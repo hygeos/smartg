@@ -2464,20 +2464,29 @@ def diff1(a, axis=0, samesize=True):
  
 
 def od2k(prof, dataset, axis=1, zreverse=False):
-    '''
-    From integrated Optical Depth to vertical coefficient in km-1)
+    """
+    Convert cumulated optical depth to a vertical coefficient profile.
 
-    Inputs:
-        prof : atmosphere profile (MLUT) as computed by calc method of AtmAFGL
-        dataset : name of the dataset to be processed
+    Parameters
+    ----------
+    prof : MLUT
+        Atmospheric profile containing the cumulated optical depth dataset
+        and the ``z_atm`` vertical coordinate.
+    dataset : str
+        Name of the cumulated optical depth dataset to convert.
+    axis : int, optional
+        Axis corresponding to the vertical dimension in ``dataset``.
+        Default is 1.
+    zreverse : bool, optional
+        If True, reverse the vertical axis in the returned array.
+        Default is False.
 
-    Keywords:
-        axis : number of the vertical dimension, default 1
-        zreverse : invert the vertical axis, default False
-
-    Outputs:
-        2D array (NW, NZ) of vertical coefficient (km-1)
-    '''
+    Returns
+    -------
+    ndarray
+        Two-dimensional array of vertical coefficients in km^-1 with shape
+        ``(NW, NZ)``.
+    """
     ot = diff1(prof[dataset].data.astype(np.float32), axis=axis)
     #dz = diff1(prof.axis('z_atm')).astype(np.float32)
     zz = prof.axis('z_atm') if not isinstance(prof, xr.Dataset) else prof['z_atm']
