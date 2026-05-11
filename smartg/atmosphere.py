@@ -2469,7 +2469,7 @@ def od2k(prof, dataset, axis=1, zreverse=False):
 
     Parameters
     ----------
-    prof : MLUT
+    prof : xr.Dataset
         Atmospheric profile containing the cumulated optical depth dataset
         and the ``z_atm`` vertical coordinate.
     dataset : str
@@ -2487,13 +2487,13 @@ def od2k(prof, dataset, axis=1, zreverse=False):
         Two-dimensional array of vertical coefficients in km^-1 with shape
         ``(NW, NZ)``.
     """
-    ot = diff1(prof[dataset].data.astype(np.float32), axis=axis)
-    #dz = diff1(prof.axis('z_atm')).astype(np.float32)
-    zz = prof.axis('z_atm') if not isinstance(prof, xr.Dataset) else prof['z_atm']
-    dz = diff1(zz).astype(np.float32)
+    if hasattr(prof, 'to_xarray'): prof = prof.to_xarray()
+
+    ot = diff1(prof[dataset].to_numpy().astype(np.float32, copy=False), axis=axis)
+    dz = diff1(prof.coords['z_atm'].to_numpy().astype(np.float32, copy=False))
     
-    
-    k  = abs(ot/dz)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        k = abs(ot/dz)
     k[np.isnan(k)] = 0
     sl = slice(None,None,-1 if zreverse else 1)
     
