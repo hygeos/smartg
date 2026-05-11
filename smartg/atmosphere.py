@@ -3100,7 +3100,7 @@ def artdeco_to_smartg_cld(input_path, output_path=None, h5_group=None, normalize
     
 def extract_split(m):
     """
-    Use a SMART-G run results' MLUT object to compute atmospheric optical 
+    Use SMART-G run results to compute atmospheric optical 
     properties at specified wavelengths and separates them into decomposed 
     components (absorption, Rayleigh scattering, aerosols, and phase functions).
     These returned profiles can be used as alternative inputs to initialize a 
@@ -3108,8 +3108,8 @@ def extract_split(m):
 
     Parameters
     ----------
-    m : MLUT
-        An MLUT object containing results of a SMART-G run. 
+    m : xr.Dataset
+        SMART-G run results containing the atmospheric optical properties.
         Must include the following datasets:
         
         - OD_p: particulate optical depth
@@ -3134,7 +3134,7 @@ def extract_split(m):
         Tuple containing:
         
         - prof_phase[0]: Phase function indices (iphase_atm) 
-        - prof_phase[1]: List of phase matrix functions for each index
+        - prof_phase[1]: List of phase matrix DataArray objects for each index
 
     Examples
     --------
@@ -3143,12 +3143,13 @@ def extract_split(m):
     >>> new_atm = AtmAFGL('afglt', prof_abs=prof_abs, prof_ray=prof_ray, 
     ...     prof_aer=prof_aer, prof_phases=prof_phases)
     """
-    pro_aer = diff1(m['OD_p'].data.astype(np.float32), axis=1)
-    ssa_aer = m['ssa_p_atm'].data
-    pro_ray = diff1(m['OD_r'].data.astype(np.float32), axis=1)
-    pro_abs = diff1(m['OD_g'].data.astype(np.float32), axis=1)
-    pro_iphase = m['iphase_atm'].data
-    pro_phases = [m['phase_atm'].sub({'iphase':i}) for i in range(pro_iphase.max()+1)]
+    if hasattr(m, 'to_xarray'): m = m.to_xarray()
+    pro_aer = diff1(m['OD_p'].to_numpy().astype(np.float32, copy=False), axis=1)
+    ssa_aer = m['ssa_p_atm'].to_numpy()
+    pro_ray = diff1(m['OD_r'].to_numpy().astype(np.float32, copy=False), axis=1)
+    pro_abs = diff1(m['OD_g'].to_numpy().astype(np.float32, copy=False), axis=1)
+    pro_iphase = m['iphase_atm'].to_numpy()
+    pro_phases = [m['phase_atm'].isel(iphase=i, drop=True) for i in range(int(pro_iphase.max()) + 1)]
 
     return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
