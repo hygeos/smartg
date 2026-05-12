@@ -935,7 +935,7 @@ class Smartg(object):
         self.norders = int(norders)
         # SCL_MODE: 0=none, 1=last_scattering_layer, 2=scattering_order, 3=scattering_order_per_layer
         self._scl_mode = _valid_scatter_classes.index(scatter_classes)
-        self.rng = init_rng(rng)
+        self.rng = _init_rng(rng)
         self.back= back
         self.thermal=thermal
         self.obj3D= obj3D
@@ -3443,34 +3443,77 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
     return to_gpu(np.array([x0, y0, z0], dtype='float32')), np.exp(-tautot)
 
 
-def init_rng(rng):
+def _init_rng(rng):
     if rng == 'PHILOX':
-        return RNG_PHILOX()
+        return _RngPhilox()
     elif rng == 'CURAND_PHILOX':
-        return RNG_CURAND_PHILOX()
+        return _RngCurandPhilox()
     else:
         raise Exception('Invalid RNG "{}"'.format(rng))
 
 
-class RNG_PHILOX(object):
+class _RngPhilox(object):
+    """Philox random-number generator backend.
+
+    This helper manages the RNG seed and state buffer for Philox-based
+    random number generation on the GPU.
+
+    Parameters
+    ----------
+    None
+    """
     def __init__(self):
         pass
 
-    def setup(self, SEED, XBLOCK, XGRID):
-        if SEED == -1:
-            # SEED is based on clock
+    def setup(self, seed, xblock, xgrid):
+        """Initialize Philox RNG state on GPU.
+
+        Parameters
+        ----------
+        seed : int
+            Seed value for the random-number generator. If -1, seed is derived
+            from current UTC time (rounded to nearest second).
+        xblock : int
+            Number of threads per block in the GPU kernel launch.
+        xgrid : int
+            Number of blocks (grid size) for GPU kernel launch.
+
+        Returns
+        -------
+        int
+            The seed value used to initialize the RNG state. If input was -1,
+            returns the generated timestamp-based seed; otherwise returns the
+            input seed.
+
+        Notes
+        -----
+        This method allocates GPU memory for the RNG state buffer and transfers
+        it to device. The state buffer has size ``xblock*xgrid+1`` elements.
+        """
+        if seed == -1:
+            # seed is based on clock
             # A multiply by 1000 has been removed to avoid OverflowError due to uint32 limit
-            SEED = np.uint32((datetime.now(tz=timezone.utc)
+            seed = np.uint32((datetime.now(tz=timezone.utc)
                               - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
 
-        state = np.zeros(XBLOCK*XGRID+1, dtype='uint32')
-        state[0] = SEED
+        state = np.zeros(xblock*xgrid+1, dtype='uint32')
+        state[0] = seed
         self.state = to_gpu(state)
 
-        return SEED
+        return seed
 
 
-class RNG_CURAND_PHILOX(object):
+class _RngCurandPhilox(object):
+    """CURAND Philox random-number generator backend.
+
+    This helper wraps a tiny CUDA module that initializes
+    ``curandStatePhilox4_32_10_t`` states on device memory for all active
+    threads.
+
+    Parameters
+    ----------
+    None
+    """
     def __init__(self):
         # build module containing initilization functions
         source = r'''
@@ -3502,22 +3545,49 @@ class RNG_CURAND_PHILOX(object):
         self.mod.get_function('get_state_size')(s, block=(1, 1, 1), grid=(1, 1, 1))
         self.STATE_SIZE = int(np.squeeze(s.get()))  # size in bytes
 
-    def setup(self, SEED, XBLOCK, XGRID):
-        if SEED == -1:
-            # SEED is based on clock
-            SEED = np.uint32((datetime.now(tz=timezone.utc)
+    def setup(self, seed, xblock, xgrid):
+        """Initialize CURAND Philox RNG state on GPU.
+
+        Parameters
+        ----------
+        seed : int
+            Seed value for the random-number generator. If -1, seed is derived
+            from current UTC time (rounded to nearest second).
+        xblock : int
+            Number of threads per block in the GPU kernel launch.
+        xgrid : int
+            Number of blocks (grid size) for GPU kernel launch.
+
+        Returns
+        -------
+        int
+            The seed value used to initialize the RNG state. If input was -1,
+            returns the generated timestamp-based seed; otherwise returns the
+            input seed.
+
+        Notes
+        -----
+        This method initializes ``curandStatePhilox4_32_10_t`` states on device
+        memory for all threads in the GPU grid. It configures GPU global variables
+        (XBLOCKd, XGRIDd, SEEDd) and launches the setup kernel to initialize the
+        RNG state buffer.
+        """
+        if seed == -1:
+            # seed is based on clock
+            seed = np.uint32((datetime.now(tz=timezone.utc)
                              - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
 
-        cuda.memcpy_htod(self.mod.get_global('XBLOCKd')[0], np.array([XBLOCK], dtype=np.int32))
-        cuda.memcpy_htod(self.mod.get_global('XGRIDd')[0], np.array([XGRID], dtype=np.int32))
-        cuda.memcpy_htod(self.mod.get_global('SEEDd')[0], np.array([XGRID], dtype=np.int32))
+        cuda.memcpy_htod(self.mod.get_global('XBLOCKd')[0], np.array([xblock], dtype=np.int32))
+        cuda.memcpy_htod(self.mod.get_global('XGRIDd')[0], np.array([xgrid], dtype=np.int32))
+        cuda.memcpy_htod(self.mod.get_global('SEEDd')[0], np.array([seed], dtype=np.int32))
 
         # setup RNG
-        self.state = gpuzeros(self.STATE_SIZE*XBLOCK*XGRID, dtype='uint8')
+        self.state = gpuzeros(self.STATE_SIZE*xblock*xgrid, dtype='uint8')
         setup = self.mod.get_function('setup')
-        setup(self.state, block=(XBLOCK,1,1), grid=(XGRID, 1, 1))
+        setup(self.state, block=(xblock,1,1), grid=(xgrid, 1, 1))
 
-        return SEED
+        return seed
+
 
 def _init_obj(lgobj, v_sun, wl, cus_l=None):
     """Initialize object-related GPU buffers and receiver metadata.
@@ -3827,7 +3897,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
 
 
 def _normalize_rec(c_mat_visu_recep, mat_cats, nb_cx, nb_cy, nb_photons, surf_lph, 
-                       cell_size, cus_l, sun_disc, le):
+                   cell_size, cus_l, sun_disc, le):
     """
     Normalize receiver signal.
 
