@@ -4009,67 +4009,66 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     return n_ext
 
     
-def get_sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6371., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
+def get_sensor(vza_level, level=0., vaa=0., earth_radius=6371., height_toa=120., fov=0., 
+               type=0, pp=True, verbose=False):
     """Build a sensor located on the atmospheric boundary from view angles.
 
     This helper is used in backward simulations. The viewing zenith angle
-    (`VZA_lev`) is defined at altitude `LEVEL` and transformed into a sensor
-    position on the top atmospheric boundary.
+    (`vza_level`) is defined at altitude `level` and transformed into a sensor
+    position on the top-of-atmosphere boundary.
 
     Parameters
     ----------
-    VZA_lev : float
-        Viewing zenith angle (degrees) defined at altitude `LEVEL`.
-    LEVEL : float, optional
-        Altitude (km) where `VZA_lev` is defined. Default is 0.0 (ground).
-    VAA : float, optional
+    vza_level : float
+        Viewing zenith angle (degrees) defined at altitude `level`.
+    level : float, optional
+        Altitude (km) at which `vza_level` is defined. Default is 0.0 (ground).
+    vaa : float, optional
         Viewing azimuth angle (degrees). Default is 0.0.
-    RTER : float, optional
-        Earth radius (km), used in spherical-shell mode. Default is 6371.0.
-    H : float, optional
-        Atmosphere top altitude (km). Default is 120.0.
-    FOV : float, optional
+    earth_radius : float, optional
+        Earth radius (km), used in spherical-shell geometry. Default is 6371.0.
+    height_toa : float, optional
+        Altitude (km) of the top of atmosphere. Default is 120.0.
+    fov : float, optional
         Sensor field of view (degrees). Default is 0.0.
-    TYPE : int, optional
-        Sensor type:
+    type : int, optional
+        Sensor measurement type:
 
-        - 0: radiance
+        - 0: radiance (default)
         - 1: planar irradiance
         - 2: spherical irradiance
-
-        Default is 0.
-    PP : bool, optional
-        Geometry flag. If `True`, use plane-parallel geometry. If `False`, use
-        spherical-shell geometry. Default is `True`.
+    pp : bool, optional
+        If `True`, use plane-parallel geometry; if `False`, use spherical-shell
+        geometry. Default is `True`.
     verbose : bool, optional
         If `True`, print the computed sensor position. Default is `False`.
 
     Returns
     -------
     Sensor
-        Sensor instance located on the atmospheric boundary with orientation
+        Sensor instance positioned on the atmospheric boundary with orientation
         derived from the input angles.
     """
-    radius = (H + RTER)
+    radius = (height_toa + earth_radius)
     large_dist = float("inf") # large distance(km)
-    origin = gc.Point(0., 0., LEVEL) if PP else gc.Point(0., 0., RTER+LEVEL)
+    origin = gc.Point(0., 0., level) if pp else gc.Point(0., 0., earth_radius+level)
     # Boundaries
-    if PP: Boundary = gc.BBox(gc.Point(-large_dist, -large_dist, 0.), gc.Point(large_dist, large_dist, H)) # Rectangle for atmosphere for PP
+    if pp: Boundary = gc.BBox(gc.Point(-large_dist, -large_dist, 0.), gc.Point(large_dist, large_dist, height_toa)) # Rectangle for atmosphere for PP
     else : Boundary = gc.Sphere(radius) # Create the Earth + atmosphere sphere for SS
     # Compute the direction vector object from Zenith and Azimuth angles
-    dir = gc.ang2vec(VZA_lev, VAA)
+    dir = gc.ang2vec(vza_level, vaa)
     # Make a ray from origin in direction dir
     ray = gc.Ray(o=origin, d=dir)
     # Compute the intersection with the Boundary
-    if PP: _, t1, hit = Boundary.intersect(ray, ds_output=False)
+    if pp: _, t1, hit = Boundary.intersect(ray, ds_output=False)
     else : t1, hit = Boundary.is_intersection_t(ray) 
     if not hit: raise NameError("The intersection test failed!! Check input paramaters.")
     # Computations of sensor position
     pos = origin + dir*t1
-    if verbose : print("VZA =", VZA_lev, "--> pos =", pos)
+    if verbose : print("VZA =", vza_level, "--> pos =", pos)
 
     th, ph = gc.vec2ang(dir, vec_view='nadir')
-    if (th == 0. or th ==180.): ph=VAA-180. # no impact on I value, but possible impact o Q, U and V
-    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=th, PHDEG=ph, LOC='ATMOS', FOV=FOV, TYPE=TYPE)
+    if (th == 0. or th ==180.): ph=vaa-180. # no impact on I value, but possible impact o Q, U and V
+    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=th, PHDEG=ph, LOC='ATMOS', FOV=fov, TYPE=type)
 
 
