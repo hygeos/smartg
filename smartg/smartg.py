@@ -1040,7 +1040,7 @@ class Smartg(object):
                 self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
         self.common_attrs['cuda_version'] = '.'.join([str(x) for x in pycuda.driver.get_version()])
-        self.common_attrs.update(get_git_attrs())
+        self.common_attrs.update(_get_git_attrs())
 
 
     def clear_context(self):
@@ -3292,8 +3292,25 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         NPhotonsOutTot.get(), NPhotonsOutTotNoAer.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
 
 
-def get_git_attrs():
-    R = {}
+def _get_git_attrs():
+    """Retrieve git repository metadata as output attributes.
+
+    Queries the current git repository for the HEAD commit hash and working
+    tree status. Returns an empty dict silently if git is unavailable or the
+    current directory is not inside a git repository.
+
+    Returns
+    -------
+    dict
+        Dictionary with zero or more of the following keys:
+
+        ``'git_commit_ref'`` : bytes
+            SHA-1 hash of the current HEAD commit.
+        ``'git_dirty_repo'`` : int
+            1 if the working tree has uncommitted tracked-file changes,
+            0 otherwise.
+    """
+    attrs = {}
 
     # Try to find git executable
     import shutil
@@ -3317,7 +3334,7 @@ def get_git_attrs():
         return {}
     else:
         shasum = p.communicate()[0].strip()
-        R.update({'git_commit_ref': shasum})
+        attrs.update({'git_commit_ref': shasum})
 
     # check if repo is dirty
     p = subprocess.Popen([git_cmd, 'status', '--porcelain',
@@ -3328,8 +3345,8 @@ def get_git_attrs():
         return {}
     else:
         is_dirty = len(p.communicate()[0]) != 0
-        R.update({'git_dirty_repo': int(is_dirty)})
-    return R
+        attrs.update({'git_dirty_repo': int(is_dirty)})
+    return attrs
 
 
 def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
