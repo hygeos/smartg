@@ -219,6 +219,7 @@ type_GObj = [
     ('bPmaxz', 'float32'),    #/
 ]
 
+
 class FlatSurface(object):
     """
     Definition of a flat sea surface
@@ -244,6 +245,7 @@ class FlatSurface(object):
                 }
     def __str__(self):
         return 'FLATSURF-SUR={SUR}'.format(**self.dict)
+
 
 class RoughSurface(object):
     """
@@ -1460,8 +1462,8 @@ class Smartg(object):
             NATM_ABS = 0
 
         # computation of the impact point
-        #X0, _ = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
-        X0, tabTransDir_analytic = impactInit(prof_atm, NLAM, THVDEG, RTER, self.pp)
+        #X0, _ = _impact_init(prof_atm, NLAM, THVDEG, RTER, self.pp)
+        X0, tabTransDir_analytic = _impact_init(prof_atm, NLAM, THVDEG, RTER, self.pp)
 
         # sensor definition
         if sensor is None:
@@ -3330,14 +3332,36 @@ def get_git_attrs():
     return R
 
 
-def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
-    '''
-    Calculate the coordinates of the entry point in the atmosphere
-    and direct transmission of the atmosphere
+def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
+    """Compute atmospheric entry point coordinates and direct transmittance.
 
-    Returns :
-        - [x0, y0, z0] : cartesian coordinates
-    '''
+    Calculates the cartesian coordinates of the photon entry point at the top
+    of atmosphere and the direct (Beer-Lambert) transmittance through the
+    atmosphere for each wavelength.
+
+    Parameters
+    ----------
+    prof_atm : xarray.Dataset or object with ``to_xarray`` method, or None
+        Atmospheric profile containing ``z_atm`` coordinates (km) and
+        ``OD_atm`` optical depth array. If None, no atmosphere is assumed.
+    nlam : int
+        Number of wavelengths.
+    thv_deg : float
+        Solar/viewing zenith angle in degrees.
+    earth_radius : float
+        Earth radius in km.
+    pp : bool
+        If True, use plane-parallel geometry; if False, use spherical geometry.
+
+    Returns
+    -------
+    x0_gpu : pycuda.gpuarray.GPUArray
+        GPU array of shape (3,) containing the cartesian coordinates
+        ``[x0, y0, z0]`` (float32) of the atmosphere entry point.
+    tab_trans_dir : numpy.ndarray
+        Array of shape (nlam,) with the direct transmittance
+        ``exp(-tau_total)`` for each wavelength.
+    """
     if prof_atm is None:
         Hatm = 0.
         natm = 0
@@ -3351,46 +3375,46 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
     if prof_atm is not None:
         od_atm = prof_atm['OD_atm'].to_numpy()
 
-    vx = -np.sin(THVDEG * np.pi / 180)
+    vx = -np.sin(thv_deg * np.pi / 180)
     vy = 0.
-    vz = -np.cos(THVDEG * np.pi / 180)
-    Rter = np.double(Rter)
+    vz = -np.cos(thv_deg * np.pi / 180)
+    earth_radius = np.double(earth_radius)
 
-    tautot = np.zeros(NLAM, dtype=np.float64)
+    tautot = np.zeros(nlam, dtype=np.float64)
 
     if pp:
         z0 = Hatm
-        x0 = Hatm*np.tan(THVDEG*np.pi/180.)
+        x0 = Hatm*np.tan(thv_deg*np.pi/180.)
         y0 = 0.
 
         if natm != 0:
-            for ilam in range(NLAM):
+            for ilam in range(nlam):
                 if prof_atm['OD_atm'].ndim == 2:
                     # lam, z
-                    #tautot[ilam] = prof_atm['OD_atm'][ilam, natm]/np.cos(THVDEG*pi/180.)
-                    tautot[ilam] = od_atm[ilam, -1]/np.cos(THVDEG*pi/180.)
+                    #tautot[ilam] = prof_atm['OD_atm'][ilam, natm]/np.cos(thv_deg*pi/180.)
+                    tautot[ilam] = od_atm[ilam, -1]/np.cos(thv_deg*np.pi/180.)
                 elif prof_atm['OD_atm'].ndim == 1:
                     # z
-                    #tautot[ilam] = prof_atm['OD_atm'][natm]/np.cos(THVDEG*pi/180.)
-                    tautot[ilam] = od_atm[-1]/np.cos(THVDEG*pi/180.)
+                    #tautot[ilam] = prof_atm['OD_atm'][natm]/np.cos(thv_deg*pi/180.)
+                    tautot[ilam] = od_atm[-1]/np.cos(thv_deg*np.pi/180.)
                 else:
                     raise Exception('invalid number of dimensions in prof_atm')
     else:
-        tanthv = np.tan(THVDEG*np.pi/180.)
+        tanthv = np.tan(thv_deg*np.pi/180.)
 
         # Pythagorean theorem in right triangle OMZ, where:
         # * O is the center of the earth
-        # * M is the entry point in the atmosphere, has cartesian coordinates (x0, y0, Rter+z0)
+        # * M is the entry point in the atmosphere, has cartesian coordinates (x0, y0, earth_radius+z0)
         #     (origin is at the surface)
         # * Z is the projection of M on z axis
         # tan(thv) = x0/z0
-        # Rter is the radius of the earth and Hatm the thickness of the atmosphere
-        # solve the equation x0^2 + (Rter+z0)^2 = (Rter+Hatm)^2 for z0
-        delta = 4*Rter**2 + 4*(tanthv**2 + 1) * (Hatm**2 + 2*Hatm*Rter)
-        z0 = (-2.*Rter + np.sqrt(delta))/(2 *(tanthv**2 + 1.))
+        # earth_radius is the radius of the earth and Hatm the thickness of the atmosphere
+        # solve the equation x0^2 + (earth_radius+z0)^2 = (earth_radius+Hatm)^2 for z0
+        delta = 4*earth_radius**2 + 4*(tanthv**2 + 1) * (Hatm**2 + 2*Hatm*earth_radius)
+        z0 = (-2.*earth_radius + np.sqrt(delta))/(2 *(tanthv**2 + 1.))
         x0 = z0*tanthv
         y0 = 0.
-        z0 += Rter
+        z0 += earth_radius
 
         # loop over the NATM atmosphere layers to find the total optical thickness
         xph = x0
@@ -3402,9 +3426,9 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
             # next layer
             # we have: R = X + V.D
             # R² = X² + (V.D)² + 2XVD
-            # where R is Rter+ALT[i]
+            # where R is earth_radius+ALT[i]
             # solve for D:
-            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (Rter + Zatm[i])**2)
+            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (earth_radius + Zatm[i])**2)
 
             # the 2 solutions are:
             D1 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) + np.sqrt(delta))
@@ -3420,14 +3444,14 @@ def impactInit(prof_atm, NLAM, THVDEG, Rter, pp):
                 if D2 > 0:
                     D = D2
                 else:
-                    raise Exception('No solution in impactInit')
+                    raise Exception('No solution in _impact_init')
 
             # photon moves forward
             xph += vx * D
             yph += vy * D
             zph += vz * D
 
-            for ilam in range(NLAM):
+            for ilam in range(nlam):
                 # optical thickness of the layer in vertical direction
                 hlay0 = abs(od_atm[ilam, i] - od_atm[ilam, i - 1])
 
