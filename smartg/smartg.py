@@ -4010,23 +4010,46 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
 
     
 def get_sensor(VZA_lev, LEVEL=0., VAA=0., RTER=6371., H=120., FOV=0., TYPE=0., PP=True, verbose=False):
-    '''
-    Return the Sensor object for atmosphere height of H for backward simulations where
-    VZA_lev is the View Zenith Angle defined at the level: origin (0, 0, RTER+LEVEL) for Spherical
-    Shell (SS), (0, 0, LEVEL) for Plane Parallel (PP)
+    """Build a sensor located on the atmospheric boundary from view angles.
 
-    Input:
-        VZA_lev: View Zenith Angle defined at altitude LEVEL of Atmosphere
-        
-    Keywords:
-        LEV : Altitude (km) where the VZA is defined, default 0. (ground)
-        VAA : View Azimuth Angle
-        FOV : Field of View (de), default 0.
-        TYPE: Type od sensor, default 0 (radiance), 1 (planar irradiance), 2 (spherical irradiance)
-        RTER: Earth radius (km)
-        H   : Altitude of the Atmosphere (km)
-        SS  : Plane Parallel (PP default or SS)
-    '''
+    This helper is used in backward simulations. The viewing zenith angle
+    (`VZA_lev`) is defined at altitude `LEVEL` and transformed into a sensor
+    position on the top atmospheric boundary.
+
+    Parameters
+    ----------
+    VZA_lev : float
+        Viewing zenith angle (degrees) defined at altitude `LEVEL`.
+    LEVEL : float, optional
+        Altitude (km) where `VZA_lev` is defined. Default is 0.0 (ground).
+    VAA : float, optional
+        Viewing azimuth angle (degrees). Default is 0.0.
+    RTER : float, optional
+        Earth radius (km), used in spherical-shell mode. Default is 6371.0.
+    H : float, optional
+        Atmosphere top altitude (km). Default is 120.0.
+    FOV : float, optional
+        Sensor field of view (degrees). Default is 0.0.
+    TYPE : int, optional
+        Sensor type:
+
+        - 0: radiance
+        - 1: planar irradiance
+        - 2: spherical irradiance
+
+        Default is 0.
+    PP : bool, optional
+        Geometry flag. If `True`, use plane-parallel geometry. If `False`, use
+        spherical-shell geometry. Default is `True`.
+    verbose : bool, optional
+        If `True`, print the computed sensor position. Default is `False`.
+
+    Returns
+    -------
+    Sensor
+        Sensor instance located on the atmospheric boundary with orientation
+        derived from the input angles.
+    """
     radius = (H + RTER)
     large_dist = float("inf") # large distance(km)
     origin = gc.Point(0., 0., LEVEL) if PP else gc.Point(0., 0., RTER+LEVEL)
