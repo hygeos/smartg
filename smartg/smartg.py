@@ -2255,7 +2255,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
                 SUM_naatm=0
                 p.update(j+1, 'n_aatm computed : {:.3g} / {:.3g}'.format(j+1, lwl))
                 for i in range (len(dicSTP["LPH"])):
-                    SUM_naatm += findExtinction(dicSTP["LPH"][i], dicSTP["LPR"][0], prof_atm, j)
+                    SUM_naatm += _find_extinction(dicSTP["LPH"][i], dicSTP["LPR"][0], prof_atm, j)
                 naatm[j] = SUM_naatm/len(dicSTP["LPH"])
             p.finish('Done! | Analytic approx of n_atm computed for {:.3g} wavelengths'.format(lwl))
             m.add_dataset('n_aatm', naatm, ['wavelength'])
@@ -3921,26 +3921,37 @@ def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, 
     return cMatVisuRecep, matCats, normC
 
 
-def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
-    '''
-    Description of the function findAtmLoss
+def _find_extinction(ip, fp, prof_atm, w_ind=0):
+    """
+    Compute the atmospheric extinction along a segment between two points.
 
-    This function enables the calculation of the extinction
-    between an initial point 'IP' to a final point 'FP'
-    === ONLY VALID WITH A 1D PP ATM ===
+    The extinction is computed as :math:`e^{-|\\Delta\\tau|}`, where
+    :math:`\\Delta\\tau` is the cumulated optical depth along the path from
+    `ip` to `fp`.
 
-    ==== ARGS:
-    IP       : Initial position (Point class)
-    FP       : Final position (Point class)
-    prof_atm : Atmosphere profil class
-    W_IND    : wavelength index (default = 0)
+    .. note::
+        Only valid for 1-D plane-parallel atmospheres.
 
-    ==== RETURN:
-    n_ext   : Extinction between IP and FP
-    '''
-    # Be sure IP and FP are Point classes
-    if not all(isinstance(i, gc.Point) for i in [IP, FP]):
-        raise NameError('Both IP and FP must be Point classes!')
+    Parameters
+    ----------
+    ip : gc.Point
+        Initial position.
+    fp : gc.Point
+        Final position.
+    prof_atm : xarray.Dataset or object with ``to_xarray``
+        Atmospheric profile containing coordinates ``z_atm`` and variable
+        ``OD_atm`` (cumulated extinction optical depth from the top).
+    w_ind : int, optional
+        Wavelength index into ``OD_atm``. Default is 0.
+
+    Returns
+    -------
+    float
+        Extinction factor between `ip` and `fp` (dimensionless, in [0, 1]).
+    """
+    # Be sure ip and fp are Point classes
+    if not all(isinstance(i, gc.Point) for i in [ip, fp]):
+        raise NameError('Both ip and fp must be Point classes!')
 
     # If there is no atm then there are no scattering and abs -> n_ext = 1
     if (prof_atm is None):
@@ -3953,33 +3964,33 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
     zatm = prof_atm.coords['z_atm'].to_numpy()
     od_atm = prof_atm['OD_atm'].to_numpy()
 
-    # Vector/direction from IP to FP
-    Vec = FP - IP
+    # Vector/direction from ip to fp
+    vec = fp - ip
 
     # Find the atm layer of the initial location
     lay = int(0)
-    while(zatm[lay] > IP.z):
+    while(zatm[lay] > ip.z):
         lay += int(1)
         
     # Initialization
-    tauHit = 0. # Optical depth distance (from IP to FP)
+    tau_hit = 0. # Optical depth distance (from ip to fp)
     ilayer2 = lay
 
     # Case with only 1 layer: n = 1
-    if (FP.z >= zatm[ilayer2] and FP.z < zatm[ilayer2-1]):
+    if (fp.z >= zatm[ilayer2] and fp.z < zatm[ilayer2-1]):
         # delta_i is: Delta(tau)1 = |tau(i-1) - tau(i)|
-        delta_i = abs(od_atm[W_IND, ilayer2-1] - od_atm[W_IND, ilayer2])
-        # tauHit = (Delat(D1)/Delat(Z1))*delta_i
-        tauHit += ((IP - FP).Length()/abs(zatm[ilayer2-1]-zatm[ilayer2]))*delta_i
+        delta_i = abs(od_atm[w_ind, ilayer2-1] - od_atm[w_ind, ilayer2])
+        # tau_hit = (Delta(D1)/Delta(Z1))*delta_i
+        tau_hit += ((ip - fp).Length()/abs(zatm[ilayer2-1]-zatm[ilayer2]))*delta_i
     else: # Case with several layers: n >= 2
         # Find the layer where there is intersection
         ilayer2 = int(1)
-        while(zatm[ilayer2] > FP.z and zatm[ilayer2] > 0.):
+        while(zatm[ilayer2] > fp.z and zatm[ilayer2] > 0.):
             ilayer2+=int(1)
 
         higher = False
         ilayer = lay
-        oldP = IP
+        old_p = ip
         
         # Check if the photon come from higher or lower layer
         if(ilayer < ilayer2): # true if the photon come from higher layer
@@ -3987,24 +3998,24 @@ def findExtinction(IP, FP, prof_atm, W_IND = int(0)):
 
         while(ilayer != ilayer2):
             if(higher):
-                timeT = abs(zatm[ilayer] - oldP.z)/abs(Vec.z)
+                time_t = abs(zatm[ilayer] - old_p.z)/abs(vec.z)
             else:
-                timeT = abs(zatm[ilayer-1] - oldP.z)/abs(Vec.z)
-            newP = oldP + (Vec*timeT)
-            delta_i = abs(od_atm[W_IND, ilayer]-od_atm[W_IND, ilayer-1])
-            tauHit += ((newP - oldP).Length()/abs(zatm[ilayer-1]-zatm[ilayer]))*delta_i
+                time_t = abs(zatm[ilayer-1] - old_p.z)/abs(vec.z)
+            new_p = old_p + (vec*time_t)
+            delta_i = abs(od_atm[w_ind, ilayer]-od_atm[w_ind, ilayer-1])
+            tau_hit += ((new_p - old_p).Length()/abs(zatm[ilayer-1]-zatm[ilayer]))*delta_i
         
             if(higher): # the photon come from higher layer
                 ilayer+= int(1)
             else: # the photon come from lower layer
                 ilayer-= int(1)
-            oldP = newP # Update the position of the photon
+            old_p = new_p # Update the position of the photon
         
         # Calculate and add the last tau distance when ilayer is equal to ilayer2
-        delta_i = abs(od_atm[W_IND, ilayer2]-od_atm[W_IND, ilayer2-1])
-        tauHit += ((FP - oldP).Length()/abs(zatm[ilayer2-1]-zatm[ilayer2]))*delta_i
+        delta_i = abs(od_atm[w_ind, ilayer2]-od_atm[w_ind, ilayer2-1])
+        tau_hit += ((fp - old_p).Length()/abs(zatm[ilayer2-1]-zatm[ilayer2]))*delta_i
 
-    n_ext = np.exp(-abs(tauHit))
+    n_ext = np.exp(-abs(tau_hit))
 
     return n_ext
 
