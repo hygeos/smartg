@@ -1730,9 +1730,9 @@ class Smartg(object):
 
         # If there is a receiver -> normalization of the signal collected
         if (TC is not None):
-            cMatVisuRecep, matCats, n_cte = normalizeRecIrr(cMatVisuRecep=cMatVisuRecep, matCats=matCats,
-                nbCx=nbCx, nbCy=nbCy, NBPHOTONS=float(np.sum(NPhotonsInTot)), surfLPH=surfLPH, TC=TC, cusL=cusL,
-                SUN_DISC=SUN_DISC, LE=LE)
+            cMatVisuRecep, matCats, n_cte = _normalize_rec(c_mat_visu_recep=cMatVisuRecep, mat_cats=matCats,
+                nb_cx=nbCx, nb_cy=nbCy, nb_photons=float(np.sum(NPhotonsInTot)), surf_lph=surfLPH, cell_size=TC, cus_l=cusL,
+                sun_disc=SUN_DISC, le=LE)
 
         if (nb_H > 0 and TC is not None and cusL is not None):
             MZAlt_H = zAlt_H/nb_H; SREC=TC*TC*nbCx*nbCy #; weightR=matCats[2, 1]
@@ -3844,81 +3844,96 @@ def initObj(LGOBJ, vSun, wl, CUSL=None):
     return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, \
         LGOBJGPU, LROBJGPU, LOBJSPECT, n_cos
 
-def normalizeRecIrr(cMatVisuRecep, matCats, nbCx, nbCy, NBPHOTONS, surfLPH, TC, cusL, SUN_DISC, LE):
-    '''
-    Description of the function normalizeRecIrr
 
-    This function enables the normalization of the signal collected
-    by a given receiver, to get the collected Power in Watt a multiplication by 
-    the sun irradiance at TOA remain still needed.
+def _normalize_rec(c_mat_visu_recep, mat_cats, nb_cx, nb_cy, nb_photons, surf_lph, 
+                       cell_size, cus_l, sun_disc, le):
+    """
+    Normalize receiver signal.
 
-    ==== ARGS:
-    cMatVisuRecep : Matrix containing the signal weight collected by each
-                    cell of a given receiver
-    matCats       : Matrix containing the total signal collected (not splited
-                    in cells) + the signal collected by each categories (see
-                    moulana et al. 2019)
-    nbCx          : Number of receiver cells in x direction
-    nbCy          : Number of receiver cells in y direction
-    NBPHOTONS     : The total number of launched photons
-    TC            : Size of a square cell, (TC -> french word 'Taille Cellule') 
-    cusL          : Custum launching mode class (see cusForward, cusBackward)
-    SUN_DISC      : The half-angle of the sun solid angle
-    LE            : boolean indicating if we are in LE mode
+    This function normalizes the signal collected by a 3d object receiver. Multiplication 
+    by the solar irradiance at the top of atmosphere is still needed.
 
-    === RETURN:
-    cMatVisuRecep : With normalized values
-    matCats       : With normalized values
-    normC         : Constant enabling normalization
-    '''
-    S_rec = TC*TC*nbCx*nbCy # receiver surface in km²
-    S_rec_m = S_rec * 1e6   # receiver surface in m²
+    Parameters
+    ----------
+    c_mat_visu_recep : ndarray
+        3D array containing the signal weight collected by each cell of the
+        receiver.
+    mat_cats : ndarray
+        2D array containing total signal and per-category breakdowns. Rows
+        correspond to categories, columns to [unknown, total, unknown, intensity, error].
+    nb_cx : int
+        Number of receiver cells in the x direction.
+    nb_cy : int
+        Number of receiver cells in the y direction.
+    nb_photons : float
+        Total number of launched photons in the simulation.
+    surf_lph : float
+        Illuminated surface area (km²) for launching mode "FF" or "RF".
+    cell_size : float
+        Side length (km) of a square receiver cell (taille cellule).
+    cus_l : object or None
+        Custom launching mode object with attributes like ``dict['LMODE']``
+        and ``dict['FOV']``. If `None`, no normalization is applied.
+    sun_disc : float
+        Half-angle (degrees) of the solar disk solid angle.
+    le : bool
+        Flag indicating whether LE (light emission) mode is enabled.
+
+    Returns
+    -------
+    tuple of (ndarray, ndarray, float)
+        - **c_mat_visu_recep** : normalized receiver signal matrix
+        - **mat_cats** : normalized category matrix  
+        - **norm_c** : normalization constant (dimensionless)
+    """
+    s_rec = cell_size * cell_size * nb_cx * nb_cy  # receiver surface in km²
+    s_rec_m = s_rec * 1e6   # receiver surface in m²
 
     # Normalize intensities such that only a mult by E_TOA is still needed to obtain power unit
-    if (cusL is None):
-        normC = 1.
-        # normC = 1./NBPHOTONS
-        # # Weights -> propor to w/m², mult by S_rec_m is needed to get something propor to watt unit
-        # normC *= S_rec_m
-        # cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]*normC
+    if (cus_l is None):
+        norm_c = 1.
+        # norm_c = 1./nb_photons
+        # # Weights -> propor to w/m², mult by s_rec_m is needed to get something propor to watt unit
+        # norm_c *= s_rec_m
+        # c_mat_visu_recep[:][:][:] = c_mat_visu_recep[:][:][:]*norm_c
         # for i in range (0, 9):
-        #     matCats[i,3] = matCats[i,1]*normC # intensity
-        #     matCats[i,4] *= normC # Absolute err
-    elif (cusL.dict['LMODE'] == "FF" or cusL.dict['LMODE'] == "RF"):
+        #     mat_cats[i,3] = mat_cats[i,1]*norm_c # intensity
+        #     mat_cats[i,4] *= norm_c # Absolute err
+    elif (cus_l.dict['LMODE'] == "FF" or cus_l.dict['LMODE'] == "RF"):
         # Here results are already propor to watt unit
-        normC = (surfLPH*1e6)/NBPHOTONS  # Here multiply by 1e6 to convert km² to m²
-        normFF = 1.
+        norm_c = (surf_lph*1e6)/nb_photons  # Here multiply by 1e6 to convert km² to m²
+        norm_ff = 1.
         #lambertian sampling normalization
-        if (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 1 and cusL.dict['FOV'] > 1e-6):
-            normFF = ( 1-np.cos(np.radians(2*cusL.dict['FOV'])) ) / (4*( 1-np.cos(np.radians(cusL.dict['FOV'])) ))
+        if (cus_l.dict['LMODE'] == "FF" and cus_l.dict['TYPE'] == 1 and cus_l.dict['FOV'] > 1e-6):
+            norm_ff = ( 1-np.cos(np.radians(2*cus_l.dict['FOV'])) ) / (4*( 1-np.cos(np.radians(cus_l.dict['FOV'])) ))
         #isotropic sampling normalization
-        elif (cusL.dict['LMODE'] == "FF" and cusL.dict['TYPE'] == 2 and cusL.dict['FOV'] > 1e-6):
-            normFF = 1.
-        normC *= normFF
+        elif (cus_l.dict['LMODE'] == "FF" and cus_l.dict['TYPE'] == 2 and cus_l.dict['FOV'] > 1e-6):
+            norm_ff = 1.
+        norm_c *= norm_ff
         for i in range (0, 9):
-            cMatVisuRecep[i][:][:] = cMatVisuRecep[i][:][:]*normC
-            matCats[i,3] = matCats[i,1]*normC
-            matCats[i,4] *= normC
-    elif (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR"):
-        normBR = 2
+            c_mat_visu_recep[i][:][:] = c_mat_visu_recep[i][:][:]*norm_c
+            mat_cats[i,3] = mat_cats[i,1]*norm_c
+            mat_cats[i,4] *= norm_c
+    elif (cus_l.dict['LMODE'] == "B" or cus_l.dict['LMODE'] == "BR"):
+        norm_br = 2
         #lambertian sampling normalization
-        if (cusL.dict['TYPE'] == 1): normBR = (1-np.cos(np.radians(2*cusL.dict['ALDEG'])))/2.
+        if (cus_l.dict['TYPE'] == 1): norm_br = (1-np.cos(np.radians(2*cus_l.dict['ALDEG'])))/2.
         #isotropic sampling normalization
-        elif (cusL.dict['TYPE'] == 2): normBR = 2*(1-np.cos(np.radians(cusL.dict['ALDEG'])))
+        elif (cus_l.dict['TYPE'] == 2): norm_br = 2*(1-np.cos(np.radians(cus_l.dict['ALDEG'])))
 
-        if not LE: normC = normBR/(NBPHOTONS*2*(1-np.cos(np.radians(SUN_DISC))))
-        else: normC = normBR/NBPHOTONS
+        if not le: norm_c = norm_br/(nb_photons*2*(1-np.cos(np.radians(sun_disc))))
+        else: norm_c = norm_br/nb_photons
 
-        # Weights -> propor to w/m², mult by S_rec_m is needed to get something propor to watt unit
-        normC *= S_rec_m
-        cMatVisuRecep[:][:][:] = cMatVisuRecep[:][:][:]*normC
+        # Weights -> propor to w/m², mult by s_rec_m is needed to get something propor to watt unit
+        norm_c *= s_rec_m
+        c_mat_visu_recep[:][:][:] = c_mat_visu_recep[:][:][:]*norm_c
         for i in range (0, 9):
-            matCats[i,3] = matCats[i,1]*normC
-            matCats[i,4] *= normC
+            mat_cats[i,3] = mat_cats[i,1]*norm_c
+            mat_cats[i,4] *= norm_c
     else:
         raise NameError('Unknown launching mode!')
 
-    return cMatVisuRecep, matCats, normC
+    return c_mat_visu_recep, mat_cats, norm_c
 
 
 def _find_extinction(ip, fp, prof_atm, w_ind=0):
