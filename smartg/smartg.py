@@ -1333,7 +1333,7 @@ class Smartg(object):
 
             # Initiliaze all the parameters linked with 3D objects
             (nGObj, nObj, nRObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             myObjects0, myGObj0, myRObj0, mySPECTObj0, n_cos) = initObj(LGOBJ=myObjects, vSun=vSun, wl=wl, CUSL=cusL)
+             myObjects0, myGObj0, myRObj0, mySPECTObj0, n_cos) = _init_obj(lgobj=myObjects, v_sun=vSun, wl=wl, cus_l=cusL)
 
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
@@ -3519,330 +3519,311 @@ class RNG_CURAND_PHILOX(object):
 
         return SEED
 
-def initObj(LGOBJ, vSun, wl, CUSL=None):
-    '''
-    Definition of the function LOBJ
+def _init_obj(lgobj, v_sun, wl, cus_l=None):
+    """Initialize object-related GPU buffers and receiver metadata.
 
-    ===ARGS:
-    LGOBJ : List of object groups
-    CUSL  : Custom lanching mode class (i.g. cusForward())
-    wl    : A scalar or list/array of wavelengths (in nm) or a list of REPTRAN or KDIS IBANDS
-    vSun  : Vector with the sun direction (needed in RF mode)
-    
-    ===RETURN:
-    nGObj     : The number of groups
-    nObj      : The number of objects
-    nRObj     : The number of receiver objects
-    surfLPH   : Surface where photons are launched, in backward = None
-    nb_H      : The number of heliostats (or heliostat facets)
-    zAlt_H    : Sum of z altitude of all heliostats (or heliostat facets)
-    totS_H    : The total surface of heliostats
-    TC        : Receiver cell size
-    nbCx      : The number of receiver cells in x direction 
-    nbCy      : The number of receiver cells in y direction
-    LOBJGPU   : GPU array of objects of type 'type_IObjets'
-    LGOBJGPU  : GPU array of objects of type 'type_GObj'
-    LROBJGPU  : GPU array of only receiver objects of type 'type_IObjets'
-    LROBJSPECT: GPU array of objects of type 'type_Spectrum_obj'
-    '''
+    Parameters
+    ----------
+    lgobj : list
+        List of object groups/entities used by the 3-D object mode.
+    v_sun : gc.Vector
+        Sun direction vector, used in restricted-forward (``RF``) mode.
+    wl : float or array-like or BandSet
+        Wavelength definition in nm. It can also be a list of REPTRAN/KDIS
+        bands and will be converted to ``BandSet`` when needed.
+    cus_l : object, optional
+        Custom launching mode object (for example ``CusForward`` or
+        ``CusBackward``). Default is ``None``.
 
-    ind = 0; LOBJ = []; nGObj = len(LGOBJ); nRObj = 0; INDROBJ = []
-    LGOBJGPU = np.zeros(nGObj, dtype=type_GObj, order='C')
+    Returns
+    -------
+    tuple
+        ``(n_gobj, n_obj, n_robj, surf_lph, nb_h, z_alt_h, tot_s_h, tc,
+        nb_cx, nb_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect, n_cos)``.
+    """
 
-    # Creation of a list with only Entity objects and creation
-    # of a GPU table with object groups parameters
+    index_offset = 0
+    lobj = []
+    n_gobj = len(lgobj)
+    ind_robj = []
+    lgobj_gpu = np.zeros(n_gobj, dtype=type_GObj, order='C')
 
-    for i in range (0, nGObj):
-        LGOBJGPU['index'][i] = ind 
-        LGOBJGPU['bPminx'][i] = LGOBJ[i].bboxGPmin.x; LGOBJGPU['bPminy'][i] = LGOBJ[i].bboxGPmin.y
-        LGOBJGPU['bPminz'][i] = LGOBJ[i].bboxGPmin.z; LGOBJGPU['bPmaxx'][i] = LGOBJ[i].bboxGPmax.x
-        LGOBJGPU['bPmaxy'][i] = LGOBJ[i].bboxGPmax.y; LGOBJGPU['bPmaxz'][i] = LGOBJ[i].bboxGPmax.z
-        if (LGOBJ[i].check == "GroupE"):
-            LGOBJGPU['nObj'][i] = LGOBJ[i].nob
-            ind += LGOBJ[i].nob
-            LOBJ.extend(LGOBJ[i].le)
-        elif (LGOBJ[i].check == "Entity"):
-            LGOBJGPU['nObj'][i] = 1
-            ind += 1
-            LOBJ.append(LGOBJ[i])
+    # Build a flat list of entities and a GPU table of object-group parameters.
+    for i in range(0, n_gobj):
+        lgobj_gpu['index'][i] = index_offset
+        lgobj_gpu['bPminx'][i] = lgobj[i].bboxGPmin.x
+        lgobj_gpu['bPminy'][i] = lgobj[i].bboxGPmin.y
+        lgobj_gpu['bPminz'][i] = lgobj[i].bboxGPmin.z
+        lgobj_gpu['bPmaxx'][i] = lgobj[i].bboxGPmax.x
+        lgobj_gpu['bPmaxy'][i] = lgobj[i].bboxGPmax.y
+        lgobj_gpu['bPmaxz'][i] = lgobj[i].bboxGPmax.z
+        if lgobj[i].check == "GroupE":
+            lgobj_gpu['nObj'][i] = lgobj[i].nob
+            index_offset += lgobj[i].nob
+            lobj.extend(lgobj[i].le)
+        elif lgobj[i].check == "Entity":
+            lgobj_gpu['nObj'][i] = 1
+            index_offset += 1
+            lobj.append(lgobj[i])
         else:
             raise NameError('In myObjects list, only Entity and GroupE classes are autorised!')
 
-    LGOBJGPU = to_gpu(LGOBJGPU)
+    lgobj_gpu = to_gpu(lgobj_gpu)
+    n_obj = len(lobj)
 
-    nObj = len(LOBJ)
-
-    if CUSL != None and CUSL.dict['LMODE'] == "BR":
-        LOBJGPU = np.zeros(nObj+1, dtype=type_IObjets, order='C')
-        TC=CUSL.dict['REC'].TC
-        sizeXmin = min(CUSL.dict['REC'].geo.p1.x, CUSL.dict['REC'].geo.p2.x,
-                       CUSL.dict['REC'].geo.p3.x, CUSL.dict['REC'].geo.p4.x)
-        sizeXmax = max(CUSL.dict['REC'].geo.p1.x, CUSL.dict['REC'].geo.p2.x,
-                       CUSL.dict['REC'].geo.p3.x, CUSL.dict['REC'].geo.p4.x)
-        sizeX = sizeXmax - sizeXmin
-        sizeYmin = min(CUSL.dict['REC'].geo.p1.y, CUSL.dict['REC'].geo.p2.y,
-                       CUSL.dict['REC'].geo.p3.y, CUSL.dict['REC'].geo.p4.y)
-        sizeYmax = max(CUSL.dict['REC'].geo.p1.y, CUSL.dict['REC'].geo.p2.y,
-                       CUSL.dict['REC'].geo.p3.y, CUSL.dict['REC'].geo.p4.y)
-        sizeY = sizeYmax - sizeYmin
-        nbCx = int(sizeX/TC)
-        nbCy = int(sizeY/TC)
-        LOBJGPU['mvRx'][nObj] = CUSL.dict['REC'].transformation.rotx
-        LOBJGPU['mvRy'][nObj] = CUSL.dict['REC'].transformation.roty
-        LOBJGPU['mvRz'][nObj] = CUSL.dict['REC'].transformation.rotz
-        if (CUSL.dict['REC'].transformation.rotOrder == "XYZ"):
-            LOBJGPU['rotOrder'][nObj] = 1
-        elif(CUSL.dict['REC'].transformation.rotOrder == "XZY"):
-            LOBJGPU['rotOrder'][nObj] = 2
-        elif(CUSL.dict['REC'].transformation.rotOrder == "YXZ"):
-            LOBJGPU['rotOrder'][nObj] = 3
-        elif(CUSL.dict['REC'].transformation.rotOrder == "YZX"):
-            LOBJGPU['rotOrder'][nObj] = 4
-        elif(CUSL.dict['REC'].transformation.rotOrder == "ZXY"):
-            LOBJGPU['rotOrder'][nObj] = 5
-        elif(CUSL.dict['REC'].transformation.rotOrder == "ZYX"):
-            LOBJGPU['rotOrder'][nObj] = 6
+    if cus_l is not None and cus_l.dict['LMODE'] == "BR":
+        lobj_gpu = np.zeros(n_obj + 1, dtype=type_IObjets, order='C')
+        tc = cus_l.dict['REC'].TC
+        size_x_min = min(cus_l.dict['REC'].geo.p1.x, cus_l.dict['REC'].geo.p2.x,
+                         cus_l.dict['REC'].geo.p3.x, cus_l.dict['REC'].geo.p4.x)
+        size_x_max = max(cus_l.dict['REC'].geo.p1.x, cus_l.dict['REC'].geo.p2.x,
+                         cus_l.dict['REC'].geo.p3.x, cus_l.dict['REC'].geo.p4.x)
+        size_x = size_x_max - size_x_min
+        size_y_min = min(cus_l.dict['REC'].geo.p1.y, cus_l.dict['REC'].geo.p2.y,
+                         cus_l.dict['REC'].geo.p3.y, cus_l.dict['REC'].geo.p4.y)
+        size_y_max = max(cus_l.dict['REC'].geo.p1.y, cus_l.dict['REC'].geo.p2.y,
+                         cus_l.dict['REC'].geo.p3.y, cus_l.dict['REC'].geo.p4.y)
+        size_y = size_y_max - size_y_min
+        nb_cx = int(size_x / tc)
+        nb_cy = int(size_y / tc)
+        lobj_gpu['mvRx'][n_obj] = cus_l.dict['REC'].transformation.rotx
+        lobj_gpu['mvRy'][n_obj] = cus_l.dict['REC'].transformation.roty
+        lobj_gpu['mvRz'][n_obj] = cus_l.dict['REC'].transformation.rotz
+        if cus_l.dict['REC'].transformation.rotOrder == "XYZ":
+            lobj_gpu['rotOrder'][n_obj] = 1
+        elif cus_l.dict['REC'].transformation.rotOrder == "XZY":
+            lobj_gpu['rotOrder'][n_obj] = 2
+        elif cus_l.dict['REC'].transformation.rotOrder == "YXZ":
+            lobj_gpu['rotOrder'][n_obj] = 3
+        elif cus_l.dict['REC'].transformation.rotOrder == "YZX":
+            lobj_gpu['rotOrder'][n_obj] = 4
+        elif cus_l.dict['REC'].transformation.rotOrder == "ZXY":
+            lobj_gpu['rotOrder'][n_obj] = 5
+        elif cus_l.dict['REC'].transformation.rotOrder == "ZYX":
+            lobj_gpu['rotOrder'][n_obj] = 6
         else:
             raise NameError('Unknown rotation order')
-        LOBJGPU['mvTx'][nObj] = CUSL.dict['REC'].transformation.transx
-        LOBJGPU['mvTy'][nObj] = CUSL.dict['REC'].transformation.transy
-        LOBJGPU['mvTz'][nObj] = CUSL.dict['REC'].transformation.transz
+        lobj_gpu['mvTx'][n_obj] = cus_l.dict['REC'].transformation.transx
+        lobj_gpu['mvTy'][n_obj] = cus_l.dict['REC'].transformation.transy
+        lobj_gpu['mvTz'][n_obj] = cus_l.dict['REC'].transformation.transz
 
-        INDROBJ.append(nObj) # For the creation of GPU table with only receivers
+        ind_robj.append(n_obj)  # For creating a receiver-only GPU table.
     else:
-        LOBJGPU = np.zeros(nObj, dtype=type_IObjets, order='C')
-        TC = None; nbCx = int(0); nbCy = int(0)
-    
-    # To consider the spectral variability of objs reflectivity
-    nObjTotal = LOBJGPU.size
-    if not isinstance(wl, BandSet): wl = BandSet(wl)
-    NLAM = wl.size
-    LOBJSPECT = np.zeros((nObjTotal*NLAM), dtype=type_Spectrum_obj, order='C')
+        lobj_gpu = np.zeros(n_obj, dtype=type_IObjets, order='C')
+        tc = None
+        nb_cx = int(0)
+        nb_cy = int(0)
 
-    # Initialization before the coming loop
-    pp1 = 0.; pp2 = 0.; pp3 = 0.; pp4 = 0.
-    nb_H = 0; zAlt_H = 0.; totS_H = 0.; ncos=0.
-    if (CUSL != None and CUSL.dict['LMODE'] == "RF"): surfLPH = 0
-    else: surfLPH = None
+    # Account for spectral variability of object reflectivity.
+    n_obj_total = lobj_gpu.size
+    if not isinstance(wl, BandSet):
+        wl = BandSet(wl)
+    nlam = wl.size
+    lobj_spect = np.zeros((n_obj_total * nlam), dtype=type_Spectrum_obj, order='C')
 
-    # ********************************************
-    # Begining of the loop to consider all objects
-    for i in range (0, nObj):
-        # ==== At this moment only 2 choices -> spherical or plane surface
-        # Here if this is a spherical object
-        if isinstance(LOBJ[i].geo, Spheric):
-            LOBJGPU['geo'][i] = 1
-            LOBJGPU['myRad'][i] = LOBJ[i].geo.radius
-            LOBJGPU['z0'][i] = LOBJ[i].geo.z0
-            LOBJGPU['z1'][i] = LOBJ[i].geo.z1
-            LOBJGPU['phi'][i] = LOBJ[i].geo.phi
-        # Here if this is a plane object
-        elif isinstance(LOBJ[i].geo, Plane):
-            LOBJGPU['geo'][i] = 2
-            LOBJGPU['p0x'][i] = LOBJ[i].geo.p1.x
-            LOBJGPU['p0y'][i] = LOBJ[i].geo.p1.y
-            LOBJGPU['p0z'][i] = LOBJ[i].geo.p1.z
-            LOBJGPU['p1x'][i] = LOBJ[i].geo.p2.x
-            LOBJGPU['p1y'][i] = LOBJ[i].geo.p2.y
-            LOBJGPU['p1z'][i] = LOBJ[i].geo.p2.z
-            LOBJGPU['p2x'][i] = LOBJ[i].geo.p3.x
-            LOBJGPU['p2y'][i] = LOBJ[i].geo.p3.y
-            LOBJGPU['p2z'][i] = LOBJ[i].geo.p3.z
-            LOBJGPU['p3x'][i] = LOBJ[i].geo.p4.x
-            LOBJGPU['p3y'][i] = LOBJ[i].geo.p4.y
-            LOBJGPU['p3z'][i] = LOBJ[i].geo.p4.z
+    # Initialization before object loop.
+    pp1 = 0.
+    pp2 = 0.
+    pp3 = 0.
+    pp4 = 0.
+    nb_h = 0
+    z_alt_h = 0.
+    tot_s_h = 0.
+    ncos = 0.
+    if cus_l is not None and cus_l.dict['LMODE'] == "RF":
+        surf_lph = 0
+    else:
+        surf_lph = None
 
-            # Get the normal of the plane Object after considering transform
-            # 1) The intial normal is known ->
-            normalBase = gc.Vector(0, 0, 1)
+    # Iterate over all objects.
+    for i in range(0, n_obj):
+        if isinstance(lobj[i].geo, Spheric):
+            lobj_gpu['geo'][i] = 1
+            lobj_gpu['myRad'][i] = lobj[i].geo.radius
+            lobj_gpu['z0'][i] = lobj[i].geo.z0
+            lobj_gpu['z1'][i] = lobj[i].geo.z1
+            lobj_gpu['phi'][i] = lobj[i].geo.phi
+        elif isinstance(lobj[i].geo, Plane):
+            lobj_gpu['geo'][i] = 2
+            lobj_gpu['p0x'][i] = lobj[i].geo.p1.x
+            lobj_gpu['p0y'][i] = lobj[i].geo.p1.y
+            lobj_gpu['p0z'][i] = lobj[i].geo.p1.z
+            lobj_gpu['p1x'][i] = lobj[i].geo.p2.x
+            lobj_gpu['p1y'][i] = lobj[i].geo.p2.y
+            lobj_gpu['p1z'][i] = lobj[i].geo.p2.z
+            lobj_gpu['p2x'][i] = lobj[i].geo.p3.x
+            lobj_gpu['p2y'][i] = lobj[i].geo.p3.y
+            lobj_gpu['p2z'][i] = lobj[i].geo.p3.z
+            lobj_gpu['p3x'][i] = lobj[i].geo.p4.x
+            lobj_gpu['p3y'][i] = lobj[i].geo.p4.y
+            lobj_gpu['p3z'][i] = lobj[i].geo.p4.z
 
-            # 2) Consider the rotation transform in X, Y et Z
-            TpRX0 = gc.get_rotateX_tf(LOBJ[i].transformation.rotation[0])
-            TpRY0 = gc.get_rotateY_tf(LOBJ[i].transformation.rotation[1])
-            TpRZ0 = gc.get_rotateZ_tf(LOBJ[i].transformation.rotation[2])
-            if (LOBJ[i].transformation.rotOrder == "XYZ"):
-                TpT0 = TpRX0*TpRY0*TpRZ0
-            elif(LOBJ[i].transformation.rotOrder == "XZY"):
-                TpT0 = TpRX0*TpRZ0*TpRY0
-            elif(LOBJ[i].transformation.rotOrder == "YXZ"):
-                TpT0 = TpRY0*TpRX0*TpRZ0
-            elif(LOBJ[i].transformation.rotOrder == "YZX"):
-                TpT0 = TpRY0*TpRZ0*TpRX0
-            elif(LOBJ[i].transformation.rotOrder == "ZXY"):
-                TpT0 = TpRZ0*TpRX0*TpRY0
-            elif(LOBJ[i].transformation.rotOrder == "ZYX"):
-                TpT0 = TpRZ0*TpRY0*TpRX0
+            # Normal of the plane object after applying rotation transform.
+            normal_base = gc.Vector(0, 0, 1)
+            tp_rx0 = gc.get_rotateX_tf(lobj[i].transformation.rotation[0])
+            tp_ry0 = gc.get_rotateY_tf(lobj[i].transformation.rotation[1])
+            tp_rz0 = gc.get_rotateZ_tf(lobj[i].transformation.rotation[2])
+            if lobj[i].transformation.rotOrder == "XYZ":
+                tp_t0 = tp_rx0 * tp_ry0 * tp_rz0
+            elif lobj[i].transformation.rotOrder == "XZY":
+                tp_t0 = tp_rx0 * tp_rz0 * tp_ry0
+            elif lobj[i].transformation.rotOrder == "YXZ":
+                tp_t0 = tp_ry0 * tp_rx0 * tp_rz0
+            elif lobj[i].transformation.rotOrder == "YZX":
+                tp_t0 = tp_ry0 * tp_rz0 * tp_rx0
+            elif lobj[i].transformation.rotOrder == "ZXY":
+                tp_t0 = tp_rz0 * tp_rx0 * tp_ry0
+            elif lobj[i].transformation.rotOrder == "ZYX":
+                tp_t0 = tp_rz0 * tp_ry0 * tp_rx0
             else:
                 raise NameError('Unknown rotation order')
 
-            # 3) Application of rotation transform
-            normalBase = TpT0(normalBase)
-            normalBase = gc.normalize(normalBase)
-            LOBJGPU['nBx'][i] = normalBase.x
-            LOBJGPU['nBy'][i] = normalBase.y
-            LOBJGPU['nBz'][i] = normalBase.z
+            normal_base = tp_t0(normal_base)
+            normal_base = gc.normalize(normal_base)
+            lobj_gpu['nBx'][i] = normal_base.x
+            lobj_gpu['nBy'][i] = normal_base.y
+            lobj_gpu['nBz'][i] = normal_base.z
+        else:
+            raise NameError("Your geometry can be only spheric or plane, please choose between Spheric or Plane classes!")
 
-        else:    # si l'objet est autre chose (inconnu)
-            raise NameError("Your geometry can be only spheric or plane, please" + \
-                            " choose between Spheric or Plane classes!")
-        # ====
-
-        # ==== Affectation of transformations (rotations and translations)
-        LOBJGPU['mvRx'][i] = LOBJ[i].transformation.rotx
-        LOBJGPU['mvRy'][i] = LOBJ[i].transformation.roty
-        LOBJGPU['mvRz'][i] = LOBJ[i].transformation.rotz
-        if (LOBJ[i].transformation.rotOrder == "XYZ"):
-            LOBJGPU['rotOrder'][i] = 1
-        elif(LOBJ[i].transformation.rotOrder == "XZY"):
-            LOBJGPU['rotOrder'][i] = 2
-        elif(LOBJ[i].transformation.rotOrder == "YXZ"):
-            LOBJGPU['rotOrder'][i] = 3
-        elif(LOBJ[i].transformation.rotOrder == "YZX"):
-            LOBJGPU['rotOrder'][i] = 4
-        elif(LOBJ[i].transformation.rotOrder == "ZXY"):
-            LOBJGPU['rotOrder'][i] = 5
-        elif(LOBJ[i].transformation.rotOrder == "ZYX"):
-            LOBJGPU['rotOrder'][i] = 6
+        # Apply transformation parameters.
+        lobj_gpu['mvRx'][i] = lobj[i].transformation.rotx
+        lobj_gpu['mvRy'][i] = lobj[i].transformation.roty
+        lobj_gpu['mvRz'][i] = lobj[i].transformation.rotz
+        if lobj[i].transformation.rotOrder == "XYZ":
+            lobj_gpu['rotOrder'][i] = 1
+        elif lobj[i].transformation.rotOrder == "XZY":
+            lobj_gpu['rotOrder'][i] = 2
+        elif lobj[i].transformation.rotOrder == "YXZ":
+            lobj_gpu['rotOrder'][i] = 3
+        elif lobj[i].transformation.rotOrder == "YZX":
+            lobj_gpu['rotOrder'][i] = 4
+        elif lobj[i].transformation.rotOrder == "ZXY":
+            lobj_gpu['rotOrder'][i] = 5
+        elif lobj[i].transformation.rotOrder == "ZYX":
+            lobj_gpu['rotOrder'][i] = 6
         else:
             raise NameError('Unknown rotation order')
-        LOBJGPU['mvTx'][i] = LOBJ[i].transformation.transx
-        LOBJGPU['mvTy'][i] = LOBJ[i].transformation.transy
-        LOBJGPU['mvTz'][i] = LOBJ[i].transformation.transz
-        # ====
+        lobj_gpu['mvTx'][i] = lobj[i].transformation.transx
+        lobj_gpu['mvTy'][i] = lobj[i].transformation.transy
+        lobj_gpu['mvTz'][i] = lobj[i].transformation.transz
 
-        # ==== Consider the material of the object
-        # 1) Front part of the object (AV for the french word 'AVant')
-        # Initialization
-        LOBJGPU['materialAV'][i] = 0; LOBJGPU['shdAV'][i] = 0
-        LOBJGPU['nindAV'][i] = 1; LOBJGPU['distAV'][i] = 0
-        # Commun to all materials
-        # LOBJGPU['reflectAV'][i] = LOBJ[i].materialAV.reflectivity
-        LOBJGPU['reflectAV'][i] = 0
-        if (np.array(LOBJ[i].materialAV.reflectivity).size == 1):
-            LOBJSPECT['reflectAV'][(i*NLAM):((i*NLAM)+NLAM)] = np.full((NLAM), LOBJ[i].materialAV.reflectivity)
-        elif (LOBJ[i].materialAV.reflectivity.size != NLAM):
+        # Front material (AV).
+        lobj_gpu['materialAV'][i] = 0
+        lobj_gpu['shdAV'][i] = 0
+        lobj_gpu['nindAV'][i] = 1
+        lobj_gpu['distAV'][i] = 0
+        lobj_gpu['reflectAV'][i] = 0
+        if np.array(lobj[i].materialAV.reflectivity).size == 1:
+            lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].materialAV.reflectivity)
+        elif lobj[i].materialAV.reflectivity.size != nlam:
             raise NameError('The number of reflectivities must be equal to the number of wavelengths!')
         else:
-            LOBJSPECT['reflectAV'][(i*NLAM):((i*NLAM)+NLAM)] = LOBJ[i].materialAV.reflectivity[:]
-        # Particularity of each material
-        if isinstance(LOBJ[i].materialAV, LambMirror):
-            LOBJGPU['materialAV'][i] = 1
-            LOBJGPU['roughAV'][i] = 0.
-        elif isinstance(LOBJ[i].materialAV, Matte):
-            LOBJGPU['materialAV'][i] = 2
-            LOBJGPU['roughAV'][i] = LOBJ[i].materialAV.roughness
-        elif isinstance(LOBJ[i].materialAV, Mirror):
-            LOBJGPU['materialAV'][i] = 3
-            LOBJGPU['shdAV'][i] = int(LOBJ[i].materialAV.shadow)
-            LOBJGPU['nindAV'][i] = LOBJ[i].materialAV.nind
-            LOBJGPU['distAV'][i] = LOBJ[i].materialAV.distribution
-            LOBJGPU['roughAV'][i] = LOBJ[i].materialAV.roughness
+            lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = lobj[i].materialAV.reflectivity[:]
+
+        if isinstance(lobj[i].materialAV, LambMirror):
+            lobj_gpu['materialAV'][i] = 1
+            lobj_gpu['roughAV'][i] = 0.
+        elif isinstance(lobj[i].materialAV, Matte):
+            lobj_gpu['materialAV'][i] = 2
+            lobj_gpu['roughAV'][i] = lobj[i].materialAV.roughness
+        elif isinstance(lobj[i].materialAV, Mirror):
+            lobj_gpu['materialAV'][i] = 3
+            lobj_gpu['shdAV'][i] = int(lobj[i].materialAV.shadow)
+            lobj_gpu['nindAV'][i] = lobj[i].materialAV.nind
+            lobj_gpu['distAV'][i] = lobj[i].materialAV.distribution
+            lobj_gpu['roughAV'][i] = lobj[i].materialAV.roughness
         else:
             raise NameError('Unknown material AV')
 
-        # 1) Back part of the object (AR for the french word 'ARriere')
-        # Initialization
-        LOBJGPU['materialAR'][i] = 0; LOBJGPU['shdAR'][i] = 0
-        LOBJGPU['nindAR'][i] = 1; LOBJGPU['distAR'][i] = 0
-        # Commun to all materials
-        #LOBJGPU['reflectAR'][i] = LOBJ[i].materialAR.reflectivity
-        LOBJGPU['reflectAR'][i] = 0
-        if (np.array(LOBJ[i].materialAR.reflectivity).size == 1):
-            LOBJSPECT['reflectAR'][(i*NLAM):((i*NLAM)+NLAM)] = np.full((NLAM), LOBJ[i].materialAR.reflectivity)
-        elif (LOBJ[i].materialAR.reflectivity.size != NLAM):
+        # Back material (AR).
+        lobj_gpu['materialAR'][i] = 0
+        lobj_gpu['shdAR'][i] = 0
+        lobj_gpu['nindAR'][i] = 1
+        lobj_gpu['distAR'][i] = 0
+        lobj_gpu['reflectAR'][i] = 0
+        if np.array(lobj[i].materialAR.reflectivity).size == 1:
+            lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].materialAR.reflectivity)
+        elif lobj[i].materialAR.reflectivity.size != nlam:
             raise NameError('The number of reflectivities must be equal to the number of wavelengths!')
         else:
-            LOBJSPECT['reflectAR'][(i*NLAM):((i*NLAM)+NLAM)] = LOBJ[i].materialAR.reflectivity[:]
-        # Particularity of each material
-        if isinstance(LOBJ[i].materialAR, LambMirror):
-            LOBJGPU['materialAR'][i] = 1
-            LOBJGPU['roughAR'][i] = 0.
-        elif isinstance(LOBJ[i].materialAR, Matte):
-            LOBJGPU['materialAR'][i] = 2
-            LOBJGPU['roughAR'][i] = LOBJ[i].materialAR.roughness
-        elif isinstance(LOBJ[i].materialAR, Mirror):
-            LOBJGPU['materialAR'][i] = 3
-            LOBJGPU['shdAR'][i] = int(LOBJ[i].materialAR.shadow)
-            LOBJGPU['nindAR'][i] = LOBJ[i].materialAR.nind
-            LOBJGPU['distAR'][i] = LOBJ[i].materialAR.distribution
-            LOBJGPU['roughAR'][i] = LOBJ[i].materialAR.roughness
+            lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = lobj[i].materialAR.reflectivity[:]
+
+        if isinstance(lobj[i].materialAR, LambMirror):
+            lobj_gpu['materialAR'][i] = 1
+            lobj_gpu['roughAR'][i] = 0.
+        elif isinstance(lobj[i].materialAR, Matte):
+            lobj_gpu['materialAR'][i] = 2
+            lobj_gpu['roughAR'][i] = lobj[i].materialAR.roughness
+        elif isinstance(lobj[i].materialAR, Mirror):
+            lobj_gpu['materialAR'][i] = 3
+            lobj_gpu['shdAR'][i] = int(lobj[i].materialAR.shadow)
+            lobj_gpu['nindAR'][i] = lobj[i].materialAR.nind
+            lobj_gpu['distAR'][i] = lobj[i].materialAR.distribution
+            lobj_gpu['roughAR'][i] = lobj[i].materialAR.roughness
         else:
             raise NameError('Unknown material AR')
-        # ====
 
-        # ==== 2 possibilities : the object is a relfector or a receiver
-        # Case of reflector object
-        if (LOBJ[i].name == "reflector"):
-            LOBJGPU['type'][i] = 1
+        # Object role: reflector, receiver, or environment.
+        if lobj[i].name == "reflector":
+            lobj_gpu['type'][i] = 1
 
-            # Collect informations needed for STP applications
-            if (  isinstance(LOBJ[i].geo, Plane) and \
-                  ( isinstance(LOBJ[i].materialAR, Mirror) or \
-                    isinstance(LOBJ[i].materialAV, Mirror) )  ):
-                nb_H += 1
-                zAlt_H += LOBJ[i].transformation.transz
-                totS_H += abs(LOBJ[i].geo.p1.x)*abs(LOBJ[i].geo.p1.y)*4
-                ncos += gc.dot(normalBase, gc.Vector(-vSun.x, -vSun.y, -vSun.z))
+            if (isinstance(lobj[i].geo, Plane)
+                    and (isinstance(lobj[i].materialAR, Mirror) or isinstance(lobj[i].materialAV, Mirror))):
+                nb_h += 1
+                z_alt_h += lobj[i].transformation.transz
+                tot_s_h += abs(lobj[i].geo.p1.x) * abs(lobj[i].geo.p1.y) * 4
+                ncos += gc.dot(normal_base, gc.Vector(-v_sun.x, -v_sun.y, -v_sun.z))
 
-            # Crucial step for the result visualization in RF mode
-            if (CUSL is not None and CUSL.dict['LMODE'] == "RF"):
-                # Take the 4 initial points of the plane object 
-                pp1 = LOBJ[i].geo.p1; pp2 = LOBJ[i].geo.p2
-                pp3 = LOBJ[i].geo.p3; pp4 = LOBJ[i].geo.p4
-                # Method to find the area of a convex rectangle
-                DotP = gc.dot(vSun*-1, normalBase)
-                TwoAAbis = abs((pp1.x - pp4.x)*(pp2.y - pp3.y)) + abs((pp2.x - pp3.x)*(pp1.y - pp4.y))
-                surfLPHbis = (TwoAAbis/2.) * DotP
-                surfLPH += surfLPHbis
-
-        # Case of receiver object
-        elif (LOBJ[i].name == "receiver"):
-            LOBJGPU['type'][i] = 2
-            TC=LOBJ[i].TC
-            sizeXmin = min(LOBJ[i].geo.p1.x, LOBJ[i].geo.p2.x,
-                           LOBJ[i].geo.p3.x, LOBJ[i].geo.p4.x)
-            sizeXmax = max(LOBJ[i].geo.p1.x, LOBJ[i].geo.p2.x,
-                           LOBJ[i].geo.p3.x, LOBJ[i].geo.p4.x)
-            sizeX = sizeXmax - sizeXmin
-            sizeYmin = min(LOBJ[i].geo.p1.y, LOBJ[i].geo.p2.y,
-                           LOBJ[i].geo.p3.y, LOBJ[i].geo.p4.y)
-            sizeYmax = max(LOBJ[i].geo.p1.y, LOBJ[i].geo.p2.y,
-                           LOBJ[i].geo.p3.y, LOBJ[i].geo.p4.y)
-            sizeY = sizeYmax - sizeYmin
-            nbCx = int(sizeX/TC)
-            nbCy = int(sizeY/TC)
-
-            INDROBJ.append(i) # For the creation of GPU table with only receivers
-
-        # This part is currently under development
-        elif (LOBJ[i].name == "environment"):
-            LOBJGPU['type'][i] = 3 
+            if cus_l is not None and cus_l.dict['LMODE'] == "RF":
+                pp1 = lobj[i].geo.p1
+                pp2 = lobj[i].geo.p2
+                pp3 = lobj[i].geo.p3
+                pp4 = lobj[i].geo.p4
+                dot_p = gc.dot(v_sun * -1, normal_base)
+                two_aa_bis = abs((pp1.x - pp4.x) * (pp2.y - pp3.y)) + abs((pp2.x - pp3.x) * (pp1.y - pp4.y))
+                surf_lph_bis = (two_aa_bis / 2.) * dot_p
+                surf_lph += surf_lph_bis
+        elif lobj[i].name == "receiver":
+            lobj_gpu['type'][i] = 2
+            tc = lobj[i].TC
+            size_x_min = min(lobj[i].geo.p1.x, lobj[i].geo.p2.x,
+                             lobj[i].geo.p3.x, lobj[i].geo.p4.x)
+            size_x_max = max(lobj[i].geo.p1.x, lobj[i].geo.p2.x,
+                             lobj[i].geo.p3.x, lobj[i].geo.p4.x)
+            size_x = size_x_max - size_x_min
+            size_y_min = min(lobj[i].geo.p1.y, lobj[i].geo.p2.y,
+                             lobj[i].geo.p3.y, lobj[i].geo.p4.y)
+            size_y_max = max(lobj[i].geo.p1.y, lobj[i].geo.p2.y,
+                             lobj[i].geo.p3.y, lobj[i].geo.p4.y)
+            size_y = size_y_max - size_y_min
+            nb_cx = int(size_x / tc)
+            nb_cy = int(size_y / tc)
+            ind_robj.append(i)
+        elif lobj[i].name == "environment":
+            lobj_gpu['type'][i] = 3
         else:
             raise NameError('You have to specify if your object is a reflector or a receiver!')
-        # ====
-    # End of the loop
-    # ********************************************
-    
-    # Creation of GPU table with only receivers
-    nRObj = len(INDROBJ)
-    if nRObj > 0:
-        LROBJGPU = np.zeros(nRObj, dtype=type_IObjets, order='C')
-        for i in range (0, nRObj):
-            LROBJGPU[:][i] = LOBJGPU[:][INDROBJ[i]]
-    else:
-        LROBJGPU = np.zeros(1, dtype=type_IObjets, order='C')
 
-    LOBJGPU = to_gpu(LOBJGPU)
-    LROBJGPU = to_gpu(LROBJGPU)
-    LOBJSPECT = to_gpu(LOBJSPECT)
-    # update the value of ncos
-    if nb_H > 0:
-        n_cos = ncos/nb_H
+    # Create receiver-only GPU table.
+    n_robj = len(ind_robj)
+    if n_robj > 0:
+        lrobj_gpu = np.zeros(n_robj, dtype=type_IObjets, order='C')
+        for i in range(0, n_robj):
+            lrobj_gpu[:][i] = lobj_gpu[:][ind_robj[i]]
+    else:
+        lrobj_gpu = np.zeros(1, dtype=type_IObjets, order='C')
+
+    lobj_gpu = to_gpu(lobj_gpu)
+    lrobj_gpu = to_gpu(lrobj_gpu)
+    lobj_spect = to_gpu(lobj_spect)
+    if nb_h > 0:
+        n_cos = ncos / nb_h
     else:
         n_cos = 1
 
-    return nGObj, nObj, nRObj, surfLPH, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy, LOBJGPU, \
-        LGOBJGPU, LROBJGPU, LOBJSPECT, n_cos
+    return (n_gobj, n_obj, n_robj, surf_lph, nb_h, z_alt_h, tot_s_h, tc,
+            nb_cx, nb_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect, n_cos)
 
 
 def _normalize_rec(c_mat_visu_recep, mat_cats, nb_cx, nb_cy, nb_photons, surf_lph, 
