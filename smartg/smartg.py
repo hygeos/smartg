@@ -2862,86 +2862,6 @@ def reduce_diff(m, varnames, delta=None):
     res.attrs = m.attrs
     return res
 
-# for record but no longer the prefered method
-'''
-def reduce_histories(kernel2, tabHist, wl, sigma, NLOW, NBTHETA=1, alb_in=None, XBLOCK=512, XGRID=512, verbose=False):
-   NL    = sigma.shape[1]
-   w     = tabHist[:, NL+4:-6]
-   #w     = tabHist[:, NL+4:-5]
-   ngood = np.sum(w[:,0]!=0)
-
-   S       = np.zeros((ngood,4),dtype=np.float32) 
-   cd      = tabHist[:ngood,     :NL  ]
-   S[:,:4] = tabHist[:ngood, NL  :NL+4]
-   w       = tabHist[:ngood, NL+4:-6  ]
-   nrrs    = tabHist[:ngood,      -6  ]
-   nref    = tabHist[:ngood,      -5  ]
-   nsif    = tabHist[:ngood,      -4  ]
-   nvrs    = tabHist[:ngood,      -3  ]
-   nenv    = tabHist[:ngood,      -2  ]
-   ith     = tabHist[:ngood,      -1  ]
-
-   NT      = XBLOCK*XGRID       # Maximum Number of threads
-   NPHOTON = cd.shape[0]        # Number of photons
-
-   NLAYER  = sigma.shape[1]     # Number of vertical layer
-   NWVL    = sigma.shape[0]     # Number of wavelength for absorption and output
-   NGROUP  = NT//NWVL           # Number of groups of photons
-   NTHREAD = NGROUP*NWVL        # Number of threads used
-   NBUNCH  = NPHOTON//NGROUP    # Number of photons per group
-   NP_REST = NPHOTON%(NGROUP*NBUNCH) # Number of additional photons in the last group
-
-   wls= np.linspace(wl[0], wl[-1], num=NLOW, dtype=np.float32)
-   f  =  interp1d(wls,np.linspace(0, NLOW-1, num=NLOW))
-   iw =  f(wl)
-   iwls_in = np.floor(iw).astype(np.int8)        # index of lower wls value in the wls array, 
-   wwls_in = (iw-iwls_in).astype(np.float32)  # floating proportion between iwls and iwls+1
-   # special case for NLOW
-   ii = np.where(iwls_in==(NLOW-1))
-   iwls_in[ii] = NLOW-2
-   wwls_in[ii] = 1.
-
-   if verbose : 
-       fmt = 'Max Number of Threads : {}\nNumber of Threads : {}\n'
-       fmt+= 'Number of groups of photons: {}\nNumber of photons : {}\n'
-       fmt+= 'Number of layer: {}\nNumber of wavelength for absorption and output : {}\n'    
-       fmt+= 'Number of photons per group : {}\nNumber of additional photons in the last group : {}\n'
-       fmt+= 'Number of wavelength for scattering correction : {}\n'
-       print(fmt.format(NT, NTHREAD, NGROUP, NPHOTON, NLAYER, NWVL, NBUNCH, NP_REST, NLOW))
-
-   if alb_in is None  : alb_in = np.zeros(2*NWVL, dtype=np.float32)
-
-   sigma_ab_in  = np.zeros((NLAYER, NWVL), order='C', dtype=np.float32)
-   sigma_ab_in[:,:]  = sigma.swapaxes(0,1)
-
-   cd_in        = cd.reshape((NPHOTON, NLAYER), order='C').astype(np.float32)
-   S_in         = S.reshape((NPHOTON, 4),       order='C').astype(np.float32)
-   weight_in    = w.reshape((NPHOTON, NLOW),order='C').astype(np.float32)
-   nrrs_in      = nrrs.reshape(NPHOTON,order='C').astype(np.int8)
-   nsif_in      = nsif.reshape(NPHOTON,order='C').astype(np.int8)
-   nref_in      = nref.reshape(NPHOTON,order='C').astype(np.int8)
-   nvrs_in      = nvrs.reshape(NPHOTON,order='C').astype(np.int8)
-   nenv_in      = nenv.reshape(NPHOTON,order='C').astype(np.int8)
-   ith_in       = ith.reshape( NPHOTON,order='C').astype(np.int8)
-
-   res_out      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
-   res_sca      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
-   res_rrs      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
-   res_sif      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
-   res_vrs      = gpuzeros((4, NWVL, NBTHETA),   dtype=np.float64)
-
-   kernel2(np.int64(NPHOTON), np.int64(NLAYER), np.int64(NWVL), 
-                     np.int64(NTHREAD), np.int64(NGROUP), np.int64(NBUNCH), 
-                     np.int64(NP_REST), np.int64(NLOW), np.int64(NBTHETA),
-                     res_out, res_sca, res_rrs, res_sif, res_vrs, 
-                     to_gpu(sigma_ab_in), to_gpu(alb_in), to_gpu(cd_in),
-                     to_gpu(S_in), to_gpu(weight_in), to_gpu(nrrs_in), 
-                     to_gpu(nref_in), to_gpu(nsif_in), to_gpu(nvrs_in),
-                     to_gpu(nenv_in), to_gpu(ith_in), to_gpu(iwls_in), to_gpu(wwls_in), 
-                     block=(XBLOCK,1,1),grid=(XGRID,1,1))
-   return res_out, res_sca, res_rrs, res_sif, res_vrs
-'''
-
 
 def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
                 NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
@@ -3033,17 +2953,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
     else : 
         NSCL = 1
         tabDistTot = gpuzeros((1), dtype=np.float64)
-
-    '''
-    if hist : 
-        tabHistTot = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
-        dz    = abs(np.diff(prof_atm.get()['z'][0,:]))
-        sigma = np.diff(prof_atm.get()['OD_abs'][:,:])/dz
-        alb_in= np.concatenate([spectrum.get()['alb_surface'][:], spectrum.get()['alb_env'][:]])
-        wl = spectrum.get()['lambda'][:]
-    else :
-        tabHistTot = gpuzeros((1), dtype=np.float32)
-    '''
 
     # Initialize of the parameters
     tabPhotonsTot = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
@@ -3168,26 +3077,6 @@ def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX
         
         T = tabDist
         tabDistTot += T
-        
-        ## for record but no longer the prefered method
-        '''
-        if hist :
-            tabHistTot = tabHist
-            res,res_sca,res_rrs,res_sif,res_vrs = reduce_histories(kern2, np.squeeze(tabHist.get()), wl, sigma, NLOW,
-                                NBTHETA=NBTHETA, alb_in=alb_in)
-            if NBTHETA>1:
-                tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,:,None]
-                tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,:,None]
-                tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,:,None]
-                tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,:,None]
-                tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,:,None]
-            else :
-                tabPhotonsTot[0,:,:,:,:,:] += res[:,None,:,None]
-                tabPhotonsTot[1,:,:,:,:,:] += res_sca[:,None,:,None]
-                tabPhotonsTot[2,:,:,:,:,:] += res_rrs[:,None,:,None]
-                tabPhotonsTot[3,:,:,:,:,:] += res_sif[:,None,:,None]
-                tabPhotonsTot[4,:,:,:,:,:] += res_vrs[:,None,:,None]
-        '''
         
         N_simu += 1
 
