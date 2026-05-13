@@ -2776,7 +2776,6 @@ def init_profile(wl, prof, kind):
     return to_gpu(prof_gpu), to_gpu(cell_gpu)
 
 
-
 def multi_profiles(profs, kind='atm'):
     '''
     Internal reorganization of list of profiles for Jacobian (with finite differences) or sensitivities

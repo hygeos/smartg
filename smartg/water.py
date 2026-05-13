@@ -868,19 +868,20 @@ class IOP_profile(IOP_base):
                 wav_pha = self.pfwav
             Bp = self.calc_iop(wav_pha)['Bp']
             pha = self.phase(wav_pha, Bp[:,1:])
-            if self.pha.shape[2] == 4:
-                pha_6 = np.zeros((pha.shape[0], pha.shape[1], 6, pha.shape[3]), dtype=np.float64)
-                pha_6[:,:,0:4,:] = pha[:,:,:,:].copy() # F11, F12, F33, F34
-                pha_6[:,:,4,:] = pha[:,:,0,:].copy() # F22 = F11
-                pha_6[:,:,5,:] = pha[:,:,2,:].copy() # F44 = F33
-                axes = list(pha.axes)
+            phase_lut = pha['phase']
+            if phase_lut.shape[2] == 4:
+                pha_6 = np.zeros((phase_lut.shape[0], phase_lut.shape[1], 6, phase_lut.shape[3]), dtype=np.float64)
+                pha_6[:,:,0:4,:] = phase_lut[:,:,:,:].copy() # F11, F12, F33, F34
+                pha_6[:,:,4,:] = phase_lut[:,:,0,:].copy() # F22 = F11
+                pha_6[:,:,5,:] = phase_lut[:,:,2,:].copy() # F44 = F33
+                axes = list(phase_lut.axes)
                 axes[2] = np.arange(6)
-                pha = LUT(
+                phase_lut = LUT(
                     pha_6,
-                    names=pha.names,
+                    names=phase_lut.names,
                     axes=axes,)
 
-            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
+            pha_, ipha = calc_iphase(phase_lut, pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
 
             # index with ipha and reshape to broadcast to [wav, z]
             coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,:]
@@ -1019,7 +1020,7 @@ class IOP_profile(IOP_base):
         result.add_axis('wav_phase', wav)
         result.add_axis('z_phase', self.z[:-1])
         #result.add_axis('z_phase', -self.z[:-1])
-        result.add_axis('theta', ang*180./np.pi)
+        result.add_axis('theta_oc', ang*180./np.pi)
         result.add_dataset('phase', pha, ['wav_phase', 'z_phase', 'stk', 'theta_oc'])
         result.add_dataset('coef_trunc', integ_ff[:,:]*0.5, ['wav_phase', 'z_phase'])
 
