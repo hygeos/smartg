@@ -2828,15 +2828,40 @@ def multi_profiles(profs, kind='atm'):
 
 
 def reduce_diff(m, varnames, delta=None):
-    '''
-    Reduce finite differences run in ALIS mode, to obtain Jacobians (with finite differences) or sensitivities
+    """Post-process ALIS finite-difference runs into sensitivities/Jacobians.
 
-    Input: 
-        m : MLUT ouput of SMART-G
-        varnames  : list of variable names for which sensitivity is calculated
-    Keyword:
-        delta : eventually list of perturbation (float) for each variable, Jacobians are calculated instead of sensitivities 
-    '''
+    The input lookup tables are expected to be packed along the wavelength
+    axis as one reference block followed by one perturbed block per variable:
+    ``[ref, var1, var2, ...]``. For each radiometric quantity, this function
+    keeps the reference LUT and appends one finite-difference LUT per variable.
+
+    Parameters
+    ----------
+    m : MLUT
+        SMART-G output lookup-table container produced in ALIS finite-
+        difference mode.
+    varnames : sequence of str
+        Names of perturbed variables, in the same order as their wavelength
+        blocks in ``m``.
+    delta : sequence of float, optional
+        Perturbation amplitude for each variable. If provided, finite
+        differences are divided by ``delta[k]`` and the outputs are Jacobians.
+        If omitted, raw finite-difference sensitivities are returned.
+
+    Returns
+    -------
+    MLUT
+        Lookup-table container with:
+        - original radiometric LUTs over the reference wavelength block,
+        - one derived LUT per variable containing either sensitivity
+          ``f(x+dx)-f(x)`` or Jacobian ``(f(x+dx)-f(x))/dx``.
+
+    Notes
+    -----
+    Only LUTs whose description contains one of
+    ``'I_'``, ``'Q_'``, ``'U_'``, ``'V_'``, ``'transmission'``, or ``'flux'``
+    are processed.
+    """
 
     res=MLUT()
     NDIFF = len(varnames)
@@ -2863,11 +2888,12 @@ def reduce_diff(m, varnames, delta=None):
     return res
 
 
-def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_abs, max_hist, n_low,
-                n_pstk, xblock, xgrid, nb_theta, nb_phi,
-                n_lam, n_sensor, double, kernel, kernel2, progress, x0, le, tab_sensor, envmap, spectrum,
-                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,
-                stdev, stdev_lim, rng, alis, lobj_gpu, receiver_cell_size, nb_cx, nb_cy, lgobj_gpu, lrobj_gpu, lobj_spect, hist=False,
+def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_abs, 
+                max_hist, n_low, n_pstk, xblock, xgrid, nb_theta, nb_phi, n_lam, n_sensor,
+                double, kernel, kernel2, progress, x0, le, tab_sensor, envmap, spectrum,
+                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf,
+                cell_proba_icdf, stdev, stdev_lim, rng, alis, lobj_gpu, receiver_cell_size,
+                nb_cx, nb_cy, lgobj_gpu, lrobj_gpu, lobj_spect, hist=False,
                 amf_variance=False, nscl=1):
     """Run the Monte Carlo transport kernel until the requested photon budget.
 
