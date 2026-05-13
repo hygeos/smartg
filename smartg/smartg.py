@@ -2948,243 +2948,212 @@ def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_
     tuple
         Tuple containing, in order:
 
-        1. ``NPhotonsInTot`` (ndarray)
-        2. ``tabPhotonsTot`` (ndarray)
-        3. ``tabPhotonsTotNoAer`` (ndarray)
-        4. ``tabDistTot`` (ndarray)
-        5. ``tabHistTot`` (ndarray)
-        6. ``tabTransDir`` (ndarray)
+        1. ``n_photons_in_tot`` (ndarray)
+        2. ``tab_photons_tot`` (ndarray)
+        3. ``tab_photons_tot_no_aer`` (ndarray)
+        4. ``tab_dist_tot`` (ndarray)
+        5. ``tab_hist_tot`` (ndarray)
+        6. ``tab_trans_dir`` (ndarray)
         7. ``errorcount`` (pycuda.gpuarray.GPUArray)
-        8. ``NPhotonsOutTot`` (ndarray)
-        9. ``NPhotonsOutTotNoAer`` (ndarray)
+        8. ``n_photons_out_tot`` (ndarray)
+        9. ``n_photons_out_tot_no_aer`` (ndarray)
         10. ``sigma`` (ndarray or None)
-        11. ``N_simu`` (int)
+        11. ``n_simu`` (int)
         12. ``secs_cuda_clock`` (float)
-        13. ``tabMatRecep`` (ndarray or None)
-        14. ``matCats`` (ndarray or None)
-        15. ``matLoss`` (ndarray or None)
-        16. ``wPhCatTot`` (ndarray)
-        17. ``wPhCat2Tot`` (ndarray)
+        13. ``tab_mat_recep`` (ndarray or None)
+        14. ``mat_cats`` (ndarray or None)
+        15. ``mat_loss`` (ndarray or None)
+        16. ``w_ph_cat_tot`` (ndarray)
+        17. ``w_ph_cat2_tot`` (ndarray)
     """
-    # Backward-compatible aliases used throughout the historical implementation.
-    NBPHOTONS = nb_photons
-    NLVL = n_level
-    NATM = n_atm
-    NATM_ABS = n_atm_abs
-    NOCE = n_oce
-    NOCE_ABS = n_oce_abs
-    MAX_HIST = max_hist
-    NLOW = n_low
-    NPSTK = n_pstk
-    XBLOCK = xblock
-    XGRID = xgrid
-    NBTHETA = nb_theta
-    NBPHI = nb_phi
-    NLAM = n_lam
-    NSENSOR = n_sensor
-    kern = kernel
     _ = kernel2
-    p = progress
-    X0 = x0
-    myObjects0 = lobj_gpu
-    TC = receiver_cell_size
-    nbCx = nb_cx
-    nbCy = nb_cy
-    myGObj0 = lgobj_gpu
-    myRObj0 = lrobj_gpu
-    mySPECTObj0 = lobj_spect
     # Initializations
-    nThreadsActive = gpuzeros(1, dtype=np.uint32)
-    Counter = gpuzeros(1, dtype=np.uint64)
+    n_threads_active = gpuzeros(1, dtype=np.uint32)
+    counter = gpuzeros(1, dtype=np.uint64)
 
-    
-    if double : FDTYPE=np.float64
-    else : FDTYPE=np.float32
-
-    # If a receiver object is used then : initialize matrix and vectors for gains and losses
-    if TC is not None:
-        nbPhCat = gpuzeros(8, dtype=np.uint64) # vector to fill the number of photons for  each categories
-        wPhCat = gpuzeros((8, NLAM), dtype=FDTYPE)  # vector to fill the weight of photons for each categories
-        wPhCatTot = gpuzeros((8, NLAM), dtype=FDTYPE)
-        wPhCat2 = gpuzeros((8, NLAM), dtype=FDTYPE)  # sum of squared photons weight for each cats
-        wPhCat2Tot = gpuzeros((8, NLAM), dtype=FDTYPE)
-        tabObjInfo = gpuzeros((9, nbCx, nbCy), dtype=FDTYPE)
-        wPhLoss = gpuzeros(7, dtype=FDTYPE)
-        wPhLoss2 = gpuzeros(7, dtype=FDTYPE)
-        tabMatRecep = np.zeros((9, nbCx, nbCy), dtype=np.float64)
-        
-        # Matrix where lines : l0 = SumCats, l1=cat1, l2=cat2, ... l8=cat8
-        # And columns : c0=nbPhotons , c1=weight, c2=weight2, c3=flux(in watt), c4=errAbs, c5=err%
-        matCats = np.zeros((9, 6), dtype=np.float64)
-        
-        # Matrix where: M[0,0]=W_I, M[1,0]=W_rhoM, M[2,0]=W_rhoP, M[3,0]=W_BM, M[4,0]=W_BP, M[5,0]=W_SM, M[6,0]=W_SP
-        # and : M[0,1]=W_I², M[1,1]=W_rhoM², M[2,1]=W_rhoP², M[3,1]=W_BM², M[4,1]=W_BP², M[5,1]=W_SM², M[6,1]=W_SP²
-        matLoss = np.zeros((7, 2), dtype=np.float64)
+    if double:
+        fdtype = np.float64
     else:
-        nbPhCat = gpuzeros((1, 1), dtype=np.uint64)
-        wPhCat = gpuzeros((1, 1), dtype=FDTYPE)
-        wPhCat2 = gpuzeros((1, 1), dtype=FDTYPE)
-        wPhCatTot = gpuzeros((1, 1), dtype=FDTYPE)
-        wPhCat2Tot = gpuzeros((1, 1), dtype=FDTYPE)
-        wPhLoss = gpuzeros(1, dtype=FDTYPE)
-        wPhLoss2 = gpuzeros(1, dtype=FDTYPE)
-        tabObjInfo = gpuzeros((1, 1, 1), dtype=FDTYPE)
-        
+        fdtype = np.float32
+
+    # If a receiver object is used then: initialize matrix and vectors for gains and losses
+    if receiver_cell_size is not None:
+        nb_ph_cat = gpuzeros(8, dtype=np.uint64)  # number of photons in each category
+        w_ph_cat = gpuzeros((8, n_lam), dtype=fdtype)  # photon weight for each category
+        w_ph_cat_tot = gpuzeros((8, n_lam), dtype=fdtype)
+        w_ph_cat2 = gpuzeros((8, n_lam), dtype=fdtype)  # squared photon weights per category
+        w_ph_cat2_tot = gpuzeros((8, n_lam), dtype=fdtype)
+        tab_obj_info = gpuzeros((9, nb_cx, nb_cy), dtype=fdtype)
+        w_ph_loss = gpuzeros(7, dtype=fdtype)
+        w_ph_loss2 = gpuzeros(7, dtype=fdtype)
+        tab_mat_recep = np.zeros((9, nb_cx, nb_cy), dtype=np.float64)
+
+        # Matrix where lines: l0 = sumCats, l1=cat1, l2=cat2, ... l8=cat8
+        # and columns: c0=nbPhotons, c1=weight, c2=weight2, c3=flux (W), c4=errAbs, c5=err%
+        mat_cats = np.zeros((9, 6), dtype=np.float64)
+
+        # Matrix where: M[0,0]=W_I, M[1,0]=W_rhoM, ..., M[6,0]=W_SP
+        # and: M[0,1]=W_I^2, M[1,1]=W_rhoM^2, ..., M[6,1]=W_SP^2
+        mat_loss = np.zeros((7, 2), dtype=np.float64)
+    else:
+        nb_ph_cat = gpuzeros((1, 1), dtype=np.uint64)
+        w_ph_cat = gpuzeros((1, 1), dtype=fdtype)
+        w_ph_cat2 = gpuzeros((1, 1), dtype=fdtype)
+        w_ph_cat_tot = gpuzeros((1, 1), dtype=fdtype)
+        w_ph_cat2_tot = gpuzeros((1, 1), dtype=fdtype)
+        w_ph_loss = gpuzeros(1, dtype=fdtype)
+        w_ph_loss2 = gpuzeros(1, dtype=fdtype)
+        tab_obj_info = gpuzeros((1, 1, 1), dtype=fdtype)
+
     # Initialize the array for error counting
-    NERROR = 32
-    errorcount = gpuzeros(NERROR, dtype='uint64')
+    n_error = 32
+    errorcount = gpuzeros(n_error, dtype='uint64')
 
-    if (NATM >0):
-        tabTransDir = gpuzeros((NSENSOR,NLAM), dtype=np.float64)
-    else :
-        tabTransDir = gpuzeros((1,1), dtype=np.float64)
-    
-    if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-        NIAMF = 3 if amf_variance else 2
-        NSCL = nscl
-        tabDistTot = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NSCL,NIAMF), dtype=np.float64)
-    else : 
-        NSCL = 1
-        tabDistTot = gpuzeros((1), dtype=np.float64)
+    if n_atm > 0:
+        tab_trans_dir = gpuzeros((n_sensor, n_lam), dtype=np.float64)
+    else:
+        tab_trans_dir = gpuzeros((1, 1), dtype=np.float64)
 
-    # Initialize of the parameters
-    tabPhotonsTot = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-    tabPhotonsTotNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-    N_simu = 0
+    if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
+        n_iamf = 3 if amf_variance else 2
+        n_scl = nscl
+        tab_dist_tot = gpuzeros((n_level, n_atm_abs + n_oce_abs, n_sensor, nb_theta, nb_phi, n_scl, n_iamf), dtype=np.float64)
+    else:
+        n_scl = 1
+        tab_dist_tot = gpuzeros((1), dtype=np.float64)
+
+    # Initialize accumulators
+    tab_photons_tot = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64)
+    tab_photons_tot_no_aer = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64)
+    n_simu = 0
     if stdev:
-        # to calculate the standard deviation of the result, we accumulate the
-        # parameters and their squares
-        # finally we extrapolate in 1/sqrt(N_simu)
+        # Accumulate normalized quantities and their squares to estimate sigma.
         sum_x = 0.
         sum_x2 = 0.
 
-    # arrays for counting the input photons (per wavelength)
-    NPhotonsIn = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
-    NPhotonsInTot = gpuzeros((NSENSOR,NLAM), dtype=np.uint64)
-    
-    # arrays for counting the output photons
-    NPhotonsOut = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
-    NPhotonsOutNoAer = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
-    NPhotonsOutTot = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
-    NPhotonsOutTotNoAer = gpuzeros((NLVL,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.uint64)
+    # Arrays for counting launched photons (per wavelength)
+    n_photons_in = gpuzeros((n_sensor, n_lam), dtype=np.uint64)
+    n_photons_in_tot = gpuzeros((n_sensor, n_lam), dtype=np.uint64)
+
+    # Arrays for counting output photons
+    n_photons_out = gpuzeros((n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64)
+    n_photons_out_no_aer = gpuzeros((n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64)
+    n_photons_out_tot = gpuzeros((n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64)
+    n_photons_out_tot_no_aer = gpuzeros((n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64)
 
     if double:
-        tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-        tabPhotonsNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float64)
-        if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NSCL,NIAMF), dtype=np.float64)
-        else :
-            tabDist = gpuzeros((1), dtype=np.float64)
+        tab_photons = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64)
+        tab_photons_no_aer = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64)
+        if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
+            tab_dist = gpuzeros((n_level, n_atm_abs + n_oce_abs, n_sensor, nb_theta, nb_phi, n_scl, n_iamf), dtype=np.float64)
+        else:
+            tab_dist = gpuzeros((1), dtype=np.float64)
     else:
-        tabPhotons = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
-        tabPhotonsNoAer = gpuzeros((NLVL,NPSTK,NSENSOR,NLAM,NBTHETA,NBPHI), dtype=np.float32)
-        if ((NATM+NOCE >0) and (NATM_ABS+NOCE_ABS <500) and alis) : 
-            tabDist = gpuzeros((NLVL,NATM_ABS+NOCE_ABS,NSENSOR,NBTHETA,NBPHI,NSCL,NIAMF), dtype=np.float32)
-        else : 
-            tabDist = gpuzeros((1), dtype=np.float32)
+        tab_photons = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float32)
+        tab_photons_no_aer = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float32)
+        if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
+            tab_dist = gpuzeros((n_level, n_atm_abs + n_oce_abs, n_sensor, nb_theta, nb_phi, n_scl, n_iamf), dtype=np.float32)
+        else:
+            tab_dist = gpuzeros((1), dtype=np.float32)
 
-    if hist : 
-        #tabHist = gpuzeros((MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,NBTHETA,1), dtype=np.float32)
-        #tabHist = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),1,1,1), dtype=np.float32)
-        tabHistTot = gpuzeros((2,MAX_HIST,(NATM_ABS+NOCE_ABS+NPSTK+NLOW+6),NSENSOR,NBTHETA,NBPHI), dtype=np.float32)
-
-    else : 
-        tabHistTot = gpuzeros((1), dtype=np.float32)
-
-    # local estimates angles
-    if le != None:
-        tabthv = to_gpu(le['th'].astype('float32'))
-        tabphi = to_gpu(le['phi'].astype('float32'))
-        if 'count_level' in le: tablevel = to_gpu(le['count_level'].astype('int32'))
-        else: tablevel = to_gpu(np.full((NBTHETA), -2).astype('int32'))
+    if hist:
+        tab_hist_tot = gpuzeros((2, max_hist, (n_atm_abs + n_oce_abs + n_pstk + n_low + 6), n_sensor, nb_theta, nb_phi), dtype=np.float32)
     else:
-        tabthv = gpuzeros(1, dtype='float32')
-        tabphi = gpuzeros(1, dtype='float32')
-        tablevel = to_gpu(np.array([-2]).astype('int32'))
+        tab_hist_tot = gpuzeros((1), dtype=np.float32)
+
+    # Local estimate angles
+    if le is not None:
+        tab_thv = to_gpu(le['th'].astype('float32'))
+        tab_phi = to_gpu(le['phi'].astype('float32'))
+        if 'count_level' in le:
+            tab_level = to_gpu(le['count_level'].astype('int32'))
+        else:
+            tab_level = to_gpu(np.full((nb_theta), -2).astype('int32'))
+    else:
+        tab_thv = gpuzeros(1, dtype='float32')
+        tab_phi = gpuzeros(1, dtype='float32')
+        tab_level = to_gpu(np.array([-2]).astype('int32'))
 
     secs_cuda_clock = 0.
-    alis_norm = NLAM if NLOW!=0 else 1
-    while((np.sum(NPhotonsInTot.get())/alis_norm) < NBPHOTONS):
-        tabPhotons.fill(0.)
-        tabPhotonsNoAer.fill(0.)
-        NPhotonsOut.fill(0)
-        NPhotonsOutNoAer.fill(0)
-        NPhotonsIn.fill(0)
-        Counter.fill(0)
-        # en rapport avec les objets
-        tabObjInfo.fill(0)
-        wPhCat.fill(0)
-        wPhCat2.fill(0)
-        wPhLoss.fill(0)
-        wPhLoss2.fill(0)
-        nThreadsActive.fill(XBLOCK*XGRID)
-        
+    alis_norm = n_lam if n_low != 0 else 1
+    nb_photons_target = nb_photons
+    while (np.sum(n_photons_in_tot.get()) / alis_norm) < nb_photons_target:
+        tab_photons.fill(0.)
+        tab_photons_no_aer.fill(0.)
+        n_photons_out.fill(0)
+        n_photons_out_no_aer.fill(0)
+        n_photons_in.fill(0)
+        counter.fill(0)
+        tab_obj_info.fill(0)
+        w_ph_cat.fill(0)
+        w_ph_cat2.fill(0)
+        w_ph_loss.fill(0)
+        w_ph_loss2.fill(0)
+        n_threads_active.fill(xblock * xgrid)
+
         start_cuda_clock = cuda.Event()
         end_cuda_clock = cuda.Event()
         start_cuda_clock.record()
 
-        # kernel launch
-        kern(envmap, spectrum, X0, faer, foce,
-             errorcount, nThreadsActive, tabPhotons, tabDist, tabHistTot, MAX_HIST, tabPhotonsNoAer, tabTransDir,
-             Counter, NPhotonsIn, NPhotonsOut, NPhotonsOutNoAer, tabthv, tabphi, tablevel, tab_sensor,
-             prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, 
-             rng.state, tabObjInfo,
-             myObjects0, myGObj0, myRObj0, mySPECTObj0, nbPhCat, wPhCat, wPhCat2,
-             wPhLoss, wPhLoss2, block=(XBLOCK, 1, 1), grid=(XGRID, 1, 1))
+        # Kernel launch
+        kernel(envmap, spectrum, x0, faer, foce,
+               errorcount, n_threads_active, tab_photons, tab_dist, tab_hist_tot, max_hist, tab_photons_no_aer, tab_trans_dir,
+               counter, n_photons_in, n_photons_out, n_photons_out_no_aer, tab_thv, tab_phi, tab_level, tab_sensor,
+               prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,
+               rng.state, tab_obj_info,
+               lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect, nb_ph_cat, w_ph_cat, w_ph_cat2,
+               w_ph_loss, w_ph_loss2, block=(xblock, 1, 1), grid=(xgrid, 1, 1))
 
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
-        secs_cuda_clock = secs_cuda_clock + start_cuda_clock.time_till(end_cuda_clock)
+        secs_cuda_clock += start_cuda_clock.time_till(end_cuda_clock)
 
         cuda.Context.synchronize()
         np.set_printoptions(precision=5, linewidth=150)
 
-        if TC is not None:
-            # Matrix with the photon weights distribution on the receiver surface
-            tabMatRecep += tabObjInfo[:, :, :].get()
-            # Fill the matrix malLoss with the photon weights for losses estimates
-            matLoss[:,0] += wPhLoss[:].get()
-            matLoss[:,1] += wPhLoss2[:].get()
-            # Begin to fill the matrix matCats
-            matCats[0,1] += np.sum(wPhCat[:, :].get())
-            matCats[0,2] += np.sum(wPhCat2[:, :].get())
-            wPhCatTot += wPhCat
-            wPhCat2Tot += wPhCat2
-            for i in range (0, 8):
-                # Count the photon weights for each category
-                matCats[i+1,1] += np.sum(wPhCat[i, :].get())    # sum of wi
-                matCats[i+1,2] += np.sum(wPhCat2[i, :].get())   # sum of wi
-        
-        L = NPhotonsIn   # number of photons launched by last kernel
-        NPhotonsInTot += L
+        if receiver_cell_size is not None:
+            # Matrix with the photon weight distribution on the receiver surface.
+            tab_mat_recep += tab_obj_info[:, :, :].get()
+            # Fill loss matrix with photon weights used for loss estimates.
+            mat_loss[:, 0] += w_ph_loss[:].get()
+            mat_loss[:, 1] += w_ph_loss2[:].get()
+            # Fill category matrix.
+            mat_cats[0, 1] += np.sum(w_ph_cat[:, :].get())
+            mat_cats[0, 2] += np.sum(w_ph_cat2[:, :].get())
+            w_ph_cat_tot += w_ph_cat
+            w_ph_cat2_tot += w_ph_cat2
+            for i in range(0, 8):
+                mat_cats[i + 1, 1] += np.sum(w_ph_cat[i, :].get())
+                mat_cats[i + 1, 2] += np.sum(w_ph_cat2[i, :].get())
 
-        NPhotonsOutTot += NPhotonsOut
-        S = tabPhotons   # sum of weights for the last kernel
+        launched_last = n_photons_in
+        n_photons_in_tot += launched_last
 
-        NPhotonsOutTotNoAer += NPhotonsOutNoAer
-        SRayleigh = tabPhotonsNoAer   # sum of weights for the last kernel
+        n_photons_out_tot += n_photons_out
+        sum_weights = tab_photons
 
-        if(not hist) : 
-            tabPhotonsTot += S
-            tabPhotonsTotNoAer += SRayleigh
-        
-        T = tabDist
-        tabDistTot += T
-        
-        N_simu += 1
+        n_photons_out_tot_no_aer += n_photons_out_no_aer
+        sum_weights_no_aer = tab_photons_no_aer
 
-        sphot = np.sum(NPhotonsInTot.get())/alis_norm
+        if not hist:
+            tab_photons_tot += sum_weights
+            tab_photons_tot_no_aer += sum_weights_no_aer
+
+        tab_dist_tot += tab_dist
+
+        n_simu += 1
+
+        sphot = np.sum(n_photons_in_tot.get()) / alis_norm
         if stdev:
-            (NSENSOR,NLAM) = NPhotonsIn.shape
-            L = L.reshape((1,1,NSENSOR,NLAM,1,1))   # broadcast to tabPhotonsTot
-            #warn('stdev is activated: it is known to slow down the code considerably.')
-            SoverL = S.get()/L.get()
-            sum_x += SoverL
-            sum_x2 += (SoverL)**2
+            n_sensor_cur, n_lam_cur = n_photons_in.shape
+            launched_last = launched_last.reshape((1, 1, n_sensor_cur, n_lam_cur, 1, 1))
+            s_over_l = sum_weights.get() / launched_last.get()
+            sum_x += s_over_l
+            sum_x2 += s_over_l**2
 
             if stdev_lim is not None:
-                sigma_bis = np.sqrt(sum_x2/N_simu - (sum_x/N_simu)**2)
-                sigma_bis /= np.sqrt(N_simu)
+                sigma_bis = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu)**2)
+                sigma_bis /= np.sqrt(n_simu)
                 sigma_bis[np.isnan(sigma_bis)] = 0
 
                 abs_min = stdev_lim.dict['err_abs_min']
@@ -3194,84 +3163,79 @@ def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_
                 level_stdev = stdev_lim.dict['level']
                 format_std = stdev_lim.dict['format']
 
-                avg = sum_x/N_simu
-                err_rel = (sigma_bis / avg)*100
+                avg = sum_x / n_simu
+                err_rel = (sigma_bis / avg) * 100
                 err_rel[np.isnan(err_rel)] = 0
-                max_rerr = np.max(err_rel[level_stdev,stk_stdev,:,:,:,:])
-                max_aerr = np.max(sigma_bis[level_stdev,stk_stdev,:,:,:,:])
+                max_rerr = np.max(err_rel[level_stdev, stk_stdev, :, :, :, :])
+                max_aerr = np.max(sigma_bis[level_stdev, stk_stdev, :, :, :, :])
 
-                if (stdev_lim.dict['verbose']):
+                if stdev_lim.dict['verbose']:
                     print(f"max rel_err = {max_rerr:{format_std}}; max abs_err = {max_aerr:{format_std}}")
 
-                if ( (N_simu >= min_loop and max_aerr <= abs_min) or (N_simu >= min_loop and max_rerr <= rel_min) ):
-                    # update of the progression Bar
-                    p.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
+                if (n_simu >= min_loop and max_aerr <= abs_min) or (n_simu >= min_loop and max_rerr <= rel_min):
+                    progress.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
                     break
 
-        if TC is not None and stdev_lim is not None:
-            NBPHOTONS_tmp = np.sum(NPhotonsInTot.get())
-            nBis = NBPHOTONS_tmp/(NBPHOTONS_tmp-1)
-            sum2Z = (matCats[0,1]*matCats[0,1])/NBPHOTONS_tmp
-            sumZ2 = matCats[0,2]
-            if (le is None): num = (nBis * (sumZ2 - sum2Z))**0.5
-            else: num = (nBis * abs(sumZ2 - sum2Z))**0.5
-            den = matCats[0,1]
-            err_p_tmp = (num/den)*100
+        if receiver_cell_size is not None and stdev_lim is not None:
+            nb_photons_tmp = np.sum(n_photons_in_tot.get())
+            n_bis = nb_photons_tmp / (nb_photons_tmp - 1)
+            sum_2z = (mat_cats[0, 1] * mat_cats[0, 1]) / nb_photons_tmp
+            sum_z2 = mat_cats[0, 2]
+            if le is None:
+                num = (n_bis * (sum_z2 - sum_2z))**0.5
+            else:
+                num = (n_bis * abs(sum_z2 - sum_2z))**0.5
+            den = mat_cats[0, 1]
+            err_p_tmp = (num / den) * 100
             min_loop = stdev_lim.dict['nb_loop_min']
             rel_min = stdev_lim.dict['err_rel_min']
 
-            if (stdev_lim.dict['verbose']):
+            if stdev_lim.dict['verbose']:
                 print(f"relative_err = {err_p_tmp:{format_std}}")
 
-            # update of the progression Bar
-            p.update(sphot, f"Launched {sphot:.3g} photons; err[rel] = {err_p_tmp:{format_std}};")
+            progress.update(sphot, f"Launched {sphot:.3g} photons; err[rel] = {err_p_tmp:{format_std}};")
 
-            if (N_simu >= min_loop and err_p_tmp <= rel_min):
-                NBPHOTONS = NBPHOTONS_tmp
-                break  
-        elif (stdev and stdev_lim is not None):
-            # update of the progression Bar
-            p.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
+            if n_simu >= min_loop and err_p_tmp <= rel_min:
+                nb_photons_target = nb_photons_tmp
+                break
+        elif stdev and stdev_lim is not None:
+            progress.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
         else:
-            # update of the progression Bar
-            p.update(sphot, 'Launched {:.3g} photons'.format(sphot))
-            
-    # END WHILE LOOP
-    secs_cuda_clock = secs_cuda_clock*1e-3
+            progress.update(sphot, 'Launched {:.3g} photons'.format(sphot))
 
-    if TC is not None: # If there is a receiver obj
-        nBis = NBPHOTONS/(NBPHOTONS-1)
-        # Count the total number of photons received and also for each cats
-        matCats[0,0] = np.sum(nbPhCat[:].get())
-        for i in range (0, 8): # Here for each cats
-            matCats[i+1,0] = nbPhCat[i].get()
-        
-        # Relative and absolute error for sum of cats and also for each cats
-        for i in range (0, 9):
-            if (matCats[i,0] != 0 and matCats[i,1] != 0):
-                # Monte carlo err computation see the book of Dunn and Shultis
-                sum2Z = (matCats[i,1]*matCats[i,1])/NBPHOTONS
-                sumZ2 = matCats[i,2]
-                if (le is None):
-                    matCats[i,4] = (nBis * (sumZ2 - sum2Z))**0.5 # errAbs not normalized
+    # END WHILE LOOP
+    secs_cuda_clock *= 1e-3
+
+    if receiver_cell_size is not None:
+        n_bis = nb_photons_target / (nb_photons_target - 1)
+        # Count the total number of received photons and for each category.
+        mat_cats[0, 0] = np.sum(nb_ph_cat[:].get())
+        for i in range(0, 8):
+            mat_cats[i + 1, 0] = nb_ph_cat[i].get()
+
+        # Relative and absolute error for sum of categories and per-category values.
+        for i in range(0, 9):
+            if mat_cats[i, 0] != 0 and mat_cats[i, 1] != 0:
+                sum_2z = (mat_cats[i, 1] * mat_cats[i, 1]) / nb_photons_target
+                sum_z2 = mat_cats[i, 2]
+                if le is None:
+                    mat_cats[i, 4] = (n_bis * (sum_z2 - sum_2z))**0.5
                 else:
-                    matCats[i,4] = (nBis * abs(sumZ2 - sum2Z))**0.5
-                matCats[i,5] = (matCats[i,4]/matCats[i,1])*100 # err%
+                    mat_cats[i, 4] = (n_bis * abs(sum_z2 - sum_2z))**0.5
+                mat_cats[i, 5] = (mat_cats[i, 4] / mat_cats[i, 1]) * 100
     else:
-        tabMatRecep = None; matCats = None; matLoss=None
+        tab_mat_recep = None
+        mat_cats = None
+        mat_loss = None
 
     if stdev:
-        # finalize the calculation of the standard deviation
-        sigma = np.sqrt(sum_x2/N_simu - (sum_x/N_simu)**2)
-
-        # extrapolate in 1/sqrt(N_simu)
-        sigma /= np.sqrt(N_simu)
+        sigma = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu)**2)
+        sigma /= np.sqrt(n_simu)
     else:
         sigma = None
 
-
-    return NPhotonsInTot.get(), tabPhotonsTot.get(), tabPhotonsTotNoAer.get(), tabDistTot.get(), tabHistTot.get(), tabTransDir.get(), errorcount, \
-        NPhotonsOutTot.get(), NPhotonsOutTotNoAer.get(), sigma, N_simu, secs_cuda_clock, tabMatRecep, matCats, matLoss, wPhCatTot.get(), wPhCat2Tot.get()
+    return n_photons_in_tot.get(), tab_photons_tot.get(), tab_photons_tot_no_aer.get(), tab_dist_tot.get(), tab_hist_tot.get(), tab_trans_dir.get(), errorcount, \
+        n_photons_out_tot.get(), n_photons_out_tot_no_aer.get(), sigma, n_simu, secs_cuda_clock, tab_mat_recep, mat_cats, mat_loss, w_ph_cat_tot.get(), w_ph_cat2_tot.get()
 
 
 def _get_git_attrs():
