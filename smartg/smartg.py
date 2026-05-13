@@ -2827,7 +2827,7 @@ def multi_profiles(profs, kind='atm'):
     return pro
 
 
-def reduce_diff(m, varnames, delta=None):
+def reduce_diff(ds_sg, varnames, delta=None):
     """Post-process ALIS finite-difference runs into sensitivities/Jacobians.
 
     The input lookup tables are expected to be packed along the wavelength
@@ -2837,54 +2837,83 @@ def reduce_diff(m, varnames, delta=None):
 
     Parameters
     ----------
-    m : MLUT
-        SMART-G output lookup-table container produced in ALIS finite-
-        difference mode.
+    ds_sg : xr.DataArray
+        SMART-G output produced in ALIS finite-difference mode.
     varnames : sequence of str
         Names of perturbed variables, in the same order as their wavelength
-        blocks in ``m``.
+        blocks in ``ds_sg``.
     delta : sequence of float, optional
         Perturbation amplitude for each variable. If provided, finite
         differences are divided by ``delta[k]`` and the outputs are Jacobians.
         If omitted, raw finite-difference sensitivities are returned.
 
-    Returns
-    -------
-    MLUT
-        Lookup-table container with:
-        - original radiometric LUTs over the reference wavelength block,
-        - one derived LUT per variable containing either sensitivity
-          ``f(x+dx)-f(x)`` or Jacobian ``(f(x+dx)-f(x))/dx``.
+        Returns
+        -------
+        xr.Dataset
+                Dataset containing:
+                - original radiometric variables over the reference wavelength block,
+                - one derived variable per perturbation containing either sensitivity
+                    ``f(x+dx)-f(x)`` or Jacobian ``(f(x+dx)-f(x))/dx``.
 
     Notes
     -----
-    Only LUTs whose description contains one of
+    Only variables whose names contain one of
     ``'I_'``, ``'Q_'``, ``'U_'``, ``'V_'``, ``'transmission'``, or ``'flux'``
     are processed.
     """
 
-    res=MLUT()
-    NDIFF = len(varnames)
-    NWL   = m.axis('wavelength').shape
-    NW    = int(NWL[0]/(NDIFF+1))
-    
-    for l in m:
-        for pref in ['I_','Q_','U_','V_','transmission','flux'] :
-            if pref in l.desc:
-                iw = l.names.index('wavelength')
-                lr = l.sub(d={'wavelength':np.arange(NW)})
-                res.add_lut(lr, desc=l.desc)
-                for k,varname in enumerate(varnames):
-                    lr = l.sub(d={'wavelength':np.arange(NW)+(k+1)*NW}) - l.sub(d={'wavelength':np.arange(NW)})
-                    if delta is not None:
-                        lr = lr/delta[k]
-                        lr.desc = 'd'+l.desc+'/'+'d'+varname
-                    else:
-                        lr.desc = 'd'+l.desc+'->('+varname+')'
-                    lr.names[iw]= 'wavelength'
-                    lr.axes[iw] = m.axis('wavelength')[:NW]
-                    res.add_lut(lr)
-    res.attrs = m.attrs
+    if hasattr(ds_sg, 'to_xarray'):
+        ds_sg = ds_sg.to_xarray()
+
+    if isinstance(ds_sg, xr.DataArray):
+        data_name = ds_sg.name if ds_sg.name is not None else 'data'
+        ds_sg = ds_sg.to_dataset(name=data_name)
+
+    if not isinstance(ds_sg, xr.Dataset):
+        raise TypeError('reduce_diff expects MLUT/LUT or xarray Dataset/DataArray input.')
+
+    if 'wavelength' not in ds_sg.dims:
+        raise ValueError("Input must define a 'wavelength' dimension.")
+
+    n_diff = len(varnames)
+    n_wl_total = ds_sg.sizes['wavelength']
+    block_size = int(n_wl_total / (n_diff + 1))
+    if block_size * (n_diff + 1) != n_wl_total:
+        raise ValueError('wavelength size is not compatible with the number of perturbation blocks.')
+
+    if delta is not None:
+        if np.isscalar(delta):
+            delta = np.full(n_diff, float(delta), dtype=np.float64)
+        else:
+            delta = np.asarray(delta)
+        if delta.shape[0] != n_diff:
+            raise ValueError('delta must have the same length as varnames.')
+
+    wl_ref = ds_sg['wavelength'].isel(wavelength=slice(0, block_size))
+    prefixes = ('I_', 'Q_', 'U_', 'V_', 'transmission', 'flux')
+
+    out_vars = OrderedDict()
+    for var_name, da in ds_sg.data_vars.items():
+        if 'wavelength' not in da.dims:
+            continue
+        if not any(pref in var_name for pref in prefixes):
+            continue
+
+        ref_da = da.isel(wavelength=slice(0, block_size)).assign_coords(wavelength=wl_ref)
+        out_vars[var_name] = ref_da
+
+        for k, pert_name in enumerate(varnames):
+            pert_da = da.isel(wavelength=slice((k + 1) * block_size, (k + 2) * block_size)).assign_coords(wavelength=wl_ref)
+            diff_da = pert_da - ref_da
+            if delta is not None:
+                diff_da = diff_da / delta[k]
+                deriv_name = f'd{var_name}/d{pert_name}'
+            else:
+                deriv_name = f'd{var_name}->({pert_name})'
+            diff_da.attrs = dict(da.attrs)
+            out_vars[deriv_name] = diff_da
+
+    res = xr.Dataset(data_vars=out_vars, attrs=dict(ds_sg.attrs))
     return res
 
 
