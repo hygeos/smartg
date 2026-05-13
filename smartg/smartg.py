@@ -2863,43 +2863,136 @@ def reduce_diff(m, varnames, delta=None):
     return res
 
 
-def loop_kernel(NBPHOTONS, faer, foce, NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW,
-                NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
-                NLAM, NSENSOR, double, kern, kern2, p, X0, le, tab_sensor, envmap, spectrum,
+def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_abs, max_hist, n_low,
+                n_pstk, xblock, xgrid, nb_theta, nb_phi,
+                n_lam, n_sensor, double, kernel, kernel2, progress, x0, le, tab_sensor, envmap, spectrum,
                 prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,
-                stdev, stdev_lim, rng, alis, myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=False,
+                stdev, stdev_lim, rng, alis, lobj_gpu, receiver_cell_size, nb_cx, nb_cy, lgobj_gpu, lrobj_gpu, lobj_spect, hist=False,
                 amf_variance=False, nscl=1):
-    """
-    launch the kernel several time until the targeted number of photons injected is reached
+    """Run the Monte Carlo transport kernel until the requested photon budget.
 
-    Arguments:
-        - NBPHOTONS : Number of photons injected
-        - Tableau : Class containing the arrays sent to the device
-        - NLVL : Number of output levels
-        - NATM : Number of atmospheric layers
-        - NPSTK : Number of Stokes parameters + 1 for number of photons
-        - BLOCK : Block dimension
-        - XGRID : Grid dimension
-        - NBTHETA : Number of intervals in zenith
-        - NLAM : Number of wavelengths
-        - options : compilation options
-        - kern : kernel launching the radiative transfer
-        - p: progress bar object
-        - X0: initial coordinates of the photon entering the atmosphere
-        - myObjects0 : gpu array containing the information of all the objects
-        - TC : if there is a receiver object, this is the size of 1 cell (result visualisation)
-        - nbCx, nbCy : number of cells in x and y directions
-    --------------------------------------------------------------
-    Returns :
-        - nbPhotonsTot : Total number of photons processed
-        - NPhotonsInTot : Total number of photons processed by interval
-        - nbPhotonsSorTot : Total number of outgoing photons
-        - tabPhotonsTot : Total weight of all outgoing photons
-        - tabDistTot    : Total distance traveled by photons in atmospheric layers
-        - tabMatRecep : Matrix containing the photon weight for each cell of the receiver
-        - vecCats : vector containing the photon's number/weight of each category
+    This function repeatedly launches the GPU kernel, accumulates radiometric
+    outputs, optional ALIS path-length diagnostics, optional history buffers,
+    and optional receiver-object diagnostics until the stopping criterion is
+    reached.
 
+    Parameters
+    ----------
+    nb_photons : int
+        Target number of launched photons.
+    faer, foce : int
+        Flags controlling aerosol and ocean contributions in the kernel.
+    n_level : int
+        Number of output levels.
+    n_atm, n_atm_abs : int
+        Number of atmospheric layers and number of atmospheric absorbing layers.
+    n_oce, n_oce_abs : int
+        Number of ocean layers and number of ocean absorbing layers.
+    max_hist : int
+        Maximum history length when ``hist=True``.
+    n_low : int
+        Number of wavelengths in ALIS low-resolution mode.
+    n_pstk : int
+        Number of Stokes components plus one accumulator component.
+    xblock, xgrid : int
+        CUDA launch dimensions (threads per block and number of blocks).
+    nb_theta, nb_phi : int
+        Number of angular bins in zenith and azimuth.
+    n_lam : int
+        Number of wavelengths.
+    n_sensor : int
+        Number of sensors.
+    double : bool
+        If True, use double precision for kernel accumulators.
+    kernel : callable
+        Main GPU kernel entry point.
+    kernel2 : callable
+        Secondary kernel handle (kept for API compatibility).
+    progress : Progress
+        Progress-bar-like object exposing ``update(value, message)``.
+    x0 : pycuda.gpuarray.GPUArray
+        Initial photon position.
+    le : dict or None
+        Local estimate configuration, or None.
+    tab_sensor, envmap, spectrum : pycuda.gpuarray.GPUArray
+        Sensor table, environment map, and spectrum arrays on device.
+    prof_atm, prof_oc : pycuda.gpuarray.GPUArray
+        Atmospheric and ocean profile tables.
+    cell_atm, cell_oc : pycuda.gpuarray.GPUArray
+        Atmospheric and ocean cell lookup tables.
+    wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf : pycuda.gpuarray.GPUArray
+        Inverse-CDF tables for wavelength, sensor, and cell sampling.
+    stdev : bool
+        If True, estimate standard deviation of normalized outputs.
+    stdev_lim : object or None
+        Optional adaptive stopping criterion based on absolute/relative error.
+    rng : object
+        Random-number generator backend with a ``state`` GPU buffer.
+    alis : bool
+        Whether ALIS mode is active.
+    lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect : pycuda.gpuarray.GPUArray
+        Object, object-group, receiver-object, and object-spectrum GPU tables.
+    receiver_cell_size : float or None
+        Receiver cell size. If None, receiver diagnostics are disabled.
+    nb_cx, nb_cy : int
+        Receiver grid dimensions in x and y.
+    hist : bool, optional
+        If True, accumulate photon histories.
+    amf_variance : bool, optional
+        If True, allocate extra AMF variance channel in ALIS distances.
+    nscl : int, optional
+        Number of ALIS scaling channels.
+
+    Returns
+    -------
+    tuple
+        Tuple containing, in order:
+
+        1. ``NPhotonsInTot`` (ndarray)
+        2. ``tabPhotonsTot`` (ndarray)
+        3. ``tabPhotonsTotNoAer`` (ndarray)
+        4. ``tabDistTot`` (ndarray)
+        5. ``tabHistTot`` (ndarray)
+        6. ``tabTransDir`` (ndarray)
+        7. ``errorcount`` (pycuda.gpuarray.GPUArray)
+        8. ``NPhotonsOutTot`` (ndarray)
+        9. ``NPhotonsOutTotNoAer`` (ndarray)
+        10. ``sigma`` (ndarray or None)
+        11. ``N_simu`` (int)
+        12. ``secs_cuda_clock`` (float)
+        13. ``tabMatRecep`` (ndarray or None)
+        14. ``matCats`` (ndarray or None)
+        15. ``matLoss`` (ndarray or None)
+        16. ``wPhCatTot`` (ndarray)
+        17. ``wPhCat2Tot`` (ndarray)
     """
+    # Backward-compatible aliases used throughout the historical implementation.
+    NBPHOTONS = nb_photons
+    NLVL = n_level
+    NATM = n_atm
+    NATM_ABS = n_atm_abs
+    NOCE = n_oce
+    NOCE_ABS = n_oce_abs
+    MAX_HIST = max_hist
+    NLOW = n_low
+    NPSTK = n_pstk
+    XBLOCK = xblock
+    XGRID = xgrid
+    NBTHETA = nb_theta
+    NBPHI = nb_phi
+    NLAM = n_lam
+    NSENSOR = n_sensor
+    kern = kernel
+    _ = kernel2
+    p = progress
+    X0 = x0
+    myObjects0 = lobj_gpu
+    TC = receiver_cell_size
+    nbCx = nb_cx
+    nbCy = nb_cy
+    myGObj0 = lgobj_gpu
+    myRObj0 = lrobj_gpu
+    mySPECTObj0 = lobj_spect
     # Initializations
     nThreadsActive = gpuzeros(1, dtype=np.uint32)
     Counter = gpuzeros(1, dtype=np.uint64)
