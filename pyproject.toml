@@ -94,3 +94,13 @@ test-basic = """
 pytest smartg/tests/test_cuda.py smartg/tests/test_profile.py
 smartg/tests/test_smartg.py -s -v"""
 test-all = "pytest smartg/tests/ -s -v"
+
+[tool.pixi.feature.extra.dependencies]
+radis = "*"
+
+[tool.pixi.feature.extra.pypi-dependencies]
+jax = {version = ">=0.4", extras = ["cuda12"]}
+statsmodels = "*"
+
+[dependency-groups]
+extra = ["radis", "hapi"]

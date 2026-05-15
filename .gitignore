@@ -4,6 +4,7 @@ auxdata/*
 notebooks/*
 !notebooks/demo_notebook.ipynb
 !notebooks/demo_notebook_objects.ipynb
+!notebooks/demo_notebook_photons_histories.ipynb
 !notebooks/notebooks/Validation_smartg_compilation.ipynb
 !notebooks/validation_SMARTG_IPRT_phaseA.ipynb
 !notebooks/validation_SMARTG_IPRT_phaseB-C2.ipynb
