@@ -1449,7 +1449,7 @@ class Smartg(object):
   
         if prof_atm is not None:
             faer = calculF(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
-            prof_atm_gpu, cell_atm_gpu = init_profile(wl, prof_atm, 'atm')
+            prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.coords['z_atm']) - 1
             if self.opt3D : 
                 NATM_ABS = np.int32(prof_atm['iabs_atm'].to_numpy().max())
@@ -1545,7 +1545,7 @@ class Smartg(object):
 
         if prof_oc is not None:
             foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
-            prof_oc_gpu, cell_oc_gpu = init_profile(wl, prof_oc, 'oc')
+            prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.coords['z_oc']) - 1
             if self.opt3D : NOCE_ABS = np.int32(prof_oc['iabs_oc'].to_numpy().max())
             else : NOCE_ABS = NOCE
@@ -2412,14 +2412,15 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
 
     Parameters
     ----------
-    profile : MLUT
+    profile : xr.Dataset
         The atmosphere/ocean profile.
     N : int
         The number of angles
     DEPO : float
         The depolarization factor 'atmospheric'.
     kind : str
-        The kind of profile. Can be 'atm' or 'oc'.
+        Profile family identifier. Must be either ``'atm'`` (atmosphere) or
+        ``'oc'`` (ocean).
     pol_off : bool, optional
         Deactivate polarization. Default False (meaning polarization is on).
     """
@@ -2706,12 +2707,36 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
             copy_to_device('LMODEd', 4, np.int32)
         if (cusL is None):
             copy_to_device('LMODEd', 0, np.int32)
-        
-def init_profile(wl, prof, kind):
-    '''
-    take the profile as a MLUT, and setup the gpu structure
-    kind = 'atm' or 'oc' for atmosphere or ocean
-    '''
+
+
+def _init_profile(wl, prof, kind):
+    """Prepare profile and cell arrays on the GPU.
+
+    Convert an atmospheric or oceanic profile into the internal SMART-G
+    structured arrays and upload them to GPU memory.
+
+    Parameters
+    ----------
+    wl : 1-D ndarray
+        Wavelength grid used for the simulation. Its length defines the first
+        dimension of the generated profile array.
+    prof : xr.Dataset
+        Atmospheric or oceanic profile.
+    kind : str
+        Profile family identifier. Must be either ``'atm'`` (atmosphere) or
+        ``'oc'`` (ocean).
+
+    Returns
+    -------
+    tuple
+        Two GPU arrays ``(prof_gpu, cell_gpu)`` where:
+
+        - ``prof_gpu`` contains the profile 1-D optical properties,
+        - ``cell_gpu`` contains the profile 3-D optical properties.
+    """
+
+    if kind not in ('atm', 'oc'):
+        raise ValueError("kind must be either 'atm' or 'oc'.")
 
     if hasattr(prof, 'to_xarray'):
         prof = prof.to_xarray()
