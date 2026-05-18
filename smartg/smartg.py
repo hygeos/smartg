@@ -1695,8 +1695,8 @@ class Smartg(object):
         if (not self.pp and not reflectance): HORIZ = 0
 
         # initialization of the constants
-        InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, self.mod,
-                  NBPHOTONS, NBLOOP, THVDEG, DEPO,
+        _init_const(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, self.mod,
+                  NBLOOP, THVDEG,
                   XBLOCK, XGRID, NLAM, SIM, NF,
                   NBTHETA, NBPHI, OUTPUT_LAYERS,
                   RTER, LE, ZIP,
@@ -1705,7 +1705,8 @@ class Smartg(object):
                   NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
-                  sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=self.nscl, SCL_MODE=self._scl_mode, NORDERS=self.norders)
+                  sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, 
+                  n_scl=self.nscl, scl_mode=self._scl_mode, n_orders=self.norders)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -2546,16 +2547,14 @@ def calculF(profile, N, DEPO, kind, pol_off=False):
     return to_gpu(phase_H)
 
 
-def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
-              NBPHOTONS, NBLOOP, THVDEG, DEPO,
-              XBLOCK, XGRID,NLAM, SIM, NF,
-              NBTHETA, NBPHI, OUTPUT_LAYERS,
-              RTER, LE, ZIP,
-              FLUX, FFS, DIRECT, OCEAN_INTERACTION, 
-              NLVL, NPSTK, NWLPROBA, NSENSORPROBA, NCELLPROBA,  BEER, SMIN, SMAX, RMIN, RMAX, RR, 
-              WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
-              Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA,
-              cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=1, SCL_MODE=0, NORDERS=1) :
+def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_v_deg,
+                xblock, xgrid, n_lam, sim, n_f, nb_theta, nb_phi, output_layers, earth_radius, 
+                le, zip_mode, flux, ffs, direct, ocean_interaction, n_lvl, n_pstk, n_wl_proba, 
+                n_sensor_proba, n_cell_proba, beer, s_min, s_max, r_min, r_max, r_r, weight_r_r, 
+                n_low, n_jac, n_sensor, refrac, horiz, sza_max, sun_disc, cus_l, n_obj, n_gobj, n_robj,
+                p_min_x, p_min_y, p_min_z, p_max_x, p_max_y, p_max_z, is_atm, tc, nb_cx, nb_cy, 
+                v_sun, hist, z_toa, cell_size, sx_min, sx_max, sy_min, sy_max, nb_sx, nb_sy, 
+                no_aer_output, n_scl=1, scl_mode=0, n_orders=1) :
     """Initialize and upload simulation constants to CUDA device globals.
 
     This routine computes a few derived geometric quantities and copies all
@@ -2572,42 +2571,42 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
         Environment configuration object exposing a ``dict`` attribute and
         geometry metadata (for example ``NENV``, ``NXENVMAP``, ``NYENVMAP``).
         If ``None``, environment-related constants are not updated.
-    NATM, NATM_ABS, NOCE, NOCE_ABS : int
+    n_atm, n_atm_abs, n_oce, n_oce_abs : int
         Numbers of atmospheric/oceanic layers and absorbing layers.
     mod : pycuda.compiler.SourceModule
         Compiled CUDA module containing global symbols to update.
-    NBPHOTONS, NBLOOP, XBLOCK, XGRID, NLAM, SIM, NF, NBTHETA, NBPHI, OUTPUT_LAYERS : int
+    nb_loop, xblock, xgrid, n_lam, sim, n_f, nb_theta, nb_phi, output_layers : int
         Main Monte Carlo and output-grid control parameters.
-    THVDEG, DEPO, RTER, SZA_MAX, SUN_DISC, ZTOA, cell_size, sxmin, sxmax, symin, symax : float
+    th_v_deg, earth_radius, sza_max, sun_disc, z_toa, cell_size, sx_min, sx_max, sy_min, sy_max : float
         Angular, physical, and spatial scalar settings.
-    LE, ZIP, FLUX, DIRECT, BEER : int
+    le, zip_mode, flux, direct, beer : int
         Integer flags controlling radiative-transfer modes.
-    NLVL, NPSTK, NBTHETA, NBPHI, NLAM : int
+    n_lvl, n_pstk, nb_theta, nb_phi, n_lam : int
         Angular/spectral and Stokes discretization controls.
-    NWLPROBA, NSENSORPROBA, NCELLPROBA, SMIN, SMAX, RMIN, RMAX, RR, NLOW : int
+    n_wl_proba, n_sensor_proba, n_cell_proba, s_min, s_max, r_min, r_max, r_r, n_low : int
         Sampling and Russian-roulette configuration parameters.
-    NJAC, HIST, NSENSOR, REFRAC, HORIZ : int
+    n_jac, hist, n_sensor, refrac, horiz : int
         Jacobian/history, sensor, and geometry/refraction control flags.
-    nObj, nGObj, nRObj, nbCx, nbCy, NSCL, SCL_MODE, NORDERS : int
+    n_obj, n_gobj, n_robj, nb_cx, nb_cy, n_scl, scl_mode, n_orders : int
         Object-scene and acceleration/grid scaling configuration.
-    FFS : bool
+    ffs : bool
         If ``True``, enable forward-flux mode constant.
-    OCEAN_INTERACTION : bool or None
+    ocean_interaction : bool or None
         Ocean-interaction flag. If ``None``, the dedicated device constant is
         set to ``-1``.
-    WEIGHTRR : float
+    weight_r_r : float
         Weight associated with Russian roulette.
-    cusL : CusForward | CusBackward | None
+    cus_l : CusForward | CusBackward | None
         Optional custom launch/view configuration object exposing ``dict``.
-    Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z : float
+    p_min_x, p_min_y, p_min_z, p_max_x, p_max_y, p_max_z : float
         Bounding-box limits for object handling.
-    IsAtm : int
+    is_atm : int
         Flag indicating atmospheric context for object processing.
-    TC : float or None
+    tc : float or None
         Receiver cell size.
-    vSun : gc.Vector
+    v_sun : gc.Vector
         Sun-direction vector with ``x``, ``y``, and ``z`` attributes.
-    nbsx, nbsy : int
+    nb_sx, nb_sy : int
         Number of horizontal bins for aerosol-related outputs.
     no_aer_output : bool
         Add output where only photons not scattered by aerosols are considered.
@@ -2619,71 +2618,71 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
     """
 
     # compute some needed constants
-    THV = THVDEG * np.pi/180.
-    STHV = np.sin(THV)
-    CTHV = np.cos(THV)
+    th_v = th_v_deg * np.pi/180.
+    s_th_v = np.sin(th_v)
+    c_th_v = np.cos(th_v)
 
-    if (  (cusL is not None) and (cusL.dict['LMODE'] == "FF")  ):
-        PZd = ZTOA+cusL.dict['CFTZ']
+    if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "FF")  ):
+        pz_d = z_toa+cus_l.dict['CFTZ']
     else:
-        PZd = ZTOA
-    tTemp = PZd/-vSun.z
-    PXd = -vSun.x * tTemp
-    PYd = -vSun.y * tTemp
+        pz_d = z_toa
+    t_temp = pz_d/-v_sun.z
+    px_d = -v_sun.x * t_temp
+    py_d = -v_sun.y * t_temp
 
     def copy_to_device(name, scalar, dtype):
         cuda.memcpy_htod(mod.get_global(name)[0], np.array([scalar], dtype=dtype))
 
     # copy constants to device
-    copy_to_device('NBLOOPd', NBLOOP, np.uint32)
-    copy_to_device('NOCEd', NOCE, np.int32)
-    copy_to_device('NOCE_ABSd', NOCE_ABS, np.int32)
-    copy_to_device('OUTPUT_LAYERSd', OUTPUT_LAYERS, np.int32)
-    copy_to_device('NF', NF, np.uint32)
-    copy_to_device('NATMd', NATM, np.int32)
-    copy_to_device('NATM_ABSd', NATM_ABS, np.int32)
-    copy_to_device('XBLOCKd', XBLOCK, np.int32)
+    copy_to_device('NBLOOPd', nb_loop, np.uint32)
+    copy_to_device('NOCEd', n_oce, np.int32)
+    copy_to_device('NOCE_ABSd', n_oce_abs, np.int32)
+    copy_to_device('OUTPUT_LAYERSd', output_layers, np.int32)
+    copy_to_device('NF', n_f, np.uint32)
+    copy_to_device('NATMd', n_atm, np.int32)
+    copy_to_device('NATM_ABSd', n_atm_abs, np.int32)
+    copy_to_device('XBLOCKd', xblock, np.int32)
     copy_to_device('YBLOCKd', 1, np.int32)
-    copy_to_device('XGRIDd', XGRID, np.int32)
+    copy_to_device('XGRIDd', xgrid, np.int32)
     copy_to_device('YGRIDd', 1, np.int32)
-    copy_to_device('NBTHETAd', NBTHETA, np.int32)
-    copy_to_device('NBPHId', NBPHI, np.int32)
-    copy_to_device('NLAMd', NLAM, np.int32)
-    copy_to_device('SIMd', SIM, np.int32)
-    copy_to_device('LEd', LE, np.int32)
-    copy_to_device('ZIPd', ZIP, np.int32)
-    copy_to_device('FLUXd', FLUX, np.int32)
-    copy_to_device('FFSd', 1 if FFS else 0, np.int32)
-    copy_to_device('DIRECTd', 1 if DIRECT else 0, np.int32)
+    copy_to_device('NBTHETAd', nb_theta, np.int32)
+    copy_to_device('NBPHId', nb_phi, np.int32)
+    copy_to_device('NLAMd', n_lam, np.int32)
+    copy_to_device('SIMd', sim, np.int32)
+    copy_to_device('LEd', le, np.int32)
+    copy_to_device('ZIPd', zip_mode, np.int32)
+    copy_to_device('FLUXd', flux, np.int32)
+    copy_to_device('FFSd', 1 if ffs else 0, np.int32)
+    copy_to_device('DIRECTd', 1 if direct else 0, np.int32)
     copy_to_device('cell_sized', cell_size, np.float32)
-    copy_to_device('sxmind', sxmin, np.float32)
-    copy_to_device('sxmaxd', sxmax, np.float32)
-    copy_to_device('symind', symin, np.float32)
-    copy_to_device('symaxd', symax, np.float32)
-    copy_to_device('nbsxd', nbsx, np.uint32)
-    copy_to_device('nbsyd', nbsy, np.uint32)
+    copy_to_device('sxmind', sx_min, np.float32)
+    copy_to_device('sxmaxd', sx_max, np.float32)
+    copy_to_device('symind', sy_min, np.float32)
+    copy_to_device('symaxd', sy_max, np.float32)
+    copy_to_device('nbsxd', nb_sx, np.uint32)
+    copy_to_device('nbsyd', nb_sy, np.uint32)
     copy_to_device('no_aer_outd', int(no_aer_output), np.int32)
-    if OCEAN_INTERACTION is None:
+    if ocean_interaction is None:
         copy_to_device('OCEAN_INTERACTIONd', -1, np.int32)
     else:
-        copy_to_device('OCEAN_INTERACTIONd', 1 if OCEAN_INTERACTION else 0, np.int32)
+        copy_to_device('OCEAN_INTERACTIONd', 1 if ocean_interaction else 0, np.int32)
     #copy_to_device('MId', MI, np.int32)
-    copy_to_device('NLVLd', NLVL, np.int32)
-    copy_to_device('NPSTKd', NPSTK, np.int32)
-    copy_to_device('BEERd', BEER, np.int32)
-    copy_to_device('SMINd', SMIN, np.int32)
-    copy_to_device('SMAXd', SMAX, np.int32)
-    copy_to_device('RMINd', RMIN, np.int32)
-    copy_to_device('RMAXd', RMAX, np.int32)
-    copy_to_device('RRd', RR, np.int32)
-    copy_to_device('WEIGHTRRd', WEIGHTRR, np.float32)
-    copy_to_device('NLOWd', NLOW, np.int32)
-    copy_to_device('NJACd', NJAC, np.int32)
-    copy_to_device('HISTd', HIST, np.int32)
-    copy_to_device('NSENSORd', NSENSOR, np.int32)
-    copy_to_device('NSCLd', NSCL, np.int32)
-    copy_to_device('SCL_MODEd', SCL_MODE, np.int32)
-    copy_to_device('NORDERSd', NORDERS, np.int32)
+    copy_to_device('NLVLd', n_lvl, np.int32)
+    copy_to_device('NPSTKd', n_pstk, np.int32)
+    copy_to_device('BEERd', beer, np.int32)
+    copy_to_device('SMINd', s_min, np.int32)
+    copy_to_device('SMAXd', s_max, np.int32)
+    copy_to_device('RMINd', r_min, np.int32)
+    copy_to_device('RMAXd', r_max, np.int32)
+    copy_to_device('RRd', r_r, np.int32)
+    copy_to_device('WEIGHTRRd', weight_r_r, np.float32)
+    copy_to_device('NLOWd', n_low, np.int32)
+    copy_to_device('NJACd', n_jac, np.int32)
+    copy_to_device('HISTd', hist, np.int32)
+    copy_to_device('NSENSORd', n_sensor, np.int32)
+    copy_to_device('NSCLd', n_scl, np.int32)
+    copy_to_device('SCL_MODEd', scl_mode, np.int32)
+    copy_to_device('NORDERSd', n_orders, np.int32)
     if surf != None:
         copy_to_device('SURd', surf.dict['SUR'], np.int32)
         copy_to_device('BRDFd', surf.dict['BRDF'], np.int32)
@@ -2700,59 +2699,59 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
         copy_to_device('NENVd', env.NENV, np.int32)
         copy_to_device('NXENVMAPd', env.NXENVMAP, np.int32)
         copy_to_device('NYENVMAPd', env.NYENVMAP, np.int32)
-    copy_to_device('STHVd', STHV, np.float32)
-    copy_to_device('CTHVd', CTHV, np.float32)
-    copy_to_device('RTER', RTER, np.float32)
-    copy_to_device('NWLPROBA', NWLPROBA, np.int32)
-    copy_to_device('NSENSORPROBA', NSENSORPROBA, np.int32)
-    copy_to_device('NCELLPROBA', NCELLPROBA, np.int32)
-    copy_to_device('REFRACd', REFRAC, np.int32)
-    copy_to_device('HORIZd', HORIZ, np.int32)
-    copy_to_device('SZA_MAXd', SZA_MAX, np.float32)
-    copy_to_device('SUN_DISCd', SUN_DISC, np.float32)
+    copy_to_device('STHVd', s_th_v, np.float32)
+    copy_to_device('CTHVd', c_th_v, np.float32)
+    copy_to_device('RTER', earth_radius, np.float32)
+    copy_to_device('NWLPROBA', n_wl_proba, np.int32)
+    copy_to_device('NSENSORPROBA', n_sensor_proba, np.int32)
+    copy_to_device('NCELLPROBA', n_cell_proba, np.int32)
+    copy_to_device('REFRACd', refrac, np.int32)
+    copy_to_device('HORIZd', horiz, np.int32)
+    copy_to_device('SZA_MAXd', sza_max, np.float32)
+    copy_to_device('SUN_DISCd', sun_disc, np.float32)
     # copy en rapport avec les objets :
-    if nObj != 0:
-        copy_to_device('nObj', nObj, np.int32)
-        copy_to_device('nGObj', nGObj, np.int32)
-        copy_to_device('nRObj', nRObj, np.int32)
-        copy_to_device('Pmin_x', Pmin_x, np.float32)
-        copy_to_device('Pmin_y', Pmin_y, np.float32)
-        copy_to_device('Pmin_z', Pmin_z, np.float32)
-        copy_to_device('Pmax_x', Pmax_x, np.float32)
-        copy_to_device('Pmax_y', Pmax_y, np.float32)
-        copy_to_device('Pmax_z', Pmax_z, np.float32)
-        copy_to_device('IsAtm', IsAtm, np.int32)
-        copy_to_device('DIRSXd', vSun.x, np.float64)
-        copy_to_device('DIRSYd', vSun.y, np.float64)
-        copy_to_device('DIRSZd', vSun.z, np.float64)
-        copy_to_device('PXd', PXd, np.float32)
-        copy_to_device('PYd', PYd, np.float32)
-        copy_to_device('PZd', PZd, np.float32)
-        copy_to_device('ZTOAd', ZTOA, np.float32)
-        if TC is not None:
-            copy_to_device('TCd', TC, np.float32)
-            copy_to_device('nbCx', nbCx, np.int32)
-            copy_to_device('nbCy', nbCy, np.int32)
-        if (  (cusL is not None) and (cusL.dict['LMODE'] == "RF")  ):
+    if n_obj != 0:
+        copy_to_device('nObj', n_obj, np.int32)
+        copy_to_device('nGObj', n_gobj, np.int32)
+        copy_to_device('nRObj', n_robj, np.int32)
+        copy_to_device('Pmin_x', p_min_x, np.float32)
+        copy_to_device('Pmin_y', p_min_y, np.float32)
+        copy_to_device('Pmin_z', p_min_z, np.float32)
+        copy_to_device('Pmax_x', p_max_x, np.float32)
+        copy_to_device('Pmax_y', p_max_y, np.float32)
+        copy_to_device('Pmax_z', p_max_z, np.float32)
+        copy_to_device('IsAtm', is_atm, np.int32)
+        copy_to_device('DIRSXd', v_sun.x, np.float64)
+        copy_to_device('DIRSYd', v_sun.y, np.float64)
+        copy_to_device('DIRSZd', v_sun.z, np.float64)
+        copy_to_device('PXd', px_d, np.float32)
+        copy_to_device('PYd', py_d, np.float32)
+        copy_to_device('PZd', pz_d, np.float32)
+        copy_to_device('ZTOAd', z_toa, np.float32)
+        if tc is not None:
+            copy_to_device('TCd', tc, np.float32)
+            copy_to_device('nbCx', nb_cx, np.int32)
+            copy_to_device('nbCy', nb_cy, np.int32)
+        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "RF")  ):
             copy_to_device('LMODEd', 1, np.int32)
-        if (  (cusL is not None) and (cusL.dict['LMODE'] == "FF")  ):
-            copy_to_device('CFXd', cusL.dict['CFX'], np.float32)
-            copy_to_device('CFYd', cusL.dict['CFY'], np.float32)
-            copy_to_device('CFTXd', cusL.dict['CFTX'], np.float32)
-            copy_to_device('CFTYd', cusL.dict['CFTY'], np.float32)
-            copy_to_device('ALDEGd', cusL.dict['FOV'], np.float32)
-            copy_to_device('TYPEd', cusL.dict['TYPE'], np.int32)
+        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "FF")  ):
+            copy_to_device('CFXd', cus_l.dict['CFX'], np.float32)
+            copy_to_device('CFYd', cus_l.dict['CFY'], np.float32)
+            copy_to_device('CFTXd', cus_l.dict['CFTX'], np.float32)
+            copy_to_device('CFTYd', cus_l.dict['CFTY'], np.float32)
+            copy_to_device('ALDEGd', cus_l.dict['FOV'], np.float32)
+            copy_to_device('TYPEd', cus_l.dict['TYPE'], np.int32)
             copy_to_device('LMODEd', 2, np.int32)
-        if (  (cusL is not None) and (cusL.dict['LMODE'] == "B" or cusL.dict['LMODE'] == "BR")  ):
-            copy_to_device('THDEGd', cusL.dict['THDEG'], np.float32)
-            copy_to_device('PHDEGd', cusL.dict['PHDEG'], np.float32)
-            copy_to_device('ALDEGd', cusL.dict['ALDEG'], np.float32)
-            copy_to_device('TYPEd', cusL.dict['TYPE'], np.int32)
-        if (  (cusL is not None) and (cusL.dict['LMODE'] == "B")  ):    
+        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "B" or cus_l.dict['LMODE'] == "BR")  ):
+            copy_to_device('THDEGd', cus_l.dict['THDEG'], np.float32)
+            copy_to_device('PHDEGd', cus_l.dict['PHDEG'], np.float32)
+            copy_to_device('ALDEGd', cus_l.dict['ALDEG'], np.float32)
+            copy_to_device('TYPEd', cus_l.dict['TYPE'], np.int32)
+        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "B")  ):    
             copy_to_device('LMODEd', 3, np.int32)
-        if (  (cusL is not None) and (cusL.dict['LMODE'] == "BR")  ):
+        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "BR")  ):
             copy_to_device('LMODEd', 4, np.int32)
-        if (cusL is None):
+        if (cus_l is None):
             copy_to_device('LMODEd', 0, np.int32)
 
 
