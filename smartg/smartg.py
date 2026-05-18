@@ -438,7 +438,6 @@ class RPVSurface(object):
         return 'RTLS-ALB={SURFALB}'.format(**self.dict)
 
 
-
 class Environment(object):
     """
     Stores the smartg parameters relative the the environment effect
@@ -2557,18 +2556,66 @@ def InitConst(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, mod,
               WEIGHTRR, NLOW, NJAC, NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
               Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm, TC, nbCx, nbCy, vSun, HIST, ZTOA,
               cell_size, sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, NSCL=1, SCL_MODE=0, NORDERS=1) :
-    """
-    Initialize the constants in python and send them to the device memory
+    """Initialize and upload simulation constants to CUDA device globals.
 
-    Arguments:
+    This routine computes a few derived geometric quantities and copies all
+    scalar simulation settings to the global constants defined in the CUDA
+    module.
 
-        - D: Dictionary containing all the parameters required to launch the simulation by the kernel
-        - surf : Surface object
-        - env : environment effect parameters (dictionary)
-        - NATM : Number of layers of the atmosphere
-        - NOCE : Number of layers of the ocean
-        - HATM : Altitude of the Top of Atmosphere
-        - mod : PyCUDA module compiling the kernel
+    Parameters
+    ----------
+    surf : FlatSurface | RoughSurface | LambSurface | RTLSSurface | RPVSurface | None
+        Surface configuration object exposing a ``dict`` attribute with keys
+        required by SMART-G (for example ``SUR``, ``BRDF``, ``DIOPTRE``,
+        ``WINDSPEED``, ``NH2O``, ``WAVE_SHADOW``, ``SINGLE``).
+    env : Environment | None
+        Environment configuration object exposing a ``dict`` attribute and
+        geometry metadata (for example ``NENV``, ``NXENVMAP``, ``NYENVMAP``).
+        If ``None``, environment-related constants are not updated.
+    NATM, NATM_ABS, NOCE, NOCE_ABS : int
+        Numbers of atmospheric/oceanic layers and absorbing layers.
+    mod : pycuda.compiler.SourceModule
+        Compiled CUDA module containing global symbols to update.
+    NBPHOTONS, NBLOOP, XBLOCK, XGRID, NLAM, SIM, NF, NBTHETA, NBPHI, OUTPUT_LAYERS : int
+        Main Monte Carlo and output-grid control parameters.
+    THVDEG, DEPO, RTER, SZA_MAX, SUN_DISC, ZTOA, cell_size, sxmin, sxmax, symin, symax : float
+        Angular, physical, and spatial scalar settings.
+    LE, ZIP, FLUX, DIRECT, BEER : int
+        Integer flags controlling radiative-transfer modes.
+    NLVL, NPSTK, NBTHETA, NBPHI, NLAM : int
+        Angular/spectral and Stokes discretization controls.
+    NWLPROBA, NSENSORPROBA, NCELLPROBA, SMIN, SMAX, RMIN, RMAX, RR, NLOW : int
+        Sampling and Russian-roulette configuration parameters.
+    NJAC, HIST, NSENSOR, REFRAC, HORIZ : int
+        Jacobian/history, sensor, and geometry/refraction control flags.
+    nObj, nGObj, nRObj, nbCx, nbCy, NSCL, SCL_MODE, NORDERS : int
+        Object-scene and acceleration/grid scaling configuration.
+    FFS : bool
+        If ``True``, enable forward-flux mode constant.
+    OCEAN_INTERACTION : bool or None
+        Ocean-interaction flag. If ``None``, the dedicated device constant is
+        set to ``-1``.
+    WEIGHTRR : float
+        Weight associated with Russian roulette.
+    cusL : CusForward | CusBackward | None
+        Optional custom launch/view configuration object exposing ``dict``.
+    Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z : float
+        Bounding-box limits for object handling.
+    IsAtm : int
+        Flag indicating atmospheric context for object processing.
+    TC : float or None
+        Receiver cell size.
+    vSun : gc.Vector
+        Sun-direction vector with ``x``, ``y``, and ``z`` attributes.
+    nbsx, nbsy : int
+        Number of horizontal bins for aerosol-related outputs.
+    no_aer_output : bool
+        Add output where only photons not scattered by aerosols are considered.
+        Default False.
+
+    Returns
+    -------
+    None
     """
 
     # compute some needed constants
