@@ -2786,9 +2786,11 @@ def multi_profiles(profs, kind='atm'):
 
     Parameters
     ----------
-    profs : list of MLUT-like
+    profs : list of xr.Dataset
         Profiles returned by atmospheric or oceanic profile builders (for
-        example ``atm.calc()`` or ``water.calc()``).
+        example ``atm.calc()`` or ``water.calc()``). MLUT-like objects are
+        converted with ``to_xarray()`` when available. DataArray inputs are
+        converted to single-variable datasets.
     kind : str, default='atm'
         Profile family to process. Allowed values are:
 
@@ -2797,50 +2799,39 @@ def multi_profiles(profs, kind='atm'):
 
     Returns
     -------
-    MLUT
-        Reorganized profile table where compatible datasets from all input
+    xr.Dataset
+        Reorganized profile dataset where compatible variables from all input
         profiles are concatenated, with phase-function indexing adjusted to
         remain unique across concatenated blocks.
     """
-    
-    first=profs[0]
-    pro=MLUT()
-    for (axname, axis) in first.axes.items():
-        if 'wavelength' in axname: 
-            axis=list(axis)*len(profs)
-        pro.add_axis(axname, axis)
 
-    for d in first.datasets():
-        if 'iphase' in d :
-            imax=0
-            k=0
-            for M in profs:            
-                im = np.unique(M[d].data).max() + 1
-                if k==0 : data =  M[d].data[:] + imax
-                else: data = np.concatenate((data, M[d].data[:] + imax), axis=0)
-                imax+=im 
-                k=k+1
-            pro.add_dataset(d, data, ['wavelength', 'z_'+kind])
+    xprofs = []
+    for prof in profs:
+        if hasattr(prof, 'to_xarray'):
+            prof = prof.to_xarray()
+        if not isinstance(prof, xr.Dataset):
+            raise TypeError('Each profile must be an xr.Dataset.')
+        xprofs.append(prof)
+
+    first = xprofs[0]
+    pro = xr.Dataset(attrs=first.attrs)
+
+    for d in first.data_vars:
+        if 'iphase' in d:
+            imax = 0
+            chunks = []
+            for M in xprofs:
+                da = M[d]
+                chunks.append(da + imax)
+                imax += np.unique(da.data).max() + 1
+            pro[d] = xr.concat(chunks, dim=chunks[0].dims[0])
+        elif d == ('phase_' + kind):
+            pro[d] = xr.concat([M[d] for M in xprofs], dim=first[d].dims[0])
+        elif d == ('T_' + kind):
+            pro[d] = first[d]
         else:
-            if d==('phase_'+kind) :
-                imax=0
-                k=0
-                for M in profs:            
-                    if k==0 : data =  M[d].data[:]
-                    else: data = np.concatenate((data, M[d].data[:]), axis=0)
-                    k=k+1
-                pro.add_dataset(d, data, ['iphase', 'stk', 'theta_'+kind])
-            elif d==('T_'+kind) :
-                pro.add_dataset(d, first[d].data[:], ['z_'+kind])
-            else:
-                imax=0
-                k=0
-                for M in profs:            
-                    if k==0 : data =  M[d].data[:]
-                    else: data = np.concatenate((data, M[d].data[:]), axis=0)
-                    k=k+1
-                if data.ndim==2 : pro.add_dataset(d, data, ['wavelength', 'z_'+kind])
-                if data.ndim==1 : pro.add_dataset(d, data, ['wavelength'])
+            pro[d] = xr.concat([M[d] for M in xprofs], dim=first[d].dims[0])
+
     return pro
 
 
