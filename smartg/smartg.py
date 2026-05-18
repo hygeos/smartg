@@ -2777,13 +2777,31 @@ def init_profile(wl, prof, kind):
 
 
 def multi_profiles(profs, kind='atm'):
-    '''
-    Internal reorganization of list of profiles for Jacobian (with finite differences) or sensitivities
+    """Reorganize a list of profiles into a single multi-profile table.
 
-    Input: 
-        profs : list of profiles (coming either from atm.calc() or water.calc())
-        kind  : atmospheric 'atm' or oceanic 'oc'
-    ''' 
+    This helper concatenates compatible profile fields so several atmosphere
+    or ocean profile configurations can be simulated in a single SMART-G run.
+    It can also be used in workflows such as finite-difference sensitivity or
+    Jacobian computations, but it is not limited to those use cases.
+
+    Parameters
+    ----------
+    profs : list of MLUT-like
+        Profiles returned by atmospheric or oceanic profile builders (for
+        example ``atm.calc()`` or ``water.calc()``).
+    kind : str, default='atm'
+        Profile family to process. Allowed values are:
+
+        - ``'atm'`` for atmospheric profiles.
+        - ``'oc'`` for oceanic profiles.
+
+    Returns
+    -------
+    MLUT
+        Reorganized profile table where compatible datasets from all input
+        profiles are concatenated, with phase-function indexing adjusted to
+        remain unique across concatenated blocks.
+    """
     
     first=profs[0]
     pro=MLUT()
