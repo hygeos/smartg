@@ -37,7 +37,7 @@ Cloud
 
 import numpy as np
 from pathlib import Path
-from luts.luts import MLUT, LUT, Idx, read_mlut, merge
+from luts.luts import MLUT, LUT, Idx, merge
 from smartg.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simpson
@@ -1071,16 +1071,16 @@ class AtmAFGL(Atmosphere):
             O3_acs_path = DIR_AUXDATA / 'acs' / O3_acs_path.name
         if not O3_acs_path.exists() and O3_acs_path.suffix != '.nc':
             O3_acs_path = O3_acs_path.with_name(O3_acs_path.name + ".nc")
-        self.acs_o3 = read_mlut(O3_acs_path)
-        self.acs_o3.rename_axis('wav', 'wavelength')
+        self.acs_o3 = xr.open_dataset(O3_acs_path)
+        self.acs_o3 = self.acs_o3.rename({'wav': 'wavelength'})
 
         NO2_acs_path = Path(NO2_acs)
         if NO2_acs_path.parent == Path('.'):
             NO2_acs_path = DIR_AUXDATA / 'acs' / NO2_acs_path.name
         if not NO2_acs_path.exists() and NO2_acs_path.suffix != '.nc':
             NO2_acs_path = NO2_acs_path.with_name(NO2_acs_path.name + ".nc")
-        self.acs_no2 = read_mlut(NO2_acs_path)
-        self.acs_no2.rename_axis('wav', 'wavelength')
+        self.acs_no2 = xr.open_dataset(NO2_acs_path)
+        self.acs_no2 = self.acs_no2.rename({'wav': 'wavelength'})
 
 
         #
@@ -1458,6 +1458,8 @@ class AtmAFGL(Atmosphere):
             # Consider gaseous from reptran/kdis
             use_o3_acs  = True
             use_no2_acs = True
+            tau_o3 = np.zeros((len(wav), len(prof.z)), dtype='float32')
+            tau_no2 = np.zeros((len(wav), len(prof.z)), dtype='float32')
             if wav.use_reptran_kdis:
                 tau_mol = wav.calc_profile(self.prof) * dz
                 # If not reptran (i.e. Kdis case) we set 03 and NO2 to 0 (already calculated in Kdis)
@@ -1465,10 +1467,8 @@ class AtmAFGL(Atmosphere):
                     all_kdis_gas = wav.data[0].band.kdis.species + wav.data[0].band.kdis.species_c
                     if 'no2' in all_kdis_gas :
                         use_no2_acs = False
-                        tau_no2 = LUT(np.zeros((len(wav), len(prof.z)), dtype='float32') , axes=[wav[:], None], names=['wavelength', 'z_atm'])
                     if 'o3' in all_kdis_gas  :
                         use_o3_acs  = False
-                        tau_o3 = LUT(np.zeros((len(wav), len(prof.z)), dtype='float32') , axes=[wav[:], None], names=['wavelength', 'z_atm'])
             else:
                 tau_mol = np.zeros((len(wav), len(prof.z)), dtype='float32') * dz
 
@@ -1477,44 +1477,46 @@ class AtmAFGL(Atmosphere):
             if use_no2_acs or use_o3_acs:
                 # Commun part           
                 T0 = 273.15  # in K
-                T = LUT(prof.T, axes=[None], names=['z_atm'])# temperature variability in z
+                T = prof.T[None, :]  # temperature variability in z
                 if use_o3_acs:
                     # O3 optical thickness
-                    min_wl = np.min(self.acs_o3.axes['wavelength'])
-                    max_wl = np.max(self.acs_o3.axes['wavelength'])
-                    C0 = self.acs_o3['O3_C0'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
-                    C1 = self.acs_o3['O3_C1'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
-                    C2 = self.acs_o3['O3_C2'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
+                    min_wl = float(np.min(self.acs_o3['wavelength'].values))
+                    max_wl = float(np.max(self.acs_o3['wavelength'].values))
+                    wl_query = xr.DataArray(wav[:], dims=['wavelength'])
+                    C0 = self.acs_o3['O3_C0'].sel(wavelength=wl_query, method='nearest').values[:, None]
+                    C1 = self.acs_o3['O3_C1'].sel(wavelength=wl_query, method='nearest').values[:, None]
+                    C2 = self.acs_o3['O3_C2'].sel(wavelength=wl_query, method='nearest').values[:, None]
                     tau_o3 = C0 + C1*(T - T0) + C2*(T - T0)*(T - T0)
-                    tau_o3.data[~np.logical_and(wav[:]>min_wl, wav[:]<max_wl)] = 0.
-                    tau_o3 *= prof.dens_o3 * 1e-15  # LUT in 10^(-20) cm2, convert in km-1
+                    tau_o3[~np.logical_and(wav[:]>min_wl, wav[:]<max_wl)] = 0.
+                    tau_o3 *= prof.dens_o3 * 1e-15  # ACS in 10^(-20) cm2, convert in km-1
                     tau_o3 *= dz
-                    tau_o3.data[tau_o3.data < 0] = 0
+                    tau_o3[tau_o3 < 0] = 0
                 if use_no2_acs:
                     # NO2 optical thickness
-                    min_wl = np.min(self.acs_no2.axes['wavelength'])
-                    max_wl = np.max(self.acs_no2.axes['wavelength'])
-                    C0 = self.acs_no2['NO2_C0'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
-                    C1 = self.acs_no2['NO2_C1'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
-                    C2 = self.acs_no2['NO2_C2'].sub({'wavelength':Idx(wav[:], round=True, fill_value='extrema')})
+                    min_wl = float(np.min(self.acs_no2['wavelength'].values))
+                    max_wl = float(np.max(self.acs_no2['wavelength'].values))
+                    wl_query = xr.DataArray(wav[:], dims=['wavelength'])
+                    C0 = self.acs_no2['NO2_C0'].sel(wavelength=wl_query, method='nearest').values[:, None]
+                    C1 = self.acs_no2['NO2_C1'].sel(wavelength=wl_query, method='nearest').values[:, None]
+                    C2 = self.acs_no2['NO2_C2'].sel(wavelength=wl_query, method='nearest').values[:, None]
                     tau_no2 = C0 + C1*(T - T0) + C2*(T - T0)*(T - T0)
-                    tau_no2.data[~np.logical_and(wav[:]>min_wl, wav[:]<max_wl)] = 0.
-                    tau_no2 *= prof.dens_no2 * 1e-15  # LUT in 10^(-20) cm2, convert in km-1
+                    tau_no2[~np.logical_and(wav[:]>min_wl, wav[:]<max_wl)] = 0.
+                    tau_no2 *= prof.dens_no2 * 1e-15  # ACS in 10^(-20) cm2, convert in km-1
                     tau_no2 *= dz
-                    tau_no2.data[tau_no2.data < 0] = 0
+                    tau_no2[tau_no2 < 0] = 0
                 
             #
             # Total gaseous optical thickness
             #
             dtaug = tau_o3 + tau_no2 + tau_mol
-            taug = dtaug.apply(lambda x: np.cumsum(x, axis=1))
+            taug = np.cumsum(dtaug, axis=1)
 
             if not self.OPT3D:
-                pro.add_dataset('OD_g', taug.data,
+                pro.add_dataset('OD_g', taug,
                 axnames=['wavelength', 'z_atm'],
                 attrs={'description': 'Cumulated gaseous absorption optical thickness'})
             else:
-                abs_coef = abs(dtaug.data/dz)
+                abs_coef = abs(dtaug/dz)
                 abs_coef[~np.isfinite(abs_coef)] = 0.
                 pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'iopt'],
                   attrs={'description':
