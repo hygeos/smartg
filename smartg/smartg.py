@@ -1447,7 +1447,7 @@ class Smartg(object):
             ZTOA = 120.
   
         if prof_atm is not None:
-            faer = _calcul_phase_gpu(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
+            faer = _calcul_phase_gpu(prof_atm, n_theta=NF, depo=DEPO, kind='atm', pol_off=pol_off)
             prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.coords['z_atm']) - 1
             if self.opt3D :
@@ -1544,7 +1544,7 @@ class Smartg(object):
             prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
-            foce = _calcul_phase_gpu(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
+            foce = _calcul_phase_gpu(prof_oc, n_theta=NF, depo=DEPO_WATER, kind='oc', pol_off=pol_off)
             prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.coords['z_oc']) - 1
             if self.opt3D :
@@ -2409,7 +2409,7 @@ def rayleigh(N, DEPO, pol_off=False):
     return pha
 
 
-def _calcul_phase_gpu(profile, N, DEPO, kind, pol_off=False):
+def _calcul_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
     """
     Build the phase-function lookup table uploaded to the GPU.
 
@@ -2418,7 +2418,7 @@ def _calcul_phase_gpu(profile, N, DEPO, kind, pol_off=False):
     CUDA kernels. The returned table always reserves:
 
     - index 0 for the molecular phase function (Rayleigh, or isotropic when
-        ``DEPO < 0``),
+        ``depo < 0``),
     - index 1 for the VRS phase function,
     - subsequent indices for the tabulated particle phase functions found in
         ``phase_<kind>``.
@@ -2440,14 +2440,15 @@ def _calcul_phase_gpu(profile, N, DEPO, kind, pol_off=False):
     ----------
     profile : xr.Dataset
             Atmospheric or oceanic optical profile.
-    N : int
+    n_theta : int
             Theta discretization used to build the sampling lookup tables.
-            It sets the number of angular samples stored for phase-function
-            sampling on the GPU.
-    DEPO : float
-                Molecular depolarization factor used to generate the Rayleigh phase
-                entry. If negative, an isotropic phase function is used instead of
-                Rayleigh.
+            In CUDA, phase values are sampled over this ``n_theta`` angular
+            discretization. A finer angular discretization improves sampling
+            precision but increases GPU memory usage.
+    depo : float
+            Molecular depolarization factor used to generate the Rayleigh phase
+            entry. If negative, an isotropic phase function is used instead of
+            Rayleigh.
     kind : str
         Profile family identifier. Must be either ``'atm'`` (atmosphere) or
         ``'oc'`` (ocean).
@@ -2459,7 +2460,7 @@ def _calcul_phase_gpu(profile, N, DEPO, kind, pol_off=False):
     Returns
     -------
     pycuda.gpuarray.GPUArray
-            GPU array of shape ``(n_phase_entries, N)`` and dtype ``type_Phase``.
+            GPU array of shape ``(n_phase_entries, n_theta)`` and dtype ``type_Phase``.
             Each row contains one phase-function lookup table ready to be indexed by
             ``iphase_<kind>`` in the profile uploaded by ``_init_profile``.
 
@@ -2485,22 +2486,22 @@ def _calcul_phase_gpu(profile, N, DEPO, kind, pol_off=False):
 
     # Initialize the cumulative distribution function
     if nphases > 0:
-        shp = (nphases, N)
+        shp = (nphases, n_theta)
     else:
-        shp = (1, N)
+        shp = (1, n_theta)
     phase_H = np.zeros(shp, dtype=type_Phase, order='C')
 
-    # Set Rayleigh phase function or isotropic if DEPO <0
-    if DEPO >=0 : phase_H[0,:] = rayleigh(N, DEPO, pol_off=pol_off)
+    # Set Rayleigh phase function or isotropic if depo <0
+    if depo >=0 : phase_H[0,:] = rayleigh(n_theta, depo, pol_off=pol_off)
     # no pol_off in isotropic because the function needs first to be corrected
-    else : phase_H[0,:]        = isotropic(N) 
+    else : phase_H[0,:]        = isotropic(n_theta) 
     if 'theta_'+kind in profile.coords:
         angles = profile.coords['theta_'+kind].to_numpy() * pi/180.
         assert angles[-1] < 3.15   # assert that angles are in radians
         dtheta = np.diff(angles)
 
     # Set VRS phase function
-    phase_H[1,:] = rayleigh(N, 0.17)
+    phase_H[1,:] = rayleigh(n_theta, 0.17)
 
     idx = 2
     #idx = 1
@@ -2533,8 +2534,8 @@ def _calcul_phase_gpu(profile, N, DEPO, kind, pol_off=False):
         scum /= scum[-1]
 
         # probability between 0 and 1
-        z = (np.arange(N, dtype='float64')+1)/N
-        angN = (np.arange(N, dtype='float64'))/(N-1)*np.pi
+        z = (np.arange(n_theta, dtype='float64')+1)/n_theta
+        angN = (np.arange(n_theta, dtype='float64'))/(n_theta-1)*np.pi
         # f1 = interp1d(angles, phase[1,:])
         # f2 = interp1d(angles, phase[0,:])
         f1 = interp1d(angles, phase[0,:])
