@@ -37,7 +37,7 @@ Cloud
 
 import numpy as np
 from pathlib import Path
-from luts.luts import MLUT, LUT, Idx, merge
+from luts.luts import MLUT, LUT
 from smartg.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simpson
@@ -1119,14 +1119,15 @@ class AtmAFGL(Atmosphere):
 
         Returns
         -------
-        out : MLUT
-            An MLUT object with the profile and (if phase = True) the phase matrices.
+        out : xr.Dataset
+            An xarray.Dataset object with the profile and (if phase = True) the phase matrices.
         """
         
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
             
-        profile = self.profile(wav)
+        profile_mlut = self.profile(wav)
+        profile = profile_mlut.to_xarray()
         
         if phase:
             if self.pfwav is None:
@@ -1135,14 +1136,14 @@ class AtmAFGL(Atmosphere):
                 wav_pha = self.pfwav
             pha = self.phase(wav_pha, NBTHETA=NBTHETA)
 
-            pro_var = profile.datasets()
+            pro_var = list(profile.data_vars)
             if (  pha is not None  or 
                   ( self.OPT3D and ('phase_atm' in pro_var) and truncation )  ):
                 
                 if pha is not None:
-                    pha_, ipha = calc_iphase(pha, profile.axis('wavelength'), profile.axis('z_atm'), use_old_calc_iphase)
+                    pha_, ipha = calc_iphase(pha, profile.coords['wavelength'].values, profile.coords['z_atm'].values, use_old_calc_iphase)
                 else: # 3D ATM
-                    pha_ = profile['phase_atm'].data
+                    pha_ = profile['phase_atm'].values
 
                 nphase = pha_.shape[0]
 
@@ -1187,29 +1188,51 @@ class AtmAFGL(Atmosphere):
                             pha_tr[iph,3,:] = pha_[iph,3,:] * beta2
 
                 if not self.OPT3D:
-                    profile.add_axis('theta_atm', pha.axes[-1])
-                    profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'])
-                    profile.add_dataset('iphase_atm', ipha, ['wavelength', 'z_atm'])
+                    theta_atm = pha.coords['theta_atm'].values if hasattr(pha, 'coords') else pha.axes[-1]
+                    profile = profile.assign_coords(theta_atm=theta_atm)
+                    profile['phase_atm'] = xr.DataArray(
+                        pha_,
+                        dims=['iphase', 'stk', 'theta_atm'],
+                        coords={'iphase': np.arange(pha_.shape[0]), 'stk': np.arange(pha_.shape[1]), 'theta_atm': theta_atm}
+                    )
+                    profile['iphase_atm'] = xr.DataArray(
+                        ipha,
+                        dims=['wavelength', 'z_atm'],
+                        coords={'wavelength': profile.coords['wavelength'], 'z_atm': profile.coords['z_atm']}
+                    )
                 else :
-                    attrs_tmp = profile['phase_atm'].attrs
-                    profile.rm_lut('phase_atm')
-                    profile.add_dataset('phase_atm', pha_, ['iphase', 'stk', 'theta_atm'],
-                                        attrs=attrs_tmp)
+                    attrs_tmp = profile['phase_atm'].attrs.copy() if 'phase_atm' in profile.data_vars else {}
+                    if 'phase_atm' in profile.data_vars:
+                        profile = profile.drop_vars('phase_atm')
+                    theta_atm = pha.coords['theta_atm'].values if hasattr(pha, 'coords') else np.linspace(0., 180., pha_.shape[-1])
+                    profile['phase_atm'] = xr.DataArray(
+                        pha_,
+                        dims=['iphase', 'stk', 'theta_atm'],
+                        coords={'iphase': np.arange(pha_.shape[0]), 'stk': np.arange(pha_.shape[1]), 'theta_atm': theta_atm},
+                        attrs=attrs_tmp
+                    )
 
                 if truncation is not None:
                     # profile.add_dataset('phase_atm_tr', pha_tr, axnames=['iphase', 'stk', 'theta_atm'])
                     attrs_tmp = profile['phase_atm'].attrs
-                    profile.rm_lut('phase_atm')
-                    profile.add_dataset('phase_atm', pha_tr, axnames=['iphase', 'stk', 'theta_atm'])
+                    if 'phase_atm' in profile.data_vars:
+                        profile = profile.drop_vars('phase_atm')
+                    theta_atm = np.linspace(0., 180., pha_tr.shape[-1])
+                    profile['phase_atm'] = xr.DataArray(
+                        pha_tr,
+                        dims=['iphase', 'stk', 'theta_atm'],
+                        coords={'iphase': np.arange(pha_tr.shape[0]), 'stk': np.arange(pha_tr.shape[1]), 'theta_atm': theta_atm},
+                        attrs=attrs_tmp
+                    )
 
                     # case tau instead of coeff (1D atm)
                     if not self.OPT3D:
-                        dtau_p = diff1(profile['OD_p'].data, axis=1)
-                        dtau_p_tr = (1 - f*profile['ssa_p_atm'].data) * dtau_p
+                        dtau_p = diff1(profile['OD_p'].values, axis=1)
+                        dtau_p_tr = (1 - f*profile['ssa_p_atm'].values) * dtau_p
                         tau_p_tr = np.cumsum(dtau_p_tr, axis=1)
-                        ssa_p_atm_tr = profile['ssa_p_atm'].data * ( (1-f) / (1 - f*profile['ssa_p_atm'].data) )
-                        tau_atm_tr = tau_p_tr + profile['OD_r'].data + profile['OD_g'].data
-                        dtau_r = diff1(profile['OD_r'].data, axis=1)
+                        ssa_p_atm_tr = profile['ssa_p_atm'].values * ( (1-f) / (1 - f*profile['ssa_p_atm'].values) )
+                        tau_atm_tr = tau_p_tr + profile['OD_r'].values + profile['OD_g'].values
+                        dtau_r = diff1(profile['OD_r'].values, axis=1)
                         tau_sca_tr = np.cumsum(dtau_r + dtau_p_tr*ssa_p_atm_tr, axis=1)
                         with np.errstate(invalid='ignore', divide='ignore'):
                             ssa_atm_tr = (dtau_r+ dtau_p_tr*ssa_p_atm_tr)/diff1(tau_atm_tr, axis=1)
@@ -1218,70 +1241,58 @@ class AtmAFGL(Atmosphere):
                             pmol_tr = dtau_r/(dtau_r + dtau_p_tr*ssa_p_atm_tr)
                         pmol_tr[np.isnan(pmol_tr)] = 1.
                         
-                        attrs_tmp = profile['OD_p'].attrs
-                        profile.rm_lut('OD_p')
-                        profile.add_dataset('OD_p', tau_p_tr, axnames=['wavelength', 'z_atm'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['ssa_p_atm'].attrs
-                        profile.rm_lut('ssa_p_atm')
-                        profile.add_dataset('ssa_p_atm', ssa_p_atm_tr, axnames=['wavelength', 'z_atm'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['OD_atm'].attrs
-                        profile.rm_lut('OD_atm')
-                        profile.add_dataset('OD_atm', tau_atm_tr, axnames=['wavelength', 'z_atm'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['OD_sca_atm'].attrs
-                        profile.rm_lut('OD_sca_atm')
-                        profile.add_dataset('OD_sca_atm', tau_sca_tr, axnames=['wavelength', 'z_atm'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['ssa_atm'].attrs
-                        profile.rm_lut('ssa_atm')
-                        profile.add_dataset('ssa_atm', ssa_atm_tr, axnames=['wavelength', 'z_atm'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['pmol_atm'].attrs
-                        profile.rm_lut('pmol_atm')
-                        profile.add_dataset('pmol_atm', pmol_tr, axnames=['wavelength', 'z_atm'],
-                                            attrs=attrs_tmp)
+                        profile['OD_p'] = xr.DataArray(tau_p_tr, dims=['wavelength', 'z_atm'],
+                            coords={'wavelength': profile.coords['wavelength'], 'z_atm': profile.coords['z_atm']},
+                            attrs=profile['OD_p'].attrs)
+                        profile['ssa_p_atm'] = xr.DataArray(ssa_p_atm_tr, dims=['wavelength', 'z_atm'],
+                            coords={'wavelength': profile.coords['wavelength'], 'z_atm': profile.coords['z_atm']},
+                            attrs=profile['ssa_p_atm'].attrs)
+                        profile['OD_atm'] = xr.DataArray(tau_atm_tr, dims=['wavelength', 'z_atm'],
+                            coords={'wavelength': profile.coords['wavelength'], 'z_atm': profile.coords['z_atm']},
+                            attrs=profile['OD_atm'].attrs)
+                        profile['OD_sca_atm'] = xr.DataArray(tau_sca_tr, dims=['wavelength', 'z_atm'],
+                            coords={'wavelength': profile.coords['wavelength'], 'z_atm': profile.coords['z_atm']},
+                            attrs=profile['OD_sca_atm'].attrs)
+                        profile['ssa_atm'] = xr.DataArray(ssa_atm_tr, dims=['wavelength', 'z_atm'],
+                            coords={'wavelength': profile.coords['wavelength'], 'z_atm': profile.coords['z_atm']},
+                            attrs=profile['ssa_atm'].attrs)
+                        profile['pmol_atm'] = xr.DataArray(pmol_tr, dims=['wavelength', 'z_atm'],
+                            coords={'wavelength': profile.coords['wavelength'], 'z_atm': profile.coords['z_atm']},
+                            attrs=profile['pmol_atm'].attrs)
                     # case coeff instead of tau (3D atm)
                     # sig for coeficients
                     else:
-                        sig_p = profile['OD_p'].data
-                        sig_p_tr = (1 - f*profile['ssa_p_atm'].data) * sig_p
-                        ssa_p_atm_tr = profile['ssa_p_atm'].data * ( (1-f) / (1 - f*profile['ssa_p_atm'].data) )
-                        sig_atm_tr = sig_p_tr + profile['OD_r'].data + profile['OD_g'].data
-                        sig_sca_tr = profile['OD_r'].data  + sig_p_tr*ssa_p_atm_tr
+                        sig_p = profile['OD_p'].values
+                        sig_p_tr = (1 - f*profile['ssa_p_atm'].values) * sig_p
+                        ssa_p_atm_tr = profile['ssa_p_atm'].values * ( (1-f) / (1 - f*profile['ssa_p_atm'].values) )
+                        sig_atm_tr = sig_p_tr + profile['OD_r'].values + profile['OD_g'].values
+                        sig_sca_tr = profile['OD_r'].values  + sig_p_tr*ssa_p_atm_tr
                         with np.errstate(invalid='ignore', divide='ignore'):
-                            ssa_atm_tr = (profile['OD_r'].data + sig_p_tr*ssa_p_atm_tr)/sig_atm_tr
+                            ssa_atm_tr = (profile['OD_r'].values + sig_p_tr*ssa_p_atm_tr)/sig_atm_tr
                         ssa_atm_tr[np.isnan(ssa_atm_tr)] = 1.
-                        sig_r = profile['OD_r'].data
+                        sig_r = profile['OD_r'].values
                         with np.errstate(invalid='ignore', divide='ignore'):
                             pmol_tr = sig_r/(sig_r + sig_p_tr*ssa_p_atm_tr)
                         pmol_tr[np.isnan(pmol_tr)] = 1.
                         
-                        attrs_tmp = profile['OD_p'].attrs
-                        profile.rm_lut('OD_p')
-                        profile.add_dataset('OD_p', sig_p_tr, axnames=['wavelength', 'iopt'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['ssa_p_atm'].attrs
-                        profile.rm_lut('ssa_p_atm')
-                        profile.add_dataset('ssa_p_atm', ssa_p_atm_tr, axnames=['wavelength', 'iopt'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['OD_atm'].attrs
-                        profile.rm_lut('OD_atm')
-                        profile.add_dataset('OD_atm', sig_atm_tr, axnames=['wavelength', 'iopt'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['OD_sca_atm'].attrs
-                        profile.rm_lut('OD_sca_atm')
-                        profile.add_dataset('OD_sca_atm', sig_sca_tr, axnames=['wavelength', 'iopt'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['ssa_atm'].attrs
-                        profile.rm_lut('ssa_atm')
-                        profile.add_dataset('ssa_atm', ssa_atm_tr, axnames=['wavelength', 'iopt'],
-                                            attrs=attrs_tmp)
-                        attrs_tmp = profile['pmol_atm'].attrs
-                        profile.rm_lut('pmol_atm')
-                        profile.add_dataset('pmol_atm', pmol_tr, axnames=['wavelength', 'iopt'],
-                                            attrs=attrs_tmp)
+                        profile['OD_p'] = xr.DataArray(sig_p_tr, dims=['wavelength', 'iopt'],
+                            coords={'wavelength': profile.coords['wavelength']},
+                            attrs=profile['OD_p'].attrs)
+                        profile['ssa_p_atm'] = xr.DataArray(ssa_p_atm_tr, dims=['wavelength', 'iopt'],
+                            coords={'wavelength': profile.coords['wavelength']},
+                            attrs=profile['ssa_p_atm'].attrs)
+                        profile['OD_atm'] = xr.DataArray(sig_atm_tr, dims=['wavelength', 'iopt'],
+                            coords={'wavelength': profile.coords['wavelength']},
+                            attrs=profile['OD_atm'].attrs)
+                        profile['OD_sca_atm'] = xr.DataArray(sig_sca_tr, dims=['wavelength', 'iopt'],
+                            coords={'wavelength': profile.coords['wavelength']},
+                            attrs=profile['OD_sca_atm'].attrs)
+                        profile['ssa_atm'] = xr.DataArray(ssa_atm_tr, dims=['wavelength', 'iopt'],
+                            coords={'wavelength': profile.coords['wavelength']},
+                            attrs=profile['ssa_atm'].attrs)
+                        profile['pmol_atm'] = xr.DataArray(pmol_tr, dims=['wavelength', 'iopt'],
+                            coords={'wavelength': profile.coords['wavelength']},
+                            attrs=profile['pmol_atm'].attrs)
 
         return profile
 
@@ -1794,12 +1805,12 @@ class AtmAFGL(Atmosphere):
         >>> prof_abs, prof_ray, (prof_aer, ssa_aer), (pro_iphase, pro_phases) = atm.calc_split(wav=500.)
         """
         pro = self.calc(wav=wav, phase=phase, NBTHETA=NBTHETA)
-        pro_aer = diff1(pro['OD_p'].data.astype(np.float32), axis=1)
-        ssa_aer = pro['ssa_p_atm'].data
-        pro_ray = diff1(pro['OD_r'].data.astype(np.float32), axis=1)
-        pro_abs = diff1(pro['OD_g'].data.astype(np.float32), axis=1)
-        pro_iphase = pro['iphase_atm'].data
-        pro_phases = [pro['phase_atm'].sub({'iphase':i}) for i in range(pro_iphase.max()+1)]
+        pro_aer = diff1(pro['OD_p'].values.astype(np.float32), axis=1)
+        ssa_aer = pro['ssa_p_atm'].values
+        pro_ray = diff1(pro['OD_r'].values.astype(np.float32), axis=1)
+        pro_abs = diff1(pro['OD_g'].values.astype(np.float32), axis=1)
+        pro_iphase = pro['iphase_atm'].values
+        pro_phases = [pro['phase_atm'].sel(iphase=i).values for i in range(int(pro_iphase.max())+1)]
 
         return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 

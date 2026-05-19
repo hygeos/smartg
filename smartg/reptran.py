@@ -43,19 +43,26 @@ def Reptran_Emission(mlut, ibands):
     '''
     Return Thermal emission
     '''
+    if hasattr(mlut, 'to_xarray'):
+        mlut = mlut.to_xarray()
+
+    z_axis = mlut.coords['z_atm'].to_numpy()
+    wavelength_axis = mlut.coords['wavelength'].to_numpy()
+    t_atm = mlut['T_atm'].to_numpy()
+
     bsgroup = ibands.get_groups()
     kabs    = od2k(mlut, 'OD_abs_atm') * 1e-3 # m-1
-    z       = -mlut.axis('z_atm') * 1e3 # m
+    z       = -z_axis * 1e3 # m
     wmin = np.unique([ib.band.wmin for ib in ibands.l])
     wmax = np.unique([ib.band.wmax for ib in ibands.l])
     Avg_B  = np.zeros((len(wmin), len(z)))
     for i,(wmin,wmax) in enumerate(zip(wmin,wmax)):    
-        for j,T in enumerate(mlut['T_atm'].data):
+        for j,T in enumerate(t_atm):
             lmin, lmax = wmin*1e-9, wmax*1e-9 # m
             dl         = wmax-wmin # nm
             Avg_B[i,j] = quad(blackbody_radiance, lmin, lmax, args=T)[0]/(dl)
     Emission = LUT(kabs * Avg_B[bsgroup, :], 
-               axes = [mlut.axis('wavelength'), z], 
+               axes = [wavelength_axis, z], 
                names= ['wavelength','z_atm'])
     return Emission
 
@@ -64,7 +71,12 @@ def Reptran_Avg_Emission(mlut, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
-    return (4*np.pi)*Reptran_Emission(mlut, ibands).reduce(simpson, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
+    if hasattr(mlut, 'to_xarray'):
+        mlut = mlut.to_xarray()
+
+    z_axis = mlut.coords['z_atm'].to_numpy()
+
+    return (4*np.pi)*Reptran_Emission(mlut, ibands).reduce(simpson, 'z_atm', x=-z_axis * 1e3)
 
 
 

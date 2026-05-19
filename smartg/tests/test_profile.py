@@ -48,7 +48,6 @@ def test_profile4(wav):
 def test_profile5():
     # set tauray
     pro = AtmAFGL('afglms', grid=[100, 20, 0.], tauR=0.14).calc(500.)
-    pro.describe()
     assert np.isclose(pro['OD_r'][0,-1], 0.14)
 
     AtmAFGL('afglms', grid=[100, 20, 0.], tauR=0.14).calc([490.,500.])
