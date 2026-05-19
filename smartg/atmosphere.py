@@ -1126,8 +1126,7 @@ class AtmAFGL(Atmosphere):
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
             
-        profile_mlut = self.profile(wav)
-        profile = profile_mlut.to_xarray()
+        profile = self.profile(wav)
         
         if phase:
             if self.pfwav is None:
@@ -1149,7 +1148,7 @@ class AtmAFGL(Atmosphere):
 
                 # If truncation parameter is given compute truncated phase function
                 if truncation is not None:
-                    if self.OPT3D: theta = profile.axis('theta_atm')
+                    if self.OPT3D: theta = profile.coords['theta_atm'].values
                     else: theta = pha.axes[-1]
                     pha_tr = np.zeros(pha_.shape, dtype=np.float64)
                     nphac = pha_.shape[1]
@@ -1315,8 +1314,8 @@ class AtmAFGL(Atmosphere):
             
         Returns
         -------
-        profile : MLUT
-            Multi-dimensional lookup table containing atmospheric optical properties 
+        profile : xr.Dataset
+            Xarray dataset containing atmospheric optical properties 
             with dimensions as a function of wavelength and altitude (or iopt grid for 3D mode).
             
             Key datasets included:
@@ -1363,20 +1362,24 @@ class AtmAFGL(Atmosphere):
 
         dz = -diff1(prof.z)
 
-        pro = MLUT()
-        pro.add_axis('z_atm', prof.z)
-        pro.add_axis('wavelength', wav[:])
+        pro = xr.Dataset(coords={'z_atm': prof.z, 'wavelength': wav[:]})
 
         # refractive index
         n = refractivity(wav[:]*1e-3, prof.P, prof.T,prof.dens_co2/prof.dens_air*1e6)
-        pro.add_dataset('n_atm', n, axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'atmospheric refractive index'})
+        pro['n_atm'] = xr.DataArray(
+            n,
+            dims=['wavelength', 'z_atm'],
+            coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+            attrs={'description': 'atmospheric refractive index'}
+        )
 
 
-        pro.add_dataset('T_atm', self.prof.T, axnames=['z_atm'],
-                        attrs={'description':
-                               'temperature (K)'})
+        pro['T_atm'] = xr.DataArray(
+            prof.T,
+            dims=['z_atm'],
+            coords={'z_atm': pro.coords['z_atm']},
+            attrs={'description': 'temperature (K)'}
+        )
         
         #
         # Rayleigh optical thickness
@@ -1404,18 +1407,24 @@ class AtmAFGL(Atmosphere):
         # Rayleigh optical thickness
         dtaur = diff1(tauray, axis=1)
         if not self.OPT3D : 
-            pro.add_dataset('OD_r', tauray, axnames=['wavelength', 'z_atm'],
-            attrs={'description':
-            'Cumulated rayleigh optical thickness'})
+            pro['OD_r'] = xr.DataArray(
+                tauray,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'Cumulated rayleigh optical thickness'}
+            )
         else:
             if self.prof_ray is None:
                 ray_coef = abs(dtaur/dz)
                 ray_coef[~np.isfinite(ray_coef)] = 0.
             else:
                 ray_coef = self.prof_ray
-            pro.add_dataset('OD_r', ray_coef, axnames=['wavelength', 'iopt'],
-            attrs={'description':
-            'rayleigh scattering coefficient (km-1)'})
+            pro['OD_r'] = xr.DataArray(
+                ray_coef,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'rayleigh scattering coefficient (km-1)'}
+            )
 
         #
         # Aerosol optical thickness and single scattering albedo
@@ -1436,28 +1445,38 @@ class AtmAFGL(Atmosphere):
             taua= np.cumsum(dtaua,axis=1)
 
         if not self.OPT3D : 
-            pro.add_dataset('OD_p', taua,
-            axnames=['wavelength', 'z_atm'],
-            attrs={'description':
-            'Cumulated particles optical thickness at each wavelength'})
+            pro['OD_p'] = xr.DataArray(
+                taua,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'Cumulated particles optical thickness at each wavelength'}
+            )
         else:
             if self.prof_aer is None:
                 aer_coef = abs(dtaua/dz)
                 aer_coef[~np.isfinite(aer_coef)] = 0.
             else : (aer_coef, ssa_p) = self.prof_aer
-            pro.add_dataset('OD_p', aer_coef,
-            axnames=['wavelength', 'iopt'],
-            attrs={'description':
-            'particles extinction coefficient (km-1)'})
+            pro['OD_p'] = xr.DataArray(
+                aer_coef,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'particles extinction coefficient (km-1)'}
+            )
 
         if not self.OPT3D:
-            pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Particles single scattering albedo of the layer'})
+            pro['ssa_p_atm'] = xr.DataArray(
+                ssa_p,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'Particles single scattering albedo of the layer'}
+            )
         else :
-            pro.add_dataset('ssa_p_atm', ssa_p, axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'Particles single scattering albedo of the layer'})
+            pro['ssa_p_atm'] = xr.DataArray(
+                ssa_p,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'Particles single scattering albedo of the layer'}
+            )
 
 
             
@@ -1523,29 +1542,41 @@ class AtmAFGL(Atmosphere):
             taug = np.cumsum(dtaug, axis=1)
 
             if not self.OPT3D:
-                pro.add_dataset('OD_g', taug,
-                axnames=['wavelength', 'z_atm'],
-                attrs={'description': 'Cumulated gaseous absorption optical thickness'})
+                pro['OD_g'] = xr.DataArray(
+                    taug,
+                    dims=['wavelength', 'z_atm'],
+                    coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                    attrs={'description': 'Cumulated gaseous absorption optical thickness'}
+                )
             else:
                 abs_coef = abs(dtaug/dz)
                 abs_coef[~np.isfinite(abs_coef)] = 0.
-                pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'iopt'],
-                  attrs={'description':
-                         'gaseous absorption coefficient (km-1)'})
+                pro['OD_g'] = xr.DataArray(
+                    abs_coef,
+                    dims=['wavelength', 'iopt'],
+                    coords={'wavelength': pro.coords['wavelength']},
+                    attrs={'description': 'gaseous absorption coefficient (km-1)'}
+                )
 
         else:
             dtaug = self.prof_abs
             taug  = np.cumsum(dtaug,axis=1)
             if not self.OPT3D:
-                pro.add_dataset('OD_g', taug, axnames=['wavelength', 'z_atm'],
-                  attrs={'description':
-                         'Cumulated gaseous absorption optical thickness'})
+                pro['OD_g'] = xr.DataArray(
+                    taug,
+                    dims=['wavelength', 'z_atm'],
+                    coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                    attrs={'description': 'Cumulated gaseous absorption optical thickness'}
+                )
 
             else: 
                 abs_coef = self.prof_abs
-                pro.add_dataset('OD_g', abs_coef, axnames=['wavelength', 'iopt'],
-                  attrs={'description':
-                         'gaseous absorption coefficient (km-1)'})
+                pro['OD_g'] = xr.DataArray(
+                    abs_coef,
+                    dims=['wavelength', 'iopt'],
+                    coords={'wavelength': pro.coords['wavelength']},
+                    attrs={'description': 'gaseous absorption coefficient (km-1)'}
+                )
 
                 
         #
@@ -1553,106 +1584,140 @@ class AtmAFGL(Atmosphere):
         #
         if not self.OPT3D:
             tau_tot = tauray + taua + taug[:,:]
-            pro.add_dataset('OD_atm', tau_tot,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Cumulated extinction optical thickness'})
+            pro['OD_atm'] = xr.DataArray(
+                tau_tot,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'Cumulated extinction optical thickness'}
+            )
 
             tau_sca = np.cumsum(dtaur + dtaua*ssa_p, axis=1)
-            pro.add_dataset('OD_sca_atm', tau_sca,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Cumulated scattering optical thickness'})
+            pro['OD_sca_atm'] = xr.DataArray(
+                tau_sca,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'Cumulated scattering optical thickness'}
+            )
 
             tau_abs = np.cumsum(dtaug[:,:] + dtaua*(1-ssa_p), axis=1)
-            pro.add_dataset('OD_abs_atm', tau_abs,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Cumulated absorption optical thickness'})
+            pro['OD_abs_atm'] = xr.DataArray(
+                tau_abs,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'Cumulated absorption optical thickness'}
+            )
 
             with np.errstate(invalid='ignore', divide='ignore'):
                 ssa = (dtaur+ dtaua*ssa_p)/diff1(tau_tot, axis=1)
             ssa[np.isnan(ssa)] = 1.
-            pro.add_dataset('ssa_atm', ssa,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Single scattering albedo of the layer'})
+            pro['ssa_atm'] = xr.DataArray(
+                ssa,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'Single scattering albedo of the layer'}
+            )
 
 
         else:
             tot_coef = ray_coef + aer_coef + abs_coef[:,:]
-            pro.add_dataset('OD_atm', tot_coef,
-                        axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'extinction coefficient (km-1)'})
+            pro['OD_atm'] = xr.DataArray(
+                tot_coef,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'extinction coefficient (km-1)'}
+            )
 
             sca_coef = ray_coef + aer_coef*ssa_p
-            pro.add_dataset('OD_sca_atm', sca_coef,
-                        axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'scattering coefficient (km-1)'})
+            pro['OD_sca_atm'] = xr.DataArray(
+                sca_coef,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'scattering coefficient (km-1)'}
+            )
 
             tabs_coef = abs_coef + aer_coef*(1.-ssa_p)
-            pro.add_dataset('OD_abs_atm', tabs_coef,
-                        axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'total absorption coefficient (km-1)'})
+            pro['OD_abs_atm'] = xr.DataArray(
+                tabs_coef,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'total absorption coefficient (km-1)'}
+            )
 
             with np.errstate(invalid='ignore', divide='ignore'):
                 ssa = (ray_coef+ aer_coef*ssa_p)/tot_coef
             ssa[np.isnan(ssa)] = 1.
-            pro.add_dataset('ssa_atm', ssa,
-                        axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'Single scattering albedo of the layer'})
+            pro['ssa_atm'] = xr.DataArray(
+                ssa,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'Single scattering albedo of the layer'}
+            )
 
         with np.errstate(invalid='ignore', divide='ignore'):
             pmol = dtaur/(dtaur + dtaua*ssa_p)
         pmol[np.isnan(pmol)] = 1.
         if not self.OPT3D:
-            pro.add_dataset('pmol_atm', pmol,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'Ratio of molecular scattering to total scattering of the layer'})
+            pro['pmol_atm'] = xr.DataArray(
+                pmol,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'Ratio of molecular scattering to total scattering of the layer'}
+            )
         else :
-            pro.add_dataset('pmol_atm', pmol,
-                        axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'Ratio of molecular scattering to total scattering of the layer'})
+            pro['pmol_atm'] = xr.DataArray(
+                pmol,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'Ratio of molecular scattering to total scattering of the layer'}
+            )
 
             
         pine = np.zeros_like(ssa)
         FQY1 = np.zeros_like(ssa)
         if not self.OPT3D:
-            pro.add_dataset('pine_atm', pine,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'fraction of inelastic scattering of the layer'})
-            pro.add_dataset('FQY1_atm', FQY1,
-                        axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'fluoresence quantum yield of the layer'})
+            pro['pine_atm'] = xr.DataArray(
+                pine,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'fraction of inelastic scattering of the layer'}
+            )
+            pro['FQY1_atm'] = xr.DataArray(
+                FQY1,
+                dims=['wavelength', 'z_atm'],
+                coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                attrs={'description': 'fluoresence quantum yield of the layer'}
+            )
         else :
-            pro.add_dataset('pine_atm', pine,
-                        axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'fraction of inelastic scattering of the layer'})
-            pro.add_dataset('FQY1_atm', FQY1,
-                        axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'fluoresence quantum yield of the layer'})
+            pro['pine_atm'] = xr.DataArray(
+                pine,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'fraction of inelastic scattering of the layer'}
+            )
+            pro['FQY1_atm'] = xr.DataArray(
+                FQY1,
+                dims=['wavelength', 'iopt'],
+                coords={'wavelength': pro.coords['wavelength']},
+                attrs={'description': 'fluoresence quantum yield of the layer'}
+            )
 
 
         if self.prof_phases is not None:
             ipha, phases = self.prof_phases
             if not self.OPT3D:
-                pro.add_dataset('iphase_atm', ipha, axnames=['wavelength', 'z_atm'],
-                        attrs={'description':
-                               'index of phase matrix'})
+                pro['iphase_atm'] = xr.DataArray(
+                    ipha,
+                    dims=['wavelength', 'z_atm'],
+                    coords={'wavelength': pro.coords['wavelength'], 'z_atm': pro.coords['z_atm']},
+                    attrs={'description': 'index of phase matrix'}
+                )
             else :
-                pro.add_dataset('iphase_atm', ipha, axnames=['wavelength', 'iopt'],
-                        attrs={'description':
-                               'index of phase matrix'})
+                pro['iphase_atm'] = xr.DataArray(
+                    ipha,
+                    dims=['wavelength', 'iopt'],
+                    coords={'wavelength': pro.coords['wavelength']},
+                    attrs={'description': 'index of phase matrix'}
+                )
 
             # set the number of scattering angles to the maximum
             # # convert legacy LUT to DataArray objects
@@ -1661,19 +1726,26 @@ class AtmAFGL(Atmosphere):
             theta = phases[ip].coords['theta_atm'].values
             #TODO: use gatiab vec_float_indexing function bellow
             pha = np.stack([p.interp(theta_atm=theta).values for p in phases])
-            pro.add_axis('theta_atm', theta)
-            pro.add_dataset('phase_atm', pha, axnames=['iphase', 'stk', 'theta_atm'],
-                    attrs={'description':
-                           'phase matrices'})
+            pro = pro.assign_coords(theta_atm=theta)
+            pro['phase_atm'] = xr.DataArray(
+                pha,
+                dims=['iphase', 'stk', 'theta_atm'],
+                coords={
+                    'iphase': np.arange(pha.shape[0]),
+                    'stk': np.arange(pha.shape[1]),
+                    'theta_atm': pro.coords['theta_atm']
+                },
+                attrs={'description': 'phase matrices'}
+            )
         # Pure 3D
         #
         if self.OPT3D:
             (iopt, iabs, pmin, pmax, neighbour) = self.cells
-            pro.add_dataset('iopt_atm', iopt, axnames=['icell'])
-            pro.add_dataset('iabs_atm', iabs, axnames=['icell'])
-            pro.add_dataset('pmin_atm', pmin, axnames=['xyz', 'icell'])
-            pro.add_dataset('pmax_atm', pmax, axnames=['xyz', 'icell'])
-            pro.add_dataset('neighbour_atm', neighbour, axnames=['faces', 'icell'])
+            pro['iopt_atm'] = xr.DataArray(iopt, dims=['icell'])
+            pro['iabs_atm'] = xr.DataArray(iabs, dims=['icell'])
+            pro['pmin_atm'] = xr.DataArray(pmin, dims=['xyz', 'icell'])
+            pro['pmax_atm'] = xr.DataArray(pmax, dims=['xyz', 'icell'])
+            pro['neighbour_atm'] = xr.DataArray(neighbour, dims=['faces', 'icell'])
 
         return pro
 
