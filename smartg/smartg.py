@@ -1447,7 +1447,7 @@ class Smartg(object):
             ZTOA = 120.
   
         if prof_atm is not None:
-            faer = calculF(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
+              faer = _calcul_phase_gpu(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
             prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.coords['z_atm']) - 1
             if self.opt3D : 
@@ -1543,7 +1543,7 @@ class Smartg(object):
             prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
-            foce = calculF(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
+              foce = _calcul_phase_gpu(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
             prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.coords['z_oc']) - 1
             if self.opt3D : NOCE_ABS = np.int32(prof_oc['iabs_oc'].to_numpy().max())
@@ -2406,7 +2406,7 @@ def rayleigh(N, DEPO, pol_off=False):
     return pha
 
 
-def calculF(profile, N, DEPO, kind, pol_off=False):
+def _calcul_phase_gpu(profile, N, DEPO, kind, pol_off=False):
     """
     Calculate cumulated phase functions from profile
 
