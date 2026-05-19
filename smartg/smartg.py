@@ -2325,17 +2325,7 @@ def rayleigh(n_theta, depo, pol_off=False):
     Build the Rayleigh phase-function lookup table.
 
     Computes the Rayleigh phase matrix (polarized or scalar) with cumulative
-    distribution function sampling over scattering angles. Phase values are
-    precomputed on two discretizations:
-
-    - ``p_*`` fields sampled on an equal-probability grid used for Monte Carlo
-      scattering angle sampling,
-    - ``a_*`` fields sampled on an equal-angle grid over the range [0, pi] used by
-      the GPU phase interpolation code.
-
-    The Rayleigh phase matrix is generated using depolarization coefficients
-    following van de Hulst's convention. When ``pol_off`` is enabled, the
-    polarized phase matrix terms are reduced to their scalar intensity equivalent.
+    distribution function sampling over scattering angles.
 
     Parameters
     ----------
@@ -2358,12 +2348,6 @@ def rayleigh(n_theta, depo, pol_off=False):
         Array of shape ``(n_theta,)`` and dtype ``type_Phase``.
         Contains the Rayleigh phase-function lookup table ready to be indexed by
         phase lookup routines.
-
-    Notes
-    -----
-    The scattering angle coordinate is computed from an equal-probability
-    grid transformation, and the cumulative scattering probability is
-    obtained by integrating the phase terms over solid angle.
     """
     pha = np.zeros(n_theta, dtype=type_Phase, order='C')
 
