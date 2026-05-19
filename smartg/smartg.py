@@ -2269,16 +2269,37 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
     return m
 
 
-def isotropic(N):
-    '''
-    isotropic phase function, incl. cumulative
-    over N angles
-    '''
-    phase_H = np.zeros(N, dtype=type_Phase, order='C')
-    angles = np.linspace(0., pi, int(N), endpoint=True, dtype=np.float64)
+def isotropic(n_theta):
+    """
+    Build the isotropic phase-function lookup table.
+
+    Computes a uniform phase matrix with cumulative distribution function
+    sampling over scattering angles.
+
+    Parameters
+    ----------
+    n_theta : int
+        Theta discretization used to build the sampling lookup tables.
+        In CUDA, phase values are sampled over this angular discretization.
+        A finer angular discretization improves sampling precision but increases
+        GPU memory usage.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape ``(n_theta,)`` and dtype ``type_Phase``.
+        Contains the isotropic phase-function lookup table ready to be indexed
+        by phase lookup routines.
+
+    Warnings
+    --------
+    This function has not been validated yet.
+    """
+    phase_H = np.zeros(n_theta, dtype=type_Phase, order='C')
+    angles = np.linspace(0., pi, int(n_theta), endpoint=True, dtype=np.float64)
     scum = [0]
     norm = 0.5
-    phase= np.zeros((4,N), dtype='float64') 
+    phase= np.zeros((4,n_theta), dtype='float64') 
     phase[0,:] = 0.5/norm
     phase[1,:] = 0.5/norm
     phase[2,:] = 0.5/norm
@@ -2293,8 +2314,8 @@ def isotropic(N):
     scum /= scum[-1]
 
     # probability between 0 and 1
-    z = (np.arange(N, dtype='float64')+1)/N
-    angN = (np.arange(N, dtype='float64'))/(N-1)*np.pi
+    z = (np.arange(n_theta, dtype='float64')+1)/n_theta
+    angN = (np.arange(n_theta, dtype='float64'))/(n_theta-1)*np.pi
     f1 = interp1d(angles, phase[0,:])
     f2 = interp1d(angles, phase[1,:])
     f3 = interp1d(angles, phase[2,:])
@@ -2317,7 +2338,6 @@ def isotropic(N):
 
 
     return phase_H
-
 
 
 def rayleigh(n_theta, depo, pol_off=False):
