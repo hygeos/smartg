@@ -1797,38 +1797,54 @@ class Smartg(object):
         return output
 
 
-def calcOmega(NBTHETA, NBPHI, SZA_MAX=90., SUN_DISC=0):
-    '''
-    returns the zenith and azimuth angles, and the solid angles
-    '''
+def calc_solid_angles(n_theta, n_phi, sza_max=90., sun_disc=0):
+    """
+    Compute zenith angles, azimuth angles, and solid angles for the sensor grid.
+
+    Parameters
+    ----------
+    n_theta : int
+        Number of zenith angle bins.
+    n_phi : int
+        Number of azimuth angle bins.
+    sza_max : float, optional
+        Maximum zenith angle in degrees. Default is ``90.``.
+    sun_disc : float, optional
+        Half-angle of the solar disc in degrees. When non-zero, all solid
+        angles are set to the solid angle subtended by the solar disc.
+        Default is ``0``.
+
+    Returns
+    -------
+    tab_th : numpy.ndarray
+        Array of shape ``(n_theta,)`` containing the zenith angles in radians,
+        centred within each bin.
+    tab_phi : numpy.ndarray
+        Array of shape ``(n_phi,)`` containing the azimuth angles in radians,
+        starting at ``0`` and spaced by ``2π / n_phi``.
+    tab_omega : numpy.ndarray
+        Array of shape ``(n_theta,)`` containing the normalized solid angles.
+        When ``sun_disc != 0``, all elements are set to the solid angle of the
+        solar disc ``2π(1 - cos(sun_disc))``.
+    """
 
     # zenith angles
-    #dth = (np.pi/2)/NBTHETA
-    #tabTh = np.linspace(dth/2, np.pi/2-dth/2, NBTHETA, dtype='float64')
-
-    # zenith angles PI
-    #dth = (np.pi)/NBTHETA
-    #tabTh = np.linspace(dth/2, np.pi-dth/2, NBTHETA, dtype='float64')
-
-    # zenith angles SZA_MAX
-    dth = (SZA_MAX/180.*np.pi)/NBTHETA
-    tabTh = np.linspace(dth/2, SZA_MAX/180.*np.pi-dth/2, NBTHETA, dtype='float64')
+    dth = (sza_max / 180. * np.pi) / n_theta
+    tab_th = np.linspace(dth/2, sza_max/180.*np.pi - dth/2, n_theta, dtype='float64')
 
     # azimuth angles
-    #dphi = np.pi/NBPHI
-    #tabPhi = np.linspace(dphi/2, np.pi-dphi/2, NBPHI, dtype='float64')
-    dphi = 2*np.pi/NBPHI
-    tabPhi = np.linspace(0., 2*np.pi-dphi, NBPHI, dtype='float64')
-
+    dphi = 2 * np.pi / n_phi
+    tab_phi = np.linspace(0., 2*np.pi - dphi, n_phi, dtype='float64')
 
     # solid angles
-    tabds = np.sin(tabTh) * dth * dphi
+    tab_ds = np.sin(tab_th) * dth * dphi
 
     # normalize to 1
-    tabOmega = tabds/(sum(tabds)*NBPHI)
-    if (SUN_DISC !=0) : tabOmega[:]= 2*np.pi * (1. - np.cos(SUN_DISC*np.pi/180))
+    tab_omega = tab_ds / (sum(tab_ds) * n_phi)
+    if sun_disc != 0:
+        tab_omega[:] = 2 * np.pi * (1. - np.cos(sun_disc * np.pi / 180))
 
-    return tabTh, tabPhi, tabOmega
+    return tab_th, tab_phi, tab_omega
 
 
 def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
@@ -1858,12 +1874,12 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             else : zip = le['zip']
             norm_geo =  1. 
         else : 
-            tabTh, tabPhi, tabOmega = calcOmega(NBTHETA, NBPHI, SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC)
+            tabTh, tabPhi, tabOmega = calc_solid_angles(NBTHETA, NBPHI, sza_max=SZA_MAX, sun_disc=SUN_DISC)
             if HORIZ==1 : norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1))
             else :  norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) 
     else:
         norm_geo = 1.
-        tabTh, tabPhi, _ = calcOmega(NBTHETA, NBPHI, SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC)
+        tabTh, tabPhi, _ = calc_solid_angles(NBTHETA, NBPHI, sza_max=SZA_MAX, sun_disc=SUN_DISC)
 
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
