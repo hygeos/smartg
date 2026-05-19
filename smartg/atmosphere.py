@@ -37,7 +37,6 @@ Cloud
 
 import numpy as np
 from pathlib import Path
-from luts.luts import MLUT, LUT
 from smartg.phase import calc_iphase
 from scipy.interpolate import interp1d
 from scipy.integrate import simpson
@@ -50,7 +49,6 @@ import pandas as pd
 import xarray as xr
 import re
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
-import netCDF4  # noqa: F401 - imported early to avoid HDF5 library conflicts with HDF5-backed readers
 
 
 class AerOPAC(object):
@@ -2870,12 +2868,12 @@ def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav,
         Date in the following format -> "yyyy-mm-dd"
     time : str
         Time in the following format -> "hh:mm:ss"
-    aod_file : str | LUT
-        Extinction AOD aeronet file (finishing by .aod) or aod LUT
-    ssa_file : str | LUT
-        Single scattering albedo aeronet file (finishing by .ssa) or ssa LUT
-    pfn_file : str | LUT
-        Phase matrix aeronet file (finishing by .pfn) or pfn LUT
+    aod_file : str | xr.DataArray
+        Extinction AOD aeronet file (finishing by .aod) or aod DataArray
+    ssa_file : str | xr.DataArray
+        Single scattering albedo aeronet file (finishing by .ssa) or ssa DataArray
+    pfn_file : str | xr.DataArray
+        Phase matrix aeronet file (finishing by .pfn) or pfn DataArray
     b_wav : list | BandSet
         Kdis bands or list of wavelenghts
     pfwav : list
@@ -2901,7 +2899,7 @@ def atm_pro_from_aeronet(date, time, aod_file, ssa_file, pfn_file, b_wav,
 
     Returns
     -------
-    out : MLUT
+    out : xarray.Dataset
         The atmophere profil. Similar to the output of the calc method of AtmAFGL.
 
     Notes
