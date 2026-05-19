@@ -1148,8 +1148,10 @@ class AtmAFGL(Atmosphere):
 
                 # If truncation parameter is given compute truncated phase function
                 if truncation is not None:
-                    if self.OPT3D: theta = profile.coords['theta_atm'].values
-                    else: theta = pha.axes[-1]
+                    if self.OPT3D:
+                        theta = profile.coords['theta_atm'].values
+                    else:
+                        theta = pha.coords['theta_atm'].values if hasattr(pha, 'coords') else pha.axes[-1]
                     pha_tr = np.zeros(pha_.shape, dtype=np.float64)
                     nphac = pha_.shape[1]
                     if (truncation.tr_method == 'DM'):
@@ -1768,8 +1770,8 @@ class AtmAFGL(Atmosphere):
             
         Returns
         -------
-        phase_matrix : LUT or None
-            Lookup table containing the weighted average phase matrix with axes 
+        phase_matrix : xr.DataArray or None
+            DataArray containing the weighted average phase matrix with axes 
             [wav_phase, z_phase, stk, theta_atm] if aerosol components are present.
             Shape is (len(wav), nz, nphamat, NBTHETA) where:
             - nz: number of altitude levels in the reduced profile (self.pfgrid)
@@ -1796,26 +1798,32 @@ class AtmAFGL(Atmosphere):
         the reduced profile (self.prof_red).
         """
         wav = np.atleast_1d(wav)
-        pha = 0.
-        norm = 0.
+        pha = None
+        norm = None
         rh = self.prof_red.relative_humidity()
 
         for comp in self.comp:
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
-            dtau = dtau[:,1:][:,:,None,None]
-            ssa_p = ssa_p[:,1:][:,:,None,None]
             comp_pha = comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)
             if hasattr(comp_pha, 'to_xarray'):
                 comp_pha = comp_pha.to_xarray()
-            comp_pha_lut = LUT(comp_pha.values,
-                               axes=[comp_pha.coords[d].values for d in comp_pha.dims],
-                               names=list(comp_pha.dims))
-            pha += comp_pha_lut*dtau*ssa_p
-            norm += dtau*ssa_p
-        if len(self.comp) > 0:
-            pha /= norm
-            pha.data[np.isnan(pha.data)] = 0.
 
+            # dtau/ssa grids are defined on pfgrid boundaries; skip TOA bound to match z_phase layers.
+            weight_2d = xr.DataArray(
+                dtau[:, 1:] * ssa_p[:, 1:],
+                dims=['wav_phase', 'z_phase'],
+                coords={
+                    'wav_phase': comp_pha.coords['wav_phase'].values,
+                    'z_phase': comp_pha.coords['z_phase'].values,
+                },
+            )
+
+            weighted_pha = comp_pha * weight_2d
+            pha = weighted_pha if pha is None else (pha + weighted_pha)
+            norm = weight_2d if norm is None else (norm + weight_2d)
+
+        if len(self.comp) > 0:
+            pha = (pha / norm).fillna(0.)
             return pha
         else:
             return None
