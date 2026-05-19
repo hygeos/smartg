@@ -1447,12 +1447,13 @@ class Smartg(object):
             ZTOA = 120.
   
         if prof_atm is not None:
-              faer = _calcul_phase_gpu(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
+            faer = _calcul_phase_gpu(prof_atm, NF, DEPO, kind='atm', pol_off=pol_off)
             prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.coords['z_atm']) - 1
-            if self.opt3D : 
+            if self.opt3D :
                 NATM_ABS = np.int32(prof_atm['iabs_atm'].to_numpy().max())
-            else : NATM_ABS = NATM
+            else:
+                NATM_ABS = NATM
         else:
             faer = gpuzeros(1, dtype='float32')
             prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
@@ -1543,11 +1544,13 @@ class Smartg(object):
             prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
-              foce = _calcul_phase_gpu(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
+            foce = _calcul_phase_gpu(prof_oc, NF, DEPO_WATER, kind='oc', pol_off=pol_off)
             prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.coords['z_oc']) - 1
-            if self.opt3D : NOCE_ABS = np.int32(prof_oc['iabs_oc'].to_numpy().max())
-            else : NOCE_ABS = NOCE
+            if self.opt3D :
+                NOCE_ABS = np.int32(prof_oc['iabs_oc'].to_numpy().max())
+            else:
+                NOCE_ABS = NOCE
         else:
             foce = gpuzeros(1, dtype='float32')
             prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
@@ -2408,21 +2411,64 @@ def rayleigh(N, DEPO, pol_off=False):
 
 def _calcul_phase_gpu(profile, N, DEPO, kind, pol_off=False):
     """
-    Calculate cumulated phase functions from profile
+    Build the phase-function lookup table uploaded to the GPU.
+
+    This routine converts the phase information stored in an atmospheric or
+    oceanic profile into the structured ``type_Phase`` table expected by the
+    CUDA kernels. The returned table always reserves:
+
+    - index 0 for the molecular phase function (Rayleigh, or isotropic when
+        ``DEPO < 0``),
+    - index 1 for the VRS phase function,
+    - subsequent indices for the tabulated particle phase functions found in
+        ``phase_<kind>``.
+
+    For each phase entry, two discretizations are precomputed:
+
+    - ``p_*`` fields sampled on an equal-probability grid used for Monte Carlo
+        scattering sampling,
+    - ``a_*`` fields sampled on an equal-angle grid over the range [0, pi] used by
+        the GPU phase interpolation code.
+
+    The profile phase matrices are first normalized to the internal
+    I-parallel/I-perpendicular representation with
+    ``convert_phase_to_iparper``. When ``pol_off`` is enabled, tabulated phase
+    matrices are reduced to their scalar intensity equivalent before the lookup
+    tables are built.
 
     Parameters
     ----------
     profile : xr.Dataset
-        The atmosphere/ocean profile.
+            Atmospheric or oceanic optical profile.
     N : int
-        The number of angles
+            Theta discretization used to build the sampling lookup tables.
+            It sets the number of angular samples stored for phase-function
+            sampling on the GPU.
     DEPO : float
-        The depolarization factor 'atmospheric'.
+                Molecular depolarization factor used to generate the Rayleigh phase
+                entry. If negative, an isotropic phase function is used instead of
+                Rayleigh.
     kind : str
         Profile family identifier. Must be either ``'atm'`` (atmosphere) or
         ``'oc'`` (ocean).
     pol_off : bool, optional
-        Deactivate polarization. Default False (meaning polarization is on).
+                If ``True``, build scalar-equivalent phase tables with polarization
+                disabled. If ``False``, keep the polarized phase-matrix terms required
+                by the vector radiative transfer kernels.
+
+    Returns
+    -------
+    pycuda.gpuarray.GPUArray
+            GPU array of shape ``(n_phase_entries, N)`` and dtype ``type_Phase``.
+            Each row contains one phase-function lookup table ready to be indexed by
+            ``iphase_<kind>`` in the profile uploaded by ``_init_profile``.
+
+    Notes
+    -----
+    The scattering-angle coordinate from ``theta_<kind>`` is converted from
+    degrees to radians internally, and the cumulative scattering probability is
+    obtained by integrating the phase terms over solid angle before
+    interpolation.
     """
 
     if hasattr(profile, 'to_xarray'):
