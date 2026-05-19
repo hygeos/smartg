@@ -2320,91 +2320,112 @@ def isotropic(N):
 
 
 
-def rayleigh(N, DEPO, pol_off=False):
+def rayleigh(n_theta, depo, pol_off=False):
     """
-    Rayleigh phase function, incl. cumulative over N angles
-    
+    Build the Rayleigh phase-function lookup table.
+
+    Computes the Rayleigh phase matrix (polarized or scalar) with cumulative
+    distribution function sampling over scattering angles. Phase values are
+    precomputed on two discretizations:
+
+    - ``p_*`` fields sampled on an equal-probability grid used for Monte Carlo
+      scattering angle sampling,
+    - ``a_*`` fields sampled on an equal-angle grid over the range [0, pi] used by
+      the GPU phase interpolation code.
+
+    The Rayleigh phase matrix is generated using depolarization coefficients
+    following van de Hulst's convention. When ``pol_off`` is enabled, the
+    polarized phase matrix terms are reduced to their scalar intensity equivalent.
+
     Parameters
     ----------
-    N : int
-        number of angles
-    DEPO : float
-        depolarization coefficient
+    n_theta : int
+        Theta discretization used to build the sampling lookup tables.
+        In CUDA, phase values are sampled over this angular discretization.
+        A finer angular discretization improves sampling precision but increases
+        GPU memory usage.
+    depo : float
+        Molecular depolarization factor. Generates the Rayleigh phase entry.
+        If negative, an isotropic phase function is used instead of Rayleigh.
     pol_off : bool, optional
+        If ``True``, build scalar-equivalent phase tables with polarization
+        disabled. If ``False``, keep the polarized phase-matrix terms required
+        by the vector radiative transfer kernels. Default is ``False``.
 
     Returns
     -------
-    out : type_Phase
-        the rayleigh phase information
+    numpy.ndarray
+        Array of shape ``(n_theta,)`` and dtype ``type_Phase``.
+        Contains the Rayleigh phase-function lookup table ready to be indexed by
+        phase lookup routines.
+
+    Notes
+    -----
+    The scattering angle coordinate is computed from an equal-probability
+    grid transformation, and the cumulative scattering probability is
+    obtained by integrating the phase terms over solid angle.
     """
-    pha = np.zeros(N, dtype=type_Phase, order='C')
+    pha = np.zeros(n_theta, dtype=type_Phase, order='C')
 
-    GAMA = DEPO / (2- DEPO)
-    DELTA = np.float32((1.0 - GAMA) / (1.0 + 2.0 *GAMA))
-    DELTA_PRIM = np.float32(GAMA / (1.0 + 2.0*GAMA))
-    BETA  = np.float32(3./2. * DELTA_PRIM)
-    ALPHA = np.float32(1./8. * DELTA)
-    A = np.float32(1. + BETA / (3.0 * ALPHA))
+    gama = depo / (2 - depo)
+    delta = np.float32((1.0 - gama) / (1.0 + 2.0 * gama))
+    delta_prim = np.float32(gama / (1.0 + 2.0 * gama))
+    beta = np.float32(3./2. * delta_prim)
+    alpha = np.float32(1./8. * delta)
+    a_coeff = np.float32(1. + beta / (3.0 * alpha))
 
-    i = np.arange(int(N), dtype=np.float32)
-    thetaLE = np.linspace(0., pi, int(N), endpoint=True, dtype=np.float64)
-    b = ((i/(N-1)) - 4.0*ALPHA - BETA) / (2.0*ALPHA)
-    u = (-b + (A**3.0 + b**2.0)**(1.0/2.0))**(1.0/3.0)
-    cTh = u - (A/u)
-    cTh = np.clip(cTh, -1, 1)
-    cTh2 = cTh*cTh
-    theta = np.arccos(cTh)
-    cThLE = np.cos(thetaLE)
-    cTh2LE = cThLE*cThLE
+    i = np.arange(int(n_theta), dtype=np.float32)
+    theta_le = np.linspace(0., pi, int(n_theta), endpoint=True, dtype=np.float64)
+    b = ((i / (n_theta - 1)) - 4.0 * alpha - beta) / (2.0 * alpha)
+    u = (-b + (a_coeff**3.0 + b**2.0)**(1.0 / 2.0))**(1.0 / 3.0)
+    c_th = u - (a_coeff / u)
+    c_th = np.clip(c_th, -1, 1)
+    c_th2 = c_th * c_th
+    theta = np.arccos(c_th)
+    c_th_le = np.cos(theta_le)
+    c_th2_le = c_th_le * c_th_le
 
-    DELTA_SECO = np.float32((1.0 - 3.0*GAMA) / (1.0 - GAMA))
-    T_demi = (3.0/2.0)
-    P22 = T_demi*(DELTA+DELTA_PRIM)
-    P12 = T_demi*DELTA_PRIM
-    P33bis = T_demi*DELTA
-    P44bis = P33bis*DELTA_SECO
+    delta_seco = np.float32((1.0 - 3.0 * gama) / (1.0 - gama))
+    t_half = (3.0 / 2.0)
+    p22 = t_half * (delta + delta_prim)
+    p12 = t_half * delta_prim
+    p33bis = t_half * delta
+    p44bis = p33bis * delta_seco
 
     if pol_off:
         # P(theta) -> phase matrix in Iperpar convention
         # F(theta) -> phase matrix in IQUV convention
         # from IQUV to IperIpar (in the case only IQUV F11 != 0 i.e. no polarisation)
-        # P11 = ((3./8.)*DELTA*(cTh2[:]-1)) + 0.5
-        # A_P11 = ((3./8.)*DELTA*(cTh2LE[:]-1)) + 0.5
-        P11 = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
-        A_P11 = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM)
-        F11 = 0.5 * (P11 + 2*P12 + P22)
-        A_F11 = 0.5 * (A_P11 + 2*P12 + P22)
-        # pha['p_P11'][:] = P11
-        # pha['p_P12'][:] = P11
-        # pha['p_P22'][:] = P11
+        # p11 = ((3./8.)*delta*(c_th2[:]-1)) + 0.5
+        # a_p11 = ((3./8.)*delta*(c_th2_le[:]-1)) + 0.5
+        p11 = t_half * (delta * c_th2[:] + delta_prim)
+        a_p11 = t_half * (delta * c_th2_le[:] + delta_prim)
+        f11 = 0.5 * (p11 + 2 * p12 + p22)
+        a_f11 = 0.5 * (a_p11 + 2 * p12 + p22)
 
-        # pha['p_ang'][:] = theta[:] # angle
-        # pha['a_P11'][:] = A_P11
-        # pha['a_P12'][:] = A_P11
-        # pha['a_P22'][:] = A_P11
-        pha['p_P11'][:] = 0.5*F11
-        pha['p_P12'][:] = 0.5*F11
-        pha['p_P22'][:] = 0.5*F11
-        pha['p_ang'][:] = theta[:] # angle
+        pha['p_P11'][:] = 0.5 * f11
+        pha['p_P12'][:] = 0.5 * f11
+        pha['p_P22'][:] = 0.5 * f11
+        pha['p_ang'][:] = theta[:]  # angle
 
-        pha['a_P11'][:] = 0.5*A_F11
-        pha['a_P12'][:] = 0.5*A_F11
-        pha['a_P22'][:] = 0.5*A_F11
+        pha['a_P11'][:] = 0.5 * a_f11
+        pha['a_P12'][:] = 0.5 * a_f11
+        pha['a_P22'][:] = 0.5 * a_f11
     else:
-        # parameters equally spaced in scattering probabiliy [0, 1]
-        pha['p_P11'][:] = T_demi*(DELTA*cTh2[:] + DELTA_PRIM)
-        pha['p_P12'][:] = P12
-        pha['p_P22'][:] = P22
-        pha['p_P33'][:] = P33bis*cTh[:] # U
-        pha['p_P44'][:] = P44bis*cTh[:] # V
-        pha['p_ang'][:] = theta[:] # angle
+        # parameters equally spaced in scattering probability [0, 1]
+        pha['p_P11'][:] = t_half * (delta * c_th2[:] + delta_prim)
+        pha['p_P12'][:] = p12
+        pha['p_P22'][:] = p22
+        pha['p_P33'][:] = p33bis * c_th[:]  # U
+        pha['p_P44'][:] = p44bis * c_th[:]  # V
+        pha['p_ang'][:] = theta[:]  # angle
 
         # parameters equally spaced in scattering angle [0, 180]
-        pha['a_P11'][:] = T_demi*(DELTA*cTh2LE[:] + DELTA_PRIM) 
-        pha['a_P12'][:] = P12
-        pha['a_P22'][:] = P22
-        pha['a_P33'][:] = P33bis*cThLE[:]  # U
-        pha['a_P44'][:] = P44bis*cThLE[:]  # V
+        pha['a_P11'][:] = t_half * (delta * c_th2_le[:] + delta_prim)
+        pha['a_P12'][:] = p12
+        pha['a_P22'][:] = p22
+        pha['a_P33'][:] = p33bis * c_th_le[:]  # U
+        pha['a_P44'][:] = p44bis * c_th_le[:]  # V
 
     return pha
 
