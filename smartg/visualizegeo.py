@@ -16,7 +16,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import mpl_toolkits.mplot3d as mp3d
 from matplotlib import colors as mcolors
 
-from typing import Literal
+from typing import Literal, Sequence
 
 import re
 from itertools import dropwhile
@@ -26,7 +26,7 @@ from scipy import interpolate
 
 def receiver_view(
     ds_sg_out: xr.Dataset,
-    cat: int = 0,
+    cat: int | Sequence[int] = 0,
     log_color_scale: bool = False,
     save_path: str | None = None,
     normalization_factor: float = 1320,
@@ -39,7 +39,8 @@ def receiver_view(
     """
     Plot receiver irradiance from a SMART-G simulation output.
 
-    The function reads receiver weights from ``ds_sg_out['C_Receiver'].isel(Categories=cat)``,
+    The function reads receiver weights from ``ds_sg_out['C_Receiver']``,
+    optionally selecting and summing one or more categories,
     converts the cell size from km to m using ``ds_sg_out.attrs['S_Cell']``, normalizes
     by cell area, multiplies by ``normalization_factor``, applies the selected power ``unit``, and
     displays the 2-D map with :func:`matplotlib.pyplot.imshow`.
@@ -51,9 +52,13 @@ def receiver_view(
     ----------
     ds_sg_out : xr.Dataset
         SMART-G output Dataset (obtained via ``mlut.to_xarray()``).
-    cat : int, default=0
-        Receiver category index. ``0`` corresponds to the sum of all categories;
-        positive values select individual categories.
+    cat : int or sequence of int, default=0
+        Receiver category index as defined in [1]_.
+
+        - ``0``: sum of all categories (scalar only).
+        - ``1``-``8``: a single specific category.
+        - A list / tuple / array of ints in ``1``-``8``: the selected
+          categories are summed together. ``0`` is not allowed in this case.
     log_color_scale : bool, default=False
         If ``True``, use a logarithmic color normalization.
     save_path : str or None, default=None
@@ -74,14 +79,35 @@ def receiver_view(
     flux_unit : {'W', 'kW', 'MW'}, default='W'
         Power unit used for displayed irradiance values.
 
+
     Returns
     -------
     None
         This function creates a matplotlib figure and colorbar, and optionally
         saves the figure to disk.
+
+    References
+    ----------
+    .. [1] Moulana, M., Elias, T., Cornet, C., & Ramon, D. (2019).
+           First results to evaluate losses and gains in solar radiation
+           collected by solar tower plants.
+           *SOLARPACES 2018: International Conference on Concentrating Solar
+           Power and Chemical Energy Systems*.
+           https://doi.org/10.1063/1.5117709
     """
 
-    m = ds_sg_out['C_Receiver'].isel(Categories=cat).values
+    if np.isscalar(cat):
+        m = ds_sg_out['C_Receiver'].isel(Categories=cat).values
+    else:
+        cat_list = list(cat)
+        if 0 in cat_list:
+            raise ValueError(
+                "Category index 0 (sum of all) is not allowed when specifying "
+                "multiple categories. Use individual indices 1–8."
+            )
+        if any(c < 1 or c > 8 for c in cat_list):
+            raise ValueError("Category indices must be in the range 1–8.")
+        m = ds_sg_out['C_Receiver'].isel(Categories=cat_list).sum(dim='Categories').values
     # Cell size: S_Cell attribute is in km, convert to m
     cell_size = float(ds_sg_out.attrs['S_Cell']) * 1e3
     half_x = (ds_sg_out.dims['X_Cell_Index'] * cell_size) / 2.
