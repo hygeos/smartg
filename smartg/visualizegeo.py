@@ -8,6 +8,8 @@ import geoclide as gc
 import matplotlib.pyplot as plt
 import numpy as np
 
+import xarray as xr
+
 from luts.luts import LUT, MLUT
 
 from mpl_toolkits.mplot3d import Axes3D
@@ -23,7 +25,7 @@ from scipy import interpolate
 
 
 def receiver_view(
-    smlut: MLUT,
+    ds_sg_out: xr.Dataset,
     cat: int = 0,
     log_color_scale: bool = False,
     save_path: str | None = None,
@@ -31,14 +33,14 @@ def receiver_view(
     vmin: float | None = None,
     vmax: float | None = None,
     interpolation: str = 'none',
-    unit: Literal['W', 'kW', 'MW'] = 'W',
+    flux_unit: Literal['W', 'kW', 'MW'] = 'W',
 ) -> None:
 
     """
     Plot receiver irradiance from a SMART-G simulation output.
 
-    The function reads receiver weights from ``smlut['C_Receiver'][cat, :, :]``,
-    converts the cell size from km to m using ``smlut.attrs['S_Cell']``, normalizes
+    The function reads receiver weights from ``ds_sg_out['C_Receiver'].isel(Categories=cat)``,
+    converts the cell size from km to m using ``ds_sg_out.attrs['S_Cell']``, normalizes
     by cell area, multiplies by ``normalization_factor``, applies the selected power ``unit``, and
     displays the 2-D map with :func:`matplotlib.pyplot.imshow`.
 
@@ -47,8 +49,8 @@ def receiver_view(
 
     Parameters
     ----------
-    smlut : MLUT
-        SMART-G output multi-layer LUT containing receiver data.
+    ds_sg_out : xr.Dataset
+        SMART-G output Dataset (obtained via ``mlut.to_xarray()``).
     cat : int, default=0
         Receiver category index. ``0`` corresponds to the sum of all categories;
         positive values select individual categories.
@@ -69,7 +71,7 @@ def receiver_view(
         ``log_color_scale=True``.
     interpolation : str, default='none'
         Image interpolation mode passed to ``imshow``.
-    unit : {'W', 'kW', 'MW'}, default='W'
+    flux_unit : {'W', 'kW', 'MW'}, default='W'
         Power unit used for displayed irradiance values.
 
     Returns
@@ -79,20 +81,20 @@ def receiver_view(
         saves the figure to disk.
     """
 
-    m = smlut['C_Receiver'][cat,:,:]
+    m = ds_sg_out['C_Receiver'].isel(Categories=cat).values
     # Cell size: S_Cell attribute is in km, convert to m
-    cell_size = float(smlut.attrs['S_Cell']) * 1e3
-    half_x = (smlut.axes['X_Cell_Index'].size * cell_size) / 2.
-    half_y = (smlut.axes['Y_Cell_Index'].size * cell_size) / 2.
+    cell_size = float(ds_sg_out.attrs['S_Cell']) * 1e3
+    half_x = (ds_sg_out.dims['X_Cell_Index'] * cell_size) / 2.
+    half_y = (ds_sg_out.dims['Y_Cell_Index'] * cell_size) / 2.
     cell_area = cell_size * cell_size
 
-    if unit == "W":
+    if flux_unit == "W":
         unit_scale = 1.
         unit_label = "W"
-    elif unit == "kW":
+    elif flux_unit == "kW":
         unit_scale = 1e-3
         unit_label = "kW"
-    elif unit == "MW":
+    elif flux_unit == "MW":
         unit_scale = 1e-6
         unit_label = "MW"
     else:
