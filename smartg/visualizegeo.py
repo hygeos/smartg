@@ -20,70 +20,81 @@ from itertools import dropwhile
 from scipy import interpolate
 
 
-def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 1320,
-                  VMIN=None, VMAX=None, INT='none', W_VIEW = 'W'):
+def receiver_view(smlut, cat = int(0), log_color_scale=False, save_path = None, 
+                  normalization_factor = 1320, vmin=None, vmax=None, interpolation='none', 
+                  unit = 'W'):
 
     """
-    Display the distribution of the radiant flux at a given receiver.
+    Plot receiver irradiance from a SMART-G simulation output.
 
-    Coordinate system::
+    The function reads receiver weights from ``smlut['C_Receiver'][cat, :, :]``,
+    converts the cell size from km to m using ``smlut.attrs['S_Cell']``, normalizes
+    by cell area, multiplies by ``normalization_factor``, applies the selected power ``unit``, and
+    displays the 2-D map with :func:`matplotlib.pyplot.imshow`.
 
-        ^ x
-        |
-    y <--
+    The displayed axes are labeled as relative receiver coordinates (m):
+    ``x`` points upward and ``y`` points to the left.
 
-    Print with the following cordinate system
-    
     Parameters
     ----------
-    SMLUT : MLUT
-        SMART-G return MLUT object.
-    CAT : int, optional
-        Category. By default = 0 (sum of all cats), else from cat 1 to 8.
-        Default: 0
-    LOG_I : bool, optional
-        Enable log interval.
-    NAME_FILE : str, optional
-        File name for PDF output. By default None. If not None, creates a pdf 
-        file in auxdata directory with the specified name.
-        Default: None
-    MTOA : float, optional
-        Radiant exitance at TOA (Unit depending on W_VIEW).
-        Default: W/m²
-    VMIN : float, optional
-        Minimal distribution value (Unit depending on W_VIEW). Not used for log scale.
-    VMAX : float, optional
-        Maximal distribution value (Unit depending on W_VIEW). Not used for log scale.
-    INT : str, optional
-        Interpolation method for imshow/matshow (e.g., 'nearest', 'bilinear', 
-        'bicubic', ...).
-    W_VIEW : str, optional
-        Unit for radiant flux display. Options are 'W' (Watt), 'kW' (kiloWatt), 
-        or 'MW' (MegaWatt).
-        Default: 'W'
+    smlut : MLUT
+        SMART-G output multi-layer LUT containing receiver data.
+    cat : int, default=0
+        Receiver category index. ``0`` corresponds to the sum of all categories;
+        positive values select individual categories.
+    log_color_scale : bool, default=False
+        If ``True``, use a logarithmic color normalization.
+    save_path : str or None, default=None
+        Output filename (without extension). If provided, the figure is saved as
+        ``<save_path>.pdf``.
+    normalization_factor : float, default=1320
+        Multiplicative factor applied to the receiver weights before display.
+        Typically the TOA solar irradiance (W/m²) for physical units, but can
+        be set to any value to rescale monochromatic simulation outputs.
+    vmin : float or None, default=None
+        Lower color limit for linear scale. Ignored when
+        ``log_color_scale=True``.
+    vmax : float or None, default=None
+        Upper color limit for linear scale. Ignored when
+        ``log_color_scale=True``.
+    interpolation : str, default='none'
+        Image interpolation mode passed to ``imshow``.
+    unit : {'W', 'kW', 'MW'}, default='W'
+        Power unit used for displayed irradiance values.
+
+    Raises
+    ------
+    NameError
+        If ``unit`` is not one of ``'W'``, ``'kW'``, or ``'MW'``.
+
+    Returns
+    -------
+    None
+        This function creates a matplotlib figure and colorbar, and optionally
+        saves the figure to disk.
     """
 
-    m = SMLUT['C_Receiver'][CAT,:,:]
+    m = smlut['C_Receiver'][cat,:,:]
     # Size of a Cell where the Cell surface = S_Cell*S_Cell
-    S_Cell = float(SMLUT.attrs['S_Cell']) * 1e3 # mult by 1e3 to convert km to m
-    wx = (SMLUT.axes['X_Cell_Index'].size * S_Cell)/ 2.
-    wy = (SMLUT.axes['Y_Cell_Index'].size * S_Cell)/ 2.
+    S_Cell = float(smlut.attrs['S_Cell']) * 1e3 # mult by 1e3 to convert km to m
+    wx = (smlut.axes['X_Cell_Index'].size * S_Cell)/ 2.
+    wy = (smlut.axes['Y_Cell_Index'].size * S_Cell)/ 2.
     C_Surf = S_Cell*S_Cell
 
-    if( W_VIEW == "W"):
+    if( unit == "W"):
         k = 1.; STRUNIT = "W";
-    elif ( W_VIEW == "kW"):
+    elif ( unit == "kW"):
         k = 1e-3; STRUNIT = "kW";
-    elif ( W_VIEW == "MW"):
+    elif ( unit == "MW"):
         k = 1e-6; STRUNIT = "MW";
     else :
-        raise NameError('Unkonwn argument for W_VIEW!')
+        raise NameError('Unknown argument for unit!')
 
     plt.figure()
 
-    if LOG_I == False :
-        cax = plt.imshow((k*m*MTOA)/C_Surf, cmap=plt.get_cmap('jet'), interpolation=INT, \
-                         vmin=VMIN, vmax=VMAX, extent = [wy,-wy,-wx,wx])
+    if log_color_scale == False :
+        cax = plt.imshow((k*m*normalization_factor)/C_Surf, cmap=plt.get_cmap('jet'), interpolation=interpolation, \
+                         vmin=vmin, vmax=vmax, extent = [wy,-wy,-wx,wx])
     else:
         m2 = m
         if (np.amin(m2) < 0.00001):
@@ -91,9 +102,9 @@ def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 132
         else:
             valmin = np.amin(m2)
             
-        cax = plt.imshow((k*m*MTOA)/C_Surf, cmap=plt.get_cmap('jet'), \
-                         norm=mcolors.LogNorm(vmin=valmin*MTOA, vmax=np.amax(m*MTOA)), \
-                         interpolation=INT, extent = [wy,-wy,-wx,wx])
+        cax = plt.imshow((k*m*normalization_factor)/C_Surf, cmap=plt.get_cmap('jet'), \
+                         norm=mcolors.LogNorm(vmin=valmin*normalization_factor, vmax=np.amax(m*normalization_factor)), \
+                         interpolation=interpolation, extent = [wy,-wy,-wx,wx])
 
     cbar = plt.colorbar()
     cbar.remove()
@@ -102,8 +113,8 @@ def receiver_view(SMLUT, CAT = int(0), LOG_I=False, NAME_FILE = None, MTOA = 132
     plt.xlabel(r'Position (m) in relative y axis')
     plt.ylabel(r'Position (m) in relative x axis')
     plt.title('Receiver surface')
-    if (NAME_FILE is not None):
-        plt.savefig(NAME_FILE + '.pdf')  
+    if (save_path is not None):
+        plt.savefig(save_path + '.pdf')  
 
 
 def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W", M_VIEW = "m",
