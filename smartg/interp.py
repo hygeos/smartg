@@ -5,6 +5,7 @@ from __future__ import print_function, division
 from scipy.ndimage import map_coordinates
 import numpy as np
 import xarray as xr
+from numpy.typing import ArrayLike, NDArray
 
 
 def interp3(x, y, z, v, xi, yi, zi, **kwargs):
@@ -30,6 +31,7 @@ def interp3(x, y, z, v, xi, yi, zi, **kwargs):
 
     return output.reshape(orig_shape)
 
+
 def interp2(x, y, v, xi, yi, **kwargs):
     """Sample a 2D array "v" with pixel corner locations at "x","y", at the
     points in "xi", "yi",  using linear interpolation. Additional kwargs
@@ -53,7 +55,9 @@ def interp2(x, y, v, xi, yi, **kwargs):
 
     return output.reshape(orig_shape)
 
-def interp_1d_coord(da, coord_name, x, extrema=False):
+
+def interp_1d_coord(da: xr.DataArray, coord_name: str, x: ArrayLike,
+                    extrema: bool = False) -> NDArray[np.float64]:
     """Interpolate a 1-D coordinate with optional extrema clipping.
 
     Parameters
