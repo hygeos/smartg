@@ -11,7 +11,7 @@ from scipy.integrate import quad, simpson
 from smartg.config import DIR_AUXDATA
 from scipy.interpolate import interp1d
 import netCDF4
-from smartg.tools.interp import interp2, interp3
+from smartg.interp import interp2, interp3
 
 dir_reptran = DIR_AUXDATA / 'reptran'
 

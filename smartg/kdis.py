@@ -12,7 +12,7 @@ from scipy.interpolate import interp1d
 from scipy.interpolate import interpn
 import os
 from itertools import product
-from smartg.tools.interp import interp2
+from smartg.interp import interp2
 import h5py
 
 from smartg.config import DIR_AUXDATA
