@@ -281,7 +281,7 @@ def read_phase_nc(filename,
         for iwav in range (0, nwl):
             for irhreff in range (0, n_rh_reff):
                 f = da_pha.data[iwav,irhreff,0,:] # P11 term
-                norm = np.trapezoid(f[idmu],mu[idmu])
+                norm = np.trapz(f[idmu],mu[idmu])
                 da_pha.data[iwav,irhreff,:,:] *= 2./abs(norm)
 
     if nwl > 1:
@@ -359,7 +359,7 @@ def read_phase_dat(filename, kind='atm', normalize=True):
         mu = np.cos(np.deg2rad(theta))
         idmu = np.argsort(mu)
         f = pha[0,:] # P11 term
-        pha = (2.*pha) / np.trapezoid(f[idmu],mu[idmu])
+        pha = (2.*pha) / np.trapz(f[idmu],mu[idmu])
 
     # Add wav_phase and z_phase dimensions for consistency with other readers
     wav_phase = np.array([0.], dtype=float)
@@ -536,7 +536,7 @@ def read_phase_cdf(filename,
         for iwav in range (0, nwl):
             for irhreff in range (0, n_rh_reff):
                 f = da_pha.data[iwav,irhreff,0,:] # P11 term
-                norm = np.trapezoid(f[idmu],mu[idmu])
+                norm = np.trapz(f[idmu],mu[idmu])
                 da_pha.data[iwav,irhreff,:,:] *= 2./abs(norm)
 
     if nwl > 1:
