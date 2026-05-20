@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, division, absolute_import
-from luts.luts import MLUT, LUT, Idx
-from smartg.atmosphere import diff1
 import numpy as np
+import xarray as xr
 from warnings import warn
+from smartg.atmosphere import diff1
 from smartg.albedo import Albedo_cst
 from smartg.config import NPSTK
 from smartg.phase import fournierForand, integ_phase, calc_iphase
@@ -14,6 +14,56 @@ from smartg.config import DIR_AUXDATA as dir_aux
 
 def diff2(x):
     return np.ediff1d(x, to_end=[0.])
+
+
+def interp_1d_coord(da, coord_name, x, extrema=False):
+    """Interpolate a 1-D coordinate with optional extrema clipping.
+
+    Parameters
+    ----------
+    da : xarray.DataArray
+        Input 1-D data array containing the values to interpolate.
+    coord_name : str
+        Name of the coordinate used as interpolation axis.
+    x : array-like
+        Query points where interpolated values are requested. Any shape is
+        accepted and preserved in the output.
+        extrema : bool, optional
+        Boundary behavior:
+
+                - ``False``: strict mode. Values outside coordinate bounds raise an
+          exception.
+                - ``True``: clip to boundary values (legacy extrema behavior).
+
+    Returns
+    -------
+    numpy.ndarray
+        Interpolated values with the same shape as ``x``.
+
+    Raises
+    ------
+    ValueError
+        If ``extrema`` is ``False`` and at least one query point lies
+        outside the coordinate bounds.
+    """
+    coord = np.asarray(da.coords[coord_name].values, dtype='float64')
+    values = np.asarray(da.values, dtype='float64')
+    x_arr = np.asarray(x, dtype='float64')
+    flat_x = x_arr.ravel()
+
+    if extrema:
+        y = np.interp(flat_x, coord, values, left=values[0], right=values[-1])
+    else:
+        xmin = coord.min()
+        xmax = coord.max()
+        if np.any((flat_x < xmin) | (flat_x > xmax)):
+            raise ValueError(
+                f"Out-of-range interpolation requested on '{coord_name}' with extrema=False: "
+                f"valid range is [{xmin}, {xmax}]"
+            )
+        y = np.interp(flat_x, coord, values)
+
+    return y.reshape(x_arr.shape)
 
 
 def read_aw(dir_aux):
@@ -36,9 +86,10 @@ def read_aw(dir_aux):
     lam_pw = data_pw[::-1,0]
     ok_pw = lam_pw > 725
 
-    aw = LUT(
+    aw = xr.DataArray(
             np.array(list(aw_pf[ok_pf]) + list(aw_pw[ok_pw])),
-            axes=[np.array(list(lam_pf[ok_pf]) + list(lam_pw[ok_pw]))]
+            dims=['wavelength'],
+            coords={'wavelength': np.array(list(lam_pf[ok_pf]) + list(lam_pw[ok_pw]))}
             )
 
     return aw
@@ -74,17 +125,26 @@ class IOP(IOP_base):
         self.atot = atot
         self.ap = ap
         self.aw = aw
+        if phase is not None and hasattr(phase, 'to_xarray'):
+            phase = phase.to_xarray()
         if phase is not None and phase.shape[2] == 4:
             pha_6 = np.zeros((phase.shape[0], phase.shape[1], 6, phase.shape[3]), dtype=np.float64)
             pha_6[:,:,0:4,:] = phase[:,:,:,:].copy() # F11, F12, F33, F34
             pha_6[:,:,4,:] = phase[:,:,0,:].copy() # F22 = F11
             pha_6[:,:,5,:] = phase[:,:,2,:].copy() # F44 = F33
-            axes = list(phase.axes)
-            axes[2] = np.arange(6)
-            phase = LUT(
+            axes = list(phase.dims)
+            coords = {}
+            for i, dim in enumerate(axes):
+                if i == 2:
+                    coords[dim] = np.arange(6)
+                elif dim in phase.coords and phase.coords[dim].size == pha_6.shape[i]:
+                    coords[dim] = phase.coords[dim].values
+                else:
+                    coords[dim] = np.arange(pha_6.shape[i])
+            phase = xr.DataArray(
                 pha_6,
-                names=phase.names,
-                axes=axes,)
+                dims=axes,
+                coords=coords)
         self.phase = phase
         self.aCDOM = aCDOM
         self.Bp  = Bp
@@ -120,7 +180,7 @@ class IOP(IOP_base):
             aCDOM = self.aCDOM
 
         if self.aw is None:
-            aw = self.AW[Idx(wav2)]
+            aw = interp_1d_coord(self.AW, 'wavelength', wav2)
         else:
             aw = self.aw
 
@@ -147,27 +207,25 @@ class IOP(IOP_base):
 
         FQYC = np.zeros(shp, dtype='float')
 
-        pro = MLUT()
+        pro = xr.Dataset()
+        pro = pro.assign_coords(wavelength=wav[:], z_oc=self.Z)
 
-        pro.add_axis('wavelength', wav[:])
-        pro.add_axis('z_oc', self.Z)
-        pro.add_dataset('T_oc', np.array([280.]*len(self.Z), dtype='float32'),
-                        ['z_oc'])
+        pro['T_oc'] = xr.DataArray(np.array([280.]*len(self.Z), dtype='float32'), dims=['z_oc'])
 
         if (self.phase is None) and (self.Bp is not None) and ((np.array(bp) > 0).any()):
             self.phase, self.coef_trunc = self.calc_phase(self.pfwav[:])
-            bp *= self.coef_trunc.data
+            bp *= self.coef_trunc.values
 
         btot = bw + bp
 
         if self.phase is not None:
 
             pha = self.phase
-            pha_, ipha = calc_iphase(pha, pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
+            pha_, ipha = calc_iphase(pha, pro.coords['wavelength'].values, pro.coords['z_oc'].values, use_old_calc_iphase)
 
-            pro.add_axis('theta_oc', pha.axis('theta_oc'))
-            pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
-            pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
+            pro = pro.assign_coords(theta_oc=pha.coords['theta_oc'].values)
+            pro['phase_oc'] = xr.DataArray(pha_, dims=['iphase', 'stk', 'theta_oc'])
+            pro['iphase_oc'] = xr.DataArray(ipha, dims=['wavelength', 'z_oc'])
 
         dz = - diff1(self.Z)
         #dz = - diff1(self.Z) * aw/aw
@@ -201,51 +259,50 @@ class IOP(IOP_base):
             ssa = tau_sca/tau_tot
         ssa[np.isnan(ssa)] = 1.
 
-        pro.add_dataset('OD_w', np.cumsum(tau_w, out=tau_w, axis=1),
-                        ['wavelength', 'z_oc'],
+        pro['OD_w'] = xr.DataArray(np.cumsum(tau_w, out=tau_w, axis=1),
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated water optical thickness at each wavelength'})
 
-        pro.add_dataset('OD_p_oc', np.cumsum(tau_p, out=tau_p, axis=1),
-                        ['wavelength', 'z_oc'],
+        pro['OD_p_oc'] = xr.DataArray(np.cumsum(tau_p, out=tau_p, axis=1),
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated oceanic particles optical thickness at each wavelength'})
 
-        pro.add_dataset('OD_y', np.cumsum(tau_y, out=tau_y, axis=1),
-                        ['wavelength', 'z_oc'],
+        pro['OD_y'] = xr.DataArray(np.cumsum(tau_y, out=tau_y, axis=1),
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated CDOM optical thickness at each wavelength'})
 
-        pro.add_dataset('OD_oc', np.cumsum(tau_tot, out=tau_tot, axis=1),
-                        ['wavelength', 'z_oc'])
+        pro['OD_oc'] = xr.DataArray(np.cumsum(tau_tot, out=tau_tot, axis=1),
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('OD_sca_oc', np.cumsum(tau_sca, out=tau_sca, axis=1),
-                        ['wavelength', 'z_oc'])
+        pro['OD_sca_oc'] = xr.DataArray(np.cumsum(tau_sca, out=tau_sca, axis=1),
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('OD_abs_oc', np.cumsum(tau_abs, out=tau_abs, axis=1),
-                        ['wavelength', 'z_oc'])
+        pro['OD_abs_oc'] = xr.DataArray(np.cumsum(tau_abs, out=tau_abs, axis=1),
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('pine_oc', pine,
-                        ['wavelength', 'z_oc'])
+        pro['pine_oc'] = xr.DataArray(pine,
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('pmol_oc', pmol,
-                        ['wavelength', 'z_oc'])
+        pro['pmol_oc'] = xr.DataArray(pmol,
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('ssa_oc', ssa,
-                        ['wavelength', 'z_oc'])
+        pro['ssa_oc'] = xr.DataArray(ssa,
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('ssa_p_oc', ssa_p,
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('ssa_w', ssa_w,
-                        ['wavelength', 'z_oc'])
+        pro['ssa_p_oc'] = xr.DataArray(ssa_p,
+                        dims=['wavelength', 'z_oc'])
+        pro['ssa_w'] = xr.DataArray(ssa_w,
+                        dims=['wavelength', 'z_oc'])
         # NEW !!!
-        pro.add_dataset('FQY1_oc', FQYC,
-                        ['wavelength', 'z_oc'])
+        pro['FQY1_oc'] = xr.DataArray(FQYC,
+                        dims=['wavelength', 'z_oc'])
         # NEW !!!
 
-        pro.add_dataset('albedo_seafloor',
-                        self.ALB.get(wav),
-                        ['wavelength'])
+        pro['albedo_seafloor'] = xr.DataArray(self.ALB.get(wav),
+                        dims=['wavelength'])
         return pro
 
 
@@ -286,11 +343,12 @@ class IOP(IOP_base):
         integ_ff = integ_phase(ang, pha[:,:,0,:])
         pha *= 2./integ_ff[:,:,None,None]
 
-        P = LUT(pha,  # stk, theta
-            axes=[wav, self.Z, None, np.rad2deg(ang)],
-            names=['wav_phase', 'z_phase', 'stk', 'theta_oc'],
+        P = xr.DataArray(pha,  # stk, theta
+            dims=['wav_phase', 'z_phase', 'stk', 'theta_oc'],
+            coords={'wav_phase': wav, 'z_phase': self.Z, 'theta_oc': np.rad2deg(ang)},
            )
-        coef_trunc = LUT(integ_ff[:,:]*0.5, axes=[wav, self.Z], names=['wav_phase', 'z_phase'])
+        coef_trunc = xr.DataArray(integ_ff[:,:]*0.5, dims=['wav_phase', 'z_phase'], 
+                                  coords={'wav_phase': wav, 'z_phase': self.Z})
 
         return P, coef_trunc
 
@@ -314,35 +372,22 @@ class IOP_Rw(IOP_base):
             wav = BandSet(wav)
         wav = np.array(wav)
 
-        pro = MLUT()
-        pro.add_axis('wavelength', wav[:])
-        pro.add_axis('z_oc', np.zeros(2))
+        pro = xr.Dataset()
+        pro = pro.assign_coords(wavelength=wav[:], z_oc=np.zeros(2))
         shp = (len(wav), 2)
 
-        pro.add_dataset('T_oc', np.array([280., 280.], dtype='float32'),
-                        ['z_oc'])
-        pro.add_dataset('OD_oc', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('OD_w', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('OD_p_oc', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('OD_sca_oc', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('OD_abs_oc', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('OD_y', np.zeros(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('pmol_oc', np.ones(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('pine_oc', np.ones(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('FQY1_oc', np.ones(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('ssa_oc', np.ones(shp, dtype='float32'),
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('albedo_seafloor',
-                        self.ALB.get(wav), ['wavelength'])
+        pro['T_oc'] = xr.DataArray(np.array([280., 280.], dtype='float32'), dims=['z_oc'])
+        pro['OD_oc'] = xr.DataArray(np.zeros(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['OD_w'] = xr.DataArray(np.zeros(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['OD_p_oc'] = xr.DataArray(np.zeros(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['OD_sca_oc'] = xr.DataArray(np.zeros(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['OD_abs_oc'] = xr.DataArray(np.zeros(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['OD_y'] = xr.DataArray(np.zeros(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['pmol_oc'] = xr.DataArray(np.ones(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['pine_oc'] = xr.DataArray(np.ones(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['FQY1_oc'] = xr.DataArray(np.ones(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['ssa_oc'] = xr.DataArray(np.ones(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
+        pro['albedo_seafloor'] = xr.DataArray(self.ALB.get(wav), dims=['wavelength'])
 
         return pro
 
@@ -382,10 +427,10 @@ class IOP_1(IOP_base):
         # Bricaud (98)
         ap_bricaud = np.genfromtxt(dir_aux / 'water' / 'aph_bricaud_1998.txt',
                                    delimiter=',', skip_header=12)  # header is lambda,Ap,Ep,Aphi,Ephi
-        self.BRICAUD = MLUT()
-        self.BRICAUD.add_axis('wav', ap_bricaud[:,0])
-        self.BRICAUD.add_dataset('A', ap_bricaud[:,1], axnames=['wav'])
-        self.BRICAUD.add_dataset('E', 1-ap_bricaud[:,2], axnames=['wav'])
+        self.BRICAUD = xr.Dataset()
+        self.BRICAUD = self.BRICAUD.assign_coords(wav=ap_bricaud[:,0])
+        self.BRICAUD['A'] = xr.DataArray(ap_bricaud[:,1], dims=['wav'])
+        self.BRICAUD['E'] = xr.DataArray(1-ap_bricaud[:,2], dims=['wav'])
 
 
     def calc_iop(self, wav, coef_trunc=2.):
@@ -404,11 +449,11 @@ class IOP_1(IOP_base):
         chl = self.chl
 
         # pure water absorption
-        aw = self.aw[Idx(wav[:], fill_value='extrema')]
+        aw = interp_1d_coord(self.aw, 'wavelength', wav[:], extrema=True)
 
         # phytoplankton absorption
-        aphy = (self.BRICAUD['A'][Idx(wav, fill_value='extrema')]
-                * (chl**self.BRICAUD['E'][Idx(wav, fill_value='extrema')]))
+        aphy = (interp_1d_coord(self.BRICAUD['A'], 'wav', wav, extrema=True)
+            * (chl**interp_1d_coord(self.BRICAUD['E'], 'wav', wav, extrema=True)))
 
 
         # NEW !!!
@@ -475,10 +520,9 @@ class IOP_1(IOP_base):
             wav = BandSet(wav)
 
         wav = np.array(wav)
-        pro = MLUT()
-        pro.add_axis('wavelength', wav[:])
-        pro.add_axis('z_oc', np.array([0., -self.depth]))
-        pro.add_dataset('T_oc', np.array([280., 280.], dtype='float32'), ['z_oc'])
+        pro = xr.Dataset()
+        pro = pro.assign_coords(wavelength=wav[:], z_oc=np.array([0., -self.depth]))
+        pro['T_oc'] = xr.DataArray(np.array([280., 280.], dtype='float32'), dims=['z_oc'])
 
         if phase:
             if self.pfwav is None:
@@ -488,14 +532,14 @@ class IOP_1(IOP_base):
             Bp = self.calc_iop(wav_pha)['Bp']
             pha = self.phase(wav_pha, Bp)
 
-            pha_, ipha = calc_iphase(pha['phase'], pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
+            pha_, ipha = calc_iphase(pha['phase'], pro.coords['wavelength'].values, pro.coords['z_oc'].values, use_old_calc_iphase)
 
             # index with ipha and reshape to broadcast to [wav, z]
-            coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,0]  # discard dimension 'z_oc'
+            coef_trunc = pha['coef_trunc'].values.ravel()[ipha][:,0]  # discard dimension 'z_oc'
 
-            pro.add_axis('theta_oc', pha.axis('theta_oc'))
-            pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
-            pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
+            pro = pro.assign_coords(theta_oc=pha.coords['theta_oc'].values)
+            pro['phase_oc'] = xr.DataArray(pha_, dims=['iphase', 'stk', 'theta_oc'])
+            pro['iphase_oc'] = xr.DataArray(ipha, dims=['wavelength', 'z_oc'])
         else:
             coef_trunc = 2.
 
@@ -516,70 +560,69 @@ class IOP_1(IOP_base):
             ssa_p[:,1] = iop['bp']/(iop['aphy'] + iop['bp'])
         ssa_p[np.isnan(ssa_p)] = 0.
 
-        pro.add_dataset('OD_w', tau_w,
-                        ['wavelength', 'z_oc'],
+        pro['OD_w'] = xr.DataArray(tau_w,
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated water optical thickness at each wavelength'})
 
-        pro.add_dataset('OD_p_oc', tau_p,
-                        ['wavelength', 'z_oc'],
+        pro['OD_p_oc'] = xr.DataArray(tau_p,
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated oceanic particles optical thickness at each wavelength'})
 
-        pro.add_dataset('OD_y', tau_y,
-                        ['wavelength', 'z_oc'],
+        pro['OD_y'] = xr.DataArray(tau_y,
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated CDOM optical thickness at each wavelength'})
 
         tau_tot = np.zeros(shp, dtype='float32')
         tau_tot[:,1] = - ((iop['atot'] + iop['btot']) * self.depth)
-        pro.add_dataset('OD_oc', tau_tot,
-                        ['wavelength', 'z_oc'])
+        pro['OD_oc'] = xr.DataArray(tau_tot,
+                        dims=['wavelength', 'z_oc'])
 
         tau_sca = np.zeros(shp, dtype='float32')
         tau_sca[:,1] = - (iop['btot'] * self.depth)
-        pro.add_dataset('OD_sca_oc', tau_sca,
-                        ['wavelength', 'z_oc'])
+        pro['OD_sca_oc'] = xr.DataArray(tau_sca,
+                        dims=['wavelength', 'z_oc'])
 
         tau_abs = np.zeros(shp, dtype='float32')
         tau_abs[:,1] = - (iop['atot'] * self.depth)
-        pro.add_dataset('OD_abs_oc', tau_abs,
-                        ['wavelength', 'z_oc'])
+        pro['OD_abs_oc'] = xr.DataArray(tau_abs,
+                        dims=['wavelength', 'z_oc'])
 
         pmol = np.ones(shp, dtype='float32')
         pmol[:,1] = iop['bw']/(iop['bw']+iop['bp'])
-        pro.add_dataset('pmol_oc', pmol,
-                        ['wavelength', 'z_oc'])
+        pro['pmol_oc'] = xr.DataArray(pmol,
+                        dims=['wavelength', 'z_oc'])
 
         with np.errstate(invalid='ignore'):
             ssa = tau_sca/tau_tot
         ssa[np.isnan(ssa)] = 1.
 
-        pro.add_dataset('ssa_oc', ssa,
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('ssa_p_oc', ssa_p,
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('ssa_w', ssa_w,
-                        ['wavelength', 'z_oc'])
+        pro['ssa_oc'] = xr.DataArray(ssa,
+                        dims=['wavelength', 'z_oc'])
+        pro['ssa_p_oc'] = xr.DataArray(ssa_p,
+                        dims=['wavelength', 'z_oc'])
+        pro['ssa_w'] = xr.DataArray(ssa_w,
+                        dims=['wavelength', 'z_oc'])
 
         # NEW !!!
-        tau_ine = np.ones(shp, dtype='float32')
+        tau_ine = np.zeros(shp, dtype='float32')
         tau_ine[:,1] = -((iop['aphy'] * iop['FQYC']) * self.depth)
-        with np.errstate(invalid='ignore'):
+        with np.errstate(invalid='ignore', divide='ignore'):
             pine = tau_ine/tau_sca
-        pine[np.isnan(pine)] = 0.
-        pro.add_dataset('pine_oc', pine,
-                        ['wavelength', 'z_oc'])
+        pine[~np.isfinite(pine)] = 0.
+        pro['pine_oc'] = xr.DataArray(pine,
+                        dims=['wavelength', 'z_oc'])
 
         FQY1 = np.zeros(shp, dtype='float32')
         FQY1[:,1] = iop['FQYC']
-        pro.add_dataset('FQY1_oc', FQY1,
-                        ['wavelength', 'z_oc'])
+        pro['FQY1_oc'] = xr.DataArray(FQY1,
+                        dims=['wavelength', 'z_oc'])
 
         # NEW !!!
-        pro.add_dataset('albedo_seafloor',
-                        self.ALB.get(wav),
-                        ['wavelength'])
+        pro['albedo_seafloor'] = xr.DataArray(self.ALB.get(wav),
+                        dims=['wavelength'])
 
 
         return pro
@@ -624,13 +667,11 @@ class IOP_1(IOP_base):
         integ_ff = integ_phase(ang, pha[:,0,0,:])
         pha *= 2./integ_ff[:,None,None,None]
 
-        # create output MLUT
-        result = MLUT()
-        result.add_axis('wav_phase', wav)
-        result.add_axis('z_phase', np.array([0.]))
-        result.add_axis('theta_oc', ang*180./np.pi)
-        result.add_dataset('phase', pha, ['wav_phase', 'z_phase', 'stk', 'theta_oc'])
-        result.add_dataset('coef_trunc', integ_ff[:,None]*0.5, ['wav_phase', 'z_phase'])
+        # create output Dataset
+        result = xr.Dataset()
+        result = result.assign_coords(wav_phase=wav, z_phase=np.array([0.]), theta_oc=ang*180./np.pi)
+        result['phase'] = xr.DataArray(pha, dims=['wav_phase', 'z_phase', 'stk', 'theta_oc'])
+        result['coef_trunc'] = xr.DataArray(integ_ff[:,None]*0.5, dims=['wav_phase', 'z_phase'])
 
         return result
 
@@ -685,10 +726,10 @@ class IOP_profile(IOP_base):
         BUV = np.zeros_like(wUV)
         AUV[::-1] = A[ii]
         BUV[::-1] = B[ii]
-        self.BRICAUD = MLUT()
-        self.BRICAUD.add_axis('wav', np.concatenate((wUV,ap_bricaud[:,0])))
-        self.BRICAUD.add_dataset('A', np.concatenate((AUV,A)), axnames=['wav'])
-        self.BRICAUD.add_dataset('E', np.concatenate((BUV,B)), axnames=['wav'])
+        self.BRICAUD = xr.Dataset()
+        self.BRICAUD = self.BRICAUD.assign_coords(wav=np.concatenate((wUV,ap_bricaud[:,0])))
+        self.BRICAUD['A'] = xr.DataArray(np.concatenate((AUV,A)), dims=['wav'])
+        self.BRICAUD['E'] = xr.DataArray(np.concatenate((BUV,B)), dims=['wav'])
 
         ## Determine Chl vertical profile
         #1. Determine chlorophyll interagted column until Euphotic Depth Zeu 
@@ -744,7 +785,7 @@ class IOP_profile(IOP_base):
         chl2, wav2 = np.meshgrid(chl,wav)
 
         # pure water absorption
-        aw = self.aw[Idx(wav2[:])]
+        aw = interp_1d_coord(self.aw, 'wavelength', wav2)
         # Pure Sea water scattering coefficient
         bw = 19.3e-4*((wav2/550.)**-4.32)
 
@@ -755,11 +796,11 @@ class IOP_profile(IOP_base):
         #        * (chl2**self.BRICAUD['E'][Idx(440., fill_value='extrema')]))
         # specific phytoplankton absorption
         chl2star=np.full_like(chl2, 1.)
-        aphystar = (self.BRICAUD['A'][Idx(wav2, fill_value='extrema')]
-                * (chl2star**self.BRICAUD['E'][Idx(wav2, fill_value='extrema')]))
+        aphystar = (interp_1d_coord(self.BRICAUD['A'], 'wav', wav2, extrema=True)
+            * (chl2star**interp_1d_coord(self.BRICAUD['E'], 'wav', wav2, extrema=True)))
         aphy = aphystar * chl2
-        aphystar440 = (self.BRICAUD['A'][Idx(440., fill_value='extrema')]
-                * (chl2star**self.BRICAUD['E'][Idx(wav2, fill_value='extrema')]))
+        aphystar440 = (interp_1d_coord(self.BRICAUD['A'], 'wav', 440., extrema=True)
+            * (chl2star**interp_1d_coord(self.BRICAUD['E'], 'wav', wav2, extrema=True)))
         aphy440 = aphystar440 * chl2
         # phytoplankton covariant particles extinction
         ## Zhai et al., 2017
@@ -854,11 +895,10 @@ class IOP_profile(IOP_base):
             wav = BandSet(wav)
 
         wav = np.array(wav)
-        pro = MLUT()
-        pro.add_axis('wavelength', wav[:])
-        pro.add_axis('z_oc', self.z)
+        pro = xr.Dataset()
+        pro = pro.assign_coords(wavelength=wav[:], z_oc=self.z)
         #pro.add_axis('z_oc', -self.z)
-        pro.add_dataset('T_oc', np.array([280.]*len(self.z), dtype='float32'), ['z_oc'])
+        pro['T_oc'] = xr.DataArray(np.array([280.]*len(self.z), dtype='float32'), dims=['z_oc'])
 
 
         if phase:
@@ -874,21 +914,28 @@ class IOP_profile(IOP_base):
                 pha_6[:,:,0:4,:] = phase_lut[:,:,:,:].copy() # F11, F12, F33, F34
                 pha_6[:,:,4,:] = phase_lut[:,:,0,:].copy() # F22 = F11
                 pha_6[:,:,5,:] = phase_lut[:,:,2,:].copy() # F44 = F33
-                axes = list(phase_lut.axes)
-                axes[2] = np.arange(6)
-                phase_lut = LUT(
+                axes = list(phase_lut.dims)
+                coords = {}
+                for i, dim in enumerate(axes):
+                    if i == 2:
+                        coords[dim] = np.arange(6)
+                    elif dim in phase_lut.coords and phase_lut.coords[dim].size == pha_6.shape[i]:
+                        coords[dim] = phase_lut.coords[dim].values
+                    else:
+                        coords[dim] = np.arange(pha_6.shape[i])
+                phase_lut = xr.DataArray(
                     pha_6,
-                    names=phase_lut.names,
-                    axes=axes,)
+                    dims=axes,
+                    coords=coords)
 
-            pha_, ipha = calc_iphase(phase_lut, pro.axis('wavelength'), pro.axis('z_oc'), use_old_calc_iphase)
+            pha_, ipha = calc_iphase(phase_lut, pro.coords['wavelength'].values, pro.coords['z_oc'].values, use_old_calc_iphase)
 
             # index with ipha and reshape to broadcast to [wav, z]
-            coef_trunc = pha['coef_trunc'].data.ravel()[ipha][:,:]
+            coef_trunc = pha['coef_trunc'].values.ravel()[ipha][:,:]
 
-            pro.add_axis('theta_oc', pha.axis('theta_oc'))
-            pro.add_dataset('phase_oc', pha_, ['iphase', 'stk', 'theta_oc'])
-            pro.add_dataset('iphase_oc', ipha, ['wavelength', 'z_oc'])
+            pro = pro.assign_coords(theta_oc=pha.coords['theta_oc'].values)
+            pro['phase_oc'] = xr.DataArray(pha_, dims=['iphase', 'stk', 'theta_oc'])
+            pro['iphase_oc'] = xr.DataArray(ipha, dims=['wavelength', 'z_oc'])
         else:
             coef_trunc = 2.
 
@@ -929,51 +976,50 @@ class IOP_profile(IOP_base):
             ssa = tau_sca/tau_tot
         ssa[np.isnan(ssa)] = 1.
 
-        pro.add_dataset('OD_w', np.cumsum(tau_w, out=tau_w, axis=1),
-                        ['wavelength', 'z_oc'],
+        pro['OD_w'] = xr.DataArray(np.cumsum(tau_w, out=tau_w, axis=1),
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated water optical thickness at each wavelength'})
 
-        pro.add_dataset('OD_p_oc', np.cumsum(tau_p, out=tau_p, axis=1),
-                        ['wavelength', 'z_oc'],
+        pro['OD_p_oc'] = xr.DataArray(np.cumsum(tau_p, out=tau_p, axis=1),
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated oceanic particles optical thickness at each wavelength'})
 
-        pro.add_dataset('OD_y', np.cumsum(tau_y, out=tau_y, axis=1),
-                        ['wavelength', 'z_oc'],
+        pro['OD_y'] = xr.DataArray(np.cumsum(tau_y, out=tau_y, axis=1),
+                        dims=['wavelength', 'z_oc'],
                         attrs={'description':
                                'Cumulated CDOM optical thickness at each wavelength'})
 
-        pro.add_dataset('OD_oc', np.cumsum(tau_tot, out=tau_tot, axis=1),
-                        ['wavelength', 'z_oc'])
+        pro['OD_oc'] = xr.DataArray(np.cumsum(tau_tot, out=tau_tot, axis=1),
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('OD_sca_oc', np.cumsum(tau_sca, out=tau_sca, axis=1),
-                        ['wavelength', 'z_oc'])
+        pro['OD_sca_oc'] = xr.DataArray(np.cumsum(tau_sca, out=tau_sca, axis=1),
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('OD_abs_oc', np.cumsum(tau_abs, out=tau_abs, axis=1),
-                        ['wavelength', 'z_oc'])
+        pro['OD_abs_oc'] = xr.DataArray(np.cumsum(tau_abs, out=tau_abs, axis=1),
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('pine_oc', pine,
-                        ['wavelength', 'z_oc'])
+        pro['pine_oc'] = xr.DataArray(pine,
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('pmol_oc', pmol,
-                        ['wavelength', 'z_oc'])
+        pro['pmol_oc'] = xr.DataArray(pmol,
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('ssa_oc', ssa,
-                        ['wavelength', 'z_oc'])
+        pro['ssa_oc'] = xr.DataArray(ssa,
+                        dims=['wavelength', 'z_oc'])
 
-        pro.add_dataset('ssa_p_oc', ssa_p,
-                        ['wavelength', 'z_oc'])
-        pro.add_dataset('ssa_w', ssa_w,
-                        ['wavelength', 'z_oc'])
+        pro['ssa_p_oc'] = xr.DataArray(ssa_p,
+                        dims=['wavelength', 'z_oc'])
+        pro['ssa_w'] = xr.DataArray(ssa_w,
+                        dims=['wavelength', 'z_oc'])
         # NEW !!!
-        pro.add_dataset('FQY1_oc', iop['FQYC'],
-                        ['wavelength', 'z_oc'])
+        pro['FQY1_oc'] = xr.DataArray(iop['FQYC'],
+                        dims=['wavelength', 'z_oc'])
         # NEW !!!
 
-        pro.add_dataset('albedo_seafloor',
-                        self.ALB.get(wav),
-                        ['wavelength'])
+        pro['albedo_seafloor'] = xr.DataArray(self.ALB.get(wav),
+                        dims=['wavelength'])
 
         return pro
 
@@ -1015,13 +1061,11 @@ class IOP_profile(IOP_base):
         integ_ff = integ_phase(ang, pha[:,:,0,:])
         pha *= 2./integ_ff[:,:,None,None]
 
-        # create output MLUT
-        result = MLUT()
-        result.add_axis('wav_phase', wav)
-        result.add_axis('z_phase', self.z[:-1])
+        # create output Dataset
+        result = xr.Dataset()
+        result = result.assign_coords(wav_phase=wav, z_phase=self.z[:-1], theta_oc=ang*180./np.pi)
         #result.add_axis('z_phase', -self.z[:-1])
-        result.add_axis('theta_oc', ang*180./np.pi)
-        result.add_dataset('phase', pha, ['wav_phase', 'z_phase', 'stk', 'theta_oc'])
-        result.add_dataset('coef_trunc', integ_ff[:,:]*0.5, ['wav_phase', 'z_phase'])
+        result['phase'] = xr.DataArray(pha, dims=['wav_phase', 'z_phase', 'stk', 'theta_oc'])
+        result['coef_trunc'] = xr.DataArray(integ_ff[:,:]*0.5, dims=['wav_phase', 'z_phase'])
 
         return result
