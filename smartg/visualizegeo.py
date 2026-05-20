@@ -14,15 +14,25 @@ from mpl_toolkits.mplot3d import Axes3D
 import mpl_toolkits.mplot3d as mp3d
 from matplotlib import colors as mcolors
 
+from typing import Literal
+
 import re
 from itertools import dropwhile
 
 from scipy import interpolate
 
 
-def receiver_view(smlut, cat = int(0), log_color_scale=False, save_path = None, 
-                  normalization_factor = 1320, vmin=None, vmax=None, interpolation='none', 
-                  unit = 'W'):
+def receiver_view(
+    smlut: MLUT,
+    cat: int = 0,
+    log_color_scale: bool = False,
+    save_path: str | None = None,
+    normalization_factor: float = 1320,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    interpolation: str = 'none',
+    unit: Literal['W', 'kW', 'MW'] = 'W',
+) -> None:
 
     """
     Plot receiver irradiance from a SMART-G simulation output.
@@ -62,11 +72,6 @@ def receiver_view(smlut, cat = int(0), log_color_scale=False, save_path = None,
     unit : {'W', 'kW', 'MW'}, default='W'
         Power unit used for displayed irradiance values.
 
-    Raises
-    ------
-    NameError
-        If ``unit`` is not one of ``'W'``, ``'kW'``, or ``'MW'``.
-
     Returns
     -------
     None
@@ -75,41 +80,43 @@ def receiver_view(smlut, cat = int(0), log_color_scale=False, save_path = None,
     """
 
     m = smlut['C_Receiver'][cat,:,:]
-    # Size of a Cell where the Cell surface = S_Cell*S_Cell
-    S_Cell = float(smlut.attrs['S_Cell']) * 1e3 # mult by 1e3 to convert km to m
-    wx = (smlut.axes['X_Cell_Index'].size * S_Cell)/ 2.
-    wy = (smlut.axes['Y_Cell_Index'].size * S_Cell)/ 2.
-    C_Surf = S_Cell*S_Cell
+    # Cell size: S_Cell attribute is in km, convert to m
+    cell_size = float(smlut.attrs['S_Cell']) * 1e3
+    half_x = (smlut.axes['X_Cell_Index'].size * cell_size) / 2.
+    half_y = (smlut.axes['Y_Cell_Index'].size * cell_size) / 2.
+    cell_area = cell_size * cell_size
 
-    if( unit == "W"):
-        k = 1.; STRUNIT = "W";
-    elif ( unit == "kW"):
-        k = 1e-3; STRUNIT = "kW";
-    elif ( unit == "MW"):
-        k = 1e-6; STRUNIT = "MW";
-    else :
+    if unit == "W":
+        unit_scale = 1.
+        unit_label = "W"
+    elif unit == "kW":
+        unit_scale = 1e-3
+        unit_label = "kW"
+    elif unit == "MW":
+        unit_scale = 1e-6
+        unit_label = "MW"
+    else:
         raise NameError('Unknown argument for unit!')
 
     plt.figure()
 
-    if log_color_scale == False :
-        cax = plt.imshow((k*m*normalization_factor)/C_Surf, cmap=plt.get_cmap('jet'), interpolation=interpolation, \
-                         vmin=vmin, vmax=vmax, extent = [wy,-wy,-wx,wx])
+    if not log_color_scale:
+        im = plt.imshow((unit_scale * m * normalization_factor) / cell_area,
+                        cmap=plt.get_cmap('jet'), interpolation=interpolation,
+                        vmin=vmin, vmax=vmax, extent=[half_y, -half_y, -half_x, half_x])
     else:
-        m2 = m
-        if (np.amin(m2) < 0.00001):
-            valmin = 0.00001
-        else:
-            valmin = np.amin(m2)
-            
-        cax = plt.imshow((k*m*normalization_factor)/C_Surf, cmap=plt.get_cmap('jet'), \
-                         norm=mcolors.LogNorm(vmin=valmin*normalization_factor, vmax=np.amax(m*normalization_factor)), \
-                         interpolation=interpolation, extent = [wy,-wy,-wx,wx])
+        log_vmin = 0.00001 if np.amin(m) < 0.00001 else np.amin(m)
+        im = plt.imshow((unit_scale * m * normalization_factor) / cell_area,
+                        cmap=plt.get_cmap('jet'),
+                        norm=mcolors.LogNorm(vmin=log_vmin * normalization_factor,
+                                            vmax=np.amax(m * normalization_factor)),
+                        interpolation=interpolation,
+                        extent=[half_y, -half_y, -half_x, half_x])
 
     cbar = plt.colorbar()
     cbar.remove()
-    cbar = plt.colorbar(cax)
-    cbar.set_label(r'Irradiance ('+STRUNIT+'.m$^{-2}$)', fontsize = 12)
+    cbar = plt.colorbar(im)
+    cbar.set_label(r'Irradiance (' + unit_label + r'.m$^{-2}$)', fontsize=12)
     plt.xlabel(r'Position (m) in relative y axis')
     plt.ylabel(r'Position (m) in relative x axis')
     plt.title('Receiver surface')
