@@ -1865,6 +1865,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
     # normalization in case of radiance
     # (broadcast everything to dimensions (LVL,NPSTK,SENSOR,LAM,THETA,PHI))
     norm_npho = NPhotonsInTot.reshape((1,1,NSENSOR,NLAM,1,1))
+    zip=False
     if flux is None:
         if le!=None : 
             tabTh = le['th']
