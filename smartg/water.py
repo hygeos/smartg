@@ -11,59 +11,10 @@ from smartg.config import NPSTK
 from smartg.phase import fournierForand, integ_phase, calc_iphase
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
+from smartg.interp import interp_1d_coord
 
 def diff2(x):
     return np.ediff1d(x, to_end=[0.])
-
-
-def interp_1d_coord(da, coord_name, x, extrema=False):
-    """Interpolate a 1-D coordinate with optional extrema clipping.
-
-    Parameters
-    ----------
-    da : xarray.DataArray
-        Input 1-D data array containing the values to interpolate.
-    coord_name : str
-        Name of the coordinate used as interpolation axis.
-    x : array-like
-        Query points where interpolated values are requested. Any shape is
-        accepted and preserved in the output.
-        extrema : bool, optional
-        Boundary behavior:
-
-                - ``False``: strict mode. Values outside coordinate bounds raise an
-          exception.
-                - ``True``: clip to boundary values (legacy extrema behavior).
-
-    Returns
-    -------
-    numpy.ndarray
-        Interpolated values with the same shape as ``x``.
-
-    Raises
-    ------
-    ValueError
-        If ``extrema`` is ``False`` and at least one query point lies
-        outside the coordinate bounds.
-    """
-    coord = np.asarray(da.coords[coord_name].values, dtype='float64')
-    values = np.asarray(da.values, dtype='float64')
-    x_arr = np.asarray(x, dtype='float64')
-    flat_x = x_arr.ravel()
-
-    if extrema:
-        y = np.interp(flat_x, coord, values, left=values[0], right=values[-1])
-    else:
-        xmin = coord.min()
-        xmax = coord.max()
-        if np.any((flat_x < xmin) | (flat_x > xmax)):
-            raise ValueError(
-                f"Out-of-range interpolation requested on '{coord_name}' with extrema=False: "
-                f"valid range is [{xmin}, {xmax}]"
-            )
-        y = np.interp(flat_x, coord, values)
-
-    return y.reshape(x_arr.shape)
 
 
 def read_aw(dir_aux):
