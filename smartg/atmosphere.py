@@ -332,9 +332,9 @@ class AerOPAC(object):
             # Float indices with extrema fill for humidity/reff, strict bounds for wavelength
             nhor = len(hor_vals)
             nwav_orig = len(wav_vals)
-            idf_hor = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(rh_reff))
-            idf_wav = interp1d(wav_vals, np.arange(nwav_orig))(np.float64(wav))
-            idf_wav_ref = interp1d(wav_vals, np.arange(nwav_orig))(np.float64(self.w_ref))
+            idf_hor = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.asarray(rh_reff, dtype=np.float64))
+            idf_wav = interp1d(wav_vals, np.arange(nwav_orig))(np.asarray(wav, dtype=np.float64))
+            idf_wav_ref = interp1d(wav_vals, np.arange(nwav_orig))(np.atleast_1d(np.asarray(self.w_ref, dtype=np.float64)))
             if (len(rh_reff) == 1):
                 # Interpolate along hor (dim 0) -> (1, wav_orig)
                 ext_at_hor = vec_float_indexing(ext_data, [idf_hor, slice(None)])  # (1, wav_orig)
@@ -376,7 +376,7 @@ class AerOPAC(object):
             else:
                 # xr.DataArray
                 wav_axis = self.tau_ref.coords[self.tau_ref.dims[0]].values.astype(np.float64)
-                tau_ref_interp = interp1d(wav_axis, self.tau_ref.values)(np.float64(wav)) 
+                tau_ref_interp = interp1d(wav_axis, self.tau_ref.values)(np.asarray(wav, dtype=np.float64))
                 dtau *= (tau_ref_interp/np.sum(dtau, axis=1))[:,None]
 
         # force ssa
@@ -389,7 +389,7 @@ class AerOPAC(object):
                 elif self.ssa.ndim == 2: ssa[:,:] = self.ssa[:,:]
             else: # xr.DataArray
                 wav_axis = self.ssa.coords[self.ssa.dims[0]].values.astype(np.float64)
-                ssa_interp = interp1d(wav_axis, self.ssa.values)(np.float64(wav))
+                ssa_interp = interp1d(wav_axis, self.ssa.values)(np.asarray(wav, dtype=np.float64))
                 ssa[:,:] = ssa_interp[:,None]
         return dtau, ssa
     
@@ -514,7 +514,7 @@ class AerOPAC(object):
 
             # Interpolate along wav: transpose to (wav, hor, stk, theta) for vec_float_indexing
             if nwav_sub > 1:
-                idf_wav = interp1d(wav_subset, np.arange(nwav_sub))(np.float64(wav))
+                idf_wav = interp1d(wav_subset, np.arange(nwav_sub))(np.asarray(wav, dtype=np.float64))
                 phase_at_wav = vec_float_indexing(
                     np.ascontiguousarray(phase_subset.transpose(1, 0, 2, 3)),
                     [idf_wav, slice(None), slice(None), slice(None)])
@@ -555,7 +555,7 @@ class AerOPAC(object):
                 hor_query = hum_or_reff_val[1:]
                 nz_phase = len(hum_or_reff_val) - 1
 
-            idf_hor = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(hor_query))
+            idf_hor = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.asarray(hor_query, dtype=np.float64))
             P_data = vec_float_indexing(
                 np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
                 [idf_hor, slice(None), slice(None), slice(None)])
@@ -593,8 +593,8 @@ class AerOPAC(object):
             )
 
             # Compute dtau and ssa using vec_float_indexing (same as dtau_ssa)
-            idf_hor_ext = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.float64(hum_or_reff_val))
-            idf_wav_ext = interp1d(wav_vals, np.arange(nwav_orig))(np.float64(wav))
+            idf_hor_ext = interp1d(hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor-1))(np.asarray(hum_or_reff_val, dtype=np.float64))
+            idf_wav_ext = interp1d(wav_vals, np.arange(nwav_orig))(np.asarray(wav, dtype=np.float64))
             ext_at_hor = vec_float_indexing(ext_data, [idf_hor_ext, slice(None)])
             ssa_at_hor = vec_float_indexing(ssa_data, [idf_hor_ext, slice(None)])
             ext_ = vec_float_indexing(ext_at_hor.T, [idf_wav_ext, slice(None)])  # (nwav, nhor_q)

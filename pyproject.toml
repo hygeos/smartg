@@ -101,6 +101,7 @@ radis = "*"
 [tool.pixi.feature.extra.pypi-dependencies]
 jax = {version = ">=0.4", extras = ["cuda12"]}
 statsmodels = "*"
+hapi = ">=1.1"
 
 [dependency-groups]
 extra = ["radis", "hapi"]
