@@ -161,9 +161,17 @@ def receiver_view(
         plt.savefig(save_path + '.pdf')  
 
 
-def cat_view(mlut, mtoa = 1320, ncl = "68%", output_unit = "FLUX_DENSITY", 
-             flux_unit = "W", length_unit = "m", print_results=True, accuracy = 6, 
-             kdis_rep_bands=None):
+def cat_view(
+    mlut: MLUT,
+    mtoa: float | np.ndarray = 1320,
+    ncl: Literal["68%", "87%", "95%", "99%", "99.99%"] = "68%",
+    output_unit: Literal["FLUX", "FLUX_DENSITY", "RADIANCE"] = "FLUX_DENSITY",
+    flux_unit: Literal["uW", "mW", "W", "kW", "MW"] = "W",
+    length_unit: Literal["mm", "cm", "dm", "m", "km"] = "m",
+    print_results: bool = True,
+    accuracy: int = 6,
+    kdis_rep_bands: object | None = None,
+) -> MLUT:
     """
     Takes the photon weight collected by a receiver available from the MLUT returned 
     by a SMART-G simulation and normalizes it to get results in terms of flux, flux 
