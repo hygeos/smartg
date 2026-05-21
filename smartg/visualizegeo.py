@@ -159,8 +159,9 @@ def receiver_view(
         plt.savefig(save_path + '.pdf')  
 
 
-def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W", M_VIEW = "m",
-             PRINT=True, ACC = 6, kdis_rep_bands=None):
+def cat_view(mlut, mtoa = 1320, ncl = "68%", output_unit = "FLUX_DENSITY", 
+             flux_unit = "W", length_unit = "m", print_results=True, accuracy = 6, 
+             kdis_rep_bands=None):
     """
     Takes the photon weight collected by a receiver available from the MLUT returned 
     by a SMART-G simulation and normalizes it to get results in terms of flux, flux 
@@ -168,34 +169,34 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
 
     Parameters
     ----------
-    SMLUT : MLUT
+    mlut : MLUT
         SMART-G return MLUT (Multi-Layer Unit Tabular)
-    MTOA : float | 1-D ndarray, optional
+    mtoa : float | 1-D ndarray, optional
         Solar flux at TOA (W/m²). If there is a wavelength dimension, provide 
         an np.array with the flux as a function of wavelength.
         Default: 1320
-    NCL : str, optional
+    ncl : str, optional
         Nominal Confidence Limit for the error estimation.
         Default: "68%"
-    UNIT : str, optional
+    output_unit : str, optional
         Output unit type. Choices are:
         - 'FLUX' (Watt)
         - 'FLUX_DENSITY' (Watt/meter²)
         - 'RADIANCE' (Watt/meter²/sr)
         Default: "FLUX_DENSITY"
-    W_VIEW : str, optional
-        Power unit for display. Choices are "W" (Watt), "kW" (kiloWatt), 
-        or "MW" (MegaWatt).
-        Default: "W"
-    M_VIEW : str, optional
+    flux_unit : str, optional
+        Power unit used for displayed irradiance values. Choices are 'W' (Watt),
+        'kW' (kiloWatt), 'MW' (MegaWatt).
+        Default: 'W'.
+    length_unit : str, optional
         Length unit for display. Choices are "cm" (centimeter), "m" (meter), 
         "km" (kilometer), etc.
         Default: "m"
-    PRINT : bool, optional
+    print_results : bool, optional
         If True, print results. If there is a wavelength dimension, prints 
         the spectrally integrated results.
         Default: True
-    ACC : int, optional
+    accuracy : int, optional
         Accuracy: number of decimal points to display when printing.
         Default: 6
     kdis_rep_bands : KDIS_IBAND_LIST | REPTRAN_IBAND_LIST, optional
@@ -209,7 +210,7 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
         associated error estimates.
     """
     
-    m = SMLUT
+    m = mlut
 
     # Initialize the output MLUT
     output = MLUT()
@@ -235,32 +236,32 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     MF = m['wPhCats']; MF2 = m['wPhCats2']
     
     # The disired unit of measurement between Watt, kiloWatt, MegaWatt...
-    if(W_VIEW == "uW"):     k = 1e6 ; STRUNIT = "microWatt"
-    elif( W_VIEW == "mW"):  k = 1e3 ; STRUNIT = "milliWatt"
-    elif( W_VIEW == "W"):   k = 1.  ; STRUNIT = "Watt"
-    elif( W_VIEW == "kW"):  k = 1e-3; STRUNIT = "kiloWatt"
-    elif( W_VIEW == "MW"):  k = 1e-6; STRUNIT = "MegaWatt"
-    else : raise NameError('Unkonwn argument for W_VIEW!')
+    if(flux_unit == "uW"):     k = 1e6 ; STRUNIT = "microWatt"
+    elif( flux_unit == "mW"):  k = 1e3 ; STRUNIT = "milliWatt"
+    elif( flux_unit == "W"):   k = 1.  ; STRUNIT = "Watt"
+    elif( flux_unit == "kW"):  k = 1e-3; STRUNIT = "kiloWatt"
+    elif( flux_unit == "MW"):  k = 1e-6; STRUNIT = "MegaWatt"
+    else : raise NameError('Unkonwn argument for flux_unit!')
 
     # The disired unit of measurement of length (centimeter, meter, ...)
-    if(M_VIEW == "mm"):     kl = 1e-3*1e-3; STRUNITL = "millimeter"
-    elif( M_VIEW == "cm"):  kl = 1e-2*1e-2; STRUNITL = "centimeter"
-    elif( M_VIEW == "dm"):  kl = 1e-1*1e-1; STRUNITL = "decimeter"
-    elif( M_VIEW == "m"):   kl = 1.       ; STRUNITL = "meter"
-    elif ( M_VIEW == "km"): kl = 1e3*1e3  ; STRUNITL = "kilometer"
-    else : raise NameError('Unkonwn argument for M_VIEW!')
+    if(length_unit == "mm"):     kl = 1e-3*1e-3; STRUNITL = "millimeter"
+    elif( length_unit == "cm"):  kl = 1e-2*1e-2; STRUNITL = "centimeter"
+    elif( length_unit == "dm"):  kl = 1e-1*1e-1; STRUNITL = "decimeter"
+    elif( length_unit == "m"):   kl = 1.       ; STRUNITL = "meter"
+    elif ( length_unit == "km"): kl = 1e3*1e3  ; STRUNITL = "kilometer"
+    else : raise NameError('Unkonwn argument for length_unit!')
 
-    if (UNIT == "FLUX"):
+    if (output_unit == "FLUX"):
         cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"; STRTY = "flux"
-    elif (UNIT == "FLUX_DENSITY"):
+    elif (output_unit == "FLUX_DENSITY"):
         cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
         STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"; STRTY = "irradiance"
-    elif (UNIT == "RADIANCE"):
+    elif (output_unit == "RADIANCE"):
         cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
         cst *= 2./(np.pi*(1 - np.cos(np.radians(2*ALDEG))))
         STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"; STRTY = "radiance"
     else:
-        raise NameError('Unkonwn argument for UNIT!')
+        raise NameError('Unkonwn argument for output_unit!')
         
     if (isWaveAxis):
         cst*=float(m.attrs['n_cte'])
@@ -271,30 +272,30 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     # Normlalized intensity
     if (isWaveAxis):
         if (kdis_rep_bands is not None) :
-            MF_N = (MF*cst*MTOA).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
+            MF_N = (MF*cst*mtoa).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
             MF_N_int = MF_N/norm
-            MF2_N_int = (MF2*(cst*MTOA)*(cst*MTOA)).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
+            MF2_N_int = (MF2*(cst*mtoa)*(cst*mtoa)).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
             MF2_N_int /= norm
             MF_N_int = LUT(MF_N_int[:,:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
                                           dtype=np.float64), np.array(MF_N.axes[1])],
                                           names=["Categories", "wavelength"])
             MF_N /= norm_dl
         else :
-            MF_N = MF[:,:]*cst*MTOA
-            MF2_N = MF2[:,:]*(cst*MTOA)*(cst*MTOA)
+            MF_N = MF[:,:]*cst*mtoa
+            MF2_N = MF2[:,:]*(cst*mtoa)*(cst*mtoa)
         MF_N = LUT(MF_N[:,:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64), np.array(MF_N.axes[1])],
                               names=["Categories", "wavelength"])
         # Add the wl dimension in the output MLUT
         output.add_axis('wavelength', np.array(MF_N.axes[1]))
     else:
-        MF_N = MF*cst*MTOA
+        MF_N = MF*cst*mtoa
 
     # Nominal confidence limit factor needed for the error calculation
-    if (NCL == "68%"):      ld = 1
-    elif (NCL == "87%"):    ld = 1.5
-    elif (NCL == "95%"):    ld = 2
-    elif (NCL == "99%"):    ld = 3
-    elif (NCL == "99.99%"): ld = 4
+    if (ncl == "68%"):      ld = 1
+    elif (ncl == "87%"):    ld = 1.5
+    elif (ncl == "95%"):    ld = 2
+    elif (ncl == "99%"):    ld = 3
+    elif (ncl == "99.99%"): ld = 4
     
     # Absolute error calculation and normalization, then convert to LUT
     if (isWaveAxis):
@@ -312,10 +313,10 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
                           axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64), m.axes['wavelength']],
                           names=["Categories", "wavelength"])
         if (kdis_rep_bands is not None) :
-            abs_err_LUT_N = (abs_err_LUT*cst*MTOA*ld).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
+            abs_err_LUT_N = (abs_err_LUT*cst*mtoa*ld).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
             abs_err_LUT_N /= norm_dl
         else:
-            abs_err_LUT_N = abs_err_LUT[:,:]*cst*MTOA*ld
+            abs_err_LUT_N = abs_err_LUT[:,:]*cst*mtoa*ld
         abs_err_LUT_N = LUT(abs_err_LUT_N[:,:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64), np.array(abs_err_LUT_N.axes[1])],
                             names=["Categories", "wavelength"])
 
@@ -360,26 +361,26 @@ def cat_view(SMLUT, MTOA = 1320, NCL = "68%", UNIT = "FLUX_DENSITY", W_VIEW = "W
     # Add descriptions, then add LUTs to output MLUT
     MF_N.attrs['description'] = STRPRINT
     nb_Ph_LUT.attrs['description'] = "Number of photons in function of Categories"
-    abs_err_LUT_N.attrs['description'] = 'Absolute error of ' + UNIT
-    rel_err_LUT_N.attrs['description'] = 'Relative error in percentage of ' + UNIT
+    abs_err_LUT_N.attrs['description'] = 'Absolute error of ' + output_unit
+    rel_err_LUT_N.attrs['description'] = 'Relative error in percentage of ' + output_unit
     
-    output.add_lut(MF_N, desc=UNIT)
+    output.add_lut(MF_N, desc=output_unit)
     output.add_lut(nb_Ph_LUT, desc='NbPhotons')
     output.add_lut(abs_err_LUT_N, desc='AbsoluteErr')
     output.add_lut(rel_err_LUT_N, desc='RelativeErr')
 
     if (kdis_rep_bands is not None):
-        output.add_lut(MF_N_int, desc=UNIT+"_int")
+        output.add_lut(MF_N_int, desc=output_unit+"_int")
         MF_N_tot = LUT(np.sum(MF_N_int[:,:], axis=1),
                        axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64)],
                        names=["Categories"])
-        output.add_lut(MF_N_tot, desc=UNIT+"_tot")
+        output.add_lut(MF_N_tot, desc=output_unit+"_tot")
         output.add_lut(abs_err_LUT_int, desc="AbsoluteErr_tot")
 
     # If print == True ->
-    if (PRINT == True):
+    if (print_results == True):
         lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
-        intAcc = int(ACC)
+        intAcc = int(accuracy)
         strAcc = str(intAcc)
         strAcc = "%." + strAcc + "f"
         
