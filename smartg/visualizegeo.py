@@ -67,9 +67,10 @@ def receiver_view(
         ``<save_path>.pdf``.
         Default: None
     mtoa : float, optional
-        Solar flux at TOA (W/m²). Multiplicative factor applied to the receiver weights 
-        before display. Typically the TOA solar irradiance for physical units, but can
-        be set to any value to rescale monochromatic simulation outputs.
+        Solar flux at TOA (W/m²). Multiplicative factor applied to the
+        receiver weights before display. Typically the TOA solar irradiance for
+        physical units, but can be set to any value to rescale monochromatic
+        simulation outputs.
         Default: 1320
     vmin : float, optional
         Lower color limit for linear scale. Ignored when
@@ -82,8 +83,8 @@ def receiver_view(
     interpolation : str, optional
         Default: 'none'
     flux_unit : str, optional
-        Power unit used for displayed irradiance values. Choices are 'W' (Watt), 'kW' (kiloWatt), 
-        'MW' (MegaWatt).
+        Power unit used for displayed irradiance values. Choices are 'W' (Watt),
+        'kW' (kiloWatt), 'MW' (MegaWatt).
         Default: 'W'.
 
 
@@ -114,7 +115,8 @@ def receiver_view(
             )
         if any(c < 1 or c > 8 for c in cat_list):
             raise ValueError("Category indices must be in the range 1–8.")
-        m = ds_sg_out['C_Receiver'].isel(Categories=cat_list).sum(dim='Categories').values
+        m = ds_sg_out['C_Receiver'].isel(Categories=cat_list).sum(
+            dim='Categories').values
     # Cell size: S_Cell attribute is in km, convert to m
     cell_size = float(ds_sg_out.attrs['S_Cell']) * 1e3
     half_x = (ds_sg_out.dims['X_Cell_Index'] * cell_size) / 2.
@@ -215,11 +217,12 @@ def cat_view(mlut, mtoa = 1320, ncl = "68%", output_unit = "FLUX_DENSITY",
     # Initialize the output MLUT
     output = MLUT()
     
-    # Add the Categories dimension to the output MLUT (See Moulana et al. 2019 for the 8 Categories)
+    # Add the Categories dimension to the output MLUT
+    # (See Moulana et al. 2019 for the 8 Categories)
     output.add_axis('Categories', m.axes['Categories'])
     
     # Parameters not dependant on the wavelength
-    ALDEG = (float(m.attrs['ALDEG']))
+    aldeg = (float(m.attrs['ALDEG']))
 
     # Parameters needed in case kdis or reptran is used
     if (kdis_rep_bands is not None):
@@ -229,66 +232,80 @@ def cat_view(mlut, mtoa = 1320, ncl = "68%", output_unit = "FLUX_DENSITY",
     isWaveAxis = 'wavelength' in m['wPhCats'].names
     
     # Fill needed parameters considering the case with and without the wl dimension
-    if (isWaveAxis): NPH = m["norm_npho"][:]; NPH_int = float(m.attrs['NPHOTONS'])
-    else : NPH = float(m.attrs['NPHOTONS'])
+    if (isWaveAxis): nph = m["norm_npho"][:]; nph_int = float(m.attrs['NPHOTONS'])
+    else : nph = float(m.attrs['NPHOTONS'])
     
-    # LUT with sum of photon weight (and squared weight) in function of Categories and (if there is wl dim) wevelength
-    MF = m['wPhCats']; MF2 = m['wPhCats2']
+    # LUT with sum of photon weight (and squared weight) in function of
+    # Categories and (if there is wl dim) wavelength
+    mf = m['wPhCats']; mf2 = m['wPhCats2']
     
     # The disired unit of measurement between Watt, kiloWatt, MegaWatt...
-    if(flux_unit == "uW"):     k = 1e6 ; STRUNIT = "microWatt"
-    elif( flux_unit == "mW"):  k = 1e3 ; STRUNIT = "milliWatt"
-    elif( flux_unit == "W"):   k = 1.  ; STRUNIT = "Watt"
-    elif( flux_unit == "kW"):  k = 1e-3; STRUNIT = "kiloWatt"
-    elif( flux_unit == "MW"):  k = 1e-6; STRUNIT = "MegaWatt"
+    if(flux_unit == "uW"):     k = 1e6 ; flux_unit_long = "microWatt"
+    elif( flux_unit == "mW"):  k = 1e3 ; flux_unit_long = "milliWatt"
+    elif( flux_unit == "W"):   k = 1.  ; flux_unit_long = "Watt"
+    elif( flux_unit == "kW"):  k = 1e-3; flux_unit_long = "kiloWatt"
+    elif( flux_unit == "MW"):  k = 1e-6; flux_unit_long = "MegaWatt"
     else : raise NameError('Unkonwn argument for flux_unit!')
 
     # The disired unit of measurement of length (centimeter, meter, ...)
-    if(length_unit == "mm"):     kl = 1e-3*1e-3; STRUNITL = "millimeter"
-    elif( length_unit == "cm"):  kl = 1e-2*1e-2; STRUNITL = "centimeter"
-    elif( length_unit == "dm"):  kl = 1e-1*1e-1; STRUNITL = "decimeter"
-    elif( length_unit == "m"):   kl = 1.       ; STRUNITL = "meter"
-    elif ( length_unit == "km"): kl = 1e3*1e3  ; STRUNITL = "kilometer"
+    if(length_unit == "mm"):     kl = 1e-3*1e-3; length_unit_long = "millimeter"
+    elif( length_unit == "cm"):  kl = 1e-2*1e-2; length_unit_long = "centimeter"
+    elif( length_unit == "dm"):  kl = 1e-1*1e-1; length_unit_long = "decimeter"
+    elif( length_unit == "m"):   kl = 1.       ; length_unit_long = "meter"
+    elif ( length_unit == "km"): kl = 1e3*1e3  ; length_unit_long = "kilometer"
     else : raise NameError('Unkonwn argument for length_unit!')
 
     if (output_unit == "FLUX"):
-        cst = 1.*k; STRPRINT = "Flux in " + STRUNIT + " for each categories"; STRTY = "flux"
+        cst = 1.*k
+        str_print = "Flux in " + flux_unit_long + " for each categories"
+        str_type = "flux"
     elif (output_unit == "FLUX_DENSITY"):
         cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
-        STRPRINT = "Irradiance in " + STRUNIT + "/meter² for each categories"; STRTY = "irradiance"
+        str_print = ("Irradiance in " + flux_unit_long +
+                     f"/{length_unit_long}² for each categories")
+        str_type = "irradiance"
     elif (output_unit == "RADIANCE"):
         cst = (1.*k*kl)/(float(m.attrs['S_Receiver'])*1e6)
-        cst *= 2./(np.pi*(1 - np.cos(np.radians(2*ALDEG))))
-        STRPRINT = "Radiance in " + STRUNIT + "/meter²/sr for each categories"; STRTY = "radiance"
+        cst *= 2./(np.pi*(1 - np.cos(np.radians(2*aldeg))))
+        str_print = ("Radiance in " + flux_unit_long +
+                     f"/{length_unit_long}²/sr for each categories")
+        str_type = "radiance"
     else:
         raise NameError('Unkonwn argument for output_unit!')
         
     if (isWaveAxis):
         cst*=float(m.attrs['n_cte'])
-        cst*=np.sum(NPH) / NPH[:]
+        cst*=np.sum(nph) / nph[:]
     else:
         cst*= float(m.attrs['n_cte'])
     
     # Normlalized intensity
     if (isWaveAxis):
         if (kdis_rep_bands is not None) :
-            MF_N = (MF*cst*mtoa).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
-            MF_N_int = MF_N/norm
-            MF2_N_int = (MF2*(cst*mtoa)*(cst*mtoa)).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
-            MF2_N_int /= norm
-            MF_N_int = LUT(MF_N_int[:,:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
-                                          dtype=np.float64), np.array(MF_N.axes[1])],
-                                          names=["Categories", "wavelength"])
-            MF_N /= norm_dl
+            mf_n = (mf*cst*mtoa).reduce(np.sum, 'wavelength',
+                                         grouping=wl_kdis_rep)
+            mf_n_int = mf_n/norm
+            mf_2_n_int = (mf2*(cst*mtoa)*(cst*mtoa)).reduce(
+                np.sum, 'wavelength', grouping=wl_kdis_rep)
+            mf_2_n_int /= norm
+            mf_n_int = LUT(mf_n_int[:,:],
+                           axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                          dtype=np.float64),
+                                 np.array(mf_n.axes[1])],
+                           names=["Categories", "wavelength"])
+            mf_n /= norm_dl
         else :
-            MF_N = MF[:,:]*cst*mtoa
-            MF2_N = MF2[:,:]*(cst*mtoa)*(cst*mtoa)
-        MF_N = LUT(MF_N[:,:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64), np.array(MF_N.axes[1])],
-                              names=["Categories", "wavelength"])
+            mf_n = mf[:,:]*cst*mtoa
+            mf_2_n = mf2[:,:]*(cst*mtoa)*(cst*mtoa)
+        mf_n = LUT(mf_n[:,:],
+                   axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                   dtype=np.float64),
+                         np.array(mf_n.axes[1])],
+                   names=["Categories", "wavelength"])
         # Add the wl dimension in the output MLUT
-        output.add_axis('wavelength', np.array(MF_N.axes[1]))
+        output.add_axis('wavelength', np.array(mf_n.axes[1]))
     else:
-        MF_N = MF*cst*mtoa
+        mf_n = mf*cst*mtoa
 
     # Nominal confidence limit factor needed for the error calculation
     if (ncl == "68%"):      ld = 1
@@ -299,112 +316,136 @@ def cat_view(mlut, mtoa = 1320, ncl = "68%", output_unit = "FLUX_DENSITY",
     
     # Absolute error calculation and normalization, then convert to LUT
     if (isWaveAxis):
-        sWl = len(m.axes['wavelength'][:])
-        abs_err = np.zeros((9, sWl), dtype="float64")
-        sum2Z   = np.zeros((9, sWl), dtype="float64")
-        sumZ2   = np.zeros((9, sWl), dtype="float64")
+        s_wl = len(m.axes['wavelength'][:])
+        abs_err = np.zeros((9, s_wl), dtype="float64")
+        sum_2_z   = np.zeros((9, s_wl), dtype="float64")
+        sum_z_2   = np.zeros((9, s_wl), dtype="float64")
         
-        nBis = NPH[:] / (NPH[:] - 1)
+        n_bis = nph[:] / (nph[:] - 1)
         
-        sum2Z[:,:] = (MF[:,:] * MF[:,:])/NPH[:]
-        sumZ2 = MF2[:,:]
-        abs_err[:,:] = (nBis * abs(sumZ2 - sum2Z))**0.5
-        abs_err_LUT = LUT(abs_err[:,:],
-                          axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64), m.axes['wavelength']],
+        sum_2_z[:,:] = (mf[:,:] * mf[:,:])/nph[:]
+        sum_z_2 = mf2[:,:]
+        abs_err[:,:] = (n_bis * abs(sum_z_2 - sum_2_z))**0.5
+        abs_err_lut = LUT(abs_err[:,:],
+                          axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                         dtype=np.float64),
+                                m.axes['wavelength']],
                           names=["Categories", "wavelength"])
         if (kdis_rep_bands is not None) :
-            abs_err_LUT_N = (abs_err_LUT*cst*mtoa*ld).reduce(np.sum, 'wavelength', grouping=wl_kdis_rep)
-            abs_err_LUT_N /= norm_dl
+            abs_err_lut_n = (abs_err_lut*cst*mtoa*ld).reduce(
+                np.sum, 'wavelength', grouping=wl_kdis_rep)
+            abs_err_lut_n /= norm_dl
         else:
-            abs_err_LUT_N = abs_err_LUT[:,:]*cst*mtoa*ld
-        abs_err_LUT_N = LUT(abs_err_LUT_N[:,:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64), np.array(abs_err_LUT_N.axes[1])],
+            abs_err_lut_n = abs_err_lut[:,:]*cst*mtoa*ld
+        abs_err_lut_n = LUT(abs_err_lut_n[:,:],
+                            axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                           dtype=np.float64),
+                                  np.array(abs_err_lut_n.axes[1])],
                             names=["Categories", "wavelength"])
 
         abs_err_int = np.zeros(9, dtype="float64")
-        sum2Z_int   = np.zeros(9, dtype="float64")
-        sumZ2_int   = np.zeros(9, dtype="float64")
+        sum_2_z_int   = np.zeros(9, dtype="float64")
+        sum_z_2_int   = np.zeros(9, dtype="float64")
 
-        nBis_int    = NPH_int / (NPH_int - 1)
+        n_bis_int    = nph_int / (nph_int - 1)
 
         if (kdis_rep_bands is not None):
-            MF_int = np.sum(MF_N_int[:,:], axis=1)
-            MF2_int = np.sum(MF2_N_int[:,:], axis=1)
+            mf_int = np.sum(mf_n_int[:,:], axis=1)
+            mf_2_int = np.sum(mf_2_n_int[:,:], axis=1)
         else:
-            MF_int  = np.sum(MF_N[:,:], axis=1)
-            MF2_int = np.sum(MF2_N[:,:], axis=1)
+            mf_int  = np.sum(mf_n[:,:], axis=1)
+            mf_2_int = np.sum(mf_2_n[:,:], axis=1)
 
-        sum2Z_int[:] = (MF_int[:] * MF_int[:])/NPH_int
-        sumZ2_int = MF2_int[:]
-        abs_err_int[:] = (nBis_int * abs(sumZ2_int - sum2Z_int))**0.5
-        abs_err_LUT_int = LUT(abs_err_int[:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64)], names=["Categories"])
-        abs_err_LUT_N_int = abs_err_LUT_int
+        sum_2_z_int[:] = (mf_int[:] * mf_int[:])/nph_int
+        sum_z_2_int = mf_2_int[:]
+        abs_err_int[:] = (n_bis_int * abs(sum_z_2_int - sum_2_z_int))**0.5
+        abs_err_lut_int = LUT(abs_err_int[:],
+                              axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                             dtype=np.float64)],
+                              names=["Categories"])
+        abs_err_lut_n_int = abs_err_lut_int
 
     else:
         abs_err = np.zeros(9, dtype="float64")
-        sum2Z = np.zeros(9, dtype="float64")
-        sumZ2 = np.zeros(9, dtype="float64")
+        sum_2_z = np.zeros(9, dtype="float64")
+        sum_z_2 = np.zeros(9, dtype="float64")
         
-        nBis = NPH / (NPH - 1)
+        n_bis = nph / (nph - 1)
         
-        sum2Z[:] = (MF[:] * MF[:])/NPH
-        sumZ2 = MF2[:]
-        abs_err[:] = (nBis * abs(sumZ2 - sum2Z))**0.5
-        abs_err_LUT = LUT(abs_err[:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64)], names=["Categories"])
-        abs_err_LUT_N = abs_err_LUT*cst*MTOA*ld
+        sum_2_z[:] = (mf[:] * mf[:])/nph
+        sum_z_2 = mf2[:]
+        abs_err[:] = (n_bis * abs(sum_z_2 - sum_2_z))**0.5
+        abs_err_lut = LUT(abs_err[:],
+                          axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                         dtype=np.float64)],
+                          names=["Categories"])
+        abs_err_lut_n = abs_err_lut*cst*mtoa*ld
         
     # Relative error calculation and LUT creation
-    rel_err_LUT_N = (abs_err_LUT_N/MF_N) * 100
+    rel_err_lut_n = (abs_err_lut_n/mf_n) * 100
     
     # Create LUT for the number of photons in function of the Categories
-    nb_Ph_LUT = LUT(m['cat_PhNb'][:], axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64)], names=["Categories"])
+    nb_ph_lut = LUT(m['cat_PhNb'][:],
+                    axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                   dtype=np.float64)],
+                    names=["Categories"])
     
     # Add descriptions, then add LUTs to output MLUT
-    MF_N.attrs['description'] = STRPRINT
-    nb_Ph_LUT.attrs['description'] = "Number of photons in function of Categories"
-    abs_err_LUT_N.attrs['description'] = 'Absolute error of ' + output_unit
-    rel_err_LUT_N.attrs['description'] = 'Relative error in percentage of ' + output_unit
+    mf_n.attrs['description'] = str_print
+    nb_ph_lut.attrs['description'] = "Number of photons in function of Categories"
+    abs_err_lut_n.attrs['description'] = 'Absolute error of ' + output_unit
+    rel_err_lut_n.attrs['description'] = (f'Relative error in percentage of '
+                                           f'{output_unit}')
     
-    output.add_lut(MF_N, desc=output_unit)
-    output.add_lut(nb_Ph_LUT, desc='NbPhotons')
-    output.add_lut(abs_err_LUT_N, desc='AbsoluteErr')
-    output.add_lut(rel_err_LUT_N, desc='RelativeErr')
+    output.add_lut(mf_n, desc=output_unit)
+    output.add_lut(nb_ph_lut, desc='NbPhotons')
+    output.add_lut(abs_err_lut_n, desc='AbsoluteErr')
+    output.add_lut(rel_err_lut_n, desc='RelativeErr')
 
     if (kdis_rep_bands is not None):
-        output.add_lut(MF_N_int, desc=output_unit+"_int")
-        MF_N_tot = LUT(np.sum(MF_N_int[:,:], axis=1),
-                       axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.float64)],
+        output.add_lut(mf_n_int, desc=output_unit+"_int")
+        mf_n_tot = LUT(np.sum(mf_n_int[:,:], axis=1),
+                       axes=[np.array([0, 1, 2, 3, 4, 5, 6, 7, 8],
+                                      dtype=np.float64)],
                        names=["Categories"])
-        output.add_lut(MF_N_tot, desc=output_unit+"_tot")
-        output.add_lut(abs_err_LUT_int, desc="AbsoluteErr_tot")
+        output.add_lut(mf_n_tot, desc=output_unit+"_tot")
+        output.add_lut(abs_err_lut_int, desc="AbsoluteErr_tot")
 
     # If print == True ->
     if (print_results == True):
-        lP = ["(  D  )", "(  H  )", "(  E  )", "(  A  )", "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
-        intAcc = int(accuracy)
-        strAcc = str(intAcc)
-        strAcc = "%." + strAcc + "f"
+        l_p = ["(  D  )", "(  H  )", "(  E  )", "(  A  )",
+               "( H+A )", "( H+E )", "( E+A )", "(H+E+A)"]
+        int_acc = int(accuracy)
+        str_acc = str(int_acc)
+        str_acc = "%." + str_acc + "f"
         
         mat = np.zeros((9,4), dtype="float64")
         if (isWaveAxis):
-            if (kdis_rep_bands is not None): mat[:, 0] = np.sum(MF_N_int[:,:], axis=1)
-            else: mat[:, 0] = np.sum(MF_N[:,:], axis=1) 
+            if (kdis_rep_bands is not None): mat[:, 0] = np.sum(mf_n_int[:,:], axis=1)
+            else: mat[:, 0] = np.sum(mf_n[:,:], axis=1) 
             mat[:, 1] = m['cat_PhNb'][:]                   # number of photons
-            mat[:, 2] = abs_err_LUT_N_int[:]
+            mat[:, 2] = abs_err_lut_n_int[:]
             mat[:, 3] = (mat[:, 2]/mat[:,0])*100           # relative error
         else:
-            mat[:, 0] = MF_N[:]          # normalized intensity
+            mat[:, 0] = mf_n[:]          # normalized intensity
             mat[:, 1] = m['cat_PhNb'][:] # number of photons
-            mat[:, 2] = abs_err_LUT_N[:] # absolute error
-            mat[:, 3] = rel_err_LUT_N[:] # relative error
+            mat[:, 2] = abs_err_lut_n[:] # absolute error
+            mat[:, 3] = rel_err_lut_n[:] # relative error
             
         print("**********************************************************")
-        print(STRPRINT)
+        print(str_print)
         print("**********************************************************")
-        print("SUM_CATS      " + ": " + STRTY + "=", strAcc % (mat[0,0]), " number_ph=", np.uint64(mat[0,1]),
-              " errAbs=", strAcc % (mat[0,2]), " err(%)=", strAcc % (mat[0,3]*ld))
+        print("SUM_CATS      " + ": " + str_type + "=",
+              str_acc % (mat[0,0]), " number_ph=",
+              np.uint64(mat[0,1]), " errAbs=",
+              str_acc % (mat[0,2]), " err(%)=",
+              str_acc % (mat[0,3]*ld))
         for i in range (0, 8):
-            print("CAT",i+1, lP[i], ": " + STRTY + "=", strAcc % (mat[i+1,0]), " number_ph=", np.uint64(mat[i+1,1]),
-                  " errAbs=", strAcc % (mat[i+1,2]), " err(%)=", strAcc % (mat[i+1,3]*ld))
+            print("CAT", i+1, l_p[i], ": " + str_type + "=",
+                  str_acc % (mat[i+1,0]), " number_ph=",
+                  np.uint64(mat[i+1,1]), " errAbs=",
+                  str_acc % (mat[i+1,2]), " err(%)=",
+                  str_acc % (mat[i+1,3]*ld))
     return output
 
 
