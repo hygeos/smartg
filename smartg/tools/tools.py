@@ -16,11 +16,7 @@ from luts.luts import LUT, merge, MLUT
 import scipy.constants as cst
 from pylab import *
 
-# np.trapezoid was introduced in NumPy 2.0; fall back to np.trapz on older installs
-try:
-    from numpy import trapezoid
-except ImportError:
-    from numpy import trapz as trapezoid
+from numpy import trapezoid
 
 class Legendres(object):
     def __init__(self,nterm,ntheta):
