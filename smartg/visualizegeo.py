@@ -29,7 +29,7 @@ def receiver_view(
     cat: int | Sequence[int] = 0,
     log_color_scale: bool = False,
     save_path: str | None = None,
-    normalization_factor: float = 1320,
+    mtoa: float = 1320,
     vmin: float | None = None,
     vmax: float | None = None,
     interpolation: str = 'none',
@@ -136,15 +136,15 @@ def receiver_view(
     plt.figure()
 
     if not log_color_scale:
-        im = plt.imshow((unit_scale * m * normalization_factor) / cell_area,
+        im = plt.imshow((unit_scale * m * mtoa) / cell_area,
                         cmap=plt.get_cmap('jet'), interpolation=interpolation,
                         vmin=vmin, vmax=vmax, extent=[half_y, -half_y, -half_x, half_x])
     else:
         log_vmin = 0.00001 if np.amin(m) < 0.00001 else np.amin(m)
-        im = plt.imshow((unit_scale * m * normalization_factor) / cell_area,
+        im = plt.imshow((unit_scale * m * mtoa) / cell_area,
                         cmap=plt.get_cmap('jet'),
-                        norm=mcolors.LogNorm(vmin=log_vmin * normalization_factor,
-                                            vmax=np.amax(m * normalization_factor)),
+                        norm=mcolors.LogNorm(vmin=log_vmin * mtoa,
+                                            vmax=np.amax(m * mtoa)),
                         interpolation=interpolation,
                         extent=[half_y, -half_y, -half_x, half_x])
 
