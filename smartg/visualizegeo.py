@@ -42,7 +42,7 @@ def receiver_view(
     The function reads receiver weights from ``ds_sg_out['C_Receiver']``,
     optionally selecting and summing one or more categories,
     converts the cell size from km to m using ``ds_sg_out.attrs['S_Cell']``, normalizes
-    by cell area, multiplies by ``normalization_factor``, applies the selected power ``unit``, and
+    by cell area, multiplies by ``mtoa``, applies the selected power ``flux_unit``, and
     displays the 2-D map with :func:`matplotlib.pyplot.imshow`.
 
     The displayed axes are labeled as relative receiver coordinates (m):
@@ -59,25 +59,32 @@ def receiver_view(
         - ``1``-``8``: a single specific category.
         - A list / tuple / array of ints in ``1``-``8``: the selected
           categories are summed together. ``0`` is not allowed in this case.
-    log_color_scale : bool, default=False
+    log_color_scale : bool, optional
         If ``True``, use a logarithmic color normalization.
-    save_path : str or None, default=None
+        Default: False
+    save_path : str, optional
         Output filename (without extension). If provided, the figure is saved as
         ``<save_path>.pdf``.
-    normalization_factor : float, default=1320
-        Multiplicative factor applied to the receiver weights before display.
-        Typically the TOA solar irradiance (W/m²) for physical units, but can
+        Default: None
+    mtoa : float, optional
+        Solar flux at TOA (W/m²). Multiplicative factor applied to the receiver weights 
+        before display. Typically the TOA solar irradiance for physical units, but can
         be set to any value to rescale monochromatic simulation outputs.
-    vmin : float or None, default=None
+        Default: 1320
+    vmin : float, optional
         Lower color limit for linear scale. Ignored when
         ``log_color_scale=True``.
-    vmax : float or None, default=None
+        Default: None
+    vmax : float, optional
         Upper color limit for linear scale. Ignored when
         ``log_color_scale=True``.
-    interpolation : str, default='none'
-        Image interpolation mode passed to ``imshow``.
-    flux_unit : {'W', 'kW', 'MW'}, default='W'
-        Power unit used for displayed irradiance values.
+        Default: None
+    interpolation : str, optional
+        Default: 'none'
+    flux_unit : str, optional
+        Power unit used for displayed irradiance values. Choices are 'W' (Watt), 'kW' (kiloWatt), 
+        'MW' (MegaWatt).
+        Default: 'W'.
 
 
     Returns
