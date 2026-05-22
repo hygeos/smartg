@@ -629,8 +629,8 @@ class KDIS_IBAND_LIST(object):
                             name='bandwidth',attrs={'desc': 'bandwidth'})
 
             #norm_dl = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-            norm_dl = (we*dl).groupby(wb).sum(dim='wavelength')
-            norm = we.groupby(wb).sum(dim='wavelength')
+            norm_dl = (we*dl).groupby('wavelength').sum(dim='wavelength')
+            norm = we.groupby('wavelength').sum(dim='wavelength')
         else:
             raise ValueError("output_type must be either 'LUT' or 'DataArray'")
         return we, wb, ex, dl, norm, norm_dl    
