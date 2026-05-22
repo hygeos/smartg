@@ -1,26 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from html import entities
 
 import geoclide as gc
-
 import matplotlib.pyplot as plt
 import numpy as np
-
 import xarray as xr
-
-from luts.luts import LUT, MLUT
-
 from mpl_toolkits.mplot3d import Axes3D
 import mpl_toolkits.mplot3d as mp3d
 from matplotlib import colors as mcolors
-
 from typing import Literal, Sequence
-
 import re
 from itertools import dropwhile
-
 from scipy import interpolate
 
 
