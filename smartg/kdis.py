@@ -610,10 +610,11 @@ class KDIS_IBAND_LIST(object):
             ex_l.append(ik.ex)
             dl_l.append(ik.dl)
         if output_type == 'LUT':
-            wb=LUT(np.array(wb_l),axes=[wb_l],names=['wavelength'],desc='wavelength')
-            we=LUT(np.array(we_l),axes=[wb_l],names=['wavelength'],desc='weight')
-            ex=LUT(np.array(ex_l),axes=[wb_l],names=['wavelength'],desc='solarflux')
-            dl=LUT(np.array(dl_l),axes=[wb_l],names=['wavelength'],desc='bandwidth')
+            wb_arr = np.array(wb_l, dtype=np.float32)
+            wb=LUT(wb_arr,axes=[wb_arr],names=['wavelength'],desc='wavelength')
+            we=LUT(np.array(we_l),axes=[wb_arr],names=['wavelength'],desc='weight')
+            ex=LUT(np.array(ex_l),axes=[wb_arr],names=['wavelength'],desc='solarflux')
+            dl=LUT(np.array(dl_l),axes=[wb_arr],names=['wavelength'],desc='bandwidth')
             norm_dl = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
             norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
         elif output_type == 'DataArray':
