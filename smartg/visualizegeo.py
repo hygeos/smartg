@@ -42,7 +42,7 @@ def receiver_view(
     Parameters
     ----------
     ds_sg_out : xr.Dataset
-        SMART-G output Dataset (obtained via ``mlut.to_xarray()``).
+        SMART-G output Dataset containing simulation results.
     cat : int or sequence of int, default=0
         Receiver category index as defined in [1]_.
 
@@ -175,7 +175,7 @@ def cat_view(
     Parameters
     ----------
     ds_sg_out : xr.Dataset
-        SMART-G output Dataset containing receiver photon weights and metadata.
+        SMART-G output Dataset containing simulation results.
     mtoa : float | 1-D ndarray, optional
         Solar flux at TOA (W/m²). If there is a wavelength dimension, provide
         an np.array with the flux as a function of wavelength.
@@ -242,7 +242,7 @@ def cat_view(
     else:
         nph = float(m.attrs['NPHOTONS'])
 
-    # LUT with sum of photon weight (and squared weight) in function of
+    # DataArrays with sum of photon weight (and squared weight) as function of
     # Categories and (if there is wl dim) wavelength
     mf = m['wPhCats']
     mf2 = m['wPhCats2']
@@ -377,7 +377,7 @@ def cat_view(
         sum_2_z[:, :] = (mf.values[:, :] * mf.values[:, :]) / nph
         sum_z_2 = mf2.values[:, :]
         abs_err[:, :] = (n_bis * np.abs(sum_z_2 - sum_2_z)) ** 0.5
-        abs_err_lut = xr.DataArray(
+        abs_err_da = xr.DataArray(
             abs_err[:, :],
             dims=["Categories", "wavelength"],
             coords={
@@ -387,20 +387,20 @@ def cat_view(
         )
         if kdis_rep_bands is not None:
             # Group by bands and sum within each band
-            abs_err_lut_n = (abs_err_lut * cst * mtoa * ld).groupby(
+            abs_err_da_n = (abs_err_da * cst * mtoa * ld).groupby(
                 'wavelength').sum(dim='wavelength')
-            abs_err_lut_n /= norm_dl
+            abs_err_da_n /= norm_dl
         else:
-            abs_err_lut_n = abs_err_lut.values[:, :] * cst * mtoa * ld
-        abs_err_lut_n = xr.DataArray(
-            abs_err_lut_n if isinstance(abs_err_lut_n, np.ndarray)
-            else abs_err_lut_n.values,
+            abs_err_da_n = abs_err_da.values[:, :] * cst * mtoa * ld
+        abs_err_da_n = xr.DataArray(
+            abs_err_da_n if isinstance(abs_err_da_n, np.ndarray)
+            else abs_err_da_n.values,
             dims=["Categories", "wavelength"],
             coords={
                 "Categories": np.arange(9, dtype=np.float64),
                 "wavelength": (
-                    abs_err_lut_n.wavelength
-                    if hasattr(abs_err_lut_n, "wavelength")
+                    abs_err_da_n.wavelength
+                    if hasattr(abs_err_da_n, "wavelength")
                     else m.wavelength
                 ),
             },
@@ -422,12 +422,12 @@ def cat_view(
         sum_2_z_int[:] = (mf_int[:] * mf_int[:]) / nph_int
         sum_z_2_int = mf_2_int[:]
         abs_err_int[:] = (n_bis_int * np.abs(sum_z_2_int - sum_2_z_int)) ** 0.5
-        abs_err_lut_int = xr.DataArray(
+        abs_err_da_int = xr.DataArray(
             abs_err_int[:],
             dims=["Categories"],
             coords={"Categories": np.arange(9, dtype=np.float64)},
         )
-        abs_err_lut_n_int = abs_err_lut_int
+        abs_err_da_n_int = abs_err_da_int
 
     else:
         abs_err = np.zeros(9, dtype="float64")
@@ -439,17 +439,17 @@ def cat_view(
         sum_2_z[:] = (mf.values[:] * mf.values[:]) / nph
         sum_z_2 = mf2.values[:]
         abs_err[:] = (n_bis * np.abs(sum_z_2 - sum_2_z)) ** 0.5
-        abs_err_lut = xr.DataArray(
+        abs_err_da = xr.DataArray(
             abs_err[:],
             dims=["Categories"],
             coords={"Categories": np.arange(9, dtype=np.float64)},
         )
-        abs_err_lut_n = abs_err_lut * cst * mtoa * ld
+        abs_err_da_n = abs_err_da * cst * mtoa * ld
     # Relative error calculation
-    rel_err_lut_n = (abs_err_lut_n / mf_n) * 100
+    rel_err_da_n = (abs_err_da_n / mf_n) * 100
     
-    # Create DataArray for the number of photons in function of Categories
-    nb_ph_lut = xr.DataArray(
+    # Create DataArray for the number of photons as function of Categories
+    nb_ph_da = xr.DataArray(
         m['cat_PhNb'].values,
         dims=["Categories"],
         coords={"Categories": np.arange(9, dtype=np.float64)},
@@ -457,18 +457,18 @@ def cat_view(
     
     # Add descriptions and DataArrays to output Dataset
     mf_n.attrs['description'] = str_print
-    nb_ph_lut.attrs['description'] = (
-        "Number of photons in function of Categories"
+    nb_ph_da.attrs['description'] = (
+        "Number of photons as function of Categories"
     )
-    abs_err_lut_n.attrs['description'] = f'Absolute error of {output_unit}'
-    rel_err_lut_n.attrs['description'] = (
+    abs_err_da_n.attrs['description'] = f'Absolute error of {output_unit}'
+    rel_err_da_n.attrs['description'] = (
         f'Relative error in percentage of {output_unit}'
     )
 
     output[output_unit] = mf_n
-    output['NbPhotons'] = nb_ph_lut
-    output['AbsoluteErr'] = abs_err_lut_n
-    output['RelativeErr'] = rel_err_lut_n
+    output['NbPhotons'] = nb_ph_da
+    output['AbsoluteErr'] = abs_err_da_n
+    output['RelativeErr'] = rel_err_da_n
 
     if kdis_rep_bands is not None:
         output[output_unit + "_int"] = mf_n_int
@@ -478,7 +478,7 @@ def cat_view(
             coords={"Categories": np.arange(9, dtype=np.float64)},
         )
         output[output_unit + "_tot"] = mf_n_tot
-        output["AbsoluteErr_tot"] = abs_err_lut_int
+        output["AbsoluteErr_tot"] = abs_err_da_n_int
 
     # Print results if requested
     if print_results:
@@ -495,13 +495,13 @@ def cat_view(
             else:
                 mat[:, 0] = np.sum(mf_n.values[:, :], axis=1)
             mat[:, 1] = m['cat_PhNb'].values
-            mat[:, 2] = abs_err_lut_n_int.values
+            mat[:, 2] = abs_err_da_n_int.values
             mat[:, 3] = (mat[:, 2] / mat[:, 0]) * 100
         else:
             mat[:, 0] = mf_n.values
             mat[:, 1] = m['cat_PhNb'].values
-            mat[:, 2] = abs_err_lut_n.values
-            mat[:, 3] = rel_err_lut_n.values
+            mat[:, 2] = abs_err_da_n.values
+            mat[:, 3] = rel_err_da_n.values
             
         print("**********************************************************")
         print(str_print)
@@ -1425,7 +1425,7 @@ def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
         for j in range (0, SPY):
             MPF[i][j] = gc.Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
 
-    # Find transform in function of focal length (for the curve)
+    # Find transform as function of focal length (for the curve)
     MTF = np.zeros((SPX, SPY), dtype="object") # Matrix of Transform object of each facets
     for i in range (0, SPX):
         for j in range (0, SPY):
@@ -1548,7 +1548,7 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
         for j in range (0, SPY):
             MPF[i][j] = gc.Point(-(HELIO.hSx/2.) + (i*SFX) + wMx, -(HELIO.hSy/2.) + (j*SFY) + wMy, 0.)
 
-    # Find transform in function of focal length (for the curve)
+    # Find transform as function of focal length (for the curve)
     if MTF is None:
         MTF = np.zeros((SPX, SPY), dtype="object") # Matrix of Transform object of each facets
         for i in range (0, SPX):
