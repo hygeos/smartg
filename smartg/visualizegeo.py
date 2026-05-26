@@ -521,23 +521,23 @@ def cat_view(
     return output
 
 
-def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
+def nopt_view(sm_lut, back=False, acc=6, ncl="68%", mtoa=None, natm_approx=False):
     """
     Calculate and display the detailed optical efficiencies with associated error
     estimates of a Solar Tower Power simulated with SMART-G.
 
     Parameters
     ----------
-    SMLUT : MLUT
+    sm_lut : MLUT
         SMART-G return MLUT containing simulation results.
-    BACK : bool, optional
+    back : bool, optional
         False for forward mode (default), True for backward mode. Determines 
         which efficiency metrics are calculated and displayed.
         Default: False
-    ACC : int, optional
+    acc : int, optional
         Accuracy: number of decimal points to display in the output.
         Default: 6
-    NCL : str, optional
+    ncl : str, optional
         Nominal Confidence Limit for error estimation. Options are:
         - "68%" (1 sigma)
         - "87%" (1.5 sigma)
@@ -545,13 +545,13 @@ def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
         - "99%" (3 sigma)
         - "99.99%" (4 sigma)
         Default: "68%"
-    fl_TOA : None | 1-D ndarray, optional
+    mtoa : None | 1-D ndarray, optional
         Solar flux at TOA for each wavelength band. If None, uses the 
         total power. If provided, weights the calculation by flux per band.
         Default: None
-    NAATM : bool, optional
+    natm_approx : bool, optional
         If True, calculate and display the analytic approximation of 
-        atmospheric transmission (naatm) in backward mode. Ignored in forward mode.
+        atmospheric transmission (natm_approx) in backward mode. Ignored in forward mode.
         Default: False
 
         
@@ -574,36 +574,36 @@ def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
 
     Each metric includes an estimate of absolute error and relative error.
     """
-    m = SMLUT
+    m = sm_lut
     # Number of photons launched
     NPH = float(m.attrs['NPHOTONS'])
     # n/(n-1)
     NBIS = NPH/(NPH-1)
 
-    if(fl_TOA is None):
+    if(mtoa is None):
         powc_H = m['powc_H'].data
     else:
         powc_H = 0.
-        for i in range (0, len(fl_TOA)):
-            powc_H += m['powc_H'].data[i]*fl_TOA[i]
-        powc_H /= np.sum(fl_TOA)
+        for i in range (0, len(mtoa)):
+            powc_H += m['powc_H'].data[i]*mtoa[i]
+        powc_H /= np.sum(mtoa)
 
     k = float(m.attrs['n_cte'])/powc_H
 
-    intAcc = int(ACC)
+    intAcc = int(acc)
     strAcc = str(intAcc)
     strAcc = "%." + strAcc + "f"
-    if (NCL == "68%"): ld = 1
-    elif (NCL == "87%"): ld = 1.5
-    elif (NCL == "95%"): ld = 2
-    elif (NCL == "99%"): ld = 3
-    elif (NCL == "99.99%"): ld = 4
+    if (ncl == "68%"): ld = 1
+    elif (ncl == "87%"): ld = 1.5
+    elif (ncl == "95%"): ld = 2
+    elif (ncl == "99%"): ld = 3
+    elif (ncl == "99.99%"): ld = 4
 
     print("**********************************************")
     print(" Optical Efficiencies")
     print("**********************************************")
 
-    if(BACK == False): # Forward mode ->
+    if(back == False): # Forward mode ->
         # Sum of weights
         # w0=wI, w1=wrhoM, w2=wrhoP, w3=wBM, w4=wBP, w5=wSM, w6=wSP, w7=wREC
         w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2];
@@ -669,14 +669,14 @@ def nopt_view(SMLUT, BACK=False, ACC = 6, NCL="68%", fl_TOA=None, NAATM=False):
         print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
         print("nsbsa =", strAcc % nsbsa, ", errAbs =", strAcc % d_nsbsa, ", err% =", strAcc % ((d_nsbsa/nsbsa)*100))
 
-        if (NAATM):
-            if(fl_TOA is None):
+        if (natm_approx):
+            if(mtoa is None):
                 naatm = m['n_aatm'].data
             else:
                 naatm=0.
-                for i in range (0, len(fl_TOA)):
-                    naatm += m['n_aatm'].data[i]*fl_TOA[i]
-                naatm /= np.sum(fl_TOA)
+                for i in range (0, len(mtoa)):
+                    naatm += m['n_aatm'].data[i]*mtoa[i]
+                naatm /= np.sum(mtoa)
             print("naatm =", strAcc % naatm, " -> analytic approx of natm")
 
 
