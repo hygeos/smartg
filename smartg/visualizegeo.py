@@ -521,18 +521,26 @@ def cat_view(
     return output
 
 
-def nopt_view(sm_lut, back=False, acc=6, ncl="68%", mtoa=None, natm_approx=False):
+def nopt_view(
+    sm_lut: object,
+    back: bool = False,
+    acc: int = 6,
+    ncl: Literal["68%", "87%", "95%", "99%", "99.99%"] = "68%",
+    mtoa: None | np.ndarray = None,
+    natm_approx: bool = False,
+) -> None:
     """
-    Calculate and display the detailed optical efficiencies with associated error
-    estimates of a Solar Tower Power simulated with SMART-G.
+    Calculate and display the detailed optical efficiencies with
+    associated error estimates of a Solar Tower Power simulated with
+    SMART-G.
 
     Parameters
     ----------
     sm_lut : MLUT
         SMART-G return MLUT containing simulation results.
     back : bool, optional
-        False for forward mode (default), True for backward mode. Determines 
-        which efficiency metrics are calculated and displayed.
+        False for forward mode (default), True for backward mode.
+        Determines which efficiency metrics are calculated and displayed.
         Default: False
     acc : int, optional
         Accuracy: number of decimal points to display in the output.
@@ -546,13 +554,13 @@ def nopt_view(sm_lut, back=False, acc=6, ncl="68%", mtoa=None, natm_approx=False
         - "99.99%" (4 sigma)
         Default: "68%"
     mtoa : None | 1-D ndarray, optional
-        Solar flux at TOA for each wavelength band. If None, uses the 
-        total power. If provided, weights the calculation by flux per band.
-        Default: None
+        Solar flux at TOA for each wavelength band. If None, uses the
+        total power. If provided, weights the calculation by flux
+        per band. Default: None
     natm_approx : bool, optional
-        If True, calculate and display the analytic approximation of 
-        atmospheric transmission (natm_approx) in backward mode. Ignored in forward mode.
-        Default: False
+        If True, calculate and display the analytic approximation of
+        atmospheric transmission (natm_approx) in backward mode. Ignored
+        in forward mode. Default: False
 
         
     Notes
@@ -576,108 +584,153 @@ def nopt_view(sm_lut, back=False, acc=6, ncl="68%", mtoa=None, natm_approx=False
     """
     m = sm_lut
     # Number of photons launched
-    NPH = float(m.attrs['NPHOTONS'])
+    nph = float(m.attrs['NPHOTONS'])
     # n/(n-1)
-    NBIS = NPH/(NPH-1)
+    nbis = nph / (nph - 1)
 
     if(mtoa is None):
-        powc_H = m['powc_H'].data
+        powc_h = m['powc_H'].data
     else:
-        powc_H = 0.
-        for i in range (0, len(mtoa)):
-            powc_H += m['powc_H'].data[i]*mtoa[i]
-        powc_H /= np.sum(mtoa)
+        powc_h = 0.
+        for i in range(0, len(mtoa)):
+            powc_h += m['powc_H'].data[i] * mtoa[i]
+        powc_h /= np.sum(mtoa)
 
-    k = float(m.attrs['n_cte'])/powc_H
+    k = float(m.attrs['n_cte']) / powc_h
 
-    intAcc = int(acc)
-    strAcc = str(intAcc)
-    strAcc = "%." + strAcc + "f"
-    if (ncl == "68%"): ld = 1
-    elif (ncl == "87%"): ld = 1.5
-    elif (ncl == "95%"): ld = 2
-    elif (ncl == "99%"): ld = 3
-    elif (ncl == "99.99%"): ld = 4
+    int_acc = int(acc)
+    str_acc = str(int_acc)
+    str_acc = "%." + str_acc + "f"
+    if (ncl == "68%"):
+        ld = 1
+    elif (ncl == "87%"):
+        ld = 1.5
+    elif (ncl == "95%"):
+        ld = 2
+    elif (ncl == "99%"):
+        ld = 3
+    elif (ncl == "99.99%"):
+        ld = 4
 
     print("**********************************************")
     print(" Optical Efficiencies")
     print("**********************************************")
 
-    if(back == False): # Forward mode ->
+    if(back == False):  # Forward mode ->
         # Sum of weights
-        # w0=wI, w1=wrhoM, w2=wrhoP, w3=wBM, w4=wBP, w5=wSM, w6=wSP, w7=wREC
-        w0 = m['wLoss'][0]; w1 = m['wLoss'][1]; w2 = m['wLoss'][2];
-        w3 = m['wLoss'][3]; w4 = m['wLoss'][4]; w5 = m['wLoss'][5]; 
-        w6 = m['wLoss'][6]; w7 = m['cat_w'][2];
+        # w0=wI, w1=wrhoM, w2=wrhoP, w3=wBM, w4=wBP, w5=wSM, w6=wSP
+        # w7=wREC
+        w0 = m['wLoss'][0]
+        w1 = m['wLoss'][1]
+        w2 = m['wLoss'][2]
+        w3 = m['wLoss'][3]
+        w4 = m['wLoss'][4]
+        w5 = m['wLoss'][5]
+        w6 = m['wLoss'][6]
+        w7 = m['cat_w'][2]
         # Sum of (weights²)
-        w0_2 = m['wLoss2'][0]; w1_2 = m['wLoss2'][1]; w2_2 = m['wLoss2'][2];
-        w3_2 = m['wLoss2'][3]; w4_2 = m['wLoss2'][4]; w5_2 = m['wLoss2'][5]; 
-        w6_2 = m['wLoss2'][6]; w7_2 = m['cat_w2'][2];
+        w0_2 = m['wLoss2'][0]
+        w1_2 = m['wLoss2'][1]
+        w2_2 = m['wLoss2'][2]
+        w3_2 = m['wLoss2'][3]
+        w4_2 = m['wLoss2'][4]
+        w5_2 = m['wLoss2'][5]
+        w6_2 = m['wLoss2'][6]
+        w7_2 = m['cat_w2'][2]
         # (Sum of weights)² divided by the number of photons
-        sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH, (w3*w3)/NPH, (w4*w4)/NPH, \
-                 (w5*w5)/NPH, (w6*w6)/NPH, (w7*w7)/NPH]
+        sum_z_bar2 = [
+            (w0*w0)/nph, (w1*w1)/nph, (w2*w2)/nph, (w3*w3)/nph,
+            (w4*w4)/nph, (w5*w5)/nph, (w6*w6)/nph, (w7*w7)/nph
+        ]
         # Sum of (weights²)
-        sumZ2 = [w0_2, w1_2, w2_2, w3_2, w4_2, w5_2, w6_2, w7_2]
+        sum_z2_bar = [w0_2, w1_2, w2_2, w3_2, w4_2, w5_2, w6_2, w7_2]
         dw = []
-        for i in range (0, len(sum2Z)):
-            dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
+        for i in range(0, len(sum_z_bar2)):
+            dw_temp = ld * nbis * (sum_z2_bar[i] - sum_z_bar2[i]) ** 0.5
             dw.append(dw_temp)
         
-        nopt=gc.clamp(k*w7, 0, 1);k_s = k/float(m.attrs['n_cos']);
-        ncos=float(m.attrs['n_cos']);nsha=gc.clamp(k_s*w0, 0, 1);nref=gc.clamp(1-(w1/w0), 0, 1);
-        nblo=gc.clamp(1-(w3/w2), 0, 1);nspi=gc.clamp(1-(w5/w4), 0, 1);natm=gc.clamp(w7/w6, 0, 1)
+        nopt = gc.clamp(k*w7, 0, 1)
+        k_s = k / float(m.attrs['n_cos'])
+        ncos = float(m.attrs['n_cos'])
+        nsha = gc.clamp(k_s*w0, 0, 1)
+        nref = gc.clamp(1-(w1/w0), 0, 1)
+        nblo = gc.clamp(1-(w3/w2), 0, 1)
+        nspi = gc.clamp(1-(w5/w4), 0, 1)
+        natm = gc.clamp(w7/w6, 0, 1)
 
-        d_nopt=abs(k)*dw[7];d_ncos=0.;d_nsha=abs(k_s)*dw[0];
-        d_nref=abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
-        d_nblo=abs(-1./w2)*dw[3] + abs(w3/w2**2)*dw[2]
-        d_nspi=abs(-1./w4)*dw[5] + abs(w5/w4**2)*dw[4]
-        d_natm=abs(1./w6)*dw[7] + abs(w7/w6**2)*dw[6]
+        d_nopt = abs(k)*dw[7]
+        d_ncos = 0.
+        d_nsha = abs(k_s)*dw[0]
+        d_nref = abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
+        d_nblo = abs(-1./w2)*dw[3] + abs(w3/w2**2)*dw[2]
+        d_nspi = abs(-1./w4)*dw[5] + abs(w5/w4**2)*dw[4]
+        d_natm = abs(1./w6)*dw[7] + abs(w7/w6**2)*dw[6]
 
-        print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
-        print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
-        print("nsha =", strAcc % nsha, ", errAbs =", strAcc % d_nsha, ", err% =", strAcc % ((d_nsha/nsha)*100))
-        print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
-        print("nblo =", strAcc % nblo, ", errAbs =", strAcc % d_nblo, ", err% =", strAcc % ((d_nblo/nblo)*100))
-        print("nspi =", strAcc % nspi, ", errAbs =", strAcc % d_nspi, ", err% =", strAcc % ((d_nspi/nspi)*100))
-        print("natm =", strAcc % natm, ", errAbs =", strAcc % d_natm, ", err% =", strAcc % ((d_natm/natm)*100))
-    else: # Backward mode ->
+        print("nopt =", str_acc % nopt, ", errAbs =", str_acc % d_nopt,
+              ", err% =", str_acc % ((d_nopt/nopt)*100))
+        print("ncos =", str_acc % ncos, ", errAbs =", str_acc % d_ncos,
+              ", err% =", str_acc % ((d_ncos/ncos)*100))
+        print("nsha =", str_acc % nsha, ", errAbs =", str_acc % d_nsha,
+              ", err% =", str_acc % ((d_nsha/nsha)*100))
+        print("nref =", str_acc % nref, ", errAbs =", str_acc % d_nref,
+              ", err% =", str_acc % ((d_nref/nref)*100))
+        print("nblo =", str_acc % nblo, ", errAbs =", str_acc % d_nblo,
+              ", err% =", str_acc % ((d_nblo/nblo)*100))
+        print("nspi =", str_acc % nspi, ", errAbs =", str_acc % d_nspi,
+              ", err% =", str_acc % ((d_nspi/nspi)*100))
+        print("natm =", str_acc % natm, ", errAbs =", str_acc % d_natm,
+              ", err% =", str_acc % ((d_natm/natm)*100))
+    else:  # Backward mode ->
         # Sum of weights
         # w0=wI, w1=wrhoM, w2=wREC
-        w0=m['wLoss'][0];w1=m['wLoss'][1];w2=m['cat_w'][2];
+        w0 = m['wLoss'][0]
+        w1 = m['wLoss'][1]
+        w2 = m['cat_w'][2]
         # Sum of (weights²)
-        w0_2=m['wLoss2'][0];w1_2=m['wLoss2'][1];w2_2=m['cat_w2'][2];
+        w0_2 = m['wLoss2'][0]
+        w1_2 = m['wLoss2'][1]
+        w2_2 = m['cat_w2'][2]
         # (Sum of weights)² divided by the number of photons
-        sum2Z = [(w0*w0)/NPH, (w1*w1)/NPH, (w2*w2)/NPH]
+        sum_z_bar2 = [(w0*w0)/nph, (w1*w1)/nph, (w2*w2)/nph]
         # Sum of (weights²)
-        sumZ2 = [w0_2, w1_2, w2_2]
+        sum_z2_bar = [w0_2, w1_2, w2_2]
         dw = []
-        for i in range (0, len(sum2Z)):
-            dw_temp = ld*NBIS*(sumZ2[i]-sum2Z[i])**0.5
+        for i in range(0, len(sum_z_bar2)):
+            dw_temp = ld * nbis * (sum_z2_bar[i] - sum_z_bar2[i]) ** 0.5
             dw.append(dw_temp)
-        nopt = gc.clamp(k*w2, 0, 1);ncos=float(m.attrs['n_cos']);nref=gc.clamp(1-(w1/w0), 0, 1);
-        nsbsa = gc.clamp((k*w2)/(ncos*nref), 0, 1);
+        nopt = gc.clamp(k*w2, 0, 1)
+        ncos = float(m.attrs['n_cos'])
+        nref = gc.clamp(1-(w1/w0), 0, 1)
+        nsbsa = gc.clamp((k*w2)/(ncos*nref), 0, 1)
 
-        d_nopt=abs(k)*dw[2];d_ncos = 0.;
-        d_nref=abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
+        d_nopt = abs(k)*dw[2]
+        d_ncos = 0.
+        d_nref = abs(-1./w0)*dw[1] + abs(w1/w0**2)*dw[0]
 
-        d_nsbsa=abs(k/(ncos*(1-(w1/w0))))*dw[2] + \
-                 abs((k*w2)/(ncos*w0*(1-(w1/w0))**2))*dw[1] + \
-                 abs((-k*w2*w1)/(ncos*w0*w0*(1-(w1/w0))**2))
+        d_nsbsa = (abs(k/(ncos*(1-(w1/w0))))*dw[2] +
+                   abs((k*w2)/(ncos*w0*(1-(w1/w0))**2))*dw[1] +
+                   abs((-k*w2*w1)/(ncos*w0*w0*(1-(w1/w0))**2)))
 
-        print("nopt =", strAcc % nopt, ", errAbs =", strAcc % d_nopt, ", err% =", strAcc % ((d_nopt/nopt)*100))
-        print("ncos =", strAcc % ncos, ", errAbs =", strAcc % d_ncos, ", err% =", strAcc % ((d_ncos/ncos)*100))
-        print("nref =", strAcc % nref, ", errAbs =", strAcc % d_nref, ", err% =", strAcc % ((d_nref/nref)*100))
-        print("nsbsa =", strAcc % nsbsa, ", errAbs =", strAcc % d_nsbsa, ", err% =", strAcc % ((d_nsbsa/nsbsa)*100))
+        print("nopt =", str_acc % nopt, ", errAbs =", str_acc % d_nopt,
+              ", err% =", str_acc % ((d_nopt/nopt)*100))
+        print("ncos =", str_acc % ncos, ", errAbs =", str_acc % d_ncos,
+              ", err% =", str_acc % ((d_ncos/ncos)*100))
+        print("nref =", str_acc % nref, ", errAbs =", str_acc % d_nref,
+              ", err% =", str_acc % ((d_nref/nref)*100))
+        print("nsbsa =", str_acc % nsbsa, ", errAbs =",
+              str_acc % d_nsbsa, ", err% =",
+              str_acc % ((d_nsbsa/nsbsa)*100))
 
         if (natm_approx):
             if(mtoa is None):
                 naatm = m['n_aatm'].data
             else:
-                naatm=0.
-                for i in range (0, len(mtoa)):
+                naatm = 0.
+                for i in range(0, len(mtoa)):
                     naatm += m['n_aatm'].data[i]*mtoa[i]
                 naatm /= np.sum(mtoa)
-            print("naatm =", strAcc % naatm, " -> analytic approx of natm")
+            print("naatm =", str_acc % naatm,
+                  " -> analytic approx of natm")
 
 
 class Mirror(object):
