@@ -102,10 +102,10 @@ def receiver_view(
         if 0 in cat_list:
             raise ValueError(
                 "Category index 0 (sum of all) is not allowed when specifying "
-                "multiple categories. Use individual indices 1–8."
+                "multiple categories. Use individual indices 1-8."
             )
         if any(c < 1 or c > 8 for c in cat_list):
-            raise ValueError("Category indices must be in the range 1–8.")
+            raise ValueError("Category indices must be in the range 1-8.")
         m = ds_sg_out['C_Receiver'].isel(Categories=cat_list).sum(
             dim='Categories').values
     # Cell size: S_Cell attribute is in km, convert to m
@@ -229,8 +229,7 @@ def cat_view(
 
     # Parameters needed in case kdis or reptran is used
     if kdis_rep_bands is not None:
-        _, wb, _, _, norm, norm_dl = kdis_rep_bands.get_weights(output_type='DataArray')
-        wl_kdis_rep = wb.data
+        _, _, _, _, norm, norm_dl = kdis_rep_bands.get_weights(output_type='DataArray')
 
     # Check if there is a dimension wavelength
     is_wave_axis = 'wavelength' in m['wPhCats'].dims
@@ -522,7 +521,7 @@ def cat_view(
 
 
 def nopt_view(
-    sm_lut: object,
+    ds_sg_out: xr.Dataset,
     back: bool = False,
     acc: int = 6,
     ncl: Literal["68%", "87%", "95%", "99%", "99.99%"] = "68%",
@@ -536,8 +535,8 @@ def nopt_view(
 
     Parameters
     ----------
-    sm_lut : MLUT
-        SMART-G return MLUT containing simulation results.
+    ds_sg_out : xr.Dataset
+        SMART-G output Dataset containing simulation results.
     back : bool, optional
         False for forward mode (default), True for backward mode.
         Determines which efficiency metrics are calculated and displayed.
@@ -582,21 +581,21 @@ def nopt_view(
 
     Each metric includes an estimate of absolute error and relative error.
     """
-    m = sm_lut
+    ds = ds_sg_out
     # Number of photons launched
-    nph = float(m.attrs['NPHOTONS'])
+    nph = float(ds.attrs['NPHOTONS'])
     # n/(n-1)
     nbis = nph / (nph - 1)
 
     if(mtoa is None):
-        powc_h = m['powc_H'].data
+        powc_h = ds['powc_H'].values
     else:
         powc_h = 0.
         for i in range(0, len(mtoa)):
-            powc_h += m['powc_H'].data[i] * mtoa[i]
+            powc_h += ds['powc_H'].values[i] * mtoa[i]
         powc_h /= np.sum(mtoa)
 
-    k = float(m.attrs['n_cte']) / powc_h
+    k = float(ds.attrs['n_cte']) / powc_h
 
     int_acc = int(acc)
     str_acc = str(int_acc)
@@ -620,23 +619,23 @@ def nopt_view(
         # Sum of weights
         # w0=wI, w1=wrhoM, w2=wrhoP, w3=wBM, w4=wBP, w5=wSM, w6=wSP
         # w7=wREC
-        w0 = m['wLoss'][0]
-        w1 = m['wLoss'][1]
-        w2 = m['wLoss'][2]
-        w3 = m['wLoss'][3]
-        w4 = m['wLoss'][4]
-        w5 = m['wLoss'][5]
-        w6 = m['wLoss'][6]
-        w7 = m['cat_w'][2]
+        w0 = ds['wLoss'].values[0]
+        w1 = ds['wLoss'].values[1]
+        w2 = ds['wLoss'].values[2]
+        w3 = ds['wLoss'].values[3]
+        w4 = ds['wLoss'].values[4]
+        w5 = ds['wLoss'].values[5]
+        w6 = ds['wLoss'].values[6]
+        w7 = ds['cat_w'].values[2]
         # Sum of (weights²)
-        w0_2 = m['wLoss2'][0]
-        w1_2 = m['wLoss2'][1]
-        w2_2 = m['wLoss2'][2]
-        w3_2 = m['wLoss2'][3]
-        w4_2 = m['wLoss2'][4]
-        w5_2 = m['wLoss2'][5]
-        w6_2 = m['wLoss2'][6]
-        w7_2 = m['cat_w2'][2]
+        w0_2 = ds['wLoss2'].values[0]
+        w1_2 = ds['wLoss2'].values[1]
+        w2_2 = ds['wLoss2'].values[2]
+        w3_2 = ds['wLoss2'].values[3]
+        w4_2 = ds['wLoss2'].values[4]
+        w5_2 = ds['wLoss2'].values[5]
+        w6_2 = ds['wLoss2'].values[6]
+        w7_2 = ds['cat_w2'].values[2]
         # (Sum of weights)² divided by the number of photons
         sum_z_bar2 = [
             (w0*w0)/nph, (w1*w1)/nph, (w2*w2)/nph, (w3*w3)/nph,
@@ -650,8 +649,8 @@ def nopt_view(
             dw.append(dw_temp)
         
         nopt = gc.clamp(k*w7, 0, 1)
-        k_s = k / float(m.attrs['n_cos'])
-        ncos = float(m.attrs['n_cos'])
+        k_s = k / float(ds.attrs['n_cos'])
+        ncos = float(ds.attrs['n_cos'])
         nsha = gc.clamp(k_s*w0, 0, 1)
         nref = gc.clamp(1-(w1/w0), 0, 1)
         nblo = gc.clamp(1-(w3/w2), 0, 1)
@@ -683,13 +682,13 @@ def nopt_view(
     else:  # Backward mode ->
         # Sum of weights
         # w0=wI, w1=wrhoM, w2=wREC
-        w0 = m['wLoss'][0]
-        w1 = m['wLoss'][1]
-        w2 = m['cat_w'][2]
+        w0 = ds['wLoss'].values[0]
+        w1 = ds['wLoss'].values[1]
+        w2 = ds['cat_w'].values[2]
         # Sum of (weights²)
-        w0_2 = m['wLoss2'][0]
-        w1_2 = m['wLoss2'][1]
-        w2_2 = m['cat_w2'][2]
+        w0_2 = ds['wLoss2'].values[0]
+        w1_2 = ds['wLoss2'].values[1]
+        w2_2 = ds['cat_w2'].values[2]
         # (Sum of weights)² divided by the number of photons
         sum_z_bar2 = [(w0*w0)/nph, (w1*w1)/nph, (w2*w2)/nph]
         # Sum of (weights²)
@@ -699,7 +698,7 @@ def nopt_view(
             dw_temp = ld * nbis * (sum_z2_bar[i] - sum_z_bar2[i]) ** 0.5
             dw.append(dw_temp)
         nopt = gc.clamp(k*w2, 0, 1)
-        ncos = float(m.attrs['n_cos'])
+        ncos = float(ds.attrs['n_cos'])
         nref = gc.clamp(1-(w1/w0), 0, 1)
         nsbsa = gc.clamp((k*w2)/(ncos*nref), 0, 1)
 
@@ -723,11 +722,11 @@ def nopt_view(
 
         if (natm_approx):
             if(mtoa is None):
-                naatm = m['n_aatm'].data
+                naatm = ds['n_aatm'].values
             else:
                 naatm = 0.
                 for i in range(0, len(mtoa)):
-                    naatm += m['n_aatm'].data[i]*mtoa[i]
+                    naatm += ds['n_aatm'].values[i] * mtoa[i]
                 naatm /= np.sum(mtoa)
             print("naatm =", str_acc % naatm,
                   " -> analytic approx of natm")
