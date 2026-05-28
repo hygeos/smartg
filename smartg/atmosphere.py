@@ -1053,8 +1053,8 @@ class AtmAFGL(Atmosphere):
                 atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
             
             if atm_filename.suffix == '.nc' or atm_filename.suffix == '.dat':
-                prof = ProfileBase(atm_filename, O3=O3, H2O=H2O, NO2=NO2, P0=P0, 
-                                    RH_cst=RH_cst, O3_H2O_alt=O3_H2O_alt)
+                prof = ProfileBase(atm_filename, tco3=O3, tcwp=H2O, tcno2=NO2, p0=P0, 
+                                    rh_cst=RH_cst, o3_h2o_alt=O3_H2O_alt)
             else:
                 raise NameError("This file format is not supported. Only '.nc' and" + \
                                 " '.dat' are supported.")
@@ -1902,33 +1902,36 @@ class ProfileBase(object):
 
     Parameters
     ----------
-    atm_filename : str | Path
+    fname : str | Path
         Path to atmospheric profile file. Accepts .nc (NetCDF) or .dat (libratran) formats.
         If only filename is provided (no path), the auxdata directory is automatically prepended.
         If no suffix is provided, .nc is assumed by default.
-    O3 : float | None, optional
-        Total ozone column in Dobson units (DU). If None, uses the value from the
-        atmospheric profile. The O3 profile is scaled to match this column amount.
+    tco3 : float | None, optional
+        Total column vertically-integrated ozone in Dobson units (DU). If None, uses the 
+        value from the atmospheric profile. The ozone profile is scaled to match this column 
+        amount. Note: 1 DU = 2.1415e-5 kg m⁻².
         Default: None
-    H2O : float | None, optional
-        Total water vapor column in g/cm². If None, uses the value from the
-        atmospheric profile. The H2O profile is scaled to match this column amount.
+    tcwp : float | None, optional
+        Total column vertically-integrated water vapour in g/cm². If None, uses the value 
+        from the atmospheric profile. The water vapour profile is scaled to match this column 
+        amount.
         Default: None
-    NO2 : bool | None, optional
-        Include NO2 absorption. If False, NO2 density is set to zero.
+    tcno2 : bool | None, optional
+        Total column vertically-integrated NO2. If False, NO2 density is set to zero. 
+        If True, NO2 profile from the atmospheric file is retained.
         Default: True
-    P0 : float | None, optional
+    p0 : float | None, optional
         Sea surface (bottom layer) pressure in hPa. If None, uses the pressure
         from the atmospheric profile. Scales all pressure values proportionally.
         Default: None
-    RH_cst : float | None, optional
+    rh_cst : float | None, optional
         Force relative humidity to be constant at this value. If None, relative
         humidity is recalculated from the temperature and water vapor profiles.
         Default: None
-    O3_H2O_alt : float | None, optional
-        Altitude (km) at which the specified O3 and H2O values apply. When specified,
-        the O3 and H2O profiles are scaled such that the column amount from TOA to this
-        altitude matches the provided O3 and H2O values. The full gaseous distribution
+    o3_h2o_alt : float | None, optional
+        Altitude (km) at which the specified tco3 and tcwp values apply. When specified,
+        the ozone and water vapor profiles are scaled such that the column amount from TOA to this
+        altitude matches the provided tco3 and tcwp values. The full gaseous distribution
         from TOA to ground is preserved; only the scaling factor is adjusted to match
         the constraint at this reference altitude.
         Default: None
@@ -1941,34 +1944,57 @@ class ProfileBase(object):
     - .dat (libratran): Text format with header line containing variable names
       (e.g., 'z(km) p(mb) T(K) air(cm-3) o3(cm-3) ...')
     """
-    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, O3_H2O_alt=None):
+    def __init__(
+        self,
+        fname,
+        tco3=None,
+        tcwp=None,
+        tcno2=True,
+        p0=None,
+        rh_cst=None,
+        o3_h2o_alt=None,
+    ):
 
-        if atm_filename is None:
+        if fname is None:
             return
-        atm_filename = Path(atm_filename)
-        self.atm_filename = atm_filename
+        fname = Path(fname)
+        self.fname = fname
 
-        if not atm_filename.is_file():
-            raise FileNotFoundError(f"Atmospheric profile file not found: {atm_filename}")
+        if not fname.is_file():
+            raise FileNotFoundError(
+                f"Atmospheric profile file not found: {fname}"
+            )
 
-        if atm_filename.suffix == '.dat':
-            with open(atm_filename) as f:
+        if fname.suffix == '.dat':
+            with open(fname) as f:
                 lines = f.readlines()
 
             desc = None
             desc = ''
             n=0
             for line in lines:
-                if ('z(km)' in line) and ('p(mb)' in line) and ('T(K)' in line) and ('air(cm-3)' in line) :
+                if (
+                    ('z(km)' in line)
+                    and ('p(mb)' in line)
+                    and ('T(K)' in line)
+                    and ('air(cm-3)' in line)
+                ):
                     desc = line
                     break
                 else:
-                    n+=1
+                    n += 1
             if desc=='' : n = 0
 
             if desc is not None:
-                #data = np.loadtxt(atm_filename, dtype=np.float32, comments="#", skiprows=n)
-                data = pd.read_csv(atm_filename, comment="#", header=None, sep=r'\s+', dtype=np.float32, skiprows=n).values
+                #data = np.loadtxt(fname, dtype=np.float32, comments="#", skiprows=n)
+                data = pd.read_csv(
+                    fname,
+                    comment="#",
+                    header=None,
+                    sep=r'\s+',
+                    dtype=np.float32,
+                    skiprows=n,
+                ).values
                 self.z        = data[:,0] # Altitude in km
                 self.P        = data[:,1] # pressure in hPa
                 self.T        = data[:,2] # temperature in K
@@ -1993,8 +2019,8 @@ class ProfileBase(object):
                 self.dens_so2 = np.zeros(nz, dtype=np.float32)
             else:
                 raise NameError('Invalid atmospheric file format')
-        elif atm_filename.suffix == '.nc':
-            with xr.open_dataset(atm_filename) as data:
+        elif fname.suffix == '.nc':
+            with xr.open_dataset(fname) as data:
                 self.z = data.coords['z_atm'].values  # Altitude in km
                 self.P = data['P'].values             # pressure in hPa
                 self.T = data['T'].values             # temperature in K
@@ -2010,38 +2036,42 @@ class ProfileBase(object):
                 self.dens_no2 = data['NO2'].values    # NO2 density in cm-3
                 self.dens_so2 = data['SO2'].values    # SO2 density in cm-3
 
-        self.RH_cst   = RH_cst
+        self.rh_cst   = rh_cst
 
-        # scale to specified total O3 content
-        if O3 is not None:
-            if O3_H2O_alt is None:
-                self.dens_o3 *= 2.69e16 * O3 / (simpson(y=self.dens_o3, x=-self.z) * 1e5)
+        # scale to specified total ozone content
+        if tco3 is not None:
+            if o3_h2o_alt is None:
+                denom = simpson(y=self.dens_o3, x=-self.z) * 1e5
+                self.dens_o3 *= 2.69e16 * tco3 / denom
             else:
                 f_dens_o3 = interp1d(self.z, self.dens_o3, fill_value='extrapolate')
-                z_alt = np.append(self.z[self.z>O3_H2O_alt], O3_H2O_alt)
+                z_alt = np.append(self.z[self.z > o3_h2o_alt], o3_h2o_alt)
                 dens_o3_alt = f_dens_o3(z_alt)
-                o3_afgl = (simpson(dens_o3_alt, -z_alt) * 1e5)/2.69e16
-                self.dens_o3 *= O3/o3_afgl
-            if O3==0 : self.dens_o3[:] = 0.
+                o3_afgl = (simpson(dens_o3_alt, -z_alt) * 1e5) / 2.69e16
+                self.dens_o3 *= tco3 / o3_afgl
+            if tco3 == 0:
+                self.dens_o3[:] = 0.
 
-        # scale to total H2O content
-        if H2O is not None:
-            M_H2O = 18.015 # g/mol
+        # scale to total water vapor content
+        if tcwp is not None:
+            M_H2O = 18.015  # g/mol
             Avogadro = constants.value('Avogadro constant')
-            if O3_H2O_alt is None:
-                self.dens_h2o *= H2O/ M_H2O * Avogadro / (simpson(y=self.dens_h2o, x=-self.z) * 1e5)
+            if o3_h2o_alt is None:
+                denom = simpson(y=self.dens_h2o, x=-self.z) * 1e5
+                self.dens_h2o *= tcwp / M_H2O * Avogadro / denom
             else:
                 f_dens_h2o = interp1d(self.z, self.dens_h2o, fill_value='extrapolate')
-                z_alt = np.append(self.z[self.z>O3_H2O_alt], O3_H2O_alt)
+                z_alt = np.append(self.z[self.z > o3_h2o_alt], o3_h2o_alt)
                 dens_h2o_alt = f_dens_h2o(z_alt)
-                h2o_afgl = (simpson(y=dens_h2o_alt, x=-z_alt) * 1e5 * M_H2O)/Avogadro
-                self.dens_h2o *= H2O/h2o_afgl
-            if H2O==0 : self.dens_h2o[:] = 0.
+                h2o_afgl = (simpson(y=dens_h2o_alt, x=-z_alt) * 1e5 * M_H2O) / Avogadro
+                self.dens_h2o *= tcwp / h2o_afgl
+            if tcwp == 0:
+                self.dens_h2o[:] = 0.
 
-        if P0 is not None:
-            self.P *= P0/self.P[-1]
+        if p0 is not None:
+            self.P *= p0/self.P[-1]
 
-        if not NO2:
+        if not tcno2:
             self.dens_no2[:] = 0.
 
     def regrid(self, znew):
@@ -2085,25 +2115,51 @@ class ProfileBase(object):
         z = self.z
         prof.z = znew
         try:
-            prof.P = interp1d(z, self.P, bounds_error=False, fill_value=(1012., 1e-5))(znew)
+            _tmpP = interp1d(
+                z, self.P, bounds_error=False, fill_value=(1012., 1e-5)
+            )
+            prof.P = _tmpP(znew)
             #prof.P = np.interp(znew, z, self.P, right=1012., left=1e-5)
         except ValueError:
             print('Error interpolating ({}, {}) -> ({}, {})'.format(z[0], z[-1], znew[0], znew[-1]))
-            print('atm_filename = {}'.format(self.atm_filename))
+            print('atm_filename = {}'.format(self.fname))
             raise
-        prof.T = interp1d(z, self.T, fill_value='extrapolate')(znew) # No found np.interp with extrapolate
+        _tmpT = interp1d(z, self.T, fill_value='extrapolate')
+        prof.T = _tmpT(znew)  # No found np.interp with extrapolate
 
-        prof.dens_air = interp1d(z, self.dens_air, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_o3  = interp1d(z, self.dens_o3, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_o2  = interp1d(z, self.dens_o2, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_h2o = interp1d(z, self.dens_h2o, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_co2 = interp1d(z, self.dens_co2, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_no2 = interp1d(z, self.dens_no2, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_ch4 = interp1d(z, self.dens_ch4, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_co  = interp1d(z, self.dens_co, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_n2o = interp1d(z, self.dens_n2o, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_n2  = interp1d(z, self.dens_n2, bounds_error=False, fill_value=(0., 0.))  (znew)
-        prof.dens_so2 = interp1d(z, self.dens_so2, bounds_error=False, fill_value=(0., 0.))  (znew)
+        prof.dens_air = interp1d(
+            z, self.dens_air, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_o3 = interp1d(
+            z, self.dens_o3, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_o2 = interp1d(
+            z, self.dens_o2, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_h2o = interp1d(
+            z, self.dens_h2o, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_co2 = interp1d(
+            z, self.dens_co2, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_no2 = interp1d(
+            z, self.dens_no2, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_ch4 = interp1d(
+            z, self.dens_ch4, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_co = interp1d(
+            z, self.dens_co, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_n2o = interp1d(
+            z, self.dens_n2o, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_n2 = interp1d(
+            z, self.dens_n2, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
+        prof.dens_so2 = interp1d(
+            z, self.dens_so2, bounds_error=False, fill_value=(0., 0.)
+        )(znew)
 
         prof.RH_cst   = self.RH_cst
 
