@@ -1021,7 +1021,6 @@ class AtmAFGL(Atmosphere):
         self.prof_aer = prof_aer
         self.prof_phases = prof_phases
         self.RH_cst = RH_cst
-        self.US = US
         self.OPT3D = cells is not None
         if self.OPT3D : self.cells = cells
 
@@ -1038,7 +1037,7 @@ class AtmAFGL(Atmosphere):
         #
         if atm_filename.name == "ATM3D":
             Nopt = grid.size
-            prof = Profile_base(None)
+            prof = ProfileBase(None)
             prof.z = np.arange(Nopt, dtype=np.float32)[::-1]
             attr_names = ["P", "T", "dens_air", "dens_h2o", "dens_o3", "dens_n2o", 
                           "dens_co", "dens_ch4", "dens_co2", "dens_o2", "dens_n2", 
@@ -1054,8 +1053,8 @@ class AtmAFGL(Atmosphere):
                 atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
             
             if atm_filename.suffix == '.nc' or atm_filename.suffix == '.dat':
-                prof = Profile_base(atm_filename, O3=O3, H2O=H2O, NO2=NO2, P0=P0, 
-                                    RH_cst=RH_cst, US=US, O3_H2O_alt=O3_H2O_alt)
+                prof = ProfileBase(atm_filename, O3=O3, H2O=H2O, NO2=NO2, P0=P0, 
+                                    RH_cst=RH_cst, O3_H2O_alt=O3_H2O_alt)
             else:
                 raise NameError("This file format is not supported. Only '.nc' and" + \
                                 " '.dat' are supported.")
@@ -1308,7 +1307,7 @@ class AtmAFGL(Atmosphere):
         wav : array-like or BandSet
             Wavelengths at which to calculate optical properties [nm].
             If not a BandSet, it will be converted to one.
-        prof : Profile_base, optional
+        prof : ProfileBase, optional
             Atmospheric profile containing altitude grids, temperature, pressure, 
             and density profiles. Default is None; uses self.prof if not provided.
             
@@ -1893,7 +1892,7 @@ class AtmAFGL(Atmosphere):
         return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
-class Profile_base(object):
+class ProfileBase(object):
     """
     Atmospheric profile with physical properties.
 
@@ -1926,9 +1925,6 @@ class Profile_base(object):
         Force relative humidity to be constant at this value. If None, relative
         humidity is recalculated from the temperature and water vapor profiles.
         Default: None
-    US : bool | None, optional
-        Use U.S. Standard atmosphere convention. Application-specific flag.
-        Default: True
     O3_H2O_alt : float | None, optional
         Altitude (km) at which the specified O3 and H2O values apply. When specified,
         the O3 and H2O profiles are scaled such that the column amount from TOA to this
@@ -1945,7 +1941,7 @@ class Profile_base(object):
     - .dat (libratran): Text format with header line containing variable names
       (e.g., 'z(km) p(mb) T(K) air(cm-3) o3(cm-3) ...')
     """
-    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, US=True, O3_H2O_alt=None):
+    def __init__(self, atm_filename, O3=None, H2O=None, NO2=True, P0=None, RH_cst=None, O3_H2O_alt=None):
 
         if atm_filename is None:
             return
@@ -2065,8 +2061,8 @@ class Profile_base(object):
 
         Returns
         -------
-        Profile_base
-            New Profile_base object with all atmospheric properties interpolated to the
+        ProfileBase
+            New ProfileBase object with all atmospheric properties interpolated to the
             new altitude grid `znew`. The following attributes are interpolated:
             - z: altitude (km)
             - P: pressure (hPa)
@@ -2085,7 +2081,7 @@ class Profile_base(object):
             - RH_cst: constant relative humidity (None | float)
         """
 
-        prof = Profile_base(None)
+        prof = ProfileBase(None)
         z = self.z
         prof.z = znew
         try:
