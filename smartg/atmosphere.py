@@ -1020,7 +1020,8 @@ class AtmAFGL(Atmosphere):
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
         self.prof_phases = prof_phases
-        self.RH_cst = RH_cst
+        # store attribute using lowercase name for consistency
+        self.rh_cst = RH_cst
         self.OPT3D = cells is not None
         if self.OPT3D : self.cells = cells
 
@@ -1044,7 +1045,7 @@ class AtmAFGL(Atmosphere):
                           "dens_no2", "dens_so2"]
             for attr_name in attr_names:
                 setattr(prof, attr_name, np.zeros(Nopt, dtype=np.float32))
-            prof.RH_cst = RH_cst
+            prof.rh_cst = RH_cst
         else:
             if atm_filename.parent == Path('.'):
                 atm_filename = DIR_AUXDATA / 'atmospheres' / atm_filename.name
@@ -2161,7 +2162,7 @@ class ProfileBase(object):
             z, self.dens_so2, bounds_error=False, fill_value=(0., 0.)
         )(znew)
 
-        prof.RH_cst   = self.RH_cst
+        prof.rh_cst   = self.rh_cst
 
         return prof
 
@@ -2196,12 +2197,12 @@ class ProfileBase(object):
         The saturation pressure calculation accounts for both water and ice phases 
         using temperature-dependent formulas.
         """
-        if self.RH_cst is not None : 
-            rh[:] = self.RH_cst
+        if getattr(self, 'rh_cst', None) is not None:
+            rh = np.full_like(self.T, self.rh_cst, dtype=float)
         else:
             p_h2o = (self.dens_h2o / self.dens_air) * self.P
             p_sat = saturation_pressure(self.T)
-            rh = (p_h2o / p_sat) * 100 
+            rh = (p_h2o / p_sat) * 100
 
         return rh
 
