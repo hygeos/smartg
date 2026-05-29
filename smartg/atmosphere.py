@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-Preprocessing of atmospheric optical properties for SMART-G simulations.
+"""Preprocessing of atmospheric optical properties for SMART-G
+simulations.
 
 This module provides tools to build and preprocess atmospheric profiles for use
 as input to SMART-G radiative transfer simulations. It implements various
@@ -322,8 +322,7 @@ class AerOPAC(object):
             self.Z_sh.append(Z_stra)
 
     def dtau_ssa(self, wav, Z, rh):
-        """
-        Calculate optical depth and single scattering albedo.
+        """Calculate optical depth and single scattering albedo.
 
         Computes the spectral optical depth (dtau) and single scattering albedo (ssa)
         for aerosol/cloud layers at specified wavelengths and altitudes. This method
@@ -761,8 +760,7 @@ class AerOPAC(object):
 
     @staticmethod
     def list():
-        """
-        List available standard OPAC aerosol mixture files.
+        """List available standard OPAC aerosol mixture files.
 
         Returns
         -------
@@ -922,8 +920,7 @@ class Cloud(AerOPAC):
 
     @staticmethod
     def list():
-        """
-        List available standard cloud model files.
+        """List available standard cloud model files.
 
         Returns
         -------
@@ -1041,7 +1038,7 @@ class AerUser(AerOPAC):
 
     @staticmethod
     def list():
-        """ """
+        """"""
         raise NotImplementedError(
             "The list() method is not available for user-defined aerosols. "
             "User-defined aerosols are custom configurations and do not have "
@@ -1050,7 +1047,7 @@ class AerUser(AerOPAC):
 
 
 class Atmosphere(object):
-    """Base class for atmosphere"""
+    """Base class for atmosphere."""
 
     pass
 
@@ -1594,8 +1591,8 @@ class AtmAFGL(Atmosphere):
         return profile
 
     def profile(self, wav, prof=None):
-        """
-        Calculate the profile of optical properties at given wavelengths.
+        """Calculate the profile of optical properties at given
+        wavelengths.
 
         Computes atmospheric optical properties (extinction, scattering, absorption)
         as a function of wavelength and altitude, including contributions from
@@ -2463,8 +2460,7 @@ class ProfileBase(object):
             self.dens_no2[:] = 0.0
 
     def regrid(self, znew):
-        """
-        Regrid atmospheric profile to a new altitude grid.
+        """Regrid atmospheric profile to a new altitude grid.
 
         Interpolates all atmospheric properties (pressure, temperature, and gas densities)
         from the current altitude grid to a new altitude grid using linear interpolation.
@@ -2498,7 +2494,6 @@ class ProfileBase(object):
             - dens_so2: sulfur dioxide density (molecule/cm³)
             - RH_cst: constant relative humidity (None | float)
         """
-
         prof = ProfileBase(None)
         z = self.z
         prof.z = znew
@@ -2597,8 +2592,7 @@ class ProfileBase(object):
 
 
 def saturation_pressure(T):
-    """
-    Calculate saturation vapor pressure for water and ice phases.
+    """Calculate saturation vapor pressure for water and ice phases.
 
     Uses the Huang (2018) empirical formula, which provides accurate
     saturation vapor pressure calculations for both liquid water and ice phases.
@@ -2641,8 +2635,8 @@ def saturation_pressure(T):
 
 
 def f_n2(lam):
-    """
-    Compute the depolarization factor of N2 as a function of wavelength.
+    """Compute the depolarization factor of N2 as a function of
+    wavelength.
 
     Parameters
     ----------
@@ -2664,8 +2658,8 @@ def f_n2(lam):
 
 
 def f_o2(lam):
-    """
-    Compute the depolarization factor of O2 as a function of wavelength.
+    """Compute the depolarization factor of O2 as a function of
+    wavelength.
 
     Parameters
     ----------
@@ -2687,10 +2681,10 @@ def f_o2(lam):
 
 
 def f_air_co2(lam, co2):
-    """
-    Calculates the depolarization factor for air using a composite formula based on
-    the depolarization factors of N2 and O2, and the CO2 concentration. Produces
-    a 2-D array with one value per wavelength-layer combination.
+    """Calculates the depolarization factor for air using a composite
+    formula based on the depolarization factors of N2 and O2, and the
+    CO2 concentration. Produces a 2-D array with one value per
+    wavelength-layer combination.
 
     Parameters
     ----------
@@ -2721,8 +2715,8 @@ def f_air_co2(lam, co2):
 
 
 def n_air_co2_300(lam):
-    """
-    Compute the refractive index of dry air at 300 ppm CO2 as a function of wavelength.
+    """Compute the refractive index of dry air at 300 ppm CO2 as a
+    function of wavelength.
 
     Parameters
     ----------
@@ -2752,8 +2746,8 @@ def n_air_co2_300(lam):
 
 
 def n_air_co2(lam, co2):
-    """
-    Calculates the refractive index as function of wavelength and CO2 concentration.
+    """Calculates the refractive index as function of wavelength and CO2
+    concentration.
 
     Parameters
     ----------
@@ -2780,9 +2774,8 @@ def n_air_co2(lam, co2):
 
 
 def m_dry_air(co2):
-    """
-    Compute the mean molecular weight of dry air as a function
-    of CO2 concentration.
+    """Compute the mean molecular weight of dry air as a function of CO2
+    concentration.
 
     Parameters
     ----------
@@ -2804,8 +2797,7 @@ def m_dry_air(co2):
 
 
 def rayleigh_crs(lam, co2):
-    """
-    Compute the Rayleigh cross section
+    """Compute the Rayleigh cross section.
 
     Parameters:
     -----------
@@ -2824,7 +2816,6 @@ def rayleigh_crs(lam, co2):
         On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
         Technology*, 16, 1854-1861.
     """
-
     if not isinstance(lam, np.ndarray):
         raise ValueError("The parameter lam must be a 1-D np.ndarray.")
     if not np.isscalar(co2) and not isinstance(co2, np.ndarray):
@@ -2850,8 +2841,8 @@ def rayleigh_crs(lam, co2):
 
 
 def gravity_z0(lat):
-    """
-    Compute gravitational acceleration at Earth's surface as a function of latitude.
+    """Compute gravitational acceleration at Earth's surface as a
+    function of latitude.
 
     Parameters
     ----------
@@ -2868,7 +2859,6 @@ def gravity_z0(lat):
     .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables* (Sixth revised
            edition; fourth reprint issued 1968). Smithsonian Institution Press,
            City of Washington, 527 pp.
-
     """
     if not np.isscalar(lat):
         raise ValueError("The parameter lat must be a scalar value.")
@@ -2881,8 +2871,8 @@ def gravity_z0(lat):
 
 
 def gravity_z(lat, z):
-    """
-    Compute gravitational acceleration at a given altitude and latitude.
+    """Compute gravitational acceleration at a given altitude and
+    latitude.
 
     Parameters
     ----------
@@ -2946,9 +2936,8 @@ def rayleigh_od(lam, co2=400.0, lat=45.0, z=0.0, P=1013.25, pressure="surface"):
 
 
 def refractivity(lam, P, T, co2):
-    """
-    Calculate the refractive index of air as a function of wavelength, pressure,
-    temperature, and CO2 concentration.
+    """Calculate the refractive index of air as a function of
+    wavelength, pressure, temperature, and CO2 concentration.
 
     Parameters
     ----------
@@ -3025,8 +3014,8 @@ def diff1(a, axis=0, samesize=True):
 
 
 def od2k(prof, dataset, axis=1, zreverse=False):
-    """
-    Convert cumulated optical depth to a vertical coefficient profile.
+    """Convert cumulated optical depth to a vertical coefficient
+    profile.
 
     Parameters
     ----------
@@ -3134,8 +3123,8 @@ def get_aer_dist_integral(Z, H_min, H_max):
 
 
 def check_date(dates, year):
-    """
-    Validate that all dates are from a single year and match the provided year.
+    """Validate that all dates are from a single year and match the
+    provided year.
 
     Parameters
     ----------
@@ -3173,8 +3162,7 @@ def check_date(dates, year):
 
 
 def read_Aeronet_AOD(file, year):
-    """
-    Extract AOD data from Aeronet file
+    """Extract AOD data from Aeronet file.
 
     Parameters
     ----------
@@ -3188,7 +3176,6 @@ def read_Aeronet_AOD(file, year):
     out : xr.DataArray
         Lookup table with extinction AOD as function of Day_of_Year(Fraction) and wavelength
     """
-
     AOD = pd.read_csv(file, sep=",", skiprows=6)
     NTIME_AOD = AOD.index.size
 
@@ -3222,8 +3209,7 @@ def read_Aeronet_AOD(file, year):
 
 
 def read_Aeronet_SSA(file, year):
-    """
-    Extract SSA data from Aeronet file
+    """Extract SSA data from Aeronet file.
 
     Parameters
     ----------
@@ -3271,8 +3257,7 @@ def read_Aeronet_SSA(file, year):
 
 
 def read_Aeronet_PFN(file, year):
-    """
-    Extract PFN data from Aeronet file
+    """Extract PFN data from Aeronet file.
 
     Parameters
     ----------
@@ -3497,7 +3482,8 @@ def atm_pro_from_aeronet(
 
 
 def _open_lut_datatree_as_xarray(input_path, group=None, datasets=None):
-    """Read a LUT-style HDF5 group into an xarray.Dataset using xarray.open_datatree."""
+    """Read a LUT-style HDF5 group into an xarray.Dataset using
+    xarray.open_datatree."""
     data_vars = {}
 
     tree = xr.open_datatree(input_path)
@@ -3548,8 +3534,7 @@ def artdeco_to_smartg_cld(
     veff=None,
     wl_max=4500,
 ):
-    """
-    Convert ARTDECO cloud HDF5 file to SMART-G NetCDF file format.
+    """Convert ARTDECO cloud HDF5 file to SMART-G NetCDF file format.
 
     Reads cloud optical properties from an ARTDECO HDF5 file and converts them
     to an xarray dataset compatible with SMART-G cloud inputs.
