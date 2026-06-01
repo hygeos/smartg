@@ -757,8 +757,6 @@ class AerOPAC(object):
                     hum_or_reff_val = np.full_like(rh, self.force_rh[icont])
                 else:
                     hum_or_reff_val = rh
-            elif self.hum_or_reff == "reff":
-                hum_or_reff_val = self.reff
             else:
                 raise NameError(
                     "Phase matrix must varies as function of hum or reff."
