@@ -187,24 +187,24 @@ class AerOPAC(object):
 
     def __init__(
         self,
-        filename,
-        tau_ref,
-        w_ref,
-        H_mix_min=None,
-        H_mix_max=None,
-        H_free_min=None,
-        H_free_max=None,
-        H_stra_min=None,
-        H_stra_max=None,
-        Z_mix=None,
-        Z_free=None,
-        Z_stra=None,
-        ssa=None,
-        phase=None,
-        rh_mix=None,
-        rh_free=None,
-        rh_stra=None,
-    ):
+        filename: str | Path,
+        tau_ref: float,
+        w_ref: float,
+        H_mix_min: float | None = None,
+        H_mix_max: float | None = None,
+        H_free_min: float | None = None,
+        H_free_max: float | None = None,
+        H_stra_min: float | None = None,
+        H_stra_max: float | None = None,
+        Z_mix: float | None = None,
+        Z_free: float | None = None,
+        Z_stra: float | None = None,
+        ssa: float | list[float] | np.ndarray | xr.DataArray | None = None,
+        phase: xr.DataArray | None = None,
+        rh_mix: float | None = None,
+        rh_free: float | None = None,
+        rh_stra: float | None = None,
+    ) -> None:
 
         self.tau_ref = (
             tau_ref.to_xarray() if hasattr(tau_ref, "to_xarray") else tau_ref
@@ -367,7 +367,12 @@ class AerOPAC(object):
             self.H_max.append(H_stra_max)
             self.Z_sh.append(Z_stra)
 
-    def dtau_ssa(self, wav, Z, rh):
+    def dtau_ssa(
+        self,
+        wav: np.ndarray,
+        Z: np.ndarray,
+        rh: float | np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Calculate optical depth and single scattering albedo.
 
         Computes the spectral optical depth (dtau) and single scattering
@@ -559,7 +564,13 @@ class AerOPAC(object):
                 ssa[:, :] = ssa_interp[:, None]
         return dtau, ssa
 
-    def phase(self, wav, Z, rh, NBTHETA=721):
+    def phase(
+        self,
+        wav: np.ndarray,
+        Z: np.ndarray,
+        rh: np.ndarray,
+        NBTHETA: int = 721,
+    ) -> xr.DataArray:
         """
         Calculate phase matrix for aerosols and clouds.
 
@@ -865,7 +876,7 @@ class AerOPAC(object):
         return P_tot
 
     @staticmethod
-    def list():
+    def list() -> list[str]:
         """List available standard OPAC aerosol mixture files.
 
         Returns
