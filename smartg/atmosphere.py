@@ -174,8 +174,12 @@ class AerOPAC(object):
         rh_stra=None,
     ):
 
-        self.tau_ref = tau_ref.to_xarray() if hasattr(tau_ref, "to_xarray") else tau_ref
-        if np.isscalar(w_ref) or (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0):
+        self.tau_ref = (
+            tau_ref.to_xarray() if hasattr(tau_ref, "to_xarray") else tau_ref
+        )
+        if np.isscalar(w_ref) or (
+            isinstance(w_ref, np.ndarray) and w_ref.ndim == 0
+        ):
             self.w_ref = np.array([w_ref])
         else:
             self.w_ref = np.array(w_ref)
@@ -187,14 +191,18 @@ class AerOPAC(object):
         elif phase is None:
             self._phase = phase
         else:
-            raise ValueError("The phase variable must be an xr.DataArray or be None.")
+            raise ValueError(
+                "The phase variable must be an xr.DataArray or be None."
+            )
 
         if ssa is None:
             self.ssa = None
         else:
             if isinstance(ssa, list):
                 ssa = np.array(ssa)
-            if np.isscalar(ssa) or (isinstance(ssa, np.ndarray) and (ssa.ndim <= 2)):
+            if np.isscalar(ssa) or (
+                isinstance(ssa, np.ndarray) and (ssa.ndim <= 2)
+            ):
                 self.ssa = ssa
             elif hasattr(ssa, "to_xarray"):
                 self.ssa = ssa.to_xarray()
@@ -207,7 +215,9 @@ class AerOPAC(object):
 
         filename = Path(filename)
         if filename.parent == Path("."):  # no directory given
-            filename = DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures" / filename.name
+            filename = (
+                DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures" / filename.name
+            )
 
         # Add extension if needed
         if "_sol" not in filename.name and not filename.suffix == ".nc":
@@ -358,10 +368,13 @@ class AerOPAC(object):
         elif self.hum_or_reff == "reff":
             hum_or_reff_val = self.reff
         else:
-            raise NameError("ext and ssa must varies as function of hum or reff.")
+            raise NameError(
+                "ext and ssa must varies as function of hum or reff."
+            )
 
         if np.isscalar(hum_or_reff_val) or (
-            isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0
+            isinstance(hum_or_reff_val, np.ndarray)
+            and hum_or_reff_val.ndim == 0
         ):
             hum_or_reff_val = np.array([hum_or_reff_val])
         else:
@@ -387,7 +400,10 @@ class AerOPAC(object):
             nhor = len(hor_vals)
             nwav_orig = len(wav_vals)
             idf_hor = interp1d(
-                hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor - 1)
+                hor_vals,
+                np.arange(nhor),
+                bounds_error=False,
+                fill_value=(0, nhor - 1),
             )(np.asarray(rh_reff, dtype=np.float64))
             idf_wav = interp1d(wav_vals, np.arange(nwav_orig))(
                 np.asarray(wav, dtype=np.float64)
@@ -440,9 +456,9 @@ class AerOPAC(object):
             h1 = np.maximum(self.H_min[icont], Z[1:])
             h2 = np.minimum(self.H_max[icont], Z[:-1])
             cond = h2 > h1
-            dtau_[:, 1:][:, cond] = ext_[:, 1:][:, cond] * get_aer_dist_integral(
-                self.Z_sh[icont], h1[cond], h2[cond]
-            )
+            dtau_[:, 1:][:, cond] = ext_[:, 1:][
+                :, cond
+            ] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
             dtau += dtau_
             ssa += dtau_ * ssa_
             dtau_ref_[:, 1:][:, cond] = ext_ref_[:, 1:][
@@ -461,9 +477,9 @@ class AerOPAC(object):
                 dtau *= self.tau_ref / np.sum(dtau_ref)
             else:
                 # xr.DataArray
-                wav_axis = self.tau_ref.coords[self.tau_ref.dims[0]].values.astype(
-                    np.float64
-                )
+                wav_axis = self.tau_ref.coords[
+                    self.tau_ref.dims[0]
+                ].values.astype(np.float64)
                 tau_ref_interp = interp1d(wav_axis, self.tau_ref.values)(
                     np.asarray(wav, dtype=np.float64)
                 )
@@ -483,7 +499,9 @@ class AerOPAC(object):
                 elif self.ssa.ndim == 2:
                     ssa[:, :] = self.ssa[:, :]
             else:  # xr.DataArray
-                wav_axis = self.ssa.coords[self.ssa.dims[0]].values.astype(np.float64)
+                wav_axis = self.ssa.coords[self.ssa.dims[0]].values.astype(
+                    np.float64
+                )
                 ssa_interp = interp1d(wav_axis, self.ssa.values)(
                     np.asarray(wav, dtype=np.float64)
                 )
@@ -639,7 +657,9 @@ class AerOPAC(object):
 
             # Theta resampling if needed: transpose to (theta, nwav, hor, stk)
             if NBTHETA != len(theta_orig):
-                idf_theta = interp1d(theta_orig, np.arange(len(theta_orig)))(theta)
+                idf_theta = interp1d(theta_orig, np.arange(len(theta_orig)))(
+                    theta
+                )
                 phase_at_wav = vec_float_indexing(
                     np.ascontiguousarray(phase_at_wav.transpose(3, 0, 1, 2)),
                     [idf_theta, slice(None), slice(None), slice(None)],
@@ -658,10 +678,13 @@ class AerOPAC(object):
             elif self.hum_or_reff == "reff":
                 hum_or_reff_val = self.reff
             else:
-                raise NameError("Phase matrix must varies as function of hum or reff.")
+                raise NameError(
+                    "Phase matrix must varies as function of hum or reff."
+                )
 
             if np.isscalar(hum_or_reff_val) or (
-                isinstance(hum_or_reff_val, np.ndarray) and hum_or_reff_val.ndim == 0
+                isinstance(hum_or_reff_val, np.ndarray)
+                and hum_or_reff_val.ndim == 0
             ):
                 hum_or_reff_val = np.array([hum_or_reff_val])
             else:
@@ -676,7 +699,10 @@ class AerOPAC(object):
                 nz_phase = len(hum_or_reff_val) - 1
 
             idf_hor = interp1d(
-                hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor - 1)
+                hor_vals,
+                np.arange(nhor),
+                bounds_error=False,
+                fill_value=(0, nhor - 1),
             )(np.asarray(hor_query, dtype=np.float64))
             P_data = vec_float_indexing(
                 np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
@@ -723,13 +749,20 @@ class AerOPAC(object):
 
             # Compute dtau and ssa using vec_float_indexing (same as dtau_ssa)
             idf_hor_ext = interp1d(
-                hor_vals, np.arange(nhor), bounds_error=False, fill_value=(0, nhor - 1)
+                hor_vals,
+                np.arange(nhor),
+                bounds_error=False,
+                fill_value=(0, nhor - 1),
             )(np.asarray(hum_or_reff_val, dtype=np.float64))
             idf_wav_ext = interp1d(wav_vals, np.arange(nwav_orig))(
                 np.asarray(wav, dtype=np.float64)
             )
-            ext_at_hor = vec_float_indexing(ext_data, [idf_hor_ext, slice(None)])
-            ssa_at_hor = vec_float_indexing(ssa_data, [idf_hor_ext, slice(None)])
+            ext_at_hor = vec_float_indexing(
+                ext_data, [idf_hor_ext, slice(None)]
+            )
+            ssa_at_hor = vec_float_indexing(
+                ssa_data, [idf_hor_ext, slice(None)]
+            )
             ext_ = vec_float_indexing(
                 ext_at_hor.T, [idf_wav_ext, slice(None)]
             )  # (nwav, nhor_q)
@@ -744,9 +777,9 @@ class AerOPAC(object):
             h1 = np.maximum(self.H_min[icont], Z[1:])
             h2 = np.minimum(self.H_max[icont], Z[:-1])
             cond = h2 > h1
-            dtau_[:, 1:][:, cond] = ext_[:, 1:][:, cond] * get_aer_dist_integral(
-                self.Z_sh[icont], h1[cond], h2[cond]
-            )
+            dtau_[:, 1:][:, cond] = ext_[:, 1:][
+                :, cond
+            ] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
             dssa_ = dtau_ * ssa_  # NLAM, ALTITUDE
             dssa_ = dssa_[:, 1:, None, None]
             dssa += dssa_
@@ -850,7 +883,9 @@ class Cloud(AerOPAC):
     ):
         self.reff = reff
         self.tau_ref = tau_ref
-        if np.isscalar(w_ref) or (isinstance(w_ref, np.ndarray) and w_ref.ndim == 0):
+        if np.isscalar(w_ref) or (
+            isinstance(w_ref, np.ndarray) and w_ref.ndim == 0
+        ):
             self.w_ref = np.array([w_ref])
         else:
             self.w_ref = np.array(w_ref)
@@ -860,7 +895,9 @@ class Cloud(AerOPAC):
         else:
             if isinstance(ssa, list):
                 ssa = np.array(ssa)
-            if np.isscalar(ssa) or (isinstance(ssa, np.ndarray) and (ssa.ndim <= 2)):
+            if np.isscalar(ssa) or (
+                isinstance(ssa, np.ndarray) and (ssa.ndim <= 2)
+            ):
                 self.ssa = ssa
             elif hasattr(ssa, "to_xarray"):
                 self.ssa = ssa.to_xarray()
@@ -916,7 +953,9 @@ class Cloud(AerOPAC):
         elif phase is None:
             self._phase = phase
         else:
-            raise ValueError("The phase variable must be an xr.DataArray or be None.")
+            raise ValueError(
+                "The phase variable must be an xr.DataArray or be None."
+            )
 
     @staticmethod
     def list():
@@ -980,12 +1019,23 @@ class AerUser(AerOPAC):
     """
 
     def __init__(
-        self, aod, ssa, phase, hum, wav, theta, H_mix_min=0.0, H_mix_max=2.0, Z_mix=2
+        self,
+        aod,
+        ssa,
+        phase,
+        hum,
+        wav,
+        theta,
+        H_mix_min=0.0,
+        H_mix_max=2.0,
+        Z_mix=2,
     ):
 
         self.filename = "none"
         self.tau_ref = None
-        ext = aod / (Z_mix * (np.exp(-H_mix_min / Z_mix) - np.exp(-H_mix_max / Z_mix)))
+        ext = aod / (
+            Z_mix * (np.exp(-H_mix_min / Z_mix) - np.exp(-H_mix_max / Z_mix))
+        )
 
         # Create an xarray Dataset to hold the mixture data
         ds = xr.Dataset(
@@ -1225,7 +1275,9 @@ class AtmAFGL(Atmosphere):
                 atm_filename = DIR_AUXDATA / "atmospheres" / atm_filename.name
             # By default if no suffix is given consider it as a netcdf file
             if not atm_filename.exists() and atm_filename.suffix == "":
-                atm_filename = atm_filename.with_name(atm_filename.name + ".nc")
+                atm_filename = atm_filename.with_name(
+                    atm_filename.name + ".nc"
+                )
 
             if atm_filename.suffix == ".nc" or atm_filename.suffix == ".dat":
                 prof = ProfileBase(
@@ -1279,7 +1331,12 @@ class AtmAFGL(Atmosphere):
         self.prof_red = prof.regrid(pfgrid)
 
     def calc(
-        self, wav, phase=True, NBTHETA=721, use_old_calc_iphase=False, truncation=None
+        self,
+        wav,
+        phase=True,
+        NBTHETA=721,
+        use_old_calc_iphase=False,
+        truncation=None,
     ):
         """
         Profile and phase matrix calculation at bands / wav
@@ -1372,7 +1429,9 @@ class AtmAFGL(Atmosphere):
                         f = ds_pha["f"].values
                         f_pha[iph] = f
                         # Ensure for the moment only 1 unique truncation factor
-                        if iph > 0 and not np.isclose(f_pha[iph], f_pha[0], atol=1e-6):
+                        if iph > 0 and not np.isclose(
+                            f_pha[iph], f_pha[0], atol=1e-6
+                        ):
                             raise ValueError(
                                 "Several truncation factors f is not yet authorized"
                             )
@@ -1454,25 +1513,31 @@ class AtmAFGL(Atmosphere):
                     # case tau instead of coeff (1D atm)
                     if not self.OPT3D:
                         dtau_p = diff1(profile["OD_p"].values, axis=1)
-                        dtau_p_tr = (1 - f * profile["ssa_p_atm"].values) * dtau_p
+                        dtau_p_tr = (
+                            1 - f * profile["ssa_p_atm"].values
+                        ) * dtau_p
                         tau_p_tr = np.cumsum(dtau_p_tr, axis=1)
                         ssa_p_atm_tr = profile["ssa_p_atm"].values * (
                             (1 - f) / (1 - f * profile["ssa_p_atm"].values)
                         )
                         tau_atm_tr = (
-                            tau_p_tr + profile["OD_r"].values + profile["OD_g"].values
+                            tau_p_tr
+                            + profile["OD_r"].values
+                            + profile["OD_g"].values
                         )
                         dtau_r = diff1(profile["OD_r"].values, axis=1)
                         tau_sca_tr = np.cumsum(
                             dtau_r + dtau_p_tr * ssa_p_atm_tr, axis=1
                         )
                         with np.errstate(invalid="ignore", divide="ignore"):
-                            ssa_atm_tr = (dtau_r + dtau_p_tr * ssa_p_atm_tr) / diff1(
-                                tau_atm_tr, axis=1
-                            )
+                            ssa_atm_tr = (
+                                dtau_r + dtau_p_tr * ssa_p_atm_tr
+                            ) / diff1(tau_atm_tr, axis=1)
                         ssa_atm_tr[np.isnan(ssa_atm_tr)] = 1.0
                         with np.errstate(invalid="ignore", divide="ignore"):
-                            pmol_tr = dtau_r / (dtau_r + dtau_p_tr * ssa_p_atm_tr)
+                            pmol_tr = dtau_r / (
+                                dtau_r + dtau_p_tr * ssa_p_atm_tr
+                            )
                         pmol_tr[np.isnan(pmol_tr)] = 1.0
 
                         profile["OD_p"] = xr.DataArray(
@@ -1533,17 +1598,24 @@ class AtmAFGL(Atmosphere):
                     # sig for coeficients
                     else:
                         sig_p = profile["OD_p"].values
-                        sig_p_tr = (1 - f * profile["ssa_p_atm"].values) * sig_p
+                        sig_p_tr = (
+                            1 - f * profile["ssa_p_atm"].values
+                        ) * sig_p
                         ssa_p_atm_tr = profile["ssa_p_atm"].values * (
                             (1 - f) / (1 - f * profile["ssa_p_atm"].values)
                         )
                         sig_atm_tr = (
-                            sig_p_tr + profile["OD_r"].values + profile["OD_g"].values
+                            sig_p_tr
+                            + profile["OD_r"].values
+                            + profile["OD_g"].values
                         )
-                        sig_sca_tr = profile["OD_r"].values + sig_p_tr * ssa_p_atm_tr
+                        sig_sca_tr = (
+                            profile["OD_r"].values + sig_p_tr * ssa_p_atm_tr
+                        )
                         with np.errstate(invalid="ignore", divide="ignore"):
                             ssa_atm_tr = (
-                                profile["OD_r"].values + sig_p_tr * ssa_p_atm_tr
+                                profile["OD_r"].values
+                                + sig_p_tr * ssa_p_atm_tr
                             ) / sig_atm_tr
                         ssa_atm_tr[np.isnan(ssa_atm_tr)] = 1.0
                         sig_r = profile["OD_r"].values
@@ -1554,37 +1626,49 @@ class AtmAFGL(Atmosphere):
                         profile["OD_p"] = xr.DataArray(
                             sig_p_tr,
                             dims=["wavelength", "iopt"],
-                            coords={"wavelength": profile.coords["wavelength"]},
+                            coords={
+                                "wavelength": profile.coords["wavelength"]
+                            },
                             attrs=profile["OD_p"].attrs,
                         )
                         profile["ssa_p_atm"] = xr.DataArray(
                             ssa_p_atm_tr,
                             dims=["wavelength", "iopt"],
-                            coords={"wavelength": profile.coords["wavelength"]},
+                            coords={
+                                "wavelength": profile.coords["wavelength"]
+                            },
                             attrs=profile["ssa_p_atm"].attrs,
                         )
                         profile["OD_atm"] = xr.DataArray(
                             sig_atm_tr,
                             dims=["wavelength", "iopt"],
-                            coords={"wavelength": profile.coords["wavelength"]},
+                            coords={
+                                "wavelength": profile.coords["wavelength"]
+                            },
                             attrs=profile["OD_atm"].attrs,
                         )
                         profile["OD_sca_atm"] = xr.DataArray(
                             sig_sca_tr,
                             dims=["wavelength", "iopt"],
-                            coords={"wavelength": profile.coords["wavelength"]},
+                            coords={
+                                "wavelength": profile.coords["wavelength"]
+                            },
                             attrs=profile["OD_sca_atm"].attrs,
                         )
                         profile["ssa_atm"] = xr.DataArray(
                             ssa_atm_tr,
                             dims=["wavelength", "iopt"],
-                            coords={"wavelength": profile.coords["wavelength"]},
+                            coords={
+                                "wavelength": profile.coords["wavelength"]
+                            },
                             attrs=profile["ssa_atm"].attrs,
                         )
                         profile["pmol_atm"] = xr.DataArray(
                             pmol_tr,
                             dims=["wavelength", "iopt"],
-                            coords={"wavelength": profile.coords["wavelength"]},
+                            coords={
+                                "wavelength": profile.coords["wavelength"]
+                            },
                             attrs=profile["pmol_atm"].attrs,
                         )
 
@@ -1730,7 +1814,9 @@ class AtmAFGL(Atmosphere):
                 ray_coef,
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
-                attrs={"description": "rayleigh scattering coefficient (km-1)"},
+                attrs={
+                    "description": "rayleigh scattering coefficient (km-1)"
+                },
             )
 
         #
@@ -1740,7 +1826,9 @@ class AtmAFGL(Atmosphere):
             dtaua = np.zeros((len(wav), len(prof.z)), dtype="float32")
             ssa_p = np.zeros((len(wav), len(prof.z)), dtype="float32")
             for comp in self.comp:
-                dtau_, ssa_ = comp.dtau_ssa(wav[:], prof.z, prof.relative_humidity())
+                dtau_, ssa_ = comp.dtau_ssa(
+                    wav[:], prof.z, prof.relative_humidity()
+                )
                 dtaua += dtau_
                 ssa_p += dtau_ * ssa_
             ssa_p[dtaua != 0] /= dtaua[dtaua != 0]
@@ -1773,7 +1861,9 @@ class AtmAFGL(Atmosphere):
                 aer_coef,
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
-                attrs={"description": "particles extinction coefficient (km-1)"},
+                attrs={
+                    "description": "particles extinction coefficient (km-1)"
+                },
             )
 
         if not self.OPT3D:
@@ -1811,16 +1901,22 @@ class AtmAFGL(Atmosphere):
             if wav.use_reptran_kdis:
                 tau_mol = wav.calc_profile(self.prof) * dz
                 # If not reptran (i.e. Kdis case) we set 03 and NO2 to 0 (already calculated in Kdis)
-                if not (str(wav.type_wav) == "<class 'smartg.reptran.REPTRAN_IBAND'>"):
+                if not (
+                    str(wav.type_wav)
+                    == "<class 'smartg.reptran.REPTRAN_IBAND'>"
+                ):
                     all_kdis_gas = (
-                        wav.data[0].band.kdis.species + wav.data[0].band.kdis.species_c
+                        wav.data[0].band.kdis.species
+                        + wav.data[0].band.kdis.species_c
                     )
                     if "no2" in all_kdis_gas:
                         use_no2_acs = False
                     if "o3" in all_kdis_gas:
                         use_o3_acs = False
             else:
-                tau_mol = np.zeros((len(wav), len(prof.z)), dtype="float32") * dz
+                tau_mol = (
+                    np.zeros((len(wav), len(prof.z)), dtype="float32") * dz
+                )
 
             # Compute o3 and no2 (if kdis only compute them if not already computed)
             if use_no2_acs or use_o3_acs:
@@ -1848,7 +1944,9 @@ class AtmAFGL(Atmosphere):
                         .values[:, None]
                     )
                     tau_o3 = C0 + C1 * (T - T0) + C2 * (T - T0) * (T - T0)
-                    tau_o3[~np.logical_and(wav[:] > min_wl, wav[:] < max_wl)] = 0.0
+                    tau_o3[
+                        ~np.logical_and(wav[:] > min_wl, wav[:] < max_wl)
+                    ] = 0.0
                     tau_o3 *= (
                         prof.dens_o3 * 1e-15
                     )  # ACS in 10^(-20) cm2, convert in km-1
@@ -1875,7 +1973,9 @@ class AtmAFGL(Atmosphere):
                         .values[:, None]
                     )
                     tau_no2 = C0 + C1 * (T - T0) + C2 * (T - T0) * (T - T0)
-                    tau_no2[~np.logical_and(wav[:] > min_wl, wav[:] < max_wl)] = 0.0
+                    tau_no2[
+                        ~np.logical_and(wav[:] > min_wl, wav[:] < max_wl)
+                    ] = 0.0
                     tau_no2 *= (
                         prof.dens_no2 * 1e-15
                     )  # ACS in 10^(-20) cm2, convert in km-1
@@ -1907,7 +2007,9 @@ class AtmAFGL(Atmosphere):
                     abs_coef,
                     dims=["wavelength", "iopt"],
                     coords={"wavelength": pro.coords["wavelength"]},
-                    attrs={"description": "gaseous absorption coefficient (km-1)"},
+                    attrs={
+                        "description": "gaseous absorption coefficient (km-1)"
+                    },
                 )
 
         else:
@@ -1932,7 +2034,9 @@ class AtmAFGL(Atmosphere):
                     abs_coef,
                     dims=["wavelength", "iopt"],
                     coords={"wavelength": pro.coords["wavelength"]},
-                    attrs={"description": "gaseous absorption coefficient (km-1)"},
+                    attrs={
+                        "description": "gaseous absorption coefficient (km-1)"
+                    },
                 )
 
         #
@@ -1947,7 +2051,9 @@ class AtmAFGL(Atmosphere):
                     "wavelength": pro.coords["wavelength"],
                     "z_atm": pro.coords["z_atm"],
                 },
-                attrs={"description": "Cumulated extinction optical thickness"},
+                attrs={
+                    "description": "Cumulated extinction optical thickness"
+                },
             )
 
             tau_sca = np.cumsum(dtaur + dtaua * ssa_p, axis=1)
@@ -1958,7 +2064,9 @@ class AtmAFGL(Atmosphere):
                     "wavelength": pro.coords["wavelength"],
                     "z_atm": pro.coords["z_atm"],
                 },
-                attrs={"description": "Cumulated scattering optical thickness"},
+                attrs={
+                    "description": "Cumulated scattering optical thickness"
+                },
             )
 
             tau_abs = np.cumsum(dtaug[:, :] + dtaua * (1 - ssa_p), axis=1)
@@ -1969,7 +2077,9 @@ class AtmAFGL(Atmosphere):
                     "wavelength": pro.coords["wavelength"],
                     "z_atm": pro.coords["z_atm"],
                 },
-                attrs={"description": "Cumulated absorption optical thickness"},
+                attrs={
+                    "description": "Cumulated absorption optical thickness"
+                },
             )
 
             with np.errstate(invalid="ignore", divide="ignore"):
@@ -2055,7 +2165,9 @@ class AtmAFGL(Atmosphere):
                     "wavelength": pro.coords["wavelength"],
                     "z_atm": pro.coords["z_atm"],
                 },
-                attrs={"description": "fraction of inelastic scattering of the layer"},
+                attrs={
+                    "description": "fraction of inelastic scattering of the layer"
+                },
             )
             pro["FQY1_atm"] = xr.DataArray(
                 FQY1,
@@ -2064,20 +2176,26 @@ class AtmAFGL(Atmosphere):
                     "wavelength": pro.coords["wavelength"],
                     "z_atm": pro.coords["z_atm"],
                 },
-                attrs={"description": "fluoresence quantum yield of the layer"},
+                attrs={
+                    "description": "fluoresence quantum yield of the layer"
+                },
             )
         else:
             pro["pine_atm"] = xr.DataArray(
                 pine,
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
-                attrs={"description": "fraction of inelastic scattering of the layer"},
+                attrs={
+                    "description": "fraction of inelastic scattering of the layer"
+                },
             )
             pro["FQY1_atm"] = xr.DataArray(
                 FQY1,
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
-                attrs={"description": "fluoresence quantum yield of the layer"},
+                attrs={
+                    "description": "fluoresence quantum yield of the layer"
+                },
             )
 
         if self.prof_phases is not None:
@@ -2102,7 +2220,9 @@ class AtmAFGL(Atmosphere):
 
             # set the number of scattering angles to the maximum
             # # convert legacy LUT to DataArray objects
-            phases = [x.to_xarray() if hasattr(x, "to_xarray") else x for x in phases]
+            phases = [
+                x.to_xarray() if hasattr(x, "to_xarray") else x for x in phases
+            ]
             ip = np.array([p.sizes["theta_atm"] for p in phases]).argmax()
             theta = phases[ip].coords["theta_atm"].values
             # TODO: use gatiab vec_float_indexing function bellow
@@ -2126,7 +2246,9 @@ class AtmAFGL(Atmosphere):
             pro["iabs_atm"] = xr.DataArray(iabs, dims=["icell"])
             pro["pmin_atm"] = xr.DataArray(pmin, dims=["xyz", "icell"])
             pro["pmax_atm"] = xr.DataArray(pmax, dims=["xyz", "icell"])
-            pro["neighbour_atm"] = xr.DataArray(neighbour, dims=["faces", "icell"])
+            pro["neighbour_atm"] = xr.DataArray(
+                neighbour, dims=["faces", "icell"]
+            )
 
         return pro
 
@@ -2347,7 +2469,9 @@ class ProfileBase(object):
         self.fname = fname
 
         if not fname.is_file():
-            raise FileNotFoundError(f"Atmospheric profile file not found: {fname}")
+            raise FileNotFoundError(
+                f"Atmospheric profile file not found: {fname}"
+            )
 
         if fname.suffix == ".dat":
             with open(fname) as f:
@@ -2429,7 +2553,9 @@ class ProfileBase(object):
                 denom = simpson(y=self.dens_o3, x=-self.z) * 1e5
                 self.dens_o3 *= 2.69e16 * tco3 / denom
             else:
-                f_dens_o3 = interp1d(self.z, self.dens_o3, fill_value="extrapolate")
+                f_dens_o3 = interp1d(
+                    self.z, self.dens_o3, fill_value="extrapolate"
+                )
                 z_alt = np.append(self.z[self.z > o3_h2o_alt], o3_h2o_alt)
                 dens_o3_alt = f_dens_o3(z_alt)
                 o3_afgl = (simpson(dens_o3_alt, -z_alt) * 1e5) / 2.69e16
@@ -2445,10 +2571,14 @@ class ProfileBase(object):
                 denom = simpson(y=self.dens_h2o, x=-self.z) * 1e5
                 self.dens_h2o *= tcwp / M_H2O * Avogadro / denom
             else:
-                f_dens_h2o = interp1d(self.z, self.dens_h2o, fill_value="extrapolate")
+                f_dens_h2o = interp1d(
+                    self.z, self.dens_h2o, fill_value="extrapolate"
+                )
                 z_alt = np.append(self.z[self.z > o3_h2o_alt], o3_h2o_alt)
                 dens_h2o_alt = f_dens_h2o(z_alt)
-                h2o_afgl = (simpson(y=dens_h2o_alt, x=-z_alt) * 1e5 * M_H2O) / Avogadro
+                h2o_afgl = (
+                    simpson(y=dens_h2o_alt, x=-z_alt) * 1e5 * M_H2O
+                ) / Avogadro
                 self.dens_h2o *= tcwp / h2o_afgl
             if tcwp == 0:
                 self.dens_h2o[:] = 0.0
@@ -2498,7 +2628,9 @@ class ProfileBase(object):
         z = self.z
         prof.z = znew
         try:
-            _tmpP = interp1d(z, self.P, bounds_error=False, fill_value=(1012.0, 1e-5))
+            _tmpP = interp1d(
+                z, self.P, bounds_error=False, fill_value=(1012.0, 1e-5)
+            )
             prof.P = _tmpP(znew)
             # prof.P = np.interp(znew, z, self.P, right=1012., left=1e-5)
         except ValueError:
@@ -2624,9 +2756,9 @@ def saturation_pressure(T):
     is_water = tc > 0
     is_ice = np.logical_not(is_water)
 
-    sat_press[is_water] = (np.exp(34.494 - 4924.99 / (tc[is_water] + 237.1))) / (
-        (tc[is_water] + 105) ** 1.57
-    )
+    sat_press[is_water] = (
+        np.exp(34.494 - 4924.99 / (tc[is_water] + 237.1))
+    ) / ((tc[is_water] + 105) ** 1.57)
 
     sat_press[is_ice] = (np.exp(43.494 - (6545.8 / (tc[is_ice] + 278)))) / (
         (tc[is_ice] + 868) ** 2
@@ -2819,7 +2951,9 @@ def rayleigh_crs(lam, co2):
     if not isinstance(lam, np.ndarray):
         raise ValueError("The parameter lam must be a 1-D np.ndarray.")
     if not np.isscalar(co2) and not isinstance(co2, np.ndarray):
-        raise ValueError("The parameter co2 must be a scalar or a 1-D ndarray.")
+        raise ValueError(
+            "The parameter co2 must be a scalar or a 1-D ndarray."
+        )
 
     # Ensure float64 due to numpy 2
     lam = lam.astype(np.float64)
@@ -2900,13 +3034,16 @@ def gravity_z(lat, z):
 
     return (
         gravity_z0(lat)
-        - (3.085462 * 1.0e-4 + 2.27 * 1.0e-7 * np.cos(2 * lat * np.pi / 180.0)) * z
+        - (3.085462 * 1.0e-4 + 2.27 * 1.0e-7 * np.cos(2 * lat * np.pi / 180.0))
+        * z
         + (7.254 * 1e-11 + 1e-13 * np.cos(2 * lat * np.pi / 180.0)) * z**2
         - (1.517 * 1e-17 + 6 * 1e-20 * np.cos(2 * lat * np.pi / 180.0)) * z**3
     )
 
 
-def rayleigh_od(lam, co2=400.0, lat=45.0, z=0.0, P=1013.25, pressure="surface"):
+def rayleigh_od(
+    lam, co2=400.0, lat=45.0, z=0.0, P=1013.25, pressure="surface"
+):
     """
     Rayleigh optical depth from Bodhaine et al, 99 (N wavelengths x M layers)
         lam : wavelength in um (N)
@@ -2925,8 +3062,8 @@ def rayleigh_od(lam, co2=400.0, lat=45.0, z=0.0, P=1013.25, pressure="surface"):
     # air pressure at the pixel (i.e. at altitude) in hPa
     if pressure == "sea-level":
         Psurf = (
-            P * (1.0 - 0.0065 * z / 288.15) ** 5.255
-        ) * 1000.0  # air pressure at pixel location in dyn / cm2, which is hPa * 1000
+            (P * (1.0 - 0.0065 * z / 288.15) ** 5.255) * 1000.0
+        )  # air pressure at pixel location in dyn / cm2, which is hPa * 1000
     elif pressure == "surface":
         Psurf = P * 1000.0  # convert to dyn/cm2
     else:
@@ -3040,7 +3177,9 @@ def od2k(prof, dataset, axis=1, zreverse=False):
     if hasattr(prof, "to_xarray"):
         prof = prof.to_xarray()
 
-    ot = diff1(prof[dataset].to_numpy().astype(np.float32, copy=False), axis=axis)
+    ot = diff1(
+        prof[dataset].to_numpy().astype(np.float32, copy=False), axis=axis
+    )
     dz = diff1(prof.coords["z_atm"].to_numpy().astype(np.float32, copy=False))
 
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -3273,7 +3412,9 @@ def read_Aeronet_PFN(file, year):
         wavelength and theta_atm
     """
     PFN = pd.read_csv(file, sep=",", skiprows=6)
-    PFN = PFN[PFN["Phase_Function_Mode"] == "Total"]  # take only total of fine + coarse
+    PFN = PFN[
+        PFN["Phase_Function_Mode"] == "Total"
+    ]  # take only total of fine + coarse
     NTIME_PFN = PFN.index.size
 
     check_date(dates=PFN["Date(dd:mm:yyyy)"].values, year=year)
@@ -3385,7 +3526,10 @@ def atm_pro_from_aeronet(
     pd_date = pd.Timestamp(date + " " + time)
     nb_sec_day = 24 * 60 * 60  # number of seconds in one day
     day_frac = 1 - (
-        (nb_sec_day - (pd_date.hour * 60 * 60 + pd_date.minute * 60 + pd_date.second))
+        (
+            nb_sec_day
+            - (pd_date.hour * 60 * 60 + pd_date.minute * 60 + pd_date.second)
+        )
         / nb_sec_day
     )
     day_year_frac = pd_date.day_of_year + day_frac
@@ -3433,7 +3577,9 @@ def atm_pro_from_aeronet(
     ).drop_vars("Day_of_Year(Fraction)")
 
     aod_lut = aod_lut.where(aod_lut >= 0, 0)
-    ssa_lut = ssa_lut.where((ssa_lut >= 0) & (ssa_lut <= 1), np.clip(ssa_lut, 0, 1))
+    ssa_lut = ssa_lut.where(
+        (ssa_lut >= 0) & (ssa_lut <= 1), np.clip(ssa_lut, 0, 1)
+    )
     pfn_lut = pfn_lut.where(pfn_lut >= 0, 0)
 
     pfn_val = pfn_lut.values
@@ -3488,7 +3634,9 @@ def _open_lut_datatree_as_xarray(input_path, group=None, datasets=None):
 
     tree = xr.open_datatree(input_path)
     try:
-        group_path = "/" if group in (None, "") else f"/{str(group).strip('/')}"
+        group_path = (
+            "/" if group in (None, "") else f"/{str(group).strip('/')}"
+        )
         axis_path = "/axis" if group_path == "/" else f"{group_path}/axis"
         data_path = "/data" if group_path == "/" else f"{group_path}/data"
 
@@ -3510,10 +3658,14 @@ def _open_lut_datatree_as_xarray(input_path, group=None, datasets=None):
 
         dimensions = data_ds[name].attrs.get("dimensions")
         if dimensions is None:
-            raise ValueError(f'Missing dimensions attribute for dataset "{name}"')
+            raise ValueError(
+                f'Missing dimensions attribute for dataset "{name}"'
+            )
         if isinstance(dimensions, bytes):
             dimensions = dimensions.decode()
-        dims = tuple(dim.strip() for dim in dimensions.split(",") if dim.strip())
+        dims = tuple(
+            dim.strip() for dim in dimensions.split(",") if dim.strip()
+        )
 
         if len(dims) != data_ds[name].ndim:
             raise ValueError(
@@ -3643,13 +3795,16 @@ def artdeco_to_smartg_cld(
             + veff_max
         )
     elif is_veff:
-        art_cld = art_cld.interp(veff=np.array([veff])).squeeze("veff", drop=True)
+        art_cld = art_cld.interp(veff=np.array([veff])).squeeze(
+            "veff", drop=True
+        )
 
     reff = art_cld.coords["reff"].to_numpy().astype(np.float32, copy=False)
     nreff = len(reff)
 
     wav_full = np.round(
-        art_cld.coords["wavelengths"].to_numpy().astype(np.float64, copy=False) * 1e3,
+        art_cld.coords["wavelengths"].to_numpy().astype(np.float64, copy=False)
+        * 1e3,
         decimals=3,
     ).astype(np.float32, copy=False)
     wav_idx = np.flatnonzero(wav_full <= wl_max)
@@ -3674,9 +3829,7 @@ def artdeco_to_smartg_cld(
     if nstk == 6:
         pha_desc = "phase matrix integral normalized to 2. stk order: p11, p21, p33, p34, p22 and p44"
     if nstk == 4:
-        pha_desc = (
-            "phase matrix integral normalized to 2. stk order: p11, p21, p33 and p34"
-        )
+        pha_desc = "phase matrix integral normalized to 2. stk order: p11, p21, p33 and p34"
 
     # integral of P11 must be equal to 2
     if normalize:
@@ -3686,7 +3839,11 @@ def artdeco_to_smartg_cld(
                 Norm = np.trapezoid(f, -mu_sorted)
                 phase[ireff, iwav, :, :] *= 2.0 / abs(Norm)
 
-    ext = art_cld["Cext"].transpose("reff", "wavelengths").isel(wavelengths=wav_idx)
+    ext = (
+        art_cld["Cext"]
+        .transpose("reff", "wavelengths")
+        .isel(wavelengths=wav_idx)
+    )
     ssa = (
         art_cld["single_scattering_albedo"]
         .transpose("reff", "wavelengths")
@@ -3778,10 +3935,16 @@ def extract_split(m):
     """
     if hasattr(m, "to_xarray"):
         m = m.to_xarray()
-    pro_aer = diff1(m["OD_p"].to_numpy().astype(np.float32, copy=False), axis=1)
+    pro_aer = diff1(
+        m["OD_p"].to_numpy().astype(np.float32, copy=False), axis=1
+    )
     ssa_aer = m["ssa_p_atm"].to_numpy()
-    pro_ray = diff1(m["OD_r"].to_numpy().astype(np.float32, copy=False), axis=1)
-    pro_abs = diff1(m["OD_g"].to_numpy().astype(np.float32, copy=False), axis=1)
+    pro_ray = diff1(
+        m["OD_r"].to_numpy().astype(np.float32, copy=False), axis=1
+    )
+    pro_abs = diff1(
+        m["OD_g"].to_numpy().astype(np.float32, copy=False), axis=1
+    )
     pro_iphase = m["iphase_atm"].to_numpy()
     pro_phases = [
         m["phase_atm"].isel(iphase=i, drop=True)
@@ -3901,7 +4064,9 @@ def str2grid_array(str_grid):
     # Build piecewise linear grid with list comprehension
     return np.concatenate(
         [
-            np.linspace(numbers[i], numbers[i + 1], n, endpoint=(i == len(steps) - 1))
+            np.linspace(
+                numbers[i], numbers[i + 1], n, endpoint=(i == len(steps) - 1)
+            )
             for i, n in enumerate(n_array)
         ]
     )
