@@ -49,7 +49,7 @@ Cloud
 import numpy as np
 from pathlib import Path
 from smartg.phase import calc_iphase
-from scipy.interpolate import interp1d
+from scipy.interpolate import make_interp_spline
 from scipy.integrate import simpson
 from scipy import constants
 from scipy.constants import speed_of_light, Planck, Boltzmann
@@ -450,17 +450,20 @@ class AerOPAC(object):
             # bounds for wavelength
             nhor = len(hor_vals)
             nwav_orig = len(wav_vals)
-            idf_hor = interp1d(
+            idf_hor = np.interp(
+                np.asarray(rh_reff, dtype=np.float64),
                 hor_vals,
                 np.arange(nhor),
-                bounds_error=False,
-                fill_value=(0, nhor - 1),
-            )(np.asarray(rh_reff, dtype=np.float64))
-            idf_wav = interp1d(wav_vals, np.arange(nwav_orig))(
-                np.asarray(wav, dtype=np.float64)
+                left=0,
+                right=nhor - 1,
             )
-            idf_wav_ref = interp1d(wav_vals, np.arange(nwav_orig))(
-                np.atleast_1d(np.asarray(self.w_ref, dtype=np.float64))
+            idf_wav = np.interp(
+                np.asarray(wav, dtype=np.float64), wav_vals, np.arange(nwav_orig)
+            )
+            idf_wav_ref = np.interp(
+                np.atleast_1d(np.asarray(self.w_ref, dtype=np.float64)),
+                wav_vals,
+                np.arange(nwav_orig),
             )
             if len(rh_reff) == 1:
                 # Interpolate along hor (dim 0) -> (1, wav_orig)
@@ -535,8 +538,8 @@ class AerOPAC(object):
                 wav_axis = self.tau_ref.coords[
                     self.tau_ref.dims[0]
                 ].values.astype(np.float64)
-                tau_ref_interp = interp1d(wav_axis, self.tau_ref.values)(
-                    np.asarray(wav, dtype=np.float64)
+                tau_ref_interp = np.interp(
+                    np.asarray(wav, dtype=np.float64), wav_axis, self.tau_ref.values
                 )
                 dtau *= (tau_ref_interp / np.sum(dtau, axis=1))[:, None]
 
@@ -558,8 +561,8 @@ class AerOPAC(object):
                 wav_axis = self.ssa.coords[self.ssa.dims[0]].values.astype(
                     np.float64
                 )
-                ssa_interp = interp1d(wav_axis, self.ssa.values)(
-                    np.asarray(wav, dtype=np.float64)
+                ssa_interp = np.interp(
+                    np.asarray(wav, dtype=np.float64), wav_axis, self.ssa.values
                 )
                 ssa[:, :] = ssa_interp[:, None]
         return dtau, ssa
@@ -719,8 +722,8 @@ class AerOPAC(object):
             # Interpolate along wav: transpose to (wav, hor, stk, theta)
             # for vec_float_indexing
             if nwav_sub > 1:
-                idf_wav = interp1d(wav_subset, np.arange(nwav_sub))(
-                    np.asarray(wav, dtype=np.float64)
+                idf_wav = np.interp(
+                    np.asarray(wav, dtype=np.float64), wav_subset, np.arange(nwav_sub)
                 )
                 phase_at_wav = vec_float_indexing(
                     np.ascontiguousarray(phase_subset.transpose(1, 0, 2, 3)),
@@ -736,9 +739,7 @@ class AerOPAC(object):
             # Theta resampling if needed: transpose to (theta, nwav,
             # hor, stk)
             if NBTHETA != len(theta_orig):
-                idf_theta = interp1d(theta_orig, np.arange(len(theta_orig)))(
-                    theta
-                )
+                idf_theta = np.interp(theta, theta_orig, np.arange(len(theta_orig)))
                 phase_at_wav = vec_float_indexing(
                     np.ascontiguousarray(phase_at_wav.transpose(3, 0, 1, 2)),
                     [idf_theta, slice(None), slice(None), slice(None)],
@@ -779,12 +780,13 @@ class AerOPAC(object):
                 hor_query = hum_or_reff_val[1:]
                 nz_phase = len(hum_or_reff_val) - 1
 
-            idf_hor = interp1d(
+            idf_hor = np.interp(
+                np.asarray(hor_query, dtype=np.float64),
                 hor_vals,
                 np.arange(nhor),
-                bounds_error=False,
-                fill_value=(0, nhor - 1),
-            )(np.asarray(hor_query, dtype=np.float64))
+                left=0,
+                right=nhor - 1,
+            )
             P_data = vec_float_indexing(
                 np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
                 [idf_hor, slice(None), slice(None), slice(None)],
@@ -832,14 +834,15 @@ class AerOPAC(object):
 
             # Compute dtau and ssa using vec_float_indexing (same as
             # dtau_ssa)
-            idf_hor_ext = interp1d(
+            idf_hor_ext = np.interp(
+                np.asarray(hum_or_reff_val, dtype=np.float64),
                 hor_vals,
                 np.arange(nhor),
-                bounds_error=False,
-                fill_value=(0, nhor - 1),
-            )(np.asarray(hum_or_reff_val, dtype=np.float64))
-            idf_wav_ext = interp1d(wav_vals, np.arange(nwav_orig))(
-                np.asarray(wav, dtype=np.float64)
+                left=0,
+                right=nhor - 1,
+            )
+            idf_wav_ext = np.interp(
+                np.asarray(wav, dtype=np.float64), wav_vals, np.arange(nwav_orig)
             )
             ext_at_hor = vec_float_indexing(
                 ext_data, [idf_hor_ext, slice(None)]
@@ -2801,8 +2804,11 @@ class ProfileBase(object):
                 denom = simpson(y=self.dens_o3, x=-self.z) * 1e5
                 self.dens_o3 *= 2.69e16 * tco3 / denom
             else:
-                f_dens_o3 = interp1d(
-                    self.z, self.dens_o3, fill_value="extrapolate"
+                _s_z = np.argsort(self.z)
+                # k=1: linear interpolation; BSpline extrapolates
+                # linearly beyond the data range by default
+                f_dens_o3 = make_interp_spline(
+                    self.z[_s_z], self.dens_o3[_s_z], k=1
                 )
                 z_alt = np.append(self.z[self.z > o3_h2o_alt], o3_h2o_alt)
                 dens_o3_alt = f_dens_o3(z_alt)
@@ -2819,8 +2825,11 @@ class ProfileBase(object):
                 denom = simpson(y=self.dens_h2o, x=-self.z) * 1e5
                 self.dens_h2o *= tcwp / M_H2O * Avogadro / denom
             else:
-                f_dens_h2o = interp1d(
-                    self.z, self.dens_h2o, fill_value="extrapolate"
+                _s_z = np.argsort(self.z)
+                # k=1: linear interpolation; BSpline extrapolates
+                # linearly beyond the data range by default
+                f_dens_h2o = make_interp_spline(
+                    self.z[_s_z], self.dens_h2o[_s_z], k=1
                 )
                 z_alt = np.append(self.z[self.z > o3_h2o_alt], o3_h2o_alt)
                 dens_h2o_alt = f_dens_h2o(z_alt)
@@ -2882,13 +2891,9 @@ class ProfileBase(object):
         prof = ProfileBase(None)
         z = self.z
         prof.z = znew
+        _s = np.argsort(z)
         try:
-            _tmpP = interp1d(
-                z, self.P, bounds_error=False, fill_value=(1012.0, 1e-5)
-            )
-            prof.P = _tmpP(znew)
-            # prof.P = np.interp(znew, z, self.P, right=1012.,
-            # left=1e-5)
+            prof.P = np.interp(znew, z[_s], self.P[_s], left=1012.0, right=1e-5)
         except ValueError:
             print(
                 "Error interpolating ({}, {}) -> ({}, {})".format(
@@ -2897,42 +2902,22 @@ class ProfileBase(object):
             )
             print("atm_filename = {}".format(self.fname))
             raise
-        _tmpT = interp1d(z, self.T, fill_value="extrapolate")
-        prof.T = _tmpT(znew)  # No found np.interp with extrapolate
+        # k=1: linear interpolation; BSpline extrapolates linearly
+        # beyond the data range by default (replaces fill_value="extrapolate")
+        _tmpT = make_interp_spline(z[_s], self.T[_s], k=1)
+        prof.T = _tmpT(znew)
 
-        prof.dens_air = interp1d(
-            z, self.dens_air, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_o3 = interp1d(
-            z, self.dens_o3, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_o2 = interp1d(
-            z, self.dens_o2, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_h2o = interp1d(
-            z, self.dens_h2o, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_co2 = interp1d(
-            z, self.dens_co2, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_no2 = interp1d(
-            z, self.dens_no2, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_ch4 = interp1d(
-            z, self.dens_ch4, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_co = interp1d(
-            z, self.dens_co, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_n2o = interp1d(
-            z, self.dens_n2o, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_n2 = interp1d(
-            z, self.dens_n2, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
-        prof.dens_so2 = interp1d(
-            z, self.dens_so2, bounds_error=False, fill_value=(0.0, 0.0)
-        )(znew)
+        prof.dens_air = np.interp(znew, z[_s], self.dens_air[_s], left=0.0, right=0.0)
+        prof.dens_o3 = np.interp(znew, z[_s], self.dens_o3[_s], left=0.0, right=0.0)
+        prof.dens_o2 = np.interp(znew, z[_s], self.dens_o2[_s], left=0.0, right=0.0)
+        prof.dens_h2o = np.interp(znew, z[_s], self.dens_h2o[_s], left=0.0, right=0.0)
+        prof.dens_co2 = np.interp(znew, z[_s], self.dens_co2[_s], left=0.0, right=0.0)
+        prof.dens_no2 = np.interp(znew, z[_s], self.dens_no2[_s], left=0.0, right=0.0)
+        prof.dens_ch4 = np.interp(znew, z[_s], self.dens_ch4[_s], left=0.0, right=0.0)
+        prof.dens_co = np.interp(znew, z[_s], self.dens_co[_s], left=0.0, right=0.0)
+        prof.dens_n2o = np.interp(znew, z[_s], self.dens_n2o[_s], left=0.0, right=0.0)
+        prof.dens_n2 = np.interp(znew, z[_s], self.dens_n2[_s], left=0.0, right=0.0)
+        prof.dens_so2 = np.interp(znew, z[_s], self.dens_so2[_s], left=0.0, right=0.0)
 
         prof.rh_cst = self.rh_cst
 
