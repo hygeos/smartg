@@ -3,9 +3,12 @@
 """Preprocessing of atmospheric optical properties for SMART-G
 simulations.
 
-This module provides tools to build and preprocess atmospheric profiles for use
-as input to SMART-G radiative transfer simulations. It implements various
-atmospheric models and aerosol/cloud properties that can be combined into
+This module provides tools to build and preprocess atmospheric profiles
+for use
+as input to SMART-G radiative transfer simulations. It implements
+various
+atmospheric models and aerosol/cloud properties that can be combined
+into
 complete atmospheric profiles ready for simulation.
 
 Workflow
@@ -13,25 +16,33 @@ Workflow
 Typical usage involves:
 1. Create an atmospheric profile using model classes (e.g., AtmAFGL)
 2. Add atmospheric components (aerosols, clouds, surface) as needed
-3. (Optional) Call the profile's `calc()` method to compute optical properties
-   with specific parameters (if using optional parameters not set by default)
-4. Pass the resulting profile object as the `atm` parameter to `smartg.run()`
+3. (Optional) Call the profile's `calc()` method to compute optical
+   properties
+   with specific parameters (if using optional parameters not set by
+   default)
+4. Pass the resulting profile object as the `atm` parameter to
+   `smartg.run()`
 
 Key Classes
 -----------
 AtmAFGL
-    AFGL Standard U.S. Atmosphere model. Provides vertical temperature and
-    pressure profiles. Aerosols, clouds, and ocean surface can be added to
+    AFGL Standard U.S. Atmosphere model. Provides vertical temperature
+    and
+    pressure profiles. Aerosols, clouds, and ocean surface can be added
+    to
     build a complete atmospheric model.
 
 AerOPAC
     Aerosol Optical Properties from OPAC (Optical Properties of Aerosols
-    and Clouds) database. Computes aerosol optical depth, single scattering
+    and Clouds) database. Computes aerosol optical depth, single
+    scattering
     albedo, and phase matrices for aerosol mixtures.
 
 Cloud
-    Cloud optical properties model. Similar to AerOPAC, provides cloud optical
-    depth, single scattering albedo, and phase matrices. Used for representing
+    Cloud optical properties model. Similar to AerOPAC, provides cloud
+    optical
+    depth, single scattering albedo, and phase matrices. Used for
+    representing
     cloud layers in atmospheric profiles.
 """
 
@@ -58,10 +69,14 @@ class AerOPAC(object):
     Parameters
     ----------
     filename : str
-        Complete path to the aerosol file or filename for aerosols located in "auxdata/aerosols/OPAC/mixtures/".
-        Available auxdata aerosols: antarctic, antarctic_spheric, arctic, continental_average,
-        continental_clean, continental_polluted, desert, desert_spheric, maritime_clean,
-        maritime_polluted, mineral_transported, maritime_tropical and urban
+        Complete path to the aerosol file or filename for aerosols
+        located in "auxdata/aerosols/OPAC/mixtures/".
+        Available auxdata aerosols: antarctic, antarctic_spheric,
+        arctic, continental_average,
+        continental_clean, continental_polluted, desert, desert_spheric,
+        maritime_clean,
+        maritime_polluted, mineral_transported, maritime_tropical and
+        urban
     tau_ref : float
         Optical thickness at reference wavelength w_ref
     w_ref : float
@@ -84,39 +99,54 @@ class AerOPAC(object):
         Force scale height (see notes) of the free troposphere
     Z_stra : float, optional
         Force scale height (see notes) of the stratosphere
-    ssa : None | float | list | 1-D ndarray | 2-D ndarray | xr.DataArray, optional
+    ssa : None | float | list | 1-D ndarray | 2-D ndarray |
+    xr.DataArray, optional
         Force particle single scattering albedo. Default None.
 
         - if float -> same value for all wavelengths and altitudes
         - if list -> it will be converted into a 1-D ndarray.
         - if 1-D ndarray -> only wavelength dependence is considered
-        - if 2-D ndarray -> wavelength and altitude dependence is considered
-        - if xr.DataArray -> wavelength and altitude dependence is considered
+        - if 2-D ndarray -> wavelength and altitude dependence is
+          considered
+        - if xr.DataArray -> wavelength and altitude dependence is
+          considered
 
-        Note that xr.DataArray is more flexible since it allows interpolation if wavelengths
-        in calc method are different (but not the case for the altitude axis).
+        Note that xr.DataArray is more flexible since it allows
+        interpolation if wavelengths
+        in calc method are different (but not the case for the altitude
+        axis).
     phase : None | xr.DataArray, optional
-        Phase matrix F as function of wavelength, altitude, stoke components and scattering angle
+        Phase matrix F as function of wavelength, altitude, stoke
+        components and scattering angle
         The variable names must be:
         If 4-D matrix -> wav_phase, z_phase, stk, theta
-        If 2-D matrix (assumed monochromatic and constant vertically) -> stk, theta
+        If 2-D matrix (assumed monochromatic and constant vertically) ->
+        stk, theta
         Where:
-        - wav_phase is the wavelength. It must be equal to the `pfwav` parameter of AtmAFGL
-          if defined, else `wav` parameter vavelengths of the AtmAFGL calc method.
-        - z_phase is the phase altitude. It must be equal to the `pfgrid[1:]` parameter
+        - wav_phase is the wavelength. It must be equal to the `pfwav`
+          parameter of AtmAFGL
+          if defined, else `wav` parameter vavelengths of the AtmAFGL
+          calc method.
+        - z_phase is the phase altitude. It must be equal to the
+          `pfgrid[1:]` parameter
           of AtmAFGL
         - stk the phase matrix unique terms.
         - theta the scattering angle.
 
-        The phase matrix terms (IQUV convention) must be given in the folowing order:
-        - F11, F21, F33 and F34 if only 4 terms are given (only for spherical particles)
-        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both spherical and non-spherical particles)
+        The phase matrix terms (IQUV convention) must be given in the
+        folowing order:
+        - F11, F21, F33 and F34 if only 4 terms are given (only for
+          spherical particles)
+        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both
+          spherical and non-spherical particles)
     rh_mix/free/stra : None | float, optional
-        Force relative humidity of mixture/free tropo/strato. Default None.
+        Force relative humidity of mixture/free tropo/strato. Default
+        None.
 
     Notes
     -----
-    The scale height (see Hess et al. 2004) is the variable Z in the following equation:
+    The scale height (see Hess et al. 2004) is the variable Z in the
+    following equation:
 
     - :math:`N(h) = N(0)exp(-h/Z)`
 
@@ -131,8 +161,10 @@ class AerOPAC(object):
     Dimensions:  (hum: 8, wav: 26, stk: 4, theta: 1801)
     Coordinates:
     * hum      (hum) float32 32B 0.0 50.0 70.0 80.0 90.0 95.0 98.0 99.0
-    * wav      (wav) float32 104B 250.0 300.0 350.0 ... 3.75e+03 4e+03 4.5e+03
-    * theta    (theta) float32 7kB 0.0 0.1 0.2 0.3 0.4 ... 179.7 179.8 179.9 180.0
+    * wav      (wav) float32 104B 250.0 300.0 350.0 ... 3.75e+03 4e+03
+                                  4.5e+03
+    * theta    (theta) float32 7kB 0.0 0.1 0.2 0.3 0.4 ... 179.7 179.8 
+                                   179.9 180.0
     Dimensions without coordinates: stk
     Data variables:
         ext      (hum, wav) float32 832B ...
@@ -210,7 +242,8 @@ class AerOPAC(object):
                 self.ssa = ssa
             else:
                 raise ValueError(
-                    "The ssa variable must a scalar, a list, an ndarray of dim <= 2, or an xr.DataArray."
+                    "The ssa variable must a scalar, a list, an ndarray of "
+                    + "dim <= 2, or an xr.DataArray."
                 )
 
         filename = Path(filename)
@@ -231,7 +264,8 @@ class AerOPAC(object):
         self.filename = filename
 
         self.mixture = xr.open_dataset(self.filename)
-        # check if hum dim size == 1 (to avoid interpolation/indexing crash)
+        # check if hum dim size == 1 (to avoid interpolation/indexing
+        # crash)
         if self.mixture.sizes["hum"] == 1:
             hum_v1 = float(self.mixture.coords["hum"].values[0])
             hum_v2 = hum_v1 + 1
@@ -285,7 +319,8 @@ class AerOPAC(object):
                 / "free_troposphere_sol.nc"
             )
             self.free_tropo = xr.open_dataset(filename_tmp)
-            # check we have the same wl dim than previous aer pro in vert_content
+            # check we have the same wl dim than previous aer pro in
+            # vert_content
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
                 w_cur = self.free_tropo.wav.values
@@ -312,7 +347,8 @@ class AerOPAC(object):
                 / "stratosphere_sol.nc"
             )
             self.strato = xr.open_dataset(filename_tmp)
-            # check we have the same wl dim than previous aer pro in vert_content
+            # check we have the same wl dim than previous aer pro in
+            # vert_content
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
                 w_cur = self.strato.wav.values
@@ -334,10 +370,14 @@ class AerOPAC(object):
     def dtau_ssa(self, wav, Z, rh):
         """Calculate optical depth and single scattering albedo.
 
-        Computes the spectral optical depth (dtau) and single scattering albedo (ssa)
-        for aerosol/cloud layers at specified wavelengths and altitudes. This method
-        works with both AerOPAC (aerosol) and Cloud classes (which inherits from AerOPAC).
-        Handles vertical profiles (mixtures, free troposphere, stratosphere) and optional
+        Computes the spectral optical depth (dtau) and single scattering
+        albedo (ssa)
+        for aerosol/cloud layers at specified wavelengths and altitudes.
+        This method
+        works with both AerOPAC (aerosol) and Cloud classes (which
+        inherits from AerOPAC).
+        Handles vertical profiles (mixtures, free troposphere,
+        stratosphere) and optional
         scaling/forcing of optical properties.
 
         Parameters
@@ -345,12 +385,17 @@ class AerOPAC(object):
         wav : array-like
             Wavelengths (in nm) at which to calculate optical properties
         Z : array-like
-            Altitude profile (in km) for which to calculate optical properties
+            Altitude profile (in km) for which to calculate optical
+            properties
         rh : float or array-like, optional
-            Relative humidity (0-100). Only used with AerOPAC class; ignored for Cloud.
-            Also ignored for specific vertical layers if their corresponding layer-specific
-            humidity values (rh_mix, rh_free, rh_stra) are set to non-None during initialization.
-            For example, if only rh_mix is specified, rh is ignored only in the mixture layer.
+            Relative humidity (0-100). Only used with AerOPAC class;
+            ignored for Cloud.
+            Also ignored for specific vertical layers if their
+            corresponding layer-specific
+            humidity values (rh_mix, rh_free, rh_stra) are set to
+            non-None during initialization.
+            For example, if only rh_mix is specified, rh is ignored only
+            in the mixture layer.
 
         Returns
         -------
@@ -396,7 +441,8 @@ class AerOPAC(object):
             # Axes values
             hor_vals = cont_hor_vals
             wav_vals = cont_wav_vals
-            # Float indices with extrema fill for humidity/reff, strict bounds for wavelength
+            # Float indices with extrema fill for humidity/reff, strict
+            # bounds for wavelength
             nhor = len(hor_vals)
             nwav_orig = len(wav_vals)
             idf_hor = interp1d(
@@ -419,7 +465,8 @@ class AerOPAC(object):
                 ssa_at_hor = vec_float_indexing(
                     ssa_data, [idf_hor, slice(None)]
                 )  # (1, wav_orig)
-                # Transpose to (wav_orig, 1), interpolate along wav (dim 0) -> (nwav, 1)
+                # Transpose to (wav_orig, 1), interpolate along wav (dim
+                # 0) -> (nwav, 1)
                 ext_tmp = vec_float_indexing(
                     ext_at_hor.T, [idf_wav, slice(None)]
                 )  # (nwav, 1)
@@ -434,14 +481,16 @@ class AerOPAC(object):
                     ext_ref_[:, iz] = ext_ref_tmp[:, 0]
                     ssa_[:, iz] = ssa_tmp[:, 0]
             else:
-                # Interpolate along hor (dim 0) -> (nhor_query, wav_orig)
+                # Interpolate along hor (dim 0) -> (nhor_query,
+                # wav_orig)
                 ext_at_hor = vec_float_indexing(
                     ext_data, [idf_hor, slice(None)]
                 )  # (nhor, wav_orig)
                 ssa_at_hor = vec_float_indexing(
                     ssa_data, [idf_hor, slice(None)]
                 )  # (nhor, wav_orig)
-                # Transpose to (wav_orig, nhor), interpolate along wav (dim 0) -> (nwav, nhor)
+                # Transpose to (wav_orig, nhor), interpolate along wav
+                # (dim 0) -> (nwav, nhor)
                 ext_ = vec_float_indexing(
                     ext_at_hor.T, [idf_wav, slice(None)]
                 )  # (nwav, nhor)
@@ -468,7 +517,8 @@ class AerOPAC(object):
 
         ssa[dtau != 0] /= dtau[dtau != 0]
 
-        # apply scaling factor to get the required optical thickness at the
+        # apply scaling factor to get the required optical thickness at
+        # the
         # specified wavelength or force tau for all wavelengths
         if self.tau_ref is not None:
             if (
@@ -489,7 +539,8 @@ class AerOPAC(object):
         if self.ssa is not None:
             if np.isscalar(self.ssa):  # scalar
                 ssa[:, :] = float(self.ssa)
-            elif isinstance(self.ssa, np.ndarray):  # ndarray with dim <= 2
+            # ndarray with dim <= 2
+            elif isinstance(self.ssa, np.ndarray):
                 if self.ssa.ndim == 0:
                     ssa[:, :] = self.ssa
                 elif self.ssa.ndim == 1:
@@ -512,10 +563,14 @@ class AerOPAC(object):
         """
         Calculate phase matrix for aerosols and clouds.
 
-        Computes the phase matrix at specified wavelengths and altitudes for aerosol/cloud
-        layers. This method works with both AerOPAC (aerosol) and Cloud classes (which
-        inherits from AerOPAC). Handles vertical profiles (mixtures, free troposphere,
-        stratosphere) and performs angle resampling. Supports both spherical (4 Stokes
+        Computes the phase matrix at specified wavelengths and altitudes
+        for aerosol/cloud
+        layers. This method works with both AerOPAC (aerosol) and Cloud
+        classes (which
+        inherits from AerOPAC). Handles vertical profiles (mixtures,
+        free troposphere,
+        stratosphere) and performs angle resampling. Supports both
+        spherical (4 Stokes
         components) and non-spherical (6 components) particles.
 
         Parameters
@@ -525,28 +580,38 @@ class AerOPAC(object):
         Z : array-like
             Altitude profile (in km) for which to calculate phase matrix
         rh : array-like
-            Relative humidity (%). Must have size similar to Z (altitude profile).
+            Relative humidity (%). Must have size similar to Z (altitude
+            profile).
             Only used with AerOPAC class; ignored for Cloud.
-            Relative humidity can be greater than 100% (supersaturation).
-            Also ignored for specific vertical layers if their corresponding layer-specific
-            humidity values (rh_mix, rh_free, rh_stra) are set to non-None during initialization.
-            For example, if only rh_mix is specified, rh is ignored only in the mixture layer.
+            Relative humidity can be greater than 100%
+            (supersaturation).
+            Also ignored for specific vertical layers if their
+            corresponding layer-specific
+            humidity values (rh_mix, rh_free, rh_stra) are set to
+            non-None during initialization.
+            For example, if only rh_mix is specified, rh is ignored only
+            in the mixture layer.
         NBTHETA : int, optional
-            Number of scattering angles for angle resampling. Default is 721.
+            Number of scattering angles for angle resampling. Default is
+            721.
 
         Returns
         -------
         phase_matrix : xr.DataArray
-            DataArray containing the phase matrix with dimensions [wav_phase, z_phase, stk, theta_atm].
+            DataArray containing the phase matrix with dimensions
+            [wav_phase, z_phase, stk, theta_atm].
             Shape is (len(wav), len(Z)-1, nphamat, NBTHETA) where:
-            - nphamat = 4 for spherical particles only (phase matrix unique terms P11, P21, P33, P34)
-            - nphamat = 6 for spherical and non-spherical particles (additional phase matrix unique terms P22, P44)
+            - nphamat = 4 for spherical particles only (phase matrix
+              unique terms P11, P21, P33, P34)
+            - nphamat = 6 for spherical and non-spherical particles
+              (additional phase matrix unique terms P22, P44)
             - theta_atm: scattering angles from 0° to 180°
         """
 
         if self._phase is not None:
             if self._phase.ndim == 2:
-                # convert to 4-dim by inserting empty dimensions wav_phase and z_phase
+                # convert to 4-dim by inserting empty dimensions
+                # wav_phase and z_phase
                 dims = list(self._phase.dims)
                 assert dims == ["stk", "theta_atm"]
                 pha_ = self._phase.values[:, :]
@@ -575,8 +640,9 @@ class AerOPAC(object):
                         dtype=pha_.dtype,
                     )
                     pha_6[:, :, 0:4, :] = pha_
-                    pha_6[:, :, 4, :] = pha_[:, :, 0, :].copy()  # F22 = F11
-                    pha_6[:, :, 5, :] = pha_[:, :, 2, :].copy()  # F44 = F33
+                    # F22 = F11 ; F44 = F33
+                    pha_6[:, :, 4, :] = pha_[:, :, 0, :].copy()
+                    pha_6[:, :, 5, :] = pha_[:, :, 2, :].copy()
                     return xr.DataArray(
                         pha_6,
                         dims=dims,
@@ -639,7 +705,8 @@ class AerOPAC(object):
 
             nwav_sub = len(wav_subset)
 
-            # Interpolate along wav: transpose to (wav, hor, stk, theta) for vec_float_indexing
+            # Interpolate along wav: transpose to (wav, hor, stk, theta)
+            # for vec_float_indexing
             if nwav_sub > 1:
                 idf_wav = interp1d(wav_subset, np.arange(nwav_sub))(
                     np.asarray(wav, dtype=np.float64)
@@ -655,7 +722,8 @@ class AerOPAC(object):
                 ).copy()
             # Result: (nwav, hor, stk, theta_orig)
 
-            # Theta resampling if needed: transpose to (theta, nwav, hor, stk)
+            # Theta resampling if needed: transpose to (theta, nwav,
+            # hor, stk)
             if NBTHETA != len(theta_orig):
                 idf_theta = interp1d(theta_orig, np.arange(len(theta_orig)))(
                     theta
@@ -664,7 +732,8 @@ class AerOPAC(object):
                     np.ascontiguousarray(phase_at_wav.transpose(3, 0, 1, 2)),
                     [idf_theta, slice(None), slice(None), slice(None)],
                 )
-                # Result: (NBTHETA, nwav, hor, stk) -> transpose to (nwav, hor, stk, NBTHETA)
+                # Result: (NBTHETA, nwav, hor, stk) -> transpose to
+                # (nwav, hor, stk, NBTHETA)
                 phase_at_wav = phase_at_wav.transpose(1, 2, 3, 0)
             # phase_at_wav: (nwav, hor, stk, NBTHETA)
 
@@ -690,7 +759,8 @@ class AerOPAC(object):
             else:
                 hum_or_reff_val = np.array(hum_or_reff_val)
 
-            # Interpolate along hor: transpose to (hor, nwav, stk, NBTHETA)
+            # Interpolate along hor: transpose to (hor, nwav, stk,
+            # NBTHETA)
             if len(hum_or_reff_val) == 1:
                 hor_query = hum_or_reff_val
                 nz_phase = len(Z) - 1
@@ -708,7 +778,8 @@ class AerOPAC(object):
                 np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
                 [idf_hor, slice(None), slice(None), slice(None)],
             )
-            # Result: (nz, nwav, stk, NBTHETA) -> transpose to (nwav, nz, stk, NBTHETA)
+            # Result: (nz, nwav, stk, NBTHETA) -> transpose to (nwav,
+            # nz, stk, NBTHETA)
             P_data = np.ascontiguousarray(P_data.transpose(1, 0, 2, 3)).astype(
                 np.float32
             )
@@ -724,8 +795,9 @@ class AerOPAC(object):
                     (nwav, nz_phase, nphamat_, NBTHETA), dtype="float32"
                 )
                 P_data_6[:, :, 0:4, :] = P_data
-                P_data_6[:, :, 4, :] = P_data[:, :, 0, :].copy()  # F22 = F11
-                P_data_6[:, :, 5, :] = P_data[:, :, 2, :].copy()  # F44 = F33
+                # F22 = F11 ; F44 = F33
+                P_data_6[:, :, 4, :] = P_data[:, :, 0, :].copy()
+                P_data_6[:, :, 5, :] = P_data[:, :, 2, :].copy()
                 P_data = P_data_6
             elif nphamat == 6:
                 pass
@@ -747,7 +819,8 @@ class AerOPAC(object):
                 },
             )
 
-            # Compute dtau and ssa using vec_float_indexing (same as dtau_ssa)
+            # Compute dtau and ssa using vec_float_indexing (same as
+            # dtau_ssa)
             idf_hor_ext = interp1d(
                 hor_vals,
                 np.arange(nhor),
@@ -798,13 +871,15 @@ class AerOPAC(object):
         Returns
         -------
         list of str
-            List of available OPAC aerosol mixture filenames (without suffix).
+            List of available OPAC aerosol mixture filenames (without
+            suffix).
 
         Examples
         --------
         >>> from smartg.atmosphere import AerOPAC
         >>> AerOPAC.list()
-        ['antarctic', 'antarctic_spheric', 'arctic', 'continental_average', ...]
+        ['antarctic', 'antarctic_spheric', 'arctic',
+        'continental_average', ...]
         """
         base_dir = DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures"
         files = list(base_dir.glob("*.nc"))
@@ -818,8 +893,10 @@ class Cloud(AerOPAC):
     Parameters
     ----------
     filename : str,
-        Complete path to the cloud file or filename for clouds located in "auxdata/clouds/"
-        Available auxdata clouds: wc, ic_baum_ghm, ic_baum_asc and ic_baum_sc
+        Complete path to the cloud file or filename for clouds located
+        in "auxdata/clouds/"
+        Available auxdata clouds: wc, ic_baum_ghm, ic_baum_asc and
+        ic_baum_sc
     reff : float
         Effective radius in micrometers
     zmin : float,
@@ -830,33 +907,46 @@ class Cloud(AerOPAC):
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical thickness tau_ref
-    ssa : None | float | list | 1-D ndarray | 2-D ndarray | xr.DataArray, optional
+    ssa : None | float | list | 1-D ndarray | 2-D ndarray |
+    xr.DataArray, optional
         Force particle single scattering albedo.
 
         - if float -> same value for all wavelengths and altitudes
         - if list -> it will be converted into a 1-D ndarray.
         - if 1-D ndarray -> only wavelength dependence is considered
-        - if 2-D ndarray -> wavelength and altitude dependence is considered
-        - if xr.DataArray -> wavelength and altitude dependence is considered
+        - if 2-D ndarray -> wavelength and altitude dependence is
+          considered
+        - if xr.DataArray -> wavelength and altitude dependence is
+          considered
 
-        Note that xr.DataArray is more flexible since it allows interpolation if wavelengths
-        in calc method are different (but not the case for the altitude axis).
+        Note that xr.DataArray is more flexible since it allows
+        interpolation if wavelengths
+        in calc method are different (but not the case for the altitude
+        axis).
     phase : None | xr.DataArray, optional
-        Phase matrix F as function of wavelength, altitude, stoke components and scattering angle
+        Phase matrix F as function of wavelength, altitude, stoke
+        components and scattering angle
         The variable names must be:
         If 4-D matrix -> wav_phase, z_phase, stk, theta
-        If 2-D matrix (assumed monochromatic and contant vertically) -> stk, theta
+        If 2-D matrix (assumed monochromatic and contant vertically) ->
+        stk, theta
         Where:
-        - wav_phase is the wavelength. It must be equal to the `pfwav` parameter of AtmAFGL
-          if defined, else `wav` parameter wavelengths of the AtmAFGL calc method.
-        - z_phase is the phase altitude. It must be equal to the `pfgrid[1:]` parameter
+        - wav_phase is the wavelength. It must be equal to the `pfwav`
+          parameter of AtmAFGL
+          if defined, else `wav` parameter wavelengths of the AtmAFGL
+          calc method.
+        - z_phase is the phase altitude. It must be equal to the
+          `pfgrid[1:]` parameter
           of AtmAFGL
         - stk the phase matrix unique terms.
         - theta the scattering angle.
 
-        The phase matrix terms (IQUV convention) must be given in the folowing order:
-        - F11, F21, F33 and F34 if only 4 terms are given (only for spherical particles)
-        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both spherical and non-spherical particles)
+        The phase matrix terms (IQUV convention) must be given in the
+        folowing order:
+        - F11, F21, F33 and F34 if only 4 terms are given (only for
+          spherical particles)
+        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both
+          spherical and non-spherical particles)
 
     Examples
     --------
@@ -866,14 +956,20 @@ class Cloud(AerOPAC):
     <xarray.Dataset> Size: 52MB
     Dimensions:  (reff: 26, wav: 209, stk: 4, theta: 594)
     Coordinates:
-    * reff     (reff) float32 104B 5.0 6.0 7.0 8.0 9.0 ... 27.0 28.0 29.0 30.0
-    * wav      (wav) float32 836B 253.1 256.6 260.2 ... 4.38e+03 4.441e+03
+    * reff     (reff) float32 104B 5.0 6.0 7.0 8.0 9.0 ... 27.0 28.0
+                                   29.0 30.0
+    * wav      (wav) float32 836B 253.1 256.6 260.2 ... 4.38e+03
+                                  4.441e+03
     * stk      (stk) int16 8B 0 1 2 3
-    * theta    (theta) float64 5kB 0.0 0.01 0.02 0.03 ... 179.2 179.5 179.8 180.0
+    * theta    (theta) float64 5kB 0.0 0.01 0.02 0.03 ... 179.2 179.5
+                                   179.8 180.0
     Data variables:
-        phase    (reff, wav, stk, theta) float32 52MB 8.765e+03 8.759e+03 ... 0.0
-        ext      (reff, wav) float64 43kB 123.1 123.1 123.2 ... 4.619e+03 4.622e+03
-        ssa      (reff, wav) float64 43kB 1.0 1.0 1.0 1.0 ... 0.6522 0.636 0.6203
+        phase    (reff, wav, stk, theta) float32 52MB 8.765e+03
+                                                      8.759e+03 ... 0.0
+        ext      (reff, wav) float64 43kB 123.1 123.1 123.2 ...
+                                          4.619e+03 4.622e+03
+        ssa      (reff, wav) float64 43kB 1.0 1.0 1.0 1.0 ... 0.6522
+                                          0.636 0.6203
     Attributes:
         veff:     0.1
     """
@@ -905,7 +1001,8 @@ class Cloud(AerOPAC):
                 self.ssa = ssa
             else:
                 raise ValueError(
-                    "The ssa variable must a scalar, a list, an ndarray of dim <= 2, or an xr.DataArray."
+                    "The ssa variable must a scalar, a list, an ndarray"
+                    + " of dim <= 2, or an xr.DataArray."
                 )
 
         filename = Path(filename)
@@ -924,7 +1021,8 @@ class Cloud(AerOPAC):
         self.filename = filename
 
         self.mixture = xr.open_dataset(self.filename)
-        # check if reff dim size == 1 (to avoid interpolation/indexing crash)
+        # check if reff dim size == 1 (to avoid interpolation/indexing
+        # crash)
         if self.mixture.sizes["reff"] == 1:
             reff_v1 = float(self.mixture.coords["reff"].values[0])
             reff_v2 = reff_v1 + 1
@@ -988,13 +1086,16 @@ class AerUser(AerOPAC):
     ssa : 2-D ndarray
         Single scattering albedo values with shape (len(hum), len(wav))
     phase : 4-D ndarray
-        Phase function values with shape (len(hum), len(wav), len(stk), len(theta)).
+        Phase function values with shape (len(hum), len(wav), len(stk),
+        len(theta)).
 
         Where len(stk) is the number of unique phase terms.
 
         The phase matrix terms must be given in the folowing order:
-        - F11, F21, F33 and F34 if only 4 terms are given (only for spherical particles)
-        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both spherical and non-spherical particles)
+        - F11, F21, F33 and F34 if only 4 terms are given (only for
+          spherical particles)
+        - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both
+          spherical and non-spherical particles)
     hum : 1-D ndarray
         Relative humidity values in percentage
     wav : 1-D ndarray
@@ -1010,7 +1111,8 @@ class AerUser(AerOPAC):
 
     Notes
     -----
-    The scale height (see Hess et al. 2004) is the variable Z in the following equation:
+    The scale height (see Hess et al. 2004) is the variable Z in the
+    following equation:
 
     - :math:`N(h) = N(0)exp(-h/Z)`
 
@@ -1058,7 +1160,8 @@ class AerUser(AerOPAC):
         ds.attrs["Z_mix"] = str(Z_mix)
 
         self.mixture = ds
-        # check if hum dim size == 1 (to avoid interpolation/indexing crash)
+        # check if hum dim size == 1 (to avoid interpolation/indexing
+        # crash)
         if self.mixture.sizes["hum"] == 1:
             hum_v1 = float(self.mixture.coords["hum"].values[0])
             hum_v2 = hum_v1 + 1
@@ -1118,84 +1221,126 @@ class AtmAFGL(Atmosphere):
             - 'afglt' for Tropic (15N Annual Average)
             - 'afglus' for U.S. Standard (1976)
 
-        File format: If a full path is not provided (only filename), the atmospheric
-        auxdata directory is automatically prepended to the path. The file extension
-        defaults to '.nc' if not specified. Only '.nc' (NetCDF) and '.dat' file
-        formats are accepted. For '.dat' files, the libratran atmosphere file
+        File format: If a full path is not provided (only filename), the
+        atmospheric
+        auxdata directory is automatically prepended to the path. The
+        file extension
+        defaults to '.nc' if not specified. Only '.nc' (NetCDF) and
+        '.dat' file
+        formats are accepted. For '.dat' files, the libratran atmosphere
+        file
         convention is used.
     comp:  list, optional
-        Components particles (aerosols or clouds) to consider, i.e. a list of aerOPAC or/and Cloud objects.
+        Components particles (aerosols or clouds) to consider, i.e. a
+        list of aerOPAC or/and Cloud objects.
     grid : None | 1-D array-like, optional
-      The vertical grid (from TOA to BOA). The optical properties of the atmosphere are recalculated following
+      The vertical grid (from TOA to BOA). The optical properties of the
+      atmosphere are recalculated following
       the new grid. If None, the AFGL grid is kept.
     lat : float, optional
-        The latitude used for Rayleigh optical depth calculation. Default=45.
+        The latitude used for Rayleigh optical depth calculation.
+        Default=45.
     P0:  None | float, optional
         The sea surface pressure. If None take P0 from the AFGL profil.
     O3 : None | float, optional
-        The total ozone column in Dobson units. If None keep the total ozone content of the chosen atmospheric
+        The total ozone column in Dobson units. If None keep the total
+        ozone content of the chosen atmospheric
         profile.
     H2O : None | float, optional
-        The total water vapor column in g.cm-2. If None keep the total water vapor content of the chosen
+        The total water vapor column in g.cm-2. If None keep the total
+        water vapor content of the chosen
         atmospheric profile.
     NO2: bool, optional
         Activate NO2 absorption (default True)
     O3_H2O_alt : None | float, optional
-        Altitude (km) at which the specified O3 and H2O values apply. When specified,
-        the O3 and H2O profiles are scaled such that the column amount from TOA to this
-        altitude matches the provided O3 and H2O values. The full gaseous distribution
-        from TOA to ground is preserved; only the scaling factor is adjusted to match
+        Altitude (km) at which the specified O3 and H2O values apply.
+        When specified,
+        the O3 and H2O profiles are scaled such that the column amount
+        from TOA to this
+        altitude matches the provided O3 and H2O values. The full
+        gaseous distribution
+        from TOA to ground is preserved; only the scaling factor is
+        adjusted to match
         the constraint at this reference altitude.
         Default: None
     tauR : None | float, optional
-        Force the Rayleigh optical thickness. If None, computed from atmospheric profile and wavelength.
+        Force the Rayleigh optical thickness. If None, computed from
+        atmospheric profile and wavelength.
     pfwav : None | list, optional
-        The list of wavelengths over which the phase matrices are calculated. Then use the nearest wavelength
-        during cuda simulation. Useful to reduce the memory. If None, compute the phase matrix at all wavelengths.
+        The list of wavelengths over which the phase matrices are
+        calculated. Then use the nearest wavelength
+        during cuda simulation. Useful to reduce the memory. If None,
+        compute the phase matrix at all wavelengths.
     pfgrid : list, optional
-        The vertcial grid (from TOA to BOA) over which the phase matrices are calculated. This parameter can help
-        reduce the memory but must be used with care. If misused, it may lead to innaccurate results especially when
-        multiple aerosols are mixed. The default value is [100, 0], meaning a single phase matrix is calculated over
-        the entire column from 0 to 100 km. This is effcient and accurate when only 1 type of aerosol is present.
-        However, if multiple aerosols are mixed (with different vertical distributions), a single phase matrix may
+        The vertcial grid (from TOA to BOA) over which the phase
+        matrices are calculated. This parameter can help
+        reduce the memory but must be used with care. If misused, it may
+        lead to innaccurate results especially when
+        multiple aerosols are mixed. The default value is [100, 0],
+        meaning a single phase matrix is calculated over
+        the entire column from 0 to 100 km. This is effcient and
+        accurate when only 1 type of aerosol is present.
+        However, if multiple aerosols are mixed (with different vertical
+        distributions), a single phase matrix may
         introduce an important bias.
     prof_abs : None | 2-D ndarray, optional
-        - In 1D atm mode -> force the gaseous absorption optical thickness vertical profile (NWavelength,NZ),
+        - In 1D atm mode -> force the gaseous absorption optical
+          thickness vertical profile (NWavelength,NZ),
         it shortcuts any further gaseous absorption computation.
-        - In 3D atm mode -> just an optical properties index, it must be completed by the cells grid
+        - In 3D atm mode -> just an optical properties index, it must be
+          completed by the cells grid
     prof_ray : None | 2-D ndarray, optional
-        - In 1D atm mode -> force the Rayleigh scattering optical thickness vertical profile (NWavelength,NZ),
+        - In 1D atm mode -> force the Rayleigh scattering optical
+          thickness vertical profile (NWavelength,NZ),
         it shortcuts any further Rayleigh scattering computation.
-        - In 3D atm mode -> just an optical properties index, it must be completed by the cells grid
+        - In 3D atm mode -> just an optical properties index, it must be
+          completed by the cells grid
     prof_aer : None | tuple, optional
-        - In 1D atm mode - > A tuple (ext,ssa) with the aerosol extinction optical thickness profile (ext) and
-        single scattering albedo arrays (ssa), it shortcuts any further particles scattering computation.
-        - In 3D atm mode -> just an optical properties index, it must be completed by the cells grid
+        - In 1D atm mode - > A tuple (ext,ssa) with the aerosol
+          extinction optical thickness profile (ext) and
+        single scattering albedo arrays (ssa), it shortcuts any further
+        particles scattering computation.
+        - In 3D atm mode -> just an optical properties index, it must be
+          completed by the cells grid
     prof_phases : None | tuple, optional
-        A tuple (iphase, phases ) where iphase is the phase matrix indices profile (NWavelength,NZ),
-        and  phases is a list of phase matrices LUT (as outputs of the `read_phase` utility).
+        A tuple (iphase, phases ) where iphase is the phase matrix
+        indices profile (NWavelength,NZ),
+        and  phases is a list of phase matrices LUT (as outputs of the
+        `read_phase` utility).
     RH_cst : None | float, optional
-        Force relative humidity to be constant. If None calculated depending on H2O vertical profile.
+        Force relative humidity to be constant. If None calculated
+        depending on H2O vertical profile.
     O3_acs : str, optional
-        Path to ozone netcdf4 file with absorption coefficient cross section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
-        in cm^2, and where T is in degrees Celcius). If only filename is given automatically look at "auxdata/acs/".
-        By default use Bogumil Version 3.0 data. Available files in auxdata:
+        Path to ozone netcdf4 file with absorption coefficient cross
+        section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
+        in cm^2, and where T is in degrees Celcius). If only filename is
+        given automatically look at "auxdata/acs/".
+        By default use Bogumil Version 3.0 data. Available files in
+        auxdata:
             - 'O3_acs_BogumilV3.0_coeffs.nc'
             - 'O3_acs_Chehade(Bogumil_revised)V4.1_coeffs.nc'
             - 'O3_acs_SerdyuchenkoV2.0_coeffs.nc'
     NO2_acs : str, optional
-        Path to NO2 netcdf4 file with absorption coefficient cross section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
-        in cm^2, and where T is in degrees Celcius). If only filename is given automatically look at "auxdata/acs/".
-        By default use Bogumil Version 1.0 data. Available files in auxdata:
+        Path to NO2 netcdf4 file with absorption coefficient cross
+        section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
+        in cm^2, and where T is in degrees Celcius). If only filename is
+        given automatically look at "auxdata/acs/".
+        By default use Bogumil Version 1.0 data. Available files in
+        auxdata:
             - 'NO2_acs_BogumilV1.0_coeffs.nc'
             - 'NO2_acs_Bingen_coeffs.nc'
     cells : None | tuple, optional
         If cells is given, then we are in 3D mode. Definitions:
-           - 'iopt' gives the number of the optical property corresponding to the cells. iopt(Ncell)
-           - 'iabs' gives the number of the absorption property corresponding to the cells. iabs(Ncell)
-           - Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right pmax) of the cells. pmin(3,Ncell). pmax(3,Ncell)
-           and 6 neighbours index (positive X, negative X, positive Y, negative Y, positive Z, negative Z). neighbour(6,Ncell)
-           it returns coefficients in (km-1) instead of optical thicknesses
+           - 'iopt' gives the number of the optical property
+             corresponding to the cells. iopt(Ncell)
+           - 'iabs' gives the number of the absorption property
+             corresponding to the cells. iabs(Ncell)
+           - Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right
+             pmax) of the cells. pmin(3,Ncell). pmax(3,Ncell)
+           and 6 neighbours index (positive X, negative X, positive Y,
+           negative Y, positive Z, negative Z). neighbour(6,Ncell)
+           it returns coefficients in (km-1) instead of optical
+           thicknesses
     """
 
     def __init__(
@@ -1273,7 +1418,8 @@ class AtmAFGL(Atmosphere):
         else:
             if atm_filename.parent == Path("."):
                 atm_filename = DIR_AUXDATA / "atmospheres" / atm_filename.name
-            # By default if no suffix is given consider it as a netcdf file
+            # By default if no suffix is given consider it as a netcdf
+            # file
             if not atm_filename.exists() and atm_filename.suffix == "":
                 atm_filename = atm_filename.with_name(
                     atm_filename.name + ".nc"
@@ -1344,7 +1490,8 @@ class AtmAFGL(Atmosphere):
         Parameters
         ----------
         wav : float | 1-D ndarray | BandSet | list
-            Wavelengths at which to calculate the profile. It can be a list of REPTRAN_IBAND or KDIS_IBAND.
+            Wavelengths at which to calculate the profile. It can be a
+            list of REPTRAN_IBAND or KDIS_IBAND.
         NBTHETA : int, optional
             The number of angles to be considered for the phase matrix.
         use_old_calc_iphase : bool, optional
@@ -1355,7 +1502,8 @@ class AtmAFGL(Atmosphere):
         Returns
         -------
         out : xr.Dataset
-            An xarray.Dataset object with the profile and (if phase = True) the phase matrices.
+            An xarray.Dataset object with the profile and (if phase =
+            True) the phase matrices.
         """
 
         if not isinstance(wav, BandSet):
@@ -1386,7 +1534,8 @@ class AtmAFGL(Atmosphere):
 
                 nphase = pha_.shape[0]
 
-                # If truncation parameter is given compute truncated phase function
+                # If truncation parameter is given compute truncated
+                # phase function
                 if truncation is not None:
                     if self.OPT3D:
                         theta = profile.coords["theta_atm"].values
@@ -1428,12 +1577,14 @@ class AtmAFGL(Atmosphere):
                         f11_tr = ds_pha["phase_tr"].values
                         f = ds_pha["f"].values
                         f_pha[iph] = f
-                        # Ensure for the moment only 1 unique truncation factor
+                        # Ensure for the moment only 1 unique truncation
+                        # factor
                         if iph > 0 and not np.isclose(
                             f_pha[iph], f_pha[0], atol=1e-6
                         ):
                             raise ValueError(
-                                "Several truncation factors f is not yet authorized"
+                                "Several truncation factors f is not yet "
+                                + "authorized"
                             )
 
                         pha_tr[iph, 0, :] = f11_tr
@@ -1494,7 +1645,8 @@ class AtmAFGL(Atmosphere):
                     )
 
                 if truncation is not None:
-                    # profile.add_dataset('phase_atm_tr', pha_tr, axnames=['iphase', 'stk', 'theta_atm'])
+                    # profile.add_dataset('phase_atm_tr', pha_tr,
+                    # axnames=['iphase', 'stk', 'theta_atm'])
                     attrs_tmp = profile["phase_atm"].attrs
                     if "phase_atm" in profile.data_vars:
                         profile = profile.drop_vars("phase_atm")
@@ -1678,9 +1830,12 @@ class AtmAFGL(Atmosphere):
         """Calculate the profile of optical properties at given
         wavelengths.
 
-        Computes atmospheric optical properties (extinction, scattering, absorption)
-        as a function of wavelength and altitude, including contributions from
-        Rayleigh scattering, aerosols, and gaseous absorbers (O3, NO2, and molecular gases).
+        Computes atmospheric optical properties (extinction, scattering,
+        absorption)
+        as a function of wavelength and altitude, including
+        contributions from
+        Rayleigh scattering, aerosols, and gaseous absorbers (O3, NO2,
+        and molecular gases).
 
         Parameters
         ----------
@@ -1688,49 +1843,68 @@ class AtmAFGL(Atmosphere):
             Wavelengths at which to calculate optical properties [nm].
             If not a BandSet, it will be converted to one.
         prof : ProfileBase, optional
-            Atmospheric profile containing altitude grids, temperature, pressure,
-            and density profiles. Default is None; uses self.prof if not provided.
+            Atmospheric profile containing altitude grids, temperature,
+            pressure,
+            and density profiles. Default is None; uses self.prof if not
+            provided.
 
         Returns
         -------
         profile : xr.Dataset
             Xarray dataset containing atmospheric optical properties
-            with dimensions as a function of wavelength and altitude (or iopt grid for 3D mode).
+            with dimensions as a function of wavelength and altitude (or
+            iopt grid for 3D mode).
 
             Key datasets included:
 
-            - **n_atm**: Atmospheric refractive index [wavelength, z_atm]
+            - **n_atm**: Atmospheric refractive index [wavelength,
+              z_atm]
             - **T_atm**: Temperature profile [z_atm] (K)
-            - **OD_r**: Rayleigh cumulated optical thickness [wavelength, z_atm]
+            - **OD_r**: Rayleigh cumulated optical thickness
+              [wavelength, z_atm]
               or scattering coefficient (km⁻¹) in 3D mode
-            - **OD_p**: Particles cumulated optical thickness [wavelength, z_atm]
+            - **OD_p**: Particles cumulated optical thickness
+              [wavelength, z_atm]
               or extinction coefficient (km⁻¹) in 3D mode
-            - **ssa_p_atm**: Particle single scattering albedo [wavelength, z_atm] or [wavelength, iopt]
-            - **OD_g**: Cumulated gaseous absorption optical thickness [wavelength, z_atm]
+            - **ssa_p_atm**: Particle single scattering albedo
+              [wavelength, z_atm] or [wavelength, iopt]
+            - **OD_g**: Cumulated gaseous absorption optical thickness
+              [wavelength, z_atm]
               or absorption coefficient (km⁻¹) in 3D mode
-            - **OD_atm**: Total cumulated optical thickness [wavelength, z_atm]
+            - **OD_atm**: Total cumulated optical thickness [wavelength,
+              z_atm]
               or total extinction coefficient (km⁻¹) in 3D mode
-            - **OD_sca_atm**: Cumulated scattering optical thickness [wavelength, z_atm]
-            - **OD_abs_atm**: Cumulated absorption optical thickness [wavelength, z_atm]
-            - **ssa_atm**: Total single scattering albedo [wavelength, z_atm]
+            - **OD_sca_atm**: Cumulated scattering optical thickness
+              [wavelength, z_atm]
+            - **OD_abs_atm**: Cumulated absorption optical thickness
+              [wavelength, z_atm]
+            - **ssa_atm**: Total single scattering albedo [wavelength,
+              z_atm]
 
         Notes
         -----
         The method can operate in two modes:
 
-        - **1D Mode (OPT3D=False)**: Returns cumulated optical thicknesses with axes
+        - **1D Mode (OPT3D=False)**: Returns cumulated optical
+          thicknesses with axes
           [wavelength, z_atm]
-        - **3D Mode (OPT3D=True)**: Returns extinction/absorption coefficients with axes
-          [wavelength, iopt] for use in 3D radiative transfer calculations
+        - **3D Mode (OPT3D=True)**: Returns extinction/absorption
+          coefficients with axes
+          [wavelength, iopt] for use in 3D radiative transfer
+          calculations
 
         Optical properties include:
 
-        - Rayleigh scattering (from self.prof_ray or computed using Rayleigh optical depth)
+        - Rayleigh scattering (from self.prof_ray or computed using
+          Rayleigh optical depth)
         - Aerosol scattering and absorption from aerosol components
-        - Gaseous absorption from ozone, NO2, and molecular gases (H2O, O2, CO2)
-          using cross-sections (acs_o3, acs_no2) or REPTRAN/KDIS spectral databases
+        - Gaseous absorption from ozone, NO2, and molecular gases (H2O,
+          O2, CO2)
+          using cross-sections (acs_o3, acs_no2) or REPTRAN/KDIS
+          spectral databases
 
-        Single scattering albedo is calculated as the ratio of scattering to extinction
+        Single scattering albedo is calculated as the ratio of
+        scattering to extinction
         optical thicknesses for each layer.
         """
         if not isinstance(wav, BandSet):
@@ -1848,7 +2022,8 @@ class AtmAFGL(Atmosphere):
                     "z_atm": pro.coords["z_atm"],
                 },
                 attrs={
-                    "description": "Cumulated particles optical thickness at each wavelength"
+                    "description": "Cumulated particles optical thickness at "
+                    + "each wavelength"
                 },
             )
         else:
@@ -1875,7 +2050,8 @@ class AtmAFGL(Atmosphere):
                     "z_atm": pro.coords["z_atm"],
                 },
                 attrs={
-                    "description": "Particles single scattering albedo of the layer"
+                    "description": "Particles single scattering albedo of the "
+                    + "layer"
                 },
             )
         else:
@@ -1884,7 +2060,8 @@ class AtmAFGL(Atmosphere):
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
                 attrs={
-                    "description": "Particles single scattering albedo of the layer"
+                    "description": "Particles single scattering albedo of the "
+                    + "layer"
                 },
             )
 
@@ -1900,7 +2077,8 @@ class AtmAFGL(Atmosphere):
             tau_no2 = np.zeros((len(wav), len(prof.z)), dtype="float32")
             if wav.use_reptran_kdis:
                 tau_mol = wav.calc_profile(self.prof) * dz
-                # If not reptran (i.e. Kdis case) we set 03 and NO2 to 0 (already calculated in Kdis)
+                # If not reptran (i.e. Kdis case) we set 03 and NO2 to 0
+                # (already calculated in Kdis)
                 if not (
                     str(wav.type_wav)
                     == "<class 'smartg.reptran.REPTRAN_IBAND'>"
@@ -1918,7 +2096,8 @@ class AtmAFGL(Atmosphere):
                     np.zeros((len(wav), len(prof.z)), dtype="float32") * dz
                 )
 
-            # Compute o3 and no2 (if kdis only compute them if not already computed)
+            # Compute o3 and no2 (if kdis only compute them if not
+            # already computed)
             if use_no2_acs or use_o3_acs:
                 # Commun part
                 T0 = 273.15  # in K
@@ -1997,7 +2176,8 @@ class AtmAFGL(Atmosphere):
                         "z_atm": pro.coords["z_atm"],
                     },
                     attrs={
-                        "description": "Cumulated gaseous absorption optical thickness"
+                        "description": "Cumulated gaseous absorption optical "
+                        + "thickness"
                     },
                 )
             else:
@@ -2024,7 +2204,8 @@ class AtmAFGL(Atmosphere):
                         "z_atm": pro.coords["z_atm"],
                     },
                     attrs={
-                        "description": "Cumulated gaseous absorption optical thickness"
+                        "description": "Cumulated gaseous absorption optical "
+                        + "thickness"
                     },
                 )
 
@@ -2078,7 +2259,8 @@ class AtmAFGL(Atmosphere):
                     "z_atm": pro.coords["z_atm"],
                 },
                 attrs={
-                    "description": "Cumulated absorption optical thickness"
+                    "description": "Cumulated absorption optical "
+                    + "thickness"
                 },
             )
 
@@ -2142,7 +2324,8 @@ class AtmAFGL(Atmosphere):
                     "z_atm": pro.coords["z_atm"],
                 },
                 attrs={
-                    "description": "Ratio of molecular scattering to total scattering of the layer"
+                    "description": "Ratio of molecular scattering to total "
+                    + "scattering of the layer"
                 },
             )
         else:
@@ -2151,7 +2334,8 @@ class AtmAFGL(Atmosphere):
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
                 attrs={
-                    "description": "Ratio of molecular scattering to total scattering of the layer"
+                    "description": "Ratio of molecular scattering to total "
+                    + "scattering of the layer"
                 },
             )
 
@@ -2166,7 +2350,8 @@ class AtmAFGL(Atmosphere):
                     "z_atm": pro.coords["z_atm"],
                 },
                 attrs={
-                    "description": "fraction of inelastic scattering of the layer"
+                    "description": "fraction of inelastic scattering of the "
+                    + "layer"
                 },
             )
             pro["FQY1_atm"] = xr.DataArray(
@@ -2177,7 +2362,8 @@ class AtmAFGL(Atmosphere):
                     "z_atm": pro.coords["z_atm"],
                 },
                 attrs={
-                    "description": "fluoresence quantum yield of the layer"
+                    "description": "fluoresence quantum yield of the "
+                    + "layer"
                 },
             )
         else:
@@ -2186,7 +2372,8 @@ class AtmAFGL(Atmosphere):
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
                 attrs={
-                    "description": "fraction of inelastic scattering of the layer"
+                    "description": "fraction of inelastic scattering of the "
+                    + "layer"
                 },
             )
             pro["FQY1_atm"] = xr.DataArray(
@@ -2194,7 +2381,8 @@ class AtmAFGL(Atmosphere):
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
                 attrs={
-                    "description": "fluoresence quantum yield of the layer"
+                    "description": "fluoresence quantum yield of the "
+                    + "layer"
                 },
             )
 
@@ -2254,10 +2442,13 @@ class AtmAFGL(Atmosphere):
 
     def phase(self, wav, NBTHETA=721):
         """
-        Calculate phase matrix of aerosols and clouds at specified wavelengths.
+        Calculate phase matrix of aerosols and clouds at specified
+        wavelengths.
 
-        Computes weighted average phase functions for all aerosol components
-        using the reduced atmospheric profile. Each component's contribution
+        Computes weighted average phase functions for all aerosol
+        components
+        using the reduced atmospheric profile. Each component's
+        contribution
         is weighted by its optical depth and single scattering albedo.
 
         Parameters
@@ -2266,25 +2457,33 @@ class AtmAFGL(Atmosphere):
             Wavelengths at which to calculate phase matrix [nm].
             If scalar, will be converted to 1-D array.
         NBTHETA : int, optional
-            Number of scattering angles for angle resampling. Default is 721,
+            Number of scattering angles for angle resampling. Default is
+            721,
             corresponding to angles from 0° to 180°.
 
         Returns
         -------
         phase_matrix : xr.DataArray or None
-            DataArray containing the weighted average phase matrix with axes
-            [wav_phase, z_phase, stk, theta_atm] if aerosol components are present.
+            DataArray containing the weighted average phase matrix with
+            axes
+            [wav_phase, z_phase, stk, theta_atm] if aerosol components
+            are present.
             Shape is (len(wav), nz, nphamat, NBTHETA) where:
-            - nz: number of altitude levels in the reduced profile (self.pfgrid)
-            - nphamat = 4 for spherical particles only (phase matrix unique terms P11, P21, P33, P34)
-            - nphamat = 6 for spherical and non-spherical particles (additional terms P22, P44)
+            - nz: number of altitude levels in the reduced profile
+              (self.pfgrid)
+            - nphamat = 4 for spherical particles only (phase matrix
+              unique terms P11, P21, P33, P34)
+            - nphamat = 6 for spherical and non-spherical particles
+              (additional terms P22, P44)
             - theta_atm: scattering angles from 0° to 180°
 
-            Returns None if no aerosol components are defined (self.comp is empty).
+            Returns None if no aerosol components are defined (self.comp
+            is empty).
 
         Notes
         -----
-        **Weighted averaging:** The phase matrix is computed as a weighted average
+        **Weighted averaging:** The phase matrix is computed as a
+        weighted average
         across all aerosol components defined in the comp attribute:
 
         pha_total = [∑_i (pha_i x Δτ_i x ssa_i)) / (∑_i (Δτ_i x ssa_i)]
@@ -2309,7 +2508,8 @@ class AtmAFGL(Atmosphere):
             if hasattr(comp_pha, "to_xarray"):
                 comp_pha = comp_pha.to_xarray()
 
-            # dtau/ssa grids are defined on pfgrid boundaries; skip TOA bound to match z_phase layers.
+            # dtau/ssa grids are defined on pfgrid boundaries; skip TOA
+            # bound to match z_phase layers.
             weight_2d = xr.DataArray(
                 dtau[:, 1:] * ssa_p[:, 1:],
                 dims=["wav_phase", "z_phase"],
@@ -2331,9 +2531,12 @@ class AtmAFGL(Atmosphere):
 
     def calc_split(self, wav, phase=True, NBTHETA=721):
         """
-        Computes atmospheric optical properties at specified wavelengths and
-        separates them into decomposed components (absorption, Rayleigh scattering,
-        aerosols, and phase functions). These returned profiles can be used as
+        Computes atmospheric optical properties at specified wavelengths
+        and
+        separates them into decomposed components (absorption, Rayleigh
+        scattering,
+        aerosols, and phase functions). These returned profiles can be
+        used as
         alternative inputs to initialize a new AtmAFGL instance.
 
         Parameters
@@ -2341,36 +2544,49 @@ class AtmAFGL(Atmosphere):
         wav : scalar or array-like
             Wavelengths at which to calculate optical properties [nm].
         phase : bool, optional
-            If True (default), calculates phase functions. Set to False to skip
+            If True (default), calculates phase functions. Set to False
+            to skip
             phase function computations for faster execution.
         NBTHETA : int, optional
-            Number of scattering angles for phase function resampling. Default is 721,
-            corresponding to angles from 0° to 180°. Only used if phase=True.
+            Number of scattering angles for phase function resampling.
+            Default is 721,
+            corresponding to angles from 0° to 180°. Only used if
+            phase=True.
 
         Returns
         -------
         prof_abs : ndarray
-            Gaseous absorption coefficient [wavelength, altitude] (km⁻¹).
-            Differential optical thickness for absorption from cumulated profile.
+            Gaseous absorption coefficient [wavelength, altitude]
+            (km⁻¹).
+            Differential optical thickness for absorption from cumulated
+            profile.
         prof_ray : ndarray
-            Rayleigh scattering coefficient [wavelength, altitude] (km⁻¹).
-            Differential optical thickness for Rayleigh from cumulated profile.
+            Rayleigh scattering coefficient [wavelength, altitude]
+            (km⁻¹).
+            Differential optical thickness for Rayleigh from cumulated
+            profile.
         (prof_aer, ssa_aer) : tuple
             Aerosol profiles with:
 
-            - prof_aer: Aerosol extinction coefficient [wavelength, altitude] (km⁻¹)
-            - ssa_aer: Particle single scattering albedo [wavelength, altitude]
+            - prof_aer: Aerosol extinction coefficient [wavelength,
+              altitude] (km⁻¹)
+            - ssa_aer: Particle single scattering albedo [wavelength,
+              altitude]
 
         (pro_iphase, pro_phases) : tuple
             Phase function profiles with:
 
-            - pro_iphase: Phase matrix indices array [wavelength, altitude]
-            - pro_phases: List of phase matrix LUT objects, one for each phase index
+            - pro_iphase: Phase matrix indices array [wavelength,
+              altitude]
+            - pro_phases: List of phase matrix LUT objects, one for each
+              phase index
 
         Notes
         -----
-        This method is useful for decomposing atmospheric optical properties into
-        separate components. The returned profiles can be used to recreate the
+        This method is useful for decomposing atmospheric optical
+        properties into
+        separate components. The returned profiles can be used to
+        recreate the
         atmospheric model by passing them as alternative inputs:
 
         - prof_abs: passed as the prof_abs parameter
@@ -2382,8 +2598,9 @@ class AtmAFGL(Atmosphere):
 
         Examples
         --------
-        >>> atm = AtmAFGL(...)
-        >>> prof_abs, prof_ray, (prof_aer, ssa_aer), (pro_iphase, pro_phases) = atm.calc_split(wav=500.)
+        >>> atm = AtmAFGL('afglus')
+        >>> (prof_abs, prof_ray, (prof_aer, ssa_aer)
+        ...  (pro_iphase, pro_phases)) = atm.calc_split(wav=500.)
         """
         pro = self.calc(wav=wav, phase=phase, NBTHETA=NBTHETA)
         pro_aer = diff1(pro["OD_p"].values.astype(np.float32), axis=1)
@@ -2403,52 +2620,71 @@ class ProfileBase(object):
     """
     Atmospheric profile with physical properties.
 
-    Reads and processes atmospheric profiles from files (NetCDF or libratran format).
-    Allows customization of ozone, water vapor, and pressure profiles. Automatically
+    Reads and processes atmospheric profiles from files (NetCDF or
+    libratran format).
+    Allows customization of ozone, water vapor, and pressure profiles.
+    Automatically
     scales gaseous constituents to specified total column amounts.
 
     Parameters
     ----------
     fname : str | Path
-        Path to atmospheric profile file. Accepts .nc (NetCDF) or .dat (libratran) formats.
-        If only filename is provided (no path), the auxdata directory is automatically prepended.
+        Path to atmospheric profile file. Accepts .nc (NetCDF) or .dat
+        (libratran) formats.
+        If only filename is provided (no path), the auxdata directory is
+        automatically prepended.
         If no suffix is provided, .nc is assumed by default.
     tco3 : float | None, optional
-        Total column vertically-integrated ozone in Dobson units (DU). If None, uses the
-        value from the atmospheric profile. The ozone profile is scaled to match this column
+        Total column vertically-integrated ozone in Dobson units (DU).
+        If None, uses the
+        value from the atmospheric profile. The ozone profile is scaled
+        to match this column
         amount. Note: 1 DU = 2.1415e-5 kg m⁻².
         Default: None
     tcwp : float | None, optional
-        Total column vertically-integrated water vapour in g/cm². If None, uses the value
-        from the atmospheric profile. The water vapour profile is scaled to match this column
+        Total column vertically-integrated water vapour in g/cm². If
+        None, uses the value
+        from the atmospheric profile. The water vapour profile is scaled
+        to match this column
         amount.
         Default: None
     tcno2 : bool | None, optional
-        Total column vertically-integrated NO2. If False, NO2 density is set to zero.
+        Total column vertically-integrated NO2. If False, NO2 density is
+        set to zero.
         If True, NO2 profile from the atmospheric file is retained.
         Default: True
     p0 : float | None, optional
-        Sea surface (bottom layer) pressure in hPa. If None, uses the pressure
-        from the atmospheric profile. Scales all pressure values proportionally.
+        Sea surface (bottom layer) pressure in hPa. If None, uses the
+        pressure
+        from the atmospheric profile. Scales all pressure values
+        proportionally.
         Default: None
     rh_cst : float | None, optional
-        Force relative humidity to be constant at this value. If None, relative
-        humidity is recalculated from the temperature and water vapor profiles.
+        Force relative humidity to be constant at this value. If None,
+        relative
+        humidity is recalculated from the temperature and water vapor
+        profiles.
         Default: None
     o3_h2o_alt : float | None, optional
-        Altitude (km) at which the specified tco3 and tcwp values apply. When specified,
-        the ozone and water vapor profiles are scaled such that the column amount from TOA to this
-        altitude matches the provided tco3 and tcwp values. The full gaseous distribution
-        from TOA to ground is preserved; only the scaling factor is adjusted to match
+        Altitude (km) at which the specified tco3 and tcwp values apply.
+        When specified,
+        the ozone and water vapor profiles are scaled such that the
+        column amount from TOA to this
+        altitude matches the provided tco3 and tcwp values. The full
+        gaseous distribution
+        from TOA to ground is preserved; only the scaling factor is
+        adjusted to match
         the constraint at this reference altitude.
         Default: None
 
     Notes
     -----
     File format support:
-    - .nc (NetCDF): Expects variables 'P', 'T', 'dens', 'H2O', 'O3', etc. with
+    - .nc (NetCDF): Expects variables 'P', 'T', 'dens', 'H2O', 'O3',
+      etc. with
       dimension 'z_atm' for altitude
-    - .dat (libratran): Text format with header line containing variable names
+    - .dat (libratran): Text format with header line containing variable
+      names
       (e.g., 'z(km) p(mb) T(K) air(cm-3) o3(cm-3) ...')
     """
 
@@ -2495,7 +2731,8 @@ class ProfileBase(object):
                 n = 0
 
             if desc is not None:
-                # data = np.loadtxt(fname, dtype=np.float32, comments="#", skiprows=n)
+                # data = np.loadtxt(fname, dtype=np.float32,
+                # comments="#", skiprows=n)
                 data = pd.read_csv(
                     fname,
                     comment="#",
@@ -2533,17 +2770,17 @@ class ProfileBase(object):
                 self.z = data.coords["z_atm"].values  # Altitude in km
                 self.P = data["P"].values  # pressure in hPa
                 self.T = data["T"].values  # temperature in K
-                self.dens_air = data["dens"].values  # Air density in cm-3
-                self.dens_h2o = data["H2O"].values  # H2O density in cm-3
-                self.dens_o3 = data["O3"].values  # O3 density in cm-3
-                self.dens_n2o = data["N2O"].values  # N2O density in cm-3
-                self.dens_co = data["CO"].values  # CO density in cm-3
-                self.dens_ch4 = data["CH4"].values  # CH4 density in cm-3
-                self.dens_co2 = data["CO2"].values  # CO2 density in cm-3
-                self.dens_o2 = data["O2"].values  # O2 density in cm-3
-                self.dens_n2 = data["N2"].values  # N2 density in cm-3
-                self.dens_no2 = data["NO2"].values  # NO2 density in cm-3
-                self.dens_so2 = data["SO2"].values  # SO2 density in cm-3
+                self.dens_air = data["dens"].values  # Air density cm-3
+                self.dens_h2o = data["H2O"].values  # H2O density cm-3
+                self.dens_o3 = data["O3"].values  # O3 density cm-3
+                self.dens_n2o = data["N2O"].values  # N2O density cm-3
+                self.dens_co = data["CO"].values  # CO density cm-3
+                self.dens_ch4 = data["CH4"].values  # CH4 density cm-3
+                self.dens_co2 = data["CO2"].values  # CO2 density cm-3
+                self.dens_o2 = data["O2"].values  # O2 density cm-3
+                self.dens_n2 = data["N2"].values  # N2 density cm-3
+                self.dens_no2 = data["NO2"].values  # NO2 density cm-3
+                self.dens_so2 = data["SO2"].values  # SO2 density cm-3
 
         self.rh_cst = rh_cst
 
@@ -2592,22 +2829,29 @@ class ProfileBase(object):
     def regrid(self, znew):
         """Regrid atmospheric profile to a new altitude grid.
 
-        Interpolates all atmospheric properties (pressure, temperature, and gas densities)
-        from the current altitude grid to a new altitude grid using linear interpolation.
-        Special boundary conditions are applied for pressure (using bounds_error=False with
+        Interpolates all atmospheric properties (pressure, temperature,
+        and gas densities)
+        from the current altitude grid to a new altitude grid using
+        linear interpolation.
+        Special boundary conditions are applied for pressure (using
+        bounds_error=False with
         specific fill values) and temperature (using extrapolation).
 
         Parameters
         ----------
         znew : 1-D ndarray
-            New altitude grid in kilometers. Must be a 1-D array of altitude values.
-            The new grid can be coarser, finer, or irregular compared to the original grid.
+            New altitude grid in kilometers. Must be a 1-D array of
+            altitude values.
+            The new grid can be coarser, finer, or irregular compared to
+            the original grid.
 
         Returns
         -------
         ProfileBase
-            New ProfileBase object with all atmospheric properties interpolated to the
-            new altitude grid `znew`. The following attributes are interpolated:
+            New ProfileBase object with all atmospheric properties
+            interpolated to the
+            new altitude grid `znew`. The following attributes are
+            interpolated:
             - z: altitude (km)
             - P: pressure (hPa)
             - T: temperature (K)
@@ -2632,7 +2876,8 @@ class ProfileBase(object):
                 z, self.P, bounds_error=False, fill_value=(1012.0, 1e-5)
             )
             prof.P = _tmpP(znew)
-            # prof.P = np.interp(znew, z, self.P, right=1012., left=1e-5)
+            # prof.P = np.interp(znew, z, self.P, right=1012.,
+            # left=1e-5)
         except ValueError:
             print(
                 "Error interpolating ({}, {}) -> ({}, {})".format(
@@ -2686,14 +2931,18 @@ class ProfileBase(object):
         """
         Calculate relative humidity profile for each atmospheric layer.
 
-        Computes the relative humidity at all altitude levels based on the atmospheric
-        profile's water vapor density, air density, pressure, and temperature.
+        Computes the relative humidity at all altitude levels based on
+        the atmospheric
+        profile's water vapor density, air density, pressure, and
+        temperature.
 
         Returns
         -------
         rh : ndarray
-            Relative humidity profile [%] with shape matching altitude grid.
-            Values can exceed 100% if atmospheric conditions are supersaturated.
+            Relative humidity profile [%] with shape matching altitude
+            grid.
+            Values can exceed 100% if atmospheric conditions are
+            supersaturated.
 
         Notes
         -----
@@ -2703,14 +2952,19 @@ class ProfileBase(object):
 
         where:
 
-        - p_H₂O is the partial pressure of water vapor (from density ratio)
-        - p_sat is the saturation vapor pressure at the given temperature
+        - p_H₂O is the partial pressure of water vapor (from density
+          ratio)
+        - p_sat is the saturation vapor pressure at the given
+          temperature
 
-        If RH_cst (constant relative humidity) was set during initialization,
-        that constant value is returned for all layers instead of calculating
+        If RH_cst (constant relative humidity) was set during
+        initialization,
+        that constant value is returned for all layers instead of
+        calculating
         from the density/temperature profile.
 
-        The saturation pressure calculation accounts for both water and ice phases
+        The saturation pressure calculation accounts for both water and
+        ice phases
         using temperature-dependent formulas.
         """
         if getattr(self, "rh_cst", None) is not None:
@@ -2727,7 +2981,8 @@ def saturation_pressure(T):
     """Calculate saturation vapor pressure for water and ice phases.
 
     Uses the Huang (2018) empirical formula, which provides accurate
-    saturation vapor pressure calculations for both liquid water and ice phases.
+    saturation vapor pressure calculations for both liquid water and ice
+    phases.
 
     Parameters
     ----------
@@ -2741,14 +2996,17 @@ def saturation_pressure(T):
 
     Notes
     -----
-    The function automatically selects the appropriate formula based on temperature:
+    The function automatically selects the appropriate formula based on
+    temperature:
     - For T > 273.15 K (0°C): liquid water phase formula
     - For T ≤ 273.15 K (0°C): ice phase formula
 
     References
     ----------
-    Huang, J. (2018). A Simple Accurate Formula for Calculating Saturation
-    Vapor Pressure of Water and Ice. Journal of Applied Meteorology and Climatology, 57(6), 1265-1272.
+    Huang, J. (2018). A Simple Accurate Formula for Calculating
+    Saturation
+    Vapor Pressure of Water and Ice. Journal of Applied Meteorology and
+    Climatology, 57(6), 1265-1272.
     """
     tc = T - 273.15  # temperature in C°
     sat_press = np.zeros_like(tc)
@@ -2782,8 +3040,10 @@ def f_n2(lam):
 
     References
     ----------
-    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
-        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R.
+    (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric
+        and Oceanic
         Technology*, 16, 1854-1861.
     """
     return 1.034 + 3.17 * 1e-4 * lam ** (-2)
@@ -2805,8 +3065,10 @@ def f_o2(lam):
 
     References
     ----------
-    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
-        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R.
+    (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric
+        and Oceanic
         Technology*, 16, 1854-1861.
     """
     return 1.096 + 1.385 * 1e-3 * lam ** (-2) + 1.448 * 1e-4 * lam ** (-4)
@@ -2828,13 +3090,16 @@ def f_air_co2(lam, co2):
     Returns
     -------
     out : 2-D ndarray
-        Depolarization factor of air. Shape: (N, M), where N is the number of
+        Depolarization factor of air. Shape: (N, M), where N is the
+        number of
         wavelengths and M is the number of layers.
 
     References
     ----------
-    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
-        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R.
+    (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric
+        and Oceanic
         Technology*, 16, 1854-1861.
     """
     _FN2 = f_n2(lam).reshape((-1, 1))
@@ -2858,12 +3123,15 @@ def n_air_co2_300(lam):
     Returns
     -------
     out : float | 1-D ndarray
-        Refractive index of dry air at 300 ppm CO2. Same shape as input `lam`.
+        Refractive index of dry air at 300 ppm CO2. Same shape as input
+        `lam`.
 
     References
     ----------
-    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
-        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R.
+    (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric
+        and Oceanic
         Technology*, 16, 1854-1861.
     """
     return (
@@ -2891,13 +3159,16 @@ def n_air_co2(lam, co2):
     Returns
     -------
     out : 2-D ndarray
-        Refractive index of air. Shape: (N, M), where N is the number of wavelengths
+        Refractive index of air. Shape: (N, M), where N is the number of
+        wavelengths
         and M is the number of layers.
 
     References
     ----------
-    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
-        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R.
+    (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric
+        and Oceanic
         Technology*, 16, 1854-1861.
     """
     N300 = n_air_co2_300(lam).reshape((-1, 1))
@@ -2917,12 +3188,15 @@ def m_dry_air(co2):
     Returns
     -------
     float | ndarray
-        Mean molecular weight of dry air in g/mol. Same shape as input `co2`.
+        Mean molecular weight of dry air in g/mol. Same shape as input
+        `co2`.
 
     References
     ----------
-    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
-        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R.
+    (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric
+        and Oceanic
         Technology*, 16, 1854-1861.
     """
     return 15.0556 * co2 * 1e-6 + 28.9595
@@ -2944,8 +3218,10 @@ def rayleigh_crs(lam, co2):
 
     References
     ----------
-    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R. (1999).
-        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric and Oceanic
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R.
+    (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric
+        and Oceanic
         Technology*, 16, 1854-1861.
     """
     if not isinstance(lam, np.ndarray):
@@ -2990,8 +3266,10 @@ def gravity_z0(lat):
 
     References
     ----------
-    .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables* (Sixth revised
-           edition; fourth reprint issued 1968). Smithsonian Institution Press,
+    .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables*
+    (Sixth revised
+           edition; fourth reprint issued 1968). Smithsonian Institution
+           Press,
            City of Washington, 527 pp.
     """
     if not np.isscalar(lat):
@@ -3018,12 +3296,15 @@ def gravity_z(lat, z):
     Returns
     -------
     out : float | 1D-ndarray
-        Gravitational acceleration at the given altitude(s) and latitude in m/s².
+        Gravitational acceleration at the given altitude(s) and latitude
+        in m/s².
 
     References
     ----------
-    .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables* (Sixth revised
-           edition; fourth reprint issued 1968). Smithsonian Institution Press,
+    .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables*
+    (Sixth revised
+           edition; fourth reprint issued 1968). Smithsonian Institution
+           Press,
            City of Washington, 527 pp.
     """
     if not np.isscalar(lat):
@@ -3045,7 +3326,8 @@ def rayleigh_od(
     lam, co2=400.0, lat=45.0, z=0.0, P=1013.25, pressure="surface"
 ):
     """
-    Rayleigh optical depth from Bodhaine et al, 99 (N wavelengths x M layers)
+    Rayleigh optical depth from Bodhaine et al, 99 (N wavelengths x M
+    layers)
         lam : wavelength in um (N)
         co2 : ppm (M)
         lat : deg (scalar)
@@ -3061,9 +3343,8 @@ def rayleigh_od(
     G = gravity_z(lat, zs)
     # air pressure at the pixel (i.e. at altitude) in hPa
     if pressure == "sea-level":
-        Psurf = (
-            (P * (1.0 - 0.0065 * z / 288.15) ** 5.255) * 1000.0
-        )  # air pressure at pixel location in dyn / cm2, which is hPa * 1000
+        # air pressure at pixel location in dyn / cm2, i.e. hPa * 1000
+        Psurf = (P * (1.0 - 0.0065 * z / 288.15) ** 5.255) * 1000.0
     elif pressure == "surface":
         Psurf = P * 1000.0  # convert to dyn/cm2
     else:
@@ -3094,7 +3375,8 @@ def refractivity(lam, P, T, co2):
 
     References
     ----------
-    .. [1] Edlén, B. (1966). The refractive index of air. Metrologia, 2(2), 71-80.
+    .. [1] Edlén, B. (1966). The refractive index of air. Metrologia,
+    2(2), 71-80.
     """
     p = P * 100.0
     t = T - 273.15
@@ -3108,7 +3390,8 @@ def diff1(a, axis=0, samesize=True):
     """
     Calculate the first difference of an array along a specified axis.
 
-    Computes the difference between consecutive elements of the array along
+    Computes the difference between consecutive elements of the array
+    along
     the specified axis using `numpy.diff`. By default (samesize=True),
     preserves the original array shape by padding with zeros.
 
@@ -3119,16 +3402,20 @@ def diff1(a, axis=0, samesize=True):
     axis : int, optional
         Axis along which differences are computed. Default is 0.
     samesize : bool, optional
-        If True (default), the output has the same shape as the input array
-        with the first slice along the specified axis set to zero. If False,
+        If True (default), the output has the same shape as the input
+        array
+        with the first slice along the specified axis set to zero. If
+        False,
         the output has size reduced by 1 along the specified axis.
 
     Returns
     -------
     diff : ndarray
-        Differences between consecutive elements along the specified axis.
+        Differences between consecutive elements along the specified
+        axis.
         If `samesize=True`, the result has the same shape as `a`.
-        If `samesize=False`, the result has shape ``a.shape[axis] - 1`` along
+        If `samesize=False`, the result has shape ``a.shape[axis] - 1``
+        along
         the specified axis.
 
     Examples
@@ -3157,7 +3444,8 @@ def od2k(prof, dataset, axis=1, zreverse=False):
     Parameters
     ----------
     prof : xr.Dataset
-        Atmospheric profile containing the cumulated optical depth dataset
+        Atmospheric profile containing the cumulated optical depth
+        dataset
         and the ``z_atm`` vertical coordinate.
     dataset : str
         Name of the cumulated optical depth dataset to convert.
@@ -3171,7 +3459,8 @@ def od2k(prof, dataset, axis=1, zreverse=False):
     Returns
     -------
     ndarray
-        Two-dimensional array of vertical coefficients in km^-1 with shape
+        Two-dimensional array of vertical coefficients in km^-1 with
+        shape
         ``(NW, NZ)``.
     """
     if hasattr(prof, "to_xarray"):
@@ -3237,16 +3526,20 @@ def blackbody_radiance(wav, T):
 
 def get_aer_dist_integral(Z, H_min, H_max):
     """
-    Compute the integral of exponential vertical distribution between two altitudes.
+    Compute the integral of exponential vertical distribution between
+    two altitudes.
 
-    Calculates the integral of an exponential distribution function over a vertical
-    layer, used for computing the optical depth contribution of aerosols or clouds
+    Calculates the integral of an exponential distribution function over
+    a vertical
+    layer, used for computing the optical depth contribution of aerosols
+    or clouds
     with a scale height Z between altitudes H_min and H_max.
 
     Parameters
     ----------
     Z : float or ndarray
-        Scale height in km. Defines the vertical distribution as N(h) = N(0)*exp(-h/Z).
+        Scale height in km. Defines the vertical distribution as N(h) =
+        N(0)*exp(-h/Z).
     H_min : float or ndarray
         Minimum altitude in km (bottom of the layer).
     H_max : float or ndarray
@@ -3255,7 +3548,8 @@ def get_aer_dist_integral(Z, H_min, H_max):
     Returns
     -------
     float or ndarray
-        Integral of the exponential distribution between H_min and H_max,
+        Integral of the exponential distribution between H_min and
+        H_max,
         normalized by Z.
     """
     return -(Z) * np.exp(-H_max / Z) + (Z) * np.exp(-H_min / Z)
@@ -3275,7 +3569,8 @@ def check_date(dates, year):
     Raises
     ------
     ValueError
-        If dates contain multiple years or if the year doesn't match the expected year
+        If dates contain multiple years or if the year doesn't match the
+        expected year
 
     Returns
     -------
@@ -3290,13 +3585,15 @@ def check_date(dates, year):
     if years.size != 1:
         raise ValueError(
             f"Multiple years found in dates: {years}. "
-            "Data spanning multiple years is not supported for 'day of year' dimension."
+            "Data spanning multiple years is not supported for 'day of year'"
+            " dimension."
         )
 
     extracted_year = years[0]
     if extracted_year != year:
         raise ValueError(
-            f"Date year ({extracted_year}) does not match expected year ({year})."
+            f"Date year ({extracted_year}) does not match expected year"
+            + f" ({year})."
         )
 
 
@@ -3313,7 +3610,8 @@ def read_Aeronet_AOD(file, year):
     Returns
     -------
     out : xr.DataArray
-        Lookup table with extinction AOD as function of Day_of_Year(Fraction) and wavelength
+        Lookup table with extinction AOD as function of
+        Day_of_Year(Fraction) and wavelength
     """
     AOD = pd.read_csv(file, sep=",", skiprows=6)
     NTIME_AOD = AOD.index.size
@@ -3360,7 +3658,8 @@ def read_Aeronet_SSA(file, year):
     Returns
     -------
     out : xr.DataArray
-        Lookup table with single scattering albedo as function of Day_of_Year(Fraction)
+        Lookup table with single scattering albedo as function of
+        Day_of_Year(Fraction)
         and wavelength
     """
     SSA = pd.read_csv(file, sep=",", skiprows=6)
@@ -3408,7 +3707,8 @@ def read_Aeronet_PFN(file, year):
     Returns
     -------
     out : xr.DataArray
-        Lookup table with phase function matrix as function of Day_of_Year(Fraction),
+        Lookup table with phase function matrix as function of
+        Day_of_Year(Fraction),
         wavelength and theta_atm
     """
     PFN = pd.read_csv(file, sep=",", skiprows=6)
@@ -3483,7 +3783,8 @@ def atm_pro_from_aeronet(
     aod_file : str | xr.DataArray
         Extinction AOD aeronet file (finishing by .aod) or aod DataArray
     ssa_file : str | xr.DataArray
-        Single scattering albedo aeronet file (finishing by .ssa) or ssa DataArray
+        Single scattering albedo aeronet file (finishing by .ssa) or ssa
+        DataArray
     pfn_file : str | xr.DataArray
         Phase matrix aeronet file (finishing by .pfn) or pfn DataArray
     b_wav : list | BandSet
@@ -3501,7 +3802,8 @@ def atm_pro_from_aeronet(
     H2O : float
         Scale Water vertical column
     O3_H2O_alt : float
-        Altitude of H2O and O3 values, by default None and scale from z=0km
+        Altitude of H2O and O3 values, by default None and scale from
+        z=0km
     H_mix_min : float, optional
         Force min altitude of the mixture
     H_mix_max : float, optional
@@ -3512,11 +3814,13 @@ def atm_pro_from_aeronet(
     Returns
     -------
     out : xarray.Dataset
-        The atmophere profil. Similar to the output of the calc method of AtmAFGL.
+        The atmophere profil. Similar to the output of the calc method
+        of AtmAFGL.
 
     Notes
     -----
-    The scale height (see Hess et al. 2004) is the variable Z in the following equation:
+    The scale height (see Hess et al. 2004) is the variable Z in the
+    following equation:
 
     - :math:`N(h) = N(0)exp(-h/Z)`
 
@@ -3669,7 +3973,8 @@ def _open_lut_datatree_as_xarray(input_path, group=None, datasets=None):
 
         if len(dims) != data_ds[name].ndim:
             raise ValueError(
-                f'Dataset "{name}" declares {len(dims)} dimensions but has {data_ds[name].ndim} axes'
+                f'Dataset "{name}" declares {len(dims)} dimensions but has'
+                + f" {data_ds[name].ndim} axes"
             )
 
         data_vars[name] = (dims, data_ds[name].to_numpy())
@@ -3688,7 +3993,8 @@ def artdeco_to_smartg_cld(
 ):
     """Convert ARTDECO cloud HDF5 file to SMART-G NetCDF file format.
 
-    Reads cloud optical properties from an ARTDECO HDF5 file and converts them
+    Reads cloud optical properties from an ARTDECO HDF5 file and
+    converts them
     to an xarray dataset compatible with SMART-G cloud inputs.
 
     Parameters
@@ -3699,25 +4005,32 @@ def artdeco_to_smartg_cld(
         Output path for saving the converted SMART-G cloud NetCDF file.
         If None, the converted data is not saved to disk. Default: None
     h5_group : str, optional
-        Group name within the HDF5 file to open. If None and the file contains
-        only one group, that group is automatically selected. If the file contains
+        Group name within the HDF5 file to open. If None and the file
+        contains
+        only one group, that group is automatically selected. If the
+        file contains
         multiple groups, a group name must be specified. Default: None
     normalize : bool, optional
-        If True (default), normalize the p11 phase matrix component integral to 2.
+        If True (default), normalize the p11 phase matrix component
+        integral to 2.
         Default: True
     overwrite : bool, optional
-        If True and output_path is given, overwrite existing file. Default: False
+        If True and output_path is given, overwrite existing file.
+        Default: False
     veff : float, optional
-        Effective volume fraction. Required if cloud properties are dependent on veff.
+        Effective volume fraction. Required if cloud properties are
+        dependent on veff.
         Default: None
     wl_max : float, optional
-        Maximum wavelength in nanometers. Only wavelengths <= wl_max are included.
+        Maximum wavelength in nanometers. Only wavelengths <= wl_max are
+        included.
         Default: 4500
 
     Returns
     -------
     xr.Dataset
-        Dataset containing cloud optical properties. Includes coordinates:
+        Dataset containing cloud optical properties. Includes
+        coordinates:
 
         - reff: effective radius
         - wav: wavelength (nm)
@@ -3750,12 +4063,14 @@ def artdeco_to_smartg_cld(
                 h5_group = keys[0]
             elif len(keys) > 1:
                 raise NameError(
-                    "The h5 file has more than one group. Please choose one group between: "
+                    "The h5 file has more than one group. Please choose one "
+                    + "group between: "
                     + ", ".join(keys)
                 )
             else:
                 raise NameError(
-                    "Could not identify an ARTDECO group containing axis and data nodes."
+                    "Could not identify an ARTDECO group containing axis and "
+                    + "data nodes."
                 )
 
     art_cld = _open_lut_datatree_as_xarray(input_path, group=h5_group)
@@ -3789,10 +4104,8 @@ def artdeco_to_smartg_cld(
         veff_min = str(float(art_cld.coords["veff"].min()))
         veff_max = str(float(art_cld.coords["veff"].max()))
         raise NameError(
-            "The cloud file is dependant of veff. Please give a veff value between: "
-            + veff_min
-            + " and "
-            + veff_max
+            "The cloud file is dependant of veff. Please give a veff value "
+            + f"between: {veff_min} and {veff_max}"
         )
     elif is_veff:
         art_cld = art_cld.interp(veff=np.array([veff])).squeeze(
@@ -3827,9 +4140,15 @@ def artdeco_to_smartg_cld(
         phase[:, :, ipc, :] = phac.to_numpy().astype(np.float32, copy=False)
 
     if nstk == 6:
-        pha_desc = "phase matrix integral normalized to 2. stk order: p11, p21, p33, p34, p22 and p44"
+        pha_desc = (
+            "phase matrix integral normalized to 2. stk order: p11, "
+            + "p21, p33, p34, p22 and p44"
+        )
     if nstk == 4:
-        pha_desc = "phase matrix integral normalized to 2. stk order: p11, p21, p33 and p34"
+        pha_desc = (
+            "phase matrix integral normalized to 2. stk order: p11, "
+            + "p21, p33 and p34"
+        )
 
     # integral of P11 must be equal to 2
     if normalize:
@@ -3891,15 +4210,19 @@ def artdeco_to_smartg_cld(
 def extract_split(m):
     """
     Use SMART-G run results to compute atmospheric optical
-    properties at specified wavelengths and separates them into decomposed
-    components (absorption, Rayleigh scattering, aerosols, and phase functions).
-    These returned profiles can be used as alternative inputs to initialize a
+    properties at specified wavelengths and separates them into
+    decomposed
+    components (absorption, Rayleigh scattering, aerosols, and phase
+    functions).
+    These returned profiles can be used as alternative inputs to
+    initialize a
     new AtmAFGL instance.
 
     Parameters
     ----------
     m : xr.Dataset
-        SMART-G run results containing the atmospheric optical properties.
+        SMART-G run results containing the atmospheric optical
+        properties.
         Must include the following datasets:
 
         - OD_p: particulate optical depth
@@ -3924,12 +4247,14 @@ def extract_split(m):
         Tuple containing:
 
         - prof_phase[0]: Phase function indices (iphase_atm)
-        - prof_phase[1]: List of phase matrix DataArray objects for each index
+        - prof_phase[1]: List of phase matrix DataArray objects for each
+          index
 
     Examples
     --------
     >>> from smartg.atmosphere import extract_split, AtmAFGL
-    >>> prof_abs, prof_ray, prof_aer, prof_phases = extract_split(mlut_result)
+    >>> prof_abs, prof_ray, prof_aer, \
+    ...     prof_phases = extract_split(mlut_result)
     >>> new_atm = AtmAFGL('afglt', prof_abs=prof_abs, prof_ray=prof_ray,
     ...     prof_aer=prof_aer, prof_phases=prof_phases)
     """
@@ -3958,34 +4283,42 @@ def str2grid_array(str_grid):
     """
     Convert altitude grid specification string to numpy array.
 
-    This function adopts py4cats' compact grid specification format, providing
-    py4cats users with familiar syntax for altitude grid definition in SMARTG.
+    This function adopts py4cats' compact grid specification format,
+    providing
+    py4cats users with familiar syntax for altitude grid definition in
+    SMARTG.
 
     Parameters
     ----------
     str_grid : str
-        Compact grid specification string describing a piecewise-linear altitude
+        Compact grid specification string describing a piecewise-linear
+        altitude
         grid. Format: 'start[step1]stop1[step2]stop2[step3]stop3...'
 
         Each segment is defined by:
-        - start: starting altitude value (float, int, or scientific notation)
+        - start: starting altitude value (float, int, or scientific
+          notation)
         - [step]: step size enclosed in square brackets
-        - stop: ending altitude value (float, int, or scientific notation)
+        - stop: ending altitude value (float, int, or scientific
+          notation)
 
-        Supports both positive and negative steps. Results are always monotonic
+        Supports both positive and negative steps. Results are always
+        monotonic
         across all segments.
 
     Returns
     -------
     ndarray
-        1D array of altitude values. The array is sorted and contains the
+        1D array of altitude values. The array is sorted and contains
+        the
         generated grid points covering all specified segments.
 
     Notes
     -----
     - Each segment creates a uniformly spaced array using numpy.linspace
     - The final endpoint is always included in the output
-    - Intermediate endpoints between segments are included with their exact value
+    - Intermediate endpoints between segments are included with their
+      exact value
     - Step sizes can be positive or negative
     - Supports scientific notation (e.g., 1e-3, 2.5E+2)
 
@@ -4047,7 +4380,9 @@ def str2grid_array(str_grid):
         numbers = [float(x) for x in numbers_str]
         steps = [float(x) for x in steps_str]
     except ValueError as e:
-        raise ValueError(f"Invalid numeric value in grid specification: {e}")
+        raise ValueError(
+            f"Invalid numeric value in grid specification: {e}"
+        ) from e
 
     # Validate steps are non-zero
     if any(step == 0 for step in steps):
