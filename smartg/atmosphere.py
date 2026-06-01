@@ -163,7 +163,7 @@ class AerOPAC(object):
     * hum      (hum) float32 32B 0.0 50.0 70.0 80.0 90.0 95.0 98.0 99.0
     * wav      (wav) float32 104B 250.0 300.0 350.0 ... 3.75e+03 4e+03
                                   4.5e+03
-    * theta    (theta) float32 7kB 0.0 0.1 0.2 0.3 0.4 ... 179.7 179.8 
+    * theta    (theta) float32 7kB 0.0 0.1 0.2 0.3 0.4 ... 179.7 179.8
                                    179.9 180.0
     Dimensions without coordinates: stk
     Data variables:
@@ -458,7 +458,9 @@ class AerOPAC(object):
                 right=nhor - 1,
             )
             idf_wav = np.interp(
-                np.asarray(wav, dtype=np.float64), wav_vals, np.arange(nwav_orig)
+                np.asarray(wav, dtype=np.float64),
+                wav_vals,
+                np.arange(nwav_orig),
             )
             idf_wav_ref = np.interp(
                 np.atleast_1d(np.asarray(self.w_ref, dtype=np.float64)),
@@ -539,7 +541,9 @@ class AerOPAC(object):
                     self.tau_ref.dims[0]
                 ].values.astype(np.float64)
                 tau_ref_interp = np.interp(
-                    np.asarray(wav, dtype=np.float64), wav_axis, self.tau_ref.values
+                    np.asarray(wav, dtype=np.float64),
+                    wav_axis,
+                    self.tau_ref.values,
                 )
                 dtau *= (tau_ref_interp / np.sum(dtau, axis=1))[:, None]
 
@@ -562,7 +566,9 @@ class AerOPAC(object):
                     np.float64
                 )
                 ssa_interp = np.interp(
-                    np.asarray(wav, dtype=np.float64), wav_axis, self.ssa.values
+                    np.asarray(wav, dtype=np.float64),
+                    wav_axis,
+                    self.ssa.values,
                 )
                 ssa[:, :] = ssa_interp[:, None]
         return dtau, ssa
@@ -723,7 +729,9 @@ class AerOPAC(object):
             # for vec_float_indexing
             if nwav_sub > 1:
                 idf_wav = np.interp(
-                    np.asarray(wav, dtype=np.float64), wav_subset, np.arange(nwav_sub)
+                    np.asarray(wav, dtype=np.float64),
+                    wav_subset,
+                    np.arange(nwav_sub),
                 )
                 phase_at_wav = vec_float_indexing(
                     np.ascontiguousarray(phase_subset.transpose(1, 0, 2, 3)),
@@ -739,7 +747,9 @@ class AerOPAC(object):
             # Theta resampling if needed: transpose to (theta, nwav,
             # hor, stk)
             if NBTHETA != len(theta_orig):
-                idf_theta = np.interp(theta, theta_orig, np.arange(len(theta_orig)))
+                idf_theta = np.interp(
+                    theta, theta_orig, np.arange(len(theta_orig))
+                )
                 phase_at_wav = vec_float_indexing(
                     np.ascontiguousarray(phase_at_wav.transpose(3, 0, 1, 2)),
                     [idf_theta, slice(None), slice(None), slice(None)],
@@ -842,7 +852,9 @@ class AerOPAC(object):
                 right=nhor - 1,
             )
             idf_wav_ext = np.interp(
-                np.asarray(wav, dtype=np.float64), wav_vals, np.arange(nwav_orig)
+                np.asarray(wav, dtype=np.float64),
+                wav_vals,
+                np.arange(nwav_orig),
             )
             ext_at_hor = vec_float_indexing(
                 ext_data, [idf_hor_ext, slice(None)]
@@ -989,8 +1001,16 @@ class Cloud(AerOPAC):
     """
 
     def __init__(
-        self, filename, reff, zmin, zmax, tau_ref, w_ref, ssa=None, phase=None
-    ):
+        self,
+        filename: str | Path,
+        reff: float,
+        zmin: float,
+        zmax: float,
+        tau_ref: float,
+        w_ref: float,
+        ssa: float | list[float] | np.ndarray | xr.DataArray | None = None,
+        phase: xr.DataArray | None = None,
+    ) -> None:
         self.reff = reff
         self.tau_ref = tau_ref
         if np.isscalar(w_ref) or (
@@ -1070,7 +1090,7 @@ class Cloud(AerOPAC):
             )
 
     @staticmethod
-    def list():
+    def list() -> list[str]:
         """List available standard cloud model files.
 
         Returns
@@ -1136,16 +1156,16 @@ class AerUser(AerOPAC):
 
     def __init__(
         self,
-        aod,
-        ssa,
-        phase,
-        hum,
-        wav,
-        theta,
-        H_mix_min=0.0,
-        H_mix_max=2.0,
-        Z_mix=2,
-    ):
+        aod: np.ndarray,
+        ssa: np.ndarray,
+        phase: np.ndarray,
+        hum: np.ndarray,
+        wav: np.ndarray,
+        theta: np.ndarray,
+        H_mix_min: float = 0.0,
+        H_mix_max: float = 2.0,
+        Z_mix: float = 2,
+    ) -> None:
 
         self.filename = "none"
         self.tau_ref = None
@@ -1204,7 +1224,7 @@ class AerUser(AerOPAC):
         self._phase = None
 
     @staticmethod
-    def list():
+    def list() -> list[str]:
         """"""
         raise NotImplementedError(
             "The list() method is not available for user-defined aerosols. "
@@ -2893,7 +2913,9 @@ class ProfileBase(object):
         prof.z = znew
         _s = np.argsort(z)
         try:
-            prof.P = np.interp(znew, z[_s], self.P[_s], left=1012.0, right=1e-5)
+            prof.P = np.interp(
+                znew, z[_s], self.P[_s], left=1012.0, right=1e-5
+            )
         except ValueError:
             print(
                 "Error interpolating ({}, {}) -> ({}, {})".format(
@@ -2907,17 +2929,39 @@ class ProfileBase(object):
         _tmpT = make_interp_spline(z[_s], self.T[_s], k=1)
         prof.T = _tmpT(znew)
 
-        prof.dens_air = np.interp(znew, z[_s], self.dens_air[_s], left=0.0, right=0.0)
-        prof.dens_o3 = np.interp(znew, z[_s], self.dens_o3[_s], left=0.0, right=0.0)
-        prof.dens_o2 = np.interp(znew, z[_s], self.dens_o2[_s], left=0.0, right=0.0)
-        prof.dens_h2o = np.interp(znew, z[_s], self.dens_h2o[_s], left=0.0, right=0.0)
-        prof.dens_co2 = np.interp(znew, z[_s], self.dens_co2[_s], left=0.0, right=0.0)
-        prof.dens_no2 = np.interp(znew, z[_s], self.dens_no2[_s], left=0.0, right=0.0)
-        prof.dens_ch4 = np.interp(znew, z[_s], self.dens_ch4[_s], left=0.0, right=0.0)
-        prof.dens_co = np.interp(znew, z[_s], self.dens_co[_s], left=0.0, right=0.0)
-        prof.dens_n2o = np.interp(znew, z[_s], self.dens_n2o[_s], left=0.0, right=0.0)
-        prof.dens_n2 = np.interp(znew, z[_s], self.dens_n2[_s], left=0.0, right=0.0)
-        prof.dens_so2 = np.interp(znew, z[_s], self.dens_so2[_s], left=0.0, right=0.0)
+        prof.dens_air = np.interp(
+            znew, z[_s], self.dens_air[_s], left=0.0, right=0.0
+        )
+        prof.dens_o3 = np.interp(
+            znew, z[_s], self.dens_o3[_s], left=0.0, right=0.0
+        )
+        prof.dens_o2 = np.interp(
+            znew, z[_s], self.dens_o2[_s], left=0.0, right=0.0
+        )
+        prof.dens_h2o = np.interp(
+            znew, z[_s], self.dens_h2o[_s], left=0.0, right=0.0
+        )
+        prof.dens_co2 = np.interp(
+            znew, z[_s], self.dens_co2[_s], left=0.0, right=0.0
+        )
+        prof.dens_no2 = np.interp(
+            znew, z[_s], self.dens_no2[_s], left=0.0, right=0.0
+        )
+        prof.dens_ch4 = np.interp(
+            znew, z[_s], self.dens_ch4[_s], left=0.0, right=0.0
+        )
+        prof.dens_co = np.interp(
+            znew, z[_s], self.dens_co[_s], left=0.0, right=0.0
+        )
+        prof.dens_n2o = np.interp(
+            znew, z[_s], self.dens_n2o[_s], left=0.0, right=0.0
+        )
+        prof.dens_n2 = np.interp(
+            znew, z[_s], self.dens_n2[_s], left=0.0, right=0.0
+        )
+        prof.dens_so2 = np.interp(
+            znew, z[_s], self.dens_so2[_s], left=0.0, right=0.0
+        )
 
         prof.rh_cst = self.rh_cst
 
