@@ -415,7 +415,7 @@ class AerOPAC(object):
 
         if self.hum_or_reff == "hum":
             hum_or_reff_val = rh
-        elif self.hum_or_reff == "reff":
+        elif isinstance(self, Cloud):
             hum_or_reff_val = self.reff
         else:
             raise NameError(
@@ -750,7 +750,9 @@ class AerOPAC(object):
 
             # Determine humidity/reff values
             nphamat_ = 6
-            if self.hum_or_reff == "hum":
+            if isinstance(self, Cloud):
+                hum_or_reff_val = self.reff
+            elif self.hum_or_reff == "hum":
                 if self.force_rh[icont] is not None:
                     hum_or_reff_val = np.full_like(rh, self.force_rh[icont])
                 else:
