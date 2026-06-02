@@ -1102,6 +1102,13 @@ class Smartg(object):
                 -> The max number of history (only if hist is True). Default 8e6.
             * 'njac' : int, optional
                 -> The number of perturbed profiles. Default no Jacobian.
+            * 'njac_abs' : bool, optional
+                -> If True, Jacobians are for absorption only. ``weight_sca`` is computed
+                   only for the reference wavelength group (allowing a small ``nlow``),
+                   and is then reused (interpolated) for all perturbed groups. The
+                   scattering correction for perturbed wavelengths is taken from the
+                   reference group, while their absorption is recomputed from the
+                   perturbed profile. Requires ``njac`` > 0. Default False.
 
             Note: Optional for the dictionary keys indicate that the key is not required to be present.
         NBPHOTONS : int, optional
@@ -1390,6 +1397,7 @@ class Smartg(object):
         hist=False
         HIST=0
         NJAC=0
+        NJAC_ABS=0
         if alis_options is not None :
             if 'hist' in alis_options.keys():
                 if alis_options['hist']: 
@@ -1399,6 +1407,8 @@ class Smartg(object):
                     else : MAX_HIST=np.int64(8000000)
             if 'njac' in alis_options.keys():
                 NJAC=alis_options['njac']
+            if alis_options.get('njac_abs', False):
+                NJAC_ABS=1
             if (alis_options['nlow'] ==-1) : NLOW=NLAM
             else: NLOW=alis_options['nlow']
             BEER=1
@@ -1709,7 +1719,8 @@ class Smartg(object):
                   Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
                   TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
                   sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, 
-                  n_scl=self.nscl, scl_mode=self._scl_mode, n_orders=self.norders)
+                  n_scl=self.nscl, scl_mode=self._scl_mode, n_orders=self.norders,
+                  n_jac_abs=NJAC_ABS)
 
         # Initialize the progress bar
         p = Progress(NBPHOTONS, progress)
@@ -2128,11 +2139,14 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
         if 'phase_atm' in prof_atm.data_vars:
             for name in ['phase_atm', 'iphase_atm']:
                 da = prof_atm[name]
-                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+                # Use None for 'iphase' and 'stk' to avoid sharing axes across atm/oc
+                dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
+                m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
         if 'pine_atm' in prof_atm.data_vars:
             for name in ['pine_atm', 'FQY1_atm']:
                 da = prof_atm[name]
-                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+                dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
+                m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
 
         if 'neighbour_atm' in prof_atm.data_vars:
             for name in ['iopt_atm', 'iabs_atm', 'pmin_atm', 'pmax_atm', 'neighbour_atm']:
@@ -2157,11 +2171,14 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
         if 'phase_oc' in prof_oc.data_vars:
             for name in ['phase_oc', 'iphase_oc']:
                 da = prof_oc[name]
-                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+                # Use None for 'iphase' and 'stk' to avoid sharing axes across atm/oc
+                dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
+                m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
         if 'pine_oc' in prof_oc.data_vars:
             for name in ['pine_oc', 'FQY1_oc']:
                 da = prof_oc[name]
-                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+                dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
+                m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
 
         if 'neighbour_oc' in prof_oc.data_vars:
             for name in ['iopt_oc', 'iabs_oc', 'pmin_oc', 'pmax_oc', 'neighbour_oc']:
@@ -2643,7 +2660,7 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
                 n_low, n_jac, n_sensor, refrac, horiz, sza_max, sun_disc, cus_l, n_obj, n_gobj, n_robj,
                 p_min_x, p_min_y, p_min_z, p_max_x, p_max_y, p_max_z, is_atm, tc, nb_cx, nb_cy, 
                 v_sun, hist, z_toa, cell_size, sx_min, sx_max, sy_min, sy_max, nb_sx, nb_sy, 
-                no_aer_output, n_scl=1, scl_mode=0, n_orders=1) :
+                no_aer_output, n_scl=1, scl_mode=0, n_orders=1, n_jac_abs=0) :
     """Initialize and upload simulation constants to CUDA device globals.
 
     This routine computes a few derived geometric quantities and copies all
@@ -2767,6 +2784,7 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
     copy_to_device('WEIGHTRRd', weight_r_r, np.float32)
     copy_to_device('NLOWd', n_low, np.int32)
     copy_to_device('NJACd', n_jac, np.int32)
+    copy_to_device('NJACABSd', n_jac_abs, np.int32)
     copy_to_device('HISTd', hist, np.int32)
     copy_to_device('NSENSORd', n_sensor, np.int32)
     copy_to_device('NSCLd', n_scl, np.int32)

@@ -1557,7 +1557,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
         // FAST Move Mode ALIS specific additional initialization
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
-        int DL=(NLAMd-1)/(NLOWd-1);
+        int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
             delta_i = fabs(get_OD(BEERd, prof_oc[ilayer-1+k*DL*(NOCEd+1)])
                          - get_OD(BEERd, prof_oc[ilayer  +k*DL*(NOCEd+1)]));
@@ -1582,7 +1582,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
         // FAST Move Mode ALIS specific additional initialization
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
-        int DL=(NLAMd-1)/(NLOWd-1);
+        int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
         for (int k=0; k<NLOWd; k++) {
             ph->tau_sca[k] = get_OD(1,prof_oc[NOCEd + k*DL*(NOCEd+1)]) ;
         }
@@ -1674,7 +1674,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         // FAST Move Mode ALIS specific additional initialization
         #if defined(ALIS) && !defined(ALT_PP) && !defined(SPHERIQUE)
         // Index interval of the wavelengths where to compute scattering corrections
-        int DL=(NLAMd-1)/(NLOWd-1);
+        int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
         // Loop on correction wavelength indices
         for (int k=0; k<NLOWd; k++) {
             delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+k*DL*(NATMd+1)]) 
@@ -2400,7 +2400,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             // for ALIS case record cumulative distances && scatering corrections
             float tau;
             ph->cdist_atm[ph->layer] += d;
-            int DL=(NLAMd-1)/(NLOWd-1);
+            int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) 
                         - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
@@ -2464,7 +2464,7 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             // for ALIS case record cumulative distances && scatering corrections
             float tau;
             ph->cdist_atm[ph->layer] += d;
-            int DL=(NLAMd-1)/(NLOWd-1);
+            int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof_atm[i_layer_bh + k*DL*(NATMd+1)]) 
                         - get_OD(1,prof_atm[i_layer_fw + k*DL*(NATMd+1)]));
@@ -2666,7 +2666,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
             float tau;
             if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += d;
             if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += d;
-            int DL=(NLAMd-1)/(NLOWd-1);
+            int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof[i_layer_bh + k*DL*NL]) 
                         - get_OD(1,prof[i_layer_fw + k*DL*NL]));
@@ -2688,7 +2688,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
             float tau;
             if (ph->loc==ATMOS) ph->cdist_atm[ph->layer] += d;
             if (ph->loc==OCEAN) ph->cdist_oc[ ph->layer] += d;
-            int DL=(NLAMd-1)/(NLOWd-1);
+            int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 tau = abs(get_OD(1,prof[i_layer_bh + k*DL*NL]) 
                         - get_OD(1,prof[i_layer_fw + k*DL*NL]));
@@ -2876,7 +2876,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
             float coef;
             if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
             if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
-            int DL=(NLAMd-1)/(NLOWd-1);
+            int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
 			    ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
@@ -2895,7 +2895,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
             float coef;
             if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
             if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
-            int DL=(NLAMd-1)/(NLOWd-1);
+            int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
             for (int k=0; k<NLOWd; k++) {
                 coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
 			    ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
@@ -3109,7 +3109,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 //             float coef;
 //             if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
 //             if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
-//             int DL=(NLAMd-1)/(NLOWd-1);
+//             int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
 //             for (int k=0; k<NLOWd; k++) {
 //                 coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
 // 			    ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
@@ -3128,7 +3128,7 @@ __device__ void move_pp2_bak(Photon* ph, struct Profile *prof_atm, struct Profil
 //             float coef;
 //             if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
 //             if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
-//             int DL=(NLAMd-1)/(NLOWd-1);
+//             int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
 //             for (int k=0; k<NLOWd; k++) {
 //                 coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
 // 			    ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
@@ -3332,7 +3332,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 float coef;
                 if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
                 if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
-                int DL=(NLAMd-1)/(NLOWd-1);
+                int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
                 for (int k=0; k<NLOWd; k++)
                 {
                     coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
@@ -3359,7 +3359,7 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 float coef;
                 if (ph->loc==ATMOS) ph->cdist_atm[cell[ph->layer].iabs] += intTime1;
                 if (ph->loc==OCEAN) ph->cdist_oc[ cell[ph->layer].iabs] += intTime1;
-                int DL=(NLAMd-1)/(NLOWd-1);
+                int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
                 for (int k=0; k<NLOWd; k++)
                 {
                     coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
@@ -3492,7 +3492,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
     #ifdef ALIS
     // ALIS scattering correction
     float dsca_dl, dsca_dl0=-ph->tau ;
-    int DL=(NLAMd-1)/(NLOWd-1);
+    int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
     #else
     float ab;
     #endif
@@ -4273,7 +4273,7 @@ __device__ void scatter(Photon* ph,
              #endif
         } 
 
-		int DL=(NLAMd-1)/(NLOWd-1);
+		int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
 		float P11_aer_ref, P11_ray, P22_aer_ref, P22_ray, P12_aer_ref, P12_ray, P_ref;
         #ifndef OPT3D
 		float pmol= prof[ph->layer+ ph->ilam*(layer_end+1)].pmol;
@@ -7185,7 +7185,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
         // Specific computation for ALIS
         #else
         float dsca_dl, dsca_dl0;
-        int DL=(NLAMd-1)/(NLOWd-1);
+        int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
 
         // Complete photon history toward space for further final absorption computation
         ph->layer = 0;
@@ -7313,7 +7313,9 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
     #else //ALIS ===========================================================================================================
-    int DL=(NLAMd-1)/(NLOWd-1);
+    int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
+    // In njac_abs mode weight_sca covers only the reference group; map each il to il_ref in that group
+    int NLAM_REF = NJACABSd ? NLAMd/(NJACd+1) : NLAMd;
     float wabs;
 	if(((ith >= 0) && (ith < NBTHETAd)) && ((iphi >= 0) && (iphi < NBPHId)) && (is >= 0) && (is < NSENSORd) && (!isnan(weight))) // FIX #11
     {
@@ -7323,10 +7325,14 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           wabs=1.f;
           JJ = is*NBTHETAd*NBPHId*NLAMd + il*NBTHETAd*NBPHId + ith*NBPHId + iphi;
 
+          // In njac_abs mode, map perturbed-group wavelengths back to their reference counterpart
+          // so that weight_sca (computed only for the reference group) is reused for all groups
+          int il_ref = NJACABSd ? il % NLAM_REF : il;
+
           // Linear interpolation upon wavelength of the scattering correction
-          int ik=il/DL;
+          int ik=il_ref/DL;
           float wsca;
-          if (il != NLAMd-1) wsca = __fdividef((il-ik*DL)*1.0f,DL*1.0f) * (weight_sca[ik+1] - weight_sca[ik]) +
+          if (il_ref != NLAM_REF-1) wsca = __fdividef((il_ref-ik*DL)*1.0f,DL*1.0f) * (weight_sca[ik+1] - weight_sca[ik]) +
                           weight_sca[ik]; 
           else wsca = weight_sca[NLOWd-1];
           

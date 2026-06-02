@@ -76,6 +76,7 @@ __device__ __constant__ int RRd;
 __device__ __constant__ float WEIGHTRRd; // THRESHOLD for RUSSIAN ROULETTE PROCEDURE
 __device__ __constant__ int NLOWd;
 __device__ __constant__ int NJACd;
+__device__ __constant__ int NJACABSd; // 1 if njac_abs mode: weight_sca computed only for reference group
 __device__ __constant__ int HISTd;
 __device__ __constant__ int NSENSORd;
 __device__ __constant__ int NSCLd; // Number of Scatter Classes for AMF decomposition (Approach 2)
