@@ -48,6 +48,8 @@ Cloud
 
 import numpy as np
 from pathlib import Path
+from typing import Iterable
+from os import PathLike
 from smartg.phase import calc_iphase
 from scipy.interpolate import make_interp_spline
 from scipy.integrate import simpson
@@ -3426,7 +3428,9 @@ def refractivity(lam, P, T, co2):
     return Ntp
 
 
-def diff1(a, axis=0, samesize=True):
+def diff1(
+    a: np.ndarray, axis: int = 0, samesize: bool = True
+) -> np.ndarray:
     """
     Calculate the first difference of an array along a specified axis.
 
@@ -3477,7 +3481,12 @@ def diff1(a, axis=0, samesize=True):
         return np.diff(a, axis=axis)
 
 
-def od2k(prof, dataset, axis=1, zreverse=False):
+def od2k(
+    prof: xr.Dataset,
+    dataset: str,
+    axis: int = 1,
+    zreverse: bool = False,
+) -> np.ndarray:
     """Convert cumulated optical depth to a vertical coefficient
     profile.
 
@@ -3519,7 +3528,9 @@ def od2k(prof, dataset, axis=1, zreverse=False):
     return k[:, sl]
 
 
-def blackbody_radiance(wav, T):
+def blackbody_radiance(
+    wav: float | np.ndarray, T: float | np.ndarray
+) -> float | np.ndarray:
     """
     Calculate the spectral blackbody radiance.
 
@@ -3564,7 +3575,11 @@ def blackbody_radiance(wav, T):
     return L_b_wl
 
 
-def get_aer_dist_integral(Z, H_min, H_max):
+def get_aer_dist_integral(
+    Z: float | np.ndarray,
+    H_min: float | np.ndarray,
+    H_max: float | np.ndarray,
+) -> float | np.ndarray:
     """
     Compute the integral of exponential vertical distribution between
     two altitudes.
@@ -3595,7 +3610,9 @@ def get_aer_dist_integral(Z, H_min, H_max):
     return -(Z) * np.exp(-H_max / Z) + (Z) * np.exp(-H_min / Z)
 
 
-def check_date(dates, year):
+def check_date(
+    dates: np.ndarray | list[str], year: int
+) -> None:
     """Validate that all dates are from a single year and match the
     provided year.
 
@@ -3637,7 +3654,9 @@ def check_date(dates, year):
         )
 
 
-def read_Aeronet_AOD(file, year):
+def read_Aeronet_AOD(
+    file: str | PathLike, year: int
+) -> xr.DataArray:
     """Extract AOD data from Aeronet file.
 
     Parameters
@@ -3685,7 +3704,9 @@ def read_Aeronet_AOD(file, year):
     return AOD_ext_lut
 
 
-def read_Aeronet_SSA(file, year):
+def read_Aeronet_SSA(
+    file: str | PathLike, year: int
+) -> xr.DataArray:
     """Extract SSA data from Aeronet file.
 
     Parameters
@@ -3734,7 +3755,7 @@ def read_Aeronet_SSA(file, year):
     return SSA_lut
 
 
-def read_Aeronet_PFN(file, year):
+def read_Aeronet_PFN(file: str | PathLike, year: int) -> xr.DataArray:
     """Extract PFN data from Aeronet file.
 
     Parameters
@@ -3794,23 +3815,23 @@ def read_Aeronet_PFN(file, year):
 
 
 def atm_pro_from_aeronet(
-    date,
-    time,
-    aod_file,
-    ssa_file,
-    pfn_file,
-    b_wav,
-    pfwav=None,
-    grid=None,
-    atm_name="afglt",
-    P0=None,
-    O3=None,
-    H2O=None,
-    O3_H2O_alt=None,
-    H_mix_min=0.0,
-    H_mix_max=2.0,
-    Z_mix=8,
-):
+    date: str,
+    time: str,
+    aod_file: str | xr.DataArray,
+    ssa_file: str | xr.DataArray,
+    pfn_file: str | xr.DataArray,
+    b_wav: list[float] | BandSet,
+    pfwav: list[float] | None = None,
+    grid: np.ndarray | None = None,
+    atm_name: str = "afglt",
+    P0: float | None = None,
+    O3: float | None = None,
+    H2O: float | None = None,
+    O3_H2O_alt: float | None = None,
+    H_mix_min: float = 0.0,
+    H_mix_max: float = 2.0,
+    Z_mix: float = 8,
+) -> xr.Dataset:
     """
     Create an atmosphere profil from aeronet files
 
@@ -3971,7 +3992,11 @@ def atm_pro_from_aeronet(
     return pro
 
 
-def _open_lut_datatree_as_xarray(input_path, group=None, datasets=None):
+def _open_lut_datatree_as_xarray(
+    input_path: str | Path,
+    group: str | None = None,
+    datasets: Iterable[str] | None = None,
+) -> xr.Dataset:
     """Read a LUT-style HDF5 group into an xarray.Dataset using
     xarray.open_datatree."""
     data_vars = {}
@@ -4023,14 +4048,14 @@ def _open_lut_datatree_as_xarray(input_path, group=None, datasets=None):
 
 
 def artdeco_to_smartg_cld(
-    input_path,
-    output_path=None,
-    h5_group=None,
-    normalize=True,
-    overwrite=False,
-    veff=None,
-    wl_max=4500,
-):
+    input_path: str | Path,
+    output_path: str | Path | None = None,
+    h5_group: str | None = None,
+    normalize: bool = True,
+    overwrite: bool = False,
+    veff: float | None = None,
+    wl_max: float = 4500,
+) -> xr.Dataset:
     """Convert ARTDECO cloud HDF5 file to SMART-G NetCDF file format.
 
     Reads cloud optical properties from an ARTDECO HDF5 file and
@@ -4247,7 +4272,14 @@ def artdeco_to_smartg_cld(
     return ds
 
 
-def extract_split(m):
+def extract_split(
+    ds_sg: xr.Dataset,
+) -> tuple[
+    np.ndarray,
+    np.ndarray,
+    tuple[np.ndarray, np.ndarray],
+    tuple[np.ndarray, list[xr.DataArray]],
+]:
     """
     Use SMART-G run results to compute atmospheric optical
     properties at specified wavelengths and separates them into
@@ -4260,7 +4292,7 @@ def extract_split(m):
 
     Parameters
     ----------
-    m : xr.Dataset
+    ds_sg : xr.Dataset
         SMART-G run results containing the atmospheric optical
         properties.
         Must include the following datasets:
@@ -4298,28 +4330,28 @@ def extract_split(m):
     >>> new_atm = AtmAFGL('afglt', prof_abs=prof_abs, prof_ray=prof_ray,
     ...     prof_aer=prof_aer, prof_phases=prof_phases)
     """
-    if hasattr(m, "to_xarray"):
-        m = m.to_xarray()
+    if hasattr(ds_sg, "to_xarray"):
+        ds_sg = ds_sg.to_xarray()
     pro_aer = diff1(
-        m["OD_p"].to_numpy().astype(np.float32, copy=False), axis=1
+        ds_sg["OD_p"].to_numpy().astype(np.float32, copy=False), axis=1
     )
-    ssa_aer = m["ssa_p_atm"].to_numpy()
+    ssa_aer = ds_sg["ssa_p_atm"].to_numpy()
     pro_ray = diff1(
-        m["OD_r"].to_numpy().astype(np.float32, copy=False), axis=1
+        ds_sg["OD_r"].to_numpy().astype(np.float32, copy=False), axis=1
     )
     pro_abs = diff1(
-        m["OD_g"].to_numpy().astype(np.float32, copy=False), axis=1
+        ds_sg["OD_g"].to_numpy().astype(np.float32, copy=False), axis=1
     )
-    pro_iphase = m["iphase_atm"].to_numpy()
+    pro_iphase = ds_sg["iphase_atm"].to_numpy()
     pro_phases = [
-        m["phase_atm"].isel(iphase=i, drop=True)
+        ds_sg["phase_atm"].isel(iphase=i, drop=True)
         for i in range(int(pro_iphase.max()) + 1)
     ]
 
     return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
-def str2grid_array(str_grid):
+def str2grid_array(str_grid: str) -> np.ndarray:
     """
     Convert altitude grid specification string to numpy array.
 
@@ -4436,12 +4468,14 @@ def str2grid_array(str_grid):
     n_array = np.round(np.abs(np.diff(numbers) / steps)).astype(int)
     n_array[-1] += 1  # Ensure final endpoint is included
 
-    # Build piecewise linear grid with list comprehension
-    return np.concatenate(
-        [
-            np.linspace(
-                numbers[i], numbers[i + 1], n, endpoint=(i == len(steps) - 1)
-            )
-            for i, n in enumerate(n_array)
-        ]
-    )
+    # Build piecewise linear grid
+    segments: list[np.ndarray] = [
+        np.linspace(
+            float(numbers[i]),
+            float(numbers[i + 1]),
+            int(n),
+            endpoint=(i == len(steps) - 1),
+        )
+        for i, n in enumerate(n_array.tolist())
+    ]
+    return np.concatenate(segments)
