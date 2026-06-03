@@ -3654,7 +3654,7 @@ def check_date(
         )
 
 
-def read_Aeronet_AOD(
+def read_aeronet_aod(
     file: str | PathLike, year: int
 ) -> xr.DataArray:
     """Extract AOD data from Aeronet file.
@@ -3704,7 +3704,7 @@ def read_Aeronet_AOD(
     return AOD_ext_lut
 
 
-def read_Aeronet_SSA(
+def read_aeronet_ssa(
     file: str | PathLike, year: int
 ) -> xr.DataArray:
     """Extract SSA data from Aeronet file.
@@ -3755,7 +3755,7 @@ def read_Aeronet_SSA(
     return SSA_lut
 
 
-def read_Aeronet_PFN(file: str | PathLike, year: int) -> xr.DataArray:
+def read_aeronet_pfn(file: str | PathLike, year: int) -> xr.DataArray:
     """Extract PFN data from Aeronet file.
 
     Parameters
@@ -3904,15 +3904,15 @@ def atm_pro_from_aeronet(
     if isinstance(aod_file, xr.DataArray):
         aod_lut = aod_file
     else:
-        aod_lut = read_Aeronet_AOD(aod_file, year=year)
+        aod_lut = read_aeronet_aod(aod_file, year=year)
     if isinstance(ssa_file, xr.DataArray):
         ssa_lut = ssa_file
     else:
-        ssa_lut = read_Aeronet_SSA(ssa_file, year=year)
+        ssa_lut = read_aeronet_ssa(ssa_file, year=year)
     if isinstance(pfn_file, xr.DataArray):
         pfn_lut = pfn_file
     else:
-        pfn_lut = read_Aeronet_PFN(pfn_file, year=year)
+        pfn_lut = read_aeronet_pfn(pfn_file, year=year)
 
     if not isinstance(b_wav, BandSet):
         b_wav_BS = BandSet(b_wav)
