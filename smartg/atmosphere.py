@@ -3066,7 +3066,7 @@ def saturation_pressure(T):
     return sat_press * 1e-2
 
 
-def f_n2(lam):
+def f_n2(lam: float | np.ndarray) -> float | np.ndarray:
     """Compute the depolarization factor of N2 as a function of
     wavelength.
 
@@ -3091,7 +3091,7 @@ def f_n2(lam):
     return 1.034 + 3.17 * 1e-4 * lam ** (-2)
 
 
-def f_o2(lam):
+def f_o2(lam: float | np.ndarray) -> float | np.ndarray:
     """Compute the depolarization factor of O2 as a function of
     wavelength.
 
@@ -3116,7 +3116,7 @@ def f_o2(lam):
     return 1.096 + 1.385 * 1e-3 * lam ** (-2) + 1.448 * 1e-4 * lam ** (-4)
 
 
-def f_air_co2(lam, co2):
+def f_air_co2(lam: np.ndarray, co2: np.ndarray) -> np.ndarray:
     """Calculates the depolarization factor for air using a composite
     formula based on the depolarization factors of N2 and O2, and the
     CO2 concentration. Produces a 2-D array with one value per
@@ -3153,7 +3153,7 @@ def f_air_co2(lam, co2):
     )
 
 
-def n_air_co2_300(lam):
+def n_air_co2_300(lam: float | np.ndarray) -> float | np.ndarray:
     """Compute the refractive index of dry air at 300 ppm CO2 as a
     function of wavelength.
 
@@ -3187,7 +3187,7 @@ def n_air_co2_300(lam):
     )
 
 
-def n_air_co2(lam, co2):
+def n_air_co2(lam: np.ndarray, co2: np.ndarray) -> np.ndarray:
     """Calculates the refractive index as function of wavelength and CO2
     concentration.
 
@@ -3218,7 +3218,7 @@ def n_air_co2(lam, co2):
     return (N300 - 1) * (1 + 0.54 * (CO2 * 1e-6 - 0.0003)) + 1.0
 
 
-def m_dry_air(co2):
+def m_dry_air(co2: float | np.ndarray) -> float | np.ndarray:
     """Compute the mean molecular weight of dry air as a function of CO2
     concentration.
 
@@ -3244,7 +3244,7 @@ def m_dry_air(co2):
     return 15.0556 * co2 * 1e-6 + 28.9595
 
 
-def rayleigh_crs(lam, co2):
+def rayleigh_crs(lam: np.ndarray, co2: float | np.ndarray) -> np.ndarray:
     """Compute the Rayleigh cross section.
 
     Parameters:
@@ -3292,7 +3292,7 @@ def rayleigh_crs(lam, co2):
     )
 
 
-def gravity_z0(lat):
+def gravity_z0(lat: float) -> float:
     """Compute gravitational acceleration at Earth's surface as a
     function of latitude.
 
@@ -3324,7 +3324,7 @@ def gravity_z0(lat):
     )
 
 
-def gravity_z(lat, z):
+def gravity_z(lat: float, z: float | np.ndarray | list) -> float | np.ndarray:
     """Compute gravitational acceleration at a given altitude and
     latitude.
 
@@ -3365,8 +3365,13 @@ def gravity_z(lat, z):
 
 
 def rayleigh_od(
-    lam, co2=400.0, lat=45.0, z=0.0, P=1013.25, pressure="surface"
-):
+    lam: np.ndarray,
+    co2: float | np.ndarray = 400.0,
+    lat: float = 45.0,
+    z: float | np.ndarray = 0.0,
+    P: float | np.ndarray = 1013.25,
+    pressure: str = "surface",
+) -> np.ndarray:
     """
     Rayleigh optical depth from Bodhaine et al, 99 (N wavelengths x M
     layers)
@@ -3395,7 +3400,9 @@ def rayleigh_od(
     return rayleigh_crs(lam, co2) * Psurf * Avogadro / m_dry_air(co2) / G
 
 
-def refractivity(lam, P, T, co2):
+def refractivity(
+    lam: np.ndarray, P: np.ndarray, T: np.ndarray, co2: np.ndarray
+) -> np.ndarray:
     """Calculate the refractive index of air as a function of
     wavelength, pressure, temperature, and CO2 concentration.
 
@@ -3428,9 +3435,7 @@ def refractivity(lam, P, T, co2):
     return Ntp
 
 
-def diff1(
-    a: np.ndarray, axis: int = 0, samesize: bool = True
-) -> np.ndarray:
+def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> np.ndarray:
     """
     Calculate the first difference of an array along a specified axis.
 
@@ -3610,9 +3615,7 @@ def get_aer_dist_integral(
     return -(Z) * np.exp(-H_max / Z) + (Z) * np.exp(-H_min / Z)
 
 
-def check_date(
-    dates: np.ndarray | list[str], year: int
-) -> None:
+def check_date(dates: np.ndarray | list[str], year: int) -> None:
     """Validate that all dates are from a single year and match the
     provided year.
 
@@ -3654,9 +3657,7 @@ def check_date(
         )
 
 
-def read_aeronet_aod(
-    file: str | PathLike, year: int
-) -> xr.DataArray:
+def read_aeronet_aod(file: str | PathLike, year: int) -> xr.DataArray:
     """Extract AOD data from Aeronet file.
 
     Parameters
@@ -3704,9 +3705,7 @@ def read_aeronet_aod(
     return AOD_ext_lut
 
 
-def read_aeronet_ssa(
-    file: str | PathLike, year: int
-) -> xr.DataArray:
+def read_aeronet_ssa(file: str | PathLike, year: int) -> xr.DataArray:
     """Extract SSA data from Aeronet file.
 
     Parameters
