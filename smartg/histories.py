@@ -26,17 +26,17 @@ def get_histories(m, LEVEL=0, IDIR=0,verbose=False):
             w : A ndarray of size (NLE, NLR) for corrective scattering weights for the different LR wavelengths
             nrrs : A ndarray of size (NLE) of Rotational Raman Scattering event flag (1 : RRS, 0: no RRS)
             nref : A ndarray of size (NLE) of number of reflection on the surface (as described by the keyword surf in the run method)
-            nrrs : A ndarray of size (NLE) of Sun Induced Fluorescence event flag (1 : SIF, 0: no SIF)
+            nsif : A ndarray of size (NLE) of Sun Induced Fluorescence event flag (1 : SIF, 0: no SIF)
             nvrs : A ndarray of size (NLE) of Vibrational Raman Scattering event flag (1 : VRS, 0: no VRS)
             nenv : A ndarray of size (NLE) of reflection on the environement (as described by the keyword env in the run method)
-            //ith  : A ndarray of size (NLE) of index of the Zenith angle LE direction of the virtual photon
             nint : A ndarray of size (NLE) of number of reflection or scattering
+            nlscl : A ndarray of size (NLE) of last-scattering layer index (-1 = surface/unscattered)
     '''
     NL=m.axis('z_atm').size-1 if not isinstance(m, xarray.Dataset) else m['z_atm'].size-1
     tabHist_ = np.squeeze(m['histories'].data)
     tabHist = tabHist_[LEVEL, :,:]
     if verbose : print (tabHist.shape)
-    w0      = tabHist[:, NL+4:-6] 
+    w0      = tabHist[:, NL+4:-7] 
     #D0      = tabHist[:,0]
     good    = w0[:,0]!=0
     ngood   = np.sum(good)
@@ -45,18 +45,18 @@ def get_histories(m, LEVEL=0, IDIR=0,verbose=False):
     S       = np.zeros((ngood,4),dtype=np.float32) 
     D       = tabHist[good,     :NL  ]
     S[:,:4] = tabHist[good, NL:NL+4  ]
-    w       = tabHist[good, NL+4:-6  ]
-    nrrs    = tabHist[good,      -6  ]
-    nref    = tabHist[good,      -5  ]
-    nsif    = tabHist[good,      -4  ]
-    nvrs    = tabHist[good,      -3  ]
-    nenv    = tabHist[good,      -2  ]
-    #ith     = tabHist[good,      -1  ]
-    nint     = tabHist[good,      -1  ]
+    w       = tabHist[good, NL+4:-7  ]
+    nrrs    = tabHist[good,      -7  ]
+    nref    = tabHist[good,      -6  ]
+    nsif    = tabHist[good,      -5  ]
+    nvrs    = tabHist[good,      -4  ]
+    nenv    = tabHist[good,      -3  ]
+    nint    = tabHist[good,      -2  ]
+    nlscl   = tabHist[good,      -1  ]
     #
     if verbose : print('Number of photons in : {}\nNumber of LE photons : {}\nNumber of LR wavelengths : {}\nNumber of Layers : {}'.format(N, *w.shape, NL))
     
-    return N, S, D, w, nrrs, nref, nsif, nvrs, nenv, nint
+    return N, S, D, w, nrrs, nref, nsif, nvrs, nenv, nint, nlscl
 
 
 

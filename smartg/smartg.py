@@ -3298,7 +3298,7 @@ def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_
             tab_dist = gpuzeros((1), dtype=np.float32)
 
     if hist:
-        tab_hist_tot = gpuzeros((2, max_hist, (n_atm_abs + n_oce_abs + n_pstk + n_low + 6), n_sensor, nb_theta, nb_phi), dtype=np.float32)
+        tab_hist_tot = gpuzeros((2, max_hist, (n_atm_abs + n_oce_abs + n_pstk + n_low + 7), n_sensor, nb_theta, nb_phi), dtype=np.float32)
     else:
         tab_hist_tot = gpuzeros((1), dtype=np.float32)
 

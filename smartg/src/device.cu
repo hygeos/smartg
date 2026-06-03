@@ -7524,7 +7524,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
           if (counter2 >= MAX_HIST) return;
-          unsigned long long KK2 = NATM_ABSd+NOCE_ABSd+4+NLOWd+6; /* Number of information per local estmate photon (Record length)*/
+          unsigned long long KK2 = NATM_ABSd+NOCE_ABSd+4+NLOWd+7; /* Number of information per local estmate photon (Record length): +7 = nrrs,nref,nsif,nvrs,nenv,nint,last_scatter_layer */
           //unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           unsigned long long KKK2  = K*KK2 * MAX_HIST;/* Number of individual information per vertical Level (Number of Records)*/
@@ -7580,7 +7580,9 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+5;
           LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+5)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nint);
-          //tabCount3[LL2]= (float)(ph->ith);
+          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+6;
+          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+6)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          tabCount3[LL2]= (float)(ph->last_scatter_layer); /* index of last scattering layer (-1 = surface/unscattered) */
        } // HISTd==1
 
        // Compute scatter class index (Approach 2)
