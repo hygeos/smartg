@@ -1955,7 +1955,7 @@ class AtmAFGL(Atmosphere):
 
         # refractive index
         n = refractivity(
-            wav[:] * 1e-3, prof.P, prof.T, prof.dens_co2 / prof.dens_air * 1e6
+            wav[:] * 1e-3, prof.p, prof.t, prof.dens_co2 / prof.dens_air * 1e6
         )
         pro["n_atm"] = xr.DataArray(
             n,
@@ -1968,7 +1968,7 @@ class AtmAFGL(Atmosphere):
         )
 
         pro["T_atm"] = xr.DataArray(
-            prof.T,
+            prof.t,
             dims=["z_atm"],
             coords={"z_atm": pro.coords["z_atm"]},
             attrs={"description": "temperature (K)"},
@@ -1984,7 +1984,7 @@ class AtmAFGL(Atmosphere):
                 prof.dens_co2 / prof.dens_air * 1e6,
                 self.lat,
                 prof.z * 1e3,
-                prof.P,
+                prof.p,
             )
             dtaur = diff1(tauray, axis=1)
         else:
@@ -2137,7 +2137,7 @@ class AtmAFGL(Atmosphere):
             if use_no2_acs or use_o3_acs:
                 # Commun part
                 T0 = 273.15  # in K
-                T = prof.T[None, :]  # temperature variability in z
+                T = prof.t[None, :]  # temperature variability in z
                 if use_o3_acs:
                     # O3 optical thickness
                     min_wl = float(np.min(self.acs_o3["wavelength"].values))
@@ -2726,14 +2726,14 @@ class ProfileBase(object):
 
     def __init__(
         self,
-        fname,
-        tco3=None,
-        tcwp=None,
-        tcno2=True,
-        p0=None,
-        rh_cst=None,
-        o3_h2o_alt=None,
-    ):
+        fname: str | Path | None,
+        tco3: float | None = None,
+        tcwp: float | None = None,
+        tcno2: bool | None = True,
+        p0: float | None = None,
+        rh_cst: float | None = None,
+        o3_h2o_alt: float | None = None,
+    ) -> None:
 
         if fname is None:
             return
@@ -2778,8 +2778,8 @@ class ProfileBase(object):
                     skiprows=n,
                 ).values
                 self.z = data[:, 0]  # Altitude in km
-                self.P = data[:, 1]  # pressure in hPa
-                self.T = data[:, 2]  # temperature in K
+                self.p = data[:, 1]  # pressure in hPa
+                self.t = data[:, 2]  # temperature in K
                 self.dens_air = data[:, 3]  # Air density in cm-3
                 data2 = np.zeros((data.shape[0], 5))
                 for i, gas in enumerate(["o3", "o2", "h2o", "co2", "no2"]):
@@ -2804,8 +2804,8 @@ class ProfileBase(object):
         elif fname.suffix == ".nc":
             with xr.open_dataset(fname) as data:
                 self.z = data.coords["z_atm"].values  # Altitude in km
-                self.P = data["P"].values  # pressure in hPa
-                self.T = data["T"].values  # temperature in K
+                self.p = data["P"].values  # pressure in hPa
+                self.t = data["T"].values  # temperature in K
                 self.dens_air = data["dens"].values  # Air density cm-3
                 self.dens_h2o = data["H2O"].values  # H2O density cm-3
                 self.dens_o3 = data["O3"].values  # O3 density cm-3
@@ -2863,7 +2863,7 @@ class ProfileBase(object):
                 self.dens_h2o[:] = 0.0
 
         if p0 is not None:
-            self.P *= p0 / self.P[-1]
+            self.p *= p0 / self.p[-1]
 
         if not tcno2:
             self.dens_no2[:] = 0.0
@@ -2895,7 +2895,7 @@ class ProfileBase(object):
             new altitude grid `znew`. The following attributes are
             interpolated:
             - z: altitude (km)
-            - P: pressure (hPa)
+            - p: pressure (hPa)
             - T: temperature (K)
             - dens_air: air density (molecule/cm³)
             - dens_o3: ozone density (molecule/cm³)
@@ -2915,8 +2915,8 @@ class ProfileBase(object):
         prof.z = znew
         _s = np.argsort(z)
         try:
-            prof.P = np.interp(
-                znew, z[_s], self.P[_s], left=1012.0, right=1e-5
+            prof.p = np.interp(
+                znew, z[_s], self.p[_s], left=1012.0, right=1e-5
             )
         except ValueError:
             print(
@@ -2928,8 +2928,8 @@ class ProfileBase(object):
             raise
         # k=1: linear interpolation; BSpline extrapolates linearly
         # beyond the data range by default (replaces fill_value="extrapolate")
-        _tmpT = make_interp_spline(z[_s], self.T[_s], k=1)
-        prof.T = _tmpT(znew)
+        _tmpT = make_interp_spline(z[_s], self.t[_s], k=1)
+        prof.t = _tmpT(znew)
 
         prof.dens_air = np.interp(
             znew, z[_s], self.dens_air[_s], left=0.0, right=0.0
@@ -3010,10 +3010,10 @@ class ProfileBase(object):
         using temperature-dependent formulas.
         """
         if getattr(self, "rh_cst", None) is not None:
-            rh = np.full_like(self.T, self.rh_cst, dtype=float)
+            rh = np.full_like(self.t, self.rh_cst, dtype=float)
         else:
-            p_h2o = (self.dens_h2o / self.dens_air) * self.P
-            p_sat = saturation_pressure(self.T) * 1e-2
+            p_h2o = (self.dens_h2o / self.dens_air) * self.p
+            p_sat = saturation_pressure(self.t) * 1e-2
             rh = (p_h2o / p_sat) * 100
 
         return rh

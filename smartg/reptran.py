@@ -109,8 +109,8 @@ class REPTRAN_IBAND(object):
         various gases stored in the profile prof
         '''
         Nmol = 8
-        T = prof.T
-        P = prof.P
+        T = prof.t
+        P = prof.p
         M = len(T)
 
         densmol = np.zeros((M, Nmol), np.float64)
@@ -127,7 +127,7 @@ class REPTRAN_IBAND(object):
 
         datamol = np.zeros(M, np.float64)
 
-        assert len(prof.T) == len(prof.P)
+        assert len(prof.t) == len(prof.p)
 
         # for each gas
         for ig in np.arange(Nmol):

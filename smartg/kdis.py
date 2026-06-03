@@ -506,8 +506,8 @@ class KDIS_IBAND(object):
 
         species = ['h2o', 'co2', 'o3', 'no2', 'co', 'ch4', 'o2', 'n2', 'n2o', 'so2']
         #species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
-        T = prof.T.copy()
-        P = prof.P.copy()
+        T = prof.t.copy()
+        P = prof.p.copy()
         Ngas = 10
         #Ngas = 8
         M = len(T)
