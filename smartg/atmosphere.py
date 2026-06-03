@@ -3013,13 +3013,13 @@ class ProfileBase(object):
             rh = np.full_like(self.T, self.rh_cst, dtype=float)
         else:
             p_h2o = (self.dens_h2o / self.dens_air) * self.P
-            p_sat = saturation_pressure(self.T)
+            p_sat = saturation_pressure(self.T) * 1e-2
             rh = (p_h2o / p_sat) * 100
 
         return rh
 
 
-def saturation_pressure(T):
+def saturation_pressure(t: float | np.ndarray) -> float | np.ndarray:
     """Calculate saturation vapor pressure for water and ice phases.
 
     Uses the Huang (2018) empirical formula, which provides accurate
@@ -3028,13 +3028,13 @@ def saturation_pressure(T):
 
     Parameters
     ----------
-    T : float or array-like
+    t : float or array-like
         Temperature in Kelvin [K]
 
     Returns
     -------
     sat_press : float or numpy.ndarray
-        Saturation vapor pressure [hPa]
+        Saturation vapor pressure [Pa]
 
     Notes
     -----
@@ -3050,7 +3050,7 @@ def saturation_pressure(T):
     Vapor Pressure of Water and Ice. Journal of Applied Meteorology and
     Climatology, 57(6), 1265-1272.
     """
-    tc = T - 273.15  # temperature in C°
+    tc = t - 273.15  # temperature in C°
     sat_press = np.zeros_like(tc)
 
     is_water = tc > 0
@@ -3063,7 +3063,7 @@ def saturation_pressure(T):
     sat_press[is_ice] = (np.exp(43.494 - (6545.8 / (tc[is_ice] + 278)))) / (
         (tc[is_ice] + 868) ** 2
     )
-    return sat_press * 1e-2
+    return sat_press
 
 
 def f_n2(lam: float | np.ndarray) -> float | np.ndarray:
