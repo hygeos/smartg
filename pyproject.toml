@@ -83,6 +83,8 @@ smartg = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
 luts = "*"
+ephem = ">=4.2.1,<5"
+docformatter = ">=1.7.8,<2"
 
 [tool.pixi.environments]
 # pixi shell # default environment
@@ -104,3 +106,10 @@ jax = {version = ">=0.4", extras = ["cuda12"]}
 radis = ">=0.17"
 statsmodels = "*"
 "hitran-api" = ">=1.1"
+
+[tool.pyright]
+# Suppress "partially unknown" errors from third-party libraries with incomplete stubs (e.g. xarray)
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownParameterType = "none"
