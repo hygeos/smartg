@@ -46,9 +46,11 @@ Cloud
     cloud layers in atmospheric profiles.
 """
 
+from __future__ import annotations
+
 import numpy as np
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 from os import PathLike
 from smartg.phase import calc_iphase
 from scipy.interpolate import make_interp_spline
@@ -2565,7 +2567,17 @@ class AtmAFGL(Atmosphere):
         else:
             return None
 
-    def calc_split(self, wav, phase=True, NBTHETA=721):
+    def calc_split(
+        self,
+        wav: float | np.ndarray | list | BandSet,
+        phase: bool = True,
+        NBTHETA: int = 721,
+    ) -> tuple[
+        np.ndarray,
+        np.ndarray,
+        tuple[np.ndarray, np.ndarray],
+        tuple[np.ndarray, list[xr.DataArray]],
+    ]:
         """
         Computes atmospheric optical properties at specified wavelengths
         and
@@ -2614,8 +2626,10 @@ class AtmAFGL(Atmosphere):
 
             - pro_iphase: Phase matrix indices array [wavelength,
               altitude]
-            - pro_phases: List of phase matrix LUT objects, one for each
-              phase index
+            - pro_phases: List of xarray.DataArray phase matrices (one 
+              per phase index). Each entry is an `xr.DataArray` 
+              representing the phase matrix for that phase index 
+              (dimensions typically ['stk', 'theta_atm']).
 
         Notes
         -----
@@ -2645,7 +2659,7 @@ class AtmAFGL(Atmosphere):
         pro_abs = diff1(pro["OD_g"].values.astype(np.float32), axis=1)
         pro_iphase = pro["iphase_atm"].values
         pro_phases = [
-            pro["phase_atm"].sel(iphase=i).values
+            pro["phase_atm"].sel(iphase=i)
             for i in range(int(pro_iphase.max()) + 1)
         ]
 
@@ -2868,7 +2882,7 @@ class ProfileBase(object):
         if not tcno2:
             self.dens_no2[:] = 0.0
 
-    def regrid(self, znew):
+    def regrid(self, znew: np.ndarray) -> "ProfileBase":
         """Regrid atmospheric profile to a new altitude grid.
 
         Interpolates all atmospheric properties (pressure, temperature,
@@ -2969,7 +2983,7 @@ class ProfileBase(object):
 
         return prof
 
-    def relative_humidity(self):
+    def relative_humidity(self) -> np.ndarray:
         """
         Calculate relative humidity profile for each atmospheric layer.
 
@@ -3050,7 +3064,7 @@ def saturation_pressure(t: float | np.ndarray) -> float | np.ndarray:
     Vapor Pressure of Water and Ice. Journal of Applied Meteorology and
     Climatology, 57(6), 1265-1272.
     """
-    tc = t - 273.15  # temperature in C°
+    tc = np.atleast_1d(t) - 273.15  # temperature in C°
     sat_press = np.zeros_like(tc)
 
     is_water = tc > 0
@@ -3116,7 +3130,9 @@ def f_o2(lam: float | np.ndarray) -> float | np.ndarray:
     return 1.096 + 1.385 * 1e-3 * lam ** (-2) + 1.448 * 1e-4 * lam ** (-4)
 
 
-def f_air_co2(lam: np.ndarray, co2: np.ndarray) -> np.ndarray:
+def f_air_co2(
+    lam: np.ndarray, co2: np.ndarray | np.floating[Any]
+) -> np.ndarray:
     """Calculates the depolarization factor for air using a composite
     formula based on the depolarization factors of N2 and O2, and the
     CO2 concentration. Produces a 2-D array with one value per
@@ -3126,8 +3142,8 @@ def f_air_co2(lam: np.ndarray, co2: np.ndarray) -> np.ndarray:
     ----------
     lam : 1-D ndarray
         Wavelength values in micrometers (μm). Shape: (N,)
-    co2 : 1-D ndarray
-        CO2 concentration in parts per million (ppm). Shape: (M,)
+    co2 : 1-D ndarray | np.floating
+        CO2 concentration in parts per million (ppm). Shape: (M,) or scalar.
 
     Returns
     -------
@@ -3144,9 +3160,9 @@ def f_air_co2(lam: np.ndarray, co2: np.ndarray) -> np.ndarray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    _FN2 = f_n2(lam).reshape((-1, 1))
-    _FO2 = f_o2(lam).reshape((-1, 1))
-    _CO2 = co2.reshape((1, -1))
+    _FN2 = np.atleast_1d(f_n2(lam)).reshape((-1, 1))
+    _FO2 = np.atleast_1d(f_o2(lam)).reshape((-1, 1))
+    _CO2 = np.atleast_1d(co2).reshape((1, -1))
 
     return (78.084 * _FN2 + 20.946 * _FO2 + 0.934 + _CO2 * 1e-4 * 1.15) / (
         78.084 + 20.946 + 0.934 + _CO2 * 1e-4
@@ -3187,7 +3203,9 @@ def n_air_co2_300(lam: float | np.ndarray) -> float | np.ndarray:
     )
 
 
-def n_air_co2(lam: np.ndarray, co2: np.ndarray) -> np.ndarray:
+def n_air_co2(
+    lam: np.ndarray, co2: np.ndarray | np.floating[Any]
+) -> np.ndarray:
     """Calculates the refractive index as function of wavelength and CO2
     concentration.
 
@@ -3195,8 +3213,8 @@ def n_air_co2(lam: np.ndarray, co2: np.ndarray) -> np.ndarray:
     ----------
     lam : 1-D ndarray
         Wavelength values in micrometers (μm). Shape: (N,)
-    co2 : 1-D ndarray
-        CO2 concentration in parts per million (ppm). Shape: (M,)
+    co2 : 1-D ndarray | np.floating
+        CO2 concentration in parts per million (ppm). Shape: (M,) or scalar.
 
     Returns
     -------
@@ -3213,8 +3231,8 @@ def n_air_co2(lam: np.ndarray, co2: np.ndarray) -> np.ndarray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    N300 = n_air_co2_300(lam).reshape((-1, 1))
-    CO2 = co2.reshape((1, -1))
+    N300 = np.atleast_1d(n_air_co2_300(lam)).reshape((-1, 1))
+    CO2 = np.atleast_1d(co2).reshape((1, -1))
     return (N300 - 1) * (1 + 0.54 * (CO2 * 1e-6 - 0.0003)) + 1.0
 
 
@@ -3268,14 +3286,17 @@ def rayleigh_crs(lam: np.ndarray, co2: float | np.ndarray) -> np.ndarray:
     """
     if not isinstance(lam, np.ndarray):
         raise ValueError("The parameter lam must be a 1-D np.ndarray.")
-    if not np.isscalar(co2) and not isinstance(co2, np.ndarray):
+    if not isinstance(co2, (float, int, np.floating, np.integer, np.ndarray)):
         raise ValueError(
             "The parameter co2 must be a scalar or a 1-D ndarray."
         )
 
     # Ensure float64 due to numpy 2
     lam = lam.astype(np.float64)
-    co2 = np.float64(co2)
+    if isinstance(co2, np.ndarray):
+        co2 = co2.astype(np.float64)
+    else:
+        co2 = np.float64(float(co2))
 
     Avogadro = constants.value("Avogadro constant")
     Ns = Avogadro / 22.4141 * 273.15 / 288.15 * 1e-3
@@ -3292,14 +3313,15 @@ def rayleigh_crs(lam: np.ndarray, co2: float | np.ndarray) -> np.ndarray:
     )
 
 
-def gravity_z0(lat: float) -> float:
+def gravity_z0(lat: float | np.floating[Any] | np.integer[Any]) -> float:
     """Compute gravitational acceleration at Earth's surface as a
     function of latitude.
 
     Parameters
     ----------
-    lat : float
-        Latitude in degrees (positive for North, negative for South).
+    lat : float | np.floating | np.integer
+        Latitude in degrees as a scalar (Python float or numpy scalar).
+        Positive for North, negative for South.
 
     Returns
     -------
@@ -3314,7 +3336,7 @@ def gravity_z0(lat: float) -> float:
            Press,
            City of Washington, 527 pp.
     """
-    if not np.isscalar(lat):
+    if not isinstance(lat, (float, int, np.floating, np.integer)):
         raise ValueError("The parameter lat must be a scalar value.")
 
     return 980.6160 * (
@@ -3324,14 +3346,18 @@ def gravity_z0(lat: float) -> float:
     )
 
 
-def gravity_z(lat: float, z: float | np.ndarray | list) -> float | np.ndarray:
+def gravity_z(
+    lat: float | np.floating[Any] | np.integer[Any],
+    z: float | np.ndarray | list,
+) -> float | np.ndarray:
     """Compute gravitational acceleration at a given altitude and
     latitude.
 
     Parameters
     ----------
-    lat : float
-        Latitude in degrees (positive for North, negative for South).
+    lat : float | np.floating | np.integer
+        Latitude in degrees as a scalar (Python float or numpy scalar).
+        Positive for North, negative for South.
     z : float | 1D-ndarray | list
         Altitude(s) above sea level in meters.
 
@@ -3349,7 +3375,7 @@ def gravity_z(lat: float, z: float | np.ndarray | list) -> float | np.ndarray:
            Press,
            City of Washington, 527 pp.
     """
-    if not np.isscalar(lat):
+    if not isinstance(lat, (float, int, np.floating, np.integer)):
         raise ValueError("The parameter lat must be a scalar value.")
 
     if isinstance(z, list):
@@ -3615,7 +3641,7 @@ def get_aer_dist_integral(
     return -(Z) * np.exp(-H_max / Z) + (Z) * np.exp(-H_min / Z)
 
 
-def check_date(dates: np.ndarray | list[str], year: int) -> None:
+def check_date(dates: np.ndarray | list[str] | Any, year: int) -> None:
     """Validate that all dates are from a single year and match the
     provided year.
 
@@ -4110,6 +4136,7 @@ def artdeco_to_smartg_cld(
     # Deals with the case where h5_group is not provided
     if h5_group is None:
         tree = xr.open_datatree(input_path)
+        keys = None
         try:
             if {"axis", "data"}.issubset(tree.children):
                 h5_group = None
@@ -4122,7 +4149,7 @@ def artdeco_to_smartg_cld(
         finally:
             tree.close()
 
-        if h5_group is None and "keys" in locals():
+        if h5_group is None and keys is not None:
             if len(keys) == 1:
                 h5_group = keys[0]
             elif len(keys) > 1:
@@ -4208,7 +4235,7 @@ def artdeco_to_smartg_cld(
             "phase matrix integral normalized to 2. stk order: p11, "
             + "p21, p33, p34, p22 and p44"
         )
-    if nstk == 4:
+    else:  # nstk == 4
         pha_desc = (
             "phase matrix integral normalized to 2. stk order: p11, "
             + "p21, p33 and p34"

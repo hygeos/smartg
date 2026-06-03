@@ -113,3 +113,5 @@ reportUnknownMemberType = "none"
 reportUnknownVariableType = "none"
 reportUnknownArgumentType = "none"
 reportUnknownParameterType = "none"
+# Suppress call-issue errors caused by incomplete stubs (e.g. missing parameters in xarray stubs)
+reportCallIssue = "none"
