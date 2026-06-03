@@ -110,3 +110,288 @@ def BigSum(S, grad=None, only_I=False):
 
     if only_I : return jit(f2m)
     else : return jit(f3m)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Post-hoc AMF computation from ALIS photon histories
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_cdist_hist(
+    D_h, S_h, w_h, nref_h, nint_h, nlscl_h,
+    wl_lr_r, wl_ref, alb_ref, natm_abs,
+    *,
+    amf_variance    = True,
+    nscl            = 1,
+    scatter_classes = 'last_scattering_layer',
+    norders         = 1,
+    cdist_wabs      = False,
+    kabs_ref        = None,
+):
+    """
+    Compute cdist (tabDist) moments from ALIS photon histories.
+
+    Replicates the GPU tabDist accumulation for Smartg options:
+        amf_variance, nscl, scatter_classes, norders, cdist_wabs.
+
+    Parameters
+    ----------
+    D_h      : (NLE, NL) array  – path lengths per absorption layer [km]
+    S_h      : (NLE, NStokes)   – Stokes components from pure-scattering MC run
+    w_h      : (NLE, NLR)       – ALIS LR scattering-correction weights
+    nref_h   : (NLE,)           – surface-reflection count per photon
+    nint_h   : (NLE,) int       – scattering order (total interaction count)
+    nlscl_h  : (NLE,) int       – last-scattering layer index (-1 = surface/none)
+    wl_lr_r  : (NLR,)           – LR wavelength axis [nm]
+    wl_ref   : float            – reference wavelength [nm] for weight evaluation
+    alb_ref  : float            – surface albedo at wl_ref
+    natm_abs : int              – number of atmospheric absorption layers
+    amf_variance : bool         – store 3rd moment Σ d²·w
+    nscl     : int              – number of scatter classes (1 = no decomposition)
+    scatter_classes : str       – 'last_scattering_layer' | 'scattering_order'
+                                  | 'scattering_order_per_layer'
+    norders  : int              – scattering-order bins per layer (mode 3 only)
+    cdist_wabs : bool           – include Beer-Lambert transmittance in w_n
+    kabs_ref : (natm_abs,) or None – kabs [km⁻¹] at wl_ref (for cdist_wabs=True)
+
+    Returns
+    -------
+    cdist : ndarray, float64
+        shape (natm_abs, niamf)          when nscl == 1
+              (natm_abs, nscl, niamf)    when nscl >  1
+        niamf = 3 if amf_variance else 2
+    """
+    niamf = 3 if amf_variance else 2
+    NLE   = int(D_h.shape[0])
+
+    wl_lr_j  = jnp.array(wl_lr_r, dtype=jnp.float32)
+    wl_ref_j = jnp.float32(wl_ref)
+
+    # 1. ALIS scattering-correction weight at wl_ref
+    w_h_j    = jnp.array(w_h,  dtype=jnp.float32)
+    w_scalar = vmap(lambda wi: jnp.interp(wl_ref_j, wl_lr_j, wi))(w_h_j)
+
+    # 2. Optional Beer-Lambert transmittance at wl_ref
+    D_abs = jnp.array(D_h[:, :natm_abs], dtype=jnp.float32)
+    if cdist_wabs and kabs_ref is not None:
+        k_ref_j = jnp.array(kabs_ref[:natm_abs], dtype=jnp.float32)
+        Tabs = jnp.exp(-jnp.sum(D_abs * k_ref_j[None, :], axis=1))
+    else:
+        Tabs = jnp.ones(NLE, dtype=jnp.float32)
+
+    # 3. Effective photon weight  w_n = S_I · wsca · alb^Ki · Tabs
+    safe_alb = jnp.float32(alb_ref if float(alb_ref) > 0. else 1.)
+    nref_j   = jnp.array(nref_h, dtype=jnp.float32)
+    S_h_j    = jnp.array(S_h,    dtype=jnp.float32)
+    w_n = S_h_j[:, 0] * w_scalar * jnp.power(safe_alb, nref_j) * Tabs
+
+    # 4. Scatter class index (mirrors SCL_MODE in device.cu)
+    nint_np  = np.asarray(nint_h,  dtype=np.int32)
+    nlscl_np = np.asarray(nlscl_h, dtype=np.int32)
+
+    if nscl <= 1:
+        cls_np = np.zeros(NLE, dtype=np.int32)
+    elif scatter_classes == 'last_scattering_layer':
+        cls_np = np.where(
+            nlscl_np >= 0,
+            np.minimum((nlscl_np * nscl) // natm_abs, nscl - 1),
+            0,
+        ).astype(np.int32)
+    elif scatter_classes == 'scattering_order':
+        cls_np = np.clip(np.minimum(nint_np, nscl) - 1, 0, nscl - 1).astype(np.int32)
+    elif scatter_classes == 'scattering_order_per_layer':
+        ilayer = np.where(nlscl_np >= 0, np.minimum(nlscl_np, natm_abs - 1), 0)
+        iorder = np.where(nint_np  >  0, np.minimum(nint_np - 1, norders - 1), 0)
+        cls_np = np.minimum(ilayer * norders + iorder, nscl - 1).astype(np.int32)
+    else:
+        raise ValueError(
+            f"Unknown scatter_classes={scatter_classes!r}. "
+            "Choose from: 'last_scattering_layer', 'scattering_order', "
+            "'scattering_order_per_layer'."
+        )
+
+    # 5. Accumulate moments
+    if nscl <= 1:
+        W_tot = float(jnp.sum(w_n))
+        Dw    = np.array(jnp.sum(D_abs * w_n[:, None], axis=0))
+        cdist_out = np.empty((natm_abs, niamf), dtype=np.float64)
+        cdist_out[:, 0] = W_tot
+        cdist_out[:, 1] = Dw
+        if amf_variance:
+            cdist_out[:, 2] = np.array(jnp.sum(D_abs ** 2 * w_n[:, None], axis=0))
+    else:
+        cls_j  = jnp.array(cls_np, dtype=jnp.int32)
+        cls_oh = (jnp.arange(nscl, dtype=jnp.int32)[None, :] == cls_j[:, None]).astype(jnp.float32)
+        w_cls  = w_n[:, None] * cls_oh
+        W_cls  = np.array(jnp.sum(w_cls, axis=0))
+        DW     = np.array(jnp.einsum('il,ic->lc', D_abs, w_cls))
+        cdist_out = np.empty((natm_abs, nscl, niamf), dtype=np.float64)
+        cdist_out[:, :, 0] = W_cls[None, :]
+        cdist_out[:, :, 1] = DW
+        if amf_variance:
+            D2W = np.array(jnp.einsum('il,ic->lc', D_abs ** 2, w_cls))
+            cdist_out[:, :, 2] = D2W
+
+    return cdist_out
+
+
+def amf_from_cdist(cdist, thick):
+    """
+    Derive AMF statistics from a raw cdist moments array.
+
+    Shared by the hist=False (GPU tabDist) and hist=True (post-hoc) paths.
+
+    Parameters
+    ----------
+    cdist : (NL, niamf) or (NL, nscl, niamf) ndarray
+        iAMF=0: Σ w,   iAMF=1: Σ d·w,   iAMF=2: Σ d²·w
+    thick : (NL,) array – layer thicknesses [km]
+
+    Returns
+    -------
+    dict with keys:
+        'AMF'         : (NL,)       – total AMF per layer
+        'std_AMF'     : (NL,)       – σ(AMF) (zeros when niamf < 3)
+        'mean_dist'   : (NL,)       – mean path length [km]
+        'W'           : (NL,)       – total weight
+        -- only when cdist.ndim == 3 (nscl > 1): --
+        'AMF_cls'     : (NL, nscl)  – per-class AMF
+        'std_AMF_cls' : (NL, nscl)  – per-class σ(AMF)
+        'W_cls'       : (NL, nscl)  – per-class weight
+        'var_within'  : (NL,)       – within-class variance
+        'var_between' : (NL,)       – between-class variance
+    """
+    thick   = np.asarray(thick, dtype=np.float64)
+    niamf   = cdist.shape[-1]
+    has_scl = (cdist.ndim == 3)
+
+    if has_scl:
+        W_cls         = cdist[:, :, 0]
+        W             = W_cls.sum(axis=1)
+        mean_dist_cls = cdist[:, :, 1] / np.where(W_cls > 0, W_cls, 1.)
+        mean_dist     = cdist[:, :, 1].sum(axis=1) / np.where(W > 0, W, 1.)
+        AMF           = mean_dist / thick
+        AMF_cls       = mean_dist_cls / thick[:, None]
+        result = dict(AMF=AMF, W=W, mean_dist=mean_dist, W_cls=W_cls, AMF_cls=AMF_cls)
+        if niamf >= 3:
+            mean_dist2_cls = cdist[:, :, 2] / np.where(W_cls > 0, W_cls, 1.)
+            var_cls        = mean_dist2_cls - mean_dist_cls ** 2
+            frac_cls       = W_cls / np.where(W > 0, W, 1.)[:, None]
+            var_within     = (frac_cls * var_cls).sum(axis=1)
+            var_between    = (frac_cls * (mean_dist_cls - mean_dist[:, None]) ** 2).sum(axis=1)
+            std_AMF        = np.sqrt(np.maximum(var_within + var_between, 0.)) / thick
+            std_AMF_cls    = np.sqrt(np.maximum(var_cls, 0.)) / thick[:, None]
+            result.update(std_AMF=std_AMF, std_AMF_cls=std_AMF_cls,
+                          var_within=var_within, var_between=var_between)
+        else:
+            result.update(std_AMF=np.zeros_like(AMF),
+                          std_AMF_cls=np.zeros_like(AMF_cls))
+    else:
+        W         = cdist[:, 0]
+        mean_dist = cdist[:, 1] / np.where(W > 0, W, 1.)
+        AMF       = mean_dist / thick
+        result    = dict(AMF=AMF, W=W, mean_dist=mean_dist)
+        if niamf >= 3:
+            mean_dist2    = cdist[:, 2] / np.where(W > 0, W, 1.)
+            result['std_AMF'] = np.sqrt(np.maximum(mean_dist2 - mean_dist**2, 0.)) / thick
+        else:
+            result['std_AMF'] = np.zeros_like(AMF)
+
+    return result
+
+
+def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
+                amf_variance=True, nscl=1,
+                scatter_classes='last_scattering_layer',
+                norders=1, cdist_wabs=False, kabs_ref=None):
+    """
+    Compute AMF from a Smartg MLUT — works transparently for hist=False and hist=True.
+
+    Dispatches on MLut content:
+      • 'cdist_up (TOA)' present  →  hist=False: reads GPU tabDist directly
+      • 'histories'       present  →  hist=True:  calls compute_cdist_hist()
+
+    Parameters
+    ----------
+    m : MLUT – Smartg.run() output
+    wl_lr_r : (NLR,) array, optional
+        LR wavelength axis [nm].  Defaults to m.axis('wavelength').
+    wl_ref : float, optional
+        Reference wavelength [nm].  Defaults to median of wl_lr_r.
+    alb_ref : float
+        Surface albedo at wl_ref (required for hist=True path).
+    natm_abs : int, optional
+        Number of atmospheric absorption layers.
+        Defaults to m.axis('z_atm').size - 1.
+    amf_variance : bool   – include 3rd moment Σ d²·w (for σ(AMF))
+    nscl : int            – number of scatter classes
+    scatter_classes : str – 'last_scattering_layer' | 'scattering_order'
+                            | 'scattering_order_per_layer'
+    norders : int         – scatter-order bins per layer (mode 3 only)
+    cdist_wabs : bool     – include Beer-Lambert transmittance weight in w_n
+    kabs_ref : (natm_abs,) array – kabs [km⁻¹] at wl_ref (for cdist_wabs=True)
+
+    Returns
+    -------
+    amf_dict : dict  – output of amf_from_cdist()
+        Keys always present: 'AMF', 'std_AMF', 'W', 'mean_dist'
+        Extra keys when nscl > 1: 'AMF_cls', 'std_AMF_cls', 'W_cls',
+                                   'var_within', 'var_between'
+    thick : (NL,) ndarray – layer thicknesses [km]
+    cdist : (NL, niamf) or (NL, nscl, niamf) ndarray – raw moments
+    """
+    thick = np.abs(np.diff(m.axis('z_atm')))
+
+    # Auto-fill optional parameters from the MLut
+    if wl_lr_r is None:
+        wl_lr_r  = m.axis('wavelength')
+    if wl_ref is None:
+        wl_ref   = float(np.median(wl_lr_r))
+    if natm_abs is None:
+        natm_abs = int(m.axis('z_atm').size) - 1
+
+    # Dispatch on MLut content.
+    # Check for 'histories' FIRST: a hist=True run also stores a basic
+    # cdist_up (TOA) (nscl=1, niamf=2), so testing cdist first would
+    # silently ignore the richer post-hoc computation.
+    has_hist = True
+    try:
+        m['histories']
+    except Exception:
+        has_hist = False
+
+    if has_hist:
+        # hist=True path: compute cdist post-hoc from photon histories
+        if alb_ref is None:
+            raise ValueError(
+                "compute_amf: alb_ref is required for the hist=True path "
+                "(m contains 'histories')."
+            )
+        _, S, D, w, _, nref, _, _, _, nint, nlscl = get_histories(m)
+        cdist = compute_cdist_hist(
+            D, S, w, nref, nint, nlscl,
+            wl_lr_r, wl_ref, alb_ref, natm_abs,
+            amf_variance    = amf_variance,
+            nscl            = nscl,
+            scatter_classes = scatter_classes,
+            norders         = norders,
+            cdist_wabs      = cdist_wabs,
+            kabs_ref        = kabs_ref,
+        )
+    else:
+        # hist=False path: read GPU tabDist directly from the MLut
+        try:
+            lut   = m['cdist_up (TOA)']
+        except Exception:
+            raise ValueError(
+                "compute_amf: m contains neither 'histories' (hist=True) "
+                "nor 'cdist_up (TOA)' (hist=False)."
+            )
+        names = list(lut.names)
+        arr   = lut.data
+        idx   = [slice(None)] * arr.ndim
+        for i, nm in enumerate(names):
+            if nm in ('Azimuth angles', 'Zenith angles'):
+                idx[i] = 0
+        cdist = arr[tuple(idx)]                        # (NL, [nscl,] niamf)
+
+    return amf_from_cdist(cdist, thick), thick, cdist
