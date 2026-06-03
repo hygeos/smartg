@@ -1,4 +1,3 @@
-import warnings
 import numpy as np
 import jax.numpy as jnp
 from jax import value_and_grad, vmap, jit
@@ -43,11 +42,14 @@ def get_histories(m, LEVEL=0, IDIR=0,verbose=False):
     ngood   = np.sum(good)
     max_hist = tabHist.shape[0]
     if ngood >= max_hist:
-        warnings.warn(
-            f"History buffer saturated: {ngood}/{max_hist} slots used. "
-            "Photons beyond max_hist were not recorded — AMF from histories will be biased. "
-            "Increase max_hist or reduce NBPHOTONS per loop.",
-            stacklevel=2,
+        # Use print rather than warnings.warn: Python's default warning filter
+        # deduplicates per call-site, so the message would silently disappear
+        # on the second call in the same session.
+        print(
+            f"\033[1;33m[ALIS hist WARNING] History buffer saturated: "
+            f"{ngood:,}/{max_hist:,} slots used ({100.*ngood/max_hist:.0f}%). "
+            "Photons beyond max_hist were NOT recorded — results will be biased. "
+            "→ Increase max_hist or reduce NBPHOTONS per loop.\033[0m"
         )
     N = m['Nphotons_in'].data[0,0]
     ###################

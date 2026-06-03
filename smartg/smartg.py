@@ -3298,7 +3298,17 @@ def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_
             tab_dist = gpuzeros((1), dtype=np.float32)
 
     if hist:
-        tab_hist_tot = gpuzeros((2, max_hist, (n_atm_abs + n_oce_abs + n_pstk + n_low + 7), n_sensor, nb_theta, nb_phi), dtype=np.float32)
+        _n_cols_hist = n_atm_abs + n_oce_abs + n_pstk + n_low + 7
+        tab_hist_tot = gpuzeros((2, max_hist, _n_cols_hist, n_sensor, nb_theta, nb_phi), dtype=np.float32)
+        _hist_bytes = int(tab_hist_tot.nbytes)
+        print(
+            f"[ALIS hist] tabHist allocated — "
+            f"shape: (2, {max_hist:,}, {_n_cols_hist}, {n_sensor}, {nb_theta}, {nb_phi})  "
+            f"| record: {_n_cols_hist} float32 "
+            f"({n_atm_abs+n_oce_abs} path-lengths + {n_pstk} Stokes + {n_low} ALIS weights + 7 scalars)  "
+            f"| GPU: {_hist_bytes/1024**2:.1f} MB  "
+            f"| CPU (on transfer): {_hist_bytes/1024**2:.1f} MB"
+        )
     else:
         tab_hist_tot = gpuzeros((1), dtype=np.float32)
 
