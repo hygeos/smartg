@@ -1503,7 +1503,7 @@ class AtmAFGL(Atmosphere):
             self.prof = prof
         else:
             if isinstance(grid, str):
-                grid = str2grid_array(grid)
+                grid = strgrid_to_numpy(grid)
             self.prof = prof.regrid(np.array(grid))
 
         #
@@ -4351,7 +4351,7 @@ def extract_split(
     return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
-def str2grid_array(str_grid: str) -> np.ndarray:
+def strgrid_to_numpy(str_grid: str) -> np.ndarray:
     """
     Convert altitude grid specification string to numpy array.
 
@@ -4399,7 +4399,7 @@ def str2grid_array(str_grid: str) -> np.ndarray:
     --------
     Simple grid from TOA to ground (100 km to 0 km with step 1 km):
 
-    >>> grid = str2grid_array('100[1]0')
+    >>> grid = strgrid_to_numpy('100[1]0')
     >>> grid
     array([100.,  99.,  98., ...,   2.,   1.,   0.])
     >>> len(grid)
@@ -4407,7 +4407,7 @@ def str2grid_array(str_grid: str) -> np.ndarray:
 
     Multi-segment grid with varying resolution (TOA to ground):
 
-    >>> grid = str2grid_array('500[10]100[1]0')
+    >>> grid = strgrid_to_numpy('500[10]100[1]0')
     >>> grid[:5]
     array([500., 490., 480., 470., 460.])
     >>> grid[40:43]
@@ -4415,7 +4415,7 @@ def str2grid_array(str_grid: str) -> np.ndarray:
 
     Grid with scientific notation:
 
-    >>> grid = str2grid_array('1[1e-1]1e-1[1e-2]0')
+    >>> grid = strgrid_to_numpy('1[1e-1]1e-1[1e-2]0')
     >>> grid
     array([1.  , 0.9 , 0.8 , 0.7 , 0.6 , 0.5 , 0.4 , 0.3 , 0.2 , 0.1 ,
            0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01, 0.  ])
