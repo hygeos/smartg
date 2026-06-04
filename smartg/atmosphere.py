@@ -1417,8 +1417,7 @@ class AtmAFGL(Atmosphere):
         # store attribute using lowercase name for consistency
         self.rh_cst = RH_cst
         self.OPT3D = cells is not None
-        if self.OPT3D:
-            self.cells = cells
+        self.cells = cells
 
         self.tauR = tauR
         if tauR is not None:
@@ -1864,7 +1863,11 @@ class AtmAFGL(Atmosphere):
 
         return profile
 
-    def profile(self, wav, prof=None):
+    def profile(
+        self,
+        wav: float | np.ndarray | list[float] | BandSet,
+        prof: ProfileBase | None = None,
+    ) -> xr.Dataset:
         """Calculate the profile of optical properties at given
         wavelengths.
 
@@ -1954,6 +1957,19 @@ class AtmAFGL(Atmosphere):
         dz = -diff1(prof.z)
 
         pro = xr.Dataset(coords={"z_atm": prof.z, "wavelength": wav[:]})
+
+        if self.OPT3D and self.prof_ray is not None:
+            ray_coef = np.zeros_like(self.prof_ray)
+        else:
+            ray_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
+        if self.OPT3D and self.prof_aer is not None:
+            aer_coef = np.zeros_like(self.prof_aer[0])
+        else:
+            aer_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
+        if self.OPT3D and self.prof_abs is not None:
+            abs_coef = np.zeros_like(self.prof_abs)
+        else:
+            abs_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
 
         # refractive index
         n = refractivity(
@@ -2121,6 +2137,7 @@ class AtmAFGL(Atmosphere):
                     str(wav.type_wav)
                     == "<class 'smartg.reptran.REPTRAN_IBAND'>"
                 ):
+                    assert wav.data is not None
                     all_kdis_gas = (
                         wav.data[0].band.kdis.species
                         + wav.data[0].band.kdis.species_c
@@ -2467,6 +2484,7 @@ class AtmAFGL(Atmosphere):
         # Pure 3D
         #
         if self.OPT3D:
+            assert self.cells is not None
             (iopt, iabs, pmin, pmax, neighbour) = self.cells
             pro["iopt_atm"] = xr.DataArray(iopt, dims=["icell"])
             pro["iabs_atm"] = xr.DataArray(iabs, dims=["icell"])
@@ -2478,7 +2496,7 @@ class AtmAFGL(Atmosphere):
 
         return pro
 
-    def phase(self, wav, NBTHETA=721):
+    def phase(self, wav: Any, NBTHETA: int = 721) -> xr.DataArray | None:
         """
         Calculate phase matrix of aerosols and clouds at specified
         wavelengths.
@@ -2562,6 +2580,7 @@ class AtmAFGL(Atmosphere):
             norm = weight_2d if norm is None else (norm + weight_2d)
 
         if len(self.comp) > 0:
+            assert pha is not None and norm is not None
             pha = (pha / norm).fillna(0.0)
             return pha
         else:
