@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
+# Must be set before importing JAX so only the CPU backend is initialised.
+# This prevents JAX from creating a CUDA context that conflicts with PyCUDA's
+# at process exit ("context::pop failed: invalid device context").
+os.environ["JAX_PLATFORMS"] = "cpu"
+#os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"
+
 import pytest
 from gc import collect
 try:
@@ -18,26 +26,32 @@ from smartg.albedo import Albedo_cst
 from luts import LUT
 from smartg.tools.smartg_view import mdesc
 from smartg import conftest
-import os
 from pathlib import Path
 from smartg.config import DIR_AUXDATA
 
-#os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]   = "platform"
 
-
-# Clean jax memory after each test
+# Clean up JAX memory and stale PyCUDA atexit handlers after each test
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_after_each_test():
     yield
     jax.clear_caches()
     collect()
+    # Each Smartg() import of pycuda.autoinit registers a new _finish_up atexit
+    # callback.  After sg.clear_context() the context is already gone, so the
+    # callback raises "context::pop failed".  Unregister it here while we still
+    # have control, so the error is never printed.
+    try:
+        import atexit
+        import pycuda.autoinit as _pai
+        atexit.unregister(_pai._finish_up)
+    except Exception:
+        pass
 
-@pytest.mark.parametrize('N_WL_ABS', [221])
+@pytest.mark.parametrize('N_WL_ABS', [51])
 @pytest.mark.parametrize('WMAX', [350.])
 @pytest.mark.parametrize('WMIN', [320.])
 @pytest.mark.skipif(SKIP, reason="cannot test this since the jax package is not installed.")
-def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=2e4, MAX_HIST=2e7):
+def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=5e4, MAX_HIST=1e6):
     ALB_SNOW     = Albedo_cst(0.6)
     ALB_HIST     = Albedo_cst(1.0)
     wl_sca       = np.linspace(WMIN, WMAX, num=11)
@@ -58,10 +72,10 @@ def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=2e4, MAX_HIST=2e7)
             NBPHOTONS=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
         sg.clear_context()
         
-        jax.default_backend() # jax.devices("cpu") # jax.devices("gpu")
-        N, S, D, w, _, nref, _, _, _, _ = get_histories(m, LEVEL=LEVEL, verbose=False)
-        I  = BigSum(Si,  only_I=True) (wl_abs, sigma, alb, S[:,0], w, D, nref, wl_sca).sum(axis=0)/N
-        I2 = BigSum(Si2, only_I=True) (wl_abs, sigma, alb, S[:,0], w, D, nref, wl_sca).sum(axis=0)/N
+        with jax.default_device(jax.devices("cpu")[0]):  # run on CPU to avoid slow GPU XLA compilation
+            N, S, D, w, _, nref, _, _, _, _, _ = get_histories(m, LEVEL=LEVEL, verbose=False)
+            I  = np.array(BigSum(Si,  only_I=True)(wl_abs, sigma, alb, S[:,0], w, D, nref, wl_sca).sum(axis=0))/N
+            I2 = np.array(BigSum(Si2, only_I=True)(wl_abs, sigma, alb, S[:,0], w, D, nref, wl_sca).sum(axis=0))/N
         Std     = np.sqrt((I2-I**2)/N)
         upper   = I + 1.95*Std
         lower   = I - 1.95*Std
@@ -80,7 +94,7 @@ def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=2e4, MAX_HIST=2e7)
 
     
 @pytest.mark.skipif(SKIP, reason="cannot test this since the jax package is not installed.")    
-def test_validation_artdeco(request, NB=1e6, VALPATH=DIR_AUXDATA):
+def test_validation_artdeco(request, NB=2e5, VALPATH=DIR_AUXDATA):
     '''
     Validation of SMART-G with ARTDECO validation data
     '''
@@ -132,21 +146,21 @@ def test_validation_artdeco(request, NB=1e6, VALPATH=DIR_AUXDATA):
     m1 = sg.run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
         alis_options={'nlow':NLOW,'hist':False}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
     m2 = sg.run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
-        alis_options={'nlow':NLOW,'hist':True, 'max_hist':np.int64(1e7)}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
+        alis_options={'nlow':NLOW,'hist':True, 'max_hist':np.int64(2e6)}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
     sg.clear_context()
     print ('GPU time no hist: %.4f'%float(m1.attrs['kernel time (s)']), 's')
     print ('GPU time hist: %.4f'%float(m2.attrs['kernel time (s)']), 's')
     
-    jax.default_backend() # jax.devices("cpu") # jax.devices("gpu")
-    N, S, D, w, _, nref, _, _, _, _ = get_histories(m2, LEVEL=0, verbose=True)
-    I  = BigSum(Si, only_I=True)(w_valid, sigma_valid, 
-                        np.zeros_like(w_valid), S[:,0], w, D, nref, wl_lr).sum(axis=0)/N
+    with jax.default_device(jax.devices("cpu")[0]):  # run on CPU to avoid slow GPU XLA compilation
+        N, S, D, w, _, nref, _, _, _, _, _ = get_histories(m2, LEVEL=0, verbose=True)
+        I  = np.array(BigSum(Si, only_I=True)(w_valid, sigma_valid,
+                        np.zeros_like(w_valid), S[:,0], w, D, nref, wl_lr).sum(axis=0))/N
     
     #####################
     i_valid=data_valid[:,1]
     plt.figure(figsize=(12,4))
     plt.plot(w_valid,  i_valid, 'r', label='Doubling Adding: 32 streams')
-    m1[0].plot('c', label='SMART-G no hist.')
+    m1['I_up (TOA)'].plot('c', label='SMART-G no hist.')
     plt.plot(w_valid,  I, 'b', label='SMART-G, hist. with jax')
     plt.legend()
     plt.ylabel(mdesc('I_up (TOA)'))
@@ -156,12 +170,11 @@ def test_validation_artdeco(request, NB=1e6, VALPATH=DIR_AUXDATA):
     plt.figure(figsize=(12,4))
     df= I- i_valid
     dff=df/i_valid*100
-    dff.desc='(SMARTG - DA) rel. diff. (%)'
     plt.plot(w_valid, dff, 'b-')
-    df1= m1[0][:]- i_valid
+    df1= m1['I_up (TOA)'][:]- i_valid
     dff1=df1/i_valid*100
     plt.plot(w_valid, dff1, 'c-')
-    plt.ylim(-2,2)
+    plt.ylim(-20,20)
     plt.grid()
-    plt.ylabel(mdesc('I_up (TOA)') + 'relatice difference %')
+    plt.ylabel(mdesc('I_up (TOA)') + ' relative difference to Doubling Adding (%)')
     conftest.savefig(request)

@@ -142,41 +142,75 @@ def pytest_addoption(parser):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item):
-    pytest_html = item.config.pluginmanager.getplugin('html')
+    # pytest-html 4.x moved extras to a top-level import; 3.x used the plugin object.
+    try:
+        from pytest_html import extras as html_extras  # 4.x
+    except ImportError:
+        html_extras = None
+
+    # 3.x fallback
+    pytest_html_plugin = item.config.pluginmanager.getplugin('html')
+
     outcome = yield
     report = outcome.get_result()
-    extra = getattr(report, 'extra', [])
+    extra = getattr(report, 'extras', [])
     img_size = item.config.getini('img_size') or '250px'
     img_use_extra = {'true': True, 'false': False}[
         (item.config.getini('img_collapsible') or 'true').lower()
         ]
-    if ((report.when == 'call')
-            and (pytest_html is not None)):
+
+    has_html_plugin = html_extras is not None or pytest_html_plugin is not None
+
+    if (report.when == 'call') and has_html_plugin:
+        def _html(content):
+            if html_extras is not None:
+                return html_extras.html(content)
+            return pytest_html_plugin.extras.html(content)
+
+        def _image(b64data):
+            if html_extras is not None:
+                return html_extras.image(b64data, mime_type='image/png')
+            return pytest_html_plugin.extras.image(b64data)
+
         # add docstring
         doc = item.function.__doc__
         if doc is not None:
-            extra.append(pytest_html.extras.html(f'<pre>{doc}</pre>'))
+            extra.append(_html(f'<pre>{doc}</pre>'))
 
         # add images
+        # pytest-html 4.x HTML-escapes the content of extras.html(), so
+        # embedding <img> tags via html() produces raw text, not images.
+        # Always use the native image() API when on 4.x.
+        use_native_image = html_extras is not None
         img_content = ''
         for image in getattr(item, 'images', []):
             b64data = base64.b64encode(image).decode('ascii')
-            if img_use_extra:
-                img_content += f'<img src="data:image/png;base64,{b64data}" style="max-width:{img_size};">'
+            if use_native_image:
+                extra.append(_image(b64data))
+            elif img_use_extra:
+                img_content += (f'<img src="data:image/png;base64,{b64data}"'
+                                f' style="max-width:{img_size};">')
             else:
-                extra.append(pytest_html.extras.image(b64data))
+                extra.append(_image(b64data))
 
         if img_content:
-            extra.append(pytest_html.extras.extra(
-                f'''
-                <details open>
-                    <summary>Images</summary>
-                    {img_content}
-                </details>
-                ''', 'html'))
+            extra.append(_html(
+                f'<details open><summary>Images</summary>{img_content}</details>'
+            ))
 
-        # add other extras
+        # add other extras (added via add_extra_to_report)
         for a in getattr(item, 'extras', []):
-            extra.append(pytest_html.extras.extra(*a))
+            content, fmt = a[0], (a[1] if len(a) > 1 else 'text')
+            if html_extras is not None:
+                if fmt == 'html':
+                    extra.append(html_extras.html(content))
+                elif fmt == 'url':
+                    extra.append(html_extras.url(content, name=a[2] if len(a) > 2 else 'Link'))
+                elif fmt == 'text':
+                    extra.append(html_extras.text(content))
+                else:
+                    extra.append(html_extras.text(str(content)))
+            else:
+                extra.append(pytest_html_plugin.extras.extra(*a))
 
         report.extras = extra
