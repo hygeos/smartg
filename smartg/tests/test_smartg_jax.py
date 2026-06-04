@@ -122,7 +122,13 @@ def test_validation_artdeco(request, NB=2e5, VALPATH=DIR_AUXDATA):
         #pizero=np.genfromtxt(faer_phase, usecols=range(1), skip_header=(1+(2+N)*k+1), max_rows=1)
         data[k,0,:,:] = np.genfromtxt(faer_phase, usecols=range(5), skip_header=(1+(2+N)*k+2), max_rows=N)
     data=data.swapaxes(2,3)
-    phase_valid = LUT(data[:,:,1:,:],
+
+    # From iparper to standard phase convention
+    pha_data = data[:,:,1:,:].copy()
+    pha_data[:,:,0,:] = (data[:,:,1,:] + data[:,:,2,:])*0.5
+    pha_data[:,:,1,:] = (data[:,:,1,:] - data[:,:,2,:])*0.5
+    
+    phase_valid = LUT(pha_data,
             names = ['wav_phase', 'z_phase', 'stk','theta_atm'] ,
             axes  = [pfwav, [0], None, data[0,0,0,:]])
     data_valid=np.loadtxt(Path(VALPATH) / 'validation' / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat")
