@@ -47,7 +47,7 @@ def cleanup_after_each_test():
     except Exception:
         pass
 
-@pytest.mark.parametrize('N_WL_ABS', [51])
+@pytest.mark.parametrize('N_WL_ABS', [301])
 @pytest.mark.parametrize('WMAX', [350.])
 @pytest.mark.parametrize('WMIN', [320.])
 @pytest.mark.skipif(SKIP, reason="cannot test this since the jax package is not installed.")
@@ -59,15 +59,15 @@ def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=5e4, MAX_HIST=1e6)
     alb          = ALB_SNOW.get(wl_abs)
     lez          = {'th_deg':np.array([0.]), 'phi_deg':np.array([0.]), 'zip':False}
 
-    for AOD, fmt1 in zip(np.linspace(0.3, 0.3, num=1), ['-m', '-c']):
+    for AOD, fmt1 in zip(np.linspace(0.1, 0.5, num=2), ['-m', '-c']):
         LEVEL=0 # 1: BOA downward reflectance, 0 : TOA
         atm = AtmAFGL('afglms', comp=[AerOPAC('urban',AOD, 550.)], grid=np.linspace(50., 0., num=40))
         sigma = od2k(atm.calc(wl_abs), 'OD_abs_atm')[:,1:]
         sg = Smartg(alis=True, alt_pp=True)
-        m  = sg.run(THVDEG=45., wl=wl_sca, surf=LambSurface(ALB_HIST), le=lez, BEER=0, atm=atm.calc(wl_sca), 
+        m  = sg.run(SEED=0, THVDEG=45., wl=wl_sca, surf=LambSurface(ALB_HIST), le=lez, BEER=0, atm=atm.calc(wl_sca), 
             alis_options={'nlow':wl_sca.size,'hist':True, 'max_hist':np.int64(MAX_HIST)},
             NBPHOTONS=NBPHOTONS, NBLOOP=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
-        m0 = sg.run(THVDEG=45., wl=wl_abs, surf=LambSurface(ALB_SNOW), le=lez, BEER=0, atm=atm.calc(wl_abs), 
+        m0 = sg.run(SEED=0, THVDEG=45., wl=wl_abs, surf=LambSurface(ALB_SNOW), le=lez, BEER=0, atm=atm.calc(wl_abs), 
             alis_options={'nlow':wl_sca.size,'hist':False},
             NBPHOTONS=NBPHOTONS, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
         sg.clear_context()
@@ -94,11 +94,11 @@ def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=5e4, MAX_HIST=1e6)
 
     
 @pytest.mark.skipif(SKIP, reason="cannot test this since the jax package is not installed.")    
-def test_validation_artdeco(request, NB=2e5, VALPATH=DIR_AUXDATA):
+def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
     '''
     Validation of SMART-G with ARTDECO validation data
     '''
-    typ='urban' # tau=0.25
+    typ='desert' # tau=0.25
     ####################""""""
     fgas = Path(VALPATH) / 'validation' / f"cTauGas_ray_{typ}_O2.dat"
     gas_valid   = diff1(np.loadtxt(fgas, skiprows=7)[:,1:].T, axis=1)
@@ -149,10 +149,10 @@ def test_validation_artdeco(request, NB=2e5, VALPATH=DIR_AUXDATA):
     wl_lr= np.linspace(w_valid.min(), w_valid.max(), num=NLOW)
     
     sg = Smartg(alis=True, alt_pp=True)
-    m1 = sg.run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
+    m1 = sg.run(SEED=0, THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
         alis_options={'nlow':NLOW,'hist':False}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
-    m2 = sg.run(THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
-        alis_options={'nlow':NLOW,'hist':True, 'max_hist':np.int64(2e6)}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
+    m2 = sg.run(SEED=0, THVDEG=30., wl=w_valid, surf=None, le=le, BEER=0, atm=atm_valid.calc(w_valid), DEPO=0.,
+        alis_options={'nlow':NLOW,'hist':True, 'max_hist':np.int64(1e7)}, NBPHOTONS=NB, NBLOOP=NB, NF=1e3).dropaxis('Zenith angles').dropaxis('Azimuth angles')
     sg.clear_context()
     print ('GPU time no hist: %.4f'%float(m1.attrs['kernel time (s)']), 's')
     print ('GPU time hist: %.4f'%float(m2.attrs['kernel time (s)']), 's')
@@ -180,7 +180,7 @@ def test_validation_artdeco(request, NB=2e5, VALPATH=DIR_AUXDATA):
     df1= m1['I_up (TOA)'][:]- i_valid
     dff1=df1/i_valid*100
     plt.plot(w_valid, dff1, 'c-')
-    plt.ylim(-20,20)
+    plt.ylim(-2,2)
     plt.grid()
     plt.ylabel(mdesc('I_up (TOA)') + ' relative difference to Doubling Adding (%)')
     conftest.savefig(request)
