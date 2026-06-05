@@ -50,8 +50,7 @@ from __future__ import annotations
 
 import numpy as np
 from pathlib import Path
-from typing import Any, Iterable
-from os import PathLike
+from typing import Iterable, Sequence
 from smartg.phase import calc_iphase
 from scipy.interpolate import make_interp_spline
 from scipy.integrate import simpson
@@ -65,6 +64,8 @@ import pandas as pd
 import xarray as xr
 import re
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
+from smartg.typing import NumericArrayLike, PathType, RealNumber
+from numpy.typing import NDArray
 
 
 class AerOPAC(object):
@@ -73,7 +74,7 @@ class AerOPAC(object):
 
     Parameters
     ----------
-    filename : str
+    filename : str | path-like
         Complete path to the aerosol file or filename for aerosols
         located in "auxdata/aerosols/OPAC/mixtures/".
         Available auxdata aerosols: antarctic, antarctic_spheric,
@@ -104,12 +105,12 @@ class AerOPAC(object):
         Force scale height (see notes) of the free troposphere
     Z_stra : float, optional
         Force scale height (see notes) of the stratosphere
-        ssa : None or float or list or 1-D ndarray or 2-D ndarray or
-            DataArray, optional
+    ssa : array_like or DataArray or None, optional
         Force particle single scattering albedo. Default None.
 
         - if float -> same value for all wavelengths and altitudes
-        - if list -> it will be converted into a 1-D ndarray.
+        - if sequence of int or float -> it will be converted into a 1-D
+          ndarray.
         - if 1-D ndarray -> only wavelength dependence is considered
         - if 2-D ndarray -> wavelength and altitude dependence is
           considered
@@ -204,7 +205,7 @@ class AerOPAC(object):
         Z_mix: float | None = None,
         Z_free: float | None = None,
         Z_stra: float | None = None,
-        ssa: float | list[float] | np.ndarray | xr.DataArray | None = None,
+        ssa: NumericArrayLike | xr.DataArray | None = None,
         phase: xr.DataArray | None = None,
         rh_mix: float | None = None,
         rh_free: float | None = None,
@@ -235,7 +236,7 @@ class AerOPAC(object):
         if ssa is None:
             self.ssa = None
         else:
-            if isinstance(ssa, list):
+            if isinstance(ssa, Sequence):
                 ssa = np.array(ssa)
             if np.isscalar(ssa) or (
                 isinstance(ssa, np.ndarray) and (ssa.ndim <= 2)
@@ -1516,7 +1517,7 @@ class AtmAFGL(Atmosphere):
 
     def calc(
         self,
-        wav: float | np.ndarray | list[float] | BandSet,
+        wav: NumericArrayLike | BandSet,
         phase: bool = True,
         NBTHETA: int = 721,
         use_old_calc_iphase: bool = False,
@@ -1866,7 +1867,7 @@ class AtmAFGL(Atmosphere):
 
     def profile(
         self,
-        wav: float | np.ndarray | list[float] | BandSet,
+        wav: NumericArrayLike | BandSet,
         prof: ProfileBase | None = None,
     ) -> xr.Dataset:
         """Calculate the profile of optical properties at given
@@ -1881,7 +1882,7 @@ class AtmAFGL(Atmosphere):
 
         Parameters
         ----------
-        wav : array-like or BandSet
+        wav : array_like or BandSet
             Wavelengths at which to calculate optical properties [nm].
             If not a BandSet, it will be converted to one.
         prof : ProfileBase, optional
@@ -2497,7 +2498,9 @@ class AtmAFGL(Atmosphere):
 
         return pro
 
-    def phase(self, wav: Any, NBTHETA: int = 721) -> xr.DataArray | None:
+    def phase(
+        self, wav: NumericArrayLike, NBTHETA: int = 721
+    ) -> xr.DataArray | None:
         """
         Calculate phase matrix of aerosols and clouds at specified
         wavelengths.
@@ -2510,7 +2513,7 @@ class AtmAFGL(Atmosphere):
 
         Parameters
         ----------
-        wav : scalar or array-like
+        wav : array_like
             Wavelengths at which to calculate phase matrix [nm].
             If scalar, will be converted to 1-D array.
         NBTHETA : int, optional
@@ -2589,7 +2592,7 @@ class AtmAFGL(Atmosphere):
 
     def calc_split(
         self,
-        wav: float | np.ndarray | list | BandSet,
+        wav: NumericArrayLike | BandSet,
         phase: bool = True,
         NBTHETA: int = 721,
     ) -> tuple[
@@ -2609,7 +2612,7 @@ class AtmAFGL(Atmosphere):
 
         Parameters
         ----------
-        wav : scalar or array-like
+        wav : array_like or BandSet
             Wavelengths at which to calculate optical properties [nm].
         phase : bool, optional
             If True (default), calculates phase functions. Set to False
@@ -2672,6 +2675,8 @@ class AtmAFGL(Atmosphere):
         >>> (prof_abs, prof_ray, (prof_aer, ssa_aer)
         ...  (pro_iphase, pro_phases)) = atm.calc_split(wav=500.)
         """
+        if not isinstance(wav, BandSet):
+            wav = np.atleast_1d(wav)
         pro = self.calc(wav=wav, phase=phase, NBTHETA=NBTHETA)
         pro_aer = diff1(pro["OD_p"].values.astype(np.float32), axis=1)
         ssa_aer = pro["ssa_p_atm"].values
@@ -2698,44 +2703,44 @@ class ProfileBase(object):
 
     Parameters
     ----------
-    fname : str | Path
+    fname : path-like or None, optional
         Path to atmospheric profile file. Accepts .nc (NetCDF) or .dat
         (libratran) formats.
         If only filename is provided (no path), the auxdata directory is
         automatically prepended.
         If no suffix is provided, .nc is assumed by default.
-    tco3 : float | None, optional
+    tco3 : float or None, optional
         Total column vertically-integrated ozone in Dobson units (DU).
         If None, uses the
         value from the atmospheric profile. The ozone profile is scaled
         to match this column
         amount. Note: 1 DU = 2.1415e-5 kg m⁻².
         Default: None
-    tcwp : float | None, optional
+    tcwp : float or None, optional
         Total column vertically-integrated water vapour in g/cm². If
         None, uses the value
         from the atmospheric profile. The water vapour profile is scaled
         to match this column
         amount.
         Default: None
-    tcno2 : bool | None, optional
+    tcno2 : bool or None, optional
         Total column vertically-integrated NO2. If False, NO2 density is
         set to zero.
         If True, NO2 profile from the atmospheric file is retained.
         Default: True
-    p0 : float | None, optional
+    p0 : float or None, optional
         Sea surface (bottom layer) pressure in hPa. If None, uses the
         pressure
         from the atmospheric profile. Scales all pressure values
         proportionally.
         Default: None
-    rh_cst : float | None, optional
+    rh_cst : float or None, optional
         Force relative humidity to be constant at this value. If None,
         relative
         humidity is recalculated from the temperature and water vapor
         profiles.
         Default: None
-    o3_h2o_alt : float | None, optional
+    o3_h2o_alt : float or None, optional
         Altitude (km) at which the specified tco3 and tcwp values apply.
         When specified,
         the ozone and water vapor profiles are scaled such that the
@@ -2760,7 +2765,7 @@ class ProfileBase(object):
 
     def __init__(
         self,
-        fname: str | Path | None,
+        fname: PathType | None,
         tco3: float | None = None,
         tcwp: float | None = None,
         tcno2: bool | None = True,
@@ -2902,7 +2907,7 @@ class ProfileBase(object):
         if not tcno2:
             self.dens_no2[:] = 0.0
 
-    def regrid(self, znew: np.ndarray) -> "ProfileBase":
+    def regrid(self, znew: NDArray) -> "ProfileBase":
         """Regrid atmospheric profile to a new altitude grid.
 
         Interpolates all atmospheric properties (pressure, temperature,
@@ -2915,7 +2920,7 @@ class ProfileBase(object):
 
         Parameters
         ----------
-        znew : 1-D ndarray
+        znew : ndarray
             New altitude grid in kilometers. Must be a 1-D array of
             altitude values.
             The new grid can be coarser, finer, or irregular compared to
@@ -2942,8 +2947,9 @@ class ProfileBase(object):
             - dens_n2o: nitrous oxide density (molecule/cm³)
             - dens_n2: nitrogen density (molecule/cm³)
             - dens_so2: sulfur dioxide density (molecule/cm³)
-            - RH_cst: constant relative humidity (None | float)
+            - RH_cst: constant relative humidity (None or float)
         """
+        znew = np.atleast_1d(znew)
         prof = ProfileBase(None)
         z = self.z
         prof.z = znew
@@ -3003,7 +3009,7 @@ class ProfileBase(object):
 
         return prof
 
-    def relative_humidity(self) -> np.ndarray:
+    def relative_humidity(self) -> NDArray:
         """
         Calculate relative humidity profile for each atmospheric layer.
 
@@ -3053,7 +3059,7 @@ class ProfileBase(object):
         return rh
 
 
-def saturation_pressure(t: float | np.ndarray) -> float | np.ndarray:
+def saturation_pressure(t: NumericArrayLike) -> NDArray:
     """Calculate saturation vapor pressure for water and ice phases.
 
     Uses the Huang (2018) empirical formula, which provides accurate
@@ -3062,12 +3068,12 @@ def saturation_pressure(t: float | np.ndarray) -> float | np.ndarray:
 
     Parameters
     ----------
-    t : float or array-like
+    t : array_like
         Temperature in Kelvin [K]
 
     Returns
     -------
-    sat_press : float or numpy.ndarray
+    sat_press : ndarray
         Saturation vapor pressure [Pa]
 
     Notes
@@ -3100,18 +3106,18 @@ def saturation_pressure(t: float | np.ndarray) -> float | np.ndarray:
     return sat_press
 
 
-def f_n2(lam: float | np.ndarray) -> float | np.ndarray:
+def f_n2(lam: NumericArrayLike) -> NDArray:
     """Compute the depolarization factor of N2 as a function of
     wavelength.
 
     Parameters
     ----------
-    lam : float | 1-D ndarray
+    lam : array_like
         Wavelength in micrometers (μm).
 
     Returns
     -------
-    out : float | 1-D ndarray
+    ndarray
         Depolarization factor of N2. Same shape as input `lam`.
 
     References
@@ -3122,21 +3128,22 @@ def f_n2(lam: float | np.ndarray) -> float | np.ndarray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
+    lam = np.atleast_1d(lam)
     return 1.034 + 3.17 * 1e-4 * lam ** (-2)
 
 
-def f_o2(lam: float | np.ndarray) -> float | np.ndarray:
+def f_o2(lam: NumericArrayLike) -> NDArray:
     """Compute the depolarization factor of O2 as a function of
     wavelength.
 
     Parameters
     ----------
-    lam : float | 1-D ndarray
+    lam : array_like
         Wavelength in micrometers (μm).
 
     Returns
     -------
-    out : float | 1-D ndarray
+    ndarray
         Depolarization factor of O2. Same shape as input `lam`.
 
     References
@@ -3147,12 +3154,11 @@ def f_o2(lam: float | np.ndarray) -> float | np.ndarray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
+    lam = np.atleast_1d(lam)
     return 1.096 + 1.385 * 1e-3 * lam ** (-2) + 1.448 * 1e-4 * lam ** (-4)
 
 
-def f_air_co2(
-    lam: np.ndarray, co2: np.ndarray | np.floating[Any]
-) -> np.ndarray:
+def f_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     """Calculates the depolarization factor for air using a composite
     formula based on the depolarization factors of N2 and O2, and the
     CO2 concentration. Produces a 2-D array with one value per
@@ -3160,14 +3166,14 @@ def f_air_co2(
 
     Parameters
     ----------
-    lam : 1-D ndarray
+    lam : array_like
         Wavelength values in micrometers (μm). Shape: (N,)
-    co2 : 1-D ndarray or np.floating
+    co2 : array_like
         CO2 concentration in parts per million (ppm). Shape: (M,) or scalar.
 
     Returns
     -------
-    out : 2-D ndarray
+    ndarray
         Depolarization factor of air. Shape: (N, M), where N is the
         number of
         wavelengths and M is the number of layers.
@@ -3189,18 +3195,18 @@ def f_air_co2(
     )
 
 
-def n_air_co2_300(lam: float | np.ndarray) -> float | np.ndarray:
+def n_air_co2_300(lam: NumericArrayLike) -> NDArray:
     """Compute the refractive index of dry air at 300 ppm CO2 as a
     function of wavelength.
 
     Parameters
     ----------
-    lam : float | ndarray
+    lam : array_like
         Wavelength in micrometers (μm).
 
     Returns
     -------
-    out : float | 1-D ndarray
+    ndarray
         Refractive index of dry air at 300 ppm CO2. Same shape as input
         `lam`.
 
@@ -3212,6 +3218,7 @@ def n_air_co2_300(lam: float | np.ndarray) -> float | np.ndarray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
+    lam = np.atleast_1d(lam)
     return (
         1e-8
         * (
@@ -3223,22 +3230,20 @@ def n_air_co2_300(lam: float | np.ndarray) -> float | np.ndarray:
     )
 
 
-def n_air_co2(
-    lam: np.ndarray, co2: np.ndarray | np.floating[Any]
-) -> np.ndarray:
+def n_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     """Calculates the refractive index as function of wavelength and CO2
     concentration.
 
     Parameters
     ----------
-    lam : 1-D ndarray
+    lam : array_like
         Wavelength values in micrometers (μm). Shape: (N,)
-    co2 : 1-D ndarray | np.floating
+    co2 : array_like
         CO2 concentration in parts per million (ppm). Shape: (M,) or scalar.
 
     Returns
     -------
-    out : 2-D ndarray
+    ndarray
         Refractive index of air. Shape: (N, M), where N is the number of
         wavelengths
         and M is the number of layers.
@@ -3256,18 +3261,18 @@ def n_air_co2(
     return (N300 - 1) * (1 + 0.54 * (CO2 * 1e-6 - 0.0003)) + 1.0
 
 
-def m_dry_air(co2: float | np.ndarray) -> float | np.ndarray:
+def m_dry_air(co2: NumericArrayLike) -> NDArray:
     """Compute the mean molecular weight of dry air as a function of CO2
     concentration.
 
     Parameters
     ----------
-    co2 : float or ndarray
+    co2 : array_like
         CO2 concentration in parts per million (ppm).
 
     Returns
     -------
-    float or ndarray
+    ndarray
         Mean molecular weight of dry air in g/mol. Same shape as input
         `co2`.
 
@@ -3279,21 +3284,22 @@ def m_dry_air(co2: float | np.ndarray) -> float | np.ndarray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    return 15.0556 * co2 * 1e-6 + 28.9595
+    return 15.0556 * np.atleast_1d(co2) * 1e-6 + 28.9595
 
 
-def rayleigh_crs(lam: np.ndarray, co2: float | np.ndarray) -> np.ndarray:
+def rayleigh_crs(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     """Compute the Rayleigh cross section.
 
-    Parameters:
-    -----------
-    lam : 1-D ndarray
+    Parameters
+    ----------
+    lam : array_like
         The wavelength(s) in um
-    co2 : float or 1-D ndarray
+    co2 : array_like
         CO2 concentration(s) in ppm
 
-    Returns:
-    out : 2-D ndarray
+    Returns
+    -------
+    ndarray
         The Rayleigh cross section (N wavelengths x M layers)
 
     References
@@ -3304,19 +3310,12 @@ def rayleigh_crs(lam: np.ndarray, co2: float | np.ndarray) -> np.ndarray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    if not isinstance(lam, np.ndarray):
-        raise ValueError("The parameter lam must be a 1-D np.ndarray.")
-    if not isinstance(co2, (float, int, np.floating, np.integer, np.ndarray)):
-        raise ValueError(
-            "The parameter co2 must be a scalar or a 1-D ndarray."
-        )
+    lam = np.atleast_1d(lam)
+    co2 = np.atleast_1d(co2)
 
     # Ensure float64 due to numpy 2
     lam = lam.astype(np.float64)
-    if isinstance(co2, np.ndarray):
-        co2 = co2.astype(np.float64)
-    else:
-        co2 = np.float64(float(co2))
+    co2 = co2.astype(np.float64)
 
     Avogadro = constants.value("Avogadro constant")
     Ns = Avogadro / 22.4141 * 273.15 / 288.15 * 1e-3
@@ -3333,19 +3332,18 @@ def rayleigh_crs(lam: np.ndarray, co2: float | np.ndarray) -> np.ndarray:
     )
 
 
-def gravity_z0(lat: float | np.floating[Any] | np.integer[Any]) -> float:
+def gravity_z0(lat: NumericArrayLike) -> NDArray:
     """Compute gravitational acceleration at Earth's surface as a
     function of latitude.
 
     Parameters
     ----------
-    lat : float | np.floating | np.integer
-        Latitude in degrees as a scalar (Python float or numpy scalar).
-        Positive for North, negative for South.
+    lat : array_like
+        Latitude values in degrees. Positive for North, negative for South.
 
     Returns
     -------
-    out : float
+    ndarray
         Gravitational acceleration at ground level in m/s².
 
     References
@@ -3356,9 +3354,7 @@ def gravity_z0(lat: float | np.floating[Any] | np.integer[Any]) -> float:
            Press,
            City of Washington, 527 pp.
     """
-    if not isinstance(lat, (float, int, np.floating, np.integer)):
-        raise ValueError("The parameter lat must be a scalar value.")
-
+    lat = np.atleast_1d(lat)
     return 980.6160 * (
         1.0
         - 0.0026372 * np.cos(2 * lat * np.pi / 180.0)
@@ -3367,23 +3363,23 @@ def gravity_z0(lat: float | np.floating[Any] | np.integer[Any]) -> float:
 
 
 def gravity_z(
-    lat: float | np.floating[Any] | np.integer[Any],
-    z: float | np.ndarray | list,
-) -> float | np.ndarray:
+    lat: RealNumber,
+    z: NumericArrayLike,
+) -> NDArray:
     """Compute gravitational acceleration at a given altitude and
     latitude.
 
     Parameters
     ----------
-    lat : float | np.floating | np.integer
+    lat : float
         Latitude in degrees as a scalar (Python float or numpy scalar).
         Positive for North, negative for South.
-    z : float | 1D-ndarray | list
+    z : array_like
         Altitude(s) above sea level in meters.
 
     Returns
     -------
-    out : float | 1D-ndarray
+    ndarray
         Gravitational acceleration at the given altitude(s) and latitude
         in m/s².
 
@@ -3398,8 +3394,7 @@ def gravity_z(
     if not isinstance(lat, (float, int, np.floating, np.integer)):
         raise ValueError("The parameter lat must be a scalar value.")
 
-    if isinstance(z, list):
-        z = np.asarray(z)
+    z = np.atleast_1d(z)
 
     return (
         gravity_z0(lat)
@@ -3411,27 +3406,63 @@ def gravity_z(
 
 
 def rayleigh_od(
-    lam: np.ndarray,
-    co2: float | np.ndarray = 400.0,
+    lam: NumericArrayLike,
+    co2: NumericArrayLike = 400.0,
     lat: float = 45.0,
-    z: float | np.ndarray = 0.0,
-    P: float | np.ndarray = 1013.25,
+    z: NumericArrayLike = 0.0,
+    P: NumericArrayLike = 1013.25,
     pressure: str = "surface",
-) -> np.ndarray:
-    """
-    Rayleigh optical depth from Bodhaine et al, 99 (N wavelengths x M
-    layers)
-        lam : wavelength in um (N)
-        co2 : ppm (M)
-        lat : deg (scalar)
-        z : altitude in m (M)
-        P : pressure in hPa (M)
-            (surface or sea-level)
-        pressure: str
-            - 'surface': P provided at altitude z
-            - 'sea-level': P provided at altitude 0
+) -> NDArray:
+    """Compute Rayleigh optical depth.
+
+    Uses the formulation from Bodhaine et al. (1999) to compute the
+    Rayleigh optical depth for given wavelengths and atmospheric
+    layers.
+
+    Parameters
+    ----------
+    lam : array_like
+        Wavelength(s) in micrometers. Shape (N,).
+    co2 : array_like, optional
+        CO2 concentration in parts per million (ppm). May be a scalar or
+        an array with one entry per layer. Default is 400.0.
+    lat : float, optional
+        Latitude in degrees used for gravity calculation.
+        Default is 45.0.
+    z : array_like, optional
+        Altitude(s) above sea level in meters. May be a scalar or
+        have one entry per layer.
+        Default is 0.0.
+    P : array_like, optional
+        Pressure in hPa. Interpretation depends on the ``pressure`` arg.
+        Default is 1013.25.
+    pressure : {'surface', 'sea-level'}, optional
+        How to interpret ``P``:
+        - 'surface' : ``P`` is the pressure at altitude ``z`` (default).
+        - 'sea-level' : ``P`` is sea-level pressure and will be reduced
+          to the altitude ``z``.
+
+    Returns
+    -------
+    ndarray
+        Rayleigh optical depth. The returned array has shape (N, M),
+        where N corresponds to the number of wavelengths and M to the
+        number of layers (from inputs such as ``z`` or ``co2``).
+
+    References
+    ----------
+    .. [1] Bodhaine, B. A., Wood, N. B., Dutton, E. G., & Slusser, J. R.
+    (1999).
+        On Rayleigh Optical Depth Calculations. *Journal of Atmospheric
+        and Oceanic
+        Technology*, 16, 1854-1861.
     """
     Avogadro = constants.value("Avogadro constant")
+    z = np.atleast_1d(z)
+    lam = np.atleast_1d(lam)
+    co2 = np.atleast_1d(co2)
+    P = np.atleast_1d(P)
+
     zs = 0.73737 * z + 5517.56  # effective mass-weighted altitude
     G = gravity_z(lat, zs)
     # air pressure at the pixel (i.e. at altitude) in hPa
@@ -3447,8 +3478,11 @@ def rayleigh_od(
 
 
 def refractivity(
-    lam: np.ndarray, P: np.ndarray, T: np.ndarray, co2: np.ndarray
-) -> np.ndarray:
+    lam: NumericArrayLike,
+    P: NumericArrayLike,
+    T: NumericArrayLike,
+    co2: NumericArrayLike,
+) -> NDArray:
     """Calculate the refractive index of air as a function of
     wavelength, pressure, temperature, and CO2 concentration.
 
@@ -3473,6 +3507,11 @@ def refractivity(
     .. [1] Edlén, B. (1966). The refractive index of air. Metrologia,
     2(2), 71-80.
     """
+    lam = np.atleast_1d(lam)
+    P = np.atleast_1d(P)
+    T = np.atleast_1d(T)
+    co2 = np.atleast_1d(co2)
+
     p = P * 100.0
     t = T - 273.15
     Ntp = 1 + (n_air_co2(lam[:], co2) - 1) * p * (
@@ -3481,7 +3520,7 @@ def refractivity(
     return Ntp
 
 
-def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> np.ndarray:
+def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> NDArray:
     """
     Calculate the first difference of an array along a specified axis.
 
@@ -3505,7 +3544,7 @@ def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> np.ndarray:
 
     Returns
     -------
-    diff : ndarray
+    ndarray
         Differences between consecutive elements along the specified
         axis.
         If `samesize=True`, the result has the same shape as `a`.
@@ -3537,7 +3576,7 @@ def od2k(
     dataset: str,
     axis: int = 1,
     zreverse: bool = False,
-) -> np.ndarray:
+) -> NDArray:
     """Convert cumulated optical depth to a vertical coefficient
     profile.
 
@@ -3580,8 +3619,8 @@ def od2k(
 
 
 def blackbody_radiance(
-    wav: float | np.ndarray, T: float | np.ndarray
-) -> float | np.ndarray:
+    wav: NumericArrayLike, T: NumericArrayLike
+) -> float | NDArray:
     """
     Calculate the spectral blackbody radiance.
 
@@ -3591,14 +3630,14 @@ def blackbody_radiance(
 
     Parameters
     ----------
-    wav : float or ndarray
+    wav : array_like
         Wavelength in meters.
-    T : float or ndarray
+    T : array_like
         Temperature in Kelvin.
 
     Returns
     -------
-    L_b_wl : float or ndarray
+    L_b_wl : NDArray
         Spectral radiance in W·m⁻³·sr⁻¹.
 
     References
@@ -3620,17 +3659,27 @@ def blackbody_radiance(
     >>> T = 5778  # Sun's surface temperature
     >>> L_b_wl = blackbody_radiance(wavelengths, T)
     """
+    scalar_input = np.isscalar(wav) and np.isscalar(T)
+    wav = np.asarray(wav, dtype=float)
+    T = np.asarray(T, dtype=float)
+    try:
+        np.broadcast_shapes(wav.shape, T.shape)
+    except ValueError as err:
+        raise ValueError("wav and T must be broadcastable") from err
+
     c1 = 2.0 * Planck * speed_of_light**2
     c2 = Planck * speed_of_light / Boltzmann
     L_b_wl = c1 / ((wav**5) * (np.exp(c2 / (wav * T)) - 1.0))
+    if scalar_input:
+        return float(L_b_wl)
     return L_b_wl
 
 
 def get_aer_dist_integral(
-    Z: float | np.ndarray,
-    H_min: float | np.ndarray,
-    H_max: float | np.ndarray,
-) -> float | np.ndarray:
+    Z: NumericArrayLike,
+    H_min: NumericArrayLike,
+    H_max: NumericArrayLike,
+) -> NDArray:
     """
     Compute the integral of exponential vertical distribution between
     two altitudes.
@@ -3643,32 +3692,35 @@ def get_aer_dist_integral(
 
     Parameters
     ----------
-    Z : float or ndarray
+    Z : array_like
         Scale height in km. Defines the vertical distribution as N(h) =
         N(0)*exp(-h/Z).
-    H_min : float or ndarray
+    H_min : array_like
         Minimum altitude in km (bottom of the layer).
-    H_max : float or ndarray
+    H_max : array_like
         Maximum altitude in km (top of the layer).
 
     Returns
     -------
-    float or ndarray
+    ndarray
         Integral of the exponential distribution between H_min and
         H_max,
         normalized by Z.
     """
+    Z = np.atleast_1d(Z)
+    H_min = np.atleast_1d(H_min)
+    H_max = np.atleast_1d(H_max)
     return -(Z) * np.exp(-H_max / Z) + (Z) * np.exp(-H_min / Z)
 
 
-def check_date(dates: np.ndarray | list[str] | Any, year: int) -> None:
+def check_date(dates: Iterable[str] | NDArray[np.str_], year: int) -> None:
     """Validate that all dates are from a single year and match the
     provided year.
 
     Parameters
     ----------
-    dates : 1d-array | list
-        Dates in format "dd:mm:yyyy" (numpy array or list)
+    dates : array-like of str
+        Dates in format "dd:mm:yyyy"
     year : int
         Expected year in format yyyy
 
@@ -3682,11 +3734,14 @@ def check_date(dates: np.ndarray | list[str] | Any, year: int) -> None:
     -------
     None
     """
-    if len(dates) == 0:
+    # Normalize input to a list of strings so we accept numpy/pandas arrays
+    dates_list = [str(d) for d in dates]
+
+    if len(dates_list) == 0:
         raise ValueError("dates cannot be empty")
 
     # Extract years from dates using list comprehension
-    years = np.unique([int(date.split(":")[-1]) for date in dates])
+    years = np.unique([int(date.split(":")[-1]) for date in dates_list])
 
     if years.size != 1:
         raise ValueError(
@@ -3703,12 +3758,12 @@ def check_date(dates: np.ndarray | list[str] | Any, year: int) -> None:
         )
 
 
-def read_aeronet_aod(file: str | PathLike, year: int) -> xr.DataArray:
+def read_aeronet_aod(file: PathType, year: int) -> xr.DataArray:
     """Extract AOD data from Aeronet file.
 
     Parameters
     ----------
-    file : str | Pathlike
+    file : path-like
         Extinction AOD aeronet file path
     year : int
         The year for 'Day_of_Year(Fraction)' dimension creation
@@ -3751,12 +3806,12 @@ def read_aeronet_aod(file: str | PathLike, year: int) -> xr.DataArray:
     return AOD_ext_lut
 
 
-def read_aeronet_ssa(file: str | PathLike, year: int) -> xr.DataArray:
+def read_aeronet_ssa(file: PathType, year: int) -> xr.DataArray:
     """Extract SSA data from Aeronet file.
 
     Parameters
     ----------
-    file : str | Pathlike
+    file : path-like
         Single scattering albedo aeronet file path
     year : int
         The year for 'Day_of_Year(Fraction)' dimension creation
@@ -3800,12 +3855,12 @@ def read_aeronet_ssa(file: str | PathLike, year: int) -> xr.DataArray:
     return SSA_lut
 
 
-def read_aeronet_pfn(file: str | PathLike, year: int) -> xr.DataArray:
+def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
     """Extract PFN data from Aeronet file.
 
     Parameters
     ----------
-    file : str | Pathlike
+    file : path-like
         Phase matrix aeronet file path
     year : int
         The year for 'Day_of_Year(Fraction)' dimension creation
@@ -3865,9 +3920,9 @@ def atm_pro_from_aeronet(
     aod_file: str | xr.DataArray,
     ssa_file: str | xr.DataArray,
     pfn_file: str | xr.DataArray,
-    b_wav: list[float] | BandSet,
-    pfwav: list[float] | None = None,
-    grid: np.ndarray | None = None,
+    b_wav: NumericArrayLike | BandSet,
+    pfwav: NumericArrayLike | None = None,
+    grid: NumericArrayLike | None = None,
     atm_name: str = "afglt",
     P0: float | None = None,
     O3: float | None = None,
@@ -3886,28 +3941,28 @@ def atm_pro_from_aeronet(
         Date in the following format -> "yyyy-mm-dd"
     time : str
         Time in the following format -> "hh:mm:ss"
-    aod_file : str | xr.DataArray
+    aod_file : str or xr.DataArray
         Extinction AOD aeronet file (finishing by .aod) or aod DataArray
-    ssa_file : str | xr.DataArray
+    ssa_file : str or xr.DataArray
         Single scattering albedo aeronet file (finishing by .ssa) or ssa
         DataArray
-    pfn_file : str | xr.DataArray
+    pfn_file : str or xr.DataArray
         Phase matrix aeronet file (finishing by .pfn) or pfn DataArray
-    b_wav : list | BandSet
-        Kdis bands or list of wavelenghts
-    pfwav : list
-        List of wavelenghts where the phase functions are computed
-    grid : array-like
+    b_wav : array_like or BandSet, optional
+        Kdis bands or list of wavelengths
+    pfwav : array_like or None, optional
+        List of wavelengths where the phase functions are computed
+    grid : array_like or None, optional
         Altitude grid profil
-    atm_name : str
+    atm_name : str, optional
         The atmAFGL atmosphere used
-    P0 : float
+    P0 : float, optional
         Surface pressure
-    O3 : float
+    O3 : float, optional
         Scale ozone vertical column (Dobson units)
-    H2O : float
+    H2O : float, optional
         Scale Water vertical column
-    O3_H2O_alt : float
+    O3_H2O_alt : float or None, optional
         Altitude of H2O and O3 values, by default None and scale from
         z=0km
     H_mix_min : float, optional
@@ -4038,7 +4093,7 @@ def atm_pro_from_aeronet(
 
 
 def _open_lut_datatree_as_xarray(
-    input_path: str | Path,
+    input_path: PathType,
     group: str | None = None,
     datasets: Iterable[str] | None = None,
 ) -> xr.Dataset:
@@ -4093,8 +4148,8 @@ def _open_lut_datatree_as_xarray(
 
 
 def artdeco_to_smartg_cld(
-    input_path: str | Path,
-    output_path: str | Path | None = None,
+    input_path: PathType,
+    output_path: PathType | None = None,
     h5_group: str | None = None,
     normalize: bool = True,
     overwrite: bool = False,
@@ -4109,9 +4164,9 @@ def artdeco_to_smartg_cld(
 
     Parameters
     ----------
-    input_path : str | Path
+    input_path : path-like
         Path to the ARTDECO cloud HDF5 file.
-    output_path : str | Path, optional
+    output_path : path-like, optional
         Output path for saving the converted SMART-G cloud NetCDF file.
         If None, the converted data is not saved to disk. Default: None
     h5_group : str, optional
