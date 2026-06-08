@@ -26,11 +26,11 @@ Typical usage involves:
 Key Classes
 -----------
 Atm1D
-    AFGL Standard U.S. Atmosphere model. Provides vertical temperature
-    and
-    pressure profiles. Aerosols, clouds, and ocean surface can be added
-    to
-    build a complete atmospheric model.
+    1D atmospheric profile model. Provides vertical temperature and
+    pressure profiles read from an auxiliary data file (AFGL standard
+    atmospheres are shipped by default, but any other or user-provided
+    profile can be used). Aerosols, clouds, and ocean surface can be
+    added to build a complete atmospheric model.
 
 AerOPAC
     Aerosol Optical Properties from OPAC (Optical Properties of Aerosols
@@ -44,6 +44,12 @@ Cloud
     depth, single scattering albedo, and phase matrices. Used for
     representing
     cloud layers in atmospheric profiles.
+
+AerUser
+    User-defined aerosol model. Like AerOPAC, but the aerosol optical
+    depth, single scattering albedo, and phase matrices are supplied
+    directly by the user instead of being interpolated from the OPAC
+    pre-calculated aerosol netcdf files.
 """
 
 from __future__ import annotations
@@ -1247,19 +1253,32 @@ class Atmosphere(object):
 
 class Atm1D(Atmosphere):
     """
-    Atmospheric profile definition using AFGL data
+    1D atmospheric profile definition
+
+    The atmospheric profile is read from an auxiliary data file. The
+    profiles currently shipped with the auxiliary data are the AFGL
+    standard atmospheres, but this is not a limitation: any other
+    profile can be used. Users can provide their own atmospheric
+    profile, either by placing the file in the atmospheric auxdata
+    directory (and referring to it by filename) or by passing the full
+    path to the `atm_filename` parameter.
 
     Parameters
     ----------
 
     atm_filename : str
-        The AFGL atmosphere profile to use. Choice are:
+        The atmospheric profile to use. The AFGL standard
+        atmospheres are provided in the auxiliary data:
             - 'afglms' for Mid-Latitude Summer (45N July)
             - 'afglmw' for Mid-Latitude Winter (45N Jan)
             - 'afglss' for Sub Arctic Summer (60N July)
             - 'afglsw' for Sub Arctic Winter (60N Jan)
             - 'afglt' for Tropic (15N Annual Average)
             - 'afglus' for U.S. Standard (1976)
+
+        Any other profile may be used as well: provide your own file
+        either by placing it in the atmospheric auxdata directory (and
+        passing its filename) or by passing its full path.
 
         File format: If a full path is not provided (only filename), the
         atmospheric
@@ -1276,12 +1295,13 @@ class Atm1D(Atmosphere):
     grid : None or array-like, optional
       The vertical grid (from TOA to BOA). The optical properties of the
       atmosphere are recalculated following
-      the new grid. If None, the AFGL grid is kept.
+      the new grid. If None, the grid of the input profile is kept.
     lat : float, optional
         The latitude used for Rayleigh optical depth calculation.
         Default=45.
     P0:  None or float, optional
-        The sea surface pressure. If None take P0 from the AFGL profil.
+        The sea surface pressure. If None take P0 from the input
+        profile.
     O3 : None or float, optional
         The total ozone column in Dobson units. If None keep the total
         ozone content of the chosen atmospheric
