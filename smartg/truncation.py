@@ -38,6 +38,7 @@ Examples
 """
 
 import numpy as np
+from typing import Optional
 
 
 class DM_trunc(object):
@@ -65,12 +66,17 @@ class DM_trunc(object):
     """
 
     def __init__(
-        self, nb_streams, integral_method="lobatto", pha_scale_method=1
-    ):
+        self,
+        nb_streams: int,
+        integral_method: str = "lobatto",
+        pha_scale_method: int = 1,
+    ) -> None:
         # check parameter values
-        if (isinstance(nb_streams, bool) or not isinstance(
-            nb_streams, (int, np.integer)
-        ) or nb_streams < 1):
+        if (
+            isinstance(nb_streams, bool)
+            or not isinstance(nb_streams, (int, np.integer))
+            or nb_streams < 1
+        ):
             raise ValueError(
                 "The nb_streams parameter must be an integer >= 1."
             )
@@ -127,17 +133,19 @@ class GT_trunc(object):
 
     def __init__(
         self,
-        trunc_frac,
-        integral_method="lobatto",
-        theta_tol=None,
-        theta_tr=None,
-        lobatto_optimization=False,
-        pha_scale_method=1,
-    ):
+        trunc_frac: float,
+        integral_method: str = "lobatto",
+        theta_tol: Optional[float] = None,
+        theta_tr: Optional[float] = None,
+        lobatto_optimization: bool = False,
+        pha_scale_method: int = 1,
+    ) -> None:
         # check parameter values
-        if (isinstance(trunc_frac, bool) or not isinstance(
-            trunc_frac, (float, np.floating)
-        ) or not (0.0 < trunc_frac < 1.0)):
+        if (
+            isinstance(trunc_frac, bool)
+            or not isinstance(trunc_frac, (float, np.floating))
+            or not (0.0 < trunc_frac < 1.0)
+        ):
             raise ValueError(
                 "The trunc_frac parameter must be a scalar in the "
                 + "interval ]0; 1[."
@@ -149,9 +157,11 @@ class GT_trunc(object):
                 + f"{integral_methods_ok}."
             )
         if theta_tol is not None:
-            if (isinstance(theta_tol, bool) or not isinstance(
-                theta_tol, (float, np.floating)
-            ) or not (0.0 < theta_tol < 180.0)):
+            if (
+                isinstance(theta_tol, bool)
+                or not isinstance(theta_tol, (float, np.floating))
+                or not (0.0 < theta_tol < 180.0)
+            ):
                 raise ValueError(
                     "The theta_tol parameter must be a scalar in the "
                     + "interval ]0; 180[."
