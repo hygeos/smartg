@@ -136,7 +136,7 @@ def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
     aer_ssa_valid  = aer_sca_valid / aer_ext_valid
     aer_ssa_valid[aer_ext_valid==0]=1.
     comp=[AerOPAC('desert',0.5, 550., phase= phase_valid)]
-    atm_valid = Atm1D('afglmw', grid=z_valid, O3=0., NO2=False, pfwav=pfwav, comp=comp,
+    atm_valid = Atm1D('afglmw', grid=z_valid, tco3=0., no2=False, pfwav=pfwav, comp=comp,
                         prof_ray= ray_valid,
                         prof_aer= (aer_ext_valid,aer_ssa_valid),
                         prof_abs= gas_valid

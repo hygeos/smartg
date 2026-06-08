@@ -47,11 +47,11 @@ def test_profile4(wav):
 
 def test_profile5():
     # set tauray
-    pro = Atm1D('afglms', grid=[100, 20, 0.], tauR=0.14).calc(500.)
+    pro = Atm1D('afglms', grid=[100, 20, 0.], tau_r=0.14).calc(500.)
     assert np.isclose(pro['OD_r'][0,-1], 0.14)
 
-    Atm1D('afglms', grid=[100, 20, 0.], tauR=0.14).calc([490.,500.])
-    Atm1D('afglms', grid=[100, 20, 0.], tauR=[0.15, 0.14]).calc([490.,500.])
+    Atm1D('afglms', grid=[100, 20, 0.], tau_r=0.14).calc([490.,500.])
+    Atm1D('afglms', grid=[100, 20, 0.], tau_r=[0.15, 0.14]).calc([490.,500.])
 
 def test_profile6():
     # set ssa

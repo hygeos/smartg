@@ -313,7 +313,7 @@ def test_val_ray_surf():
     stokes_TOA = ['I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)']
     stokes_Oplus = ['I_up (0+)', 'Q_up (0+)', 'U_up (0+)']
 
-    atm=Atm1D('afglms',lat=0., O3=0., NO2=False)
+    atm=Atm1D('afglms',lat=0., tco3=0., no2=False)
     surf=RoughSurface(SUR=1,NH2O=1.34,WIND=7.)
 
     ml30=read_mlut_hdf('auxdata/validation/ml30_AOS_I')

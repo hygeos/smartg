@@ -1299,20 +1299,20 @@ class Atm1D(Atmosphere):
     lat : float, optional
         The latitude used for Rayleigh optical depth calculation.
         Default=45.
-    P0:  None or float, optional
-        The sea surface pressure. If None take P0 from the input
+    p0:  None or float, optional
+        The sea surface pressure. If None take p0 from the input
         profile.
-    O3 : None or float, optional
+    tco3 : None or float, optional
         The total ozone column in Dobson units. If None keep the total
         ozone content of the chosen atmospheric
         profile.
-    H2O : None or float, optional
+    tcwp : None or float, optional
         The total water vapor column in g.cm-2. If None keep the total
         water vapor content of the chosen
         atmospheric profile.
-    NO2: bool, optional
+    no2: bool, optional
         Activate NO2 absorption (default True)
-    O3_H2O_alt : None or float, optional
+    o3_h2o_alt : None or float, optional
         Altitude (km) at which the specified O3 and H2O values apply.
         When specified,
         the O3 and H2O profiles are scaled such that the column amount
@@ -1323,7 +1323,7 @@ class Atm1D(Atmosphere):
         adjusted to match
         the constraint at this reference altitude.
         Default: None
-    tauR : None or float, optional
+    tau_r : None or float, optional
         Force the Rayleigh optical thickness. If None, computed from
         atmospheric profile and wavelength.
     pfwav : None or list, optional
@@ -1367,10 +1367,10 @@ class Atm1D(Atmosphere):
         indices profile (NWavelength,NZ),
         and  phases is a list of phase matrices LUT (as outputs of the
         `read_phase` utility).
-    RH_cst : None or float, optional
+    rh_cst : None or float, optional
         Force relative humidity to be constant. If None calculated
-        depending on H2O vertical profile.
-    O3_acs : str, optional
+        depending on h2o vertical profile.
+    o3_acs : str, optional
         Path to ozone netcdf4 file with absorption coefficient cross
         section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
         in cm^2, and where T is in degrees Celcius). If only filename is
@@ -1380,7 +1380,7 @@ class Atm1D(Atmosphere):
             - 'O3_acs_BogumilV3.0_coeffs.nc'
             - 'O3_acs_Chehade(Bogumil_revised)V4.1_coeffs.nc'
             - 'O3_acs_SerdyuchenkoV2.0_coeffs.nc'
-    NO2_acs : str, optional
+    no2_acs : str, optional
         Path to NO2 netcdf4 file with absorption coefficient cross
         section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
         in cm^2, and where T is in degrees Celcius). If only filename is
@@ -1409,22 +1409,22 @@ class Atm1D(Atmosphere):
         comp=[],
         grid=None,
         lat=45.0,
-        P0=None,
-        O3=None,
-        H2O=None,
-        NO2=True,
-        O3_H2O_alt=None,
-        tauR=None,
+        p0=None,
+        tco3=None,
+        tcwp=None,
+        no2=True,
+        o3_h2o_alt=None,
+        tau_r=None,
         pfwav=None,
         pfgrid=[100.0, 0.0],
         prof_abs=None,
         prof_ray=None,
         prof_aer=None,
         prof_phases=None,
-        RH_cst=None,
+        rh_cst=None,
         cells=None,
-        O3_acs="O3_acs_BogumilV3.0_coeffs",
-        NO2_acs="NO2_acs_BogumilV1.0_coeffs",
+        o3_acs="O3_acs_BogumilV3.0_coeffs",
+        no2_acs="NO2_acs_BogumilV1.0_coeffs",
     ):
 
         self.lat = lat
@@ -1436,13 +1436,13 @@ class Atm1D(Atmosphere):
         self.prof_aer = prof_aer
         self.prof_phases = prof_phases
         # store attribute using lowercase name for consistency
-        self.rh_cst = RH_cst
+        self.rh_cst = rh_cst
         self.OPT3D = cells is not None
         self.cells = cells
 
-        self.tauR = tauR
-        if tauR is not None:
-            self.tauR = np.array(tauR)
+        self.tauR = tau_r
+        if tau_r is not None:
+            self.tauR = np.array(tau_r)
 
         assert (np.diff(pfgrid) < 0.0).all()
 
@@ -1472,7 +1472,7 @@ class Atm1D(Atmosphere):
             ]
             for attr_name in attr_names:
                 setattr(prof, attr_name, np.zeros(Nopt, dtype=np.float32))
-            prof.rh_cst = RH_cst
+            prof.rh_cst = rh_cst
         else:
             if atm_filename.parent == Path("."):
                 atm_filename = DIR_AUXDATA / "atmospheres" / atm_filename.name
@@ -1486,12 +1486,12 @@ class Atm1D(Atmosphere):
             if atm_filename.suffix == ".nc" or atm_filename.suffix == ".dat":
                 prof = ProfileBase(
                     atm_filename,
-                    tco3=O3,
-                    tcwp=H2O,
-                    tcno2=NO2,
-                    p0=P0,
-                    rh_cst=RH_cst,
-                    o3_h2o_alt=O3_H2O_alt,
+                    tco3=tco3,
+                    tcwp=tcwp,
+                    tcno2=no2,
+                    p0=p0,
+                    rh_cst=rh_cst,
+                    o3_h2o_alt=o3_h2o_alt,
                 )
             else:
                 raise NameError(
@@ -1502,7 +1502,7 @@ class Atm1D(Atmosphere):
         #
         # read gaseous acs
         #
-        O3_acs_path = Path(O3_acs)
+        O3_acs_path = Path(o3_acs)
         if O3_acs_path.parent == Path("."):
             O3_acs_path = DIR_AUXDATA / "acs" / O3_acs_path.name
         if not O3_acs_path.exists() and O3_acs_path.suffix != ".nc":
@@ -1510,7 +1510,7 @@ class Atm1D(Atmosphere):
         self.acs_o3 = xr.open_dataset(O3_acs_path)
         self.acs_o3 = self.acs_o3.rename({"wav": "wavelength"})
 
-        NO2_acs_path = Path(NO2_acs)
+        NO2_acs_path = Path(no2_acs)
         if NO2_acs_path.parent == Path("."):
             NO2_acs_path = DIR_AUXDATA / "acs" / NO2_acs_path.name
         if not NO2_acs_path.exists() and NO2_acs_path.suffix != ".nc":
@@ -4101,11 +4101,11 @@ def atm_pro_from_aeronet(
         atm_name,
         comp=[aer],
         grid=grid,
-        P0=P0,
-        O3=O3,
-        H2O=H2O,
+        p0=P0,
+        tco3=O3,
+        tcwp=H2O,
         pfwav=pf_wav,
-        O3_H2O_alt=O3_H2O_alt,
+        o3_h2o_alt=O3_H2O_alt,
     ).calc(b_wav_BS)
 
     return pro

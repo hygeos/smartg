@@ -300,7 +300,7 @@ def test_objForward(**kwargv):
     custumF = CusForward(CFX=0.5, CFY=0.05, CFTX=1., CFTY=0., LMODE = "FF")
     
     aer = AeroOPAC('desert', 0.25, 550.)
-    pro = Atm1D('afglms', comp=[aer], P0 = 877, H2O=1.2)
+    pro = Atm1D('afglms', comp=[aer], p0 = 877, tcwp=1.2)
     
     m = Smartg(debug_photon=False, double = True,
                obj3D = True).run(surf = LambSurface(ALB=0.25),
