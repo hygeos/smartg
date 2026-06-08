@@ -72,6 +72,7 @@ import re
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 from smartg.typing import NumericArrayLike, PathType, RealNumber
 from numpy.typing import NDArray
+from typing import Any
 
 
 class AerOPAC(object):
@@ -1405,32 +1406,37 @@ class Atm1D(Atmosphere):
 
     def __init__(
         self,
-        atm_filename,
-        comp=[],
-        grid=None,
-        lat=45.0,
-        p0=None,
-        tco3=None,
-        tcwp=None,
-        no2=True,
-        o3_h2o_alt=None,
-        tau_r=None,
-        pfwav=None,
-        pfgrid=[100.0, 0.0],
-        prof_abs=None,
-        prof_ray=None,
-        prof_aer=None,
-        prof_phases=None,
-        rh_cst=None,
-        cells=None,
-        o3_acs="O3_acs_BogumilV3.0_coeffs",
-        no2_acs="NO2_acs_BogumilV1.0_coeffs",
-    ):
+        atm_filename: PathType,
+        comp: list[AerOPAC] | None = None,
+        grid: NDArray[np.floating] | None = None,
+        lat: float = 45.0,
+        p0: float | None = None,
+        tco3: float | None = None,
+        tcwp: float | None = None,
+        no2: bool = True,
+        o3_h2o_alt: float | None = None,
+        tau_r: float | None = None,
+        pfwav: NumericArrayLike | None = None,
+        pfgrid: NumericArrayLike | None = None,
+        prof_abs: NDArray[np.floating] | None = None,
+        prof_ray: NDArray[np.floating] | None = None,
+        prof_aer: (
+            tuple[NDArray[np.floating], NDArray[np.floating]] | None
+        ) = None,
+        prof_phases: tuple[NDArray[np.integer], list[Any]] | None = None,
+        rh_cst: float | None = None,
+        cells: tuple[Any, ...] | None = None,
+        o3_acs: PathType = "O3_acs_BogumilV3.0_coeffs",
+        no2_acs: PathType = "NO2_acs_BogumilV1.0_coeffs",
+    ) -> None:
 
         self.lat = lat
-        self.comp = comp
+        self.comp = [] if comp is None else comp
         self.pfwav = pfwav
-        self.pfgrid = np.array(pfgrid)
+        self.pfgrid = (
+            np.array([100.0, 0.0]) if pfgrid is None else np.asarray(pfgrid)
+        )
+        assert (np.diff(self.pfgrid) < 0.0).all()
         self.prof_abs = prof_abs
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
@@ -1444,14 +1450,13 @@ class Atm1D(Atmosphere):
         if tau_r is not None:
             self.tauR = np.array(tau_r)
 
-        assert (np.diff(pfgrid) < 0.0).all()
-
         atm_filename = Path(atm_filename)
 
         #
         # init directories and read atm file
         #
         if atm_filename.name == "ATM3D":
+            assert grid is not None, "For 3D atmosphere, grid must be provided"
             Nopt = grid.size
             prof = ProfileBase(None)
             prof.z = np.arange(Nopt, dtype=np.float32)[::-1]
@@ -1532,7 +1537,7 @@ class Atm1D(Atmosphere):
         # calculate reduced profile
         # (for phase function blending)
         #
-        self.prof_red = prof.regrid(pfgrid)
+        self.prof_red = prof.regrid(self.pfgrid)
 
     def calc(
         self,
