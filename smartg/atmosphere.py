@@ -1422,7 +1422,6 @@ class Atm1D(Atmosphere):
         prof_aer=None,
         prof_phases=None,
         RH_cst=None,
-        US=True,
         cells=None,
         O3_acs="O3_acs_BogumilV3.0_coeffs",
         NO2_acs="NO2_acs_BogumilV1.0_coeffs",
