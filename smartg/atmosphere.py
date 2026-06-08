@@ -1262,12 +1262,12 @@ class Atm1D(Atmosphere):
     profile can be used. Users can provide their own atmospheric
     profile, either by placing the file in the atmospheric auxdata
     directory (and referring to it by filename) or by passing the full
-    path to the `atm_filename` parameter.
+    path to the `fname` parameter.
 
     Parameters
     ----------
 
-    atm_filename : str
+    fname : str
         The atmospheric profile to use. The AFGL standard
         atmospheres are provided in the auxiliary data:
             - 'afglms' for Mid-Latitude Summer (45N July)
@@ -1291,48 +1291,52 @@ class Atm1D(Atmosphere):
         file
         convention is used.
     comp:  list, optional
-        Components particles (aerosols or clouds) to consider, i.e. a
-        list of aerOPAC or/and Cloud objects.
-    grid : None or array-like, optional
+        Components particles (aerosols or clouds ) to consider, i.e. a
+        list of aerOPAC, Cloud or/and AerUser objects.
+    grid : array_like or None, optional
       The vertical grid (from TOA to BOA). The optical properties of the
       atmosphere are recalculated following
       the new grid. If None, the grid of the input profile is kept.
     lat : float, optional
         The latitude used for Rayleigh optical depth calculation.
-        Default=45.
-    p0:  None or float, optional
-        The sea surface pressure. If None take p0 from the input
-        profile.
-    tco3 : None or float, optional
-        The total ozone column in Dobson units. If None keep the total
-        ozone content of the chosen atmospheric
-        profile.
-    tcwp : None or float, optional
-        The total water vapor column in g.cm-2. If None keep the total
-        water vapor content of the chosen
-        atmospheric profile.
-    no2: bool, optional
-        Activate NO2 absorption (default True)
-    o3_h2o_alt : None or float, optional
-        Altitude (km) at which the specified O3 and H2O values apply.
-        When specified,
-        the O3 and H2O profiles are scaled such that the column amount
-        from TOA to this
-        altitude matches the provided O3 and H2O values. The full
-        gaseous distribution
-        from TOA to ground is preserved; only the scaling factor is
-        adjusted to match
-        the constraint at this reference altitude.
+        Default: 45.
+    p0 : float or None, optional
+        Sea surface (bottom layer) pressure in hPa. If None, uses the
+        pressure from the input profile. Scales all pressure values
+        proportionally.
         Default: None
-    tau_r : None or float, optional
+    tco3 : float or None, optional
+        Total column vertically-integrated ozone in Dobson units (DU).
+        If None, uses the value from the input profile. The ozone
+        profile is scaled to match this column amount.
+        Note: 1 DU = 2.1415e-5 kg m⁻².
+        Default: None
+    tcwp : float or None, optional
+        Total column vertically-integrated water vapour in g/cm². If
+        None, uses the value from the input profile. The water vapour
+        profile is scaled to match this column amount.
+        Default: None
+    no2 : bool, optional
+        Activate NO2 absorption. If False, NO2 density is set to zero.
+        If True, the NO2 profile from the atmospheric file is retained.
+        Default: True
+    o3_h2o_alt : float or None, optional
+        Altitude (km) at which the specified tco3 and tcwp values apply.
+        When specified, the ozone and water vapor profiles are scaled
+        such that the column amount from TOA to this altitude matches
+        the provided tco3 and tcwp values. The full gaseous distribution
+        from TOA to ground is preserved; only the scaling factor is
+        adjusted to match the constraint at this reference altitude.
+        Default: None
+    tau_r : float or None, optional
         Force the Rayleigh optical thickness. If None, computed from
         atmospheric profile and wavelength.
-    pfwav : None or list, optional
-        The list of wavelengths over which the phase matrices are
+    pfwav : array_like or None, optional
+        The wavelengths over which the phase matrices are
         calculated. Then use the nearest wavelength
         during cuda simulation. Useful to reduce the memory. If None,
         compute the phase matrix at all wavelengths.
-    pfgrid : list, optional
+    pfgrid : array_like or None, optional
         The vertcial grid (from TOA to BOA) over which the phase
         matrices are calculated. This parameter can help
         reduce the memory but must be used with care. If misused, it may
@@ -1346,31 +1350,41 @@ class Atm1D(Atmosphere):
         introduce an important bias.
     prof_abs : None or 2-D ndarray, optional
         - In 1D atm mode -> force the gaseous absorption optical
-          thickness vertical profile (NWavelength,NZ),
+          thickness vertical profile (nwavelength,nz),
         it shortcuts any further gaseous absorption computation.
-        - In 3D atm mode -> just an optical properties index, it must be
-          completed by the cells grid
+        - In 3D atm mode -> the gaseous absorption optical properties
+          (1,nopt), where nopt is the number of unique optical
+          properties (gathering both the 1D values and the values of the
+          provided 3D grid). It must be completed by the cells grid.
     prof_ray : None or 2-D ndarray, optional
         - In 1D atm mode -> force the Rayleigh scattering optical
-          thickness vertical profile (NWavelength,NZ),
+          thickness vertical profile (nwavelength,nz),
         it shortcuts any further Rayleigh scattering computation.
-        - In 3D atm mode -> just an optical properties index, it must be
-          completed by the cells grid
+        - In 3D atm mode -> the Rayleigh scattering optical properties
+          (1,nopt), where nopt is the number of unique optical
+          properties (gathering both the 1D values and the values of the
+          provided 3D grid). It must be completed by the cells grid.
     prof_aer : None or tuple, optional
         - In 1D atm mode - > A tuple (ext,ssa) with the aerosol
           extinction optical thickness profile (ext) and
         single scattering albedo arrays (ssa), it shortcuts any further
         particles scattering computation.
-        - In 3D atm mode -> just an optical properties index, it must be
-          completed by the cells grid
-    prof_phases : None or tuple, optional
+        - In 3D atm mode -> the aerosol optical properties (1,nopt),
+          where nopt is the number of unique optical properties
+          (gathering both the 1D values and the values of the provided
+          3D grid). It must be completed by the cells grid.
+    prof_phases : tuple or None, optional
         A tuple (iphase, phases ) where iphase is the phase matrix
-        indices profile (NWavelength,NZ),
-        and  phases is a list of phase matrices LUT (as outputs of the
-        `read_phase` utility).
-    rh_cst : None or float, optional
-        Force relative humidity to be constant. If None calculated
-        depending on h2o vertical profile.
+        indices profile (nwavelength,nz) in 1D atm mode, or (1,nopt) in
+        3D atm mode (with nopt the number of unique optical properties
+        gathering both the 1D values and the values of the provided 3D
+        grid), and phases is a list of phase matrices LUT (as outputs of
+        the `read_phase` utility).
+    rh_cst : float or None, optional
+        Force relative humidity to be constant at this value. If None,
+        relative humidity is recalculated from the temperature and water
+        vapor profiles.
+        Default: None
     o3_acs : str, optional
         Path to ozone netcdf4 file with absorption coefficient cross
         section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
@@ -1390,7 +1404,7 @@ class Atm1D(Atmosphere):
         auxdata:
             - 'NO2_acs_BogumilV1.0_coeffs.nc'
             - 'NO2_acs_Bingen_coeffs.nc'
-    cells : None or tuple, optional
+    cells : tuple or None, optional
         If cells is given, then we are in 3D mode. Definitions:
            - 'iopt' gives the number of the optical property
              corresponding to the cells. iopt(Ncell)
@@ -1406,7 +1420,7 @@ class Atm1D(Atmosphere):
 
     def __init__(
         self,
-        atm_filename: PathType,
+        fname: PathType,
         comp: list[AerOPAC] | None = None,
         grid: NDArray[np.floating] | None = None,
         lat: float = 45.0,
@@ -1432,7 +1446,7 @@ class Atm1D(Atmosphere):
 
         self.lat = lat
         self.comp = [] if comp is None else comp
-        self.pfwav = pfwav
+        self.pfwav = np.asarray(pfwav)
         self.pfgrid = (
             np.array([100.0, 0.0]) if pfgrid is None else np.asarray(pfgrid)
         )
@@ -1450,12 +1464,12 @@ class Atm1D(Atmosphere):
         if tau_r is not None:
             self.tauR = np.array(tau_r)
 
-        atm_filename = Path(atm_filename)
+        fname = Path(fname)
 
         #
         # init directories and read atm file
         #
-        if atm_filename.name == "ATM3D":
+        if fname.name == "ATM3D":
             assert grid is not None, "For 3D atmosphere, grid must be provided"
             Nopt = grid.size
             prof = ProfileBase(None)
@@ -1479,18 +1493,18 @@ class Atm1D(Atmosphere):
                 setattr(prof, attr_name, np.zeros(Nopt, dtype=np.float32))
             prof.rh_cst = rh_cst
         else:
-            if atm_filename.parent == Path("."):
-                atm_filename = DIR_AUXDATA / "atmospheres" / atm_filename.name
+            if fname.parent == Path("."):
+                fname = DIR_AUXDATA / "atmospheres" / fname.name
             # By default if no suffix is given consider it as a netcdf
             # file
-            if not atm_filename.exists() and atm_filename.suffix == "":
-                atm_filename = atm_filename.with_name(
-                    atm_filename.name + ".nc"
+            if not fname.exists() and fname.suffix == "":
+                fname = fname.with_name(
+                    fname.name + ".nc"
                 )
 
-            if atm_filename.suffix == ".nc" or atm_filename.suffix == ".dat":
+            if fname.suffix == ".nc" or fname.suffix == ".dat":
                 prof = ProfileBase(
-                    atm_filename,
+                    fname,
                     tco3=tco3,
                     tcwp=tcwp,
                     tcno2=no2,
