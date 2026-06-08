@@ -1461,8 +1461,8 @@ class Atm1D(Atmosphere):
             prof = ProfileBase(None)
             prof.z = np.arange(Nopt, dtype=np.float32)[::-1]
             attr_names = [
-                "P",
-                "T",
+                "p",
+                "t",
                 "dens_air",
                 "dens_h2o",
                 "dens_o3",
