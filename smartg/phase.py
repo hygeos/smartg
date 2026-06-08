@@ -202,7 +202,7 @@ def read_phase_nc(filename,
     pfwav : float or array-like, optional
         Wavelength(s) (in nm) to interpolate to. Required if the file
         contains multiple wavelengths (nwl > 1).
-        This parameter has the same meaning as ``pfwav`` in the ``AtmAFGL``
+        This parameter has the same meaning as ``pfwav`` in the ``Atm1D``
         constructor.
         Default: None
 
@@ -211,7 +211,7 @@ def read_phase_nc(filename,
         altitude-dependent phase functions. If provided with n_rh_reff > 1, the
         z_rh_reff values will be interpolated onto this grid. The first element
         (z_top) is skipped; remaining elements define the z_phase coordinate.
-        This parameter has the same meaning as ``pfgrid`` in the ``AtmAFGL``
+        This parameter has the same meaning as ``pfgrid`` in the ``Atm1D``
         constructor.
         Default: None
 
@@ -419,7 +419,7 @@ def read_phase_cdf(filename,
     pfwav : float or array-like, optional
         Wavelength(s) (in micrometers) to interpolate to. Required if the file
         contains multiple wavelengths (nwl > 1).
-        This parameter has the same meaning as ``pfwav`` in the ``AtmAFGL``
+        This parameter has the same meaning as ``pfwav`` in the ``Atm1D``
         constructor.
         Default: None
 
@@ -428,7 +428,7 @@ def read_phase_cdf(filename,
         altitude-dependent phase functions. If provided with n_rh_reff > 1, the
         z_rh_reff values will be interpolated onto this grid. The first element
         (z_top) is skipped; remaining elements define the z_phase coordinate.
-        This parameter has the same meaning as ``pfgrid`` in the ``AtmAFGL``
+        This parameter has the same meaning as ``pfgrid`` in the ``Atm1D``
         constructor.
         Default: None
 
@@ -712,9 +712,9 @@ def convert_phase_to_iparper(pha):
 
 def get_prof_phases(phase, wav, z):
     """
-    Generate prof_phases parameter for AtmAFGL from phase function data.
+    Generate prof_phases parameter for Atm1D from phase function data.
     
-    Constructs the prof_phases tuple required by AtmAFGL initialization. This 
+    Constructs the prof_phases tuple required by Atm1D initialization. This 
     function directly produces the format needed for the prof_phases parameter.
     
     Parameters
@@ -724,11 +724,11 @@ def get_prof_phases(phase, wav, z):
         ('wav_phase', 'z_phase', 'stk', 'theta_atm')
     wav : 1-D ndarray
         Full wavelength grid in nanometers. Must match the wavelengths used
-        in AtmAFGL.calc() method. Equivalent to the 'wav' parameter passed 
-        to AtmAFGL.calc().
+        in Atm1D.calc() method. Equivalent to the 'wav' parameter passed 
+        to Atm1D.calc().
     z : 1-D ndarray
         Full altitude grid in kilometers (descending order from TOA to BOA). 
-        Must match the 'grid' parameter used in AtmAFGL initialization.
+        Must match the 'grid' parameter used in Atm1D initialization.
     
     Returns
     -------

@@ -21,7 +21,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from smartg.smartg import Smartg
 from smartg.smartg import LambSurface, Albedo_cst
-from smartg.atmosphere import AtmAFGL, AerOPAC, od2k, diff1
+from smartg.atmosphere import Atm1D, AerOPAC, od2k, diff1
 from smartg.albedo import Albedo_cst
 from luts import LUT
 from smartg.tools.smartg_view import mdesc
@@ -61,7 +61,7 @@ def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=5e4, MAX_HIST=1e6)
 
     for AOD, fmt1 in zip(np.linspace(0.1, 0.5, num=2), ['-m', '-c']):
         LEVEL=0 # 1: BOA downward reflectance, 0 : TOA
-        atm = AtmAFGL('afglms', comp=[AerOPAC('urban',AOD, 550.)], grid=np.linspace(50., 0., num=40))
+        atm = Atm1D('afglms', comp=[AerOPAC('urban',AOD, 550.)], grid=np.linspace(50., 0., num=40))
         sigma = od2k(atm.calc(wl_abs), 'OD_abs_atm')[:,1:]
         sg = Smartg(alis=True, alt_pp=True)
         m  = sg.run(SEED=0, THVDEG=45., wl=wl_sca, surf=LambSurface(ALB_HIST), le=lez, BEER=0, atm=atm.calc(wl_sca), 
@@ -136,7 +136,7 @@ def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
     aer_ssa_valid  = aer_sca_valid / aer_ext_valid
     aer_ssa_valid[aer_ext_valid==0]=1.
     comp=[AerOPAC('desert',0.5, 550., phase= phase_valid)]
-    atm_valid = AtmAFGL('afglmw', grid=z_valid, O3=0., NO2=False, pfwav=pfwav, comp=comp,
+    atm_valid = Atm1D('afglmw', grid=z_valid, O3=0., NO2=False, pfwav=pfwav, comp=comp,
                         prof_ray= ray_valid,
                         prof_aer= (aer_ext_valid,aer_ssa_valid),
                         prof_abs= gas_valid

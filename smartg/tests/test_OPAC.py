@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-from smartg.atmosphere import AtmAFGL, AerOPAC
+from smartg.atmosphere import Atm1D, AerOPAC
 from pathlib import Path
 import logging
 
@@ -66,7 +66,7 @@ logger.addHandler(file_handler)
 def test_aer_spheric(mod):
     wl_ref = 550.
     aer_comp = AerOPAC(mod, tau_ref=None, w_ref=wl_ref, rh_mix=80., rh_free=0., rh_stra=0.)
-    pro = AtmAFGL('afglt', comp=[aer_comp]).calc(wl_ref)
+    pro = Atm1D('afglt', comp=[aer_comp]).calc(wl_ref)
 
     opac_tau = AER_SPHERIC_OPAC[mod]['tau']
     opac_ssa = AER_SPHERIC_OPAC[mod]['ssa']

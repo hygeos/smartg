@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-from smartg.atmosphere import AtmAFGL, AerOPAC, Cloud
+from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 import numpy as np
 
 
@@ -20,24 +20,24 @@ def wav(request):
     return request.param
 
 def test_profile1(wav):
-    atm = AtmAFGL('afglt')
+    atm = Atm1D('afglt')
     atm.calc(wav)
 
 def test_profile2(wav):
-    atm = AtmAFGL('afglms',
+    atm = Atm1D('afglms',
                   grid=[100., 50., 20., 10., 5., 2., 1., 0.],
                   pfgrid=[100., 10., 0.])
     atm.calc(wav)
 
 def test_profile3(wav):
-    atm = AtmAFGL('afglms',
+    atm = Atm1D('afglms',
                 comp=[AerOPAC('desert', 0.1, 550.)],
                 grid='100[20]10[1]0',
                 pfgrid=[100., 10., 0.])
     atm.calc(wav)
 
 def test_profile4(wav):
-    atm = AtmAFGL('afglms',
+    atm = Atm1D('afglms',
                   comp=[AerOPAC('desert', 0.1, 550.),
                         Cloud('wc', 12.68, 2, 3, 10., 550.),
                        ],
@@ -47,23 +47,23 @@ def test_profile4(wav):
 
 def test_profile5():
     # set tauray
-    pro = AtmAFGL('afglms', grid=[100, 20, 0.], tauR=0.14).calc(500.)
+    pro = Atm1D('afglms', grid=[100, 20, 0.], tauR=0.14).calc(500.)
     assert np.isclose(pro['OD_r'][0,-1], 0.14)
 
-    AtmAFGL('afglms', grid=[100, 20, 0.], tauR=0.14).calc([490.,500.])
-    AtmAFGL('afglms', grid=[100, 20, 0.], tauR=[0.15, 0.14]).calc([490.,500.])
+    Atm1D('afglms', grid=[100, 20, 0.], tauR=0.14).calc([490.,500.])
+    Atm1D('afglms', grid=[100, 20, 0.], tauR=[0.15, 0.14]).calc([490.,500.])
 
 def test_profile6():
     # set ssa
-    AtmAFGL('afglms', grid=[100, 20, 0.],
+    Atm1D('afglms', grid=[100, 20, 0.],
             comp=[AerOPAC('urban', 0.1, 550., ssa=0.8)]
             ).calc(400.)
 
-    AtmAFGL('afglms', grid=[100, 20, 0.],
+    Atm1D('afglms', grid=[100, 20, 0.],
             comp=[AerOPAC('urban', 0.1, 550., ssa=0.8)]
             ).calc([400., 500., 600.])
 
-    AtmAFGL('afglms', grid=[100, 20, 0.],
+    Atm1D('afglms', grid=[100, 20, 0.],
             comp=[AerOPAC('urban', 0.1, 550., ssa=[0.76, 0.77, 0.78])]
             ).calc([400., 500., 600.])
 

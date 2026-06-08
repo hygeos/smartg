@@ -5,7 +5,7 @@
 import pytest
 
 from smartg.smartg import Smartg, Sensor, LambSurface, Albedo_cst
-from smartg.atmosphere import AtmAFGL
+from smartg.atmosphere import Atm1D
 from smartg.phase import read_phase
 import pandas as pd
 import numpy as np
@@ -85,7 +85,7 @@ def test_A1(request, S1DF, S1DB):
     mol_sca = np.array([0., 0.5])[None,:]
     mol_abs = np.array([0., 0.])[None,:]
     z       = np.array([1., 0.])
-    atm     = AtmAFGL('afglt', grid=z, prof_ray= mol_sca, prof_abs=mol_abs).calc(550.)
+    atm     = Atm1D('afglt', grid=z, prof_ray= mol_sca, prof_abs=mol_abs).calc(550.)
     surf    = None
 
     # *************************** DEPOL = 0 *************************** 
@@ -300,7 +300,7 @@ def test_A2(request, S1DF):
     mol_sca = np.array([0., 0.1])[None,:]
     mol_abs = np.array([0., 0.])[None,:]
     z       = np.array([1., 0.])
-    atm     = AtmAFGL('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(550.)
+    atm     = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(550.)
     surf    = LambSurface(ALB=Albedo_cst(0.3))
 
     # === Illumination conditions
@@ -455,7 +455,7 @@ def test_A5_pp(request, S1DF):
     lpha_lut = []
     for i in range (0, pha_atm.shape[0]): 
         lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, NTH)], names=['stk', 'theta_atm'])) 
-    atm = AtmAFGL('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut))
+    atm = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut))
     pro = atm.calc(800., phase=False)
     surf  = None
 
@@ -594,7 +594,7 @@ def test_A5_al(request, S1DF):
     lpha_lut = []
     for i in range (0, pha_atm.shape[0]): 
         lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, NTH)], names=['stk', 'theta_atm'])) 
-    atm = AtmAFGL('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut))
+    atm = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut))
     pro = atm.calc(800., phase=False)
     surf  = None
 

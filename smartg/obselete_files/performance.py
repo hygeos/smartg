@@ -16,7 +16,7 @@ from matplotlib.colors import LogNorm
 # smartg
 from smartg.smartg import Smartg
 from smartg.smartg import LambSurface, RoughSurface
-from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
+from smartg.atmosphere import Atm1D, AeroOPAC, CloudOPAC
 from luts.luts import merge
 from smartg.water import IOP_1
 from smartg.tools.smartg_view import smartg_view, input_view
@@ -58,7 +58,7 @@ def test_rayleigh(**kwargv):
         print("Basic Rayleigh")
         print("==============================================")
     m = Smartg(debug_photon=False, double = False).run(NF=1e6, wl=400., NBPHOTONS=1e8,
-                     atm=AtmAFGL('afglt'), progress=False, **kwargv)
+                     atm=Atm1D('afglt'), progress=False, **kwargv)
     if option_cuda_time == False:
         print(choose_attrs + " :", m.attrs[choose_attrs])
         print(m.attrs['device'])
@@ -74,7 +74,7 @@ def test_rayleighLE(**kwargv):
         print("==============================================")
     loc = {'phi':np.array([0]), 'th':np.array([1.57])}
     m = Smartg(double = False).run(NF=1e6, le=loc, wl=400., NBPHOTONS=1e9,
-                     atm=AtmAFGL('afglt'), progress=False, **kwargv)
+                     atm=Atm1D('afglt'), progress=False, **kwargv)
     if option_cuda_time == False:
         print(choose_attrs + " :", m.attrs[choose_attrs])
         print(m.attrs['device'])
@@ -89,7 +89,7 @@ def test_sp(**kwargv):
         print("Basic Rayleigh in spherical ")
         print("==============================================")
     m = Smartg(pp=False, double = False).run(NF=1e6, wl=400., NBPHOTONS=1e9, 
-                             atm=AtmAFGL('afglt'), progress=False, **kwargv)
+                             atm=Atm1D('afglt'), progress=False, **kwargv)
     if option_cuda_time == False:
         print(choose_attrs + " :", m.attrs[choose_attrs])
         print(m.attrs['device'])
@@ -103,7 +103,7 @@ def test_rayleigh_grid(**kwargv):
         print("==============================================")
         print("Rayleigh custom atmosphere grid ")
         print("==============================================")
-    pro = AtmAFGL('afglt', grid='100[75]25[5]10[1]0')
+    pro = Atm1D('afglt', grid='100[75]25[5]10[1]0')
     m = Smartg(pp=False, double = False).run(NF=1e6, wl=500., NBPHOTONS=1e9, 
                      atm=pro, progress=False, **kwargv)
     if option_cuda_time == False:
@@ -120,7 +120,7 @@ def test_aerosols(**kwargv):
         print("test with aerosols")
         print("==============================================")
     aer = AeroOPAC('maritime_clean', 0.4, 550.)
-    pro = AtmAFGL('afglms', comp=[aer])
+    pro = Atm1D('afglms', comp=[aer])
     m = Smartg(pp=False, double = False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
                      progress=False, **kwargv)
     if option_cuda_time == False:
@@ -137,7 +137,7 @@ def test_aerosols2(**kwargv):
         print("test with aerosols2")
         print("==============================================")
     aer = AeroOPAC('desert', 0.4, 550.)
-    pro = AtmAFGL('afglms', comp=[aer])
+    pro = Atm1D('afglms', comp=[aer])
     m = Smartg(double = False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
                      progress=False, **kwargv)
     if option_cuda_time == False:
@@ -155,7 +155,7 @@ def test_aerosols2(**kwargv):
 #         print("==============================================")
 #     aer = AeroOPAC('maritime_clean', 0.1, 550.)
 #     cloud = CloudOPAC('CUMA',[('wc.sol.mie',1.,12.68,2.,3.)], 5., 550.)
-#     pro = AtmAFGL('afglss.dat', comp=[aer], cloud=cloud, grid='100[25]25[5]5[1]0')
+#     pro = Atm1D('afglss.dat', comp=[aer], cloud=cloud, grid='100[25]25[5]5[1]0')
 #     m = Smartg(pp=False).run(NF=1e6, wl=490., atm=pro, NBPHOTONS=1e9,
 #                      progress=False, **kwargv)
 #     if option_cuda_time == False:
@@ -171,7 +171,7 @@ def test_atm_surf(**kwargv):
         print("==============================================")
         print("atmosphere + lambertian surface of albedo 10%")
         print("==============================================")
-    m = Smartg(pp=False, double = False).run(wl=490., NF=1e6, NBPHOTONS=1e9, atm=AtmAFGL('afglms'),
+    m = Smartg(pp=False, double = False).run(wl=490., NF=1e6, NBPHOTONS=1e9, atm=Atm1D('afglms'),
                      surf=LambSurface(ALB=0.1), progress=False, **kwargv)
     if option_cuda_time == False:
         print(choose_attrs + " :", m.attrs[choose_attrs])
@@ -300,7 +300,7 @@ def test_objForward(**kwargv):
     custumF = CusForward(CFX=0.5, CFY=0.05, CFTX=1., CFTY=0., LMODE = "FF")
     
     aer = AeroOPAC('desert', 0.25, 550.)
-    pro = AtmAFGL('afglms', comp=[aer], P0 = 877, H2O=1.2)
+    pro = Atm1D('afglms', comp=[aer], P0 = 877, H2O=1.2)
     
     m = Smartg(debug_photon=False, double = True,
                obj3D = True).run(surf = LambSurface(ALB=0.25),
@@ -369,7 +369,7 @@ if __name__ == '__main__' and '__file__' in globals():
             print("Basic Rayleigh")
             print("==============================================")
         m = Smartg(debug_photon=False, double = False).run(NF=1e6, wl=400., NBPHOTONS=1e8,
-                         atm=AtmAFGL('afglt'), progress=False, **kwargv)
+                         atm=Atm1D('afglt'), progress=False, **kwargv)
         if option_cuda_time == False:
             print(choose_attrs + " :", m.attrs[choose_attrs])
             print(m.attrs['device'])
@@ -389,7 +389,7 @@ if __name__ == '__main__' and '__file__' in globals():
         print("computation without measurement")
         print("==============================================")
         # m = Smartg(debug_photon=False).run(NF=1e5, wl=400., NBPHOTONS=1e6,
-        #                  atm=AtmAFGL('afglt'), progress=False)
+        #                  atm=Atm1D('afglt'), progress=False)
 
     def cuda_block_time(var_list):
         '''
@@ -543,7 +543,7 @@ if __name__ == '__main__' and '__file__' in globals():
             reload(sys.modules['smartg.smartg'])
                 
             from smartg.smartg import Smartg, LambSurface, RoughSurface
-            from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
+            from smartg.atmosphere import Atm1D, AeroOPAC, CloudOPAC
             from luts.luts import merge
             from smartg.water import IOP_1
             from smartg.tools.smartg_view import smartg_view, input_view
@@ -646,7 +646,7 @@ if __name__ == '__main__' and '__file__' in globals():
                 reload(sys.modules['smartg.smartg'])
                 
                 from smartg.smartg import Smartg, LambSurface, RoughSurface
-                from smartg.atmosphere import AtmAFGL, AeroOPAC, CloudOPAC
+                from smartg.atmosphere import Atm1D, AeroOPAC, CloudOPAC
                 from luts.luts import merge
                 from smartg.water import IOP_1
                 from smartg.tools.smartg_view import smartg_view, input_view

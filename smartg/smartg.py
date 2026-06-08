@@ -1082,7 +1082,7 @@ class Smartg(object):
         ----------
         wl : float | list | 1-D ndarray
             Wavelength(s) in nm. It can be a list of REPTRAN_IBAND or KDIS_IBAND objects.
-        atm : None | AtmAFGL | MLUT, optional
+        atm : None | Atm1D | MLUT, optional
             The atmosphere profile. If None, there is no atmosphere.
         surf : None | RoughSurface | FlatSurface | LambSurface, optional
             The surface profile. If None, there is no surface.
@@ -1264,9 +1264,9 @@ class Smartg(object):
         Examples
         --------
         >>> from smartg.smartg import Smartg, RoughSurface
-        >>> from smartg.atmosphere import AtmAFGL, AerOPAC
+        >>> from smartg.atmosphere import Atm1D, AerOPAC
         >>> from smartg.water import IOP_1
-        >>> atm = AtmAFGL('afglt', comp=[AerOPAC('maritime_clean', 0.5, 550.)])
+        >>> atm = Atm1D('afglt', comp=[AerOPAC('maritime_clean', 0.5, 550.)])
         >>> water = IOP_1(chl=0.5, DEPTH=5.)
         >>> surf = RoughSurface(WIND=5., NH2O=1.34)
         >>> m = Smartg().run(wl=550., atm=atm, water=water, surf=surf)

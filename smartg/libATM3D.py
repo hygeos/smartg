@@ -9,7 +9,7 @@ import pandas as pd
 from pathlib import Path
 import os
 
-from smartg.atmosphere import AtmAFGL, Cloud, od2k
+from smartg.atmosphere import Atm1D, Cloud, od2k
 from smartg.smartg import Sensor
 
 import matplotlib.gridspec as gridspec
@@ -1103,7 +1103,7 @@ class Atm3D(object):
             if pha_ and comp[0].phase is not None : zpf = [100, 0]
             else                                  : zpf = znew
 
-            atm_1d = AtmAFGL(atm_filename, comp=comp, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2,
+            atm_1d = Atm1D(atm_filename, comp=comp, lat=lat, P0=P0, O3=O3, H2O=H2O, NO2=NO2,
                              tauR=tauR, grid=znew, pfgrid=zpf).calc(wls, phase=pha_, NBTHETA=nth_aer_1d)
             self.ssa_aer_1d = atm_1d['ssa_p_atm']
             if (pha_):

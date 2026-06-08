@@ -14,7 +14,7 @@ complete atmospheric profiles ready for simulation.
 Workflow
 --------
 Typical usage involves:
-1. Create an atmospheric profile using model classes (e.g., AtmAFGL)
+1. Create an atmospheric profile using model classes (e.g., Atm1D)
 2. Add atmospheric components (aerosols, clouds, surface) as needed
 3. (Optional) Call the profile's `calc()` method to compute optical
    properties
@@ -25,7 +25,7 @@ Typical usage involves:
 
 Key Classes
 -----------
-AtmAFGL
+Atm1D
     AFGL Standard U.S. Atmosphere model. Provides vertical temperature
     and
     pressure profiles. Aerosols, clouds, and ocean surface can be added
@@ -130,12 +130,12 @@ class AerOPAC(object):
         stk, theta
         Where:
         - wav_phase is the wavelength. It must be equal to the `pfwav`
-          parameter of AtmAFGL
-          if defined, else `wav` parameter vavelengths of the AtmAFGL
+          parameter of Atm1D
+          if defined, else `wav` parameter vavelengths of the Atm1D
           calc method.
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
-          of AtmAFGL
+          of Atm1D
         - stk the phase matrix unique terms.
         - theta the scattering angle.
 
@@ -964,12 +964,12 @@ class Cloud(AerOPAC):
         stk, theta
         Where:
         - wav_phase is the wavelength. It must be equal to the `pfwav`
-          parameter of AtmAFGL
-          if defined, else `wav` parameter wavelengths of the AtmAFGL
+          parameter of Atm1D
+          if defined, else `wav` parameter wavelengths of the Atm1D
           calc method.
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
-          of AtmAFGL
+          of Atm1D
         - stk the phase matrix unique terms.
         - theta the scattering angle.
 
@@ -1245,7 +1245,7 @@ class Atmosphere(object):
     pass
 
 
-class AtmAFGL(Atmosphere):
+class Atm1D(Atmosphere):
     """
     Atmospheric profile definition using AFGL data
 
@@ -2608,7 +2608,7 @@ class AtmAFGL(Atmosphere):
         scattering,
         aerosols, and phase functions). These returned profiles can be
         used as
-        alternative inputs to initialize a new AtmAFGL instance.
+        alternative inputs to initialize a new Atm1D instance.
 
         Parameters
         ----------
@@ -2671,7 +2671,7 @@ class AtmAFGL(Atmosphere):
 
         Examples
         --------
-        >>> atm = AtmAFGL('afglus')
+        >>> atm = Atm1D('afglus')
         >>> (prof_abs, prof_ray, (prof_aer, ssa_aer)
         ...  (pro_iphase, pro_phases)) = atm.calc_split(wav=500.)
         """
@@ -3976,7 +3976,7 @@ def atm_pro_from_aeronet(
     -------
     out : xarray.Dataset
         The atmophere profil. Similar to the output of the calc method
-        of AtmAFGL.
+        of Atm1D.
 
     Notes
     -----
@@ -4078,7 +4078,7 @@ def atm_pro_from_aeronet(
         H_mix_max=H_mix_max,
         Z_mix=Z_mix,
     )
-    pro = AtmAFGL(
+    pro = Atm1D(
         atm_name,
         comp=[aer],
         grid=grid,
@@ -4389,7 +4389,7 @@ def extract_split(
     functions).
     These returned profiles can be used as alternative inputs to
     initialize a
-    new AtmAFGL instance.
+    new Atm1D instance.
 
     Parameters
     ----------
@@ -4425,10 +4425,10 @@ def extract_split(
 
     Examples
     --------
-    >>> from smartg.atmosphere import extract_split, AtmAFGL
+    >>> from smartg.atmosphere import extract_split, Atm1D
     >>> prof_abs, prof_ray, prof_aer, \
     ...     prof_phases = extract_split(mlut_result)
-    >>> new_atm = AtmAFGL('afglt', prof_abs=prof_abs, prof_ray=prof_ray,
+    >>> new_atm = Atm1D('afglt', prof_abs=prof_abs, prof_ray=prof_ray,
     ...     prof_aer=prof_aer, prof_phases=prof_phases)
     """
     if hasattr(ds_sg, "to_xarray"):

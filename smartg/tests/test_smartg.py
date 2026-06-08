@@ -8,7 +8,7 @@ SMART-G test suite using pytest
 import pytest
 import numpy as np
 from smartg.smartg import Smartg, RoughSurface, LambSurface, Albedo_cst
-from smartg.atmosphere import AtmAFGL, AerOPAC, Cloud
+from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 from smartg.water import IOP_1
 from smartg.reptran import REPTRAN, reduce_reptran
 from smartg.tools.smartg_view import smartg_view
@@ -37,19 +37,19 @@ def test_compile(pp, back):
 
 def test_basic(request):
     ''' Most basic test '''
-    m = Smartg(autoinit=True).run(500., atm=AtmAFGL('afglms'), NBPHOTONS=NBPHOTONS)
+    m = Smartg(autoinit=True).run(500., atm=Atm1D('afglms'), NBPHOTONS=NBPHOTONS)
     smartg_view(m)
     conftest.savefig(request)
 
 @pytest.mark.parametrize('wav', wav_list)
 def test_atm(sg, wav):
-    atm = AtmAFGL('afglt', comp=[AerOPAC('desert', 0.1, 550.)])
+    atm = Atm1D('afglt', comp=[AerOPAC('desert', 0.1, 550.)])
     m = sg.run(wav, atm=atm, NBPHOTONS=NBPHOTONS)
     assert ('wavelength' in m.axes) == ('__getitem__' in dir(wav))
 
 @pytest.mark.parametrize('wav', wav_list)
 def test_cloud(sg, wav):
-    atm = AtmAFGL('afglt',
+    atm = Atm1D('afglt',
                   comp=[AerOPAC('desert', 0.1, 550.),
                         Cloud('wc', 12.68, 2, 3, 10., 550.),
                        ],
@@ -62,7 +62,7 @@ def test_cloud(sg, wav):
 @pytest.mark.parametrize('thv', [0., 40.])
 @pytest.mark.parametrize('surf', [RoughSurface(WIND=2.), LambSurface(ALB=Albedo_cst(0.2))])
 def test_atm_surf(sg, wav, surf, thv):
-    atm = AtmAFGL('afglt', comp=[AerOPAC('desert', 0.1, 550.)])
+    atm = Atm1D('afglt', comp=[AerOPAC('desert', 0.1, 550.)])
 
     sg.run(wav,
            atm=atm,
@@ -78,7 +78,7 @@ def test_surf_iop1_1():
 
 
 def test_atm_surf_iop1():
-    atm = AtmAFGL('afglt', comp=[AerOPAC('desert', 0.1, 550.)],
+    atm = Atm1D('afglt', comp=[AerOPAC('desert', 0.1, 550.)],
                   pfwav=[500., 600.], pfgrid=[100., 5., 0.])
     surf = RoughSurface(WIND=10.)
     water = IOP_1(chl=1., pfwav=np.array([450, 550, 650, 750]))
@@ -87,7 +87,7 @@ def test_atm_surf_iop1():
 
 
 def test_reptran(sg):
-    atm = AtmAFGL('afglt', comp=[AerOPAC('desert', 0.1, 550.)])
+    atm = Atm1D('afglt', comp=[AerOPAC('desert', 0.1, 550.)])
     surf = RoughSurface(WIND=2.)
 
     ibands = REPTRAN('reptran_solar_msg').to_smartg('msg1')
@@ -97,7 +97,7 @@ def test_reptran(sg):
 
 
 def test_locale_estimate(sg):
-    atm = AtmAFGL('afglt')
+    atm = Atm1D('afglt')
     surf = RoughSurface()
     wav = 400.
     res = sg.run(wav, atm=atm,
@@ -113,7 +113,7 @@ def test_locale_estimate(sg):
 
 @pytest.mark.parametrize('rng', ['PHILOX', 'CURAND_PHILOX'])
 def test_rng(rng):
-    atm = AtmAFGL('afglt')
+    atm = Atm1D('afglt')
     surf = RoughSurface()
     wav = np.linspace(400, 800, 5)
     Smartg(rng=rng).run(
@@ -128,7 +128,7 @@ def test_adjacency():
 
 
 def test_no_aer_output():
-    atm1 = AtmAFGL('afglt')
+    atm1 = Atm1D('afglt')
     water = IOP_1(chl=0.5, DEPTH=5.)
     surf = RoughSurface(WIND=5., NH2O=1.34)
     sg = Smartg()
