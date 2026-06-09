@@ -72,7 +72,8 @@ import re
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 from smartg.typing import NumericArrayLike, PathType, RealNumber
 from numpy.typing import NDArray
-from typing import Any
+from typing import Any, cast
+from luts.luts import LUT
 
 
 class AerOPAC(object):
@@ -81,7 +82,7 @@ class AerOPAC(object):
 
     Parameters
     ----------
-    filename : str | path-like
+    filename : str or path-like
         Complete path to the aerosol file or filename for aerosols
         located in "auxdata/aerosols/OPAC/mixtures/".
         Available auxdata aerosols: antarctic, antarctic_spheric,
@@ -90,7 +91,7 @@ class AerOPAC(object):
         maritime_clean,
         maritime_polluted, mineral_transported, maritime_tropical and
         urban
-    tau_ref : float
+    tau_ref : float or array_like or DataArray or LUT or None
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical depth tau_ref
@@ -158,12 +159,20 @@ class AerOPAC(object):
 
     Notes
     -----
-    The scale height (see Hess et al. 2004) is the variable Z in the
+    The scale height (see [1]) is the variable Z in the
     following equation:
 
     - :math:`N(h) = N(0)exp(-h/Z)`
 
     with N the number density and h the altitude
+
+    References
+    ----------
+    .. [1] M. Hess, P. Koepke, and I. Schult,
+       "Optical Properties of Aerosols and Clouds: The Software
+       Package OPAC," _Bulletin of the American Meteorological
+       Society_, vol. 79, no. 5, pp. 831-844, 1998.
+       doi:10.1175/1520-0477(1998)079<0831:OPOAAC>2.0.CO;2.
 
     Examples
     --------
@@ -201,7 +210,7 @@ class AerOPAC(object):
     def __init__(
         self,
         filename: str | Path,
-        tau_ref: float,
+        tau_ref: float | NumericArrayLike | xr.DataArray | LUT | None,
         w_ref: float,
         H_mix_min: float | None = None,
         H_mix_max: float | None = None,
@@ -220,7 +229,7 @@ class AerOPAC(object):
     ) -> None:
 
         self.tau_ref = (
-            tau_ref.to_xarray() if hasattr(tau_ref, "to_xarray") else tau_ref
+            tau_ref.to_xarray() if isinstance(tau_ref, LUT) else tau_ref
         )
         if np.isscalar(w_ref) or (
             isinstance(w_ref, np.ndarray) and w_ref.ndim == 0
@@ -231,7 +240,7 @@ class AerOPAC(object):
 
         if isinstance(phase, xr.DataArray):
             self._phase = phase
-        elif hasattr(phase, "to_xarray"):
+        elif isinstance(phase, LUT):
             self._phase = phase.to_xarray()
         elif phase is None:
             self._phase = phase
@@ -249,7 +258,7 @@ class AerOPAC(object):
                 isinstance(ssa, np.ndarray) and (ssa.ndim <= 2)
             ):
                 self.ssa = ssa
-            elif hasattr(ssa, "to_xarray"):
+            elif isinstance(ssa, LUT):
                 self.ssa = ssa.to_xarray()
             elif isinstance(ssa, xr.DataArray):
                 self.ssa = ssa
@@ -482,22 +491,29 @@ class AerOPAC(object):
             )
             if len(rh_reff) == 1:
                 # Interpolate along hor (dim 0) -> (1, wav_orig)
-                ext_at_hor = vec_float_indexing(
-                    ext_data, [idf_hor, slice(None)]
+                ext_at_hor = cast(
+                    NDArray,
+                    vec_float_indexing(ext_data, [idf_hor, slice(None)]),
                 )  # (1, wav_orig)
-                ssa_at_hor = vec_float_indexing(
-                    ssa_data, [idf_hor, slice(None)]
+                ssa_at_hor = cast(
+                    NDArray,
+                    vec_float_indexing(ssa_data, [idf_hor, slice(None)]),
                 )  # (1, wav_orig)
                 # Transpose to (wav_orig, 1), interpolate along wav (dim
                 # 0) -> (nwav, 1)
-                ext_tmp = vec_float_indexing(
-                    ext_at_hor.T, [idf_wav, slice(None)]
+                ext_tmp = cast(
+                    NDArray,
+                    vec_float_indexing(ext_at_hor.T, [idf_wav, slice(None)]),
                 )  # (nwav, 1)
-                ext_ref_tmp = vec_float_indexing(
-                    ext_at_hor.T, [idf_wav_ref, slice(None)]
+                ext_ref_tmp = cast(
+                    NDArray,
+                    vec_float_indexing(
+                        ext_at_hor.T, [idf_wav_ref, slice(None)]
+                    ),
                 )  # (nwav_ref, 1)
-                ssa_tmp = vec_float_indexing(
-                    ssa_at_hor.T, [idf_wav, slice(None)]
+                ssa_tmp = cast(
+                    NDArray,
+                    vec_float_indexing(ssa_at_hor.T, [idf_wav, slice(None)]),
                 )  # (nwav, 1)
                 for iz in range(0, len(Z)):
                     ext_[:, iz] = ext_tmp[:, 0]
@@ -506,22 +522,29 @@ class AerOPAC(object):
             else:
                 # Interpolate along hor (dim 0) -> (nhor_query,
                 # wav_orig)
-                ext_at_hor = vec_float_indexing(
-                    ext_data, [idf_hor, slice(None)]
+                ext_at_hor = cast(
+                    NDArray,
+                    vec_float_indexing(ext_data, [idf_hor, slice(None)]),
                 )  # (nhor, wav_orig)
-                ssa_at_hor = vec_float_indexing(
-                    ssa_data, [idf_hor, slice(None)]
+                ssa_at_hor = cast(
+                    NDArray,
+                    vec_float_indexing(ssa_data, [idf_hor, slice(None)]),
                 )  # (nhor, wav_orig)
                 # Transpose to (wav_orig, nhor), interpolate along wav
                 # (dim 0) -> (nwav, nhor)
-                ext_ = vec_float_indexing(
-                    ext_at_hor.T, [idf_wav, slice(None)]
+                ext_ = cast(
+                    NDArray,
+                    vec_float_indexing(ext_at_hor.T, [idf_wav, slice(None)]),
                 )  # (nwav, nhor)
-                ext_ref_ = vec_float_indexing(
-                    ext_at_hor.T, [idf_wav_ref, slice(None)]
+                ext_ref_ = cast(
+                    NDArray,
+                    vec_float_indexing(
+                        ext_at_hor.T, [idf_wav_ref, slice(None)]
+                    ),
                 )  # (nwav_ref, nhor)
-                ssa_ = vec_float_indexing(
-                    ssa_at_hor.T, [idf_wav, slice(None)]
+                ssa_ = cast(
+                    NDArray,
+                    vec_float_indexing(ssa_at_hor.T, [idf_wav, slice(None)]),
                 )  # (nwav, nhor)
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
@@ -547,8 +570,10 @@ class AerOPAC(object):
             if (
                 isinstance(self.tau_ref, np.ndarray) and self.tau_ref.ndim == 0
             ) or np.isscalar(self.tau_ref):
-                dtau *= self.tau_ref / np.sum(dtau_ref)
-            else:
+                dtau *= np.asarray(self.tau_ref, dtype=np.float64) / np.sum(
+                    dtau_ref
+                )
+            elif isinstance(self.tau_ref, xr.DataArray):
                 # xr.DataArray
                 wav_axis = self.tau_ref.coords[
                     self.tau_ref.dims[0]
@@ -563,7 +588,7 @@ class AerOPAC(object):
         # force ssa
         if self.ssa is not None:
             if np.isscalar(self.ssa):  # scalar
-                ssa[:, :] = float(self.ssa)
+                ssa[:, :] = float(cast(float, self.ssa))
             # ndarray with dim <= 2
             elif isinstance(self.ssa, np.ndarray):
                 if self.ssa.ndim == 0:
@@ -574,7 +599,7 @@ class AerOPAC(object):
                     ]  # If 1d array -> consider only wl variability
                 elif self.ssa.ndim == 2:
                     ssa[:, :] = self.ssa[:, :]
-            else:  # xr.DataArray
+            elif isinstance(self.ssa, xr.DataArray):  # xr.DataArray
                 wav_axis = self.ssa.coords[self.ssa.dims[0]].values.astype(
                     np.float64
                 )
@@ -746,9 +771,14 @@ class AerOPAC(object):
                     wav_subset,
                     np.arange(nwav_sub),
                 )
-                phase_at_wav = vec_float_indexing(
-                    np.ascontiguousarray(phase_subset.transpose(1, 0, 2, 3)),
-                    [idf_wav, slice(None), slice(None), slice(None)],
+                phase_at_wav = cast(
+                    NDArray,
+                    vec_float_indexing(
+                        np.ascontiguousarray(
+                            phase_subset.transpose(1, 0, 2, 3)
+                        ),
+                        [idf_wav, slice(None), slice(None), slice(None)],
+                    ),
                 )
             else:
                 phase_at_wav = np.broadcast_to(
@@ -763,9 +793,14 @@ class AerOPAC(object):
                 idf_theta = np.interp(
                     theta, theta_orig, np.arange(len(theta_orig))
                 )
-                phase_at_wav = vec_float_indexing(
-                    np.ascontiguousarray(phase_at_wav.transpose(3, 0, 1, 2)),
-                    [idf_theta, slice(None), slice(None), slice(None)],
+                phase_at_wav = cast(
+                    NDArray,
+                    vec_float_indexing(
+                        np.ascontiguousarray(
+                            phase_at_wav.transpose(3, 0, 1, 2)
+                        ),
+                        [idf_theta, slice(None), slice(None), slice(None)],
+                    ),
                 )
                 # Result: (NBTHETA, nwav, hor, stk) -> transpose to
                 # (nwav, hor, stk, NBTHETA)
@@ -810,9 +845,12 @@ class AerOPAC(object):
                 left=0,
                 right=nhor - 1,
             )
-            P_data = vec_float_indexing(
-                np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
-                [idf_hor, slice(None), slice(None), slice(None)],
+            P_data = cast(
+                NDArray,
+                vec_float_indexing(
+                    np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
+                    [idf_hor, slice(None), slice(None), slice(None)],
+                ),
             )
             # Result: (nz, nwav, stk, NBTHETA) -> transpose to (nwav,
             # nz, stk, NBTHETA)
@@ -869,17 +907,21 @@ class AerOPAC(object):
                 wav_vals,
                 np.arange(nwav_orig),
             )
-            ext_at_hor = vec_float_indexing(
-                ext_data, [idf_hor_ext, slice(None)]
+            ext_at_hor = cast(
+                NDArray,
+                vec_float_indexing(ext_data, [idf_hor_ext, slice(None)]),
             )
-            ssa_at_hor = vec_float_indexing(
-                ssa_data, [idf_hor_ext, slice(None)]
+            ssa_at_hor = cast(
+                NDArray,
+                vec_float_indexing(ssa_data, [idf_hor_ext, slice(None)]),
             )
-            ext_ = vec_float_indexing(
-                ext_at_hor.T, [idf_wav_ext, slice(None)]
+            ext_ = cast(
+                NDArray,
+                vec_float_indexing(ext_at_hor.T, [idf_wav_ext, slice(None)]),
             )  # (nwav, nhor_q)
-            ssa_ = vec_float_indexing(
-                ssa_at_hor.T, [idf_wav_ext, slice(None)]
+            ssa_ = cast(
+                NDArray,
+                vec_float_indexing(ssa_at_hor.T, [idf_wav_ext, slice(None)]),
             )  # (nwav, nhor_q)
             if len(hum_or_reff_val) == 1:
                 ext_ = np.broadcast_to(ext_, (nwav, len(Z))).copy()
@@ -897,6 +939,7 @@ class AerOPAC(object):
             dssa += dssa_
             P_tot += P * dssa_
 
+        P_tot = cast(xr.DataArray, P_tot)
         with np.errstate(divide="ignore", invalid="ignore"):
             P_tot.data /= dssa
         P_tot.data[np.isnan(P_tot.data)] = 0.0
@@ -1021,8 +1064,13 @@ class Cloud(AerOPAC):
         zmax: float,
         tau_ref: float,
         w_ref: float,
-        ssa: float | list[float] | np.ndarray | xr.DataArray | None = None,
-        phase: xr.DataArray | None = None,
+        ssa: float
+        | list[float]
+        | np.ndarray
+        | xr.DataArray
+        | LUT
+        | None = None,
+        phase: xr.DataArray | LUT | None = None,
     ) -> None:
         self.reff = reff
         self.tau_ref = tau_ref
@@ -1042,7 +1090,7 @@ class Cloud(AerOPAC):
                 isinstance(ssa, np.ndarray) and (ssa.ndim <= 2)
             ):
                 self.ssa = ssa
-            elif hasattr(ssa, "to_xarray"):
+            elif isinstance(ssa, LUT):
                 self.ssa = ssa.to_xarray()
             elif isinstance(ssa, xr.DataArray):
                 self.ssa = ssa
@@ -1093,7 +1141,7 @@ class Cloud(AerOPAC):
 
         if isinstance(phase, xr.DataArray):
             self._phase = phase
-        elif hasattr(phase, "to_xarray"):
+        elif isinstance(phase, LUT):
             self._phase = phase.to_xarray()
         elif phase is None:
             self._phase = phase
@@ -1328,7 +1376,7 @@ class Atm1D(Atmosphere):
         from TOA to ground is preserved; only the scaling factor is
         adjusted to match the constraint at this reference altitude.
         Default: None
-    tau_r : float or None, optional
+    tau_r : float or array_like or None, optional
         Force the Rayleigh optical thickness. If None, computed from
         atmospheric profile and wavelength.
     pfwav : array_like or None, optional
@@ -1422,14 +1470,14 @@ class Atm1D(Atmosphere):
         self,
         fname: PathType,
         comp: list[AerOPAC] | None = None,
-        grid: NDArray[np.floating] | None = None,
+        grid: NumericArrayLike | None = None,
         lat: float = 45.0,
         p0: float | None = None,
         tco3: float | None = None,
         tcwp: float | None = None,
         no2: bool = True,
         o3_h2o_alt: float | None = None,
-        tau_r: float | None = None,
+        tau_r: float | NumericArrayLike | None = None,
         pfwav: NumericArrayLike | None = None,
         pfgrid: NumericArrayLike | None = None,
         prof_abs: NDArray[np.floating] | None = None,
@@ -1446,7 +1494,7 @@ class Atm1D(Atmosphere):
 
         self.lat = lat
         self.comp = [] if comp is None else comp
-        self.pfwav = np.asarray(pfwav)
+        self.pfwav = None if pfwav is None else np.asarray(pfwav)
         self.pfgrid = (
             np.array([100.0, 0.0]) if pfgrid is None else np.asarray(pfgrid)
         )
@@ -1460,10 +1508,10 @@ class Atm1D(Atmosphere):
         self.OPT3D = cells is not None
         self.cells = cells
 
-        self.tauR = tau_r
-        if tau_r is not None:
-            self.tauR = np.array(tau_r)
-
+        self.tauR = np.asarray(tau_r) if tau_r is not None else None
+        if isinstance(grid, str):
+            grid = strgrid_to_numpy(grid)
+        grid = np.asarray(grid) if grid is not None else None
         fname = Path(fname)
 
         #
@@ -1498,9 +1546,7 @@ class Atm1D(Atmosphere):
             # By default if no suffix is given consider it as a netcdf
             # file
             if not fname.exists() and fname.suffix == "":
-                fname = fname.with_name(
-                    fname.name + ".nc"
-                )
+                fname = fname.with_name(fname.name + ".nc")
 
             if fname.suffix == ".nc" or fname.suffix == ".dat":
                 prof = ProfileBase(
@@ -1543,9 +1589,7 @@ class Atm1D(Atmosphere):
         if grid is None:
             self.prof = prof
         else:
-            if isinstance(grid, str):
-                grid = strgrid_to_numpy(grid)
-            self.prof = prof.regrid(np.array(grid))
+            self.prof = prof.regrid(grid)
 
         #
         # calculate reduced profile
@@ -1594,6 +1638,7 @@ class Atm1D(Atmosphere):
             else:
                 wav_pha = self.pfwav
             pha = self.phase(wav_pha, NBTHETA=NBTHETA)
+            ipha = None
 
             pro_var = list(profile.data_vars)
             if pha is not None or (
@@ -1613,10 +1658,16 @@ class Atm1D(Atmosphere):
 
                 # If truncation parameter is given compute truncated
                 # phase function
+                f = None
+                pha_tr = None
                 if truncation is not None:
                     if self.OPT3D:
                         theta = profile.coords["theta_atm"].values
                     else:
+                        assert pha is not None, (
+                            "Truncation is only possible if phase "
+                            + "matrix is provided in 1D atm mode"
+                        )
                         theta = (
                             pha.coords["theta_atm"].values
                             if hasattr(pha, "coords")
@@ -1624,9 +1675,17 @@ class Atm1D(Atmosphere):
                         )
                     pha_tr = np.zeros(pha_.shape, dtype=np.float64)
                     nphac = pha_.shape[1]
-                    if truncation.tr_method == "DM":
+                    # initialize truncation-related locals to avoid static
+                    # analyzer warnings about possibly unbound variables
+                    m_max = None
+                    f_ = None
+                    th_tol = None
+                    l_opti = False
+                    th_f = None
+
+                    if isinstance(truncation, DM_trunc):
                         m_max = truncation.m_max
-                    elif truncation.tr_method == "GT":
+                    elif isinstance(truncation, GT_trunc):
                         f_ = truncation.trunc_frac
                         th_tol = truncation.theta_tol
                         l_opti = truncation.lobatto_optimization
@@ -1636,20 +1695,29 @@ class Atm1D(Atmosphere):
                     method = truncation.integral_method
                     f_pha = np.zeros(nphase, dtype=np.float64)
                     for iph in range(nphase):
-                        if truncation.tr_method == "DM":
-                            ds_pha = delta_m_phase_approx(
-                                pha_[iph, 0, :], theta, m_max, method=method
+                        if isinstance(truncation, DM_trunc):
+                            ds_pha = cast(
+                                xr.Dataset,
+                                delta_m_phase_approx(
+                                    pha_[iph, 0, :],
+                                    theta,
+                                    m_max,
+                                    method=method,
+                                ),
                             )
 
-                        elif truncation.tr_method == "GT":
-                            ds_pha = gt_phase_approx(
-                                pha_[iph, 0, :],
-                                theta,
-                                f_,
-                                method=method,
-                                th_tol=th_tol,
-                                th_f=th_f,
-                                lobatto_optimization=l_opti,
+                        elif isinstance(truncation, GT_trunc):
+                            ds_pha = cast(
+                                xr.Dataset,
+                                gt_phase_approx(
+                                    pha_[iph, 0, :],
+                                    theta,
+                                    f_,
+                                    method=method,
+                                    th_tol=th_tol,
+                                    th_f=th_f,
+                                    lobatto_optimization=l_opti,
+                                ),
                             )
                         f11_tr = ds_pha["phase_tr"].values
                         f = ds_pha["f"].values
@@ -1673,6 +1741,7 @@ class Atm1D(Atmosphere):
                             pha_tr[iph, 1, :] = pha_[iph, 1, :] * beta2
                             pha_tr[iph, 3, :] = pha_[iph, 3, :] * beta2
 
+                assert pha is not None
                 if not self.OPT3D:
                     theta_atm = (
                         pha.coords["theta_atm"].values
@@ -1698,6 +1767,7 @@ class Atm1D(Atmosphere):
                         },
                     )
                 else:
+                    assert ipha is not None
                     attrs_tmp = (
                         profile["phase_atm"].attrs.copy()
                         if "phase_atm" in profile.data_vars
@@ -1722,6 +1792,8 @@ class Atm1D(Atmosphere):
                     )
 
                 if truncation is not None:
+                    assert pha_tr is not None
+                    assert f is not None
                     # profile.add_dataset('phase_atm_tr', pha_tr,
                     # axnames=['iphase', 'stk', 'theta_atm'])
                     attrs_tmp = profile["phase_atm"].attrs
@@ -4056,7 +4128,8 @@ def atm_pro_from_aeronet(
         b_wav_BS = BandSet(b_wav)
     else:
         b_wav_BS = b_wav
-    b_wav_unique = np.unique(b_wav_BS)
+    b_wav_unique = np.unique(b_wav_BS.wav)
+
     if pfwav is None:
         pf_wav = b_wav_unique
     else:
