@@ -3589,8 +3589,8 @@ def rayleigh_od(
 
 def refractivity(
     lam: NumericArrayLike,
-    P: NumericArrayLike,
-    T: NumericArrayLike,
+    p: NumericArrayLike,
+    t: NumericArrayLike,
     co2: NumericArrayLike,
 ) -> NDArray:
     """Calculate the refractive index of air as a function of
@@ -3600,9 +3600,9 @@ def refractivity(
     ----------
     lam : array_like
         Wavelength in micrometers (um), shape (N,)
-    P : array_like
+    p : array_like
         Atmospheric pressure in hectopascals (hPa), shape (M,)
-    T : array_like
+    t : array_like
         Temperature in Kelvin (K), shape (M,)
     co2 : array_like
         CO2 concentration in parts per million (ppm), shape (M,)
@@ -3618,16 +3618,22 @@ def refractivity(
     2(2), 71-80.
     """
     lam = np.atleast_1d(lam)
-    P = np.atleast_1d(P)
-    T = np.atleast_1d(T)
+    p = np.atleast_1d(p)  # input pressure in hPa
+    t = np.atleast_1d(t)  # input temperature in Kelvin
     co2 = np.atleast_1d(co2)
 
-    p = P * 100.0
-    t = T - 273.15
-    Ntp = 1 + (n_air_co2(lam[:], co2) - 1) * p * (
-        1.0 + p * (60.1 - 0.972 * t) * 1e-10
-    ) / (96095.43 * (1 + 0.003661 * t))
-    return Ntp
+    # check that input arrays have compatible shapes
+    if p.shape != t.shape or p.shape != co2.shape:
+        raise ValueError(
+            "Input arrays p, t, and co2 must have the same shape."
+        )
+
+    p_pa = p * 100.0
+    t_c = t - 273.15
+    ntp = 1 + (n_air_co2(lam[:], co2) - 1) * p * (
+        1.0 + p_pa * (60.1 - 0.972 * t_c) * 1e-10
+    ) / (96095.43 * (1 + 0.003661 * t_c))
+    return ntp
 
 
 def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> NDArray:
