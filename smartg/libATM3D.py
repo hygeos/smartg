@@ -376,22 +376,23 @@ class Cloud3D(object):
 
         return reff
     
-    def get_phase(self, NBTHETA=721, conv_Iparper=True):
+    def get_phase(self, n_theta=721, conv_Iparper=True):
 
         # First check if we have already phase
         if (self.phase is not None):
-             if (len(self.phase.axes[3]) == NBTHETA): return self.phase
-             else:
-                theta = np.linspace(0., 180., NBTHETA)
+            if (len(self.phase.axes[3]) == n_theta):
+                return self.phase
+            else:
+                theta = np.linspace(0., 180., n_theta)
                 return self.phase.sub()[:, :, :, Idx(theta)]
 
-        theta = np.linspace(0., 180., NBTHETA)
+        theta = np.linspace(0., 180., n_theta)
         pha = self.cld_mlut['phase'].swapaxes('reff', 'wav')[:,:,:,Idx(theta)]
         nwav = pha.shape[0]
         nreff = pha.shape[1]
         nstklut = pha.shape[2]
 
-        pha_ = np.zeros((nwav, nreff, 6, NBTHETA), dtype=np.float64)
+        pha_ = np.zeros((nwav, nreff, 6, n_theta), dtype=np.float64)
         pha_[:,:,:nstklut,:] = pha
 
         P = LUT(pha_, axes=[self.cld_mlut.axes['wav'], self.cld_mlut.axes['reff'], np.arange(6), theta],
@@ -1104,7 +1105,7 @@ class Atm3D(object):
             else                                  : zpf = znew
 
             atm_1d = Atm1D(atm_filename, comp=comp, lat=lat, p0=P0, tco3=O3, tcwp=H2O, no2=NO2,
-                             tau_r=tauR, grid=znew, pfgrid=zpf).calc(wls, phase=pha_, NBTHETA=nth_aer_1d)
+                             tau_r=tauR, grid=znew, pfgrid=zpf).calc(wls, phase=pha_, n_theta=nth_aer_1d)
             self.ssa_aer_1d = atm_1d['ssa_p_atm']
             if (pha_):
                 self.ipha_aer_1d = atm_1d['iphase_atm']
@@ -1324,7 +1325,7 @@ class Atm3D(object):
         return ext_aer_glob
     
 
-    def get_glob_aer_phase(self, wl_phase=None, NBTHETA=721, conv_Iparper=True):
+    def get_glob_aer_phase(self, wl_phase=None, n_theta=721, conv_Iparper=True):
         """
         Get global (1d+3d) aerosol phase matrices
 
@@ -1346,7 +1347,7 @@ class Atm3D(object):
 
         # Get the phase matrix
         # Here dim : wav,reff,stk,theta
-        phase = self.cloud_3d.get_phase(NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)
+        phase = self.cloud_3d.get_phase(n_theta=n_theta, conv_Iparper=conv_Iparper)
 
         luts = []
 
@@ -1354,7 +1355,7 @@ class Atm3D(object):
             # Dim of pha_aer: wav, stk, theta.
             # 3d phase : phase.axes[3] -> theta dim
             # 1d phase : self.pha_aer.axes[2] -> theta dim
-            if (len(self.pha_aer_1d.axes[2]) == NBTHETA):
+            if (len(self.pha_aer_1d.axes[2]) == n_theta):
                 phase_aer_1d = self.pha_aer_1d
             else:
                 phase_aer_1d = self.pha_aer_1d.sub()[:, :, Idx(phase.axes[3])]
@@ -1420,7 +1421,7 @@ class Atm3D(object):
         return (ipha3D, luts)
     
 
-    def get_glob_aer_phase_ext_ssa(self, wl_phase=None, NBTHETA=721, conv_Iparper=True):
+    def get_glob_aer_phase_ext_ssa(self, wl_phase=None, n_theta=721, conv_Iparper=True):
         """
         Get global (1d+3d) aerosol phase matrices, extinction coefficients and single scattering albedos
 
@@ -1443,7 +1444,7 @@ class Atm3D(object):
 
         # Get the phase matrix
         # Here dim : wav,reff,stk,theta
-        phase = self.cloud_3d.get_phase(NBTHETA=NBTHETA, conv_Iparper=conv_Iparper)
+        phase = self.cloud_3d.get_phase(n_theta=n_theta, conv_Iparper=conv_Iparper)
 
         luts = []
 
@@ -1455,7 +1456,7 @@ class Atm3D(object):
             # Dim of pha_aer: wav, stk, theta.
             # 3d phase : phase.axes[3] -> theta dim
             # 1d phase : self.pha_aer.axes[2] -> theta dim
-            if (len(self.pha_aer_1d.axes[2]) == NBTHETA):
+            if (len(self.pha_aer_1d.axes[2]) == n_theta):
                 phase_aer_1d = self.pha_aer_1d
             else:
                 phase_aer_1d = self.pha_aer_1d.sub()[:, :, Idx(phase.axes[3])]

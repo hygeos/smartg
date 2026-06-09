@@ -620,7 +620,7 @@ class AerOPAC(object):
         wav: np.ndarray,
         Z: np.ndarray,
         rh: np.ndarray,
-        NBTHETA: int = 721,
+        n_theta: int = 721,
     ) -> xr.DataArray:
         """
         Calculate phase matrix for aerosols and clouds.
@@ -653,7 +653,7 @@ class AerOPAC(object):
             non-None during initialization.
             For example, if only rh_mix is specified, rh is ignored only
             in the mixture layer.
-        NBTHETA : int, optional
+        n_theta : int, optional
             Number of scattering angles for angle resampling. Default is
             721.
 
@@ -662,7 +662,7 @@ class AerOPAC(object):
         phase_matrix : DataArray
             DataArray containing the phase matrix with dimensions
             [wav_phase, z_phase, stk, theta_atm].
-            Shape is (len(wav), len(Z)-1, nphamat, NBTHETA) where:
+            Shape is (len(wav), len(Z)-1, nphamat, n_theta) where:
             - nphamat = 4 for spherical particles only (phase matrix
               unique terms P11, P21, P33, P34)
             - nphamat = 6 for spherical and non-spherical particles
@@ -721,7 +721,7 @@ class AerOPAC(object):
                     coords={d: self._phase.coords[d].values for d in dims},
                 )
 
-        theta = np.linspace(0.0, 180.0, num=NBTHETA)
+        theta = np.linspace(0.0, 180.0, num=n_theta)
         lam_tabulated = self.mixture.coords["wav"].values
         nwav = len(wav)
 
@@ -793,7 +793,7 @@ class AerOPAC(object):
 
             # Theta resampling if needed: transpose to (theta, nwav,
             # hor, stk)
-            if NBTHETA != len(theta_orig):
+            if n_theta != len(theta_orig):
                 idf_theta = np.interp(
                     theta, theta_orig, np.arange(len(theta_orig))
                 )
@@ -806,10 +806,10 @@ class AerOPAC(object):
                         [idf_theta, slice(None), slice(None), slice(None)],
                     ),
                 )
-                # Result: (NBTHETA, nwav, hor, stk) -> transpose to
-                # (nwav, hor, stk, NBTHETA)
+                # Result: (n_theta, nwav, hor, stk) -> transpose to
+                # (nwav, hor, stk, n_theta)
                 phase_at_wav = phase_at_wav.transpose(1, 2, 3, 0)
-            # phase_at_wav: (nwav, hor, stk, NBTHETA)
+            # phase_at_wav: (nwav, hor, stk, n_theta)
 
             # Determine humidity/reff values
             nphamat_ = 6
@@ -834,7 +834,7 @@ class AerOPAC(object):
                 hum_or_reff_val = np.array(hum_or_reff_val)
 
             # Interpolate along hor: transpose to (hor, nwav, stk,
-            # NBTHETA)
+            # n_theta)
             if len(hum_or_reff_val) == 1:
                 hor_query = hum_or_reff_val
                 nz_phase = len(Z) - 1
@@ -856,8 +856,8 @@ class AerOPAC(object):
                     [idf_hor, slice(None), slice(None), slice(None)],
                 ),
             )
-            # Result: (nz, nwav, stk, NBTHETA) -> transpose to (nwav,
-            # nz, stk, NBTHETA)
+            # Result: (nz, nwav, stk, n_theta) -> transpose to (nwav,
+            # nz, stk, n_theta)
             P_data = np.ascontiguousarray(P_data.transpose(1, 0, 2, 3)).astype(
                 np.float32
             )
@@ -870,7 +870,7 @@ class AerOPAC(object):
             # Expand 4 stk to 6 if needed
             if nphamat == 4:
                 P_data_6 = np.zeros(
-                    (nwav, nz_phase, nphamat_, NBTHETA), dtype="float32"
+                    (nwav, nz_phase, nphamat_, n_theta), dtype="float32"
                 )
                 P_data_6[:, :, 0:4, :] = P_data
                 # F22 = F11 ; F44 = F33
@@ -881,7 +881,7 @@ class AerOPAC(object):
                 pass
             else:
                 P_data_6 = np.zeros(
-                    (nwav, nz_phase, nphamat_, NBTHETA), dtype="float32"
+                    (nwav, nz_phase, nphamat_, n_theta), dtype="float32"
                 )
                 P_data_6[:, :, 0:nphamat, :] = P_data
                 P_data = P_data_6
@@ -1605,7 +1605,7 @@ class Atm1D(Atmosphere):
         self,
         wav: NumericArrayLike | BandSet,
         phase: bool = True,
-        NBTHETA: int = 721,
+        n_theta: int = 721,
         use_old_calc_iphase: bool = False,
         truncation: DM_trunc | GT_trunc | None = None,
     ) -> xr.Dataset:
@@ -1617,7 +1617,7 @@ class Atm1D(Atmosphere):
         wav : array_like or BandSet
             Wavelengths at which to calculate the profile. It can be a
             list of REPTRAN_IBAND or KDIS_IBAND.
-        NBTHETA : int, optional
+        n_theta : int, optional
             The number of angles to be considered for the phase matrix.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (depracated).
@@ -1641,7 +1641,7 @@ class Atm1D(Atmosphere):
                 wav_pha = wav[:]
             else:
                 wav_pha = self.pfwav
-            pha = self.phase(wav_pha, NBTHETA=NBTHETA)
+            pha = self.phase(wav_pha, n_theta=n_theta)
             ipha = None
 
             pro_var = list(profile.data_vars)
@@ -2613,7 +2613,7 @@ class Atm1D(Atmosphere):
         return pro
 
     def phase(
-        self, wav: NumericArrayLike, NBTHETA: int = 721
+        self, wav: NumericArrayLike, n_theta: int = 721
     ) -> xr.DataArray | None:
         """
         Calculate phase matrix of aerosols and clouds at specified
@@ -2630,10 +2630,9 @@ class Atm1D(Atmosphere):
         wav : array_like
             Wavelengths at which to calculate phase matrix [nm].
             If scalar, will be converted to 1-D array.
-        NBTHETA : int, optional
+        n_theta : int, optional
             Number of scattering angles for angle resampling. Default is
-            721,
-            corresponding to angles from 0° to 180°.
+            721, corresponding to angles from 0° to 180°.
 
         Returns
         -------
@@ -2642,7 +2641,7 @@ class Atm1D(Atmosphere):
             axes
             [wav_phase, z_phase, stk, theta_atm] if aerosol components
             are present.
-            Shape is (len(wav), nz, nphamat, NBTHETA) where:
+            Shape is (len(wav), nz, nphamat, n_theta) where:
             - nz: number of altitude levels in the reduced profile
               (self.pfgrid)
             - nphamat = 4 for spherical particles only (phase matrix
@@ -2678,7 +2677,7 @@ class Atm1D(Atmosphere):
 
         for comp in self.comp:
             dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
-            comp_pha = comp.phase(wav, self.pfgrid, rh, NBTHETA=NBTHETA)
+            comp_pha = comp.phase(wav, self.pfgrid, rh, n_theta=n_theta)
             if hasattr(comp_pha, "to_xarray"):
                 comp_pha = comp_pha.to_xarray()
 
@@ -2708,7 +2707,7 @@ class Atm1D(Atmosphere):
         self,
         wav: NumericArrayLike | BandSet,
         phase: bool = True,
-        NBTHETA: int = 721,
+        n_theta: int = 721,
     ) -> tuple[
         np.ndarray,
         np.ndarray,
@@ -2732,11 +2731,10 @@ class Atm1D(Atmosphere):
             If True (default), calculates phase functions. Set to False
             to skip
             phase function computations for faster execution.
-        NBTHETA : int, optional
+        n_theta : int, optional
             Number of scattering angles for phase function resampling.
-            Default is 721,
-            corresponding to angles from 0° to 180°. Only used if
-            phase=True.
+            Default is 721, corresponding to angles from 0° to 180°.
+            Only used if ``phase=True``.
 
         Returns
         -------
@@ -2791,7 +2789,7 @@ class Atm1D(Atmosphere):
         """
         if not isinstance(wav, BandSet):
             wav = np.atleast_1d(wav)
-        pro = self.calc(wav=wav, phase=phase, NBTHETA=NBTHETA)
+        pro = self.calc(wav=wav, phase=phase, n_theta=n_theta)
         pro_aer = diff1(pro["OD_p"].values.astype(np.float32), axis=1)
         ssa_aer = pro["ssa_p_atm"].values
         pro_ray = diff1(pro["OD_r"].values.astype(np.float32), axis=1)

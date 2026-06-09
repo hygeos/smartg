@@ -925,7 +925,7 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
             aer = AerOPAC(str(file_path), 0.2, 350., H_mix_min=0., H_mix_max=120.,
                           H_free_min=120., H_free_max=120., H_stra_min=120., H_stra_max=120., Z_mix=1e6,
                           rh_mix=0.)
-        pro = Atm1D('afglt', comp=[aer], grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl, phase=True, NBTHETA=nth)
+        pro = Atm1D('afglt', comp=[aer], grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl, phase=True, n_theta=nth)
         surf  = None
 
         nvza = len(vza)
@@ -1273,7 +1273,7 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
             aer1 = AerOPAC(str(file_path), 0.5, wl[0], H_mix_min=0., H_mix_max=3.,
                            H_free_min=2., H_free_max=2., H_stra_min=12., H_stra_max=12., Z_mix=1e6, rh_mix=0.)
 
-        pro = Atm1D('afglt', comp=[aer1], grid=z, prof_ray=sca, prof_abs=abs).calc(wl, phase=True, NBTHETA=nth)
+        pro = Atm1D('afglt', comp=[aer1], grid=z, prof_ray=sca, prof_abs=abs).calc(wl, phase=True, n_theta=nth)
         surf = None
         
         nvza = len(vza)
@@ -1346,7 +1346,7 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
                            rh_mix=0.)
 
         pro = Atm1D('afglt', comp=[aer1, aer2], grid=z, prof_ray=sca, 
-                      prof_abs=abs, pfgrid=[120., 21., 20., 3., 0.]).calc(wl, phase=True, NBTHETA=nth)
+                      prof_abs=abs, pfgrid=[120., 21., 20., 3., 0.]).calc(wl, phase=True, n_theta=nth)
         surf = None
         
         nvza = len(vza)
@@ -1412,7 +1412,7 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
             ds_ic_baum_ghm.to_netcdf(file_path)
             cld1 = Cloud(str(file_path), reff=50., zmin=10., zmax=11., tau_ref=1., w_ref=wl[0])
 
-        pro = Atm1D('afglt', comp=[cld1], grid=z, prof_ray=sca, prof_abs=abs).calc(wl, phase=True, NBTHETA=nth)
+        pro = Atm1D('afglt', comp=[cld1], grid=z, prof_ray=sca, prof_abs=abs).calc(wl, phase=True, n_theta=nth)
         surf = None
         
         nvza = len(vza)
