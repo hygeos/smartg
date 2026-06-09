@@ -3520,7 +3520,7 @@ def rayleigh_od(
     co2: NumericArrayLike = 400.0,
     lat: float = 45.0,
     z: NumericArrayLike = 0.0,
-    P: NumericArrayLike = 1013.25,
+    p: NumericArrayLike = 1013.25,
     pressure: str = "surface",
 ) -> NDArray:
     """Compute Rayleigh optical depth.
@@ -3543,7 +3543,7 @@ def rayleigh_od(
         Altitude(s) above sea level in meters. May be a scalar or
         have one entry per layer.
         Default is 0.0.
-    P : array_like, optional
+    p : array_like, optional
         Pressure in hPa. Interpretation depends on the ``pressure`` arg.
         Default is 1013.25.
     pressure : {'surface', 'sea-level'}, optional
@@ -3567,24 +3567,30 @@ def rayleigh_od(
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    Avogadro = constants.value("Avogadro constant")
+    avogadro = constants.value("Avogadro constant")
     z = np.atleast_1d(z)
     lam = np.atleast_1d(lam)
     co2 = np.atleast_1d(co2)
-    P = np.atleast_1d(P)
+    p = np.atleast_1d(p)
+
+    #check that input arrays have compatible shapes
+    if co2.shape != z.shape or co2.shape != p.shape:
+        raise ValueError(
+            "Input arrays co2, z, and p must have the same shape."
+        )
 
     zs = 0.73737 * z + 5517.56  # effective mass-weighted altitude
-    G = gravity_z(lat, zs)
+    g_z = gravity_z(lat, zs)
     # air pressure at the pixel (i.e. at altitude) in hPa
     if pressure == "sea-level":
         # air pressure at pixel location in dyn / cm2, i.e. hPa * 1000
-        Psurf = (P * (1.0 - 0.0065 * z / 288.15) ** 5.255) * 1000.0
+        p_surf = (p * (1.0 - 0.0065 * z / 288.15) ** 5.255) * 1000.0
     elif pressure == "surface":
-        Psurf = P * 1000.0  # convert to dyn/cm2
+        p_surf = p * 1000.0  # convert to dyn/cm2
     else:
         raise ValueError(f"Invalid pressure type ({pressure})")
 
-    return rayleigh_crs(lam, co2) * Psurf * Avogadro / m_dry_air(co2) / G
+    return rayleigh_crs(lam, co2) * p_surf * avogadro / m_dry_air(co2) / g_z
 
 
 def refractivity(
