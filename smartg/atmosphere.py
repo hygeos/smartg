@@ -3884,36 +3884,36 @@ def read_aeronet_aod(file: PathType, year: int) -> xr.DataArray:
         Lookup table with extinction AOD as function of
         Day_of_Year(Fraction) and wavelength
     """
-    AOD = pd.read_csv(file, sep=",", skiprows=6)
-    NTIME_AOD = AOD.index.size
+    aod = pd.read_csv(file, sep=",", skiprows=6)
+    ntime_aod = aod.index.size
 
-    check_date(dates=AOD["Date(dd:mm:yyyy)"].values, year=year)
+    check_date(dates=aod["Date(dd:mm:yyyy)"].values, year=year)
 
     wav_ext = []
-    for key in AOD.keys():
+    for key in aod.keys():
         if "AOD_Extinction-Total" in key:
             str_bis = key.split("[")
             wav_ext.append(float(str_bis[1][:-3]))
     wav_ext = np.unique(wav_ext)
-    NWAV_EXT = len(wav_ext)
+    n_wav_ext = len(wav_ext)
 
-    mat_ext = np.zeros((NTIME_AOD, NWAV_EXT), dtype=np.float64)
-    for itime in range(0, NTIME_AOD):
+    mat_ext = np.zeros((ntime_aod, n_wav_ext), dtype=np.float64)
+    for itime in range(0, ntime_aod):
         for iwav, wav in enumerate(wav_ext):
             key = "AOD_Extinction-Total[" + str(int(wav)) + "nm]"
-            mat_ext[itime, iwav] = AOD.iloc[itime][key]
+            mat_ext[itime, iwav] = aod.iloc[itime][key]
 
-    AOD_ext_lut = xr.DataArray(
+    aod_ext_da = xr.DataArray(
         mat_ext,
         coords={
-            "Day_of_Year(Fraction)": AOD["Day_of_Year(Fraction)"].values,
+            "Day_of_Year(Fraction)": aod["Day_of_Year(Fraction)"].values,
             "wavelength": wav_ext,
         },
         dims=["Day_of_Year(Fraction)", "wavelength"],
         name="aod",
     )
 
-    return AOD_ext_lut
+    return aod_ext_da
 
 
 def read_aeronet_ssa(file: PathType, year: int) -> xr.DataArray:
@@ -3933,36 +3933,36 @@ def read_aeronet_ssa(file: PathType, year: int) -> xr.DataArray:
         Day_of_Year(Fraction)
         and wavelength
     """
-    SSA = pd.read_csv(file, sep=",", skiprows=6)
-    NTIME_SSA = SSA.index.size
+    ssa = pd.read_csv(file, sep=",", skiprows=6)
+    ntime_ssa = ssa.index.size
 
-    check_date(dates=SSA["Date(dd:mm:yyyy)"].values, year=year)
+    check_date(dates=ssa["Date(dd:mm:yyyy)"].values, year=year)
 
     wav_ssa = []
-    for key in SSA.keys():
+    for key in ssa.keys():
         if "Single_Scattering_Albedo" in key:
             str_bis = key.split("[")
             wav_ssa.append(float(str_bis[1][:-3]))
     wav_ssa = np.unique(wav_ssa)
-    NWAV_SSA = len(wav_ssa)
+    n_wav_ssa = len(wav_ssa)
 
-    mat_ssa = np.zeros((NTIME_SSA, NWAV_SSA), dtype=np.float64)
-    for itime in range(0, NTIME_SSA):
+    mat_ssa = np.zeros((ntime_ssa, n_wav_ssa), dtype=np.float64)
+    for itime in range(0, ntime_ssa):
         for iwav, wav in enumerate(wav_ssa):
             key = "Single_Scattering_Albedo[" + str(int(wav)) + "nm]"
-            mat_ssa[itime, iwav] = SSA.iloc[itime][key]
+            mat_ssa[itime, iwav] = ssa.iloc[itime][key]
 
-    SSA_lut = xr.DataArray(
+    ssa_da = xr.DataArray(
         mat_ssa,
         coords={
-            "Day_of_Year(Fraction)": SSA["Day_of_Year(Fraction)"].values,
+            "Day_of_Year(Fraction)": ssa["Day_of_Year(Fraction)"].values,
             "wavelength": wav_ssa,
         },
         dims=["Day_of_Year(Fraction)", "wavelength"],
         name="ssa",
     )
 
-    return SSA_lut
+    return ssa_da
 
 
 def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
@@ -3982,38 +3982,38 @@ def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
         Day_of_Year(Fraction),
         wavelength and theta_atm
     """
-    PFN = pd.read_csv(file, sep=",", skiprows=6)
-    PFN = PFN[
-        PFN["Phase_Function_Mode"] == "Total"
+    pfn = pd.read_csv(file, sep=",", skiprows=6)
+    pfn = pfn[
+        pfn["Phase_Function_Mode"] == "Total"
     ]  # take only total of fine + coarse
-    NTIME_PFN = PFN.index.size
+    ntime_pfn = pfn.index.size
 
-    check_date(dates=PFN["Date(dd:mm:yyyy)"].values, year=year)
+    check_date(dates=pfn["Date(dd:mm:yyyy)"].values, year=year)
 
     ang = []
     wav_pfn = []
-    for key in PFN.keys():
+    for key in pfn.keys():
         if "0000" in key:
             str_bis = key.split("[")
             ang.append(float(str_bis[0]))
             wav_pfn.append(float(str_bis[1][:-3]))
     ang = np.unique(ang)[::-1]
     wav_pfn = np.unique(wav_pfn)
-    NANG = len(ang)
-    NWAV_PFN = len(wav_pfn)
+    n_ang = len(ang)
+    nwav_pfn = len(wav_pfn)
 
-    mat_pfn = np.zeros((NTIME_PFN, NWAV_PFN, NANG), dtype=np.float64)
-    for itime in range(0, NTIME_PFN):
+    mat_pfn = np.zeros((ntime_pfn, nwav_pfn, n_ang), dtype=np.float64)
+    for itime in range(0, ntime_pfn):
         for iwav, wav in enumerate(wav_pfn):
             for iang, ag in enumerate(ang):
                 ang_str = "%.6f" % float(ag)
                 key = ang_str + "[" + str(int(wav)) + "nm]"
-                mat_pfn[itime, iwav, iang] = PFN.iloc[itime][key]
+                mat_pfn[itime, iwav, iang] = pfn.iloc[itime][key]
 
-    phase_lut = xr.DataArray(
+    phase_da = xr.DataArray(
         mat_pfn,
         coords={
-            "Day_of_Year(Fraction)": PFN["Day_of_Year(Fraction)"].values,
+            "Day_of_Year(Fraction)": pfn["Day_of_Year(Fraction)"].values,
             "wavelength": wav_pfn,
             "theta_atm": ang,
         },
@@ -4021,7 +4021,7 @@ def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
         name="pfn",
     )
 
-    return phase_lut
+    return phase_da
 
 
 def atm_pro_from_aeronet(
@@ -4432,8 +4432,8 @@ def artdeco_to_smartg_cld(
         for iwav in range(0, nwav):
             for ireff in range(0, nreff):
                 f = phase[ireff, iwav, 0, :]  # P11
-                Norm = np.trapezoid(f, -mu_sorted)
-                phase[ireff, iwav, :, :] *= 2.0 / abs(Norm)
+                norm = np.trapezoid(f, -mu_sorted)
+                phase[ireff, iwav, :, :] *= 2.0 / abs(norm)
 
     ext = (
         art_cld["Cext"]
