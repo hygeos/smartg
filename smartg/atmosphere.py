@@ -76,6 +76,10 @@ from typing import Any, cast
 from luts.luts import LUT
 
 
+# constants
+M_H2O = 18.015  # g/mol
+
+
 class AerOPAC(object):
     """
     Initialize the Aerosol OPAC model
@@ -2990,11 +2994,10 @@ class ProfileBase(object):
 
         # scale to total water vapor content
         if tcwp is not None:
-            M_H2O = 18.015  # g/mol
-            Avogadro = constants.value("Avogadro constant")
+            avogadro = constants.value("Avogadro constant")
             if o3_h2o_alt is None:
                 denom = simpson(y=self.dens_h2o, x=-self.z) * 1e5
-                self.dens_h2o *= tcwp / M_H2O * Avogadro / denom
+                self.dens_h2o *= tcwp / M_H2O * avogadro / denom
             else:
                 _s_z = np.argsort(self.z)
                 # k=1: linear interpolation; BSpline extrapolates
@@ -3006,7 +3009,7 @@ class ProfileBase(object):
                 dens_h2o_alt = f_dens_h2o(z_alt)
                 h2o_afgl = (
                     simpson(y=dens_h2o_alt, x=-z_alt) * 1e5 * M_H2O
-                ) / Avogadro
+                ) / avogadro
                 self.dens_h2o *= tcwp / h2o_afgl
             if tcwp == 0:
                 self.dens_h2o[:] = 0.0
@@ -3169,7 +3172,7 @@ class ProfileBase(object):
         return rh
 
 
-def saturation_pressure(t: NumericArrayLike) -> NDArray:
+def saturation_pressure(t: NumericArrayLike) -> float | NDArray:
     """Calculate saturation vapor pressure for water and ice phases.
 
     Uses the Huang (2018) empirical formula, which provides accurate
@@ -3183,7 +3186,7 @@ def saturation_pressure(t: NumericArrayLike) -> NDArray:
 
     Returns
     -------
-    sat_press : ndarray
+    sat_press : float or ndarray
         Saturation vapor pressure [Pa]
 
     Notes
@@ -3200,7 +3203,7 @@ def saturation_pressure(t: NumericArrayLike) -> NDArray:
     Vapor Pressure of Water and Ice. Journal of Applied Meteorology and
     Climatology, 57(6), 1265-1272.
     """
-    tc = np.atleast_1d(t) - 273.15  # temperature in C°
+    tc = np.asarray(t, dtype=np.float64) - 273.15  # temperature in C°
     sat_press = np.zeros_like(tc)
 
     is_water = tc > 0
@@ -3213,10 +3216,12 @@ def saturation_pressure(t: NumericArrayLike) -> NDArray:
     sat_press[is_ice] = (np.exp(43.494 - (6545.8 / (tc[is_ice] + 278)))) / (
         (tc[is_ice] + 868) ** 2
     )
+    if sat_press.ndim == 0:
+        sat_press = float(sat_press)
     return sat_press
 
 
-def f_n2(lam: NumericArrayLike) -> NDArray:
+def f_n2(lam: NumericArrayLike) -> float | NDArray:
     """Compute the depolarization factor of N2 as a function of
     wavelength.
 
@@ -3227,7 +3232,7 @@ def f_n2(lam: NumericArrayLike) -> NDArray:
 
     Returns
     -------
-    ndarray
+    float or ndarray
         Depolarization factor of N2. Same shape as input `lam`.
 
     References
@@ -3238,11 +3243,13 @@ def f_n2(lam: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    lam = np.atleast_1d(lam)
+    lam = np.asarray(lam, dtype=np.float64)
+    if lam.ndim == 0:
+        lam = float(lam)
     return 1.034 + 3.17 * 1e-4 * lam ** (-2)
 
 
-def f_o2(lam: NumericArrayLike) -> NDArray:
+def f_o2(lam: NumericArrayLike) -> float | NDArray:
     """Compute the depolarization factor of O2 as a function of
     wavelength.
 
@@ -3253,7 +3260,7 @@ def f_o2(lam: NumericArrayLike) -> NDArray:
 
     Returns
     -------
-    ndarray
+    float or ndarray
         Depolarization factor of O2. Same shape as input `lam`.
 
     References
@@ -3264,7 +3271,9 @@ def f_o2(lam: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    lam = np.atleast_1d(lam)
+    lam = np.asarray(lam, dtype=np.float64)
+    if lam.ndim == 0:
+        lam = float(lam)
     return 1.096 + 1.385 * 1e-3 * lam ** (-2) + 1.448 * 1e-4 * lam ** (-4)
 
 
@@ -3296,16 +3305,19 @@ def f_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    _FN2 = np.atleast_1d(f_n2(lam)).reshape((-1, 1))
-    _FO2 = np.atleast_1d(f_o2(lam)).reshape((-1, 1))
-    _CO2 = np.atleast_1d(co2).reshape((1, -1))
+    fn2_reshp = np.atleast_1d(f_n2(lam)).reshape((-1, 1))
+    fo2_reshp = np.atleast_1d(f_o2(lam)).reshape((-1, 1))
+    co2_reshp = np.atleast_1d(co2).reshape((1, -1))
 
-    return (78.084 * _FN2 + 20.946 * _FO2 + 0.934 + _CO2 * 1e-4 * 1.15) / (
-        78.084 + 20.946 + 0.934 + _CO2 * 1e-4
-    )
+    return (
+        78.084 * fn2_reshp
+        + 20.946 * fo2_reshp
+        + 0.934
+        + co2_reshp * 1e-4 * 1.15
+    ) / (78.084 + 20.946 + 0.934 + co2_reshp * 1e-4)
 
 
-def n_air_co2_300(lam: NumericArrayLike) -> NDArray:
+def n_air_co2_300(lam: NumericArrayLike) -> float | NDArray:
     """Compute the refractive index of dry air at 300 ppm CO2 as a
     function of wavelength.
 
@@ -3316,7 +3328,7 @@ def n_air_co2_300(lam: NumericArrayLike) -> NDArray:
 
     Returns
     -------
-    ndarray
+    float or ndarray
         Refractive index of dry air at 300 ppm CO2. Same shape as input
         `lam`.
 
@@ -3328,7 +3340,10 @@ def n_air_co2_300(lam: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    lam = np.atleast_1d(lam)
+    lam = np.asarray(lam, dtype=np.float64)
+    # ensure scalar input returns scalar output
+    if lam.ndim == 0:
+        lam = float(lam)
     return (
         1e-8
         * (
@@ -3355,8 +3370,7 @@ def n_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     -------
     ndarray
         Refractive index of air. Shape: (N, M), where N is the number of
-        wavelengths
-        and M is the number of layers.
+        wavelengths and M is the number of layers.
 
     References
     ----------
@@ -3366,12 +3380,12 @@ def n_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    N300 = np.atleast_1d(n_air_co2_300(lam)).reshape((-1, 1))
-    CO2 = np.atleast_1d(co2).reshape((1, -1))
-    return (N300 - 1) * (1 + 0.54 * (CO2 * 1e-6 - 0.0003)) + 1.0
+    n300 = np.atleast_1d(n_air_co2_300(lam)).reshape((-1, 1))
+    co2_reshp = np.atleast_1d(co2).reshape((1, -1))
+    return (n300 - 1) * (1 + 0.54 * (co2_reshp * 1e-6 - 0.0003)) + 1.0
 
 
-def m_dry_air(co2: NumericArrayLike) -> NDArray:
+def m_dry_air(co2: NumericArrayLike) -> float | NDArray:
     """Compute the mean molecular weight of dry air as a function of CO2
     concentration.
 
@@ -3382,7 +3396,7 @@ def m_dry_air(co2: NumericArrayLike) -> NDArray:
 
     Returns
     -------
-    ndarray
+    float or ndarray
         Mean molecular weight of dry air in g/mol. Same shape as input
         `co2`.
 
@@ -3394,7 +3408,11 @@ def m_dry_air(co2: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    return 15.0556 * np.atleast_1d(co2) * 1e-6 + 28.9595
+    co2 = np.asarray(co2, dtype=np.float64)
+    # ensure scalar input returns scalar output
+    if co2.ndim == 0:
+        co2 = float(co2)
+    return 15.0556 * co2 * 1e-6 + 28.9595
 
 
 def rayleigh_crs(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
@@ -3427,8 +3445,8 @@ def rayleigh_crs(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     lam = lam.astype(np.float64)
     co2 = co2.astype(np.float64)
 
-    Avogadro = constants.value("Avogadro constant")
-    Ns = Avogadro / 22.4141 * 273.15 / 288.15 * 1e-3
+    avogadro = constants.value("Avogadro constant")
+    ns = avogadro / 22.4141 * 273.15 / 288.15 * 1e-3
     nn2 = n_air_co2(lam, co2) ** 2
 
     return (
@@ -3436,13 +3454,13 @@ def rayleigh_crs(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
         * np.pi**3
         * (nn2 - 1) ** 2
         / (lam[:, None] * 1e-4) ** 4
-        / Ns**2
+        / ns**2
         / (nn2 + 2) ** 2
         * f_air_co2(lam, co2)
     )
 
 
-def gravity_z0(lat: NumericArrayLike) -> NDArray:
+def gravity_z0(lat: NumericArrayLike) -> float | NDArray:
     """Compute gravitational acceleration at Earth's surface as a
     function of latitude.
 
@@ -3453,7 +3471,7 @@ def gravity_z0(lat: NumericArrayLike) -> NDArray:
 
     Returns
     -------
-    ndarray
+    float or ndarray
         Gravitational acceleration at ground level in m/s².
 
     References
@@ -3464,7 +3482,9 @@ def gravity_z0(lat: NumericArrayLike) -> NDArray:
            Press,
            City of Washington, 527 pp.
     """
-    lat = np.atleast_1d(lat)
+    lat = np.asarray(lat)
+    if lat.ndim == 0:
+        lat = float(lat)
     return 980.6160 * (
         1.0
         - 0.0026372 * np.cos(2 * lat * np.pi / 180.0)
@@ -3475,7 +3495,7 @@ def gravity_z0(lat: NumericArrayLike) -> NDArray:
 def gravity_z(
     lat: RealNumber,
     z: NumericArrayLike,
-) -> NDArray:
+) -> float | NDArray:
     """Compute gravitational acceleration at a given altitude and
     latitude.
 
@@ -3489,7 +3509,7 @@ def gravity_z(
 
     Returns
     -------
-    ndarray
+    float or ndarray
         Gravitational acceleration at the given altitude(s) and latitude
         in m/s².
 
@@ -3504,7 +3524,9 @@ def gravity_z(
     if not isinstance(lat, (float, int, np.floating, np.integer)):
         raise ValueError("The parameter lat must be a scalar value.")
 
-    z = np.atleast_1d(z)
+    z = np.asarray(z, dtype=np.float64)
+    if z.ndim == 0:
+        z = float(z)
 
     return (
         gravity_z0(lat)
@@ -3573,7 +3595,7 @@ def rayleigh_od(
     co2 = np.atleast_1d(co2)
     p = np.atleast_1d(p)
 
-    #check that input arrays have compatible shapes
+    # check that input arrays have compatible shapes
     if co2.shape != z.shape or co2.shape != p.shape:
         raise ValueError(
             "Input arrays co2, z, and p must have the same shape."
@@ -3781,9 +3803,9 @@ def blackbody_radiance(
     >>> T = 5778  # Sun's surface temperature
     >>> L_b_wl = blackbody_radiance(wavelengths, T)
     """
-    scalar_input = np.isscalar(wav) and np.isscalar(T)
-    wav = np.asarray(wav, dtype=float)
-    T = np.asarray(T, dtype=float)
+    wav = np.asarray(wav, dtype=np.float64)
+    T = np.asarray(T, dtype=np.float64)
+    scalar_input = wav.ndim == 0 and T.ndim == 0
     try:
         np.broadcast_shapes(wav.shape, T.shape)
     except ValueError as err:
