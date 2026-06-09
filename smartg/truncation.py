@@ -112,10 +112,10 @@ class GT_trunc(object):
         - 'lobatto' ->  use Lobatto quadrature (default)
         - 'trapezoid' ->  use scypi.integrate.trapezoid method
         - 'simpson' ->  use scipy.integrate.simpson method
-    theta_tol : None | float, optional
+    theta_tol : None or float, optional
         Search the truncated angle between 0 and theta_tol
         (in degrees).
-    theta_tr : None | float, optional
+    theta_tr : None or float, optional
         Directly provide the truncated angle (in degrees). If provided,
         trunc_frac and theta_tol are ignored.
     lobatto_optimization : bool, optional
@@ -143,7 +143,9 @@ class GT_trunc(object):
         # check parameter values
         if (
             isinstance(trunc_frac, bool)
-            or not isinstance(trunc_frac, (float, np.floating))
+            or not isinstance(
+                trunc_frac, (int, float, np.integer, np.floating)
+            )
             or not (0.0 < trunc_frac < 1.0)
         ):
             raise ValueError(
@@ -159,7 +161,9 @@ class GT_trunc(object):
         if theta_tol is not None:
             if (
                 isinstance(theta_tol, bool)
-                or not isinstance(theta_tol, (float, np.floating))
+                or not isinstance(
+                    theta_tol, (int, float, np.integer, np.floating)
+                )
                 or not (0.0 < theta_tol < 180.0)
             ):
                 raise ValueError(
