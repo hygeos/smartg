@@ -3786,41 +3786,39 @@ def blackbody_radiance(
 
 
 def get_aer_dist_integral(
-    Z: NumericArrayLike,
-    H_min: NumericArrayLike,
-    H_max: NumericArrayLike,
+    z: NumericArrayLike,
+    h_min: NumericArrayLike,
+    h_max: NumericArrayLike,
 ) -> NDArray:
     """
     Compute the integral of exponential vertical distribution between
     two altitudes.
 
-    Calculates the integral of an exponential distribution function over
-    a vertical
-    layer, used for computing the optical depth contribution of aerosols
-    or clouds
-    with a scale height Z between altitudes H_min and H_max.
+    Calculates the integral of an exponential distribution function
+    over a vertical layer, used for computing the optical depth
+    contribution of aerosols or clouds with a scale height `z` between
+    altitudes `h_min` and `h_max`.
 
     Parameters
     ----------
-    Z : array_like
-        Scale height in km. Defines the vertical distribution as N(h) =
-        N(0)*exp(-h/Z).
-    H_min : array_like
+    z : array_like
+        Scale height in km. Defines the vertical distribution as
+        N(h) = N(0)*exp(-h/z).
+    h_min : array_like
         Minimum altitude in km (bottom of the layer).
-    H_max : array_like
+    h_max : array_like
         Maximum altitude in km (top of the layer).
 
     Returns
     -------
     ndarray
-        Integral of the exponential distribution between H_min and
-        H_max,
-        normalized by Z.
+        Integral of the exponential distribution between `h_min` and
+        `h_max`, normalized by `z`.
     """
-    Z = np.atleast_1d(Z)
-    H_min = np.atleast_1d(H_min)
-    H_max = np.atleast_1d(H_max)
-    return -(Z) * np.exp(-H_max / Z) + (Z) * np.exp(-H_min / Z)
+    z = np.atleast_1d(z)
+    h_min = np.atleast_1d(h_min)
+    h_max = np.atleast_1d(h_max)
+    return -(z) * np.exp(-h_max / z) + (z) * np.exp(-h_min / z)
 
 
 def check_date(dates: Iterable[str] | NDArray[np.str_], year: int) -> None:
