@@ -1516,10 +1516,10 @@ class Atm1D(Atmosphere):
         self.prof_phases = prof_phases
         # store attribute using lowercase name for consistency
         self.rh_cst = rh_cst
-        self.OPT3D = cells is not None
+        self.opt3d = cells is not None
         self.cells = cells
 
-        self.tauR = np.asarray(tau_r) if tau_r is not None else None
+        self.tau_r = np.asarray(tau_r) if tau_r is not None else None
         if isinstance(grid, str):
             grid = strgrid_to_numpy(grid)
         grid = np.asarray(grid) if grid is not None else None
@@ -1653,7 +1653,7 @@ class Atm1D(Atmosphere):
 
             pro_var = list(profile.data_vars)
             if pha is not None or (
-                self.OPT3D and ("phase_atm" in pro_var) and truncation
+                self.opt3d and ("phase_atm" in pro_var) and truncation
             ):
                 if pha is not None:
                     pha_, ipha = calc_iphase(
@@ -1672,7 +1672,7 @@ class Atm1D(Atmosphere):
                 f = None
                 pha_tr = None
                 if truncation is not None:
-                    if self.OPT3D:
+                    if self.opt3d:
                         theta = profile.coords["theta_atm"].values
                     else:
                         assert pha is not None, (
@@ -1753,7 +1753,7 @@ class Atm1D(Atmosphere):
                             pha_tr[iph, 3, :] = pha_[iph, 3, :] * beta2
 
                 assert pha is not None
-                if not self.OPT3D:
+                if not self.opt3d:
                     theta_atm = (
                         pha.coords["theta_atm"].values
                         if hasattr(pha, "coords")
@@ -1823,7 +1823,7 @@ class Atm1D(Atmosphere):
                     )
 
                     # case tau instead of coeff (1D atm)
-                    if not self.OPT3D:
+                    if not self.opt3d:
                         dtau_p = diff1(profile["OD_p"].values, axis=1)
                         dtau_p_tr = (
                             1 - f * profile["ssa_p_atm"].values
@@ -2049,10 +2049,10 @@ class Atm1D(Atmosphere):
         -----
         The method can operate in two modes:
 
-        - **1D Mode (OPT3D=False)**: Returns cumulated optical
+                - **1D Mode (opt3d=False)**: Returns cumulated optical
           thicknesses with axes
           [wavelength, z_atm]
-        - **3D Mode (OPT3D=True)**: Returns extinction/absorption
+                - **3D Mode (opt3d=True)**: Returns extinction/absorption
           coefficients with axes
           [wavelength, iopt] for use in 3D radiative transfer
           calculations
@@ -2081,15 +2081,15 @@ class Atm1D(Atmosphere):
 
         pro = xr.Dataset(coords={"z_atm": prof.z, "wavelength": wav[:]})
 
-        if self.OPT3D and self.prof_ray is not None:
+        if self.opt3d and self.prof_ray is not None:
             ray_coef = np.zeros_like(self.prof_ray)
         else:
             ray_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
-        if self.OPT3D and self.prof_aer is not None:
+        if self.opt3d and self.prof_aer is not None:
             aer_coef = np.zeros_like(self.prof_aer[0])
         else:
             aer_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
-        if self.OPT3D and self.prof_abs is not None:
+        if self.opt3d and self.prof_abs is not None:
             abs_coef = np.zeros_like(self.prof_abs)
         else:
             abs_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
@@ -2141,20 +2141,20 @@ class Atm1D(Atmosphere):
             dtaur = self.prof_ray
             tauray = np.cumsum(dtaur, axis=1)
 
-        if self.tauR is not None:
+        if self.tau_r is not None:
             # scale Rayleigh optical thickness
-            if self.tauR.ndim == 1:
+            if self.tau_r.ndim == 1:
                 # for each wavelength
-                tauray *= self.tauR[:, None] / tauray[:, -1:]
+                tauray *= self.tau_r[:, None] / tauray[:, -1:]
             else:
                 # scalar
-                tauray *= self.tauR / tauray[:, -1:]
+                tauray *= self.tau_r / tauray[:, -1:]
 
         assert tauray.ndim == 2
 
         # Rayleigh optical thickness
         dtaur = diff1(tauray, axis=1)
-        if not self.OPT3D:
+        if not self.opt3d:
             pro["OD_r"] = xr.DataArray(
                 tauray,
                 dims=["wavelength", "z_atm"],
@@ -2199,7 +2199,7 @@ class Atm1D(Atmosphere):
             (dtaua, ssa_p) = self.prof_aer
             taua = np.cumsum(dtaua, axis=1)
 
-        if not self.OPT3D:
+        if not self.opt3d:
             pro["OD_p"] = xr.DataArray(
                 taua,
                 dims=["wavelength", "z_atm"],
@@ -2227,7 +2227,7 @@ class Atm1D(Atmosphere):
                 },
             )
 
-        if not self.OPT3D:
+        if not self.opt3d:
             pro["ssa_p_atm"] = xr.DataArray(
                 ssa_p,
                 dims=["wavelength", "z_atm"],
@@ -2354,7 +2354,7 @@ class Atm1D(Atmosphere):
             dtaug = tau_o3 + tau_no2 + tau_mol
             taug = np.cumsum(dtaug, axis=1)
 
-            if not self.OPT3D:
+            if not self.opt3d:
                 pro["OD_g"] = xr.DataArray(
                     taug,
                     dims=["wavelength", "z_atm"],
@@ -2382,7 +2382,7 @@ class Atm1D(Atmosphere):
         else:
             dtaug = self.prof_abs
             taug = np.cumsum(dtaug, axis=1)
-            if not self.OPT3D:
+            if not self.opt3d:
                 pro["OD_g"] = xr.DataArray(
                     taug,
                     dims=["wavelength", "z_atm"],
@@ -2410,7 +2410,7 @@ class Atm1D(Atmosphere):
         #
         # Total optical thickness and other parameters
         #
-        if not self.OPT3D:
+        if not self.opt3d:
             tau_tot = tauray + taua + taug[:, :]
             pro["OD_atm"] = xr.DataArray(
                 tau_tot,
@@ -2502,7 +2502,7 @@ class Atm1D(Atmosphere):
         with np.errstate(invalid="ignore", divide="ignore"):
             pmol = dtaur / (dtaur + dtaua * ssa_p)
         pmol[np.isnan(pmol)] = 1.0
-        if not self.OPT3D:
+        if not self.opt3d:
             pro["pmol_atm"] = xr.DataArray(
                 pmol,
                 dims=["wavelength", "z_atm"],
@@ -2528,7 +2528,7 @@ class Atm1D(Atmosphere):
 
         pine = np.zeros_like(ssa)
         fqy1 = np.zeros_like(ssa)
-        if not self.OPT3D:
+        if not self.opt3d:
             pro["pine_atm"] = xr.DataArray(
                 pine,
                 dims=["wavelength", "z_atm"],
@@ -2575,7 +2575,7 @@ class Atm1D(Atmosphere):
 
         if self.prof_phases is not None:
             ipha, phases = self.prof_phases
-            if not self.OPT3D:
+            if not self.opt3d:
                 pro["iphase_atm"] = xr.DataArray(
                     ipha,
                     dims=["wavelength", "z_atm"],
@@ -2615,7 +2615,7 @@ class Atm1D(Atmosphere):
             )
         # Pure 3D
         #
-        if self.OPT3D:
+        if self.opt3d:
             assert self.cells is not None
             (iopt, iabs, pmin, pmax, neighbour) = self.cells
             pro["iopt_atm"] = xr.DataArray(iopt, dims=["icell"])
