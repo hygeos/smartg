@@ -1491,7 +1491,14 @@ class Atm1D(Atmosphere):
         ) = None,
         prof_phases: tuple[NDArray[np.integer], list[Any]] | None = None,
         rh_cst: float | None = None,
-        cells: tuple[Any, ...] | None = None,
+        cells: tuple[
+            NDArray[np.integer],
+            NDArray[np.integer],
+            NDArray[np.floating],
+            NDArray[np.floating],
+            NDArray[np.integer],
+        ]
+        | None = None,
         o3_acs: PathType = "O3_acs_BogumilV3.0_coeffs",
         no2_acs: PathType = "NO2_acs_BogumilV1.0_coeffs",
     ) -> None:
@@ -2089,8 +2096,17 @@ class Atm1D(Atmosphere):
 
         # refractive index
         n = refractivity(
-            wav[:] * 1e-3, prof.p, prof.t, prof.dens_co2 / prof.dens_air * 1e6
+            wav[:] * 1e-3,
+            prof.p,
+            prof.t,
+            np.divide(
+                prof.dens_co2 * 1e6,
+                prof.dens_air,
+                out=np.zeros_like(prof.dens_co2),
+                where=prof.dens_air != 0,
+            ),
         )
+
         pro["n_atm"] = xr.DataArray(
             n,
             dims=["wavelength", "z_atm"],
@@ -3161,11 +3177,21 @@ class ProfileBase(object):
         using temperature-dependent formulas.
         """
         if getattr(self, "rh_cst", None) is not None:
-            rh = np.full_like(self.t, self.rh_cst, dtype=float)
+            rh = np.full_like(self.t, self.rh_cst, dtype=np.float64)
         else:
-            p_h2o = (self.dens_h2o / self.dens_air) * self.p
+            p_h2o = np.divide(
+                self.dens_h2o * self.p,
+                self.dens_air,
+                out=np.zeros_like(self.dens_h2o),
+                where=self.dens_air != 0,
+            )
             p_sat = saturation_pressure(self.t) * 1e-2
-            rh = (p_h2o / p_sat) * 100
+            rh = (
+                np.divide(
+                    p_h2o, p_sat, out=np.zeros_like(p_h2o), where=p_sat != 0
+                )
+                * 100
+            )
 
         return rh
 
