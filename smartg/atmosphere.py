@@ -99,17 +99,17 @@ class AerOPAC(object):
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical depth tau_ref
-    H_mix_min : float, optional
+    h_min_mix : float, optional
         Force min altitude of the mixture
-    H_mix_max : float, optional
+    h_mix_max : float, optional
         Force max altitude of the mixture
-    H_free_min : float, optional
+    h_free_min : float, optional
         Force min altitude of the free troposphere
-    H_free_max : float, optional
+    h_free_max : float, optional
         Force max altitude of the free troposphere
-    H_stra_min : float, optional
+    h_stra_min : float, optional
         Force min altitude of the stratosphere
-    H_stra_max : float, optional
+    h_stra_max : float, optional
         Force max altitude of the stratosphere
     Z_mix : float, optional
         Force scale height (see notes) of the mixture
@@ -198,12 +198,12 @@ class AerOPAC(object):
         phase    (hum, wav, stk, theta) float32 6MB ...
     Attributes:
         name:        maritime_clean
-        H_mix_min:   0
-        H_mix_max:   2
-        H_free_min:  2
-        H_free_max:  12
-        H_stra_min:  12
-        H_stra_max:  35
+        h_min_mix:   0
+        h_mix_max:   2
+        h_free_min:  2
+        h_free_max:  12
+        h_stra_min:  12
+        h_stra_max:  35
         Z_mix:       1
         Z_free:      8
         Z_stra:      99
@@ -216,15 +216,15 @@ class AerOPAC(object):
         filename: str | Path,
         tau_ref: float | NumericArrayLike | xr.DataArray | LUT | None,
         w_ref: float,
-        H_mix_min: float | None = None,
-        H_mix_max: float | None = None,
-        H_free_min: float | None = None,
-        H_free_max: float | None = None,
-        H_stra_min: float | None = None,
-        H_stra_max: float | None = None,
-        Z_mix: float | None = None,
-        Z_free: float | None = None,
-        Z_stra: float | None = None,
+        h_min_mix: float | None = None,
+        h_mix_max: float | None = None,
+        h_free_min: float | None = None,
+        h_free_max: float | None = None,
+        h_stra_min: float | None = None,
+        h_stra_max: float | None = None,
+        z_mix: float | None = None,
+        z_free: float | None = None,
+        z_stra: float | None = None,
         ssa: NumericArrayLike | xr.DataArray | None = None,
         phase: xr.DataArray | None = None,
         rh_mix: float | None = None,
@@ -298,28 +298,28 @@ class AerOPAC(object):
             ds2 = self.mixture.assign_coords(hum=[hum_v2])
             self.mixture = xr.concat([self.mixture, ds2], dim="hum")
 
-        if H_mix_min is None:
-            H_mix_min = float(self.mixture.attrs["H_mix_min"])
-        if H_mix_max is None:
-            H_mix_max = float(self.mixture.attrs["H_mix_max"])
-        if H_free_min is None:
-            H_free_min = float(self.mixture.attrs["H_free_min"])
-        if H_free_max is None:
-            H_free_max = float(self.mixture.attrs["H_free_max"])
-        if H_stra_min is None:
-            H_stra_min = float(self.mixture.attrs["H_stra_min"])
-        if H_stra_max is None:
-            H_stra_max = float(self.mixture.attrs["H_stra_max"])
+        if h_min_mix is None:
+            h_min_mix = float(self.mixture.attrs["H_mix_min"])
+        if h_mix_max is None:
+            h_mix_max = float(self.mixture.attrs["H_mix_max"])
+        if h_free_min is None:
+            h_free_min = float(self.mixture.attrs["H_free_min"])
+        if h_free_max is None:
+            h_free_max = float(self.mixture.attrs["H_free_max"])
+        if h_stra_min is None:
+            h_stra_min = float(self.mixture.attrs["H_stra_min"])
+        if h_stra_max is None:
+            h_stra_max = float(self.mixture.attrs["H_stra_max"])
 
-        if Z_mix is None:
-            Z_mix = float(self.mixture.attrs["Z_mix"])
-        if Z_free is None:
-            Z_free = float(self.mixture.attrs["Z_free"])
-        if Z_stra is None:
+        if z_mix is None:
+            z_mix = float(self.mixture.attrs["Z_mix"])
+        if z_free is None:
+            z_free = float(self.mixture.attrs["Z_free"])
+        if z_stra is None:
             if self.mixture.attrs["Z_stra"] == "99":
-                Z_stra = 1e6  # -> OPAC Z=99 for constant vertical dist
+                z_stra = 1e6  # -> OPAC Z=99 for constant vertical dist
             else:
-                Z_stra = float(self.mixture.attrs["Z_stra"])
+                z_stra = float(self.mixture.attrs["Z_stra"])
 
         self.hum_or_reff = "hum"
         self.free_tropo = None
@@ -327,16 +327,16 @@ class AerOPAC(object):
 
         self.force_rh = [rh_mix, rh_free, rh_stra]
         self.vert_content = []
-        self.H_min = []
-        self.H_max = []
-        self.Z_sh = []
+        self.h_min = []
+        self.h_max = []
+        self.z_sh = []
 
-        if H_mix_max - H_mix_min > 1e-6:
+        if h_mix_max - h_min_mix > 1e-6:
             self.vert_content.append(self.mixture)
-            self.H_min.append(H_mix_min)
-            self.H_max.append(H_mix_max)
-            self.Z_sh.append(Z_mix)
-        if H_free_max - H_free_min > 1e-6:
+            self.h_min.append(h_min_mix)
+            self.h_max.append(h_mix_max)
+            self.z_sh.append(z_mix)
+        if h_free_max - h_free_min > 1e-6:
             filename_tmp = (
                 DIR_AUXDATA
                 / "aerosols"
@@ -361,10 +361,10 @@ class AerOPAC(object):
                     )
                     self.free_tropo = self.free_tropo.interp(wav=wav_clip)
             self.vert_content.append(self.free_tropo)
-            self.H_min.append(H_free_min)
-            self.H_max.append(H_free_max)
-            self.Z_sh.append(Z_free)
-        if H_stra_max - H_stra_min > 1e-6:
+            self.h_min.append(h_free_min)
+            self.h_max.append(h_free_max)
+            self.z_sh.append(z_free)
+        if h_stra_max - h_stra_min > 1e-6:
             filename_tmp = (
                 DIR_AUXDATA
                 / "aerosols"
@@ -389,9 +389,9 @@ class AerOPAC(object):
                     )
                     self.strato = self.strato.interp(wav=wav_clip)
             self.vert_content.append(self.strato)
-            self.H_min.append(H_stra_min)
-            self.H_max.append(H_stra_max)
-            self.Z_sh.append(Z_stra)
+            self.h_min.append(h_stra_min)
+            self.h_max.append(h_stra_max)
+            self.z_sh.append(z_stra)
 
     def dtau_ssa(
         self,
@@ -552,17 +552,17 @@ class AerOPAC(object):
                 )  # (nwav, nhor)
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
-            h1 = np.maximum(self.H_min[icont], Z[1:])
-            h2 = np.minimum(self.H_max[icont], Z[:-1])
+            h1 = np.maximum(self.h_min[icont], Z[1:])
+            h2 = np.minimum(self.h_max[icont], Z[:-1])
             cond = h2 > h1
             dtau_[:, 1:][:, cond] = ext_[:, 1:][
                 :, cond
-            ] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            ] * get_aer_dist_integral(self.z_sh[icont], h1[cond], h2[cond])
             dtau += dtau_
             ssa += dtau_ * ssa_
             dtau_ref_[:, 1:][:, cond] = ext_ref_[:, 1:][
                 :, cond
-            ] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            ] * get_aer_dist_integral(self.z_sh[icont], h1[cond], h2[cond])
             dtau_ref += dtau_ref_
 
         ssa[dtau != 0] /= dtau[dtau != 0]
@@ -932,12 +932,12 @@ class AerOPAC(object):
                 ssa_ = np.broadcast_to(ssa_, (nwav, len(Z))).copy()
 
             dtau_ = np.zeros((len(wav), len(Z)), dtype=np.float32)
-            h1 = np.maximum(self.H_min[icont], Z[1:])
-            h2 = np.minimum(self.H_max[icont], Z[:-1])
+            h1 = np.maximum(self.h_min[icont], Z[1:])
+            h2 = np.minimum(self.h_max[icont], Z[:-1])
             cond = h2 > h1
             dtau_[:, 1:][:, cond] = ext_[:, 1:][
                 :, cond
-            ] * get_aer_dist_integral(self.Z_sh[icont], h1[cond], h2[cond])
+            ] * get_aer_dist_integral(self.z_sh[icont], h1[cond], h2[cond])
             dssa_ = dtau_ * ssa_  # NLAM, ALTITUDE
             dssa_ = dssa_[:, 1:, None, None]
             dssa += dssa_
@@ -1133,15 +1133,15 @@ class Cloud(AerOPAC):
         self.strato = None
 
         self.vert_content = []
-        self.H_min = []
-        self.H_max = []
-        self.Z_sh = []
+        self.h_min = []
+        self.h_max = []
+        self.z_sh = []
 
         if zmax - zmin > 1e-6:
             self.vert_content.append(self.mixture)
-            self.H_min.append(zmin)
-            self.H_max.append(zmax)
-            self.Z_sh.append(1e6)  # constant dist
+            self.h_min.append(zmin)
+            self.h_max.append(zmax)
+            self.z_sh.append(1e6)  # constant dist
 
         if isinstance(phase, xr.DataArray):
             self._phase = phase
@@ -1201,11 +1201,11 @@ class AerUser(AerOPAC):
         Wavelength values in nanometers
     theta : 1-D ndarray
         Scattering angle values in degrees
-    H_mix_min : float, optional
+    h_mix_min : float, optional
         Force min altitude of the mixture
-    H_mix_max : float, optional
+    h_mix_max : float, optional
         Force max altitude of the mixture
-    Z_mix : float, optional
+    z_mix : float, optional
         Force scale height (see notes) of the mixture
 
     Notes
@@ -1227,15 +1227,15 @@ class AerUser(AerOPAC):
         hum: np.ndarray,
         wav: np.ndarray,
         theta: np.ndarray,
-        H_mix_min: float = 0.0,
-        H_mix_max: float = 2.0,
-        Z_mix: float = 2,
+        h_mix_min: float = 0.0,
+        h_mix_max: float = 2.0,
+        z_mix: float = 2,
     ) -> None:
 
         self.filename = "none"
         self.tau_ref = None
         ext = aod / (
-            Z_mix * (np.exp(-H_mix_min / Z_mix) - np.exp(-H_mix_max / Z_mix))
+            z_mix * (np.exp(-h_mix_min / z_mix) - np.exp(-h_mix_max / z_mix))
         )
 
         # Create an xarray Dataset to hold the mixture data
@@ -1254,9 +1254,9 @@ class AerUser(AerOPAC):
         )
 
         ds.attrs["name"] = "none"
-        ds.attrs["H_mix_min"] = str(H_mix_min)
-        ds.attrs["H_mix_max"] = str(H_mix_max)
-        ds.attrs["Z_mix"] = str(Z_mix)
+        ds.attrs["H_mix_min"] = str(h_mix_min)
+        ds.attrs["H_mix_max"] = str(h_mix_max)
+        ds.attrs["Z_mix"] = str(z_mix)
 
         self.mixture = ds
         # check if hum dim size == 1 (to avoid interpolation/indexing
@@ -1276,15 +1276,15 @@ class AerUser(AerOPAC):
 
         self.force_rh = [None]
         self.vert_content = []
-        self.H_min = []
-        self.H_max = []
-        self.Z_sh = []
+        self.h_min = []
+        self.h_max = []
+        self.z_sh = []
 
-        if H_mix_max - H_mix_min > 1e-6:
+        if h_mix_max - h_mix_min > 1e-6:
             self.vert_content.append(self.mixture)
-            self.H_min.append(H_mix_min)
-            self.H_max.append(H_mix_max)
-            self.Z_sh.append(Z_mix)
+            self.h_min.append(h_mix_min)
+            self.h_max.append(h_mix_max)
+            self.z_sh.append(z_mix)
 
         self._phase = None
 
@@ -4094,9 +4094,9 @@ def atm_pro_from_aeronet(
     O3: float | None = None,
     H2O: float | None = None,
     O3_H2O_alt: float | None = None,
-    H_mix_min: float = 0.0,
-    H_mix_max: float = 2.0,
-    Z_mix: float = 8,
+    h_mix_min: float = 0.0,
+    h_mix_max: float = 2.0,
+    z_mix: float = 8,
 ) -> xr.Dataset:
     """
     Create an atmosphere profil from aeronet files
@@ -4131,11 +4131,11 @@ def atm_pro_from_aeronet(
     O3_H2O_alt : float or None, optional
         Altitude of H2O and O3 values, by default None and scale from
         z=0km
-    H_mix_min : float, optional
+    h_mix_min : float, optional
         Force min altitude of the mixture
-    H_mix_max : float, optional
+    h_mix_max : float, optional
         Force max altitude of the mixture
-    Z_mix : float, optional
+    z_mix : float, optional
         Force scale height (see notes) of the mixture
 
     Returns
@@ -4241,9 +4241,9 @@ def atm_pro_from_aeronet(
         hum,
         wav,
         theta,
-        H_mix_min=H_mix_min,
-        H_mix_max=H_mix_max,
-        Z_mix=Z_mix,
+        h_mix_min=h_mix_min,
+        h_mix_max=h_mix_max,
+        z_mix=z_mix,
     )
     pro = Atm1D(
         atm_name,

@@ -63,7 +63,7 @@ logger.addHandler(file_handler)
 @pytest.mark.parametrize('mix', MIXTURES)
 def test_aer_mixtures(request, mix):
     wls = np.array([400., 700.])
-    aer = AerOPAC(mix, 1., 550., H_free_min=0., H_stra_max=0, H_stra_min=0., H_free_max=0.)
+    aer = AerOPAC(mix, 1., 550., h_free_min=0., h_stra_max=0, h_stra_min=0., h_free_max=0.)
     pro = Atm1D('afglt', comp=[aer]).calc(wls)
 
     ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_{}.nc'.format(mix)
@@ -133,7 +133,7 @@ def test_aer_mixtures(request, mix):
 @pytest.mark.parametrize('spe', SPECIES)
 def test_aer_species(request, spe):
     wls = np.array([400., 700.])
-    aer = AerOPAC(spe, 1., 550., H_free_min=0., H_stra_max=0, H_stra_min=0., H_free_max=0.)
+    aer = AerOPAC(spe, 1., 550., h_free_min=0., h_stra_max=0, h_stra_min=0., h_free_max=0.)
     pro = Atm1D('afglt', comp=[aer]).calc(wls)
 
     ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_{}.nc'.format(spe)
@@ -275,11 +275,11 @@ def test_dd_cc_mixture(request):
     wls = np.array([400., 700.])
     pfgrid = [100., 6., 5., 4., 3., 2., 1., 0.]
     aer1 = AerOPAC('desert', 1., 550.,
-                    H_free_min=0., H_stra_max=0, 
-                    H_stra_min=0., H_free_max=0.)
+                    h_free_min=0., h_stra_max=0, 
+                    h_stra_min=0., h_free_max=0.)
     aer2 = AerOPAC('continental_clean', 1., 550.,
-                    H_free_min=0., H_stra_max=0, 
-                    H_stra_min=0., H_free_max=0.)
+                    h_free_min=0., h_stra_max=0, 
+                    h_stra_min=0., h_free_max=0.)
     pro = Atm1D('afglt', comp=[aer1, aer2], pfgrid=pfgrid).calc(wls)
     
     ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_desert_cont_clean_mix.nc'
@@ -351,8 +351,8 @@ def test_dd_cc_mixture(request):
 def test_desert_one_wl(request):
     wl = 400.
     aer = AerOPAC('desert', 1., 550.,
-                    H_free_min=0., H_stra_max=0, 
-                    H_stra_min=0., H_free_max=0.)
+                    h_free_min=0., h_stra_max=0, 
+                    h_stra_min=0., h_free_max=0.)
     pro = Atm1D('afglt', comp=[aer]).calc(wl)
     
     ref_fname = DIR_AUXDATA / 'aerosols' / 'test_ref' / 'atm_afglt_desert.nc'

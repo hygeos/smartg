@@ -922,8 +922,8 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'spheroid_d4.nc'
             ds_spheroid.to_netcdf(file_path)
-            aer = AerOPAC(str(file_path), 0.2, 350., H_mix_min=0., H_mix_max=120.,
-                          H_free_min=120., H_free_max=120., H_stra_min=120., H_stra_max=120., Z_mix=1e6,
+            aer = AerOPAC(str(file_path), 0.2, 350., h_min_mix=0., h_mix_max=120.,
+                          h_free_min=120., h_free_max=120., h_stra_min=120., h_stra_max=120., z_mix=1e6,
                           rh_mix=0.)
         pro = Atm1D('afglt', comp=[aer], grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl, phase=True, n_theta=nth)
         surf  = None
@@ -1270,8 +1270,8 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'desert_e3.nc'
             ds_desert.to_netcdf(file_path)
-            aer1 = AerOPAC(str(file_path), 0.5, wl[0], H_mix_min=0., H_mix_max=3.,
-                           H_free_min=2., H_free_max=2., H_stra_min=12., H_stra_max=12., Z_mix=1e6, rh_mix=0.)
+            aer1 = AerOPAC(str(file_path), 0.5, wl[0], h_min_mix=0., h_mix_max=3.,
+                           h_free_min=2., h_free_max=2., h_stra_min=12., h_stra_max=12., z_mix=1e6, rh_mix=0.)
 
         pro = Atm1D('afglt', comp=[aer1], grid=z, prof_ray=sca, prof_abs=abs).calc(wl, phase=True, n_theta=nth)
         surf = None
@@ -1335,14 +1335,14 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'desert_e4.nc'
             ds_desert.to_netcdf(file_path)
-            aer1 = AerOPAC(str(file_path), 0.5, wl[0], H_mix_min=0., H_mix_max=3.,
-                           H_free_min=2., H_free_max=2., H_stra_min=12., H_stra_max=12., Z_mix=1e6,
+            aer1 = AerOPAC(str(file_path), 0.5, wl[0], h_min_mix=0., h_mix_max=3.,
+                           h_free_min=2., h_free_max=2., h_stra_min=12., h_stra_max=12., z_mix=1e6,
                            rh_mix=0.)
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'sulfate_e4.nc'
             ds_sulfate.to_netcdf(file_path)
-            aer2 = AerOPAC(str(file_path), 0.05, wl[0], H_mix_min=20., H_mix_max=21.,
-                           H_free_min=2., H_free_max=2., H_stra_min=12., H_stra_max=12., Z_mix=1e6,
+            aer2 = AerOPAC(str(file_path), 0.05, wl[0], h_min_mix=20., h_mix_max=21.,
+                           h_free_min=2., h_free_max=2., h_stra_min=12., h_stra_max=12., z_mix=1e6,
                            rh_mix=0.)
 
         pro = Atm1D('afglt', comp=[aer1, aer2], grid=z, prof_ray=sca, 
