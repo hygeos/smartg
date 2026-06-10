@@ -2271,29 +2271,29 @@ class Atm1D(Atmosphere):
             # already computed)
             if use_no2_acs or use_o3_acs:
                 # Commun part
-                T0 = 273.15  # in K
-                T = prof.t[None, :]  # temperature variability in z
+                t0 = 273.15  # in K
+                t = prof.t[None, :]  # temperature variability in z
                 if use_o3_acs:
                     # O3 optical thickness
                     min_wl = float(np.min(self.acs_o3["wavelength"].values))
                     max_wl = float(np.max(self.acs_o3["wavelength"].values))
                     wl_query = xr.DataArray(wav[:], dims=["wavelength"])
-                    C0 = (
+                    c0 = (
                         self.acs_o3["O3_C0"]
                         .sel(wavelength=wl_query, method="nearest")
                         .values[:, None]
                     )
-                    C1 = (
+                    c1 = (
                         self.acs_o3["O3_C1"]
                         .sel(wavelength=wl_query, method="nearest")
                         .values[:, None]
                     )
-                    C2 = (
+                    c2 = (
                         self.acs_o3["O3_C2"]
                         .sel(wavelength=wl_query, method="nearest")
                         .values[:, None]
                     )
-                    tau_o3 = C0 + C1 * (T - T0) + C2 * (T - T0) * (T - T0)
+                    tau_o3 = c0 + c1 * (t - t0) + c2 * (t - t0) * (t - t0)
                     tau_o3[
                         ~np.logical_and(wav[:] > min_wl, wav[:] < max_wl)
                     ] = 0.0
@@ -2307,22 +2307,22 @@ class Atm1D(Atmosphere):
                     min_wl = float(np.min(self.acs_no2["wavelength"].values))
                     max_wl = float(np.max(self.acs_no2["wavelength"].values))
                     wl_query = xr.DataArray(wav[:], dims=["wavelength"])
-                    C0 = (
+                    c0 = (
                         self.acs_no2["NO2_C0"]
                         .sel(wavelength=wl_query, method="nearest")
                         .values[:, None]
                     )
-                    C1 = (
+                    c1 = (
                         self.acs_no2["NO2_C1"]
                         .sel(wavelength=wl_query, method="nearest")
                         .values[:, None]
                     )
-                    C2 = (
+                    c2 = (
                         self.acs_no2["NO2_C2"]
                         .sel(wavelength=wl_query, method="nearest")
                         .values[:, None]
                     )
-                    tau_no2 = C0 + C1 * (T - T0) + C2 * (T - T0) * (T - T0)
+                    tau_no2 = c0 + c1 * (t - t0) + c2 * (t - t0) * (t - t0)
                     tau_no2[
                         ~np.logical_and(wav[:] > min_wl, wav[:] < max_wl)
                     ] = 0.0
@@ -2511,7 +2511,7 @@ class Atm1D(Atmosphere):
             )
 
         pine = np.zeros_like(ssa)
-        FQY1 = np.zeros_like(ssa)
+        fqy1 = np.zeros_like(ssa)
         if not self.OPT3D:
             pro["pine_atm"] = xr.DataArray(
                 pine,
@@ -2526,7 +2526,7 @@ class Atm1D(Atmosphere):
                 },
             )
             pro["FQY1_atm"] = xr.DataArray(
-                FQY1,
+                fqy1,
                 dims=["wavelength", "z_atm"],
                 coords={
                     "wavelength": pro.coords["wavelength"],
@@ -2548,7 +2548,7 @@ class Atm1D(Atmosphere):
                 },
             )
             pro["FQY1_atm"] = xr.DataArray(
-                FQY1,
+                fqy1,
                 dims=["wavelength", "iopt"],
                 coords={"wavelength": pro.coords["wavelength"]},
                 attrs={
