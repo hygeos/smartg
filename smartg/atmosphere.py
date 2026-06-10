@@ -111,11 +111,11 @@ class AerOPAC(object):
         Force min altitude of the stratosphere
     h_stra_max : float, optional
         Force max altitude of the stratosphere
-    Z_mix : float, optional
+    z_mix : float, optional
         Force scale height (see notes) of the mixture
-    Z_free : float, optional
+    z_free : float, optional
         Force scale height (see notes) of the free troposphere
-    Z_stra : float, optional
+    z_stra : float, optional
         Force scale height (see notes) of the stratosphere
     ssa : array_like or DataArray or None, optional
         Force particle single scattering albedo. Default None.
@@ -163,10 +163,10 @@ class AerOPAC(object):
 
     Notes
     -----
-    The scale height (see [1]) is the variable Z in the
+    The scale height (see [1]) is the variable z in the
     following equation:
 
-    - :math:`N(h) = N(0)exp(-h/Z)`
+    - :math:`N(h) = N(0)exp(-h/z)`
 
     with N the number density and h the altitude
 
@@ -198,12 +198,12 @@ class AerOPAC(object):
         phase    (hum, wav, stk, theta) float32 6MB ...
     Attributes:
         name:        maritime_clean
-        h_min_mix:   0
-        h_mix_max:   2
-        h_free_min:  2
-        h_free_max:  12
-        h_stra_min:  12
-        h_stra_max:  35
+        H_min_mix:   0
+        H_mix_max:   2
+        H_free_min:  2
+        H_free_max:  12
+        H_stra_min:  12
+        H_stra_max:  35
         Z_mix:       1
         Z_free:      8
         Z_stra:      99
@@ -396,7 +396,7 @@ class AerOPAC(object):
     def dtau_ssa(
         self,
         wav: np.ndarray,
-        Z: np.ndarray,
+        z: np.ndarray,
         rh: float | np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Calculate optical depth and single scattering albedo.
@@ -415,7 +415,7 @@ class AerOPAC(object):
         ----------
         wav : array-like
             Wavelengths (in nm) at which to calculate optical properties
-        Z : array-like
+        z : array-like
             Altitude profile (in km) for which to calculate optical
             properties
         rh : float or array-like, optional
@@ -431,12 +431,12 @@ class AerOPAC(object):
         Returns
         -------
         dtau : ndarray
-            Optical depth with shape (len(wav), len(Z))
+            Optical depth with shape (len(wav), len(z))
         ssa : ndarray
-            Single scattering albedo with shape (len(wav), len(Z))
+            Single scattering albedo with shape (len(wav), len(z))
         """
-        dtau = np.zeros((len(wav), len(Z)), dtype=np.float32)
-        dtau_ref = np.zeros((1, len(Z)), dtype=np.float32)
+        dtau = np.zeros((len(wav), len(z)), dtype=np.float32)
+        dtau_ref = np.zeros((1, len(z)), dtype=np.float32)
         ssa = np.zeros_like(dtau)
 
         if self.hum_or_reff == "hum":
@@ -519,7 +519,7 @@ class AerOPAC(object):
                     NDArray,
                     vec_float_indexing(ssa_at_hor.T, [idf_wav, slice(None)]),
                 )  # (nwav, 1)
-                for iz in range(0, len(Z)):
+                for iz in range(0, len(z)):
                     ext_[:, iz] = ext_tmp[:, 0]
                     ext_ref_[:, iz] = ext_ref_tmp[:, 0]
                     ssa_[:, iz] = ssa_tmp[:, 0]
@@ -552,8 +552,8 @@ class AerOPAC(object):
                 )  # (nwav, nhor)
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
-            h1 = np.maximum(self.h_min[icont], Z[1:])
-            h2 = np.minimum(self.h_max[icont], Z[:-1])
+            h1 = np.maximum(self.h_min[icont], z[1:])
+            h2 = np.minimum(self.h_max[icont], z[:-1])
             cond = h2 > h1
             dtau_[:, 1:][:, cond] = ext_[:, 1:][
                 :, cond
@@ -618,7 +618,7 @@ class AerOPAC(object):
     def phase(
         self,
         wav: np.ndarray,
-        Z: np.ndarray,
+        z: np.ndarray,
         rh: np.ndarray,
         n_theta: int = 721,
     ) -> xr.DataArray:
@@ -639,10 +639,10 @@ class AerOPAC(object):
         ----------
         wav : array-like
             Wavelengths (in nm) at which to calculate phase matrix
-        Z : array-like
+        z : array-like
             Altitude profile (in km) for which to calculate phase matrix
         rh : array-like
-            Relative humidity (%). Must have size similar to Z (altitude
+            Relative humidity (%). Must have size similar to z (altitude
             profile).
             Only used with AerOPAC class; ignored for Cloud.
             Relative humidity can be greater than 100%
@@ -662,7 +662,7 @@ class AerOPAC(object):
         phase_matrix : DataArray
             DataArray containing the phase matrix with dimensions
             [wav_phase, z_phase, stk, theta_atm].
-            Shape is (len(wav), len(Z)-1, nphamat, n_theta) where:
+            Shape is (len(wav), len(z)-1, nphamat, n_theta) where:
             - nphamat = 4 for spherical particles only (phase matrix
               unique terms P11, P21, P33, P34)
             - nphamat = 6 for spherical and non-spherical particles
@@ -837,7 +837,7 @@ class AerOPAC(object):
             # n_theta)
             if len(hum_or_reff_val) == 1:
                 hor_query = hum_or_reff_val
-                nz_phase = len(Z) - 1
+                nz_phase = len(z) - 1
             else:
                 hor_query = hum_or_reff_val[1:]
                 nz_phase = len(hum_or_reff_val) - 1
@@ -928,12 +928,12 @@ class AerOPAC(object):
                 vec_float_indexing(ssa_at_hor.T, [idf_wav_ext, slice(None)]),
             )  # (nwav, nhor_q)
             if len(hum_or_reff_val) == 1:
-                ext_ = np.broadcast_to(ext_, (nwav, len(Z))).copy()
-                ssa_ = np.broadcast_to(ssa_, (nwav, len(Z))).copy()
+                ext_ = np.broadcast_to(ext_, (nwav, len(z))).copy()
+                ssa_ = np.broadcast_to(ssa_, (nwav, len(z))).copy()
 
-            dtau_ = np.zeros((len(wav), len(Z)), dtype=np.float32)
-            h1 = np.maximum(self.h_min[icont], Z[1:])
-            h2 = np.minimum(self.h_max[icont], Z[:-1])
+            dtau_ = np.zeros((len(wav), len(z)), dtype=np.float32)
+            h1 = np.maximum(self.h_min[icont], z[1:])
+            h2 = np.minimum(self.h_max[icont], z[:-1])
             cond = h2 > h1
             dtau_[:, 1:][:, cond] = ext_[:, 1:][
                 :, cond
@@ -947,7 +947,7 @@ class AerOPAC(object):
         with np.errstate(divide="ignore", invalid="ignore"):
             P_tot.data /= dssa
         P_tot.data[np.isnan(P_tot.data)] = 0.0
-        P_tot = P_tot.assign_coords(z_phase=Z[1:])
+        P_tot = P_tot.assign_coords(z_phase=z[1:])
         return P_tot
 
     @staticmethod
