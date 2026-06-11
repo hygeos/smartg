@@ -17,7 +17,7 @@ def diff2(x):
     return np.ediff1d(x, to_end=[0.])
 
 
-def read_aw(dir_aux):
+def _read_aw(dir_aux):
     '''
     Read pure water absorption from pope&fry, 97 (<700nm)
     and palmer&williams, 74 (>700nm)
@@ -106,7 +106,7 @@ class IOP(IOP_base):
         self.NLAYER = len(Z)
         self.pfwav = pfwav
 
-        self.AW = read_aw(dir_aux)
+        self.AW = _read_aw(dir_aux)
 
     def calc(self, wav, use_old_calc_iphase=False):
         shp = [x.shape for x in [self.bp, self.bw, self.atot, self.ap, self.aw, self.aCDOM, self.Bp] if x is not None][0]
@@ -373,7 +373,7 @@ class IOP_1(IOP_base):
         #
         # read pure water absorption coefficient
         #
-        self.aw = read_aw(dir_aux)
+        self.aw = _read_aw(dir_aux)
 
         # Bricaud (98)
         ap_bricaud = np.genfromtxt(dir_aux / 'water' / 'aph_bricaud_1998.txt',
@@ -660,7 +660,7 @@ class IOP_profile(IOP_base):
         #
         # read pure water absorption coefficient
         #
-        self.aw = read_aw(dir_aux)
+        self.aw = _read_aw(dir_aux)
 
         # Bricaud (98)
         # Absorption of the phytoplankton
