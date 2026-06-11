@@ -12,14 +12,17 @@ from smartg.phase import fournierForand, integ_phase, calc_iphase
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
+from smartg.typing import PathType, NumericArrayLike
+from pathlib import Path
+from numpy.typing import NDArray
 
 
-def diff2(x):
+def diff2(x: NumericArrayLike) -> NDArray:
     return np.ediff1d(x, to_end=[0.])
 
 
-def _read_aw(dir_aux):
-    '''
+def _read_aw(dir_aux: PathType) -> xr.DataArray:
+    """
     Read pure water absorption coefficient.
 
     Combines data from [1]_ for wavelengths <= 725 nm and
@@ -47,10 +50,10 @@ def _read_aw(dir_aux):
     .. [2] K. F. Palmer and D. Williams, "Optical properties of water
        in the near infrared," J. Opt. Soc. Am. 64, 1107-1110 (1974).
        https://doi.org/10.1364/JOSA.64.001107
-    '''
+    """
 
     # Pope&Fry
-    with open(dir_aux / "water" / "pope97.dat", "rb") as fp:
+    with open(Path(dir_aux) / "water" / "pope97.dat", "rb") as fp:
         for i in range(6):
             fp.readline()  # skip the first 6 lines
         data_pf = np.genfromtxt(fp)
@@ -59,7 +62,7 @@ def _read_aw(dir_aux):
     ok_pf = lam_pf <= 725
 
     # Palmer&Williams
-    data_pw = np.genfromtxt(dir_aux / "water" / "palmer74.dat", skip_header=5)
+    data_pw = np.genfromtxt(Path(dir_aux) / "water" / "palmer74.dat", skip_header=5)
     aw_pw = data_pw[::-1, 1] * 100  #  convert from cm-1 to m-1
     lam_pw = data_pw[::-1, 0]
     ok_pw = lam_pw > 725
