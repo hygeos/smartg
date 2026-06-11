@@ -18,6 +18,24 @@ from numpy.typing import NDArray
 
 
 def diff2(x: NumericArrayLike) -> NDArray:
+    """
+    Compute the discrete difference of an array with a zero appended at the end.
+
+    This is equivalent to ``numpy.ediff1d(x, to_end=[0.])``, which computes
+    ``x[i+1] - x[i]`` for each element and appends a zero as the final value,
+    so the output has the same length as the input.
+
+    Parameters
+    ----------
+    x : array_like
+        Input array.
+
+    Returns
+    -------
+    ndarray
+        The discrete difference array, same shape as `x`, with a zero
+        appended at the end.
+    """
     return np.ediff1d(x, to_end=[0.])
 
 
@@ -37,7 +55,7 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
 
     Returns
     -------
-    xarray.DataArray
+    aw : DataArray
         Pure water absorption coefficient [m^-1] as a function of
         wavelength [nm], with dimension ``('wavelength',)``.
 
