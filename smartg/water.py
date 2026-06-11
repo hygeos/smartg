@@ -13,35 +13,64 @@ from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
 
+
 def diff2(x):
     return np.ediff1d(x, to_end=[0.])
 
 
 def _read_aw(dir_aux):
     '''
-    Read pure water absorption from pope&fry, 97 (<700nm)
-    and palmer&williams, 74 (>700nm)
+    Read pure water absorption coefficient.
+
+    Combines data from [1]_ for wavelengths <= 725 nm and
+    [2]_ for wavelengths > 725 nm.
+    Values are converted from cm^-1 to m^-1.
+
+    Parameters
+    ----------
+    dir_aux : path-like
+        Path to the auxiliary data directory. Must contain
+        ``water/pope97.dat`` and ``water/palmer74.dat``.
+
+    Returns
+    -------
+    xarray.DataArray
+        Pure water absorption coefficient [m^-1] as a function of
+        wavelength [nm], with dimension ``('wavelength',)``.
+
+    References
+    ----------
+    .. [1] R. M. Pope and E. S. Fry, "Absorption spectrum (380-700 nm)
+       of pure water. II. Integrating cavity measurements,"
+       Appl. Opt. 36, 8710-8723 (1997).
+       https://doi.org/10.1364/AO.36.008710
+    .. [2] K. F. Palmer and D. Williams, "Optical properties of water
+       in the near infrared," J. Opt. Soc. Am. 64, 1107-1110 (1974).
+       https://doi.org/10.1364/JOSA.64.001107
     '''
 
     # Pope&Fry
-    with open(dir_aux / 'water' / 'pope97.dat', 'rb') as fp:
-        for i in range(6): fp.readline()  # skip the first 6 lines
+    with open(dir_aux / "water" / "pope97.dat", "rb") as fp:
+        for i in range(6):
+            fp.readline()  # skip the first 6 lines
         data_pf = np.genfromtxt(fp)
-    aw_pf = data_pf[:,1] * 100 #  convert from cm-1 to m-1
-    lam_pf = data_pf[:,0]
+    aw_pf = data_pf[:, 1] * 100  #  convert from cm-1 to m-1
+    lam_pf = data_pf[:, 0]
     ok_pf = lam_pf <= 725
 
     # Palmer&Williams
-    data_pw = np.genfromtxt(dir_aux / 'water' / 'palmer74.dat', skip_header=5)
-    aw_pw = data_pw[::-1,1] * 100 #  convert from cm-1 to m-1
-    lam_pw = data_pw[::-1,0]
+    data_pw = np.genfromtxt(dir_aux / "water" / "palmer74.dat", skip_header=5)
+    aw_pw = data_pw[::-1, 1] * 100  #  convert from cm-1 to m-1
+    lam_pw = data_pw[::-1, 0]
     ok_pw = lam_pw > 725
 
     aw = xr.DataArray(
-            np.array(list(aw_pf[ok_pf]) + list(aw_pw[ok_pw])),
-            dims=['wavelength'],
-            coords={'wavelength': np.array(list(lam_pf[ok_pf]) + list(lam_pw[ok_pw]))}
-            )
+        np.array(list(aw_pf[ok_pf]) + list(aw_pw[ok_pw])),
+        dims=["wavelength"],
+        coords={
+            "wavelength": np.array(list(lam_pf[ok_pf]) + list(lam_pw[ok_pw]))
+        },
+    )
 
     return aw
 
@@ -302,8 +331,6 @@ class IOP(IOP_base):
                                   coords={'wav_phase': wav, 'z_phase': self.Z})
 
         return P, coef_trunc
-
-
 
 
 class IOP_Rw(IOP_base):
