@@ -164,7 +164,7 @@ def _build_water_iop() -> IOP:
     data[:, 1] = 0.06225 * (1.0 + 0.835 * np.cos(theta) ** 2)
     np.savetxt(pure_water_path, data)
 
-    phase = read_phase(pure_water_path, kind="oc", standard=True)
+    phase = read_phase(pure_water_path, kind="oc")
 
     return IOP(
         phase=phase,
@@ -211,7 +211,8 @@ def _smartg_run(_water_iop, _atm, _surf):
     """
     sg = Smartg(double=True)
 
-    common = dict(
+    # --- Irradiance run (planar flux, stdev stripped) ---
+    m_flux = sg.run(
         wl=WAVELENGTHS,
         THVDEG=SZA_DEG,
         atm=_atm,
@@ -222,14 +223,9 @@ def _smartg_run(_water_iop, _atm, _surf):
         XBLOCK=64,
         XGRID=1024,
         alis_options={"nlow": -1, "njac": 0},
-    )
-
-    # --- Irradiance run (planar flux, stdev stripped) ---
-    m_flux = sg.run(
         OUTPUT_LAYERS=3,
         flux="planar",
         stdev=True,
-        **common,
     )
     m_flux = m_flux.to_xarray()
     r_smartg = (
@@ -239,9 +235,18 @@ def _smartg_run(_water_iop, _atm, _surf):
 
     # --- Radiance run (no flux → stdev preserved) ---
     m_rad = sg.run(
+        wl=WAVELENGTHS,
+        THVDEG=SZA_DEG,
+        atm=_atm,
+        surf=_surf,
+        water=_water_iop,
+        NBPHOTONS=1e7,
+        NBLOOP=1e6,
+        XBLOCK=64,
+        XGRID=1024,
+        alis_options={"nlow": -1, "njac": 0},
         OUTPUT_LAYERS=3,
         stdev=True,
-        **common,
     )
     m_rad = m_rad.to_xarray()
 
@@ -288,14 +293,16 @@ def test_hydrolight(hl_pw, _smartg_run):
 
     for i, wl in enumerate(WAVELENGTHS):
         diff = abs(r_smartg[i] - r_hl[i])
+        pct = diff / abs(r_hl[i]) * 100.0
         threshold = 4.0 * r_stdev[i]
+        pct_sigma = threshold / abs(r_hl[i]) * 100.0
         status = "PASS" if diff < threshold else "FAIL"
         logger.info(
             f"wl={wl:.0f}nm - "
             f"SMART-G={r_smartg[i]:.4E} - "
             f"HydroLight={r_hl[i]:.4E} - "
-            f"|diff|={diff:.4E} - "
-            f"4*sigma={threshold:.4E} - "
+            f"diff(%)={pct:.3f} - "
+            f"4*sigma(%)={pct_sigma:.3f} - "
             f"{status}"
         )
 

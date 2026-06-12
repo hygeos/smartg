@@ -80,7 +80,9 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
     ok_pf = lam_pf <= 725
 
     # Palmer&Williams
-    data_pw = np.genfromtxt(Path(dir_aux) / "water" / "palmer74.dat", skip_header=5)
+    data_pw = np.genfromtxt(
+        Path(dir_aux) / "water" / "palmer74.dat", skip_header=5
+    )
     aw_pw = data_pw[::-1, 1] * 100  #  convert from cm-1 to m-1
     lam_pw = data_pw[::-1, 0]
     ok_pw = lam_pw > 725
