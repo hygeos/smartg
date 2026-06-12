@@ -239,39 +239,35 @@ def _surf():
 
 @pytest.fixture(scope="module")
 def _smartg_run(_water_iop, _atm, _surf):
-    """Run SMART-G and return R, Rrs and their MC stdev.
+    """Run SMART-G and return R = Eu/Ed, Lu/Ed and stdev.
 
     Two runs are performed:
 
-    1. **Flux run** (``flux='planar'``) — gives R = Eu/Ed
-       values.
-    2. **Radiance run** (no flux, ``stdev=True``) — gives
-       per-bin radiance stdevs propagated to R and Rrs stdev.
+    1. **Flux run** (``flux='planar'``) — gives R = Eu/Ed.
+    2. **Local estimate run** — gives Lu/Ed with MC stdev.
 
     Returns
     -------
     r_smartg : np.ndarray  (3,)  — R = Eu/Ed
-    r_stdev  : np.ndarray  (3,)  — MC standard deviation of R
     rrs_smartg : np.ndarray  (3,)  — Lu/Ed (1/sr)
-    rrs_stdev  : np.ndarray  (3,)  — MC standard deviation
+    rrs_stdev : np.ndarray  (3,)  — MC stdev of Lu/Ed
     """
     sg = Smartg(double=True)
 
-    # --- Irradiance run (planar flux, stdev stripped) ---
+    # --- Irradiance run (planar flux, 5x photons) ---
     m_flux = sg.run(
         wl=WAVELENGTHS,
         THVDEG=SZA_DEG,
         atm=_atm,
         surf=_surf,
         water=_water_iop,
-        NBPHOTONS=1e7,
+        NBPHOTONS=5e7,
         NBLOOP=1e6,
         XBLOCK=64,
         XGRID=1024,
         alis_options={"nlow": -1, "njac": 0},
         OUTPUT_LAYERS=3,
         flux="planar",
-        stdev=True,
     )
     m_flux = m_flux.to_xarray()
     r_smartg = (
@@ -279,39 +275,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         / m_flux["flux_down (0-)"].values
     )
 
-    # --- Radiance run (no flux → stdev preserved) ---
-    m_rad = sg.run(
-        wl=WAVELENGTHS,
-        THVDEG=SZA_DEG,
-        atm=_atm,
-        surf=_surf,
-        water=_water_iop,
-        NBPHOTONS=1e7,
-        NBLOOP=1e6,
-        XBLOCK=64,
-        XGRID=1024,
-        alis_options={"nlow": -1, "njac": 0},
-        OUTPUT_LAYERS=3,
-        stdev=True,
-    )
-    m_rad = m_rad.to_xarray()
-
-    i_up = m_rad["I_up (0-)"].values
-    i_down = m_rad["I_down (0-)"].values
-    i_up_sd = m_rad["I_stdev_up (0-)"].values
-    i_down_sd = m_rad["I_stdev_down (0-)"].values
-
-    # Irradiance ≈ sum of radiance over angular bins
-    fu = i_up.sum(axis=(1, 2))
-    fd = i_down.sum(axis=(1, 2))
-    fu_sd = np.sqrt((i_up_sd**2).sum(axis=(1, 2)))
-    fd_sd = np.sqrt((i_down_sd**2).sum(axis=(1, 2)))
-
-    r_stdev = r_smartg * np.sqrt(
-        (fu_sd / fu) ** 2 + (fd_sd / fd) ** 2
-    )
-
-    # --- Radiance run with local estimate (Lu/Ed) ---
+    # --- Local estimate run (Lu/Ed) ---
     local_est = {
         "th_deg": np.array([0.0]),
         "phi_deg": np.array([0.0]),
@@ -340,12 +304,10 @@ def _smartg_run(_water_iop, _atm, _surf):
     fd_le = m_flux["flux_down (0-)"].values
 
     rrs_smartg = i_le_up[:, 0, 0] / fd_le / np.pi
-    rrs_stdev = np.abs(rrs_smartg) * np.sqrt(
-        (i_le_up_sd[:, 0, 0] / i_le_up[:, 0, 0]) ** 2
-        + (fd_sd / fd) ** 2
-    )
+    # Ed is considered perfect, so stdev comes from Lu only
+    rrs_stdev = i_le_up_sd[:, 0, 0] / fd_le / np.pi
 
-    return r_smartg, r_stdev, rrs_smartg, rrs_stdev
+    return r_smartg, rrs_smartg, rrs_stdev
 
 
 # -----------------------------------------------------------------
@@ -353,15 +315,16 @@ def _smartg_run(_water_iop, _atm, _surf):
 # -----------------------------------------------------------------
 
 
-def test_hydrolight(hl_pw, hl_pw_rrs, _smartg_run):
-    """SMART-G must agree with HydroLight within 4σ.
+MAX_DIFF_PCT = 1.0  # maximum allowed diff in %
 
-    Both R = Eu/Ed and Lu/Ed are tested.  The absolute
-    difference between SMART-G and the HydroLight reference
-    must be smaller than four times the SMART-G standard
-    deviation, at each of the three matching wavelengths.
+
+def test_hydrolight(hl_pw, hl_pw_rrs, _smartg_run):
+    """SMART-G must agree with HydroLight within criteria.
+
+    Eu/Ed: relative difference < 1.0%.
+    Lu/Ed: absolute difference < 4 * MC stdev (Ed perfect).
     """
-    r_smartg, r_stdev, rrs_smartg, rrs_stdev = _smartg_run
+    r_smartg, rrs_smartg, rrs_stdev = _smartg_run
 
     # --- Eu/Ed at depth 0- ---
     r_hl_ref = hl_pw["r_depth_0_minus"]
@@ -375,30 +338,24 @@ def test_hydrolight(hl_pw, hl_pw_rrs, _smartg_run):
 
     logger.info("---- Eu/Ed ----")
     for i, wl in enumerate(WAVELENGTHS):
-        diff = abs(r_smartg[i] - r_hl[i])
-        pct = diff / abs(r_hl[i]) * 100.0
-        threshold = 4.0 * r_stdev[i]
-        pct_sigma = threshold / abs(r_hl[i]) * 100.0
-        status = "PASS" if diff < threshold else "FAIL"
+        pct = abs(r_smartg[i] - r_hl[i]) / abs(r_hl[i]) * 100.0
+        status = "PASS" if pct < MAX_DIFF_PCT else "FAIL"
         logger.info(
             f"wl={wl:.0f}nm - "
             f"SMART-G={r_smartg[i]:.4E} - "
             f"HydroLight={r_hl[i]:.4E} - "
             f"diff(%)={pct:.3f} - "
-            f"4*sigma(%)={pct_sigma:.3f} - "
             f"{status}"
         )
 
     np.testing.assert_array_less(
-        np.abs(r_smartg - r_hl),
-        4.0 * r_stdev,
+        np.abs(r_smartg - r_hl) / np.abs(r_hl) * 100.0,
+        MAX_DIFF_PCT,
         err_msg=(
             "SMART-G R=Eu/Ed differs from HydroLight"
-            " by more than 4 sigma\n"
+            " by more than 1.0%\n"
             f"  SMART-G  : {r_smartg}\n"
-            f"  HydroLight: {r_hl}\n"
-            f"  |diff|    : {np.abs(r_smartg - r_hl)}\n"
-            f"  4*sigma   : {4.0 * r_stdev}"
+            f"  HydroLight: {r_hl}"
         ),
     )
 
