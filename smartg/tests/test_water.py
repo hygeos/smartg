@@ -55,7 +55,17 @@ RAW_HL_PW = """\
 600.0   3.3475E-02   1.0209E-03   1.0201E-03   1.0173E-03
 """
 
-# Column metadata
+# HydroLight Lu/Ed (1/sr) reference
+# Columns: in-air | depth 0 m | depth 1 m | depth 5 m
+RAW_HL_PW_RRS = """\
+440.0   2.9509E-02   4.2502E-02   4.2502E-02   4.2498E-02
+495.0   1.0841E-02   9.8604E-03   9.8603E-03   9.8601E-03
+550.0   6.5506E-03   1.8459E-03   1.8461E-03   1.8467E-03
+575.0   6.1567E-03   1.1166E-03   1.1168E-03   1.1173E-03
+600.0   5.7323E-03   3.2492E-04   3.2506E-04   3.2552E-04
+"""
+
+# Column metadata (Eu/Ed)
 COLUMN_NAMES = [
     "r_depth_0_plus",
     "r_depth_0_minus",
@@ -70,21 +80,45 @@ COLUMN_LONG_NAMES = [
     "R=Eu/Ed, 5 m below sea surface",
 ]
 
+# Column metadata (Lu/Ed)
+RRS_COLUMN_NAMES = [
+    "rrs_depth_0_plus",
+    "rrs_depth_0_minus",
+    "rrs_depth_1",
+    "rrs_depth_5",
+]
 
-def _parse_hl_pw(raw: str) -> xr.Dataset:
-    """Parse a HydroLight Petzold-Water text block into an xr.Dataset.
+RRS_COLUMN_LONG_NAMES = [
+    "Lu/Ed, in air (just above sea surface)",
+    "Lu/Ed, just below sea surface (0 m)",
+    "Lu/Ed, 1 m below sea surface",
+    "Lu/Ed, 5 m below sea surface",
+]
+
+
+def _parse_hl_table(
+    raw: str,
+    col_names: list[str],
+    col_long_names: list[str],
+) -> xr.Dataset:
+    """Parse a HydroLight text table into an xr.Dataset.
 
     Parameters
     ----------
     raw : str
-        Multi-line text block.  First column is wavelength (nm),
-        remaining columns are the data values.
+        Multi-line text block.  First column is wavelength
+        (nm), remaining columns are the data values.
+    col_names : list[str]
+        Variable names for each data column.
+    col_long_names : list[str]
+        ``long_name`` attribute for each data column.
 
     Returns
     -------
     xr.Dataset
-        One data variable per column, each with a ``wavelength``
-        dimension, ``long_name`` and ``units`` attributes.
+        One data variable per column, each with a
+        ``wavelength`` dimension, ``long_name`` and ``units``
+        attributes.
     """
     wavelengths: list[float] = []
     rows: list[list[float]] = []
@@ -98,7 +132,7 @@ def _parse_hl_pw(raw: str) -> xr.Dataset:
 
     data_vars: dict[str, xr.DataArray] = {}
     for idx, (name, long_name) in enumerate(
-        zip(COLUMN_NAMES, COLUMN_LONG_NAMES, strict=True)
+        zip(col_names, col_long_names, strict=True)
     ):
         data_vars[name] = xr.DataArray(
             data[:, idx],
@@ -115,8 +149,18 @@ def _parse_hl_pw(raw: str) -> xr.Dataset:
 
 @pytest.fixture(scope="module")
 def hl_pw() -> xr.Dataset:
-    """Return parsed HydroLight irradiance reflectance dataset."""
-    return _parse_hl_pw(RAW_HL_PW)
+    """Return parsed HydroLight Eu/Ed dataset."""
+    return _parse_hl_table(
+        RAW_HL_PW, COLUMN_NAMES, COLUMN_LONG_NAMES,
+    )
+
+
+@pytest.fixture(scope="module")
+def hl_pw_rrs() -> xr.Dataset:
+    """Return parsed HydroLight Lu/Ed dataset."""
+    return _parse_hl_table(
+        RAW_HL_PW_RRS, RRS_COLUMN_NAMES, RRS_COLUMN_LONG_NAMES,
+    )
 
 
 # -----------------------------------------------------------------
@@ -195,19 +239,21 @@ def _surf():
 
 @pytest.fixture(scope="module")
 def _smartg_run(_water_iop, _atm, _surf):
-    """Run SMART-G and return R = Eu/Ed and its MC standard deviation.
+    """Run SMART-G and return R, Rrs and their MC stdev.
 
     Two runs are performed:
 
-    1. **Flux run** (``flux='planar'``) — gives R = Eu/Ed values.
-    2. **Radiance run** (no flux, ``stdev=True``) — gives per-bin
-       radiance stdevs which are propagated to the irradiance stdev
-       of R.
+    1. **Flux run** (``flux='planar'``) — gives R = Eu/Ed
+       values.
+    2. **Radiance run** (no flux, ``stdev=True``) — gives
+       per-bin radiance stdevs propagated to R and Rrs stdev.
 
     Returns
     -------
-    r_smartg : np.ndarray  (3,)  — R = Eu/Ed  at 3 wavelengths
+    r_smartg : np.ndarray  (3,)  — R = Eu/Ed
     r_stdev  : np.ndarray  (3,)  — MC standard deviation of R
+    rrs_smartg : np.ndarray  (3,)  — Lu/Ed (1/sr)
+    rrs_stdev  : np.ndarray  (3,)  — MC standard deviation
     """
     sg = Smartg(double=True)
 
@@ -261,9 +307,45 @@ def _smartg_run(_water_iop, _atm, _surf):
     fu_sd = np.sqrt((i_up_sd**2).sum(axis=(1, 2)))
     fd_sd = np.sqrt((i_down_sd**2).sum(axis=(1, 2)))
 
-    r_stdev = r_smartg * np.sqrt((fu_sd / fu) ** 2 + (fd_sd / fd) ** 2)
+    r_stdev = r_smartg * np.sqrt(
+        (fu_sd / fu) ** 2 + (fd_sd / fd) ** 2
+    )
 
-    return r_smartg, r_stdev
+    # --- Radiance run with local estimate (Lu/Ed) ---
+    local_est = {
+        "th_deg": np.array([0.0]),
+        "phi_deg": np.array([0.0]),
+        "count_level": np.array([4]),
+    }
+    m_le = sg.run(
+        wl=WAVELENGTHS,
+        THVDEG=SZA_DEG,
+        atm=_atm,
+        surf=_surf,
+        water=_water_iop,
+        NBPHOTONS=1e7,
+        NBLOOP=1e6,
+        XBLOCK=64,
+        XGRID=1024,
+        alis_options={"nlow": -1, "njac": 0},
+        OUTPUT_LAYERS=4,
+        NF=1e3,
+        le=local_est,
+        stdev=True,
+    )
+    m_le = m_le.to_xarray()
+
+    i_le_up = m_le["I_up (0-)"].values
+    i_le_up_sd = m_le["I_stdev_up (0-)"].values
+    fd_le = m_flux["flux_down (0-)"].values
+
+    rrs_smartg = i_le_up[:, 0, 0] / fd_le / np.pi
+    rrs_stdev = np.abs(rrs_smartg) * np.sqrt(
+        (i_le_up_sd[:, 0, 0] / i_le_up[:, 0, 0]) ** 2
+        + (fd_sd / fd) ** 2
+    )
+
+    return r_smartg, r_stdev, rrs_smartg, rrs_stdev
 
 
 # -----------------------------------------------------------------
@@ -271,26 +353,27 @@ def _smartg_run(_water_iop, _atm, _surf):
 # -----------------------------------------------------------------
 
 
-def test_hydrolight(hl_pw, _smartg_run):
-    """SMART-G R = Eu/Ed must agree with HydroLight within 4Δ.
+def test_hydrolight(hl_pw, hl_pw_rrs, _smartg_run):
+    """SMART-G must agree with HydroLight within 4σ.
 
-    The absolute difference between SMART-G and the HydroLight
-    reference (from ``RAW_HL_PW``, column ``r_depth_0_minus``) must
-    be smaller than four times the SMART-G standard deviation, at
-    each of the three matching wavelengths (440, 550, 600 nm).
+    Both R = Eu/Ed and Lu/Ed are tested.  The absolute
+    difference between SMART-G and the HydroLight reference
+    must be smaller than four times the SMART-G standard
+    deviation, at each of the three matching wavelengths.
     """
-    r_smartg, r_stdev = _smartg_run
+    r_smartg, r_stdev, rrs_smartg, rrs_stdev = _smartg_run
 
-    # HydroLight reference at depth 0- for the 3 test wavelengths
-    hl_ref = hl_pw["r_depth_0_minus"]
+    # --- Eu/Ed at depth 0- ---
+    r_hl_ref = hl_pw["r_depth_0_minus"]
     r_hl = np.array(
         [
-            hl_ref.sel(wavelength=440.0).values,
-            hl_ref.sel(wavelength=550.0).values,
-            hl_ref.sel(wavelength=600.0).values,
+            r_hl_ref.sel(wavelength=440.0).values,
+            r_hl_ref.sel(wavelength=550.0).values,
+            r_hl_ref.sel(wavelength=600.0).values,
         ]
     )
 
+    logger.info("---- Eu/Ed ----")
     for i, wl in enumerate(WAVELENGTHS):
         diff = abs(r_smartg[i] - r_hl[i])
         pct = diff / abs(r_hl[i]) * 100.0
@@ -311,10 +394,49 @@ def test_hydrolight(hl_pw, _smartg_run):
         4.0 * r_stdev,
         err_msg=(
             "SMART-G R=Eu/Ed differs from HydroLight"
-            " by more than 4 Δ\n"
+            " by more than 4 sigma\n"
             f"  SMART-G  : {r_smartg}\n"
             f"  HydroLight: {r_hl}\n"
             f"  |diff|    : {np.abs(r_smartg - r_hl)}\n"
-            f"  4*Δ       : {4.0 * r_stdev}"
+            f"  4*sigma   : {4.0 * r_stdev}"
+        ),
+    )
+
+    # --- Lu/Ed at depth 0- ---
+    rrs_hl_ref = hl_pw_rrs["rrs_depth_0_minus"]
+    rrs_hl = np.array(
+        [
+            rrs_hl_ref.sel(wavelength=440.0).values,
+            rrs_hl_ref.sel(wavelength=550.0).values,
+            rrs_hl_ref.sel(wavelength=600.0).values,
+        ]
+    )
+
+    logger.info("---- Lu/Ed ----")
+    for i, wl in enumerate(WAVELENGTHS):
+        diff = abs(rrs_smartg[i] - rrs_hl[i])
+        pct = diff / abs(rrs_hl[i]) * 100.0
+        threshold = 4.0 * rrs_stdev[i]
+        pct_sigma = threshold / abs(rrs_hl[i]) * 100.0
+        status = "PASS" if diff < threshold else "FAIL"
+        logger.info(
+            f"wl={wl:.0f}nm - "
+            f"SMART-G={rrs_smartg[i]:.4E} - "
+            f"HydroLight={rrs_hl[i]:.4E} - "
+            f"diff(%)={pct:.3f} - "
+            f"4*sigma(%)={pct_sigma:.3f} - "
+            f"{status}"
+        )
+
+    np.testing.assert_array_less(
+        np.abs(rrs_smartg - rrs_hl),
+        4.0 * rrs_stdev,
+        err_msg=(
+            "SMART-G Lu/Ed differs from HydroLight"
+            " by more than 4 sigma\n"
+            f"  SMART-G  : {rrs_smartg}\n"
+            f"  HydroLight: {rrs_hl}\n"
+            f"  |diff|    : {np.abs(rrs_smartg - rrs_hl)}\n"
+            f"  4*sigma   : {4.0 * rrs_stdev}"
         ),
     )
