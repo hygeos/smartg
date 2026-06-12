@@ -5,12 +5,41 @@ import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
+import logging
+from pathlib import Path
 
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
 from smartg.phase import read_phase
 from smartg.smartg import RoughSurface, Smartg
 from smartg.water import IOP
+
+# -------------------------------------------------
+# Logging
+# -------------------------------------------------
+ROOTPATH = Path(__file__).resolve().parent.parent.parent
+LOG_DIR = ROOTPATH / "smartg" / "tests" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logger = logging.getLogger("test_water")
+logger.setLevel(logging.INFO)
+
+# Console handler (errors only)
+_ch = logging.StreamHandler()
+_ch.setLevel(logging.ERROR)
+_fmt = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s -"
+    " %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S%p",
+)
+_ch.setFormatter(_fmt)
+logger.addHandler(_ch)
+
+# File handler (info and above)
+_fh = logging.FileHandler(LOG_DIR / "water.log", mode="w")
+_fh.setLevel(logging.INFO)
+_fh.setFormatter(_fmt)
+logger.addHandler(_fh)
 
 
 # -----------------------------------------------------------------
@@ -256,6 +285,19 @@ def test_hydrolight(hl_pw, _smartg_run):
             hl_ref.sel(wavelength=600.0).values,
         ]
     )
+
+    for i, wl in enumerate(WAVELENGTHS):
+        diff = abs(r_smartg[i] - r_hl[i])
+        threshold = 4.0 * r_stdev[i]
+        status = "PASS" if diff < threshold else "FAIL"
+        logger.info(
+            f"wl={wl:.0f}nm - "
+            f"SMART-G={r_smartg[i]:.4E} - "
+            f"HydroLight={r_hl[i]:.4E} - "
+            f"|diff|={diff:.4E} - "
+            f"4*sigma={threshold:.4E} - "
+            f"{status}"
+        )
 
     np.testing.assert_array_less(
         np.abs(r_smartg - r_hl),
