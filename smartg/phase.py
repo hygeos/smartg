@@ -1,5 +1,47 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""Scattering phase matrix utilities for SMART-G.
+
+This module provides phase matrix readers for multiple
+file formats, and helper routines used to build the phase
+function input required by SMART-G radiative transfer
+simulations.
+
+Phase Matrix I/O
+-----------------
+read_phase
+    Dispatch function that selects the appropriate reader
+    based on file extension (``.dat``, ``.nc``, ``.cdf``).
+read_phase_dat
+    Read a monochromatic, vertically uniform phase matrix
+    from a space-separated ``.dat`` file.
+read_phase_nc
+    Read and process phase function data from SMART-G
+    NetCDF aerosol/cloud files (``.nc`` suffix).
+read_phase_cdf
+    Read and process phase function data from libRadtran
+    NetCDF aerosol/cloud files (``.cdf`` suffix).
+
+Phase Matrix Processing
+------------------------
+integ_phase
+    Numerically integrate a phase function weighted by
+    ``sin(theta)`` along the scattering angle axis.
+calc_iphase
+    Map phase functions onto the full wavelength/altitude
+    grid and return compact index arrays.
+get_ipha_a
+    Map the phase-function altitude grid onto the model
+    altitude grid.
+convert_phase_to_iparper
+    Convert a phase matrix from the IQUV Stokes convention
+    to the parallel/perpendicular intensity convention
+    used by SMART-G.
+get_prof_phases
+    Build the ``prof_phases`` tuple expected by ``Atm1D``
+    from a phase function ``DataArray`` and the full
+    wavelength/altitude grids.
+"""
 
 from __future__ import print_function, division
 from numpy import sin, cos, pi
