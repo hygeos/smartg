@@ -24,13 +24,14 @@ read_phase_cdf
 Phase Matrix Processing
 ------------------------
 integ_phase
-    Numerically integrate a phase function weighted by ``sin(theta)``
-    along the scattering angle axis.
+    Numerically integrate a phase function weighted by
+    ``sin(theta)`` along the scattering angle axis.
 calc_iphase
-    Map phase functions onto the full wavelength/altitude grid and
-    return compact index arrays.
+    Map phase functions onto the full wavelength/altitude grid
+    and return compact index arrays.
 get_ipha_a
-    Map the phase-function altitude grid onto the model altitude grid.
+    Map the phase-function altitude grid onto the model
+    altitude grid by maximum vertical overlap.
 convert_phase_to_iparper
     Convert a phase matrix from the IQUV Stokes convention to the
     parallel/perpendicular intensity convention used by SMART-G.
@@ -54,10 +55,40 @@ def integ_phase(
     ang: NDArray[np.floating[Any]],
     pha: NDArray[np.floating[Any]],
 ) -> NDArray[np.floating[Any]]:
-    """Integrate pha(ang)*sin(ang) along the last axis.
+    """Numerically integrate a phase function weighted by sin(theta).
 
-    ang in radians.
-    pha: phase function, dim [..., ang].
+    Compute the integral of ``pha(ang) * sin(ang)`` along the last
+    axis of *pha* using a composite rule that blends trapezoidal
+    and Simpson's rules at each sub-interval.
+
+    Parameters
+    ----------
+    ang : ndarray
+        Scattering angles in radians, shape ``(nt,)``, strictly
+        increasing.
+    pha : ndarray
+        Phase function values at *ang* of shape
+        ``(..., nt)`` where ``...`` is any number of leading dimensions.
+
+    Returns
+    -------
+    ndarray
+        Integration result of shape ``(...)`` (last axis reduced).
+
+    Notes
+    -----
+    Each sub-interval ``[ang[i], ang[i+1]]`` is integrated using a
+    composite scheme that is exact for linear integrands on each
+    piece:
+
+    .. math::
+
+        w_i = \\Delta\\theta_i \\left[
+            \\frac{\\sin\\theta_i\\,p_i
+                  + \\sin\\theta_{i+1}\\,p_{i+1}}{3}
+          + \\frac{\\sin\\theta_i\\,p_{i+1}
+                  + \\sin\\theta_{i+1}\\,p_i}{6}
+        \\right]
     """
     assert not np.isnan(pha).any()
 
@@ -80,15 +111,38 @@ def calc_iphase(
     z_full: NDArray[np.floating[Any]],
     old_method: bool = False,
 ) -> tuple[NDArray[np.floating[Any]], NDArray[np.int32]]:
-    """
-    calculate phase function indices
-    phase is an xr.DataArray of shape [wav_phase, z_phase, stk, theta]
-    or a LUT object (will be converted to xr.DataArray)
+    """Map phase functions onto the full wavelength/altitude grid.
 
-    returns (pha, ipha) where:
-        * pha is an array reshaped from phase to [wav*z, stk, theta]
-        * ipha is an array of phase function indices (starting from 0)
-          in the full array [wav_full, z_full]
+    Reshape the phase DataArray into a compact array and compute an
+    index array that maps each model grid point to the nearest
+    phase-function entry.
+
+    Parameters
+    ----------
+    phase : DataArray or LUT
+        Phase function data as an ``xr.DataArray`` with
+        coordinates ``wav_phase``, ``z_phase`` and dimensions
+        ``(wav_phase, z_phase, stk, theta)``, or a LUT object
+        exposing a ``to_xarray()`` method.
+    wav_full : ndarray
+        Full model wavelength grid, shape ``(nwav,)``.
+    z_full : ndarray
+        Full model altitude grid, shape ``(nz,)``.
+    old_method : bool, optional
+        If ``True``, use simple nearest-neighbour matching for
+        both wavelength and altitude grids.  If ``False``
+        (default), altitude mapping is delegated to
+        :func:`get_ipha_a` (layer-overlap-aware with null-phase
+        penalties).
+
+    Returns
+    -------
+    pha : ndarray
+        Phase function values reshaped from *phase* of shape
+        ``(nwav_pf * nz_pf, nstk, ntheta)``.
+    ipha : ndarray
+        Index array of shape ``(nwav_full, nz_full)`` mapping each
+        model grid point to an entry in *pha*.  Indices are zero-based.
     """
     # Deals with the case where the legacy LUT object is used for phase
     if hasattr(phase, "to_xarray"):
@@ -120,6 +174,39 @@ def get_ipha_a(
     z_pf: NDArray[np.floating[Any]],
     phase: xr.DataArray | None = None,
 ) -> NDArray[np.int32]:
+    """Map the phase-function altitude grid onto the model altitude
+    grid.  For each level in *z_full* find the phase-function layer
+    with the largest vertical overlap, optionally penalising layers
+    whose phase function is identically zero.
+
+    Parameters
+    ----------
+    z_full : ndarray
+        Model altitude grid, shape ``(nz_full,)``.
+    z_pf : ndarray
+        Phase-function altitude grid, shape ``(nz_pf,)``.
+    phase : DataArray or None, optional
+        If provided, the phase function values (dimension order
+        ``wav, z, stk, theta``) are used to detect and penalise
+        layers with a zero phase function.  Layers whose first
+        wavelength / Stokes component sums to zero have their
+        weight scaled by ``1e-6`` and trigger a warning.
+
+    Returns
+    -------
+    ndarray
+        Array of shape ``(nz_full,)`` mapping each level to the
+        index into *z_pf* of the best-matching phase-function
+        layer.
+
+    Notes
+    -----
+    * When ``len(z_pf) == 1`` a single phase function is assumed
+      for the entire column and an all-zeros index array is returned.
+    * When *z_full* extends below *z_pf* (ocean case —i.e.,
+      ``sum(z_full) < 0``), the lowest phase-function layer is
+      assigned to all deeper levels.
+    """
     # Particular case with only 1 phase matrix for the whole z column
     if len(z_pf) == 1:
         ida = np.zeros_like(z_full, dtype=np.int32)
