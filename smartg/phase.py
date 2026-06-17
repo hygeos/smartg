@@ -2,45 +2,41 @@
 # -*- coding: utf-8 -*-
 """Scattering phase matrix utilities for SMART-G.
 
-This module provides phase matrix readers for multiple
-file formats, and helper routines used to build the phase
-function input required by SMART-G radiative transfer
-simulations.
+This module provides phase matrix readers for multiple file formats,
+and helper routines used to build the phase function input required by
+SMART-G radiative transfer simulations.
 
 Phase Matrix I/O
 -----------------
 read_phase
-    Dispatch function that selects the appropriate reader
-    based on file extension (``.dat``, ``.nc``, ``.cdf``).
+    Dispatch function that selects the appropriate reader based on file
+    extension (``.dat``, ``.nc``, ``.cdf``).
 read_phase_dat
-    Read a monochromatic, vertically uniform phase matrix
-    from a space-separated ``.dat`` file.
+    Read a monochromatic, vertically uniform phase matrix from a
+    space-separated ``.dat`` file.
 read_phase_nc
-    Read and process phase function data from SMART-G
-    NetCDF aerosol/cloud files (``.nc`` suffix).
+    Read and process phase function data from SMART-G NetCDF
+    aerosol/cloud files (``.nc`` suffix).
 read_phase_cdf
-    Read and process phase function data from libRadtran
-    NetCDF aerosol/cloud files (``.cdf`` suffix).
+    Read and process phase function data from libRadtran NetCDF
+    aerosol/cloud files (``.cdf`` suffix).
 
 Phase Matrix Processing
 ------------------------
 integ_phase
-    Numerically integrate a phase function weighted by
-    ``sin(theta)`` along the scattering angle axis.
+    Numerically integrate a phase function weighted by ``sin(theta)``
+    along the scattering angle axis.
 calc_iphase
-    Map phase functions onto the full wavelength/altitude
-    grid and return compact index arrays.
+    Map phase functions onto the full wavelength/altitude grid and
+    return compact index arrays.
 get_ipha_a
-    Map the phase-function altitude grid onto the model
-    altitude grid.
+    Map the phase-function altitude grid onto the model altitude grid.
 convert_phase_to_iparper
-    Convert a phase matrix from the IQUV Stokes convention
-    to the parallel/perpendicular intensity convention
-    used by SMART-G.
+    Convert a phase matrix from the IQUV Stokes convention to the
+    parallel/perpendicular intensity convention used by SMART-G.
 get_prof_phases
-    Build the ``prof_phases`` tuple expected by ``Atm1D``
-    from a phase function ``DataArray`` and the full
-    wavelength/altitude grids.
+    Build the ``prof_phases`` tuple expected by ``Atm1D`` from a phase
+    function ``DataArray`` and the full wavelength/altitude grids.
 """
 
 from __future__ import annotations
@@ -48,20 +44,20 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import numpy as np
-import numpy.typing as npt
+from numpy.typing import NDArray
 from pathlib import Path
 import pandas as pd
 import xarray as xr
 
 
 def integ_phase(
-    ang: npt.NDArray[np.floating[Any]],
-    pha: npt.NDArray[np.floating[Any]],
-) -> npt.NDArray[np.floating[Any]]:
-    """
-    Integrate pha(ang)*sin(ang) along the last axis
-    ang in radians
-    pha: phase function, dim [...,ang]
+    ang: NDArray[np.floating[Any]],
+    pha: NDArray[np.floating[Any]],
+) -> NDArray[np.floating[Any]]:
+    """Integrate pha(ang)*sin(ang) along the last axis.
+
+    ang in radians.
+    pha: phase function, dim [..., ang].
     """
     assert not np.isnan(pha).any()
 
@@ -80,10 +76,10 @@ def integ_phase(
 
 def calc_iphase(
     phase: xr.DataArray | Any,
-    wav_full: npt.NDArray[np.floating[Any]],
-    z_full: npt.NDArray[np.floating[Any]],
+    wav_full: NDArray[np.floating[Any]],
+    z_full: NDArray[np.floating[Any]],
     old_method: bool = False,
-) -> tuple[npt.NDArray[np.floating[Any]], npt.NDArray[np.int32]]:
+) -> tuple[NDArray[np.floating[Any]], NDArray[np.int32]]:
     """
     calculate phase function indices
     phase is an xr.DataArray of shape [wav_phase, z_phase, stk, theta]
@@ -120,10 +116,10 @@ def calc_iphase(
 
 
 def get_ipha_a(
-    z_full: npt.NDArray[np.floating[Any]],
-    z_pf: npt.NDArray[np.floating[Any]],
+    z_full: NDArray[np.floating[Any]],
+    z_pf: NDArray[np.floating[Any]],
     phase: xr.DataArray | None = None,
-) -> npt.NDArray[np.int32]:
+) -> NDArray[np.int32]:
     # Particular case with only 1 phase matrix for the whole z column
     if len(z_pf) == 1:
         ida = np.zeros_like(z_full, dtype=np.int32)
@@ -208,9 +204,9 @@ def read_phase_nc(
     filename: str | Path,
     kind: str = "atm",
     normalize: bool = True,
-    pfwav: float | npt.NDArray[np.floating[Any]] | None = None,
-    pfgrid: Sequence[float] | npt.NDArray[np.floating[Any]] | None = None,
-    z_rh_reff: float | npt.NDArray[np.floating[Any]] | None = None,
+    pfwav: float | NDArray[np.floating[Any]] | None = None,
+    pfgrid: Sequence[float] | NDArray[np.floating[Any]] | None = None,
+    z_rh_reff: float | NDArray[np.floating[Any]] | None = None,
 ) -> xr.DataArray:
     """
     Read and process phase function data from SMART-G NetCDF
@@ -454,9 +450,9 @@ def read_phase_cdf(
     kind: str = "atm",
     normalize: bool = True,
     ntheta_max: int = 18001,
-    pfwav: float | npt.NDArray[np.floating[Any]] | None = None,
-    pfgrid: Sequence[float] | npt.NDArray[np.floating[Any]] | None = None,
-    z_rh_reff: float | npt.NDArray[np.floating[Any]] | None = None,
+    pfwav: float | NDArray[np.floating[Any]] | None = None,
+    pfgrid: Sequence[float] | NDArray[np.floating[Any]] | None = None,
+    z_rh_reff: float | NDArray[np.floating[Any]] | None = None,
 ) -> xr.DataArray:
     """
     Read and process phase function data from libRadtran
@@ -767,8 +763,8 @@ def read_phase(
 
 
 def convert_phase_to_iparper(
-    pha: npt.NDArray[np.floating[Any]],
-) -> npt.NDArray[np.floating[Any]]:
+    pha: NDArray[np.floating[Any]],
+) -> NDArray[np.floating[Any]]:
     """
     Convert phase matrix to parallel/perpendicular
     intensity convention.
@@ -855,9 +851,9 @@ def convert_phase_to_iparper(
 
 def get_prof_phases(
     phase: xr.DataArray,
-    wav: npt.NDArray[np.floating[Any]],
-    z: npt.NDArray[np.floating[Any]],
-) -> tuple[npt.NDArray[np.int32], list[xr.DataArray]]:
+    wav: NDArray[np.floating[Any]],
+    z: NDArray[np.floating[Any]],
+) -> tuple[NDArray[np.int32], list[xr.DataArray]]:
     """
     Generate prof_phases parameter for Atm1D from
     phase function data.
