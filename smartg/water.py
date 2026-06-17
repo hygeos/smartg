@@ -8,7 +8,8 @@ from warnings import warn
 from smartg.atmosphere import diff1
 from smartg.albedo import Albedo_cst
 from smartg.config import NPSTK
-from smartg.phase import fournierForand, integ_phase, calc_iphase
+from smartg.phase import integ_phase, calc_iphase
+from smartg.tools.water.phase_functions import fournierForand
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord

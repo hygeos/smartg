@@ -43,69 +43,21 @@ get_prof_phases
     wavelength/altitude grids.
 """
 
-from __future__ import print_function, division
-from numpy import sin, cos, pi
+from __future__ import annotations
+
+from typing import Any, Sequence
+
 import numpy as np
+import numpy.typing as npt
 from pathlib import Path
 import pandas as pd
 import xarray as xr
 
 
-def fournierForand(ang, n, mu):
-    """
-    Fournier-Forand phase function
-    Parameters:
-        ang: angle in radians
-        n: index of refraction of the particles
-        mu: slope parameter of the hyperbolic distribution
-    Normalized to 4pi
-    See http://www.oceanopticsbook.info/view/scattering/
-    the_fournierforand_phase_function
-    """
-    v = (3 - mu) / 2
-    delta = 4 / (3 * (n - 1) * (n - 1)) * sin(ang / 2) * sin(ang / 2)
-    delta180 = 4 / (3 * (n - 1) * (n - 1)) * sin(pi / 2) * sin(pi / 2)
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        res = 1 / (4 * pi * (1 - delta) * (1 - delta) * (delta**v)) * (
-            v * (1 - delta)
-            - (1 - (delta**v))
-            + (delta * (1 - (delta**v)) - v * (1 - delta))
-            * 1
-            / (sin(ang / 2) * sin(ang / 2))
-        ) + (1 - (delta180**v)) / (
-            16 * pi * (delta180 - 1) * (delta180**v)
-        ) * (3 * cos(ang) * cos(ang) - 1)
-    res *= 4 * pi
-
-    return res
-
-
-def fournierForandB(n, mu):
-    """
-    backscatter fraction of the Fournier-Forand phase function
-    """
-    d90 = 4.0 / (3.0 * (n - 1.0) ** 2) * (sin(pi / 4.0) ** 2)
-    v = (3.0 - mu) / 2.0
-    B = 1 - (1 - d90 ** (v + 1) - 0.5 * (1 - d90**v)) / ((1 - d90) * d90**v)
-    return B
-
-
-def henyeyGreenstein(angle, g):
-    """
-    Henyey-Greenstein phase function
-    Parameters:
-        angle: angle in radians
-        g: asymmetry coefficient
-           (0: isotropic ; 1: highly peaked)
-    Normalized to 4pi
-    See http://www.oceanopticsbook.info/view/scattering/
-    the_henyeygreenstein_phase_function
-    """
-    return (1 - g * g) / ((1 + g * g - 2 * g * cos(angle)) ** 1.5)
-
-
-def integ_phase(ang, pha):
+def integ_phase(
+    ang: npt.NDArray[np.floating[Any]],
+    pha: npt.NDArray[np.floating[Any]],
+) -> npt.NDArray[np.floating[Any]]:
     """
     Integrate pha(ang)*sin(ang) along the last axis
     ang in radians
@@ -126,7 +78,12 @@ def integ_phase(ang, pha):
     )
 
 
-def calc_iphase(phase, wav_full, z_full, old_method=False):
+def calc_iphase(
+    phase: xr.DataArray | Any,
+    wav_full: npt.NDArray[np.floating[Any]],
+    z_full: npt.NDArray[np.floating[Any]],
+    old_method: bool = False,
+) -> tuple[npt.NDArray[np.floating[Any]], npt.NDArray[np.int32]]:
     """
     calculate phase function indices
     phase is an xr.DataArray of shape [wav_phase, z_phase, stk, theta]
@@ -162,7 +119,11 @@ def calc_iphase(phase, wav_full, z_full, old_method=False):
     return (pha, ipha)
 
 
-def get_ipha_a(z_full, z_pf, phase=None):
+def get_ipha_a(
+    z_full: npt.NDArray[np.floating[Any]],
+    z_pf: npt.NDArray[np.floating[Any]],
+    phase: xr.DataArray | None = None,
+) -> npt.NDArray[np.int32]:
     # Particular case with only 1 phase matrix for the whole z column
     if len(z_pf) == 1:
         ida = np.zeros_like(z_full, dtype=np.int32)
@@ -244,13 +205,13 @@ def get_ipha_a(z_full, z_pf, phase=None):
 
 
 def read_phase_nc(
-    filename,
-    kind="atm",
-    normalize=True,
-    pfwav=None,
-    pfgrid=None,
-    z_rh_reff=None,
-):
+    filename: str | Path,
+    kind: str = "atm",
+    normalize: bool = True,
+    pfwav: float | npt.NDArray[np.floating[Any]] | None = None,
+    pfgrid: Sequence[float] | npt.NDArray[np.floating[Any]] | None = None,
+    z_rh_reff: float | npt.NDArray[np.floating[Any]] | None = None,
+) -> xr.DataArray:
     """
     Read and process phase function data from SMART-G NetCDF
     aerosol/cloud files.
@@ -409,7 +370,11 @@ def read_phase_nc(
     return da_pha
 
 
-def read_phase_dat(filename, kind="atm", normalize=True):
+def read_phase_dat(
+    filename: str | Path,
+    kind: str = "atm",
+    normalize: bool = True,
+) -> xr.DataArray:
     """
     Read a phase matrix from a space-separated `.dat` file.
 
@@ -485,14 +450,14 @@ def read_phase_dat(filename, kind="atm", normalize=True):
 
 
 def read_phase_cdf(
-    filename,
-    kind="atm",
-    normalize=True,
-    ntheta_max=18001,
-    pfwav=None,
-    pfgrid=None,
-    z_rh_reff=None,
-):
+    filename: str | Path,
+    kind: str = "atm",
+    normalize: bool = True,
+    ntheta_max: int = 18001,
+    pfwav: float | npt.NDArray[np.floating[Any]] | None = None,
+    pfgrid: Sequence[float] | npt.NDArray[np.floating[Any]] | None = None,
+    z_rh_reff: float | npt.NDArray[np.floating[Any]] | None = None,
+) -> xr.DataArray:
     """
     Read and process phase function data from libRadtran
     NetCDF aerosol/cloud files.
@@ -706,7 +671,12 @@ def read_phase_cdf(
     return da_pha
 
 
-def read_phase(filename, kind="atm", normalize=True, **kwargs):
+def read_phase(
+    filename: str | Path,
+    kind: str = "atm",
+    normalize: bool = True,
+    **kwargs: Any,
+) -> xr.DataArray:
     """
     Read phase function data from a file and dispatch
     to the proper reader.
@@ -796,7 +766,9 @@ def read_phase(filename, kind="atm", normalize=True, **kwargs):
         )
 
 
-def convert_phase_to_iparper(pha):
+def convert_phase_to_iparper(
+    pha: npt.NDArray[np.floating[Any]],
+) -> npt.NDArray[np.floating[Any]]:
     """
     Convert phase matrix to parallel/perpendicular
     intensity convention.
@@ -881,7 +853,11 @@ def convert_phase_to_iparper(pha):
     return pha_converted
 
 
-def get_prof_phases(phase, wav, z):
+def get_prof_phases(
+    phase: xr.DataArray,
+    wav: npt.NDArray[np.floating[Any]],
+    z: npt.NDArray[np.floating[Any]],
+) -> tuple[npt.NDArray[np.int32], list[xr.DataArray]]:
     """
     Generate prof_phases parameter for Atm1D from
     phase function data.
