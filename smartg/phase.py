@@ -41,9 +41,7 @@ get_prof_phases
 """
 
 from __future__ import annotations
-
-from typing import Any, Sequence
-
+from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 from pathlib import Path
@@ -497,7 +495,7 @@ def read_phase_dat(
 
     Returns
     -------
-    xr.DataArray
+    da_pha : DataArray
         Phase matrix with dimensions:
 
         - ``'wav_phase'`` : wavelength (single value: 0.0)
@@ -697,7 +695,7 @@ def read_phase_cdf(
             "to select/interpolate the desired wavelength(s)."
         )
     if n_rh_reff > 1 and (
-        z_rh_reff is None or (not np.isscalar(z_rh_reff) and pfgrid is None)
+        z_rh_reff is None or (not z_rh_reff.size == 1 and pfgrid is None)
     ):
         raise ValueError(
             f"Phase function file contains more than 1 {rh_or_reff} value. "
@@ -706,15 +704,20 @@ def read_phase_cdf(
             "parameter (float or 1-D array) "
             f"to select/interpolate the desired {rh_or_reff} value(s)."
         )
-    if n_rh_reff > 1 and (not np.isscalar(z_rh_reff)):
-        z_rh_reff_arr = np.atleast_1d(z_rh_reff)
-        pfgrid_arr = np.atleast_1d(pfgrid)
-        if z_rh_reff_arr.size != pfgrid_arr.size - 1:
+    if n_rh_reff > 1 and z_rh_reff is not None and pfgrid is not None:
+        if z_rh_reff.size != pfgrid.size - 1:
             raise ValueError(
                 "Invalid 'z_rh_reff' size: when 'z_rh_reff' is a 1-D array, "
                 "its size must be len(pfgrid) - 1. "
-                f"Got len(z_rh_reff)={z_rh_reff_arr.size} and len(pfgrid)={pfgrid_arr.size}."
+                f"Got len(z_rh_reff)={z_rh_reff.size}"
+                f" and len(pfgrid)={pfgrid.size}."
             )
+    elif n_rh_reff > 1 and (z_rh_reff is None or pfgrid is None):
+        raise ValueError(
+            "When the phase function file contains more than 1 "
+            f"{rh_or_reff} value, both 'z_rh_reff' and 'pfgrid'"
+            "parameters must be provided."
+        )
 
     da_pha = xr.DataArray(
         np.zeros((nwl, n_rh_reff, nphamat, ntheta)),
@@ -745,11 +748,9 @@ def read_phase_cdf(
                 da_pha.data[iwav, irhreff, :, :] *= 2.0 / abs(norm)
 
     if nwl > 1:
-        pfwav = np.atleast_1d(pfwav).astype(float)
         da_pha = da_pha.interp(wav_phase=pfwav)
 
     if n_rh_reff > 1:
-        z_rh_reff = np.atleast_1d(z_rh_reff).astype(np.float32)
         da_pha = da_pha.interp(
             {rh_or_reff: z_rh_reff}, kwargs={"bounds_error": True}
         )
@@ -772,17 +773,17 @@ def read_phase_cdf(
 
 
 def read_phase(
-    filename: str | Path,
+    filename: PathType,
     kind: str = "atm",
     normalize: bool = True,
     **kwargs: Any,
 ) -> xr.DataArray:
     """
-    Read phase function data from a file and dispatch
-    to the proper reader.
+    Read phase function data from a file and dispatch to the proper
+    reader.
 
-    This convenience function selects the backend
-    according to the file suffix:
+    This convenience function selects the backend according to the
+    file suffix:
 
     - ``.dat`` -> :func:`read_phase_dat`
     - ``.nc`` -> :func:`read_phase_nc`
@@ -790,9 +791,9 @@ def read_phase(
 
     Parameters
     ----------
-    filename : str | Path
-        Path to a phase function file. Supported formats
-        are ``.dat``, ``.nc``, and ``.cdf``.
+    filename : str or path-like
+        Path to a phase function file. Supported formats are
+        ``.dat``, ``.nc``, and ``.cdf``.
 
     kind : str, optional
         Medium label used in the theta dimension name ('theta_' + kind).
@@ -802,24 +803,23 @@ def read_phase(
         Default: 'atm'
 
     normalize : bool, optional
-        If True, normalize the phase matrix P11 term such
-        that the integral over all angles equals 2.
+        If True, normalize the phase matrix P11 term such that the
+        integral over all angles equals 2.
         Default: True
 
     **kwargs : dict, optional
-        Additional keyword arguments forwarded to the
-        selected backend reader:
+        Additional keyword arguments forwarded to the selected backend
+        reader:
 
         - for ``.nc``: forwarded to :func:`read_phase_nc`
         - for ``.cdf``: forwarded to :func:`read_phase_cdf`
 
-        Typical arguments include ``pfwav``,
-        ``pfgrid``, ``z_rh_reff``, and ``ntheta_max``
-        (only for ``.cdf``).
+        Typical arguments include ``pfwav``, ``pfgrid``, ``z_rh_reff``,
+        and ``ntheta_max`` (only for ``.cdf``).
 
     Returns
     -------
-    xr.DataArray
+    DataArray
         Phase matrix data as returned by the selected backend reader.
         All backends return a 4-dimensional array with dimensions:
 
@@ -862,7 +862,7 @@ def read_phase(
     else:
         raise ValueError(
             f"Unsupported phase function file format: "
-            + f"{filename.suffix}. Supported formats: {supported_formats}"
+            f"{filename.suffix}. Supported formats: {supported_formats}"
         )
 
 
@@ -870,30 +870,27 @@ def convert_phase_to_iparper(
     pha: NDArray[np.floating[Any]],
 ) -> NDArray[np.floating[Any]]:
     """
-    Convert phase matrix to parallel/perpendicular
-    intensity convention.
+    Convert phase matrix to parallel/perpendicular intensity
+    convention.
 
-    Converts the phase matrix from the standard IQUV
-    (Stokes vector) convention to the Ipar/Iper
-    (parallel/perpendicular intensity) convention used
-    throughout SMART-G. This conversion is necessary
-    when using the alternative Stokes representation
-    where polarized light is characterized by
-    (Ipar, Iper, U, V) instead of (I, Q, U, V).
+    Converts the phase matrix from the standard IQUV (Stokes vector)
+    convention to the Ipar/Iper (parallel/perpendicular intensity)
+    convention used throughout SMART-G. This conversion is necessary
+    when using the alternative Stokes representation where polarized
+    light is characterized by (Ipar, Iper, U, V) instead of
+    (I, Q, U, V).
 
     Parameters
     ----------
     pha : ndarray
-        The phase matrix in IQUV convention. Can be
-        either:
-        - 2-D array of shape (nphamat, nth): phase
-          matrix with Stokes components in dimension 0
-        - 4-D array of shape (n1, n2, nphamat, nth):
-          batch of phase matrices with Stokes components
-          in dimension 2
-        where nphamat is 4 (only spherical particles)
-        or 6 (spherical and non-spherical particles),
-        and nth is the number of scattering angles.
+        The phase matrix in IQUV convention. Can be either:
+        - 2-D array of shape (nphamat, nth): phase matrix with Stokes
+          components in dimension 0
+        - 4-D array of shape (n1, n2, nphamat, nth): batch of phase
+          matrices with Stokes components in dimension 2
+        where nphamat is 4 (only spherical particles) or 6 (spherical
+        and non-spherical particles), and nth is the number of
+        scattering angles.
 
         Input phase matrix components in order:
         - If nphamat=4: p11, p21, p33, p34
@@ -901,18 +898,17 @@ def convert_phase_to_iparper(
 
     Returns
     -------
-    out : ndarray
-        The phase matrix converted to Ipar/Iper
-        convention. Always has 6 components output
-        (dimensions are preserved except Stokes
+    pha_converted : ndarray
+        The phase matrix converted to Ipar/Iper convention. Always has
+        6 components output (dimensions are preserved except Stokes
         dimension becomes 6):
         - 2-D input returns shape (6, nth)
         - 4-D input returns shape (n1, n2, 6, nth)
 
     References
     ----------
-    .. [1] Chandrasekhar, S. (2013). Radiative transfer.
-           Courier Corporation.
+    .. [1] Chandrasekhar, S. (2013). Radiative transfer. Courier
+           Corporation.
     """
 
     ndim = pha.ndim
@@ -955,46 +951,41 @@ def convert_phase_to_iparper(
 
 def get_prof_phases(
     phase: xr.DataArray,
-    wav: NDArray[np.floating[Any]],
-    z: NDArray[np.floating[Any]],
+    wav: NumericArrayLike,
+    z: NumericArrayLike,
 ) -> tuple[NDArray[np.int32], list[xr.DataArray]]:
     """
-    Generate prof_phases parameter for Atm1D from
-    phase function data.
+    Generate prof_phases parameter for Atm1D from phase function data.
 
-    Constructs the prof_phases tuple required by Atm1D
-    initialization. This function directly produces the
-    format needed for the prof_phases parameter.
+    Constructs the prof_phases tuple required by Atm1D initialization.
+    This function directly produces the format needed for the
+    prof_phases parameter.
 
     Parameters
     ----------
-    phase : xr.DataArray
-        Phase matrix data read from read_phase().
-        Expected dimensions:
+    phase : DataArray
+        Phase matrix data read from read_phase(). Expected dimensions:
         ('wav_phase', 'z_phase', 'stk', 'theta_atm')
-    wav : 1-D ndarray
-        Full wavelength grid in nanometers. Must match
-        the wavelengths used in Atm1D.calc() method.
-        Equivalent to the 'wav' parameter passed to
-        Atm1D.calc().
-    z : 1-D ndarray
-        Full altitude grid in kilometers (descending
-        order from TOA to BOA). Must match the 'grid'
-        parameter used in Atm1D initialization.
+    wav : array_like
+        Full wavelength grid in nanometers. Must match the wavelengths
+        used in Atm1D.calc() method. Equivalent to the 'wav' parameter
+        passed to Atm1D.calc().
+    z : array_like
+        Full altitude grid in kilometers (descending order from TOA to
+        BOA). Must match the 'grid' parameter used in Atm1D
+        initialization.
 
     Returns
     -------
-    tuple
-        A tuple (ipha, phases) representing prof_phases
-        parameter:
-
-        - ipha : ndarray
-            Phase matrix indices for mapping the full
-            wavelength/altitude grid
-        - phases : list of xr.DataArray
-            List of phase matrix DataArrays with dimensions
-            ('stk', 'theta_atm')
+    ipha : ndarray
+        Phase matrix indices for mapping the full wavelength/altitude
+        grid.
+    phases : list of DataArray
+        List of phase matrix DataArrays with dimensions
+        ``('stk', 'theta_atm')``.
     """
+    wav = np.atleast_1d(wav).astype(np.float32)
+    z = np.atleast_1d(z).astype(np.float32)
 
     pha_atm, ipha_atm = calc_iphase(phase, wav, z)
     lpha_da = []
