@@ -293,7 +293,7 @@ def get_ipha_a(
 
 
 def read_phase_nc(
-    filename: PathType,
+    fname: PathType,
     kind: str = "atm",
     normalize: bool = True,
     pfwav: NumericArrayLike | None = None,
@@ -311,7 +311,7 @@ def read_phase_nc(
 
     Parameters
     ----------
-    filename : str or path-like
+    fname : str or path-like
         Path to a SMART-G phase function NetCDF file (suffix: .nc).
 
         The file must include variables:
@@ -398,7 +398,7 @@ def read_phase_nc(
         else None
     )
 
-    ds = xr.open_dataset(filename)
+    ds = xr.open_dataset(fname)
 
     if "hum" in ds.variables:
         rh_reff = ds["hum"].data
@@ -465,7 +465,7 @@ def read_phase_nc(
 
 
 def read_phase_dat(
-    filename: PathType,
+    fname: PathType,
     kind: str = "atm",
     normalize: bool = True,
 ) -> xr.DataArray:
@@ -480,7 +480,7 @@ def read_phase_dat(
 
     Parameters
     ----------
-    filename : str or path-like
+    fname : str or path-like
         Path to the `.dat` phase function file.
     kind : str, optional
         Medium label used in the theta dimension name
@@ -512,7 +512,7 @@ def read_phase_dat(
     >>> pha.dims
     ('wav_phase', 'z_phase', 'stk', 'theta_atm')
     """
-    df = pd.read_csv(filename, sep=r"\s+", header=None)
+    df = pd.read_csv(fname, sep=r"\s+", header=None)
 
     theta = np.asarray(df.iloc[:, 0].values)
     pha = np.asarray(df.iloc[:, 1:].values)
@@ -543,7 +543,7 @@ def read_phase_dat(
 
 
 def read_phase_cdf(
-    filename: PathType,
+    fname: PathType,
     kind: str = "atm",
     normalize: bool = True,
     ntheta_max: int = 18001,
@@ -565,7 +565,7 @@ def read_phase_cdf(
 
     Parameters
     ----------
-    filename : str or path-like
+    fname : str or path-like
         Path to a libRadtran phase function NetCDF file (suffix:
         .cdf).
         Examples: 'ssam.mie.cdf', 'wc.sol.mie.cdf', 'cloud.water.cdf'.
@@ -665,7 +665,7 @@ def read_phase_cdf(
         else None
     )
 
-    ds = xr.open_dataset(filename)
+    ds = xr.open_dataset(fname)
 
     if "hum" in ds.variables:
         rh_reff = ds["hum"].data
@@ -773,7 +773,7 @@ def read_phase_cdf(
 
 
 def read_phase(
-    filename: PathType,
+    fname: PathType,
     kind: str = "atm",
     normalize: bool = True,
     **kwargs: Any,
@@ -791,7 +791,7 @@ def read_phase(
 
     Parameters
     ----------
-    filename : str or path-like
+    fname : str or path-like
         Path to a phase function file. Supported formats are
         ``.dat``, ``.nc``, and ``.cdf``.
 
@@ -842,27 +842,27 @@ def read_phase(
     ...                  ntheta_max=18001)
     """
 
-    filename = Path(filename)
+    fname = Path(fname)
 
-    if not filename.is_file():
-        raise FileNotFoundError(f"Phase function file not found: {filename}")
+    if not fname.is_file():
+        raise FileNotFoundError(f"Phase function file not found: {fname}")
 
     supported_formats = [".dat", ".nc", ".cdf"]
 
-    if filename.suffix == ".dat":
-        return read_phase_dat(filename, kind=kind, normalize=normalize)
-    elif filename.suffix == ".nc":
+    if fname.suffix == ".dat":
+        return read_phase_dat(fname, kind=kind, normalize=normalize)
+    elif fname.suffix == ".nc":
         return read_phase_nc(
-            filename, kind=kind, normalize=normalize, **kwargs
+            fname, kind=kind, normalize=normalize, **kwargs
         )
-    elif filename.suffix == ".cdf":
+    elif fname.suffix == ".cdf":
         return read_phase_cdf(
-            filename, kind=kind, normalize=normalize, **kwargs
+            fname, kind=kind, normalize=normalize, **kwargs
         )
     else:
         raise ValueError(
             f"Unsupported phase function file format: "
-            f"{filename.suffix}. Supported formats: {supported_formats}"
+            f"{fname.suffix}. Supported formats: {supported_formats}"
         )
 
 

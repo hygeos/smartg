@@ -3936,7 +3936,7 @@ def read_aeronet_aod(file: PathType, year: int) -> xr.DataArray:
 
     Returns
     -------
-    out : DataArray
+    aod_ext_da : DataArray
         Lookup table with extinction AOD as function of
         Day_of_Year(Fraction) and wavelength
     """
@@ -3984,7 +3984,7 @@ def read_aeronet_ssa(file: PathType, year: int) -> xr.DataArray:
 
     Returns
     -------
-    out : DataArray
+    ssa_da : DataArray
         Lookup table with single scattering albedo as function of
         Day_of_Year(Fraction)
         and wavelength
@@ -4033,7 +4033,7 @@ def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
 
     Returns
     -------
-    out : DataArray
+    phase_da : DataArray
         Lookup table with phase function matrix as function of
         Day_of_Year(Fraction),
         wavelength and theta_atm
@@ -4140,7 +4140,7 @@ def atm_pro_from_aeronet(
 
     Returns
     -------
-    out : xarray.Dataset
+    pro : Dataset
         The atmophere profil. Similar to the output of the calc method
         of Atm1D.
 
@@ -4360,7 +4360,7 @@ def artdeco_to_smartg_cld(
 
     Returns
     -------
-    xr.Dataset
+    ds : Dataset
         Dataset containing cloud optical properties. Includes
         coordinates:
 

@@ -16,6 +16,9 @@ will be completed and corrected before the final `v2.0.0` release.
   - `read_phase_dat`, `read_phase_nc` and `read_phase_cdf` now always return a
     4-D `xr.DataArray` (dims: `wav_phase`, `z_phase`, `stk`, `theta_atm/oc`).
     The `nphamat` dimension is no longer squeezed when its size is 1.
+  - The `filename` parameter of `read_phase`, `read_phase_dat`, `read_phase_nc`
+    and `read_phase_cdf` has been renamed to `fname` (positional usage is
+    unaffected, keyword usage must be updated).
   - The `conv_Iparper` parameter has been removed from `AerOPAC.phase()`,
     `Cloud.phase()` and `AtmAFGL.calc()`. The IQ → Ipar/Iper conversion is now
     performed automatically inside the `run()` method (only for atmospheric phases).

@@ -450,7 +450,7 @@ def test_A5_pp(request, S1DF):
     prof_aer = (cld_tau_ext, cld_ssa)
     NTH = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
     file_cld_phase = DIR_AUXDATA / 'IPRT' / 'phaseA' / 'opt_prop' / 'watercloud.mie.cdf'
-    cld_phase = read_phase(filename=file_cld_phase)
+    cld_phase = read_phase(fname=file_cld_phase)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.]), z)
     lpha_lut = []
     for i in range (0, pha_atm.shape[0]): 
@@ -589,7 +589,7 @@ def test_A5_al(request, S1DF):
     prof_aer = (cld_tau_ext, cld_ssa)
     NTH = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
     file_cld_phase = DIR_AUXDATA / 'IPRT' / 'phaseA' / 'opt_prop' / 'watercloud.mie.cdf'
-    cld_phase = read_phase(filename=file_cld_phase)
+    cld_phase = read_phase(fname=file_cld_phase)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.]), z)
     lpha_lut = []
     for i in range (0, pha_atm.shape[0]): 
