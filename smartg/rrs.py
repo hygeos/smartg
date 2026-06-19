@@ -5,8 +5,6 @@ import numpy as np
 X_N2 = 0.788
 X_O2 = 0.212
 
-def is_odd(j):
-    return j % 2 != 0
 
 # Bates, Planel. Space Sa., Vol.32, No.6, pp. 785-790. 1984 
 def Fk_N2(lam):
@@ -98,11 +96,13 @@ def L_O2(T):
 
     T in K
     '''
-    B0 = 1.4378 # cm-1
-    J  = np.linspace(0, 36, num=37, dtype=int)
-    gj = np.array([1 if is_odd(j) else 0 for j in J])
-    Ej = J*(J+1)*cst.h*cst.c*B0*100 # B0 translated in m-1 !!!
-    Fj = gj*(2*J+1) * np.exp(-Ej/(cst.k*T))
+    B0 = 1.4378  # cm-1
+    J = np.linspace(0, 36, num=37, dtype=np.int32)
+    # 1 if J is odd, 0 if even. Faster than j % 2 != 0 (but only int!)
+    gj = J & 1
+    # B0 translated in m-1!!!
+    Ej = J * (J + 1) * cst.h * cst.c * B0 * 100
+    Fj = gj * (2 * J + 1) * np.exp(-Ej / (cst.k * T))
     
     Lj_S  = Fj * bjp(J)
     Dnu_S = -(4*J+6)*B0
@@ -124,11 +124,13 @@ def L_N2(T):
 
     T in K
     '''
-    B0 = 1.9897 # cm-1
-    J  = np.linspace(0, 36, num=37, dtype=int)
-    gj = np.array([3 if is_odd(j) else 6 for j in J])
-    Ej = J*(J+1)*cst.h*cst.c*B0*100 # B0 translated in m-1 !!!
-    Fj = gj*(2*J+1) * np.exp(-Ej/(cst.k*T))
+    B0 = 1.9897  # cm-1
+    J = np.linspace(0, 36, num=37, dtype=np.int32)
+    # Bitwise AND with 1 selects odd J -> gj takes the odd branch value
+    gj = np.where(J & 1, 3, 6)
+    # B0 translated in m-1 !!!
+    Ej = J * (J + 1) * cst.h * cst.c * B0 * 100
+    Fj = gj * (2 * J + 1) * np.exp(-Ej / (cst.k * T))
     
     Lj_S  = Fj * bjp(J)
     Dnu_S = -(4*J+6)*B0
