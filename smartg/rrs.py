@@ -1,15 +1,14 @@
 """Rotational Raman scattering (Ring effect) spectrum utilities.
 
-This module builds the rotational Raman line list of dry air (N2
-+ O2) and assembles the inelastic Ring spectrum that must be
-folded into a radiative-transfer calculation to reproduce the
-Ring effect observed in satellite backscatter ultraviolet
-measurements.
+This module builds the rotational Raman line list of dry air (N2 + O2)
+and assembles the inelastic Ring spectrum that must be folded into a
+radiative-transfer calculation to reproduce the Ring effect observed
+in satellite backscatter ultraviolet measurements.
 
 The two main building blocks are:
 
-* Bates (1984) Rayleigh-scattering depolarization for N2 and O2,
-  used to compute Kattawar et al. (1981) Cabannes fractions
+* Bates (1984) Rayleigh-scattering depolarization for N2 and O2, used
+  to compute Kattawar et al. (1981) Cabannes fractions
   :func:`f0_air`, :func:`f0_n2`, :func:`f0_o2`.
 * Joiner et al. (1995) rotational Raman line strengths built from
   Boltzmann-weighted rigid-rotor populations and Placzek-Teller
@@ -22,13 +21,12 @@ References
    *Planetary and Space Science*, 32(6), 785-790.
    https://doi.org/10.1016/0032-0633(84)90102-8
 .. [2] Kattawar, G. W., Young, A. T., & Humphreys, T. J. (1981).
-   Inelastic scattering in planetary atmospheres. I. The Ring
-   effect, without aerosols. *Astrophysical Journal, Part 1*,
-   243, 1049-1057.
-.. [3] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-   E., McPeters, R. D., & Park, H. (1995). Rotational Raman
-   scattering (Ring effect) in satellite backscatter ultraviolet
-   measurements. *Applied Optics*, 34(21), 4513.
+   Inelastic scattering in planetary atmospheres. I. The Ring effect,
+   without aerosols. *Astrophysical Journal, Part 1*, 243, 1049-1057.
+.. [3] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+   McPeters, R. D., & Park, H. (1995). Rotational Raman scattering
+   (Ring effect) in satellite backscatter ultraviolet measurements.
+   *Applied Optics*, 34(21), 4513.
    https://doi.org/10.1364/AO.34.004513
 """
 
@@ -87,8 +85,7 @@ def epsilon_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     Returns
     -------
     eps : float or ndarray
-        Dimensionless depolarization ratio of N2. Same shape as
-        ``lam``.
+        Dimensionless depolarization ratio of N2. Same shape as ``lam``.
 
     References
     ----------
@@ -112,7 +109,6 @@ def fk_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     fk : float or ndarray
         Dimensionless King correction factor of O2. Same shape as
         ``lam``.
-
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.
@@ -143,7 +139,6 @@ def epsilon_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     eps : float or ndarray
         Dimensionless depolarization ratio of O2. Same shape as
         ``lam``.
-
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.
@@ -158,8 +153,8 @@ def epsilon_air(lam: NumericArrayLike) -> float | NDArray[np.floating]:
 
     Weighted sum of the N2 and O2 depolarization ratios using the
     standard dry-air mixing ratios :attr:`X_N2` and :attr:`X_O2`:
-    :math:`\varepsilon_{\text{air}} = \varepsilon_{N_2} X_{N_2}
-    + \varepsilon_{O_2} X_{O_2}`.
+    :math:`\varepsilon_{\text{air}} = \varepsilon_{N_2} X_{N_2} +
+    \varepsilon_{O_2} X_{O_2}`.
 
     Parameters
     ----------
@@ -171,7 +166,6 @@ def epsilon_air(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     eps : float or ndarray
         Dimensionless effective depolarization ratio of dry air.
         Same shape as ``lam``.
-
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.
@@ -181,17 +175,18 @@ def epsilon_air(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     return epsilon_n2(lam) * X_N2 + epsilon_o2(lam) * X_O2
 
 
-# Kattawar, Astrophysical Journal, Part 1, vol. 243, Feb. 1, 1981, p. 1049-1057.
+# Kattawar, Astrophysical Journal, Part 1, vol. 243, Feb. 1, 1981,
+# p. 1049-1057.
 def f0_air(
     lam: NumericArrayLike, theta: float
 ) -> float | NDArray[np.floating]:
     r"""Cabannes fraction of dry air (Kattawar's ``f0``).
 
-    Fraction of Rayleigh-scattered photons that are depolarized,
-    i.e. the probability that the scattered photon retains the
-    polarization memory. Computed from the dry-air depolarization
-    ratio and the scattering angle using the analytical expression
-    given by Kattawar et al. (1981).
+    Fraction of Rayleigh-scattered photons that are depolarized, i.e.
+    the probability that the scattered photon retains the polarization
+    memory. Computed from the dry-air depolarization ratio and the
+    scattering angle using the analytical expression given by
+    Kattawar et al. (1981).
 
     Parameters
     ----------
@@ -284,9 +279,12 @@ def f0_o2(
     return num / den
 
 
-# Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E., McPeters, R. D., & Park, H. (1995). Rotational Raman scattering (Ring effect)
-# in satellite backscatter ultraviolet measurements. Applied Optics, 34(21), 4513. doi:10.1364/ao.34.004513
-## !!!! Erreur dans le papier original sur les coeffs de Placzek-Teller Anti Stokes !!!
+# Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E., McPeters,
+# R. D., & Park, H. (1995). Rotational Raman scattering (Ring effect)
+# in satellite backscatter ultraviolet measurements. Applied Optics,
+# 34(21), 4513. doi:10.1364/ao.34.004513
+## !!!! Erreur dans le papier original sur les coeffs de
+## Placzek-Teller Anti Stokes !!!
 
 
 def k_ratio(
@@ -313,8 +311,8 @@ def k_ratio(
 
     References
     ----------
-    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-       E., McPeters, R. D., & Park, H. (1995). Rotational Raman
+    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+       McPeters, R. D., & Park, H. (1995). Rotational Raman
        scattering (Ring effect) in satellite backscatter ultraviolet
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
@@ -323,9 +321,10 @@ def k_ratio(
 
 
 def bjm_plus(j: NumericArrayLike) -> float | NDArray[np.floating]:
-    r"""Placzek-Teller coefficient for the Stokes branch (:math:`\Delta j = +2`).
+    r"""Placzek-Teller coefficient for the Stokes branch.
 
-    :math:`b_{j}^{+} = \frac{3 (j+1)(j+2)}{2 (2j+1)(2j+3)}`.
+    .. math::
+        b_{j}^{+} = \frac{3 (j+1)(j+2)}{2 (2j+1)(2j+3)}
 
     Parameters
     ----------
@@ -339,8 +338,8 @@ def bjm_plus(j: NumericArrayLike) -> float | NDArray[np.floating]:
 
     References
     ----------
-    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-       E., McPeters, R. D., & Park, H. (1995). Rotational Raman
+    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+       McPeters, R. D., & Park, H. (1995). Rotational Raman
        scattering (Ring effect) in satellite backscatter ultraviolet
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
@@ -361,10 +360,12 @@ def bjm_plus(j: NumericArrayLike) -> float | NDArray[np.floating]:
 
 
 def bjm_minus(j: NumericArrayLike) -> float | NDArray[np.floating]:
-    r"""Placzek-Teller coefficient for the anti-Stokes branch (:math:`\Delta j = -2`).
+    r"""Placzek-Teller coefficient for the anti-Stokes branch.
 
-    :math:`b_{j}^{-} = \frac{3 j (j-1)}{2 (2j+1)(2j-1)}`, set to 0
-    for :math:`j \le 1` (no physical transition).
+    .. math::
+        b_{j}^{-} = \frac{3 j (j-1)}{2 (2j+1)(2j-1)},
+
+    set to 0 for :math:`j \le 1` (no physical transition).
 
     Parameters
     ----------
@@ -378,8 +379,8 @@ def bjm_minus(j: NumericArrayLike) -> float | NDArray[np.floating]:
 
     References
     ----------
-    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-       E., McPeters, R. D., & Park, H. (1995). Rotational Raman
+    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+       McPeters, R. D., & Park, H. (1995). Rotational Raman
        scattering (Ring effect) in satellite backscatter ultraviolet
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
@@ -409,11 +410,11 @@ def l_o2(
     Builds the rotational Raman spectrum of O2 from the rigid-rotor
     energy levels with rotational quantum number :math:`j \in
     [0, 36]`. For each transition, the Boltzmann weight is combined
-    with the nuclear-spin degeneracy (``gj = 1`` for odd j, ``0``
-    for even j, since :sup:`16`O has zero nuclear spin) and the
+    with the nuclear-spin degeneracy (``gj = 1`` for odd j, ``0`` for
+    even j, since :sup:`16`O has zero nuclear spin) and the
     Placzek-Teller coefficient. Line shifts :math:`\Delta\nu` are
-    returned in cm:sup:`-1` and line strengths are normalised so
-    that the total Stokes + anti-Stokes weight sums to one.
+    returned in cm:sup:`-1` and line strengths are normalised so that
+    the total Stokes + anti-Stokes weight sums to one.
 
     Parameters
     ----------
@@ -434,8 +435,8 @@ def l_o2(
 
     References
     ----------
-    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-       E., McPeters, R. D., & Park, H. (1995). Rotational Raman
+    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+       McPeters, R. D., & Park, H. (1995). Rotational Raman
        scattering (Ring effect) in satellite backscatter ultraviolet
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
@@ -472,11 +473,11 @@ def l_n2(
     Builds the rotational Raman spectrum of N2 from the rigid-rotor
     energy levels with rotational quantum number :math:`j \in
     [0, 36]`. For each transition, the Boltzmann weight is combined
-    with the nuclear-spin degeneracy (``gj = 6`` for even j, ``3``
-    for odd j, the standard homonuclear diatomic convention) and
-    the Placzek-Teller coefficient. Line shifts :math:`\Delta\nu`
-    are returned in cm:sup:`-1` and line strengths are normalised so
-    that the total Stokes + anti-Stokes weight sums to one.
+    with the nuclear-spin degeneracy (``gj = 6`` for even j, ``3`` for
+    odd j, the standard homonuclear diatomic convention) and the
+    Placzek-Teller coefficient. Line shifts :math:`\Delta\nu` are
+    returned in cm:sup:`-1` and line strengths are normalised so that
+    the total Stokes + anti-Stokes weight sums to one.
 
     Parameters
     ----------
@@ -497,15 +498,16 @@ def l_n2(
 
     References
     ----------
-    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-       E., McPeters, R. D., & Park, H. (1995). Rotational Raman
+    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+       McPeters, R. D., & Park, H. (1995). Rotational Raman
        scattering (Ring effect) in satellite backscatter ultraviolet
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
     B0 = 1.9897  # cm-1
     j = np.linspace(0, 36, num=37, dtype=np.int32)
-    # Bitwise AND with 1 selects odd j -> gj takes the odd branch value
+    # Bitwise AND with 1 selects odd j -> gj takes the odd branch
+    # value
     gj = np.where(j & 1, 3, 6)
     # B0 translated in m-1 !!!
     Ej = j * (j + 1) * cst.h * cst.c * B0 * 100
@@ -533,11 +535,11 @@ def l_air(
 
     Combines the N2 and O2 rotational Raman line lists, weights them
     by the dry-air mixing ratios (``X_N2``, ``X_O2``) and Joiner's
-    O2-to-N2 Cabannes ratio :func:`k_ratio`, converts the
-    frequency shifts :math:`\Delta\nu` (cm:sup:`-1`) into output
-    wavelengths (nm), concatenates the four branches (Stokes/anti-
-    Stokes for N2/O2), normalises the resulting spectrum to unit
-    area and sorts it by increasing wavelength.
+    O2-to-N2 Cabannes ratio :func:`k_ratio`, converts the frequency
+    shifts :math:`\Delta\nu` (cm:sup:`-1`) into output wavelengths
+    (nm), concatenates the four branches (Stokes/anti-Stokes for
+    N2/O2), normalises the resulting spectrum to unit area and sorts
+    it by increasing wavelength.
 
     Parameters
     ----------
@@ -551,16 +553,15 @@ def l_air(
     Returns
     -------
     lam_out : ndarray of float
-        Output wavelengths in nanometers, sorted in increasing
-        order.
+        Output wavelengths in nanometers, sorted in increasing order.
     l_out : ndarray of float
         Normalised line intensities at each ``lam_out`` (spectrum
         integrates to 1).
 
     References
     ----------
-    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-       E., McPeters, R. D., & Park, H. (1995). Rotational Raman
+    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+       McPeters, R. D., & Park, H. (1995). Rotational Raman
        scattering (Ring effect) in satellite backscatter ultraviolet
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
@@ -580,14 +581,16 @@ def l_air(
     lam_astk_o2 = 1e7 / (nu0 + dnu_astk_o2)
 
     norm = (
-        lj_stk_n2.sum() + lj_astk_n2.sum() + lj_stk_o2.sum() + lj_astk_o2.sum()
+        lj_stk_n2.sum() + lj_astk_n2.sum() + lj_stk_o2.sum()
+        + lj_astk_o2.sum()
     )
 
     lam_out = np.concatenate(
         [lam_astk_n2, lam_astk_o2, lam_stk_n2, lam_stk_o2]
     )
     l_out = (
-        np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2]) / norm
+        np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2])
+        / norm
     )
     ii = np.argsort(lam_out)
 
@@ -601,12 +604,11 @@ def l2d(
     r"""Vectorised air rotational Raman spectrum over many wavelengths.
 
     Same physics as :func:`l_air`, but evaluated simultaneously for
-    every excitation wavelength in ``lam``. The N2 and O2 line
-    lists depend only on temperature and are reused across all
-    ``lam``; the wavelength-dependent Cabannes ratio
-    :func:`k_ratio` is broadcast to weight each line. The output
-    is sorted by increasing wavelength along the last axis for
-    each input excitation wavelength.
+    every excitation wavelength in ``lam``. The N2 and O2 line lists
+    depend only on temperature and are reused across all ``lam``; the
+    wavelength-dependent Cabannes ratio :func:`k_ratio` is broadcast
+    to weight each line. The output is sorted by increasing wavelength
+    along the last axis for each input excitation wavelength.
 
     Parameters
     ----------
@@ -620,15 +622,15 @@ def l2d(
     Returns
     -------
     lam_out : ndarray of float, shape (nlam, nlines)
-        Output wavelengths in nanometers, sorted in increasing
-        order along the last axis.
+        Output wavelengths in nanometers, sorted in increasing order
+        along the last axis.
     l_out : ndarray of float, shape (nlam, nlines)
         Normalised line intensities; each row integrates to 1.
 
     References
     ----------
-    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-       E., McPeters, R. D., & Park, H. (1995). Rotational Raman
+    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+       McPeters, R. D., & Park, H. (1995). Rotational Raman
        scattering (Ring effect) in satellite backscatter ultraviolet
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
@@ -659,8 +661,10 @@ def l2d(
     lj_stk_o2 /= norm[:, np.newaxis]
     lj_astk_o2 /= norm[:, np.newaxis]
     # we add also negative unity impulse at zero for removal of elastic
-    # l_out  = np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2, np.stack([np.array([0])]*nlam)], axis=1)
-    # dnu_out= np.concatenate([dnu_astk_n2, dnu_astk_o2, dnu_stk_n2, dnu_stk_o2, np.array([0.])])
+    # l_out  = np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2,
+    #     lj_stk_o2, np.stack([np.array([0])]*nlam)], axis=1)
+    # dnu_out= np.concatenate([dnu_astk_n2, dnu_astk_o2, dnu_stk_n2,
+    #     dnu_stk_o2, np.array([0.])])
     l_out = np.concatenate(
         [lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2], axis=1
     )
@@ -685,9 +689,9 @@ def l2d_inv(
 
     Given a set of scattered wavelengths ``lam`` observed at angle
     ``theta``, returns the corresponding excitation wavelengths and
-    the Ring-spectrum weights that map to each scattered
-    wavelength. This is the inverse of :func:`l2d`: instead of
-    computing ``output = excitation + Delta nu``, it computes
+    the Ring-spectrum weights that map to each scattered wavelength.
+    This is the inverse of :func:`l2d`: instead of computing
+    ``output = excitation + Delta nu``, it computes
     ``excitation = output - Delta nu``. Used by callers (e.g.
     :func:`smartg.bandset.BandSet`) that need to fold the Ring
     spectrum into an output wavelength grid.
@@ -704,17 +708,16 @@ def l2d_inv(
     Returns
     -------
     lam_in : ndarray of float, shape (nlam, nlines)
-        Excitation wavelengths in nanometers that contribute to
-        each scattered wavelength, sorted in increasing order
-        along the last axis.
+        Excitation wavelengths in nanometers that contribute to each
+        scattered wavelength, sorted in increasing order along the
+        last axis.
     l_in : ndarray of float, shape (nlam, nlines)
-        Normalised weights of each contribution; each row sums
-        to 1.
+        Normalised weights of each contribution; each row sums to 1.
 
     References
     ----------
-    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath,
-       E., McPeters, R. D., & Park, H. (1995). Rotational Raman
+    .. [1] Joiner, J., Bhartia, P. K., Cebula, R. P., Hilsenrath, E.,
+       McPeters, R. D., & Park, H. (1995). Rotational Raman
        scattering (Ring effect) in satellite backscatter ultraviolet
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
@@ -723,7 +726,9 @@ def l2d_inv(
     dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(t)
     dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(t)
     # reorganization with lambda instead od Dnu
-    dnu_in = np.concatenate([dnu_astk_n2, dnu_astk_o2, dnu_stk_n2, dnu_stk_o2])
+    dnu_in = np.concatenate(
+        [dnu_astk_n2, dnu_astk_o2, dnu_stk_n2, dnu_stk_o2]
+    )
     nu0 = 1e7 / lam
     lam_in1 = 1e7 / (nu0[:, np.newaxis] - dnu_stk_o2[np.newaxis, :])
     lam_in2 = 1e7 / (nu0[:, np.newaxis] - dnu_astk_o2[np.newaxis, :])
