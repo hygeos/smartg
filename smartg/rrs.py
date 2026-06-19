@@ -334,7 +334,7 @@ def bjm_plus(j: NumericArrayLike) -> float | NDArray[np.floating]:
 
     Returns
     -------
-    b : float or ndarray
+    bjm_plus : float or ndarray
         Dimensionless coefficient. Same shape as ``j``.
 
     References
@@ -345,9 +345,19 @@ def bjm_plus(j: NumericArrayLike) -> float | NDArray[np.floating]:
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    return 3.0 * (j + 1) * (j + 2) / 2.0 / (
+    j_arr = np.asarray(j)
+    if not np.issubdtype(j_arr.dtype, np.integer):
+        raise TypeError(
+            f"j must be an integer or an array_like of integers, "
+            f"got dtype {j_arr.dtype!r}"
+        )
+    j = j_arr.astype(np.int32)
+    bjm_plus = 3.0 * (j + 1) * (j + 2) / 2.0 / (
         2 * j + 1
     ) / (2 * j + 3)
+    if bjm_plus.ndim == 0:
+        bjm_plus = float(bjm_plus)
+    return bjm_plus
 
 
 def bjm_minus(j: NumericArrayLike) -> float | NDArray[np.floating]:
@@ -363,7 +373,7 @@ def bjm_minus(j: NumericArrayLike) -> float | NDArray[np.floating]:
 
     Returns
     -------
-    b : float or ndarray
+    bjm_minus : float or ndarray
         Dimensionless coefficient. Same shape as ``j``.
 
     References
@@ -374,15 +384,24 @@ def bjm_minus(j: NumericArrayLike) -> float | NDArray[np.floating]:
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    b = 3.0 * j * (j - 1) / 2.0 / (
+    j_arr = np.asarray(j)
+    if not np.issubdtype(j_arr.dtype, np.integer):
+        raise TypeError(
+            f"j must be an integer or an array_like of integers, "
+            f"got dtype {j_arr.dtype!r}"
+        )
+    j = j_arr.astype(np.int32)
+    bjm_minus = 3.0 * j * (j - 1) / 2.0 / (
         2 * j + 1
     ) / (2 * j - 1)
-    b[j <= 1] = 0.0
-    return b
+    bjm_minus[j <= 1] = 0.0
+    if bjm_minus.ndim == 0:
+        bjm_minus = float(bjm_minus)
+    return bjm_minus
 
 
 def l_o2(
-    T: float,
+    t: float,
 ) -> tuple[NDArray[np.floating], NDArray[np.floating],
            NDArray[np.floating], NDArray[np.floating]]:
     r"""O2 rotational Raman line list.
@@ -398,7 +417,7 @@ def l_o2(
 
     Parameters
     ----------
-    T : float
+    t : float
         Gas temperature in Kelvin.
 
     Returns
@@ -427,7 +446,7 @@ def l_o2(
     gj = j & 1
     # B0 translated in m-1!!!
     Ej = j * (j + 1) * cst.h * cst.c * B0 * 100
-    Fj = gj * (2 * j + 1) * np.exp(-Ej / (cst.k * T))
+    Fj = gj * (2 * j + 1) * np.exp(-Ej / (cst.k * t))
 
     lj_stk = Fj * bjm_plus(j)
     dnu_stk = -(4 * j + 6) * B0
@@ -445,7 +464,7 @@ def l_o2(
 
 
 def l_n2(
-    T: float,
+    t: float,
 ) -> tuple[NDArray[np.floating], NDArray[np.floating],
            NDArray[np.floating], NDArray[np.floating]]:
     r"""N2 rotational Raman line list.
@@ -461,7 +480,7 @@ def l_n2(
 
     Parameters
     ----------
-    T : float
+    t : float
         Gas temperature in Kelvin.
 
     Returns
@@ -490,7 +509,7 @@ def l_n2(
     gj = np.where(j & 1, 3, 6)
     # B0 translated in m-1 !!!
     Ej = j * (j + 1) * cst.h * cst.c * B0 * 100
-    Fj = gj * (2 * j + 1) * np.exp(-Ej / (cst.k * T))
+    Fj = gj * (2 * j + 1) * np.exp(-Ej / (cst.k * t))
 
     lj_stk = Fj * bjm_plus(j)
     dnu_stk = -(4 * j + 6) * B0
@@ -508,7 +527,7 @@ def l_n2(
 
 
 def l_air(
-    lam: float, theta: float, T: float
+    lam: float, theta: float, t: float
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Air rotational Raman spectrum at a single excitation wavelength.
 
@@ -526,7 +545,7 @@ def l_air(
         Excitation wavelength in nanometers (scalar).
     theta : float
         Scattering angle in degrees (0 = forward, 180 = backward).
-    T : float
+    t : float
         Gas temperature in Kelvin.
 
     Returns
@@ -546,8 +565,8 @@ def l_air(
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(T)
-    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(T)
+    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(t)
+    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(t)
     lj_stk_n2 *= X_N2
     lj_astk_n2 *= X_N2
     lj_stk_o2 *= X_O2 * k_ratio(lam, theta)
@@ -577,7 +596,7 @@ def l_air(
 
 
 def l2d(
-    lam: NDArray[np.floating], theta: float, T: float
+    lam: NumericArrayLike, theta: float, t: float
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Vectorised air rotational Raman spectrum over many wavelengths.
 
@@ -591,11 +610,11 @@ def l2d(
 
     Parameters
     ----------
-    lam : ndarray of float, shape (nlam,)
+    lam : float or array_like, shape (nlam,)
         Excitation wavelengths in nanometers.
     theta : float
         Scattering angle in degrees (0 = forward, 180 = backward).
-    T : float
+    t : float
         Gas temperature in Kelvin.
 
     Returns
@@ -614,10 +633,11 @@ def l2d(
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    kk = k_ratio(lam, theta)
+    lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
+    kk = np.atleast_1d(k_ratio(lam, theta), dtype=np.float64)
     nlam = lam.size
-    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(T)
-    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(T)
+    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(t)
+    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(t)
     norm_n2 = lj_stk_n2.sum() + lj_astk_n2.sum()
     norm_o2 = lj_stk_o2.sum() + lj_astk_o2.sum()
     lj_stk_n2 /= norm_n2
@@ -659,7 +679,7 @@ def l2d(
 
 
 def l2d_inv(
-    lam: NDArray[np.floating], theta: float, T: float
+    lam: NumericArrayLike, theta: float, t: float
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Inverse air rotational Raman spectrum (vectorised).
 
@@ -674,11 +694,11 @@ def l2d_inv(
 
     Parameters
     ----------
-    lam : ndarray of float, shape (nlam,)
+    lam : float or array_like, shape (nlam,)
         Scattered (output) wavelengths in nanometers.
     theta : float
         Scattering angle in degrees (0 = forward, 180 = backward).
-    T : float
+    t : float
         Gas temperature in Kelvin.
 
     Returns
@@ -699,9 +719,9 @@ def l2d_inv(
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-
-    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(T)
-    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(T)
+    lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
+    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(t)
+    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(t)
     # reorganization with lambda instead od Dnu
     dnu_in = np.concatenate([dnu_astk_n2, dnu_astk_o2, dnu_stk_n2, dnu_stk_o2])
     nu0 = 1e7 / lam
