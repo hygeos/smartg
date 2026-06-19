@@ -33,11 +33,9 @@ References
 """
 
 from __future__ import annotations
-
 import scipy.constants as cst
 import numpy as np
 from numpy.typing import NDArray
-
 from smartg.typing import NumericArrayLike
 
 # Atmosphere model: dry-air molar mixing ratios (mol/mol).
@@ -56,7 +54,7 @@ def fk_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
 
     Returns
     -------
-    fk : float or ndarray
+    float or ndarray
         Dimensionless King correction factor of N2. Same shape as
         ``lam``.
 
@@ -66,7 +64,12 @@ def fk_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
        *Planetary and Space Science*, 32(6), 785-790.
        https://doi.org/10.1016/0032-0633(84)90102-8
     """
-    return 1.034 + 3.17 * 1e-4 / ((lam * 1e-3) ** 2)
+    fk_n2 = 1.034 + 3.17 * 1e-4 / (
+        (np.asarray(lam, dtype=np.float64) * 1e-3) ** 2
+    )
+    if fk_n2.ndim == 0:
+        fk_n2 = float(fk_n2)
+    return fk_n2
 
 
 def epsilon_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
@@ -319,20 +322,20 @@ def k_ratio(
     return (1.0 - f0_o2(lam, theta)) / (1.0 - f0_n2(lam, theta))
 
 
-def bjm_plus(J: NumericArrayLike) -> float | NDArray[np.floating]:
-    r"""Placzek-Teller coefficient for the Stokes branch (:math:`\Delta J = +2`).
+def bjm_plus(j: NumericArrayLike) -> float | NDArray[np.floating]:
+    r"""Placzek-Teller coefficient for the Stokes branch (:math:`\Delta j = +2`).
 
-    :math:`b_{J}^{+} = \frac{3 (J+1)(J+2)}{2 (2J+1)(2J+3)}`.
+    :math:`b_{j}^{+} = \frac{3 (j+1)(j+2)}{2 (2j+1)(2j+3)}`.
 
     Parameters
     ----------
-    J : int or array_like of int
+    j : int or array_like of int
         Rotational quantum number(s).
 
     Returns
     -------
     b : float or ndarray
-        Dimensionless coefficient. Same shape as ``J``.
+        Dimensionless coefficient. Same shape as ``j``.
 
     References
     ----------
@@ -342,24 +345,26 @@ def bjm_plus(J: NumericArrayLike) -> float | NDArray[np.floating]:
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    return 3.0 * (J + 1) * (J + 2) / 2.0 / (2 * J + 1) / (2 * J + 3)
+    return 3.0 * (j + 1) * (j + 2) / 2.0 / (
+        2 * j + 1
+    ) / (2 * j + 3)
 
 
-def bjm_minus(J: NumericArrayLike) -> float | NDArray[np.floating]:
-    r"""Placzek-Teller coefficient for the anti-Stokes branch (:math:`\Delta J = -2`).
+def bjm_minus(j: NumericArrayLike) -> float | NDArray[np.floating]:
+    r"""Placzek-Teller coefficient for the anti-Stokes branch (:math:`\Delta j = -2`).
 
-    :math:`b_{J}^{-} = \frac{3 J (J-1)}{2 (2J+1)(2J-1)}`, set to 0
-    for :math:`J \le 1` (no physical transition).
+    :math:`b_{j}^{-} = \frac{3 j (j-1)}{2 (2j+1)(2j-1)}`, set to 0
+    for :math:`j \le 1` (no physical transition).
 
     Parameters
     ----------
-    J : int or array_like of int
+    j : int or array_like of int
         Rotational quantum number(s).
 
     Returns
     -------
     b : float or ndarray
-        Dimensionless coefficient. Same shape as ``J``.
+        Dimensionless coefficient. Same shape as ``j``.
 
     References
     ----------
@@ -369,8 +374,10 @@ def bjm_minus(J: NumericArrayLike) -> float | NDArray[np.floating]:
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    b = 3.0 * J * (J - 1) / 2.0 / (2 * J + 1) / (2 * J - 1)
-    b[J <= 1] = 0.0
+    b = 3.0 * j * (j - 1) / 2.0 / (
+        2 * j + 1
+    ) / (2 * j - 1)
+    b[j <= 1] = 0.0
     return b
 
 
@@ -381,10 +388,10 @@ def l_o2(
     r"""O2 rotational Raman line list.
 
     Builds the rotational Raman spectrum of O2 from the rigid-rotor
-    energy levels with rotational quantum number :math:`J \in
+    energy levels with rotational quantum number :math:`j \in
     [0, 36]`. For each transition, the Boltzmann weight is combined
-    with the nuclear-spin degeneracy (``gj = 1`` for odd J, ``0``
-    for even J, since :sup:`16`O has zero nuclear spin) and the
+    with the nuclear-spin degeneracy (``gj = 1`` for odd j, ``0``
+    for even j, since :sup:`16`O has zero nuclear spin) and the
     Placzek-Teller coefficient. Line shifts :math:`\Delta\nu` are
     returned in cm:sup:`-1` and line strengths are normalised so
     that the total Stokes + anti-Stokes weight sums to one.
@@ -415,21 +422,21 @@ def l_o2(
        https://doi.org/10.1364/AO.34.004513
     """
     B0 = 1.4378  # cm-1
-    J = np.linspace(0, 36, num=37, dtype=np.int32)
-    # 1 if J is odd, 0 if even. Faster than j % 2 != 0 (but only int!)
-    gj = J & 1
+    j = np.linspace(0, 36, num=37, dtype=np.int32)
+    # 1 if j is odd, 0 if even. Faster than j % 2 != 0 (but only int!)
+    gj = j & 1
     # B0 translated in m-1!!!
-    Ej = J * (J + 1) * cst.h * cst.c * B0 * 100
-    Fj = gj * (2 * J + 1) * np.exp(-Ej / (cst.k * T))
+    Ej = j * (j + 1) * cst.h * cst.c * B0 * 100
+    Fj = gj * (2 * j + 1) * np.exp(-Ej / (cst.k * T))
 
-    lj_stk = Fj * bjm_plus(J)
-    dnu_stk = -(4 * J + 6) * B0
+    lj_stk = Fj * bjm_plus(j)
+    dnu_stk = -(4 * j + 6) * B0
     is_nonzero = lj_stk != 0.0
     lj_stk = lj_stk[is_nonzero]
     dnu_stk = dnu_stk[is_nonzero]
-    lj_astk = Fj * bjm_minus(J)
+    lj_astk = Fj * bjm_minus(j)
     is_nonzero = lj_astk != 0.0
-    dnu_astk = (4 * J - 2) * B0
+    dnu_astk = (4 * j - 2) * B0
     lj_astk = lj_astk[is_nonzero]
     dnu_astk = dnu_astk[is_nonzero]
 
@@ -444,10 +451,10 @@ def l_n2(
     r"""N2 rotational Raman line list.
 
     Builds the rotational Raman spectrum of N2 from the rigid-rotor
-    energy levels with rotational quantum number :math:`J \in
+    energy levels with rotational quantum number :math:`j \in
     [0, 36]`. For each transition, the Boltzmann weight is combined
-    with the nuclear-spin degeneracy (``gj = 6`` for even J, ``3``
-    for odd J, the standard homonuclear diatomic convention) and
+    with the nuclear-spin degeneracy (``gj = 6`` for even j, ``3``
+    for odd j, the standard homonuclear diatomic convention) and
     the Placzek-Teller coefficient. Line shifts :math:`\Delta\nu`
     are returned in cm:sup:`-1` and line strengths are normalised so
     that the total Stokes + anti-Stokes weight sums to one.
@@ -478,21 +485,21 @@ def l_n2(
        https://doi.org/10.1364/AO.34.004513
     """
     B0 = 1.9897  # cm-1
-    J = np.linspace(0, 36, num=37, dtype=np.int32)
-    # Bitwise AND with 1 selects odd J -> gj takes the odd branch value
-    gj = np.where(J & 1, 3, 6)
+    j = np.linspace(0, 36, num=37, dtype=np.int32)
+    # Bitwise AND with 1 selects odd j -> gj takes the odd branch value
+    gj = np.where(j & 1, 3, 6)
     # B0 translated in m-1 !!!
-    Ej = J * (J + 1) * cst.h * cst.c * B0 * 100
-    Fj = gj * (2 * J + 1) * np.exp(-Ej / (cst.k * T))
+    Ej = j * (j + 1) * cst.h * cst.c * B0 * 100
+    Fj = gj * (2 * j + 1) * np.exp(-Ej / (cst.k * T))
 
-    lj_stk = Fj * bjm_plus(J)
-    dnu_stk = -(4 * J + 6) * B0
+    lj_stk = Fj * bjm_plus(j)
+    dnu_stk = -(4 * j + 6) * B0
     is_nonzero = lj_stk != 0.0
     lj_stk = lj_stk[is_nonzero]
     dnu_stk = dnu_stk[is_nonzero]
-    lj_astk = Fj * bjm_minus(J)
+    lj_astk = Fj * bjm_minus(j)
     is_nonzero = lj_astk != 0.0
-    dnu_astk = (4 * J - 2) * B0
+    dnu_astk = (4 * j - 2) * B0
     lj_astk = lj_astk[is_nonzero]
     dnu_astk = dnu_astk[is_nonzero]
 
