@@ -3,7 +3,7 @@
 
 from __future__ import print_function, division
 import numpy as np
-from smartg.rrs import L2d_inv
+from smartg.rrs import l2d_inv
 from smartg.vrs import V2d_inv
 from luts.luts import LUT
 import scipy.constants as cst
@@ -100,7 +100,7 @@ def spectral_grids(
 
     if Raman == "RRS":
         ## RRS excitation wavelength grid for scattering angle of 90 deg and 243°K
-        wl_RS, _ = L2d_inv(wl, 90.0, 243.0)
+        wl_RS, _ = l2d_inv(wl, 90.0, 243.0)
     else:
         ## VRS excitation wavelength grid
         wl_RS, _ = V2d_inv(wl)

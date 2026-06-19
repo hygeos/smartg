@@ -6,36 +6,36 @@ X_N2 = 0.788
 X_O2 = 0.212
 
 
-# Bates, Planel. Space Sa., Vol.32, No.6, pp. 785-790. 1984 
-def Fk_N2(lam):
+# Bates, Planel. Space Sa., Vol.32, No.6, pp. 785-790. 1984
+def fk_n2(lam):
     '''
     lam in nm
     '''
     return 1.034 + 3.17*1e-4/((lam*1e-3)**2)
 
-def Epsilon_N2(lam):
+def epsilon_n2(lam):
     '''
     lam in nm
     '''
-    return (Fk_N2(lam)-1) * 4.5
+    return (fk_n2(lam)-1) * 4.5
 
-def Fk_O2(lam):
+def fk_o2(lam):
     '''
     lam in nm
     '''
     return 1.096 + 1.385*1e-3/((lam*1e-3)**2) + 1.448*1e-4/((lam*1e-3)**4)
 
-def Epsilon_O2(lam):
+def epsilon_o2(lam):
     '''
     lam in nm
     '''
-    return (Fk_O2(lam)-1) * 4.5
+    return (fk_o2(lam)-1) * 4.5
 
-def Epsilon_air(lam):
+def epsilon_air(lam):
     '''
     lam in nm
     '''
-    return Epsilon_N2(lam) * X_N2 + Epsilon_O2(lam) * X_O2
+    return epsilon_n2(lam) * X_N2 + epsilon_o2(lam) * X_O2
 
 #Kattawar, Astrophysical Journal, Part 1, vol. 243, Feb. 1, 1981, p. 1049-1057.
 def f0_air(lam, theta):
@@ -43,29 +43,29 @@ def f0_air(lam, theta):
     lam in nm
     theta in deg
     '''
-    eps = Epsilon_air(lam)
+    eps = epsilon_air(lam)
     c2  = np.cos(np.radians(theta))**2
     num = (180.+13.*eps) + (180.+eps)*c2
     den = (180.+52.*eps) + (180.+4.*eps)*c2
     return num/den
     
-def f0_N2(lam, theta):
+def f0_n2(lam, theta):
     '''
     lam in nm
     theta in deg
     '''
-    eps = Epsilon_N2(lam)
+    eps = epsilon_n2(lam)
     c2  = np.cos(np.radians(theta))**2
     num = (180.+13.*eps) + (180.+eps)*c2
     den = (180.+52.*eps) + (180.+4.*eps)*c2
     return num/den
 
-def f0_O2(lam, theta):
+def f0_o2(lam, theta):
     '''
     lam in nm
     theta in deg
     '''
-    eps = Epsilon_O2(lam)
+    eps = epsilon_o2(lam)
     c2  = np.cos(np.radians(theta))**2
     num = (180.+13.*eps) + (180.+eps)*c2
     den = (180.+52.*eps) + (180.+4.*eps)*c2
@@ -75,22 +75,22 @@ def f0_O2(lam, theta):
 # in satellite backscatter ultraviolet measurements. Applied Optics, 34(21), 4513. doi:10.1364/ao.34.004513
 ## !!!! Erreur dans le papier original sur les coeffs de Placzek-Teller Anti Stokes !!!
 
-def K(lam, theta):
+def k_ratio(lam, theta):
     '''
     lam in nm
     theta in deg
     '''
-    return (1.-f0_O2(lam,theta))/(1.-f0_N2(lam,theta))
+    return (1.-f0_o2(lam,theta))/(1.-f0_n2(lam,theta))
 
-def bjp(J):
+def bjm_plus(J):
     return 3.*(J+1)*(J+2)/2./(2*J+1)/(2*J+3)
 
-def bjm(J):
+def bjm_minus(J):
     b = 3.*J*(J-1)/2./(2*J+1)/(2*J-1)
     b[J<=1] = 0.
     return b
     
-def L_O2(T):
+def l_o2(T):
     '''
     O2 Rotational Raman Spectrum
 
@@ -104,12 +104,12 @@ def L_O2(T):
     Ej = J * (J + 1) * cst.h * cst.c * B0 * 100
     Fj = gj * (2 * J + 1) * np.exp(-Ej / (cst.k * T))
     
-    Lj_S  = Fj * bjp(J)
+    Lj_S  = Fj * bjm_plus(J)
     Dnu_S = -(4*J+6)*B0
     not0  = Lj_S != 0.
     Lj_S  = Lj_S[not0]
     Dnu_S = Dnu_S[not0]
-    Lj_A  = Fj * bjm(J)
+    Lj_A  = Fj * bjm_minus(J)
     not0  = Lj_A != 0.
     Dnu_A =  (4*J-2)*B0
     Lj_A  = Lj_A[not0]
@@ -118,7 +118,7 @@ def L_O2(T):
     norm = Lj_S.sum() + Lj_A.sum()
     return Dnu_S, Lj_S/norm, Dnu_A, Lj_A/norm
 
-def L_N2(T):
+def l_n2(T):
     '''
     N2 Rotational Raman Spectrum
 
@@ -132,12 +132,12 @@ def L_N2(T):
     Ej = J * (J + 1) * cst.h * cst.c * B0 * 100
     Fj = gj * (2 * J + 1) * np.exp(-Ej / (cst.k * T))
     
-    Lj_S  = Fj * bjp(J)
+    Lj_S  = Fj * bjm_plus(J)
     Dnu_S = -(4*J+6)*B0
     not0  = Lj_S != 0.
     Lj_S  = Lj_S[not0]
     Dnu_S = Dnu_S[not0]
-    Lj_A  = Fj * bjm(J)
+    Lj_A  = Fj * bjm_minus(J)
     not0  = Lj_A != 0.
     Dnu_A =  (4*J-2)*B0
     Lj_A  = Lj_A[not0]
@@ -146,7 +146,7 @@ def L_N2(T):
     norm = Lj_S.sum() + Lj_A.sum()
     return Dnu_S, Lj_S/norm, Dnu_A, Lj_A/norm
 
-def L(lam, theta, T):
+def l_air(lam, theta, T):
     '''
     Air Rotational Raman Spectrum
     
@@ -154,12 +154,12 @@ def L(lam, theta, T):
     theta in deg
     T in K
     '''
-    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = L_N2(T)
-    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = L_O2(T)
+    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = l_n2(T)
+    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = l_o2(T)
     Lj_S_N2 *= X_N2
     Lj_A_N2 *= X_N2
-    Lj_S_O2 *= X_O2*K(lam, theta)
-    Lj_A_O2 *= X_O2*K(lam, theta)
+    Lj_S_O2 *= X_O2*k_ratio(lam, theta)
+    Lj_A_O2 *= X_O2*k_ratio(lam, theta)
     
     nu0 = 1e7/(lam) # nu0 in cm-1
     # compute output lamnda in nm
@@ -178,7 +178,7 @@ def L(lam, theta, T):
     return lam_out[ii], L_out[ii]
 
 
-def L2d(lam, theta, T):
+def l2d(lam, theta, T):
     '''
     Air Rotational Raman Spectrum
     
@@ -186,10 +186,10 @@ def L2d(lam, theta, T):
     theta in deg
     T in K
     '''
-    KK = K(lam, theta)
+    KK = k_ratio(lam, theta)
     nlam = lam.size
-    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = L_N2(T)
-    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = L_O2(T) 
+    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = l_n2(T)
+    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = l_o2(T) 
     norm_N2 = Lj_S_N2.sum() + Lj_A_N2.sum()
     norm_O2 = Lj_S_O2.sum() + Lj_A_O2.sum()
     Lj_S_N2/=norm_N2
@@ -222,7 +222,7 @@ def L2d(lam, theta, T):
     return lam_out, L_out
 
 
-def L2d_inv(lam, theta, T):
+def l2d_inv(lam, theta, T):
     '''
     Air Inverse Rotational Raman Spectrum
     
@@ -231,16 +231,16 @@ def L2d_inv(lam, theta, T):
     T in K
     '''
     
-    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = L_N2(T)
-    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = L_O2(T) 
+    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = l_n2(T)
+    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = l_o2(T) 
     # reorganization with lambda instead od Dnu
     Dnu_in= np.concatenate([Dnu_A_N2, Dnu_A_O2, Dnu_S_N2, Dnu_S_O2])
     nu0 = 1e7/lam
     lam_in1 = 1e7/(nu0[:, np.newaxis]-Dnu_S_O2[np.newaxis,:])
     lam_in2 = 1e7/(nu0[:, np.newaxis]-Dnu_A_O2[np.newaxis,:])
     nlam = lam.shape[0]
-    KK1 = K(lam_in1, theta)
-    KK2 = K(lam_in2, theta)
+    KK1 = k_ratio(lam_in1, theta)
+    KK2 = k_ratio(lam_in2, theta)
     norm_N2 = Lj_S_N2.sum() + Lj_A_N2.sum()
     norm_O2 = Lj_S_O2.sum() + Lj_A_O2.sum()
     Lj_S_N2/=norm_N2
