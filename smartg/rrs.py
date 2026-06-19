@@ -32,16 +32,21 @@ References
    https://doi.org/10.1364/AO.34.004513
 """
 
+from __future__ import annotations
+
 import scipy.constants as cst
 import numpy as np
+from numpy.typing import NDArray
+
+from smartg.typing import NumericArrayLike
 
 # Atmosphere model: dry-air molar mixing ratios (mol/mol).
-X_N2 = 0.788
-X_O2 = 0.212
+X_N2: float = 0.788
+X_O2: float = 0.212
 
 
 # Bates, Planel. Space Sa., Vol.32, No.6, pp. 785-790. 1984
-def fk_n2(lam):
+def fk_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     """King correction factor of N2 as a function of wavelength.
 
     Parameters
@@ -64,7 +69,7 @@ def fk_n2(lam):
     return 1.034 + 3.17 * 1e-4 / ((lam * 1e-3) ** 2)
 
 
-def epsilon_n2(lam):
+def epsilon_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     r"""Depolarization ratio of N2 as a function of wavelength.
 
     Computed from the King correction factor as
@@ -91,7 +96,7 @@ def epsilon_n2(lam):
     return (fk_n2(lam) - 1) * 4.5
 
 
-def fk_o2(lam):
+def fk_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     """King correction factor of O2 as a function of wavelength.
 
     Parameters
@@ -118,7 +123,7 @@ def fk_o2(lam):
     )
 
 
-def epsilon_o2(lam):
+def epsilon_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     r"""Depolarization ratio of O2 as a function of wavelength.
 
     Computed from the King correction factor as
@@ -145,7 +150,7 @@ def epsilon_o2(lam):
     return (fk_o2(lam) - 1) * 4.5
 
 
-def epsilon_air(lam):
+def epsilon_air(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     r"""Effective depolarization ratio of dry air.
 
     Weighted sum of the N2 and O2 depolarization ratios using the
@@ -174,7 +179,9 @@ def epsilon_air(lam):
 
 
 # Kattawar, Astrophysical Journal, Part 1, vol. 243, Feb. 1, 1981, p. 1049-1057.
-def f0_air(lam, theta):
+def f0_air(
+    lam: NumericArrayLike, theta: float
+) -> float | NDArray[np.floating]:
     r"""Cabannes fraction of dry air (Kattawar's ``f0``).
 
     Fraction of Rayleigh-scattered photons that are depolarized,
@@ -210,7 +217,9 @@ def f0_air(lam, theta):
     return num / den
 
 
-def f0_n2(lam, theta):
+def f0_n2(
+    lam: NumericArrayLike, theta: float
+) -> float | NDArray[np.floating]:
     r"""Cabannes fraction of N2 (Kattawar's ``f0`` for pure N2).
 
     Parameters
@@ -240,7 +249,9 @@ def f0_n2(lam, theta):
     return num / den
 
 
-def f0_o2(lam, theta):
+def f0_o2(
+    lam: NumericArrayLike, theta: float
+) -> float | NDArray[np.floating]:
     r"""Cabannes fraction of O2 (Kattawar's ``f0`` for pure O2).
 
     Parameters
@@ -275,7 +286,9 @@ def f0_o2(lam, theta):
 ## !!!! Erreur dans le papier original sur les coeffs de Placzek-Teller Anti Stokes !!!
 
 
-def k_ratio(lam, theta):
+def k_ratio(
+    lam: NumericArrayLike, theta: float
+) -> float | NDArray[np.floating]:
     r"""Joiner's O2-to-N2 Cabannes ratio.
 
     Ratio :math:`K(\lambda, \theta) = (1 - f_0^{O_2}) /
@@ -306,7 +319,7 @@ def k_ratio(lam, theta):
     return (1.0 - f0_o2(lam, theta)) / (1.0 - f0_n2(lam, theta))
 
 
-def bjm_plus(J):
+def bjm_plus(J: NumericArrayLike) -> float | NDArray[np.floating]:
     r"""Placzek-Teller coefficient for the Stokes branch (:math:`\Delta J = +2`).
 
     :math:`b_{J}^{+} = \frac{3 (J+1)(J+2)}{2 (2J+1)(2J+3)}`.
@@ -332,7 +345,7 @@ def bjm_plus(J):
     return 3.0 * (J + 1) * (J + 2) / 2.0 / (2 * J + 1) / (2 * J + 3)
 
 
-def bjm_minus(J):
+def bjm_minus(J: NumericArrayLike) -> float | NDArray[np.floating]:
     r"""Placzek-Teller coefficient for the anti-Stokes branch (:math:`\Delta J = -2`).
 
     :math:`b_{J}^{-} = \frac{3 J (J-1)}{2 (2J+1)(2J-1)}`, set to 0
@@ -361,7 +374,10 @@ def bjm_minus(J):
     return b
 
 
-def l_o2(T):
+def l_o2(
+    T: float,
+) -> tuple[NDArray[np.floating], NDArray[np.floating],
+           NDArray[np.floating], NDArray[np.floating]]:
     r"""O2 rotational Raman line list.
 
     Builds the rotational Raman spectrum of O2 from the rigid-rotor
@@ -421,7 +437,10 @@ def l_o2(T):
     return dnu_stk, lj_stk / norm, dnu_astk, lj_astk / norm
 
 
-def l_n2(T):
+def l_n2(
+    T: float,
+) -> tuple[NDArray[np.floating], NDArray[np.floating],
+           NDArray[np.floating], NDArray[np.floating]]:
     r"""N2 rotational Raman line list.
 
     Builds the rotational Raman spectrum of N2 from the rigid-rotor
@@ -481,7 +500,9 @@ def l_n2(T):
     return dnu_stk, lj_stk / norm, dnu_astk, lj_astk / norm
 
 
-def l_air(lam, theta, T):
+def l_air(
+    lam: float, theta: float, T: float
+) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Air rotational Raman spectrum at a single excitation wavelength.
 
     Combines the N2 and O2 rotational Raman line lists, weights them
@@ -548,7 +569,9 @@ def l_air(lam, theta, T):
     return lam_out[ii], l_out[ii]
 
 
-def l2d(lam, theta, T):
+def l2d(
+    lam: NDArray[np.floating], theta: float, T: float
+) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Vectorised air rotational Raman spectrum over many wavelengths.
 
     Same physics as :func:`l_air`, but evaluated simultaneously for
@@ -628,7 +651,9 @@ def l2d(lam, theta, T):
     return lam_out, l_out
 
 
-def l2d_inv(lam, theta, T):
+def l2d_inv(
+    lam: NDArray[np.floating], theta: float, T: float
+) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Inverse air rotational Raman spectrum (vectorised).
 
     Given a set of scattered wavelengths ``lam`` observed at angle
