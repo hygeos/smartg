@@ -106,7 +106,7 @@ def fk_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
 
     Returns
     -------
-    fk : float or ndarray
+    fk_o2 : float or ndarray
         Dimensionless King correction factor of O2. Same shape as
         ``lam``.
     References
@@ -115,11 +115,14 @@ def fk_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
        *Planetary and Space Science*, 32(6), 785-790.
        https://doi.org/10.1016/0032-0633(84)90102-8
     """
-    return (
+    fk_o2 = (
         1.096
-        + 1.385 * 1e-3 / ((lam * 1e-3) ** 2)
-        + 1.448 * 1e-4 / ((lam * 1e-3) ** 4)
+        + 1.385 * 1e-3 / ((np.asarray(lam, dtype=np.float64) * 1e-3) ** 2)
+        + 1.448 * 1e-4 / ((np.asarray(lam, dtype=np.float64) * 1e-3) ** 4)
     )
+    if np.ndim(fk_o2) == 0:
+        fk_o2 = float(fk_o2)
+    return fk_o2
 
 
 def epsilon_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
