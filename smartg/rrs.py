@@ -104,19 +104,19 @@ def l_o2(T):
     Ej = J * (J + 1) * cst.h * cst.c * B0 * 100
     Fj = gj * (2 * J + 1) * np.exp(-Ej / (cst.k * T))
     
-    Lj_S  = Fj * bjm_plus(J)
-    Dnu_S = -(4*J+6)*B0
-    not0  = Lj_S != 0.
-    Lj_S  = Lj_S[not0]
-    Dnu_S = Dnu_S[not0]
-    Lj_A  = Fj * bjm_minus(J)
-    not0  = Lj_A != 0.
-    Dnu_A =  (4*J-2)*B0
-    Lj_A  = Lj_A[not0]
-    Dnu_A = Dnu_A[not0]
+    lj_stk  = Fj * bjm_plus(J)
+    dnu_stk = -(4*J+6)*B0
+    is_nonzero  = lj_stk != 0.
+    lj_stk  = lj_stk[is_nonzero]
+    dnu_stk = dnu_stk[is_nonzero]
+    lj_astk  = Fj * bjm_minus(J)
+    is_nonzero  = lj_astk != 0.
+    dnu_astk =  (4*J-2)*B0
+    lj_astk  = lj_astk[is_nonzero]
+    dnu_astk = dnu_astk[is_nonzero]
 
-    norm = Lj_S.sum() + Lj_A.sum()
-    return Dnu_S, Lj_S/norm, Dnu_A, Lj_A/norm
+    norm = lj_stk.sum() + lj_astk.sum()
+    return dnu_stk, lj_stk/norm, dnu_astk, lj_astk/norm
 
 def l_n2(T):
     '''
@@ -132,19 +132,19 @@ def l_n2(T):
     Ej = J * (J + 1) * cst.h * cst.c * B0 * 100
     Fj = gj * (2 * J + 1) * np.exp(-Ej / (cst.k * T))
     
-    Lj_S  = Fj * bjm_plus(J)
-    Dnu_S = -(4*J+6)*B0
-    not0  = Lj_S != 0.
-    Lj_S  = Lj_S[not0]
-    Dnu_S = Dnu_S[not0]
-    Lj_A  = Fj * bjm_minus(J)
-    not0  = Lj_A != 0.
-    Dnu_A =  (4*J-2)*B0
-    Lj_A  = Lj_A[not0]
-    Dnu_A = Dnu_A[not0]
+    lj_stk  = Fj * bjm_plus(J)
+    dnu_stk = -(4*J+6)*B0
+    is_nonzero  = lj_stk != 0.
+    lj_stk  = lj_stk[is_nonzero]
+    dnu_stk = dnu_stk[is_nonzero]
+    lj_astk  = Fj * bjm_minus(J)
+    is_nonzero  = lj_astk != 0.
+    dnu_astk =  (4*J-2)*B0
+    lj_astk  = lj_astk[is_nonzero]
+    dnu_astk = dnu_astk[is_nonzero]
 
-    norm = Lj_S.sum() + Lj_A.sum()
-    return Dnu_S, Lj_S/norm, Dnu_A, Lj_A/norm
+    norm = lj_stk.sum() + lj_astk.sum()
+    return dnu_stk, lj_stk/norm, dnu_astk, lj_astk/norm
 
 def l_air(lam, theta, T):
     '''
@@ -154,28 +154,28 @@ def l_air(lam, theta, T):
     theta in deg
     T in K
     '''
-    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = l_n2(T)
-    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = l_o2(T)
-    Lj_S_N2 *= X_N2
-    Lj_A_N2 *= X_N2
-    Lj_S_O2 *= X_O2*k_ratio(lam, theta)
-    Lj_A_O2 *= X_O2*k_ratio(lam, theta)
+    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(T)
+    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(T)
+    lj_stk_n2 *= X_N2
+    lj_astk_n2 *= X_N2
+    lj_stk_o2 *= X_O2*k_ratio(lam, theta)
+    lj_astk_o2 *= X_O2*k_ratio(lam, theta)
     
     nu0 = 1e7/(lam) # nu0 in cm-1
     # compute output lamnda in nm
-    lam_S_N2 = 1e7/(nu0+Dnu_S_N2)
-    lam_A_N2 = 1e7/(nu0+Dnu_A_N2)
-    lam_S_O2 = 1e7/(nu0+Dnu_S_O2)
-    lam_A_O2 = 1e7/(nu0+Dnu_A_O2)
+    lam_stk_n2 = 1e7/(nu0+dnu_stk_n2)
+    lam_astk_n2 = 1e7/(nu0+dnu_astk_n2)
+    lam_stk_o2 = 1e7/(nu0+dnu_stk_o2)
+    lam_astk_o2 = 1e7/(nu0+dnu_astk_o2)
     
-    norm = Lj_S_N2.sum() + Lj_A_N2.sum() + Lj_S_O2.sum() + Lj_A_O2.sum() 
+    norm = lj_stk_n2.sum() + lj_astk_n2.sum() + lj_stk_o2.sum() + lj_astk_o2.sum() 
     
-    lam_out= np.concatenate([lam_A_N2, lam_A_O2, lam_S_N2, lam_S_O2])
-    L_out  = np.concatenate([Lj_A_N2, Lj_A_O2, Lj_S_N2, Lj_S_O2])/norm
+    lam_out= np.concatenate([lam_astk_n2, lam_astk_o2, lam_stk_n2, lam_stk_o2])
+    l_out  = np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2])/norm
     ii = np.argsort(lam_out)
     
     # return spectrum with increasing wavelengths
-    return lam_out[ii], L_out[ii]
+    return lam_out[ii], l_out[ii]
 
 
 def l2d(lam, theta, T):
@@ -186,40 +186,40 @@ def l2d(lam, theta, T):
     theta in deg
     T in K
     '''
-    KK = k_ratio(lam, theta)
+    kk = k_ratio(lam, theta)
     nlam = lam.size
-    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = l_n2(T)
-    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = l_o2(T) 
-    norm_N2 = Lj_S_N2.sum() + Lj_A_N2.sum()
-    norm_O2 = Lj_S_O2.sum() + Lj_A_O2.sum()
-    Lj_S_N2/=norm_N2
-    Lj_A_N2/=norm_N2
-    Lj_S_O2/=norm_O2
-    Lj_A_O2/=norm_O2
-    Lj_S_N2 = np.stack([Lj_S_N2]*nlam) * X_N2
-    Lj_A_N2 = np.stack([Lj_A_N2]*nlam) * X_N2
-    Lj_S_O2 = Lj_S_O2[np.newaxis, :] * X_O2 * KK[:, np.newaxis]
-    Lj_A_O2 = Lj_A_O2[np.newaxis, :] * X_O2 * KK[:, np.newaxis]
-    norm = np.sum(Lj_S_N2, axis=1) + np.sum(Lj_A_N2, axis=1) + np.sum(Lj_S_O2, axis=1) + np.sum(Lj_A_O2, axis=1)
-    Lj_S_N2/=norm[:, np.newaxis]
-    Lj_A_N2/=norm[:, np.newaxis]
-    Lj_S_O2/=norm[:, np.newaxis]
-    Lj_A_O2/=norm[:, np.newaxis]
+    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(T)
+    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(T) 
+    norm_n2 = lj_stk_n2.sum() + lj_astk_n2.sum()
+    norm_o2 = lj_stk_o2.sum() + lj_astk_o2.sum()
+    lj_stk_n2/=norm_n2
+    lj_astk_n2/=norm_n2
+    lj_stk_o2/=norm_o2
+    lj_astk_o2/=norm_o2
+    lj_stk_n2 = np.stack([lj_stk_n2]*nlam) * X_N2
+    lj_astk_n2 = np.stack([lj_astk_n2]*nlam) * X_N2
+    lj_stk_o2 = lj_stk_o2[np.newaxis, :] * X_O2 * kk[:, np.newaxis]
+    lj_astk_o2 = lj_astk_o2[np.newaxis, :] * X_O2 * kk[:, np.newaxis]
+    norm = np.sum(lj_stk_n2, axis=1) + np.sum(lj_astk_n2, axis=1) + np.sum(lj_stk_o2, axis=1) + np.sum(lj_astk_o2, axis=1)
+    lj_stk_n2/=norm[:, np.newaxis]
+    lj_astk_n2/=norm[:, np.newaxis]
+    lj_stk_o2/=norm[:, np.newaxis]
+    lj_astk_o2/=norm[:, np.newaxis]
     #we add also negative unity impulse at zero for removal of elastic
-    #L_out  = np.concatenate([Lj_A_N2, Lj_A_O2, Lj_S_N2, Lj_S_O2, np.stack([np.array([0])]*nlam)], axis=1)
-    #Dnu_out= np.concatenate([Dnu_A_N2, Dnu_A_O2, Dnu_S_N2, Dnu_S_O2, np.array([0.])])
-    L_out  = np.concatenate([Lj_A_N2, Lj_A_O2, Lj_S_N2, Lj_S_O2], axis=1)
-    Dnu_out= np.concatenate([Dnu_A_N2, Dnu_A_O2, Dnu_S_N2, Dnu_S_O2])
+    #l_out  = np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2, np.stack([np.array([0])]*nlam)], axis=1)
+    #dnu_out= np.concatenate([dnu_astk_n2, dnu_astk_o2, dnu_stk_n2, dnu_stk_o2, np.array([0.])])
+    l_out  = np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2], axis=1)
+    dnu_out= np.concatenate([dnu_astk_n2, dnu_astk_o2, dnu_stk_n2, dnu_stk_o2])
     
     
     # reorganization with lambda instead od Dnu and increasing order
     nu0 = 1e7/lam
-    lam_out = 1e7/(nu0[:, np.newaxis]+Dnu_out[np.newaxis,:])
+    lam_out = 1e7/(nu0[:, np.newaxis]+dnu_out[np.newaxis,:])
     ii  = np.argsort(lam_out, axis=1)
     lam_out = np.take_along_axis(lam_out, ii, axis=1)
-    L_out   = np.take_along_axis(L_out,   ii, axis=1)
+    l_out   = np.take_along_axis(l_out,   ii, axis=1)
     
-    return lam_out, L_out
+    return lam_out, l_out
 
 
 def l2d_inv(lam, theta, T):
@@ -231,36 +231,36 @@ def l2d_inv(lam, theta, T):
     T in K
     '''
     
-    Dnu_S_N2, Lj_S_N2, Dnu_A_N2, Lj_A_N2 = l_n2(T)
-    Dnu_S_O2, Lj_S_O2, Dnu_A_O2, Lj_A_O2 = l_o2(T) 
+    dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(T)
+    dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(T) 
     # reorganization with lambda instead od Dnu
-    Dnu_in= np.concatenate([Dnu_A_N2, Dnu_A_O2, Dnu_S_N2, Dnu_S_O2])
+    dnu_in= np.concatenate([dnu_astk_n2, dnu_astk_o2, dnu_stk_n2, dnu_stk_o2])
     nu0 = 1e7/lam
-    lam_in1 = 1e7/(nu0[:, np.newaxis]-Dnu_S_O2[np.newaxis,:])
-    lam_in2 = 1e7/(nu0[:, np.newaxis]-Dnu_A_O2[np.newaxis,:])
+    lam_in1 = 1e7/(nu0[:, np.newaxis]-dnu_stk_o2[np.newaxis,:])
+    lam_in2 = 1e7/(nu0[:, np.newaxis]-dnu_astk_o2[np.newaxis,:])
     nlam = lam.shape[0]
-    KK1 = k_ratio(lam_in1, theta)
-    KK2 = k_ratio(lam_in2, theta)
-    norm_N2 = Lj_S_N2.sum() + Lj_A_N2.sum()
-    norm_O2 = Lj_S_O2.sum() + Lj_A_O2.sum()
-    Lj_S_N2/=norm_N2
-    Lj_A_N2/=norm_N2
-    Lj_S_O2/=norm_O2
-    Lj_A_O2/=norm_O2
-    Lj_S_N2 = np.stack([Lj_S_N2]*nlam) * X_N2
-    Lj_A_N2 = np.stack([Lj_A_N2]*nlam) * X_N2
-    Lj_S_O2 = Lj_S_O2[np.newaxis, :] * X_O2 * KK1
-    Lj_A_O2 = Lj_A_O2[np.newaxis, :] * X_O2 * KK2
-    norm = np.sum(Lj_S_N2, axis=1) + np.sum(Lj_A_N2, axis=1) + np.sum(Lj_S_O2, axis=1) + np.sum(Lj_A_O2, axis=1)
-    Lj_S_N2/=norm[:, np.newaxis]
-    Lj_A_N2/=norm[:, np.newaxis]
-    Lj_S_O2/=norm[:, np.newaxis]
-    Lj_A_O2/=norm[:, np.newaxis]
-    L_in    = np.concatenate([Lj_A_N2, Lj_A_O2, Lj_S_N2, Lj_S_O2], axis=1)
+    kk1 = k_ratio(lam_in1, theta)
+    kk2 = k_ratio(lam_in2, theta)
+    norm_n2 = lj_stk_n2.sum() + lj_astk_n2.sum()
+    norm_o2 = lj_stk_o2.sum() + lj_astk_o2.sum()
+    lj_stk_n2/=norm_n2
+    lj_astk_n2/=norm_n2
+    lj_stk_o2/=norm_o2
+    lj_astk_o2/=norm_o2
+    lj_stk_n2 = np.stack([lj_stk_n2]*nlam) * X_N2
+    lj_astk_n2 = np.stack([lj_astk_n2]*nlam) * X_N2
+    lj_stk_o2 = lj_stk_o2[np.newaxis, :] * X_O2 * kk1
+    lj_astk_o2 = lj_astk_o2[np.newaxis, :] * X_O2 * kk2
+    norm = np.sum(lj_stk_n2, axis=1) + np.sum(lj_astk_n2, axis=1) + np.sum(lj_stk_o2, axis=1) + np.sum(lj_astk_o2, axis=1)
+    lj_stk_n2/=norm[:, np.newaxis]
+    lj_astk_n2/=norm[:, np.newaxis]
+    lj_stk_o2/=norm[:, np.newaxis]
+    lj_astk_o2/=norm[:, np.newaxis]
+    l_in    = np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2], axis=1)
 
-    lam_in = 1e7/(nu0[:, np.newaxis]-Dnu_in[np.newaxis,:])
+    lam_in = 1e7/(nu0[:, np.newaxis]-dnu_in[np.newaxis,:])
     ii  = np.argsort(lam_in, axis=1)
     lam_in = np.take_along_axis(lam_in, ii, axis=1)
-    L_in   = np.take_along_axis(L_in,   ii, axis=1)
+    l_in   = np.take_along_axis(l_in,   ii, axis=1)
     
-    return lam_in, L_in
+    return lam_in, l_in
