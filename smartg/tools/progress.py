@@ -1,7 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""Progress bar utilities for SMART-G.
 
-from __future__ import print_function, division
+Provides a unified :func:`Progress` factory that returns a progress bar
+adapted to the current execution environment:
+
+* ``notebook`` mode -- uses ``ipywidgets`` (``FloatProgress``) when running
+  inside an IPython/Jupyter kernel.
+* ``progressbar2`` mode -- uses the ``progressbar2`` library when available.
+* ``progressbar`` mode -- falls back to the legacy ``progressbar`` library.
+
+The active mode is selected automatically at import time. Callers can also
+request an invisible (no-op) progress bar via ``activate=False``.
+"""
+
 
 FloatProgress = Label = Box = Layout = display = FormatLabel = None
 ProgressBar = ETA = Percentage = Bar = WidgetBase = None
