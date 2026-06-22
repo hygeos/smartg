@@ -166,7 +166,7 @@ def spectral_grids(
     datas: NDArray[np.floating],
     dl: RealNumber | None = None,
     dls: RealNumber | None = None,
-    Raman: str = "RRS",
+    raman: str = "RRS",
     unit: str = "mW/m2/nm",
 ) -> tuple[
     NDArray[np.floating],
@@ -211,7 +211,7 @@ def spectral_grids(
         Low spectral resolution step for scattering features (nm).
         If ``None`` (default), the low-resolution grid is reduced to a
         single point (``NWS = 1``).
-    Raman : {'RRS', 'VRS'}, optional
+    raman : {'RRS', 'VRS'}, optional
         Raman scattering type: ``'RRS'`` (rotational Raman, default)
         uses a 90 deg scattering angle and 243 K temperature;
         ``'VRS'`` (vibrational Raman) uses ``V2d_inv``.
@@ -259,7 +259,7 @@ def spectral_grids(
         NW = int((lmax - lmin) / dl) + 1
         wl = np.linspace(lmin, lmax, num=NW)  # wavelength grid
 
-    if Raman == "RRS":
+    if raman == "RRS":
         # RRS excitation wavelength grid for a scattering angle of
         # 90 deg and a temperature of 243 K.
         wl_RS, _ = l2d_inv(wl, 90.0, 243.0)
