@@ -16,10 +16,15 @@ Two entry points are exposed:
   axis.
 """
 
+from __future__ import annotations
+
 import numpy as np
+from numpy.typing import NDArray
+
+from smartg.typing import NumericArrayLike
 
 
-def ICDF(P, N=None):
+def ICDF(P: NumericArrayLike, N: int | None = None) -> NDArray[np.integer]:
     """Invert the CDF of a 1-D PDF and return sampling indices.
 
     The cumulative distribution function (CDF) of the input
@@ -58,7 +63,7 @@ def ICDF(P, N=None):
     P = np.array(P)
 
     # calculate the cumulative distribution function
-    CDF = np.cumsum(P).astype("float32")
+    CDF: NDArray[np.floating] = np.cumsum(P).astype("float32")
     CDF /= CDF[-1]  # normalization
 
     if N is None:
@@ -78,12 +83,12 @@ def ICDF(P, N=None):
     # (we use the mid points so find the nearest neighbour with
     # searchsorted)
     bins = np.linspace(0, 1, num=N, endpoint=False) + 1.0 / (2 * N)
-    ICDF = np.searchsorted(CDF, bins)
+    ICDF: NDArray[np.integer] = np.searchsorted(CDF, bins)
 
     return ICDF
 
 
-def ICDF2D(P, N=500):
+def ICDF2D(P: NDArray[np.floating], N: int = 500) -> NDArray[np.integer]:
     """Invert the CDF of a 2-D PDF row-wise and return sampling indices.
 
     :func:`ICDF` is applied to each row of ``P`` (i.e. looping over
@@ -107,7 +112,7 @@ def ICDF2D(P, N=500):
         corresponding distribution.
     """
     # assert P.ndims==2
-    ll = []
+    ll: list[NDArray[np.integer]] = []
     for k in range(P.shape[0]):
         ll.append(ICDF(P[k, :], N=N))
 
