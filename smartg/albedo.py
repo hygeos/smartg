@@ -29,7 +29,7 @@ AlbedoSpeclib
 
 AlbedoSpectrum
     Spectral albedo defined by an explicit user-supplied spectrum
-    ``R(lambda)``, given as albedo values and corresponding
+    ``r(lambda)``, given as albedo values and corresponding
     wavelengths (nm).
 
 AlbedoMap
@@ -148,15 +148,15 @@ class AlbedoSpeclib(object):
 
 class AlbedoSpectrum(object):
     """
-    Spectral albedo defined by an explicit spectrum ``R(lambda)``.
+    Spectral albedo defined by an explicit spectrum ``r(lambda)``.
 
     Parameters
     ----------
-    R : array_like
+    r : array_like
         Spectral albedo values (dimensionless).
     lam : array_like
-        Wavelengths (nm) at which ``R`` is sampled. Must be the same
-        length as ``R``.
+        Wavelengths (nm) at which ``r`` is sampled. Must be the same
+        length as ``r``.
 
     Attributes
     ----------
@@ -164,8 +164,8 @@ class AlbedoSpectrum(object):
         Look-up table of albedo values indexed by wavelength (nm).
     """
 
-    def __init__(self, R: NumericArrayLike, lam: NumericArrayLike) -> None:
-        self.data: LUT = LUT(R, axes=[lam], names=["wavelength"])
+    def __init__(self, r: NumericArrayLike, lam: NumericArrayLike) -> None:
+        self.data: LUT = LUT(r, axes=[lam], names=["wavelength"])
 
     def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:
         """
@@ -206,15 +206,15 @@ class AlbedoMap(object):
     ``[xn-1, xn]``, with ``xn`` large enough to be considered as
     ``+Inf`` (and similarly for ``y``).
 
-    Each rectangle is assigned an index in ``Alist`` through the 2D
-    array ``Ai`` of shape ``(len(x), len(y))``. Negative indices are
+    Each rectangle is assigned an index in ``alist`` through the 2D
+    array ``ai`` of shape ``(len(x), len(y))``. Negative indices are
     reserved for surface properties.
 
     Parameters
     ----------
-    Ai : ndarray of int
+    ai : ndarray of int
         2D array of shape ``(len(x), len(y))`` giving, for each grid
-        cell, the index of the corresponding albedo in ``Alist``.
+        cell, the index of the corresponding albedo in ``alist``.
         Negative indices are reserved for surface properties.
     x : ndarray
         Monotonic array of upper ``x`` boundaries (km) of the grid
@@ -222,7 +222,7 @@ class AlbedoMap(object):
     y : ndarray
         Monotonic array of upper ``y`` boundaries (km) of the grid
         cells.
-    Alist : list of Albedo objects
+    alist : list of Albedo objects
         List of ``AlbedoCst``, ``AlbedoSpectrum`` or
         ``AlbedoSpeclib`` instances, one per distinct spectral
         albedo.
@@ -234,20 +234,20 @@ class AlbedoMap(object):
         (km).
     list : list of Albedo objects
         The list of distinct spectral albedos.
-    NALB : int
-        Number of distinct spectral albedos (``len(Alist)``).
+    nalb : int
+        Number of distinct spectral albedos (``len(alist)``).
     """
 
     def __init__(
         self,
-        Ai: NDArray[np.integer],
+        ai: NDArray[np.integer],
         x: NDArray[np.floating],
         y: NDArray[np.floating],
-        Alist: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum],
+        alist: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum],
     ) -> None:
-        self.map: LUT = LUT(Ai, axes=[x, y], names=["X", "Y"])
-        self.list: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum] = Alist
-        self.NALB: int = len(Alist)
+        self.map: LUT = LUT(ai, axes=[x, y], names=["X", "Y"])
+        self.list: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum] = alist
+        self.nalb: int = len(alist)
 
     def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:
         """
@@ -261,11 +261,11 @@ class AlbedoMap(object):
         Returns
         -------
         ndarray
-            Array of shape ``(len(wl), NALB)`` holding the spectral
+            Array of shape ``(len(wl), nalb)`` holding the spectral
             albedo of each entry in ``self.list`` at the requested
             wavelengths.
         """
-        return np.stack([ALB.get(wl) for ALB in self.list]).T
+        return np.stack([alb.get(wl) for alb in self.list]).T
 
     def get_map(
         self, x0: NumericArrayLike, y0: NumericArrayLike
@@ -283,7 +283,7 @@ class AlbedoMap(object):
         Returns
         -------
         ndarray
-            Albedo index (int) from ``Alist`` at each ``(x0, y0)``
+            Albedo index (int) from ``alist`` at each ``(x0, y0)``
             position, obtained by rounding to the nearest grid cell.
         """
         return np.asarray(
