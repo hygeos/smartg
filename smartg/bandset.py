@@ -11,16 +11,31 @@ from scipy.interpolate import interp1d
 
 class BandSet(object):
     def __init__(self, wav):
-        """
-        Common objet for formatting input bands definition
+        """Initialize a BandSet from wavelength band definitions.
 
-        Valid inputs:
-            * float
-            * 1-d array
-            * KDIS or REPTRAN IBANDS LIST
+        Common object for formatting input band definitions. Accepts a
+        scalar float, a 1-D array of wavelengths, or a list of KDIS or
+        RepTran ``IBandS`` objects (detected automatically via the
+        ``calc_profile`` attribute of the first element).
 
-        Methods:
-            __getitem__: returns wavelength
+        The wavelengths are stored internally as a ``float32`` NumPy
+        array. When the input is a scalar, it is reshaped to a 1-element
+        array and ``scalar`` is set to ``True``.
+
+        Parameters
+        ----------
+        wav : float, list, ndarray, or list of IBandS
+            Wavelength band definition. A float or 1-D array of
+            wavelengths (in nm), or a list of KDIS/RepTran ``IBandS``
+            objects whose ``w`` attribute gives the band wavelength.
+
+        Notes
+        -----
+        When ``wav`` is a list of ``IBandS`` objects,
+        ``use_reptran_kdis`` is set to ``True``, ``data`` holds the
+        original objects, and ``calc_profile`` delegates to each band's
+        own ``calc_profile`` method. Otherwise ``data`` is ``None`` and
+        ``calc_profile`` returns zeros.
         """
         try:
             self.use_reptran_kdis = hasattr(wav[0], "calc_profile")
@@ -45,14 +60,53 @@ class BandSet(object):
         self.size = self.wav.size
 
     def __getitem__(self, key):
+        """Return the wavelength(s) at the given index or slice.
+
+        Parameters
+        ----------
+        key : int, slice, or array-like
+            Index, slice, or fancy index into the internal wavelength
+            array.
+
+        Returns
+        -------
+        ndarray or float
+            The wavelength value(s) selected from the internal
+            ``float32`` wavelength array.
+        """
         return self.wav[key]
 
     def __len__(self):
+        """Return the number of bands in the set.
+
+        Returns
+        -------
+        int
+            Number of wavelength bands (``self.size``).
+        """
         return self.size
 
     def calc_profile(self, prof):
-        """
-        calculate the absorption profile for each band
+        """Compute the molecular absorption profile for each band.
+
+        For each band, calculate the absorption optical depth profile
+        over the altitude grid of ``prof``. When the BandSet was built
+        from KDIS/RepTran ``IBandS`` objects
+        (``use_reptran_kdis is True``), each band's own
+        ``calc_profile`` method is invoked. Otherwise an array of zeros
+        is returned (no molecular absorption handled at the band level).
+
+        Parameters
+        ----------
+        prof : Profile
+            Atmospheric profile providing the altitude grid ``prof.z``
+            (in km) on which the optical depth is evaluated.
+
+        Returns
+        -------
+        tau_mol : ndarray
+            Molecular absorption optical depth with shape
+            ``(size, len(prof.z))`` and ``float32`` dtype.
         """
         tau_mol = np.zeros((self.size, len(prof.z)), dtype="float32")
 
@@ -66,17 +120,69 @@ class BandSet(object):
 def spectral_grids(
     lmin, lmax, datas, dl=None, dls=None, Raman="RRS", unit="mW/m2/nm"
 ):
-    """
-    inputs:
-        lmin  : lambda min (nm)
-        lmax  : lambda max (nm)
-        datas : solar spectrum data
+    """Build spectral grids for absorption and scattering computations.
 
-    keywords:
-        dl : high spectral resolution for absorption features # nm (default, None, same as datas)
-        dls: low  spectral resolution for scattering features # nm (default None), NWS=1
-        Raman: 'RRS' or 'VRS'
-        unit: solar irradiance unit 'photons/cm2/s/nm' or 'mW/m2/nm'
+    Construct the high-resolution wavelength grid used for absorption
+    features (``wl``), the low-resolution grid used for scattering
+    features (``wls``), and the Raman excitation grid (``wl_RS``). A
+    solar irradiance LUT (``Es_LUT``) is built over the union of the
+    scattering and Raman-shifted ranges, and precomputed interpolation
+    parameters (``iwls_in``, ``wwls_in``) map each high-resolution
+    wavelength onto the low-resolution grid by 1-D linear
+    interpolation.
+
+    When ``dl`` is ``None``, the high-resolution grid is taken directly
+    from the solar spectrum samples falling within ``[lmin, lmax]``;
+    otherwise it is a uniform grid from ``lmin`` to ``lmax`` with step
+    ``dl``. When ``dls`` is ``None``, the low-resolution grid is
+    collapsed to a single point (``NWS = 1``); otherwise it is a
+    uniform grid with step ``dls`` whose size is forced to be odd.
+
+    Parameters
+    ----------
+    lmin : float
+        Minimum wavelength of the spectral range (nm).
+    lmax : float
+        Maximum wavelength of the spectral range (nm).
+    datas : ndarray
+        Solar spectrum data with shape ``(N, 2)``: column 0 holds the
+        wavelengths (nm) and column 1 the irradiance values.
+    dl : float, optional
+        High spectral resolution step for absorption features (nm).
+        If ``None`` (default), the solar spectrum sampling within
+        ``[lmin, lmax]`` is used as the high-resolution grid.
+    dls : float, optional
+        Low spectral resolution step for scattering features (nm).
+        If ``None`` (default), the low-resolution grid is reduced to a
+        single point (``NWS = 1``).
+    Raman : {'RRS', 'VRS'}, optional
+        Raman scattering type: ``'RRS'`` (rotational Raman, default)
+        uses a 90 deg scattering angle and 243 K temperature;
+        ``'VRS'`` (vibrational Raman) uses ``V2d_inv``.
+    unit : {'mW/m2/nm', 'photons/cm2/s/nm'}, optional
+        Unit of the solar irradiance in ``datas``. If
+        ``'photons/cm2/s/nm'``, the values are converted from
+        ``mW/m2/nm`` to photon flux. Default is ``'mW/m2/nm'``.
+
+    Returns
+    -------
+    wl : ndarray
+        High-resolution wavelength grid (nm) for absorption features.
+    wls : ndarray
+        Low-resolution wavelength grid (nm) for scattering features
+        (single point if ``dls`` is ``None``).
+    wl_RS : ndarray
+        Raman excitation wavelength grid (nm) corresponding to ``wl``.
+    Es_LUT : LUT
+        Solar irradiance look-up table over the union of ``wls`` and
+        ``wl_RS`` ranges, indexed by wavelength.
+    iwls_in : ndarray of int8
+        Index of the lower ``wls`` value used to linearly interpolate
+        each ``wl`` onto the low-resolution grid.
+    wwls_in : ndarray of float32
+        Floating-point weight (in ``[0, 1]``) between ``iwls_in`` and
+        ``iwls_in + 1`` for the linear interpolation of ``wl`` in
+        ``wls``.
     """
     ## Solar spectrum input data ##
     wl0 = datas[:, 0]
