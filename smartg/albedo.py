@@ -44,7 +44,7 @@ class Albedo_cst(object):
             Albedo values, same shape as ``wl``, filled with
             ``self.alb``.
         """
-        alb = np.zeros(np.array(wl).shape, dtype="float32")
+        alb = np.zeros(np.array(wl).shape, dtype=np.float32)
         alb[...] = self.alb
         return alb
 
@@ -231,7 +231,7 @@ class Albedo_map(object):
             Albedo index from ``Alist`` at each ``(x0, y0)`` position,
             obtained by rounding to the nearest grid cell.
         """
-        return self.map[
+        return np.asarray(self.map[
             Idx(x0, round=True, fill_value="extrema"),
             Idx(y0, round=True, fill_value="extrema"),
-        ].astype(int)
+        ]).astype(int)
