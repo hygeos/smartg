@@ -17,7 +17,7 @@ from smartg.phase import convert_phase_to_iparper
 from smartg.water import IOP_base
 from warnings import warn
 from smartg.albedo import AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
-from smartg.tools.progress import Progress
+from smartg.tools.progress import progress as make_progress
 from smartg.cdf import icdf_2d
 from smartg.modified_environ import modified_environ
 from luts.luts import LUT, MLUT
@@ -1723,7 +1723,7 @@ class Smartg(object):
                   n_jac_abs=NJAC_ABS)
 
         # Initialize the progress bar
-        p = Progress(NBPHOTONS, progress)
+        p = make_progress(NBPHOTONS, progress)
 
         # Initialize the RNG
         SEED = self.rng.setup(SEED, XBLOCK, XGRID)
@@ -2289,7 +2289,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
         # === Here allows the calculation of the analytical approx of n_atm in backward ->
         if (back and (dicSTP["LPH"] is not None) and (dicSTP["LPR"] is not None)):
             naatm = np.zeros(lwl, dtype=np.float64)
-            p = Progress(lwl-1, dicSTP["prog"])
+            p = make_progress(lwl-1, dicSTP["prog"])
             for j in range (0, lwl):
                 SUM_naatm=0
                 p.update(j+1, 'n_aatm computed : {:.3g} / {:.3g}'.format(j+1, lwl))
@@ -3149,7 +3149,7 @@ def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_
         Main GPU kernel entry point.
     kernel2 : callable
         Secondary kernel handle (kept for API compatibility).
-    progress : Progress
+    progress : progress
         Progress-bar-like object exposing ``update(value, message)``.
     x0 : pycuda.gpuarray.GPUArray
         Initial photon position.

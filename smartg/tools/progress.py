@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Progress bar utilities for SMART-G.
 
-Provides a unified :func:`Progress` factory that returns a progress bar
+Provides a unified :func:`progress` factory that returns a progress bar
 adapted to the current execution environment:
 
 * ``notebook`` mode -- uses ``ipywidgets`` (``FloatProgress``) when running
@@ -39,20 +39,20 @@ except (NameError, ImportError):
         mode = "progressbar"
 
 
-def Progress(vmax, activate=True):
+def progress(vmax, activate=True):
     if not activate:
-        return Progress_invisible()
+        return ProgressInvisible()
     elif mode == "notebook":
-        return Progress_notebook(vmax)
+        return ProgressNotebook(vmax)
     elif mode == "progressbar2":
-        return Progress_progressbar2(vmax)
+        return ProgressProgressbar2(vmax)
     elif mode == "progressbar":
-        return Progress_progressbar(vmax)
+        return ProgressProgressbar(vmax)
     else:
         raise ValueError("Invalid mode " + mode)
 
 
-class Progress_invisible(object):
+class ProgressInvisible(object):
     """
     A progress bar that does nothing
     """
@@ -64,7 +64,7 @@ class Progress_invisible(object):
         pass
 
 
-class Progress_notebook(object):
+class ProgressNotebook(object):
     def __init__(self, vmax):
         """
         Initialize the progress bar object in the notebook
@@ -96,7 +96,7 @@ class Progress_notebook(object):
         self.label.value = message
 
 
-class Progress_progressbar2(object):
+class ProgressProgressbar2(object):
     def __init__(self, max):
         """
         Initialize the progress bar objectusing library 'progressbar2'
@@ -126,7 +126,7 @@ class Progress_progressbar2(object):
         self.label.format = message
 
 
-class Progress_progressbar(object):
+class ProgressProgressbar(object):
     def __init__(self, max):
         """
         Initialize the progress bar object using library 'progressbar'
