@@ -24,96 +24,100 @@ from numpy.typing import NDArray
 from smartg.typing import NumericArrayLike
 
 
-def icdf(P: NumericArrayLike, N: int | None = None) -> NDArray[np.integer]:
+def icdf(
+    pdf: NumericArrayLike, n: int | None = None
+) -> NDArray[np.integer]:
     """Invert the CDF of a 1-D PDF and return sampling indices.
 
     The cumulative distribution function (CDF) of the input
-    probability distribution function (PDF) ``P`` is computed and
-    normalised. Its inverse is then evaluated at ``N`` mid-points
-    evenly spaced over ``[0, 1]``, yielding the indices of ``P`` that
-    should be sampled to follow the distribution. When ``N`` is not
-    provided, it is automatically estimated so that the smallest CDF
-    bin is sampled over at least ``Nmin = 10`` values, bounding the
-    maximum relative sampling error to ``1 / Nmin``.
+    probability distribution function (PDF) ``pdf`` is computed and
+    normalised. Its inverse is then evaluated at ``n`` mid-points
+    evenly spaced over ``[0, 1]``, yielding the indices of ``pdf``
+    that should be sampled to follow the distribution. When ``n`` is
+    not provided, it is automatically estimated so that the smallest
+    CDF bin is sampled over at least ``n_min = 10`` values, bounding
+    the maximum relative sampling error to ``1 / n_min``.
 
     Parameters
     ----------
-    P : array_like
+    pdf : array_like
         1-D probability distribution function values. They need not
         be normalised; the CDF is normalised internally.
-    N : int, optional
+    n : int, optional
         Number of discretisation points for the inverse cumulative
         distribution function. If ``None`` (default), it is
         automatically estimated from the smallest CDF step so that
-        the smallest bin is sampled over at least ``Nmin = 10``
+        the smallest bin is sampled over at least ``n_min = 10``
         values.
 
     Returns
     -------
     ndarray of int
-        1-D array of length ``N`` holding the indices of ``P`` to
+        1-D array of length ``n`` holding the indices of ``pdf`` to
         sample in order to follow the input distribution.
 
     Notes
     -----
-    The mid-points of the ``[0, 1]`` interval divided in ``N`` bins
+    The mid-points of the ``[0, 1]`` interval divided in ``n`` bins
     are used so that ``numpy.searchsorted`` finds the nearest
     neighbour of each mid-point in the CDF.
     """
-    P = np.array(P)
+    pdf = np.array(pdf)
 
     # calculate the cumulative distribution function
-    CDF: NDArray[np.floating] = np.cumsum(P).astype("float32")
-    CDF /= CDF[-1]  # normalization
+    cdf: NDArray[np.floating] = np.cumsum(pdf).astype("float32")
+    cdf /= cdf[-1]  # normalization
 
-    if N is None:
+    if n is None:
         # m is the size of smallest CDF value (relative to 1)
-        m = np.amin(np.diff(CDF))
-        # calculate the number of bins N in the icdf
-        # such that the smallest bin be sampled over at least Nmin
+        m = np.amin(np.diff(cdf))
+        # calculate the number of bins n in the icdf
+        # such that the smallest bin be sampled over at least n_min
         # values to avoid sampling inaccuracies
-        # (maximum relative error is then 1/Nmin)
-        Nmin = 10.0
-        N = int(np.round(Nmin / m))
+        # (maximum relative error is then 1/n_min)
+        n_min = 10.0
+        n = int(np.round(n_min / m))
 
     #
     # inverse the CDF
     #
-    # mid points of the [0,1] internal divided in N
+    # mid points of the [0,1] internal divided in n
     # (we use the mid points so find the nearest neighbour with
     # searchsorted)
-    bins = np.linspace(0, 1, num=N, endpoint=False) + 1.0 / (2 * N)
-    icdf: NDArray[np.integer] = np.searchsorted(CDF, bins)
+    bins = np.linspace(0, 1, num=n, endpoint=False) + 1.0 / (2 * n)
+    icdf: NDArray[np.integer] = np.searchsorted(cdf, bins)
 
     return icdf
 
 
-def icdf_2d(P: NDArray[np.floating], N: int = 500) -> NDArray[np.integer]:
+def icdf_2d(
+    pdf: NDArray[np.floating], n: int = 500
+) -> NDArray[np.integer]:
     """Invert the CDF of a 2-D PDF row-wise and return sampling indices.
 
-    :func:`icdf` is applied to each row of ``P`` (i.e. looping over
+    :func:`icdf` is applied to each row of ``pdf`` (i.e. looping over
     the first axis), producing one set of sampling indices per row.
 
     Parameters
     ----------
-    P : array_like
+    pdf : array_like
         2-D probability distribution function values of shape
         ``(n_rows, n_bins)``. Each row is treated as an independent
         1-D PDF and need not be normalised.
-    N : int, optional
+    n : int, optional
         Number of discretisation points for the inverse cumulative
         distribution function of each row. Default is ``500``.
 
     Returns
     -------
     ndarray of int
-        2-D array of shape ``(n_rows, N)`` holding, for each row of
-        ``P``, the indices to sample in order to follow the
+        2-D array of shape ``(n_rows, n)`` holding, for each row of
+        ``pdf``, the indices to sample in order to follow the
         corresponding distribution.
     """
-    # assert P.ndims==2
+    # assert pdf.ndims==2
     ll: list[NDArray[np.integer]] = []
-    for k in range(P.shape[0]):
-        ll.append(icdf(P[k, :], N=N))
+    for k in range(pdf.shape[0]):
+        ll.append(icdf(pdf[k, :], n=n))
 
     return np.stack(ll)

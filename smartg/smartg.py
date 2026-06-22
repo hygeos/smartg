@@ -1129,13 +1129,13 @@ class Smartg(object):
             The earth radius in km
         wl_proba : None | 1-D ndarray, optional
             The inversed cumulative distribution function for wavelength selection. It is for example 
-            the result of function icdf(proba, N).
+            the result of function icdf(proba, n).
         sensor_proba : None | 1-D ndarray, optional
            The inversed cumulative distribution function for sensor selection. It is for example 
-           the result of function icdf(proba, N).
+           the result of function icdf(proba, n).
         cell_proba : None | 2-D ndarray, optional
             The inversed cumulative distribution function for cell selection. It is for example 
-            the result of function icdf_2d(proba, N).
+            the result of function icdf_2d(proba, n).
         NBTHETA : int, optional
             The number of viewing/sun zenith angles in forward/backward for the cone sampling.
             This parameter is ignored if the parameter `le` is used.
