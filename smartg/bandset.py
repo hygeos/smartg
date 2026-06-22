@@ -1,16 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
+
 import numpy as np
+from numpy.typing import NDArray
+from scipy.interpolate import interp1d
+import scipy.constants as cst
+
+from luts.luts import LUT
 from smartg.rrs import l2d_inv
 from smartg.vrs import V2d_inv
-from luts.luts import LUT
-import scipy.constants as cst
-from scipy.interpolate import interp1d
+from smartg.typing import BandLike, NumericArrayLike, RealNumber
+
+if TYPE_CHECKING:
+    # Imported only for type checking to avoid circular imports
+    # (atmosphere.py imports from bandset.py at runtime).
+    from smartg.atmosphere import ProfileBase
 
 
 class BandSet(object):
-    def __init__(self, wav):
+    def __init__(self, wav: NumericArrayLike | list[BandLike]) -> None:
         """Initialize a BandSet from wavelength band definitions.
 
         Common object for formatting input band definitions. Accepts a
@@ -37,29 +49,36 @@ class BandSet(object):
         own ``calc_profile`` method. Otherwise ``data`` is ``None`` and
         ``calc_profile`` returns zeros.
         """
+        # Detect KDIS/RepTran band objects via the BandLike protocol.
+        # Scalar inputs (int/float) have no __getitem__ and are handled
+        # by the except branch.
         try:
-            self.use_reptran_kdis = hasattr(wav[0], "calc_profile")
-        except:
+            first = wav[0] if isinstance(wav, (list, np.ndarray)) else wav
+            self.use_reptran_kdis: bool = isinstance(first, BandLike)
+        except Exception:
             self.use_reptran_kdis = False
 
-        self.type_wav = False
+        self.type_wav: type | None = None
         if self.use_reptran_kdis:
-            self.wav = [x.w for x in wav]
-            self.data = wav
-            self.type_wav = type(wav[0])
+            bands = cast(list[BandLike], wav)
+            wav_vals: list[float] | NumericArrayLike = [x.w for x in bands]
+            self.data: list[BandLike] | None = bands
+            self.type_wav = type(bands[0])
         else:
-            self.wav = wav
+            wav_vals = cast(NumericArrayLike, wav)
             self.data = None
             self.type_wav = None
 
-        assert isinstance(self.wav, (float, list, np.ndarray))
-        self.wav = np.array(self.wav, dtype="float32")
-        self.scalar = self.wav.ndim == 0
+        assert isinstance(wav_vals, (float, list, np.ndarray))
+        self.wav: NDArray[np.float32] = np.array(wav_vals, dtype="float32")
+        self.scalar: bool = self.wav.ndim == 0
         if self.scalar:
             self.wav = self.wav.reshape(1)
-        self.size = self.wav.size
+        self.size: int = int(self.wav.size)
 
-    def __getitem__(self, key):
+    def __getitem__(
+        self, key: int | slice | NDArray[np.integer]
+    ) -> NDArray[np.float32] | np.floating:
         """Return the wavelength(s) at the given index or slice.
 
         Parameters
@@ -76,7 +95,7 @@ class BandSet(object):
         """
         return self.wav[key]
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return the number of bands in the set.
 
         Returns
@@ -86,7 +105,7 @@ class BandSet(object):
         """
         return self.size
 
-    def calc_profile(self, prof):
+    def calc_profile(self, prof: ProfileBase) -> NDArray[np.float32]:
         """Compute the molecular absorption profile for each band.
 
         For each band, calculate the absorption optical depth profile
@@ -111,6 +130,7 @@ class BandSet(object):
         tau_mol = np.zeros((self.size, len(prof.z)), dtype="float32")
 
         if self.use_reptran_kdis:
+            assert self.data is not None
             for i, w in enumerate(self.data):
                 tau_mol[i, :] = w.calc_profile(prof)
 
@@ -118,8 +138,21 @@ class BandSet(object):
 
 
 def spectral_grids(
-    lmin, lmax, datas, dl=None, dls=None, Raman="RRS", unit="mW/m2/nm"
-):
+    lmin: RealNumber,
+    lmax: RealNumber,
+    datas: NDArray[np.floating],
+    dl: RealNumber | None = None,
+    dls: RealNumber | None = None,
+    Raman: str = "RRS",
+    unit: str = "mW/m2/nm",
+) -> tuple[
+    NDArray[np.floating],
+    NDArray[np.floating],
+    NDArray[np.floating],
+    LUT,
+    NDArray[np.int8],
+    NDArray[np.float32],
+]:
     """Build spectral grids for absorption and scattering computations.
 
     Construct the high-resolution wavelength grid used for absorption
