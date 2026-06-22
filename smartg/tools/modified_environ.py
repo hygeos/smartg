@@ -1,11 +1,23 @@
-import contextlib
-import os
+"""Context manager for temporarily modifying the process environment.
 
-'''
-A context to temporarily modify environment variables
+This module provides a context manager that allows environment variables
+to be added, updated, or removed for the duration of a ``with`` block.
+On exit, the original environment is restored: variables that existed
+before are reset to their previous values, variables that were newly
+introduced are removed, and variables that were explicitly removed are
+restored.
 
-https://stackoverflow.com/questions/2059482/python-temporarily-modify-the-current-processs-environment
+It is used, for instance, to temporarily set the ``CUDA_DEVICE``
+environment variable when initializing a pycuda context (see
+:func:`smartg.smartg.Smartg.__init__`).
 
+References
+----------
+.. [1] Stack Overflow: temporarily modify the current process's
+       environment.
+
+Examples
+--------
 >>> with modified_environ('HOME', LD_LIBRARY_PATH='/my/path/to/lib'):
 ...     home = os.environ.get('HOME')
 ...     path = os.environ.get("LD_LIBRARY_PATH")
@@ -20,22 +32,56 @@ True
 False
 >>> path is None
 True
-'''
+"""
+
+import contextlib
+import os
+from collections.abc import Iterator
+from typing import Any
+
 
 @contextlib.contextmanager
-def modified_environ(*remove, **update):
-    """
-    Temporarily updates the ``os.environ`` dictionary in-place.
+def modified_environ(*remove: str, **update: Any) -> Iterator[None]:
+    """Temporarily update ``os.environ`` in-place.
 
-    The ``os.environ`` dictionary is updated in-place so that the modification
-    is sure to work in all situations.
+    The environment is modified in-place so that the change is visible
+    to all subprocesses and C extensions that consult ``os.environ``
+    directly. The original state is restored when the context block
+    exits, even if an exception is raised inside it.
 
-    :param remove: Environment variables to remove.
-    :param update: Dictionary of environment variables and values to add/update.
+    Parameters
+    ----------
+    *remove : str
+        Names of environment variables to remove for the duration of
+        the context. Variables that did not exist before are simply
+        ignored.
+    **update : str
+        Environment variables to set or override, given as keyword
+        arguments (e.g. ``LD_LIBRARY_PATH='/my/path'``). Values are
+        converted to strings by :meth:`os.environ.update`.
+
+    Yields
+    ------
+    None
+        No value is yielded; the context only provides the side effect
+        of a modified environment.
+
+    Notes
+    -----
+    Variables that are both updated and already present are saved and
+    restored to their original value on exit. Variables introduced by
+    ``update`` that were not previously defined are removed on exit.
+    Variables listed in ``remove`` are restored on exit if they
+    existed before, otherwise they stay absent.
+
+    See Also
+    --------
+    smartg.smartg.Smartg : uses this context manager to select a CUDA
+        device at initialization time.
     """
     env = os.environ
     update = update or {}
-    remove = remove or []
+    remove = remove or ()
 
     # List of environment variables being updated or removed.
     stomped = (set(update.keys()) | set(remove)) & set(env.keys())
