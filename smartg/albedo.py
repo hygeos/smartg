@@ -1,9 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
+
+from typing import cast
 
 import numpy as np
+from numpy.typing import NDArray
 from luts.luts import LUT, Idx
+
+from smartg.typing import NumericArrayLike, PathType
 
 
 class Albedo_cst(object):
@@ -25,10 +31,10 @@ class Albedo_cst(object):
         The constant albedo value stored at construction time.
     """
 
-    def __init__(self, alb):
-        self.alb = alb
+    def __init__(self, alb: float) -> None:
+        self.alb: float = alb
 
-    def get(self, wl):
+    def get(self, wl: NumericArrayLike) -> NDArray[np.float32]:
         """
         Return the spectral albedo at the requested wavelengths.
 
@@ -40,9 +46,9 @@ class Albedo_cst(object):
 
         Returns
         -------
-        ndarray of float32
-            Albedo values, same shape as ``wl``, filled with
-            ``self.alb``.
+        ndarray
+            Albedo values (float32), same shape as ``wl``, filled
+            with ``self.alb``.
         """
         alb = np.zeros(np.array(wl).shape, dtype=np.float32)
         alb[...] = self.alb
@@ -71,17 +77,17 @@ class Albedo_speclib(object):
         Look-up table of albedo values indexed by wavelength (nm).
     """
 
-    def __init__(self, filename):
+    def __init__(self, filename: PathType) -> None:
         data = np.genfromtxt(filename, skip_header=26)
         # convert X axis from micrometers to nm
         # convert Y axis from percent to dimensionless
-        self.data = LUT(
+        self.data: LUT = LUT(
             data[:, 1] / 100.0,
             axes=[data[:, 0] * 1000.0],
             names=["wavelength"],
         )
 
-    def get(self, wl):
+    def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:
         """
         Return the spectral albedo at the requested wavelengths.
 
@@ -98,7 +104,9 @@ class Albedo_speclib(object):
         ndarray
             Albedo values, same shape as ``wl``.
         """
-        return self.data[Idx(wl, fill_value="extrapolate")]
+        return cast(
+            NDArray[np.floating], self.data[Idx(wl, fill_value="extrapolate")]
+        )
 
 
 class Albedo_spectrum(object):
@@ -119,10 +127,10 @@ class Albedo_spectrum(object):
         Look-up table of albedo values indexed by wavelength (nm).
     """
 
-    def __init__(self, R, lam):
-        self.data = LUT(R, axes=[lam], names=["wavelength"])
+    def __init__(self, R: NumericArrayLike, lam: NumericArrayLike) -> None:
+        self.data: LUT = LUT(R, axes=[lam], names=["wavelength"])
 
-    def get(self, wl):
+    def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:
         """
         Return the spectral albedo at the requested wavelengths.
 
@@ -139,7 +147,9 @@ class Albedo_spectrum(object):
         ndarray
             Albedo values, same shape as ``wl``.
         """
-        return self.data[Idx(wl, fill_value="extrapolate")]
+        return cast(
+            NDArray[np.floating], self.data[Idx(wl, fill_value="extrapolate")]
+        )
 
 
 class Albedo_map(object):
@@ -191,12 +201,18 @@ class Albedo_map(object):
         Number of distinct spectral albedos (``len(Alist)``).
     """
 
-    def __init__(self, Ai, x, y, Alist):
-        self.map = LUT(Ai, axes=[x, y], names=["X", "Y"])
-        self.list = Alist
-        self.NALB = len(Alist)
+    def __init__(
+        self,
+        Ai: NDArray[np.integer],
+        x: NDArray[np.floating],
+        y: NDArray[np.floating],
+        Alist: list[Albedo_cst | Albedo_speclib | Albedo_spectrum],
+    ) -> None:
+        self.map: LUT = LUT(Ai, axes=[x, y], names=["X", "Y"])
+        self.list: list[Albedo_cst | Albedo_speclib | Albedo_spectrum] = Alist
+        self.NALB: int = len(Alist)
 
-    def get(self, wl):
+    def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:
         """
         Return the spectral albedo of every entry in the map.
 
@@ -214,7 +230,9 @@ class Albedo_map(object):
         """
         return np.stack([ALB.get(wl) for ALB in self.list]).T
 
-    def get_map(self, x0, y0):
+    def get_map(
+        self, x0: NumericArrayLike, y0: NumericArrayLike
+    ) -> NDArray[np.integer]:
         """
         Return the albedo index at the requested surface positions.
 
@@ -227,11 +245,13 @@ class Albedo_map(object):
 
         Returns
         -------
-        ndarray of int
-            Albedo index from ``Alist`` at each ``(x0, y0)`` position,
-            obtained by rounding to the nearest grid cell.
+        ndarray
+            Albedo index (int) from ``Alist`` at each ``(x0, y0)``
+            position, obtained by rounding to the nearest grid cell.
         """
-        return np.asarray(self.map[
-            Idx(x0, round=True, fill_value="extrema"),
-            Idx(y0, round=True, fill_value="extrema"),
-        ]).astype(int)
+        return np.asarray(
+            self.map[
+                Idx(x0, round=True, fill_value="extrema"),
+                Idx(y0, round=True, fill_value="extrema"),
+            ]
+        ).astype(int)
