@@ -1,5 +1,42 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""Surface albedo models for SMART-G simulations.
+
+This module provides classes defining the spectral albedo of the
+surface bounding a SMART-G radiative transfer simulation. Several
+albedo representations are available, ranging from idealised flat
+spectra to user-supplied or library-read spectra, and including a 2D
+horizontal map of spectral albedos for spatially heterogeneous
+surfaces.
+
+The albedo objects expose a common ``get(wl)`` interface returning the
+spectral albedo evaluated at the requested wavelengths (nm). They are
+passed as the ``alb`` parameter when building a surface in
+``smartg.atmosphere``.
+
+Key Classes
+-----------
+Albedo_cst
+    Constant (wavelength-independent) albedo. A single scalar value is
+    returned for every wavelength, producing a flat spectral albedo.
+    Useful for idealised surfaces such as a white Lambertian ground.
+
+Albedo_speclib
+    Spectral albedo read from a JPL spectral library file (ASTER
+    Spectral Library ASCII format). The wavelength axis is converted
+    from micrometers to nanometres and the reflectance from percent to
+    a dimensionless albedo in ``[0, 1]``.
+
+Albedo_spectrum
+    Spectral albedo defined by an explicit user-supplied spectrum
+    ``R(lambda)``, given as albedo values and corresponding
+    wavelengths (nm).
+
+Albedo_map
+    2D horizontal map of spectral albedos. A rectangular grid of
+    cells, each referencing one entry from a list of albedo objects,
+    allows spatially heterogeneous surfaces to be represented.
+"""
 
 from __future__ import annotations
 
