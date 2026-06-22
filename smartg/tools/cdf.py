@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Inverse cumulative distribution function (ICDF) utilities.
+"""Inverse cumulative distribution function (icdf) utilities.
 
 This module provides helpers to sample indices according to a
 probability distribution function (PDF) by inverting its cumulative
@@ -11,8 +11,8 @@ events from discrete phase functions.
 
 Two entry points are exposed:
 
-- :func:`ICDF` for a 1-D PDF.
-- :func:`ICDF2D` for a 2-D PDF, processed row-wise over its first
+- :func:`icdf` for a 1-D PDF.
+- :func:`icdf_2d` for a 2-D PDF, processed row-wise over its first
   axis.
 """
 
@@ -24,7 +24,7 @@ from numpy.typing import NDArray
 from smartg.typing import NumericArrayLike
 
 
-def ICDF(P: NumericArrayLike, N: int | None = None) -> NDArray[np.integer]:
+def icdf(P: NumericArrayLike, N: int | None = None) -> NDArray[np.integer]:
     """Invert the CDF of a 1-D PDF and return sampling indices.
 
     The cumulative distribution function (CDF) of the input
@@ -69,7 +69,7 @@ def ICDF(P: NumericArrayLike, N: int | None = None) -> NDArray[np.integer]:
     if N is None:
         # m is the size of smallest CDF value (relative to 1)
         m = np.amin(np.diff(CDF))
-        # calculate the number of bins N in the ICDF
+        # calculate the number of bins N in the icdf
         # such that the smallest bin be sampled over at least Nmin
         # values to avoid sampling inaccuracies
         # (maximum relative error is then 1/Nmin)
@@ -83,15 +83,15 @@ def ICDF(P: NumericArrayLike, N: int | None = None) -> NDArray[np.integer]:
     # (we use the mid points so find the nearest neighbour with
     # searchsorted)
     bins = np.linspace(0, 1, num=N, endpoint=False) + 1.0 / (2 * N)
-    ICDF: NDArray[np.integer] = np.searchsorted(CDF, bins)
+    icdf: NDArray[np.integer] = np.searchsorted(CDF, bins)
 
-    return ICDF
+    return icdf
 
 
-def ICDF2D(P: NDArray[np.floating], N: int = 500) -> NDArray[np.integer]:
+def icdf_2d(P: NDArray[np.floating], N: int = 500) -> NDArray[np.integer]:
     """Invert the CDF of a 2-D PDF row-wise and return sampling indices.
 
-    :func:`ICDF` is applied to each row of ``P`` (i.e. looping over
+    :func:`icdf` is applied to each row of ``P`` (i.e. looping over
     the first axis), producing one set of sampling indices per row.
 
     Parameters
@@ -114,6 +114,6 @@ def ICDF2D(P: NDArray[np.floating], N: int = 500) -> NDArray[np.integer]:
     # assert P.ndims==2
     ll: list[NDArray[np.integer]] = []
     for k in range(P.shape[0]):
-        ll.append(ICDF(P[k, :], N=N))
+        ll.append(icdf(P[k, :], N=N))
 
     return np.stack(ll)

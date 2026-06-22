@@ -18,7 +18,7 @@ from smartg.water import IOP_base
 from warnings import warn
 from smartg.albedo import AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
 from smartg.tools.progress import Progress
-from smartg.tools.cdf import ICDF2D
+from smartg.tools.cdf import icdf_2d
 from smartg.tools.modified_environ import modified_environ
 from luts.luts import LUT, MLUT
 from scipy.interpolate import interp1d
@@ -1129,13 +1129,13 @@ class Smartg(object):
             The earth radius in km
         wl_proba : None | 1-D ndarray, optional
             The inversed cumulative distribution function for wavelength selection. It is for example 
-            the result of function ICDF(proba, N).
+            the result of function icdf(proba, N).
         sensor_proba : None | 1-D ndarray, optional
            The inversed cumulative distribution function for sensor selection. It is for example 
-           the result of function ICDF(proba, N).
+           the result of function icdf(proba, N).
         cell_proba : None | 2-D ndarray, optional
             The inversed cumulative distribution function for cell selection. It is for example 
-            the result of function ICDF2D(proba, N).
+            the result of function icdf_2d(proba, N).
         NBTHETA : int, optional
             The number of viewing/sun zenith angles in forward/backward for the cone sampling.
             This parameter is ignored if the parameter `le` is used.
@@ -1690,7 +1690,7 @@ class Smartg(object):
                 )
                 norm_emission = (4*np.pi) * emission.sum(dim='z_atm')
                 p_emission = emission * (4*np.pi) / norm_emission
-                cell_proba_icdf = to_gpu(ICDF2D(p_emission.to_numpy()).T)
+                cell_proba_icdf = to_gpu(icdf_2d(p_emission.to_numpy()).T)
                 NCELLPROBA = cell_proba_icdf.shape[0]
             else:
                 assert cell_proba.shape[1] == NLAM
