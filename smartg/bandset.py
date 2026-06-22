@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function, division
 import numpy as np
 from smartg.rrs import l2d_inv
 from smartg.vrs import V2d_inv
