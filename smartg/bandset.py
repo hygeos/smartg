@@ -1,5 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""Spectral band definition and spectral grid construction for SMART-G.
+
+This module provides tools to define the wavelength bands used in
+SMART-G radiative transfer simulations and to build the spectral grids
+required for absorption and scattering computations.
+
+Key components
+--------------
+BandSet
+    Common object for formatting input band definitions. Accepts a
+    scalar float, a 1-D array of wavelengths, or a list of KDIS/RepTran
+    ``IBandS`` objects (detected automatically via the ``BandLike``
+    protocol). When built from ``IBandS`` objects, molecular absorption
+    profiles are computed by delegating to each band's
+    ``calc_profile`` method.
+
+spectral_grids
+    Build the high-resolution wavelength grid for absorption features,
+    the low-resolution grid for scattering features, the Raman
+    excitation grid, and a solar irradiance look-up table. Precomputed
+    interpolation parameters map the high-resolution grid onto the
+    low-resolution grid by 1-D linear interpolation.
+"""
 
 from __future__ import annotations
 
@@ -50,8 +73,8 @@ class BandSet(object):
         ``calc_profile`` returns zeros.
         """
         # Detect KDIS/RepTran band objects via the BandLike protocol.
-        # Scalar inputs (int/float) have no __getitem__ and are handled
-        # by the except branch.
+        # Scalar inputs (int/float) have no __getitem__ and fall back
+        # to the except branch.
         try:
             first = wav[0] if isinstance(wav, (list, np.ndarray)) else wav
             self.use_reptran_kdis: bool = isinstance(first, BandLike)
@@ -217,14 +240,14 @@ def spectral_grids(
         ``iwls_in + 1`` for the linear interpolation of ``wl`` in
         ``wls``.
     """
-    ## Solar spectrum input data ##
+    # Solar spectrum input data
     wl0 = datas[:, 0]
     E0 = datas[:, 1]
-    # from mW/m2/nm to photons/cm2/s/nm
+    # Convert from mW/m2/nm to photons/cm2/s/nm
     if unit == "photons/cm2/s/nm":
         E0 *= 1e-3 * 1e-4 / (cst.h * cst.c) * (wl0 * 1e-9)
 
-    ## High spectral resolution grid (for absorption features)
+    # High spectral resolution grid (for absorption features)
     if dl is None:
         # Solar grid
         ii = np.where((wl0 >= lmin) & (wl0 <= lmax))
@@ -237,10 +260,11 @@ def spectral_grids(
         wl = np.linspace(lmin, lmax, num=NW)  # wavelength grid
 
     if Raman == "RRS":
-        ## RRS excitation wavelength grid for scattering angle of 90 deg and 243°K
+        # RRS excitation wavelength grid for a scattering angle of
+        # 90 deg and a temperature of 243 K.
         wl_RS, _ = l2d_inv(wl, 90.0, 243.0)
     else:
-        ## VRS excitation wavelength grid
+        # VRS excitation wavelength grid
         wl_RS, _ = V2d_inv(wl)
 
     lmin_RS = min(wl_RS.min(), wl.min())
@@ -249,27 +273,24 @@ def spectral_grids(
     # Solar spectrum LUT building
     ii = np.where((wl0 >= lmin_RS) & (wl0 <= lmax_RS))
     Es_LUT = LUT(E0[ii], axes=[wl0[ii]], names=["wavelength"], desc="Es")
-
-    # low spectral resolution for scattering computations # nm
+    # Low spectral resolution for scattering computations (step in nm)
     if dls is not None:
         NWS = int((lmax_RS - lmin_RS) / dls)
-        # ensures NWS is odd
+        # Ensure NWS is odd
         NWS = NWS if (NWS & 1) else NWS + 1
     else:
         NWS = 1
     wls = np.linspace(lmin_RS, lmax_RS, num=NWS)
 
-    # parameters for 1D linear interpolation of wl in wls
+    # Parameters for 1-D linear interpolation of wl in wls
     if NWS > 1:
         f = interp1d(wls, np.linspace(0, NWS - 1, num=NWS))
         iw = f(wl)
-        iwls_in = np.floor(iw).astype(
-            np.int8
-        )  # index of lower wls value in the wls array,
-        wwls_in = (iw - iwls_in).astype(
-            np.float32
-        )  # floating proportion between iwls and iwls+1
-        # special case for NWS
+        # Index of the lower wls value in the wls array
+        iwls_in = np.floor(iw).astype(np.int8)
+        # Floating-point proportion between iwls_in and iwls_in + 1
+        wwls_in = (iw - iwls_in).astype(np.float32)
+        # Special case for the upper boundary
         ii = np.where(iwls_in == (NWS - 1))
         iwls_in[ii] = NWS - 2
         wwls_in[ii] = 1.0
