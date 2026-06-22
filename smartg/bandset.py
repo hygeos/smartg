@@ -180,8 +180,8 @@ def spectral_grids(
 
     Construct the high-resolution wavelength grid used for absorption
     features (``wl``), the low-resolution grid used for scattering
-    features (``wls``), and the Raman excitation grid (``wl_RS``). A
-    solar irradiance LUT (``Es_LUT``) is built over the union of the
+    features (``wls``), and the Raman excitation grid (``wl_rs``). A
+    solar irradiance LUT (``es_lut``) is built over the union of the
     scattering and Raman-shifted ranges, and precomputed interpolation
     parameters (``iwls_in``, ``wwls_in``) map each high-resolution
     wavelength onto the low-resolution grid by 1-D linear
@@ -191,7 +191,7 @@ def spectral_grids(
     from the solar spectrum samples falling within ``[lmin, lmax]``;
     otherwise it is a uniform grid from ``lmin`` to ``lmax`` with step
     ``dl``. When ``dls`` is ``None``, the low-resolution grid is
-    collapsed to a single point (``NWS = 1``); otherwise it is a
+    collapsed to a single point (``nws = 1``); otherwise it is a
     uniform grid with step ``dls`` whose size is forced to be odd.
 
     Parameters
@@ -210,7 +210,7 @@ def spectral_grids(
     dls : float, optional
         Low spectral resolution step for scattering features (nm).
         If ``None`` (default), the low-resolution grid is reduced to a
-        single point (``NWS = 1``).
+        single point (``nws = 1``).
     raman : {'RRS', 'VRS'}, optional
         Raman scattering type: ``'RRS'`` (rotational Raman, default)
         uses a 90 deg scattering angle and 243 K temperature;
@@ -227,11 +227,11 @@ def spectral_grids(
     wls : ndarray
         Low-resolution wavelength grid (nm) for scattering features
         (single point if ``dls`` is ``None``).
-    wl_RS : ndarray
+    wl_rs : ndarray
         Raman excitation wavelength grid (nm) corresponding to ``wl``.
-    Es_LUT : LUT
+    es_lut : LUT
         Solar irradiance look-up table over the union of ``wls`` and
-        ``wl_RS`` ranges, indexed by wavelength.
+        ``wl_rs`` ranges, indexed by wavelength.
     iwls_in : ndarray of int8
         Index of the lower ``wls`` value used to linearly interpolate
         each ``wl`` onto the low-resolution grid.
@@ -242,60 +242,60 @@ def spectral_grids(
     """
     # Solar spectrum input data
     wl0 = datas[:, 0]
-    E0 = datas[:, 1]
+    e0 = datas[:, 1]
     # Convert from mW/m2/nm to photons/cm2/s/nm
     if unit == "photons/cm2/s/nm":
-        E0 *= 1e-3 * 1e-4 / (cst.h * cst.c) * (wl0 * 1e-9)
+        e0 *= 1e-3 * 1e-4 / (cst.h * cst.c) * (wl0 * 1e-9)
 
     # High spectral resolution grid (for absorption features)
     if dl is None:
         # Solar grid
         ii = np.where((wl0 >= lmin) & (wl0 <= lmax))
         wl = wl0[ii]
-        NW = wl.size
+        nw = wl.size
         # Solar resolution
         dl = (wl[-1] - wl[0]) / wl.size
     else:
-        NW = int((lmax - lmin) / dl) + 1
-        wl = np.linspace(lmin, lmax, num=NW)  # wavelength grid
+        nw = int((lmax - lmin) / dl) + 1
+        wl = np.linspace(lmin, lmax, num=nw)  # wavelength grid
 
     if raman == "RRS":
         # RRS excitation wavelength grid for a scattering angle of
         # 90 deg and a temperature of 243 K.
-        wl_RS, _ = l2d_inv(wl, 90.0, 243.0)
+        wl_rs, _ = l2d_inv(wl, 90.0, 243.0)
     else:
         # VRS excitation wavelength grid
-        wl_RS, _ = V2d_inv(wl)
+        wl_rs, _ = V2d_inv(wl)
 
-    lmin_RS = min(wl_RS.min(), wl.min())
-    lmax_RS = max(wl_RS.max(), wl.max())
+    lmin_rs = min(wl_rs.min(), wl.min())
+    lmax_rs = max(wl_rs.max(), wl.max())
 
     # Solar spectrum LUT building
-    ii = np.where((wl0 >= lmin_RS) & (wl0 <= lmax_RS))
-    Es_LUT = LUT(E0[ii], axes=[wl0[ii]], names=["wavelength"], desc="Es")
+    ii = np.where((wl0 >= lmin_rs) & (wl0 <= lmax_rs))
+    es_lut = LUT(e0[ii], axes=[wl0[ii]], names=["wavelength"], desc="Es")
     # Low spectral resolution for scattering computations (step in nm)
     if dls is not None:
-        NWS = int((lmax_RS - lmin_RS) / dls)
-        # Ensure NWS is odd
-        NWS = NWS if (NWS & 1) else NWS + 1
+        nws = int((lmax_rs - lmin_rs) / dls)
+        # Ensure nws is odd
+        nws = nws if (nws & 1) else nws + 1
     else:
-        NWS = 1
-    wls = np.linspace(lmin_RS, lmax_RS, num=NWS)
+        nws = 1
+    wls = np.linspace(lmin_rs, lmax_rs, num=nws)
 
     # Parameters for 1-D linear interpolation of wl in wls
-    if NWS > 1:
-        f = interp1d(wls, np.linspace(0, NWS - 1, num=NWS))
+    if nws > 1:
+        f = interp1d(wls, np.linspace(0, nws - 1, num=nws))
         iw = f(wl)
         # Index of the lower wls value in the wls array
         iwls_in = np.floor(iw).astype(np.int8)
         # Floating-point proportion between iwls_in and iwls_in + 1
         wwls_in = (iw - iwls_in).astype(np.float32)
         # Special case for the upper boundary
-        ii = np.where(iwls_in == (NWS - 1))
-        iwls_in[ii] = NWS - 2
+        ii = np.where(iwls_in == (nws - 1))
+        iwls_in[ii] = nws - 2
         wwls_in[ii] = 1.0
     else:
         iwls_in = np.array([0], dtype=np.int8)
         wwls_in = np.array([0], dtype=np.float32)
 
-    return wl, wls, wl_RS, Es_LUT, iwls_in, wwls_in
+    return wl, wls, wl_rs, es_lut, iwls_in, wwls_in
