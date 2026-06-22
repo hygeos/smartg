@@ -7,7 +7,7 @@ SMART-G test suite using pytest
 
 import pytest
 import numpy as np
-from smartg.smartg import Smartg, RoughSurface, LambSurface, Albedo_cst
+from smartg.smartg import Smartg, RoughSurface, LambSurface, AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 from smartg.water import IOP_1
 from smartg.reptran import REPTRAN, reduce_reptran
@@ -60,7 +60,7 @@ def test_cloud(sg, wav):
 
 @pytest.mark.parametrize('wav', wav_list)
 @pytest.mark.parametrize('thv', [0., 40.])
-@pytest.mark.parametrize('surf', [RoughSurface(WIND=2.), LambSurface(ALB=Albedo_cst(0.2))])
+@pytest.mark.parametrize('surf', [RoughSurface(WIND=2.), LambSurface(ALB=AlbedoCst(0.2))])
 def test_atm_surf(sg, wav, surf, thv):
     atm = Atm1D('afglt', comp=[AerOPAC('desert', 0.1, 550.)])
 

@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 from warnings import warn
 from smartg.atmosphere import diff1
-from smartg.albedo import Albedo_cst
+from smartg.albedo import AlbedoCst
 from smartg.phase import integ_phase, calc_iphase
 from smartg.tools.water.phase_functions import fournierForand
 from smartg.bandset import BandSet
@@ -120,7 +120,7 @@ class IOP(IOP_base):
     '''
     def __init__(self, phase=None, bp=None, bw=None,
                  atot=None, ap=None, aw=None, aCDOM=None, Bp=None,
-                 Z=[0, -10000], NANG=721, ang_trunc=5., pfwav=None, ALB=Albedo_cst(0.)):
+                 Z=[0, -10000], NANG=721, ang_trunc=5., pfwav=None, ALB=AlbedoCst(0.)):
 
         self.Z = np.array(Z, dtype='float')
         self.bp = bp
@@ -407,7 +407,7 @@ class IOP_1(IOP_base):
         pfwav: list of wavelengths at which the phase functions are calculated
         FQYC: Chorophyll a fluorescence Quantum Yield
     '''
-    def __init__(self, chl, pfwav=None, ALB=Albedo_cst(0.),
+    def __init__(self, chl, pfwav=None, ALB=AlbedoCst(0.),
                  DEPTH=10000, NANG=72001, ang_trunc=5., FQYC=0.0):
         self.chl = chl
         self.depth = float(DEPTH)
@@ -693,7 +693,7 @@ class IOP_profile(IOP_base):
         MIXED: Mixed or Statified waters
         FQYC : Fluorescence Quantum Yield for Chlorophyll
     '''
-    def __init__(self, chls, pfwav=None, ALB=Albedo_cst(0.),
+    def __init__(self, chls, pfwav=None, ALB=AlbedoCst(0.),
                  DEPTH=300., NANG=7201, ang_trunc=5., NLAYER=20, Zeu=None, MIXED=False, FQYC=0.):
         self.chls = chls
         self.depth = float(DEPTH)

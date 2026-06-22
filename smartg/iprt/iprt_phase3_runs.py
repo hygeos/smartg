@@ -7,7 +7,7 @@ import os
 
 from smartg.smartg import Smartg, Sensor, LambSurface, RoughSurface
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
-from smartg.albedo import Albedo_cst
+from smartg.albedo import AlbedoCst
 
 import geoclide as gc
 import pandas as pd
@@ -715,7 +715,7 @@ def case_D2(nphotons=1e8, overwrite=True, output_dir='./'):
         wl = 550.
 
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl)
-        surf  = LambSurface(ALB=Albedo_cst(0.3))
+        surf  = LambSurface(ALB=AlbedoCst(0.3))
         nvza = len(vza)
         nvaa = len(vaa)
         phi = -vaa

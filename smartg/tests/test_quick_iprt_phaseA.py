@@ -4,7 +4,7 @@
 # Tested with the following GPUs: 3090
 import pytest
 
-from smartg.smartg import Smartg, Sensor, LambSurface, Albedo_cst
+from smartg.smartg import Smartg, Sensor, LambSurface, AlbedoCst
 from smartg.atmosphere import Atm1D
 from smartg.phase import read_phase
 import pandas as pd
@@ -301,7 +301,7 @@ def test_A2(request, S1DF):
     mol_abs = np.array([0., 0.])[None,:]
     z       = np.array([1., 0.])
     atm     = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(550.)
-    surf    = LambSurface(ALB=Albedo_cst(0.3))
+    surf    = LambSurface(ALB=AlbedoCst(0.3))
 
     # === Illumination conditions
     VZAMIN = 100.

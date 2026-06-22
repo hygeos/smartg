@@ -16,7 +16,7 @@ from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
 from smartg.phase import convert_phase_to_iparper
 from smartg.water import IOP_base
 from warnings import warn
-from smartg.albedo import Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map
+from smartg.albedo import AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
 from smartg.tools.progress import Progress
 from smartg.tools.cdf import ICDF2D
 from smartg.tools.modified_environ import modified_environ
@@ -291,14 +291,14 @@ class LambSurface(object):
 
     Parameters
     ----------
-    ALB : Albedo_cst, | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+    ALB : AlbedoCst, | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
         The albedo spectral model.
     """
-    def __init__(self, ALB=Albedo_cst(0.5)):
+    def __init__(self, ALB=AlbedoCst(0.5)):
 
-        if (not isinstance(ALB, (Albedo_cst, Albedo_speclib, Albedo_spectrum, Albedo_map))):
-            raise ValueError('The parameter ALB must be one of the following objects: Albedo_cst, ' + 
-                             'Albedo_speclib, Albedo_spectrum or Albedo_map.')
+        if (not isinstance(ALB, (AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap))):
+            raise ValueError('The parameter ALB must be one of the following objects: AlbedoCst, ' + 
+                             'AlbedoSpeclib, AlbedoSpectrum or AlbedoMap.')
         self.dict = {
                 'SUR': 1,
                 'DIOPTRE': 3,
@@ -322,18 +322,18 @@ class RTLSSurface(object):
     kp: None | tuple, optional
         The Ross-Thick Li-Sparse coefficients (deprecated, see notes). Form of the tuple:
          
-        * k0 : Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map
+        * k0 : AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap
             -> The spectral albedo of the isotropic (lambertian) kernel
-        * k1p: Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map
+        * k1p: AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap
            -> The relative weight of the F1 (geometric) kernel (=K1/K0)
-        * k2p: Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map
+        * k2p: AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap
            -> The relative weight of the F2 (volumetric) kernel (=K2/K0)
-    k0 : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
-        The spectral albedo of the isotropic (lambertian) kernel. Default Albedo_cst(0.5).
-    k1p : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
-        The relative weight of the F1 (geometric) kernel (=K1/K0). Default Albedo_cst(0.5).
-    k2p : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
-        The relative weight of the F2 (volumetric) kernel (=K2/K0). Default Albedo_cst(0.5).
+    k0 : None | AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
+        The spectral albedo of the isotropic (lambertian) kernel. Default AlbedoCst(0.5).
+    k1p : None | AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
+        The relative weight of the F1 (geometric) kernel (=K1/K0). Default AlbedoCst(0.5).
+    k2p : None | AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
+        The relative weight of the F2 (volumetric) kernel (=K2/K0). Default AlbedoCst(0.5).
 
     Notes
     -----
@@ -342,7 +342,7 @@ class RTLSSurface(object):
     """
     def __init__(self, kp=None, k0=None, k1p=None, k2p=None):
 
-        kp_bis = (Albedo_cst(0.5), Albedo_cst(0.0), Albedo_cst(0.0))
+        kp_bis = (AlbedoCst(0.5), AlbedoCst(0.0), AlbedoCst(0.0))
         if kp is not None:
             warn_message = "\nThe use of parameter `kp` is deprecated as of SMART-G 1.1.0 " + \
                            "and will be removed in one of the next release.\n" + \
@@ -363,7 +363,7 @@ class RTLSSurface(object):
                 'BRDF': 1,
                 'SINGLE': 1,
                 }
-        self.kp = kp_bis+(Albedo_cst(0.0),)
+        self.kp = kp_bis+(AlbedoCst(0.0),)
         self.alb= None
     def __str__(self):
         return 'RTLS-ALB={SURFALB}'.format(**self.dict)
@@ -378,22 +378,22 @@ class RPVSurface(object):
     kp : tuple, optional
         The RPV coefficients. Form of the tuple:
 
-        * r0 : Albedo_cst
+        * r0 : AlbedoCst
             -> Normalization.
-        * k : Albedo_cst
+        * k : AlbedoCst
             -> Minnaert exponent.
-        * bt : Albedo_cst
+        * bt : AlbedoCst
             -> Henyey-Greenstein asymetry parameter.
-        * rc : Albedo_cst
+        * rc : AlbedoCst
             -> Hotspot parameter.
     
-    r0 : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+    r0 : None | AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
        Normalization.
-    k : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+    k : None | AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
         Minnaert exponent.
-    bt : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+    bt : None | AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
         Henyey-Greenstein asymetry parameter.
-    rc : None | Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+    rc : None | AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
         Hotspot parameter.
     
     Notes
@@ -410,7 +410,7 @@ class RPVSurface(object):
     """
     def __init__(self, kp=None, r0=None, k=None, bt=None, rc=None):
 
-        kp_bis = (Albedo_cst(0.5), Albedo_cst(0.0), Albedo_cst(0.0), Albedo_cst(0.0))
+        kp_bis = (AlbedoCst(0.5), AlbedoCst(0.0), AlbedoCst(0.0), AlbedoCst(0.0))
         if kp is not None:
             warn_message = "\nThe use of parameter `kp` is deprecated as of SMART-G 1.1.0 " + \
                            "and will be removed in one of the next release.\n" + \
@@ -474,7 +474,7 @@ class Environment(object):
         The X origin position
     Y0 : float, optional
         The Y origin position
-    ALB : Albedo_cst | Albedo_speclib | Albedo_spectrum | Albedo_map, optional
+    ALB : AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
         The albedo spectral model
     NENV : int, optional
         In progress...
@@ -484,7 +484,7 @@ class Environment(object):
         In progress...
 
     """
-    def __init__(self, ENV=0, ENV_SIZE=1.e6, X0=0., Y0=0., ALB=Albedo_cst(0.0), NENV=1,
+    def __init__(self, ENV=0, ENV_SIZE=1.e6, X0=0., Y0=0., ALB=AlbedoCst(0.0), NENV=1,
                 NXENVMAP=0, NYENVMAP=0):
         self.dict = {
                 'ENV': ENV,

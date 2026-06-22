@@ -16,23 +16,23 @@ passed as the ``alb`` parameter when building a surface in
 
 Key Classes
 -----------
-Albedo_cst
+AlbedoCst
     Constant (wavelength-independent) albedo. A single scalar value is
     returned for every wavelength, producing a flat spectral albedo.
     Useful for idealised surfaces such as a white Lambertian ground.
 
-Albedo_speclib
+AlbedoSpeclib
     Spectral albedo read from a JPL spectral library file (ASTER
     Spectral Library ASCII format). The wavelength axis is converted
     from micrometers to nanometres and the reflectance from percent to
     a dimensionless albedo in ``[0, 1]``.
 
-Albedo_spectrum
+AlbedoSpectrum
     Spectral albedo defined by an explicit user-supplied spectrum
     ``R(lambda)``, given as albedo values and corresponding
     wavelengths (nm).
 
-Albedo_map
+AlbedoMap
     2D horizontal map of spectral albedos. A rectangular grid of
     cells, each referencing one entry from a list of albedo objects,
     allows spatially heterogeneous surfaces to be represented.
@@ -49,7 +49,7 @@ from luts.luts import LUT, Idx
 from smartg.typing import NumericArrayLike, PathType
 
 
-class Albedo_cst(object):
+class AlbedoCst(object):
     """
     Constant (wavelength-independent) albedo.
 
@@ -92,7 +92,7 @@ class Albedo_cst(object):
         return alb
 
 
-class Albedo_speclib(object):
+class AlbedoSpeclib(object):
     """
     Spectral albedo read from a JPL spectral library file.
 
@@ -146,7 +146,7 @@ class Albedo_speclib(object):
         )
 
 
-class Albedo_spectrum(object):
+class AlbedoSpectrum(object):
     """
     Spectral albedo defined by an explicit spectrum ``R(lambda)``.
 
@@ -189,14 +189,14 @@ class Albedo_spectrum(object):
         )
 
 
-class Albedo_map(object):
+class AlbedoMap(object):
     """
     2D horizontal map of spectral albedos.
 
     A rectangular 2D grid of spectral albedos can be constructed. Each
     cell of the grid references one entry from a list of ``Albedo``
-    objects (``Albedo_cst``, ``Albedo_spectrum`` or
-    ``Albedo_speclib``). The number of distinct spectral albedos is
+    objects (``AlbedoCst``, ``AlbedoSpectrum`` or
+    ``AlbedoSpeclib``). The number of distinct spectral albedos is
     limited to ``MAX_NREF = 10`` but could be extended.
 
     The horizontal grid is rectangular. The ``x`` and ``y`` boundaries
@@ -223,8 +223,8 @@ class Albedo_map(object):
         Monotonic array of upper ``y`` boundaries (km) of the grid
         cells.
     Alist : list of Albedo objects
-        List of ``Albedo_cst``, ``Albedo_spectrum`` or
-        ``Albedo_speclib`` instances, one per distinct spectral
+        List of ``AlbedoCst``, ``AlbedoSpectrum`` or
+        ``AlbedoSpeclib`` instances, one per distinct spectral
         albedo.
 
     Attributes
@@ -243,10 +243,10 @@ class Albedo_map(object):
         Ai: NDArray[np.integer],
         x: NDArray[np.floating],
         y: NDArray[np.floating],
-        Alist: list[Albedo_cst | Albedo_speclib | Albedo_spectrum],
+        Alist: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum],
     ) -> None:
         self.map: LUT = LUT(Ai, axes=[x, y], names=["X", "Y"])
-        self.list: list[Albedo_cst | Albedo_speclib | Albedo_spectrum] = Alist
+        self.list: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum] = Alist
         self.NALB: int = len(Alist)
 
     def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:

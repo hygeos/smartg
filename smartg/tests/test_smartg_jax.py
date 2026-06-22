@@ -20,9 +20,9 @@ except ModuleNotFoundError:
 import numpy as np
 import matplotlib.pyplot as plt
 from smartg.smartg import Smartg
-from smartg.smartg import LambSurface, Albedo_cst
+from smartg.smartg import LambSurface, AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, od2k, diff1
-from smartg.albedo import Albedo_cst
+from smartg.albedo import AlbedoCst
 from luts import LUT
 from smartg.tools.smartg_view import mdesc
 from smartg import conftest
@@ -52,8 +52,8 @@ def cleanup_after_each_test():
 @pytest.mark.parametrize('WMIN', [320.])
 @pytest.mark.skipif(SKIP, reason="cannot test this since the jax package is not installed.")
 def test_smartg_jax2(N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=5e4, MAX_HIST=1e6):
-    ALB_SNOW     = Albedo_cst(0.6)
-    ALB_HIST     = Albedo_cst(1.0)
+    ALB_SNOW     = AlbedoCst(0.6)
+    ALB_HIST     = AlbedoCst(1.0)
     wl_sca       = np.linspace(WMIN, WMAX, num=11)
     wl_abs       = np.linspace(WMIN, WMAX, num=N_WL_ABS)
     alb          = ALB_SNOW.get(wl_abs)
