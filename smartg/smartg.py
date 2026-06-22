@@ -17,7 +17,7 @@ from smartg.phase import convert_phase_to_iparper
 from smartg.water import IOP_base
 from warnings import warn
 from smartg.albedo import AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
-from smartg.tools.progress import progress as make_progress
+from smartg.progress import progress as make_progress
 from smartg.cdf import icdf_2d
 from smartg.modified_environ import modified_environ
 from luts.luts import LUT, MLUT
