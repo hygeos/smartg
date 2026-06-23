@@ -80,7 +80,7 @@ logger.addHandler(file_handler)
 
 
 @pytest.fixture(scope="module")
-def S1DF():
+def s1df():
     """
     Forward compilation in 1D
     """
@@ -88,14 +88,14 @@ def S1DF():
 
 
 @pytest.fixture(scope="module")
-def S1DB():
+def s1db():
     """
     Backward compilation in 1D
     """
     return Smartg(alt_pp=True, back=True, double=True, bias=True)
 
 
-def test_A1(request, S1DF, S1DB):
+def test_a1(request, s1df, s1db):
     print(("=== Test A1"))
     mol_sca = np.array([0.0, 0.5])[None, :]
     mol_abs = np.array([0.0, 0.0])[None, :]
@@ -138,7 +138,7 @@ def test_A1(request, S1DF, S1DB):
                 Sensor(POSZ=np.min(z), THDEG=za, PHDEG=PHI, LOC="ATMOS")
             )
 
-    mA1B = S1DB.run(
+    mA1B = s1db.run(
         wl=550.0,
         NBPHOTONS=1e7 * NBDIR,
         NBLOOP=1e7,
@@ -193,7 +193,7 @@ def test_A1(request, S1DF, S1DB):
                 Sensor(POSZ=np.max(z), THDEG=za, PHDEG=PHI, LOC="ATMOS")
             )
 
-    mA1B = S1DB.run(
+    mA1B = s1db.run(
         wl=550.0,
         NBPHOTONS=1e7 * NBDIR,
         NBLOOP=1e7,
@@ -244,7 +244,7 @@ def test_A1(request, S1DF, S1DB):
     PHI_0 = (
         180.0 - SAA
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
-    mA1F_dep003 = S1DF.run(
+    mA1F_dep003 = s1df.run(
         THVDEG=SZA,
         PHVDEG=PHI_0,
         wl=550.0,
@@ -268,7 +268,7 @@ def test_A1(request, S1DF, S1DB):
     PHI_0 = (
         180.0 - SAA
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
-    mA1F_dep01 = S1DF.run(
+    mA1F_dep01 = s1df.run(
         THVDEG=SZA,
         PHVDEG=PHI_0,
         wl=550.0,
@@ -625,7 +625,7 @@ def test_A1(request, S1DF, S1DB):
         )
 
 
-def test_A2(request, S1DF):
+def test_a2(request, s1df):
     print("=== Test A2:")
     # === Atmosphere profil
     mol_sca = np.array([0.0, 0.1])[None, :]
@@ -661,7 +661,7 @@ def test_A2(request, S1DF):
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
 
     # === Simulation
-    mA2F = S1DF.run(
+    mA2F = s1df.run(
         THVDEG=SZA,
         PHVDEG=PHI_0,
         wl=550.0,
@@ -968,7 +968,7 @@ def test_A2(request, S1DF):
         )
 
 
-def test_A5_pp(request, S1DF):
+def test_a5_pp(request, s1df):
     print("=== Test A5 principal plane:")
     # === Atmosphere profil
     z = np.array([1.0, 0.0])
@@ -1026,7 +1026,7 @@ def test_A5_pp(request, S1DF):
     le = {"th_deg": TH, "phi_deg": PHI}  # , 'zip':True}
 
     # === Simulation
-    mA5F_pp = S1DF.run(
+    mA5F_pp = s1df.run(
         THVDEG=SZA,
         PHVDEG=PHI_0,
         wl=800.0,
@@ -1276,7 +1276,7 @@ def test_A5_pp(request, S1DF):
         )
 
 
-def test_A5_al(request, S1DF):
+def test_a5_al(request, s1df):
     print("=== Test A5 almucantar:")
     # === Atmosphere profil
     z = np.array([1.0, 0.0])
@@ -1334,7 +1334,7 @@ def test_A5_al(request, S1DF):
     le = {"th_deg": TH, "phi_deg": PHI}
 
     # === Simulation
-    mA5F_al = S1DF.run(
+    mA5F_al = s1df.run(
         THVDEG=SZA,
         PHVDEG=PHI_0,
         wl=800.0,
