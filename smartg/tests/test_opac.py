@@ -63,7 +63,7 @@ logger.addHandler(console_handler)
 
 # Create a file handler
 file_handler = logging.FileHandler(
-    ROOTPATH / "smartg" / "tests" / "logs" / "OPAC.log", mode="w"
+    ROOTPATH / "smartg" / "tests" / "logs" / "opac.log", mode="w"
 )
 file_handler.setLevel(logging.INFO)
 
