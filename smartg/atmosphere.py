@@ -226,7 +226,7 @@ class AerOPAC(object):
         z_free: float | None = None,
         z_stra: float | None = None,
         ssa: NumericArrayLike | xr.DataArray | None = None,
-        phase: xr.DataArray | None = None,
+        phase: xr.DataArray | LUT | None = None,
         rh_mix: float | None = None,
         rh_free: float | None = None,
         rh_stra: float | None = None,
