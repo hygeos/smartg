@@ -131,8 +131,8 @@ def test_A1(request, S1DF, S1DB):
     NBVZA = len(VZA)
     NBVAA = len(VAA)
     NBDIR = round(NBVAA * NBVZA)
-    for iza, za in enumerate(VZA):
-        for iaa, aa in enumerate(VAA):
+    for _iza, za in enumerate(VZA):
+        for _iaa, aa in enumerate(VAA):
             PHI = -aa + 180
             lsensors.append(
                 Sensor(POSZ=np.min(z), THDEG=za, PHDEG=PHI, LOC="ATMOS")
@@ -186,8 +186,8 @@ def test_A1(request, S1DF, S1DB):
     NBVZA = len(VZA)
     NBVAA = len(VAA)
     NBDIR = round(NBVAA * NBVZA)
-    for iza, za in enumerate(VZA):
-        for iaa, aa in enumerate(VAA):
+    for _iza, za in enumerate(VZA):
+        for _iaa, aa in enumerate(VAA):
             PHI = -aa + 180
             lsensors.append(
                 Sensor(POSZ=np.max(z), THDEG=za, PHDEG=PHI, LOC="ATMOS")
@@ -366,6 +366,8 @@ def test_A1(request, S1DF, S1DB):
         lALT = [0.0, 1.0]
         lINVTH = [False, True]
         # ============ 0km of altitude
+        IQUV_smartg_tot = None
+        IQUV_mystic_tot = None
         for isim in range(0, 3):
             imgs = []
             for ialt in range(0, 2):
@@ -431,6 +433,8 @@ def test_A1(request, S1DF, S1DB):
                         lV=[V_mystic],
                     )
                 else:
+                    assert IQUV_smartg_tot is not None
+                    assert IQUV_mystic_tot is not None
                     IQUV_smartg_tot = np.concatenate(
                         (
                             IQUV_smartg_tot,
@@ -509,6 +513,8 @@ def test_A1(request, S1DF, S1DB):
         dtype=float,
         comment="#",
     ).values
+    IQUV_smartg_ref_tot = None
+    IQUV_smartg_std_ref_tot = None
     for isim in range(0, 3):
         for ialt in range(0, 2):
             (
@@ -546,6 +552,8 @@ def test_A1(request, S1DF, S1DB):
                     lV=[V_smartg_std_ref],
                 )
             else:
+                assert IQUV_smartg_ref_tot is not None
+                assert IQUV_smartg_std_ref_tot is not None
                 IQUV_smartg_ref_tot = np.concatenate(
                     (
                         IQUV_smartg_ref_tot,
@@ -581,6 +589,9 @@ def test_A1(request, S1DF, S1DB):
     )
 
     # Compute the delta_m values from the ref smartg results +- err
+    assert IQUV_mystic_tot is not None
+    assert IQUV_smartg_ref_tot is not None
+    assert IQUV_smartg_std_ref_tot is not None
     delta_m_ref_P = compute_deltam(
         obs=IQUV_mystic_tot,
         mod=IQUV_smartg_ref_tot + STDFAC * IQUV_smartg_std_ref_tot,
