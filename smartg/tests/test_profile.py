@@ -6,64 +6,94 @@ from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 import numpy as np
 
 
-'''
-Test profile calculation
-'''
+"""Tests for the ``Atm1D`` profile calculation.
 
-@pytest.fixture(params=[
-            500.,
-            np.array(500.),
-            [400.],
-            np.array([400., 800.]),
-            ])
+The ``wav`` fixture parametrizes the wavelength input across the formats
+accepted by :meth:`Atm1D.calc` (float, 0-d array, list, multi-element
+array).
+Each ``test_profile*`` exercises a different ``Atm1D`` configuration:
+default ``afglt``, ``afglms`` with explicit ``grid``/``pfgrid``, with
+aerosol or aerosol+cloud components, and with overridden ``tau_r`` or
+``ssa``.
+"""
+
+
+@pytest.fixture(
+    params=[
+        500.0,
+        np.array(500.0),
+        [400.0],
+        np.array([400.0, 800.0]),
+    ]
+)
 def wav(request):
     return request.param
 
+
 def test_profile1(wav):
-    atm = Atm1D('afglt')
+    atm = Atm1D("afglt")
     atm.calc(wav)
+
 
 def test_profile2(wav):
-    atm = Atm1D('afglms',
-                  grid=[100., 50., 20., 10., 5., 2., 1., 0.],
-                  pfgrid=[100., 10., 0.])
+    atm = Atm1D(
+        "afglms",
+        grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
+        pfgrid=[100.0, 10.0, 0.0],
+    )
     atm.calc(wav)
+
 
 def test_profile3(wav):
-    atm = Atm1D('afglms',
-                comp=[AerOPAC('desert', 0.1, 550.)],
-                grid='100[20]10[1]0',
-                pfgrid=[100., 10., 0.])
+    atm = Atm1D(
+        "afglms",
+        comp=[AerOPAC("desert", 0.1, 550.0)],
+        grid="100[20]10[1]0",
+        pfgrid=[100.0, 10.0, 0.0],
+    )
     atm.calc(wav)
 
+
 def test_profile4(wav):
-    atm = Atm1D('afglms',
-                  comp=[AerOPAC('desert', 0.1, 550.),
-                        Cloud('wc', 12.68, 2, 3, 10., 550.),
-                       ],
-                  grid=[100., 50., 20., 10., 5., 2., 1., 0.],
-                  pfgrid=[100., 10., 0.])
+    atm = Atm1D(
+        "afglms",
+        comp=[
+            AerOPAC("desert", 0.1, 550.0),
+            Cloud("wc", 12.68, 2, 3, 10.0, 550.0),
+        ],
+        grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
+        pfgrid=[100.0, 10.0, 0.0],
+    )
     atm.calc(wav)
+
 
 def test_profile5():
     # set tauray
-    pro = Atm1D('afglms', grid=[100, 20, 0.], tau_r=0.14).calc(500.)
-    assert np.isclose(pro['OD_r'][0,-1], 0.14)
+    pro = Atm1D("afglms", grid=[100, 20, 0.0], tau_r=0.14).calc(500.0)
+    assert np.isclose(pro["OD_r"][0, -1], 0.14)
 
-    Atm1D('afglms', grid=[100, 20, 0.], tau_r=0.14).calc([490.,500.])
-    Atm1D('afglms', grid=[100, 20, 0.], tau_r=[0.15, 0.14]).calc([490.,500.])
+    Atm1D("afglms", grid=[100, 20, 0.0], tau_r=0.14).calc([490.0, 500.0])
+    Atm1D("afglms", grid=[100, 20, 0.0], tau_r=[0.15, 0.14]).calc(
+        [490.0, 500.0]
+    )
+
 
 def test_profile6():
     # set ssa
-    Atm1D('afglms', grid=[100, 20, 0.],
-            comp=[AerOPAC('urban', 0.1, 550., ssa=0.8)]
-            ).calc(400.)
+    Atm1D(
+        "afglms",
+        grid=[100, 20, 0.0],
+        comp=[AerOPAC("urban", 0.1, 550.0, ssa=0.8)],
+    ).calc(400.0)
 
-    Atm1D('afglms', grid=[100, 20, 0.],
-            comp=[AerOPAC('urban', 0.1, 550., ssa=0.8)]
-            ).calc([400., 500., 600.])
+    Atm1D(
+        "afglms",
+        grid=[100, 20, 0.0],
+        comp=[AerOPAC("urban", 0.1, 550.0, ssa=0.8)],
+    ).calc([400.0, 500.0, 600.0])
 
-    Atm1D('afglms', grid=[100, 20, 0.],
-            comp=[AerOPAC('urban', 0.1, 550., ssa=[0.76, 0.77, 0.78])]
-            ).calc([400., 500., 600.])
-
+    Atm1D(
+        "afglms",
+        grid=[100, 20, 0.0],
+        comp=[AerOPAC("urban", 0.1, 550.0, ssa=[0.76, 0.77, 0.78])],
+    ).calc([400.0, 500.0, 600.0])
