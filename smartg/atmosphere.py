@@ -1345,10 +1345,14 @@ class Atm1D(Atmosphere):
     comp:  list, optional
         Components particles (aerosols or clouds ) to consider, i.e. a
         list of aerOPAC, Cloud or/and AerUser objects.
-    grid : array_like or None, optional
+    grid : array_like or str or None, optional
       The vertical grid (from TOA to BOA). The optical properties of the
       atmosphere are recalculated following
       the new grid. If None, the grid of the input profile is kept.
+      If a string is provided, it is interpreted as a compact grid
+      specification and converted to a NumPy array via
+      :func:`strgrid_to_numpy` (see that function for the supported
+      format).
     lat : float, optional
         The latitude used for Rayleigh optical depth calculation.
         Default: 45.
@@ -1474,7 +1478,7 @@ class Atm1D(Atmosphere):
         self,
         fname: PathType,
         comp: list[AerOPAC] | None = None,
-        grid: NumericArrayLike | None = None,
+        grid: NumericArrayLike | str | None = None,
         lat: float = 45.0,
         p0: float | None = None,
         tco3: float | None = None,
