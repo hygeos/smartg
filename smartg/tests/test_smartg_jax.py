@@ -50,26 +50,26 @@ def cleanup_after_each_test():
         pass
 
 
-@pytest.mark.parametrize("N_WL_ABS", [301])
-@pytest.mark.parametrize("WMAX", [350.0])
-@pytest.mark.parametrize("WMIN", [320.0])
+@pytest.mark.parametrize("n_wl_abs", [301])
+@pytest.mark.parametrize("wmax", [350.0])
+@pytest.mark.parametrize("wmin", [320.0])
 def test_smartg_jax2(
-    N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=5e4, MAX_HIST=1e6
+    n_wl_abs, wmin, wmax, request, nb_photons=5e4, max_hist=1e6
 ):
-    ALB_SNOW = AlbedoCst(0.6)
-    ALB_HIST = AlbedoCst(1.0)
-    wl_sca = np.linspace(WMIN, WMAX, num=11)
-    wl_abs = np.linspace(WMIN, WMAX, num=N_WL_ABS)
-    alb = ALB_SNOW.get(wl_abs)
+    alb_snow = AlbedoCst(0.6)
+    alb_hist = AlbedoCst(1.0)
+    wl_sca = np.linspace(wmin, wmax, num=11)
+    wl_abs = np.linspace(wmin, wmax, num=n_wl_abs)
+    alb = alb_snow.get(wl_abs)
     lez = {"th_deg": np.array([0.0]), "phi_deg": np.array([0.0]), "zip": False}
 
-    for AOD, fmt1 in zip(
+    for aod, fmt1 in zip(
         np.linspace(0.1, 0.5, num=2), ["-m", "-c"], strict=True
     ):
-        LEVEL = 0  # 1: BOA downward reflectance, 0 : TOA
+        level = 0  # 1: BOA downward reflectance, 0 : TOA
         atm = Atm1D(
             "afglms",
-            comp=[AerOPAC("urban", AOD, 550.0)],
+            comp=[AerOPAC("urban", aod, 550.0)],
             grid=np.linspace(50.0, 0.0, num=40),
         )
         sigma = od2k(atm.calc(wl_abs), "OD_abs_atm")[:, 1:]
@@ -79,17 +79,17 @@ def test_smartg_jax2(
                 SEED=0,
                 THVDEG=45.0,
                 wl=wl_sca,
-                surf=LambSurface(ALB_HIST),
+                surf=LambSurface(alb_hist),
                 le=lez,
                 BEER=0,
                 atm=atm.calc(wl_sca),
                 alis_options={
                     "nlow": wl_sca.size,
                     "hist": True,
-                    "max_hist": np.int64(MAX_HIST),
+                    "max_hist": np.int64(max_hist),
                 },
-                NBPHOTONS=NBPHOTONS,
-                NBLOOP=NBPHOTONS,
+                NBPHOTONS=nb_photons,
+                NBLOOP=nb_photons,
                 NF=1e3,
             )
             .dropaxis("Zenith angles")
@@ -100,12 +100,12 @@ def test_smartg_jax2(
                 SEED=0,
                 THVDEG=45.0,
                 wl=wl_abs,
-                surf=LambSurface(ALB_SNOW),
+                surf=LambSurface(alb_snow),
                 le=lez,
                 BEER=0,
                 atm=atm.calc(wl_abs),
                 alis_options={"nlow": wl_sca.size, "hist": False},
-                NBPHOTONS=NBPHOTONS,
+                NBPHOTONS=nb_photons,
                 NF=1e3,
             )
             .dropaxis("Zenith angles")
@@ -117,9 +117,9 @@ def test_smartg_jax2(
             jax.devices("cpu")[0]
         ):  # run on CPU to avoid slow GPU XLA compilation
             N, S, D, w, _, nref, _, _, _, _, _ = get_histories(
-                m, LEVEL=LEVEL, verbose=False
+                m, LEVEL=level, verbose=False
             )
-            I = (
+            stk_i = (
                 np.array(
                     BigSum(Si, only_I=True)(
                         wl_abs, sigma, alb, S[:, 0], w, D, nref, wl_sca
@@ -127,7 +127,7 @@ def test_smartg_jax2(
                 )
                 / N
             )
-            I2 = (
+            stk_i2 = (
                 np.array(
                     BigSum(Si2, only_I=True)(
                         wl_abs, sigma, alb, S[:, 0], w, D, nref, wl_sca
@@ -135,19 +135,19 @@ def test_smartg_jax2(
                 )
                 / N
             )
-        Std = np.sqrt((I2 - I**2) / N)
-        upper = I + 1.95 * Std
-        lower = I - 1.95 * Std
+        std = np.sqrt((stk_i2 - stk_i**2) / N)
+        upper = stk_i + 1.95 * std
+        lower = stk_i - 1.95 * std
         p = plt.plot(
             wl_abs,
-            I,
+            stk_i,
             fmt1,
             label="AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}".format(
-                AOD, np.int64(NBPHOTONS), np.int64(MAX_HIST)
+                aod, np.int64(nb_photons), np.int64(max_hist)
             ),
         )
         col = p[0].get_color()
-        print(I2, Std)
+        print(stk_i2, std)
         plt.fill_between(
             wl_abs,
             lower,
@@ -163,7 +163,7 @@ def test_smartg_jax2(
             marker="+",
             ls="",
             label="AOD@550: {:.1f}; NBPH={:.0e}; NO HIST".format(
-                AOD, np.int64(NBPHOTONS)
+                aod, np.int64(nb_photons)
             ),
             color=p[0].get_color(),
         )
@@ -176,45 +176,44 @@ def test_smartg_jax2(
     conftest.savefig(request)
 
 
-def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
+def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
     """
     Validation of SMART-G with ARTDECO validation data
     """
     typ = "desert"  # tau=0.25
     ####################""""""
-    fgas = Path(VALPATH) / "validation" / f"cTauGas_ray_{typ}_O2.dat"
+    fgas = Path(valpath) / "validation" / f"cTauGas_ray_{typ}_O2.dat"
     gas_valid = diff1(np.loadtxt(fgas, skiprows=7)[:, 1:].T, axis=1)
     z_valid = np.loadtxt(fgas, skiprows=7)[:, 0]
     w_valid = np.array(open(fgas).readlines()[5].split()).astype(float)
-    fray = Path(VALPATH) / "validation" / f"cTauRay_ray_{typ}_O2.dat"
+    fray = Path(valpath) / "validation" / f"cTauRay_ray_{typ}_O2.dat"
     ray_valid = diff1(np.loadtxt(fray, skiprows=7)[:, 1:].T, axis=1)
-    faer_abs = Path(VALPATH) / "validation" / f"cTauAbs_ptcle_ray_{typ}_O2.dat"
+    faer_abs = Path(valpath) / "validation" / f"cTauAbs_ptcle_ray_{typ}_O2.dat"
     aer_abs_valid = diff1(np.loadtxt(faer_abs, skiprows=7)[:, 1:].T, axis=1)
-    faer_sca = Path(VALPATH) / "validation" / f"cTauSca_ptcle_ray_{typ}_O2.dat"
+    faer_sca = Path(valpath) / "validation" / f"cTauSca_ptcle_ray_{typ}_O2.dat"
     aer_sca_valid = diff1(np.loadtxt(faer_sca, skiprows=7)[:, 1:].T, axis=1)
     # aerosols phase matrix import
-    faer_phase = Path(VALPATH) / "validation" / f"phasemat_ray_{typ}_O2.dat"
-    f = open(faer_phase, "r")
-    N = np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int)
+    faer_phase = Path(valpath) / "validation" / f"phasemat_ray_{typ}_O2.dat"
+    n = int(np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int))
     pfwav = []
-    Npf = 3
-    data = np.zeros((Npf, 1, N, 5), dtype=np.float32)
-    for k in range(Npf):
+    npf = 3
+    data = np.zeros((npf, 1, n, 5), dtype=np.float32)
+    for k in range(npf):
         pfwav.append(
             np.genfromtxt(
                 faer_phase,
                 usecols=range(1),
-                skip_header=(1 + (2 + N) * k),
+                skip_header=(1 + (2 + n) * k),
                 max_rows=1,
             )
         )
         # pizero=np.genfromtxt(faer_phase, usecols=range(1),
-        #                     skip_header=(1+(2+N)*k+1), max_rows=1)
+        #                     skip_header=(1+(2+n)*k+1), max_rows=1)
         data[k, 0, :, :] = np.genfromtxt(
             faer_phase,
             usecols=range(5),
-            skip_header=(1 + (2 + N) * k + 2),
-            max_rows=N,
+            skip_header=(1 + (2 + n) * k + 2),
+            max_rows=n,
         )
     data = data.swapaxes(2, 3)
 
@@ -229,7 +228,7 @@ def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
         axes=[pfwav, [0], None, data[0, 0, 0, :]],
     )
     data_valid = np.loadtxt(
-        Path(VALPATH) / "validation" / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat"
+        Path(valpath) / "validation" / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat"
     )
     aer_ext_valid = aer_sca_valid + aer_abs_valid
     aer_ssa_valid = aer_sca_valid / aer_ext_valid
@@ -254,8 +253,8 @@ def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
         "phi_deg": np.array([180.0]),
         "zip": False,
     }
-    NLOW = 3
-    wl_lr = np.linspace(w_valid.min(), w_valid.max(), num=NLOW)
+    nlow = 3
+    wl_lr = np.linspace(w_valid.min(), w_valid.max(), num=nlow)
 
     sg = Smartg(alis=True, alt_pp=True)
     m1 = (
@@ -268,9 +267,9 @@ def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
             BEER=0,
             atm=atm_valid.calc(w_valid),
             DEPO=0.0,
-            alis_options={"nlow": NLOW, "hist": False},
-            NBPHOTONS=NB,
-            NBLOOP=NB,
+            alis_options={"nlow": nlow, "hist": False},
+            NBPHOTONS=nb_photons,
+            NBLOOP=nb_photons,
             NF=1e3,
         )
         .dropaxis("Zenith angles")
@@ -287,12 +286,12 @@ def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
             atm=atm_valid.calc(w_valid),
             DEPO=0.0,
             alis_options={
-                "nlow": NLOW,
+                "nlow": nlow,
                 "hist": True,
                 "max_hist": np.int64(1e7),
             },
-            NBPHOTONS=NB,
-            NBLOOP=NB,
+            NBPHOTONS=nb_photons,
+            NBLOOP=nb_photons,
             NF=1e3,
         )
         .dropaxis("Zenith angles")
@@ -308,7 +307,7 @@ def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
         N, S, D, w, _, nref, _, _, _, _, _ = get_histories(
             m2, LEVEL=0, verbose=True
         )
-        I = (
+        stk_i = (
             np.array(
                 BigSum(Si, only_I=True)(
                     w_valid,
@@ -329,14 +328,14 @@ def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
     plt.figure(figsize=(12, 4))
     plt.plot(w_valid, i_valid, "r", label="Doubling Adding: 32 streams")
     m1["I_up (TOA)"].plot("c", label="SMART-G no hist.")
-    plt.plot(w_valid, I, "b", label="SMART-G, hist. with jax")
+    plt.plot(w_valid, stk_i, "b", label="SMART-G, hist. with jax")
     plt.legend()
     plt.ylabel(mdesc("I_up (TOA)"))
     plt.grid()
     conftest.savefig(request)
     ##
     plt.figure(figsize=(12, 4))
-    df = I - i_valid
+    df = stk_i - i_valid
     dff = df / i_valid * 100
     plt.plot(w_valid, dff, "b-")
     df1 = m1["I_up (TOA)"][:] - i_valid
