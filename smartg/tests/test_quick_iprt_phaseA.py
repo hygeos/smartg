@@ -106,41 +106,41 @@ def test_a1(request, s1df, s1db):
     surf = None
 
     # *************************** DEPOL = 0 ***************************
-    SZA = 0.0
-    SAA = 65.0
-    PHI_0 = 180.0 - SAA  # To follow MYSTIC convention
+    sza = 0.0
+    saa = 65.0
+    phi_0 = 180.0 - saa  # To follow MYSTIC convention
     le = {
-        "th_deg": np.array([SZA]),
-        "phi_deg": np.array([PHI_0]),
+        "th_deg": np.array([sza]),
+        "phi_deg": np.array([phi_0]),
         "count_level": np.array([0]),
     }
 
     # BOA radiances
-    VZAMIN = 0.0
-    VZAMAX = 80.0
-    VZAINC = 5.0
-    VZA = np.arange(VZAMIN, VZAMAX + VZAINC, VZAINC)
+    vza_min = 0.0
+    vza_max = 80.0
+    vza_inc = 5.0
+    vza = np.arange(vza_min, vza_max + vza_inc, vza_inc)
 
-    # VAA from 0. to 180.
-    VAAMIN = 0.0
-    VAAMAX = 360.0
-    VAAINC = 5.0
-    VAA = np.arange(VAAMIN, VAAMAX + VAAINC, VAAINC)
+    # vaa from 0. to 180.
+    vaa_min = 0.0
+    vaa_max = 360.0
+    vaa_inc = 5.0
+    vaa = np.arange(vaa_min, vaa_max + vaa_inc, vaa_inc)
 
     lsensors = []
-    NBVZA = len(VZA)
-    NBVAA = len(VAA)
-    NBDIR = round(NBVAA * NBVZA)
-    for _iza, za in enumerate(VZA):
-        for _iaa, aa in enumerate(VAA):
-            PHI = -aa + 180
+    nb_vza = len(vza)
+    nb_vaa = len(vaa)
+    nb_dir = round(nb_vaa * nb_vza)
+    for _iza, za in enumerate(vza):
+        for _iaa, aa in enumerate(vaa):
+            phi = -aa + 180
             lsensors.append(
-                Sensor(POSZ=np.min(z), THDEG=za, PHDEG=PHI, LOC="ATMOS")
+                Sensor(POSZ=np.min(z), THDEG=za, PHDEG=phi, LOC="ATMOS")
             )
 
-    mA1B = s1db.run(
+    m_a1_b = s1db.run(
         wl=550.0,
-        NBPHOTONS=1e7 * NBDIR,
+        NBPHOTONS=1e7 * nb_dir,
         NBLOOP=1e7,
         atm=atm,
         sensor=lsensors,
@@ -155,47 +155,47 @@ def test_a1(request, s1df, s1db):
         progress=True,
     )
 
-    mA1B = mA1B.dropaxis("Azimuth angles", "Zenith angles")
-    mA1B.add_axis("Azimuth angles", -VAA + 180.0)
-    mA1B.add_axis("Zenith angles", VZA)
+    m_a1_b = m_a1_b.dropaxis("Azimuth angles", "Zenith angles")
+    m_a1_b.add_axis("Azimuth angles", -vaa + 180.0)
+    m_a1_b.add_axis("Zenith angles", vza)
 
-    for name in mA1B.datasets():
-        if "sensor index" in mA1B[name].names:
+    for name in m_a1_b.datasets():
+        if "sensor index" in m_a1_b[name].names:
             mat_tmp = np.swapaxes(
-                mA1B[name][:].reshape(len(VZA), len(VAA)), 0, 1
+                m_a1_b[name][:].reshape(len(vza), len(vaa)), 0, 1
             )
-            attrs_tmp = mA1B[name].attrs
-            mA1B.rm_lut(name)
-            mA1B.add_dataset(
+            attrs_tmp = m_a1_b[name].attrs
+            m_a1_b.rm_lut(name)
+            m_a1_b.add_dataset(
                 name,
                 mat_tmp,
                 ["Azimuth angles", "Zenith angles"],
                 attrs=attrs_tmp,
             )
 
-    mA1B_boa_dep0 = mA1B.dropaxis("sensor index")
+    m_a1_b_boa_dep0 = m_a1_b.dropaxis("sensor index")
 
     # TOA radiances
-    # We use the previous VAA
-    VZAMIN = 100.0
-    VZAMAX = 180.0
-    VZAINC = 5.0
-    VZA = np.arange(VZAMIN, VZAMAX + VZAINC, VZAINC)
+    # We use the previous vaa
+    vza_min = 100.0
+    vza_max = 180.0
+    vza_inc = 5.0
+    vza = np.arange(vza_min, vza_max + vza_inc, vza_inc)
 
     lsensors = []
-    NBVZA = len(VZA)
-    NBVAA = len(VAA)
-    NBDIR = round(NBVAA * NBVZA)
-    for _iza, za in enumerate(VZA):
-        for _iaa, aa in enumerate(VAA):
-            PHI = -aa + 180
+    nb_vza = len(vza)
+    nb_vaa = len(vaa)
+    nb_dir = round(nb_vaa * nb_vza)
+    for _iza, za in enumerate(vza):
+        for _iaa, aa in enumerate(vaa):
+            phi = -aa + 180
             lsensors.append(
-                Sensor(POSZ=np.max(z), THDEG=za, PHDEG=PHI, LOC="ATMOS")
+                Sensor(POSZ=np.max(z), THDEG=za, PHDEG=phi, LOC="ATMOS")
             )
 
-    mA1B = s1db.run(
+    m_a1_b = s1db.run(
         wl=550.0,
-        NBPHOTONS=1e7 * NBDIR,
+        NBPHOTONS=1e7 * nb_dir,
         NBLOOP=1e7,
         atm=atm,
         sensor=lsensors,
@@ -210,43 +210,43 @@ def test_a1(request, s1df, s1db):
         progress=True,
     )
 
-    mA1B = mA1B.dropaxis("Azimuth angles", "Zenith angles")
-    mA1B.add_axis("Azimuth angles", -VAA + 180.0)
-    mA1B.add_axis("Zenith angles", VZA)
+    m_a1_b = m_a1_b.dropaxis("Azimuth angles", "Zenith angles")
+    m_a1_b.add_axis("Azimuth angles", -vaa + 180.0)
+    m_a1_b.add_axis("Zenith angles", vza)
 
-    for name in mA1B.datasets():
-        if "sensor index" in mA1B[name].names:
+    for name in m_a1_b.datasets():
+        if "sensor index" in m_a1_b[name].names:
             mat_tmp = np.swapaxes(
-                mA1B[name][:].reshape(len(VZA), len(VAA)), 0, 1
+                m_a1_b[name][:].reshape(len(vza), len(vaa)), 0, 1
             )
-            attrs_tmp = mA1B[name].attrs
-            mA1B.rm_lut(name)
-            mA1B.add_dataset(
+            attrs_tmp = m_a1_b[name].attrs
+            m_a1_b.rm_lut(name)
+            m_a1_b.add_dataset(
                 name,
                 mat_tmp,
                 ["Azimuth angles", "Zenith angles"],
                 attrs=attrs_tmp,
             )
 
-    mA1B_toa_dep0 = mA1B.dropaxis("sensor index")
+    m_a1_b_toa_dep0 = m_a1_b.dropaxis("sensor index")
     # *****************************************************************
 
     # ************************* DEPOL = 0.03 **************************
-    # We use the previous VAA and VZA
-    # SMART-G Forward TH and PHI using local estimate (anticlockwise)
-    # conversion with VZA and VAA MYSTIC (clockwise)
-    TH = 180.0 - VZA
-    PHI = -VAA
+    # We use the previous vaa and vza
+    # SMART-G Forward TH and phi using local estimate (anticlockwise)
+    # conversion with vza and vaa MYSTIC (clockwise)
+    TH = 180.0 - vza
+    phi = -vaa
     TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = {"th_deg": TH, "phi_deg": PHI}  # , 'zip':True}
-    SZA = 30.0
-    SAA = 0.0
-    PHI_0 = (
-        180.0 - SAA
+    le = {"th_deg": TH, "phi_deg": phi}  # , 'zip':True}
+    sza = 30.0
+    saa = 0.0
+    phi_0 = (
+        180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
-    mA1F_dep003 = s1df.run(
-        THVDEG=SZA,
-        PHVDEG=PHI_0,
+    m_a1_f_dep003 = s1df.run(
+        THVDEG=sza,
+        PHVDEG=phi_0,
         wl=550.0,
         NBPHOTONS=1e7,
         NBLOOP=1e5,
@@ -262,15 +262,15 @@ def test_a1(request, s1df, s1db):
     )
 
     # ************************* DEPOL = 0.1 **************************
-    # We use the previous VAA, VZA and le
-    SZA = 30.0
-    SAA = 65.0
-    PHI_0 = (
-        180.0 - SAA
+    # We use the previous vaa, vza and le
+    sza = 30.0
+    saa = 65.0
+    phi_0 = (
+        180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
-    mA1F_dep01 = s1df.run(
-        THVDEG=SZA,
-        PHVDEG=PHI_0,
+    m_a1_f_dep01 = s1df.run(
+        THVDEG=sza,
+        PHVDEG=phi_0,
         wl=550.0,
         NBPHOTONS=1e7,
         NBLOOP=1e5,
@@ -291,25 +291,25 @@ def test_a1(request, s1df, s1db):
         # (Forward, U must be multiplied by -1)
         tmp_file_a1 = Path(tmpdir) / "a1.dat"
 
-        VZA_boa_dep0 = mA1B_boa_dep0.axes["Zenith angles"]
-        VAA_boa_dep0 = 180.0 - mA1B_boa_dep0.axes["Azimuth angles"]
-        VZA_toa_dep0 = mA1B_toa_dep0.axes["Zenith angles"]
-        VAA_toa_dep0 = 180.0 - mA1B_toa_dep0.axes["Azimuth angles"]
+        vza_boa_dep0 = m_a1_b_boa_dep0.axes["Zenith angles"]
+        vaa_boa_dep0 = 180.0 - m_a1_b_boa_dep0.axes["Azimuth angles"]
+        vza_toa_dep0 = m_a1_b_toa_dep0.axes["Zenith angles"]
+        vaa_toa_dep0 = 180.0 - m_a1_b_toa_dep0.axes["Azimuth angles"]
 
-        VZA_dep003 = 180.0 - mA1F_dep003.axes["Zenith angles"]
-        VAA_dep003 = -mA1F_dep003.axes["Azimuth angles"]
-        VZA_dep01 = 180.0 - mA1F_dep01.axes["Zenith angles"]
-        VAA_dep01 = -mA1F_dep01.axes["Azimuth angles"]
+        vza_dep003 = 180.0 - m_a1_f_dep003.axes["Zenith angles"]
+        vaa_dep003 = -m_a1_f_dep003.axes["Azimuth angles"]
+        vza_dep01 = 180.0 - m_a1_f_dep01.axes["Zenith angles"]
+        vaa_dep01 = -m_a1_f_dep01.axes["Azimuth angles"]
 
         # convert
         convert_SGout_to_IPRTout(
             lm=[
-                mA1B_boa_dep0,
-                mA1B_toa_dep0,
-                mA1F_dep003,
-                mA1F_dep003,
-                mA1F_dep01,
-                mA1F_dep01,
+                m_a1_b_boa_dep0,
+                m_a1_b_toa_dep0,
+                m_a1_f_dep003,
+                m_a1_f_dep003,
+                m_a1_f_dep01,
+                m_a1_f_dep01,
             ],
             lU_sign=[1.0, 1, -1, -1, -1, -1],
             case_name="A1",
@@ -318,20 +318,20 @@ def test_a1(request, s1df, s1db):
             lSZA=[0.0, 0.0, 30.0, 30.0, 30.0, 30.0],
             lSAA=[65.0, 65.0, 0.0, 0.0, 65.0, 65.0],
             lVZA=[
-                VZA_boa_dep0,
-                VZA_toa_dep0,
-                180.0 - VZA_dep003,
-                VZA_dep003,
-                180.0 - VZA_dep01,
-                VZA_dep01,
+                vza_boa_dep0,
+                vza_toa_dep0,
+                180.0 - vza_dep003,
+                vza_dep003,
+                180.0 - vza_dep01,
+                vza_dep01,
             ],
             lVAA=[
-                VAA_boa_dep0,
-                VAA_toa_dep0,
-                VAA_dep003,
-                VAA_dep003,
-                VAA_dep01,
-                VAA_dep01,
+                vaa_boa_dep0,
+                vaa_toa_dep0,
+                vaa_dep003,
+                vaa_dep003,
+                vaa_dep01,
+                vaa_dep01,
             ],
             file_name=tmp_file_a1,
             output_layer=[
@@ -358,134 +358,136 @@ def test_a1(request, s1df, s1db):
             dtype=float,
             comment="#",
         ).values
-        avoidP = False
+        avoid_p = False
 
-        lDEP = [0.0, 0.03, 0.1]
-        lSZA = [0.0, 30.0, 30.0]
-        lSAA = [65.0, 0.0, 65.0]
-        lALT = [0.0, 1.0]
-        lINVTH = [False, True]
+        l_dep = [0.0, 0.03, 0.1]
+        l_sza = [0.0, 30.0, 30.0]
+        l_saa = [65.0, 0.0, 65.0]
+        l_alt = [0.0, 1.0]
+        l_invth = [False, True]
         # ============ 0km of altitude
-        IQUV_smartg_tot = None
-        IQUV_mystic_tot = None
+        iquv_smartg_tot = None
+        iquv_mystic_tot = None
         for isim in range(0, 3):
             imgs = []
             for ialt in range(0, 2):
                 title = (
-                    f"IPRT case A1 - depol = {lDEP[isim]} - "
-                    + f"SZA = {lSZA[isim]:.0f} - SAA = {lSAA[isim]:.0f} - "
-                    + f"{lALT[ialt]:.0f}km - SMARTG"
+                    f"IPRT case A1 - depol = {l_dep[isim]} - "
+                    + f"sza = {l_sza[isim]:.0f} - saa = {l_saa[isim]:.0f} - "
+                    + f"{l_alt[ialt]:.0f}km - SMARTG"
                 )
                 tmp_filename = (
-                    f"a1_dep{lDEP[isim]:.0e}_{lALT[ialt]:.0f}km_smartg.png"
+                    f"a1_dep{l_dep[isim]:.0e}_{l_alt[ialt]:.0f}km_smartg.png"
                 )
-                I_smartg, Q_smartg, U_smartg, V_smartg = (
+                i_smartg, q_smartg, u_smartg, v_smartg = (
                     select_and_plot_polar_iprt(
                         smartg_a1,
-                        z_alti=lALT[ialt],
-                        depol=lDEP[isim],
+                        z_alti=l_alt[ialt],
+                        depol=l_dep[isim],
                         title=title,
                         change_U_sign=True,
-                        inv_thetas=lINVTH[ialt],
+                        inv_thetas=l_invth[ialt],
                         sym=False,
                         outputIQUV=True,
-                        avoid_plot=avoidP,
+                        avoid_plot=avoid_p,
                         save_fig=Path(tmpdir) / tmp_filename,
                     )
                 )
                 imgs.append(mpimg.imread(Path(tmpdir) / tmp_filename))
 
                 tmp_filename = (
-                    f"a1_dep{lDEP[isim]}_{lALT[ialt]:.0f}km_mystic.png"
+                    f"a1_dep{l_dep[isim]}_{l_alt[ialt]:.0f}km_mystic.png"
                 )
                 title = (
-                    f"IPRT case A1 - depol = {lDEP[isim]} - "
-                    + f"SZA = {lSZA[isim]:.0f} - SAA = {lSAA[isim]:.0f} - "
-                    + f"{lALT[ialt]:.0f}km - MYSTIC"
+                    f"IPRT case A1 - depol = {l_dep[isim]} - "
+                    + f"sza = {l_sza[isim]:.0f} - saa = {l_saa[isim]:.0f} - "
+                    + f"{l_alt[ialt]:.0f}km - MYSTIC"
                 )
-                I_mystic, Q_mystic, U_mystic, V_mystic = (
+                i_mystic, q_mystic, u_mystic, v_mystic = (
                     select_and_plot_polar_iprt(
                         mystic_a1,
-                        z_alti=lALT[ialt],
-                        depol=lDEP[isim],
+                        z_alti=l_alt[ialt],
+                        depol=l_dep[isim],
                         title=title,
                         change_U_sign=True,
-                        inv_thetas=lINVTH[ialt],
+                        inv_thetas=l_invth[ialt],
                         sym=False,
                         outputIQUV=True,
-                        avoid_plot=avoidP,
+                        avoid_plot=avoid_p,
                         save_fig=Path(tmpdir) / tmp_filename,
                     )
                 )
                 imgs.append(mpimg.imread(Path(tmpdir) / tmp_filename))
 
                 if isim == 0 and ialt == 0:
-                    IQUV_smartg_tot = groupIQUV(
-                        lI=[I_smartg],
-                        lQ=[Q_smartg],
-                        lU=[U_smartg],
-                        lV=[V_smartg],
+                    iquv_smartg_tot = groupIQUV(
+                        lI=[i_smartg],
+                        lQ=[q_smartg],
+                        lU=[u_smartg],
+                        lV=[v_smartg],
                     )
-                    IQUV_mystic_tot = groupIQUV(
-                        lI=[I_mystic],
-                        lQ=[Q_mystic],
-                        lU=[U_mystic],
-                        lV=[V_mystic],
+                    iquv_mystic_tot = groupIQUV(
+                        lI=[i_mystic],
+                        lQ=[q_mystic],
+                        lU=[u_mystic],
+                        lV=[v_mystic],
                     )
                 else:
-                    assert IQUV_smartg_tot is not None
-                    assert IQUV_mystic_tot is not None
-                    IQUV_smartg_tot = np.concatenate(
+                    assert iquv_smartg_tot is not None
+                    assert iquv_mystic_tot is not None
+                    iquv_smartg_tot = np.concatenate(
                         (
-                            IQUV_smartg_tot,
+                            iquv_smartg_tot,
                             groupIQUV(
-                                lI=[I_smartg],
-                                lQ=[Q_smartg],
-                                lU=[U_smartg],
-                                lV=[V_smartg],
+                                lI=[i_smartg],
+                                lQ=[q_smartg],
+                                lU=[u_smartg],
+                                lV=[v_smartg],
                             ),
                         ),
                         axis=1,
                     )
-                    IQUV_mystic_tot = np.concatenate(
+                    iquv_mystic_tot = np.concatenate(
                         (
-                            IQUV_mystic_tot,
+                            iquv_mystic_tot,
                             groupIQUV(
-                                lI=[I_mystic],
-                                lQ=[Q_mystic],
-                                lU=[U_mystic],
-                                lV=[V_mystic],
+                                lI=[i_mystic],
+                                lQ=[q_mystic],
+                                lU=[u_mystic],
+                                lV=[v_mystic],
                             ),
                         ),
                         axis=1,
                     )
 
-                I_val = I_mystic - I_smartg
-                Q_val = Q_mystic - Q_smartg
-                U_val = U_mystic - U_smartg
-                V_val = V_mystic - V_smartg
-                maxI = max(np.abs(np.min(I_val)), np.abs(np.max(I_val)))
-                maxQ = max(np.abs(np.min(Q_val)), np.abs(np.max(Q_val)))
-                maxU = max(np.abs(np.min(U_val)), np.abs(np.max(U_val)))
-                maxV = max(np.abs(np.min(V_val)), np.abs(np.max(V_val)))
-                tmp_filename = f"a1_dep{lDEP[isim]}_0{lALT[ialt]:.0f}m_dif.png"
+                i_val = i_mystic - i_smartg
+                q_val = q_mystic - q_smartg
+                u_val = u_mystic - u_smartg
+                v_val = v_mystic - v_smartg
+                max_i = max(np.abs(np.min(i_val)), np.abs(np.max(i_val)))
+                max_q = max(np.abs(np.min(q_val)), np.abs(np.max(q_val)))
+                max_u = max(np.abs(np.min(u_val)), np.abs(np.max(u_val)))
+                max_v = max(np.abs(np.min(v_val)), np.abs(np.max(v_val)))
+                tmp_filename = (
+                    f"a1_dep{l_dep[isim]}_0{l_alt[ialt]:.0f}m_dif.png"
+                )
                 title = (
-                    f"IPRT case A1 - depol = {lDEP[isim]}  - "
-                    + f"SZA = {lSZA[isim]:.0f} - SAA = {lSAA[isim]:.0f} - "
-                    + f"{lALT[ialt]:.0f}km - dif (MYSTIC-SMARTG)"
+                    f"IPRT case A1 - depol = {l_dep[isim]}  - "
+                    + f"sza = {l_sza[isim]:.0f} - saa = {l_saa[isim]:.0f} - "
+                    + f"{l_alt[ialt]:.0f}km - dif (MYSTIC-SMARTG)"
                 )
                 select_and_plot_polar_iprt(
                     mystic_a1,
-                    z_alti=lALT[ialt],
-                    depol=lDEP[isim],
+                    z_alti=l_alt[ialt],
+                    depol=l_dep[isim],
                     title=title,
-                    forceIQUV=[I_val, Q_val, U_val, V_val],
-                    maxI=maxI,
-                    maxQ=maxQ,
-                    maxU=maxU,
-                    maxV=maxV,
+                    forceIQUV=[i_val, q_val, u_val, v_val],
+                    maxI=max_i,
+                    maxQ=max_q,
+                    maxU=max_u,
+                    maxV=max_v,
                     cmapI="RdBu_r",
-                    avoid_plot=avoidP,
+                    avoid_plot=avoid_p,
                     save_fig=Path(tmpdir) / tmp_filename,
                 )
                 imgs.append(mpimg.imread(Path(tmpdir) / tmp_filename))
@@ -513,25 +515,25 @@ def test_a1(request, s1df, s1db):
         dtype=float,
         comment="#",
     ).values
-    IQUV_smartg_ref_tot = None
-    IQUV_smartg_std_ref_tot = None
+    iquv_smartg_ref_tot = None
+    iquv_smartg_std_ref_tot = None
     for isim in range(0, 3):
         for ialt in range(0, 2):
             (
-                I_smartg_ref,
-                Q_smartg_ref,
-                U_smartg_ref,
-                V_smartg_ref,
-                I_smartg_std_ref,
-                Q_smartg_std_ref,
-                U_smartg_std_ref,
-                V_smartg_std_ref,
+                i_smartg_ref,
+                q_smartg_ref,
+                u_smartg_ref,
+                v_smartg_ref,
+                i_smartg_std_ref,
+                q_smartg_std_ref,
+                u_smartg_std_ref,
+                v_smartg_std_ref,
             ) = select_and_plot_polar_iprt(
                 smartg_a1_ref,
-                z_alti=lALT[ialt],
-                depol=lDEP[isim],
+                z_alti=l_alt[ialt],
+                depol=l_dep[isim],
                 change_U_sign=True,
-                inv_thetas=lINVTH[ialt],
+                inv_thetas=l_invth[ialt],
                 sym=False,
                 outputIQUV=True,
                 outputIQUVstd=True,
@@ -539,41 +541,41 @@ def test_a1(request, s1df, s1db):
             )
 
             if isim == 0 and ialt == 0:
-                IQUV_smartg_ref_tot = groupIQUV(
-                    lI=[I_smartg_ref],
-                    lQ=[Q_smartg_ref],
-                    lU=[U_smartg_ref],
-                    lV=[V_smartg_ref],
+                iquv_smartg_ref_tot = groupIQUV(
+                    lI=[i_smartg_ref],
+                    lQ=[q_smartg_ref],
+                    lU=[u_smartg_ref],
+                    lV=[v_smartg_ref],
                 )
-                IQUV_smartg_std_ref_tot = groupIQUV(
-                    lI=[I_smartg_std_ref],
-                    lQ=[Q_smartg_std_ref],
-                    lU=[U_smartg_std_ref],
-                    lV=[V_smartg_std_ref],
+                iquv_smartg_std_ref_tot = groupIQUV(
+                    lI=[i_smartg_std_ref],
+                    lQ=[q_smartg_std_ref],
+                    lU=[u_smartg_std_ref],
+                    lV=[v_smartg_std_ref],
                 )
             else:
-                assert IQUV_smartg_ref_tot is not None
-                assert IQUV_smartg_std_ref_tot is not None
-                IQUV_smartg_ref_tot = np.concatenate(
+                assert iquv_smartg_ref_tot is not None
+                assert iquv_smartg_std_ref_tot is not None
+                iquv_smartg_ref_tot = np.concatenate(
                     (
-                        IQUV_smartg_ref_tot,
+                        iquv_smartg_ref_tot,
                         groupIQUV(
-                            lI=[I_smartg_ref],
-                            lQ=[Q_smartg_ref],
-                            lU=[U_smartg_ref],
-                            lV=[V_smartg_ref],
+                            lI=[i_smartg_ref],
+                            lQ=[q_smartg_ref],
+                            lU=[u_smartg_ref],
+                            lV=[v_smartg_ref],
                         ),
                     ),
                     axis=1,
                 )
-                IQUV_smartg_std_ref_tot = np.concatenate(
+                iquv_smartg_std_ref_tot = np.concatenate(
                     (
-                        IQUV_smartg_std_ref_tot,
+                        iquv_smartg_std_ref_tot,
                         groupIQUV(
-                            lI=[I_smartg_std_ref],
-                            lQ=[Q_smartg_std_ref],
-                            lU=[U_smartg_std_ref],
-                            lV=[V_smartg_std_ref],
+                            lI=[i_smartg_std_ref],
+                            lQ=[q_smartg_std_ref],
+                            lU=[u_smartg_std_ref],
+                            lV=[v_smartg_std_ref],
                         ),
                     ),
                     axis=1,
@@ -581,7 +583,7 @@ def test_a1(request, s1df, s1db):
 
     # Compute the delta_m values from the ref smartg results
     delta_m_ref = compute_deltam(
-        obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot, print_res=False
+        obs=iquv_mystic_tot, mod=iquv_smartg_ref_tot, print_res=False
     )
     logger.info(
         f"A1 - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; "
@@ -589,23 +591,23 @@ def test_a1(request, s1df, s1db):
     )
 
     # Compute the delta_m values from the ref smartg results +- err
-    assert IQUV_mystic_tot is not None
-    assert IQUV_smartg_ref_tot is not None
-    assert IQUV_smartg_std_ref_tot is not None
-    delta_m_ref_P = compute_deltam(
-        obs=IQUV_mystic_tot,
-        mod=IQUV_smartg_ref_tot + STDFAC * IQUV_smartg_std_ref_tot,
+    assert iquv_mystic_tot is not None
+    assert iquv_smartg_ref_tot is not None
+    assert iquv_smartg_std_ref_tot is not None
+    delta_m_ref_p = compute_deltam(
+        obs=iquv_mystic_tot,
+        mod=iquv_smartg_ref_tot + STDFAC * iquv_smartg_std_ref_tot,
         print_res=False,
     )
-    delta_m_ref_M = compute_deltam(
-        obs=IQUV_mystic_tot,
-        mod=IQUV_smartg_ref_tot - STDFAC * IQUV_smartg_std_ref_tot,
+    delta_m_ref_m = compute_deltam(
+        obs=iquv_mystic_tot,
+        mod=iquv_smartg_ref_tot - STDFAC * iquv_smartg_std_ref_tot,
         print_res=False,
     )
 
     # Compute the delta_m values from the smartg test results
     delta_m = compute_deltam(
-        obs=IQUV_mystic_tot, mod=IQUV_smartg_tot, print_res=False
+        obs=iquv_mystic_tot, mod=iquv_smartg_tot, print_res=False
     )
     logger.info(
         f"A1 - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; "
@@ -614,14 +616,14 @@ def test_a1(request, s1df, s1db):
 
     # Check if the the test is ok by comparing smartg ref and smartg
     # test
-    IQUV_name = ["I", "Q", "U", "V"]
-    for istk, stk in enumerate(IQUV_name):
-        maxVal = max(
-            delta_m_ref[istk], delta_m_ref_P[istk], delta_m_ref_M[istk]
+    iquv_name = ["I", "Q", "U", "V"]
+    for istk, stk in enumerate(iquv_name):
+        max_val = max(
+            delta_m_ref[istk], delta_m_ref_p[istk], delta_m_ref_m[istk]
         )
-        assert not (delta_m[istk] > maxVal), (
+        assert not (delta_m[istk] > max_val), (
             f"Problem with {stk} values, get {delta_m[istk]:.5f}."
-            + f" {stk} must be < to {maxVal:.5f}"
+            + f" {stk} must be < to {max_val:.5f}"
         )
 
 
@@ -637,33 +639,33 @@ def test_a2(request, s1df):
     surf = LambSurface(ALB=AlbedoCst(0.3))
 
     # === Illumination conditions
-    VZAMIN = 100.0
-    VZAMAX = 180.0
-    VZAINC = 5.0
-    VZA = np.arange(VZAMIN, VZAMAX + VZAINC, VZAINC)
+    vza_min = 100.0
+    vza_max = 180.0
+    vza_inc = 5.0
+    vza = np.arange(vza_min, vza_max + vza_inc, vza_inc)
 
-    VAAMIN = 0.0
-    VAAMAX = 180.0
-    VAAINC = 5.0
-    VAA = np.arange(VAAMIN, VAAMAX + VAAINC, VAAINC)
+    vaa_min = 0.0
+    vaa_max = 180.0
+    vaa_inc = 5.0
+    vaa = np.arange(vaa_min, vaa_max + vaa_inc, vaa_inc)
 
-    # SMART-G Forward TH and PHI using local estimate (anticlockwise)
-    # conversion with VZA and VAA MYSTIC (clockwise)
-    TH = 180.0 - VZA
-    PHI = -VAA
+    # SMART-G Forward TH and phi using local estimate (anticlockwise)
+    # conversion with vza and vaa MYSTIC (clockwise)
+    TH = 180.0 - vza
+    phi = -vaa
     TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = {"th_deg": TH, "phi_deg": PHI}
+    le = {"th_deg": TH, "phi_deg": phi}
 
-    SZA = 50.0
-    SAA = 0.0
-    PHI_0 = (
-        180.0 - SAA
+    sza = 50.0
+    saa = 0.0
+    phi_0 = (
+        180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
 
     # === Simulation
-    mA2F = s1df.run(
-        THVDEG=SZA,
-        PHVDEG=PHI_0,
+    m_a2_f = s1df.run(
+        THVDEG=sza,
+        PHVDEG=phi_0,
         wl=550.0,
         NBPHOTONS=1e7,
         NBLOOP=1e6,
@@ -684,15 +686,15 @@ def test_a2(request, s1df):
         # (Forward, U must be multiplied by -1)
         tmp_file_a2 = Path(tmpdir) / "a2.dat"
         convert_SGout_to_IPRTout(
-            lm=[mA2F, mA2F],
+            lm=[m_a2_f, m_a2_f],
             lU_sign=[-1, -1],
             case_name="A2",
             ldepol=[0.03, 0.03],
             lalt=[0.0, 1.0],
             lSZA=[50.0, 50.0],
             lSAA=[0.0, 0.0],
-            lVZA=[180.0 - VZA, VZA],
-            lVAA=[VAA, VAA],
+            lVZA=[180.0 - vza, vza],
+            lVAA=[vaa, vaa],
             file_name=tmp_file_a2,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
@@ -712,10 +714,10 @@ def test_a2(request, s1df):
             dtype=float,
             comment="#",
         ).values
-        avoidP = False
+        avoid_p = False
         # 0km of altitude
         title = "IPRT case A2 - depol = 0.03 - 0km - SMARTG"
-        I_smartg_0km, Q_smartg_0km, U_smartg_0km, V_smartg_0km = (
+        i_smartg_0km, q_smartg_0km, u_smartg_0km, v_smartg_0km = (
             select_and_plot_polar_iprt(
                 smartg_a2,
                 0.0,
@@ -723,13 +725,13 @@ def test_a2(request, s1df):
                 change_U_sign=True,
                 sym=True,
                 outputIQUV=True,
-                avoid_plot=avoidP,
+                avoid_plot=avoid_p,
                 save_fig=Path(tmpdir) / "a2_0km_smartg.png",
             )
         )
 
         title = "IPRT case A2 - depol = 0.03 - 0km - MYSTIC"
-        I_mystic_0km, Q_mystic_0km, U_mystic_0km, V_mystic_0km = (
+        i_mystic_0km, q_mystic_0km, u_mystic_0km, v_mystic_0km = (
             select_and_plot_polar_iprt(
                 mystic_a2,
                 0.0,
@@ -737,31 +739,31 @@ def test_a2(request, s1df):
                 change_U_sign=True,
                 sym=True,
                 outputIQUV=True,
-                avoid_plot=avoidP,
+                avoid_plot=avoid_p,
                 save_fig=Path(tmpdir) / "a2_0km_mystic.png",
             )
         )
 
-        I_val = I_mystic_0km - I_smartg_0km
-        Q_val = Q_mystic_0km - Q_smartg_0km
-        U_val = U_mystic_0km - U_smartg_0km
-        V_val = V_mystic_0km - V_smartg_0km
-        maxI = max(np.abs(np.min(I_val)), np.abs(np.max(I_val)))
-        maxQ = max(np.abs(np.min(Q_val)), np.abs(np.max(Q_val)))
-        maxU = max(np.abs(np.min(U_val)), np.abs(np.max(U_val)))
-        maxV = max(np.abs(np.min(V_val)), np.abs(np.max(V_val)))
+        i_val = i_mystic_0km - i_smartg_0km
+        q_val = q_mystic_0km - q_smartg_0km
+        u_val = u_mystic_0km - u_smartg_0km
+        v_val = v_mystic_0km - v_smartg_0km
+        max_i = max(np.abs(np.min(i_val)), np.abs(np.max(i_val)))
+        max_q = max(np.abs(np.min(q_val)), np.abs(np.max(q_val)))
+        max_u = max(np.abs(np.min(u_val)), np.abs(np.max(u_val)))
+        max_v = max(np.abs(np.min(v_val)), np.abs(np.max(v_val)))
         title = "IPRT case A2 - depol = 0.03 - 0km - dif (MYSTIC-SMARTG)"
         select_and_plot_polar_iprt(
             mystic_a2,
             0.0,
             title=title,
-            forceIQUV=[I_val, Q_val, U_val, V_val],
-            maxI=maxI,
-            maxQ=maxQ,
-            maxU=maxU,
-            maxV=maxV,
+            forceIQUV=[i_val, q_val, u_val, v_val],
+            maxI=max_i,
+            maxQ=max_q,
+            maxU=max_u,
+            maxV=max_v,
             cmapI="RdBu_r",
-            avoid_plot=avoidP,
+            avoid_plot=avoid_p,
             save_fig=Path(tmpdir) / "a2_0km_dif.png",
         )
 
@@ -781,7 +783,7 @@ def test_a2(request, s1df):
     with TemporaryDirectory() as tmpdir:
         # 1km of altitude (TOA)
         title = "IPRT case A2 - depol = 0.03 - 1km - SMARTG"
-        I_smartg_1km, Q_smartg_1km, U_smartg_1km, V_smartg_1km = (
+        i_smartg_1km, q_smartg_1km, u_smartg_1km, v_smartg_1km = (
             select_and_plot_polar_iprt(
                 smartg_a2,
                 1.0,
@@ -790,13 +792,13 @@ def test_a2(request, s1df):
                 inv_thetas=True,
                 sym=True,
                 outputIQUV=True,
-                avoid_plot=avoidP,
+                avoid_plot=avoid_p,
                 save_fig=Path(tmpdir) / "a2_1km_smartg.png",
             )
         )
 
         title = "IPRT case A2 - depol = 0.03 - 1km - MYSTIC"
-        I_mystic_1km, Q_mystic_1km, U_mystic_1km, V_mystic_1km = (
+        i_mystic_1km, q_mystic_1km, u_mystic_1km, v_mystic_1km = (
             select_and_plot_polar_iprt(
                 mystic_a2,
                 1.0,
@@ -805,31 +807,31 @@ def test_a2(request, s1df):
                 inv_thetas=True,
                 sym=True,
                 outputIQUV=True,
-                avoid_plot=avoidP,
+                avoid_plot=avoid_p,
                 save_fig=Path(tmpdir) / "a2_1km_mystic.png",
             )
         )
 
-        I_val = I_mystic_1km - I_smartg_1km
-        Q_val = Q_mystic_1km - Q_smartg_1km
-        U_val = U_mystic_1km - U_smartg_1km
-        V_val = V_mystic_1km - V_smartg_1km
-        maxI = max(np.abs(np.min(I_val)), np.abs(np.max(I_val)))
-        maxQ = max(np.abs(np.min(Q_val)), np.abs(np.max(Q_val)))
-        maxU = max(np.abs(np.min(U_val)), np.abs(np.max(U_val)))
-        maxV = max(np.abs(np.min(V_val)), np.abs(np.max(V_val)))
+        i_val = i_mystic_1km - i_smartg_1km
+        q_val = q_mystic_1km - q_smartg_1km
+        u_val = u_mystic_1km - u_smartg_1km
+        v_val = v_mystic_1km - v_smartg_1km
+        max_i = max(np.abs(np.min(i_val)), np.abs(np.max(i_val)))
+        max_q = max(np.abs(np.min(q_val)), np.abs(np.max(q_val)))
+        max_u = max(np.abs(np.min(u_val)), np.abs(np.max(u_val)))
+        max_v = max(np.abs(np.min(v_val)), np.abs(np.max(v_val)))
         title = "IPRT case A2 - depol = 0.03 - 1km - dif (MYSTIC-SMARTG)"
         select_and_plot_polar_iprt(
             mystic_a2,
             1.0,
             title=title,
-            forceIQUV=[I_val, Q_val, U_val, V_val],
-            maxI=maxI,
-            maxQ=maxQ,
-            maxU=maxU,
-            maxV=maxV,
+            forceIQUV=[i_val, q_val, u_val, v_val],
+            maxI=max_i,
+            maxQ=max_q,
+            maxU=max_u,
+            maxV=max_v,
             cmapI="RdBu_r",
-            avoid_plot=avoidP,
+            avoid_plot=avoid_p,
             save_fig=Path(tmpdir) / "a2_1km_dif.png",
         )
 
@@ -850,17 +852,17 @@ def test_a2(request, s1df):
     # === Compute the delta_m values and analyse them with the previous
     # saved validated ones
     # MYSTIC and calculated SMART-G total IQUV
-    IQUV_smartg_tot = groupIQUV(
-        lI=[I_smartg_0km, I_smartg_1km],
-        lQ=[Q_smartg_0km, Q_smartg_1km],
-        lU=[U_smartg_0km, U_smartg_1km],
-        lV=[V_smartg_0km, V_smartg_1km],
+    iquv_smartg_tot = groupIQUV(
+        lI=[i_smartg_0km, i_smartg_1km],
+        lQ=[q_smartg_0km, q_smartg_1km],
+        lU=[u_smartg_0km, u_smartg_1km],
+        lV=[v_smartg_0km, v_smartg_1km],
     )
-    IQUV_mystic_tot = groupIQUV(
-        lI=[I_mystic_0km, I_mystic_1km],
-        lQ=[Q_mystic_0km, Q_mystic_1km],
-        lU=[U_mystic_0km, U_mystic_1km],
-        lV=[V_mystic_0km, V_mystic_1km],
+    iquv_mystic_tot = groupIQUV(
+        lI=[i_mystic_0km, i_mystic_1km],
+        lQ=[q_mystic_0km, q_mystic_1km],
+        lU=[u_mystic_0km, u_mystic_1km],
+        lV=[v_mystic_0km, v_mystic_1km],
     )
 
     # SMARTG ref results
@@ -877,14 +879,14 @@ def test_a2(request, s1df):
         comment="#",
     ).values
     (
-        I_smartg_0km_ref,
-        Q_smartg_0km_ref,
-        U_smartg_0km_ref,
-        V_smartg_0km_ref,
-        I_smartg_std_0km_ref,
-        Q_smartg_std_0km_ref,
-        U_smartg_std_0km_ref,
-        V_smartg_std_0km_ref,
+        i_smartg_0km_ref,
+        q_smartg_0km_ref,
+        u_smartg_0km_ref,
+        v_smartg_0km_ref,
+        i_smartg_std_0km_ref,
+        q_smartg_std_0km_ref,
+        u_smartg_std_0km_ref,
+        v_smartg_std_0km_ref,
     ) = select_and_plot_polar_iprt(
         smartg_a2_ref,
         0.0,
@@ -894,14 +896,14 @@ def test_a2(request, s1df):
         avoid_plot=True,
     )
     (
-        I_smartg_1km_ref,
-        Q_smartg_1km_ref,
-        U_smartg_1km_ref,
-        V_smartg_1km_ref,
-        I_smartg_std_1km_ref,
-        Q_smartg_std_1km_ref,
-        U_smartg_std_1km_ref,
-        V_smartg_std_1km_ref,
+        i_smartg_1km_ref,
+        q_smartg_1km_ref,
+        u_smartg_1km_ref,
+        v_smartg_1km_ref,
+        i_smartg_std_1km_ref,
+        q_smartg_std_1km_ref,
+        u_smartg_std_1km_ref,
+        v_smartg_std_1km_ref,
     ) = select_and_plot_polar_iprt(
         smartg_a2_ref,
         1.0,
@@ -912,22 +914,22 @@ def test_a2(request, s1df):
         avoid_plot=True,
     )
 
-    IQUV_smartg_ref_tot = groupIQUV(
-        lI=[I_smartg_0km_ref, I_smartg_1km_ref],
-        lQ=[Q_smartg_0km_ref, Q_smartg_1km_ref],
-        lU=[U_smartg_0km_ref, U_smartg_1km_ref],
-        lV=[V_smartg_0km_ref, V_smartg_1km_ref],
+    iquv_smartg_ref_tot = groupIQUV(
+        lI=[i_smartg_0km_ref, i_smartg_1km_ref],
+        lQ=[q_smartg_0km_ref, q_smartg_1km_ref],
+        lU=[u_smartg_0km_ref, u_smartg_1km_ref],
+        lV=[v_smartg_0km_ref, v_smartg_1km_ref],
     )
-    IQUV_smartg_std_ref_tot = groupIQUV(
-        lI=[I_smartg_std_0km_ref, I_smartg_std_1km_ref],
-        lQ=[Q_smartg_std_0km_ref, Q_smartg_std_1km_ref],
-        lU=[U_smartg_std_0km_ref, U_smartg_std_1km_ref],
-        lV=[V_smartg_std_0km_ref, V_smartg_std_1km_ref],
+    iquv_smartg_std_ref_tot = groupIQUV(
+        lI=[i_smartg_std_0km_ref, i_smartg_std_1km_ref],
+        lQ=[q_smartg_std_0km_ref, q_smartg_std_1km_ref],
+        lU=[u_smartg_std_0km_ref, u_smartg_std_1km_ref],
+        lV=[v_smartg_std_0km_ref, v_smartg_std_1km_ref],
     )
 
     # Compute the delta_m values from the ref smartg results
     delta_m_ref = compute_deltam(
-        obs=IQUV_mystic_tot, mod=IQUV_smartg_ref_tot, print_res=False
+        obs=iquv_mystic_tot, mod=iquv_smartg_ref_tot, print_res=False
     )
     logger.info(
         f"A2 - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; "
@@ -935,20 +937,20 @@ def test_a2(request, s1df):
     )
 
     # Compute the delta_m values from the ref smartg results +- err
-    delta_m_ref_P = compute_deltam(
-        obs=IQUV_mystic_tot,
-        mod=IQUV_smartg_ref_tot + STDFAC * IQUV_smartg_std_ref_tot,
+    delta_m_ref_p = compute_deltam(
+        obs=iquv_mystic_tot,
+        mod=iquv_smartg_ref_tot + STDFAC * iquv_smartg_std_ref_tot,
         print_res=False,
     )
-    delta_m_ref_M = compute_deltam(
-        obs=IQUV_mystic_tot,
-        mod=IQUV_smartg_ref_tot - STDFAC * IQUV_smartg_std_ref_tot,
+    delta_m_ref_m = compute_deltam(
+        obs=iquv_mystic_tot,
+        mod=iquv_smartg_ref_tot - STDFAC * iquv_smartg_std_ref_tot,
         print_res=False,
     )
 
     # Compute the delta_m values from the smartg test results
     delta_m = compute_deltam(
-        obs=IQUV_mystic_tot, mod=IQUV_smartg_tot, print_res=False
+        obs=iquv_mystic_tot, mod=iquv_smartg_tot, print_res=False
     )
     logger.info(
         f"A2 - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; "
@@ -957,14 +959,14 @@ def test_a2(request, s1df):
 
     # Check if the the test is ok by comparing smartg ref and smartg
     # test
-    IQUV_name = ["I", "Q", "U", "V"]
-    for istk, stk in enumerate(IQUV_name):
-        maxVal = max(
-            delta_m_ref[istk], delta_m_ref_P[istk], delta_m_ref_M[istk]
+    iquv_name = ["I", "Q", "U", "V"]
+    for istk, stk in enumerate(iquv_name):
+        max_val = max(
+            delta_m_ref[istk], delta_m_ref_p[istk], delta_m_ref_m[istk]
         )
-        assert not (delta_m[istk] > maxVal), (
+        assert not (delta_m[istk] > max_val), (
             f"Problem with {stk} values, get {delta_m[istk]:.5f}."
-            + f" {stk} must be < to {maxVal:.5f}"
+            + f" {stk} must be < to {max_val:.5f}"
         )
 
 
@@ -978,7 +980,7 @@ def test_a5_pp(request, s1df):
     cld_tau_ext[:, 0] = 0.0  # dtau TOA equal to 0
     cld_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
     prof_aer = (cld_tau_ext, cld_ssa)
-    NTH = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
+    nth = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
     file_cld_phase = (
         DIR_AUXDATA / "IPRT" / "phaseA" / "opt_prop" / "watercloud.mie.cdf"
     )
@@ -989,7 +991,7 @@ def test_a5_pp(request, s1df):
         lpha_lut.append(
             LUT(
                 pha_atm[i, :, :],
-                axes=[None, np.linspace(0, 180, NTH)],
+                axes=[None, np.linspace(0, 180, nth)],
                 names=["stk", "theta_atm"],
             )
         )
@@ -1005,34 +1007,34 @@ def test_a5_pp(request, s1df):
     surf = None
 
     # === Illumination conditions
-    SZA = 50.0
-    SAA = 0.0
-    PHI_0 = (
-        180.0 - SAA
+    sza = 50.0
+    saa = 0.0
+    phi_0 = (
+        180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
 
-    VZAMIN = 100.0
-    VZAMAX = 180.0
-    VZAINC = 1.0
-    VZA = np.arange(VZAMIN, VZAMAX + VZAINC, VZAINC)
+    vza_min = 100.0
+    vza_max = 180.0
+    vza_inc = 1.0
+    vza = np.arange(vza_min, vza_max + vza_inc, vza_inc)
 
-    VAA = np.array([0.0, 180.0])
+    vaa = np.array([0.0, 180.0])
 
-    # SMART-G Forward TH and PHI using local estimate (anticlockwise)
-    # conversion with VZA and VAA MYSTIC (clockwise)
-    TH = 180.0 - VZA
-    PHI = -VAA
+    # SMART-G Forward TH and phi using local estimate (anticlockwise)
+    # conversion with vza and vaa MYSTIC (clockwise)
+    TH = 180.0 - vza
+    phi = -vaa
     TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = {"th_deg": TH, "phi_deg": PHI}  # , 'zip':True}
+    le = {"th_deg": TH, "phi_deg": phi}  # , 'zip':True}
 
     # === Simulation
-    mA5F_pp = s1df.run(
-        THVDEG=SZA,
-        PHVDEG=PHI_0,
+    m_a5_f_pp = s1df.run(
+        THVDEG=sza,
+        PHVDEG=phi_0,
         wl=800.0,
         NBPHOTONS=1e7,
         NBLOOP=1e6,
-        NF=NTH,
+        NF=nth,
         atm=pro,
         OUTPUT_LAYERS=int(7),
         le=le,
@@ -1049,15 +1051,15 @@ def test_a5_pp(request, s1df):
         # === Convert smartg output to iprt ascii output format
         tmp_file_a5_pp = Path(tmpdir) / "a5_pp.dat"
         convert_SGout_to_IPRTout(
-            lm=[mA5F_pp, mA5F_pp],
+            lm=[m_a5_f_pp, m_a5_f_pp],
             lU_sign=[-1, -1],
             case_name="A5",
             ldepol=[0.03, 0.03],
             lalt=[0.0, 1.0],
             lSZA=[50.0, 50.0],
             lSAA=[0.0, 0.0],
-            lVZA=[VZA, VZA],
-            lVAA=[VAA, VAA],
+            lVZA=[vza, vza],
+            lVAA=[vaa, vaa],
             file_name=tmp_file_a5_pp,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
@@ -1077,14 +1079,14 @@ def test_a5_pp(request, s1df):
         dtype=float,
         comment="#",
     ).values
-    VZAn = np.sort(np.concatenate((VZA - 180, 180 - VZA)))
-    NVZA = len(VZAn)
+    vza_n = np.sort(np.concatenate((vza - 180, 180 - vza)))
+    nvza = len(vza_n)
 
     # Reflectance
-    IQUVS_with_std = seclect_iprt_IQUV(
+    iquvs_with_std = seclect_iprt_IQUV(
         smartg_a5_pp, 1.0, change_U_sign=False, inv_thetas=True, stdev=True
     )
-    IQUVM_with_std = seclect_iprt_IQUV(
+    iquvm_with_std = seclect_iprt_IQUV(
         mystic_a5_pp,
         1.0,
         change_U_sign=False,
@@ -1097,47 +1099,47 @@ def test_a5_pp(request, s1df):
     )
 
     # MYSTIC IQUV and stdev IQUV
-    IQUVM_pp = np.zeros((4, NVZA), dtype=np.float32)
-    IQUVstdM_pp = np.zeros((4, NVZA), dtype=np.float32)
-    IQUVS_pp = np.zeros((4, NVZA), dtype=np.float32)
-    IQUVstdS_pp = np.zeros((4, NVZA), dtype=np.float32)
+    iquvm_pp = np.zeros((4, nvza), dtype=np.float32)
+    iquvstdm_pp = np.zeros((4, nvza), dtype=np.float32)
+    iquvs_pp = np.zeros((4, nvza), dtype=np.float32)
+    iquvstds_pp = np.zeros((4, nvza), dtype=np.float32)
     for i in range(0, 4):
-        IQUVM_pp[i, :] = np.concatenate(
-            (IQUVM_with_std[i][:, 1], IQUVM_with_std[i][::-1, 0])
+        iquvm_pp[i, :] = np.concatenate(
+            (iquvm_with_std[i][:, 1], iquvm_with_std[i][::-1, 0])
         )
-        IQUVstdM_pp[i, :] = np.concatenate(
-            (IQUVM_with_std[i + 4][:, 1], IQUVM_with_std[i + 4][::-1, 0])
+        iquvstdm_pp[i, :] = np.concatenate(
+            (iquvm_with_std[i + 4][:, 1], iquvm_with_std[i + 4][::-1, 0])
         )
-        IQUVS_pp[i, :] = np.concatenate(
-            (IQUVS_with_std[i][:, 1], IQUVS_with_std[i][::-1, 0])
+        iquvs_pp[i, :] = np.concatenate(
+            (iquvs_with_std[i][:, 1], iquvs_with_std[i][::-1, 0])
         )
-        IQUVstdS_pp[i, :] = np.concatenate(
-            (IQUVS_with_std[i + 4][:, 1], IQUVS_with_std[i + 4][::-1, 0])
+        iquvstds_pp[i, :] = np.concatenate(
+            (iquvs_with_std[i + 4][:, 1], iquvs_with_std[i + 4][::-1, 0])
         )
 
-    IQUVS_pp_tot = IQUVS_pp.copy()
-    IQUVM_pp_tot = IQUVM_pp.copy()
+    iquvs_pp_tot = iquvs_pp.copy()
+    iquvm_pp_tot = iquvm_pp.copy()
 
-    IQUVyMin = [0.0, -2e-2, -1.2e-4, -1e-5]
-    IQUVyMax = [2.5e-1, 1.5e-2, 6e-5, 1e-5]
+    iquvy_min = [0.0, -2e-2, -1.2e-4, -1e-5]
+    iquvy_max = [2.5e-1, 1.5e-2, 6e-5, 1e-5]
     plot_iprt_radiances(
-        IQUV_obs=IQUVM_pp,
-        IQUV_mod=IQUVS_pp,
-        IQUVstd_obs=IQUVstdM_pp,
-        IQUVstd_mod=IQUVstdS_pp,
-        xaxis=VZAn,
-        xlabel="VZA [deg]",
-        IQUVyMin=IQUVyMin,
-        IQUVyMax=IQUVyMax,
+        IQUV_obs=iquvm_pp,
+        IQUV_mod=iquvs_pp,
+        IQUVstd_obs=iquvstdm_pp,
+        IQUVstd_mod=iquvstds_pp,
+        xaxis=vza_n,
+        xlabel="vza [deg]",
+        IQUVyMin=iquvy_min,
+        IQUVyMax=iquvy_max,
         title="reflectance  MYSTIC-red SMARTG-blue",
     )
     conftest.savefig(request, bbox_inches="tight")
 
     # Transmittance
-    IQUVS_with_std = seclect_iprt_IQUV(
+    iquvs_with_std = seclect_iprt_IQUV(
         smartg_a5_pp, 0.0, change_U_sign=False, inv_thetas=True, stdev=True
     )
-    IQUVM_with_std = seclect_iprt_IQUV(
+    iquvm_with_std = seclect_iprt_IQUV(
         mystic_a5_pp,
         0.0,
         change_U_sign=False,
@@ -1151,37 +1153,37 @@ def test_a5_pp(request, s1df):
 
     # MYSTIC IQUV and stdev IQUV
     for i in range(0, 4):
-        IQUVM_pp[i, :] = np.concatenate(
-            (IQUVM_with_std[i][:, 1], IQUVM_with_std[i][::-1, 0])
+        iquvm_pp[i, :] = np.concatenate(
+            (iquvm_with_std[i][:, 1], iquvm_with_std[i][::-1, 0])
         )
-        IQUVstdM_pp[i, :] = np.concatenate(
-            (IQUVM_with_std[i + 4][:, 1], IQUVM_with_std[i + 4][::-1, 0])
+        iquvstdm_pp[i, :] = np.concatenate(
+            (iquvm_with_std[i + 4][:, 1], iquvm_with_std[i + 4][::-1, 0])
         )
-        IQUVS_pp[i, :] = np.concatenate(
-            (IQUVS_with_std[i][:, 1], IQUVS_with_std[i][::-1, 0])
+        iquvs_pp[i, :] = np.concatenate(
+            (iquvs_with_std[i][:, 1], iquvs_with_std[i][::-1, 0])
         )
-        IQUVstdS_pp[i, :] = np.concatenate(
-            (IQUVS_with_std[i + 4][:, 1], IQUVS_with_std[i + 4][::-1, 0])
+        iquvstds_pp[i, :] = np.concatenate(
+            (iquvs_with_std[i + 4][:, 1], iquvs_with_std[i + 4][::-1, 0])
         )
 
-    IQUVyMin = [0.0, -3e-3, -1.5e-4, -2e-5]
-    IQUVyMax = [3.5, 4e-3, 2e-4, 3e-5]
+    iquvy_min = [0.0, -3e-3, -1.5e-4, -2e-5]
+    iquvy_max = [3.5, 4e-3, 2e-4, 3e-5]
 
     plot_iprt_radiances(
-        IQUV_obs=IQUVM_pp,
-        IQUV_mod=IQUVS_pp,
-        IQUVstd_obs=IQUVstdM_pp,
-        IQUVstd_mod=IQUVstdS_pp,
-        xaxis=VZAn,
-        xlabel="VZA [deg]",
-        IQUVyMin=IQUVyMin,
-        IQUVyMax=IQUVyMax,
+        IQUV_obs=iquvm_pp,
+        IQUV_mod=iquvs_pp,
+        IQUVstd_obs=iquvstdm_pp,
+        IQUVstd_mod=iquvstds_pp,
+        xaxis=vza_n,
+        xlabel="vza [deg]",
+        IQUVyMin=iquvy_min,
+        IQUVyMax=iquvy_max,
         title="transmittance  MYSTIC-red SMARTG-blue",
     )
     conftest.savefig(request, bbox_inches="tight")
 
-    IQUVS_pp_tot = np.concatenate((IQUVS_pp_tot, IQUVS_pp), axis=1)
-    IQUVM_pp_tot = np.concatenate((IQUVM_pp_tot, IQUVM_pp), axis=1)
+    iquvs_pp_tot = np.concatenate((iquvs_pp_tot, iquvs_pp), axis=1)
+    iquvm_pp_tot = np.concatenate((iquvm_pp_tot, iquvm_pp), axis=1)
 
     # === Compute the delta_m values and analyse them with the previous
     # saved validated ones
@@ -1198,44 +1200,44 @@ def test_a5_pp(request, s1df):
         dtype=float,
         comment="#",
     ).values
-    IQUVS_with_std_ref = seclect_iprt_IQUV(
+    iquvs_with_std_ref = seclect_iprt_IQUV(
         smartg_a5_pp_ref, 1.0, change_U_sign=False, inv_thetas=True, stdev=True
     )
-    IQUVS_pp_ref = np.zeros((4, NVZA), dtype=np.float32)
-    IQUVS_pp_std_ref = np.zeros((4, NVZA), dtype=np.float32)
+    iquvs_pp_ref = np.zeros((4, nvza), dtype=np.float32)
+    iquvs_pp_std_ref = np.zeros((4, nvza), dtype=np.float32)
     for i in range(0, 4):
-        IQUVS_pp_ref[i, :] = np.concatenate(
-            (IQUVS_with_std_ref[i][:, 1], IQUVS_with_std_ref[i][::-1, 0])
+        iquvs_pp_ref[i, :] = np.concatenate(
+            (iquvs_with_std_ref[i][:, 1], iquvs_with_std_ref[i][::-1, 0])
         )
-        IQUVS_pp_std_ref[i, :] = np.concatenate(
+        iquvs_pp_std_ref[i, :] = np.concatenate(
             (
-                IQUVS_with_std_ref[i + 4][:, 1],
-                IQUVS_with_std_ref[i + 4][::-1, 0],
+                iquvs_with_std_ref[i + 4][:, 1],
+                iquvs_with_std_ref[i + 4][::-1, 0],
             )
         )
-    IQUVS_pp_ref_tot = IQUVS_pp_ref.copy()
-    IQUVS_pp_std_ref_tot = IQUVS_pp_std_ref.copy()
-    IQUVS_with_std_ref = seclect_iprt_IQUV(
+    iquvs_pp_ref_tot = iquvs_pp_ref.copy()
+    iquvs_pp_std_ref_tot = iquvs_pp_std_ref.copy()
+    iquvs_with_std_ref = seclect_iprt_IQUV(
         smartg_a5_pp_ref, 0.0, change_U_sign=False, inv_thetas=True, stdev=True
     )
     for i in range(0, 4):
-        IQUVS_pp_ref[i, :] = np.concatenate(
-            (IQUVS_with_std_ref[i][:, 1], IQUVS_with_std_ref[i][::-1, 0])
+        iquvs_pp_ref[i, :] = np.concatenate(
+            (iquvs_with_std_ref[i][:, 1], iquvs_with_std_ref[i][::-1, 0])
         )
-        IQUVS_pp_std_ref[i, :] = np.concatenate(
+        iquvs_pp_std_ref[i, :] = np.concatenate(
             (
-                IQUVS_with_std_ref[i + 4][:, 1],
-                IQUVS_with_std_ref[i + 4][::-1, 0],
+                iquvs_with_std_ref[i + 4][:, 1],
+                iquvs_with_std_ref[i + 4][::-1, 0],
             )
         )
-    IQUVS_pp_ref_tot = np.concatenate((IQUVS_pp_ref_tot, IQUVS_pp_ref), axis=1)
-    IQUVS_pp_std_ref_tot = np.concatenate(
-        (IQUVS_pp_std_ref_tot, IQUVS_pp_std_ref), axis=1
+    iquvs_pp_ref_tot = np.concatenate((iquvs_pp_ref_tot, iquvs_pp_ref), axis=1)
+    iquvs_pp_std_ref_tot = np.concatenate(
+        (iquvs_pp_std_ref_tot, iquvs_pp_std_ref), axis=1
     )
 
     # Compute the delta_m values from the ref smartg results
     delta_m_ref = compute_deltam(
-        obs=IQUVM_pp_tot, mod=IQUVS_pp_ref_tot, print_res=False
+        obs=iquvm_pp_tot, mod=iquvs_pp_ref_tot, print_res=False
     )
     logger.info(
         f"A5_pp - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; "
@@ -1243,20 +1245,20 @@ def test_a5_pp(request, s1df):
     )
 
     # Compute the delta_m values from the ref smartg results +- err
-    delta_m_ref_P = compute_deltam(
-        obs=IQUVM_pp_tot,
-        mod=IQUVS_pp_ref_tot + STDFAC * IQUVS_pp_std_ref_tot,
+    delta_m_ref_p = compute_deltam(
+        obs=iquvm_pp_tot,
+        mod=iquvs_pp_ref_tot + STDFAC * iquvs_pp_std_ref_tot,
         print_res=False,
     )
-    delta_m_ref_M = compute_deltam(
-        obs=IQUVM_pp_tot,
-        mod=IQUVS_pp_ref_tot - STDFAC * IQUVS_pp_std_ref_tot,
+    delta_m_ref_m = compute_deltam(
+        obs=iquvm_pp_tot,
+        mod=iquvs_pp_ref_tot - STDFAC * iquvs_pp_std_ref_tot,
         print_res=False,
     )
 
     # Compute the delta_m values from the smartg test results
     delta_m = compute_deltam(
-        obs=IQUVM_pp_tot, mod=IQUVS_pp_tot, print_res=False
+        obs=iquvm_pp_tot, mod=iquvs_pp_tot, print_res=False
     )
     logger.info(
         f"A5_pp - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; "
@@ -1265,14 +1267,14 @@ def test_a5_pp(request, s1df):
 
     # Check if the the test is ok by comparing smartg ref and smartg
     # test
-    IQUV_name = ["I", "Q", "U", "V"]
-    for istk, stk in enumerate(IQUV_name):
-        maxVal = max(
-            delta_m_ref[istk], delta_m_ref_P[istk], delta_m_ref_M[istk]
+    iquv_name = ["I", "Q", "U", "V"]
+    for istk, stk in enumerate(iquv_name):
+        max_val = max(
+            delta_m_ref[istk], delta_m_ref_p[istk], delta_m_ref_m[istk]
         )
-        assert not (delta_m[istk] > maxVal), (
+        assert not (delta_m[istk] > max_val), (
             f"Problem with {stk} values, get {delta_m[istk]:.5f}."
-            + f" {stk} must be < to {maxVal:.5f}"
+            + f" {stk} must be < to {max_val:.5f}"
         )
 
 
@@ -1286,7 +1288,7 @@ def test_a5_al(request, s1df):
     cld_tau_ext[:, 0] = 0.0  # dtau TOA equal to 0
     cld_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
     prof_aer = (cld_tau_ext, cld_ssa)
-    NTH = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
+    nth = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
     file_cld_phase = (
         DIR_AUXDATA / "IPRT" / "phaseA" / "opt_prop" / "watercloud.mie.cdf"
     )
@@ -1297,7 +1299,7 @@ def test_a5_al(request, s1df):
         lpha_lut.append(
             LUT(
                 pha_atm[i, :, :],
-                axes=[None, np.linspace(0, 180, NTH)],
+                axes=[None, np.linspace(0, 180, nth)],
                 names=["stk", "theta_atm"],
             )
         )
@@ -1313,34 +1315,34 @@ def test_a5_al(request, s1df):
     surf = None
 
     # === Illumination conditions
-    SZA = 50.0
-    SAA = 0.0
-    PHI_0 = (
-        180.0 - SAA
+    sza = 50.0
+    saa = 0.0
+    phi_0 = (
+        180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
 
-    VZA = np.array([130.0])
+    vza = np.array([130.0])
 
-    VAAMIN = 0.0
-    VAAMAX = 180.0
-    VAAINC = 1.0
-    VAA = np.arange(VAAMIN, VAAMAX + VAAINC, VAAINC)
+    vaa_min = 0.0
+    vaa_max = 180.0
+    vaa_inc = 1.0
+    vaa = np.arange(vaa_min, vaa_max + vaa_inc, vaa_inc)
 
-    # SMART-G Forward TH and PHI using local estimate (anticlockwise)
-    # conversion with VZA and VAA MYSTIC (clockwise)
-    TH = 180.0 - VZA
-    PHI = -VAA
+    # SMART-G Forward TH and phi using local estimate (anticlockwise)
+    # conversion with vza and vaa MYSTIC (clockwise)
+    TH = 180.0 - vza
+    phi = -vaa
     TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = {"th_deg": TH, "phi_deg": PHI}
+    le = {"th_deg": TH, "phi_deg": phi}
 
     # === Simulation
-    mA5F_al = s1df.run(
-        THVDEG=SZA,
-        PHVDEG=PHI_0,
+    m_a5_f_al = s1df.run(
+        THVDEG=sza,
+        PHVDEG=phi_0,
         wl=800.0,
         NBPHOTONS=1e7,
         NBLOOP=1e6,
-        NF=NTH,
+        NF=nth,
         atm=pro,
         OUTPUT_LAYERS=int(7),
         le=le,
@@ -1357,15 +1359,15 @@ def test_a5_al(request, s1df):
         # === Convert smartg output to iprt ascii output format
         tmp_file_a5_al = Path(tmpdir) / "a5_al.dat"
         convert_SGout_to_IPRTout(
-            lm=[mA5F_al, mA5F_al],
+            lm=[m_a5_f_al, m_a5_f_al],
             lU_sign=[-1, -1],
             case_name="A5",
             ldepol=[0.03, 0.03],
             lalt=[0.0, 1.0],
             lSZA=[50.0, 50.0],
             lSAA=[0.0, 0.0],
-            lVZA=[VZA, VZA],
-            lVAA=[VAA, VAA],
+            lVZA=[vza, vza],
+            lVAA=[vaa, vaa],
             file_name=tmp_file_a5_al,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
@@ -1385,14 +1387,14 @@ def test_a5_al(request, s1df):
         dtype=float,
         comment="#",
     ).values
-    VAAn = VAA
-    NVAA = len(VAAn)
+    vaa_n = vaa
+    nvaa = len(vaa_n)
 
     # Reflectance
-    IQUVS_with_std = seclect_iprt_IQUV(
+    iquvs_with_std = seclect_iprt_IQUV(
         smartg_a5_al, 1.0, change_U_sign=False, inv_thetas=True, stdev=True
     )
-    IQUVM_with_std = seclect_iprt_IQUV(
+    iquvm_with_std = seclect_iprt_IQUV(
         mystic_a5_al,
         1.0,
         change_U_sign=False,
@@ -1405,39 +1407,39 @@ def test_a5_al(request, s1df):
     )
 
     # MYSTIC IQUV and stdev IQUV
-    IQUVM_al = np.zeros((4, NVAA), dtype=np.float32)
-    IQUVstdM_al = np.zeros((4, NVAA), dtype=np.float32)
-    IQUVS_al = np.zeros((4, NVAA), dtype=np.float32)
-    IQUVstdS_al = np.zeros((4, NVAA), dtype=np.float32)
+    iquvm_al = np.zeros((4, nvaa), dtype=np.float32)
+    iquvstdm_al = np.zeros((4, nvaa), dtype=np.float32)
+    iquvs_al = np.zeros((4, nvaa), dtype=np.float32)
+    iquvstds_al = np.zeros((4, nvaa), dtype=np.float32)
     for i in range(0, 4):
-        IQUVM_al[i, :] = IQUVM_with_std[i][0, :]
-        IQUVstdM_al[i, :] = IQUVM_with_std[i + 4][0, :]
-        IQUVS_al[i, :] = IQUVS_with_std[i][0, :]
-        IQUVstdS_al[i, :] = IQUVS_with_std[i + 4][0, :]
+        iquvm_al[i, :] = iquvm_with_std[i][0, :]
+        iquvstdm_al[i, :] = iquvm_with_std[i + 4][0, :]
+        iquvs_al[i, :] = iquvs_with_std[i][0, :]
+        iquvstds_al[i, :] = iquvs_with_std[i + 4][0, :]
 
-    IQUVS_al_tot = IQUVS_al.copy()
-    IQUVM_al_tot = IQUVM_al.copy()
+    iquvs_al_tot = iquvs_al.copy()
+    iquvm_al_tot = iquvm_al.copy()
 
-    IQUVyMin = [6e-2, -1e-2, -2e-3, -5e-5]
-    IQUVyMax = [1.2e-1, 2e-2, 1.2e-2, 2e-5]
+    iquvy_min = [6e-2, -1e-2, -2e-3, -5e-5]
+    iquvy_max = [1.2e-1, 2e-2, 1.2e-2, 2e-5]
     plot_iprt_radiances(
-        IQUV_obs=IQUVM_al,
-        IQUV_mod=IQUVS_al,
-        IQUVstd_obs=IQUVstdM_al,
-        IQUVstd_mod=IQUVstdS_al,
-        xaxis=VAAn,
-        xlabel="VZA [deg]",
-        IQUVyMin=IQUVyMin,
-        IQUVyMax=IQUVyMax,
+        IQUV_obs=iquvm_al,
+        IQUV_mod=iquvs_al,
+        IQUVstd_obs=iquvstdm_al,
+        IQUVstd_mod=iquvstds_al,
+        xaxis=vaa_n,
+        xlabel="vza [deg]",
+        IQUVyMin=iquvy_min,
+        IQUVyMax=iquvy_max,
         title="reflectance  MYSTIC-red SMARTG-blue",
     )
     conftest.savefig(request, bbox_inches="tight")
 
     # Transmittance
-    IQUVS_with_std = seclect_iprt_IQUV(
+    iquvs_with_std = seclect_iprt_IQUV(
         smartg_a5_al, 0.0, change_U_sign=False, inv_thetas=True, stdev=True
     )
-    IQUVM_with_std = seclect_iprt_IQUV(
+    iquvm_with_std = seclect_iprt_IQUV(
         mystic_a5_al,
         0.0,
         change_U_sign=False,
@@ -1451,29 +1453,29 @@ def test_a5_al(request, s1df):
 
     # MYSTIC IQUV and stdev IQUV
     for i in range(0, 4):
-        IQUVM_al[i, :] = IQUVM_with_std[i][0, :]
-        IQUVstdM_al[i, :] = IQUVM_with_std[i + 4][0, :]
-        IQUVS_al[i, :] = IQUVS_with_std[i][0, :]
-        IQUVstdS_al[i, :] = IQUVS_with_std[i + 4][0, :]
+        iquvm_al[i, :] = iquvm_with_std[i][0, :]
+        iquvstdm_al[i, :] = iquvm_with_std[i + 4][0, :]
+        iquvs_al[i, :] = iquvs_with_std[i][0, :]
+        iquvstds_al[i, :] = iquvs_with_std[i + 4][0, :]
 
-    IQUVyMin = [0.0, -3.5e-3, -3e-3, -1.5e-5]
-    IQUVyMax = [3.5, 5e-4, 5e-4, 2.5e-5]
+    iquvy_min = [0.0, -3.5e-3, -3e-3, -1.5e-5]
+    iquvy_max = [3.5, 5e-4, 5e-4, 2.5e-5]
 
     plot_iprt_radiances(
-        IQUV_obs=IQUVM_al,
-        IQUV_mod=IQUVS_al,
-        IQUVstd_obs=IQUVstdM_al,
-        IQUVstd_mod=IQUVstdS_al,
-        xaxis=VAAn,
-        xlabel="VZA [deg]",
-        IQUVyMin=IQUVyMin,
-        IQUVyMax=IQUVyMax,
+        IQUV_obs=iquvm_al,
+        IQUV_mod=iquvs_al,
+        IQUVstd_obs=iquvstdm_al,
+        IQUVstd_mod=iquvstds_al,
+        xaxis=vaa_n,
+        xlabel="vza [deg]",
+        IQUVyMin=iquvy_min,
+        IQUVyMax=iquvy_max,
         title="transmittance  MYSTIC-red SMARTG-blue",
     )
     conftest.savefig(request, bbox_inches="tight")
 
-    IQUVS_al_tot = np.concatenate((IQUVS_al_tot, IQUVS_al), axis=1)
-    IQUVM_al_tot = np.concatenate((IQUVM_al_tot, IQUVM_al), axis=1)
+    iquvs_al_tot = np.concatenate((iquvs_al_tot, iquvs_al), axis=1)
+    iquvm_al_tot = np.concatenate((iquvm_al_tot, iquvm_al), axis=1)
 
     # === Compute the delta_m values and analyse them with the previous
     # saved validated ones
@@ -1490,30 +1492,30 @@ def test_a5_al(request, s1df):
         dtype=float,
         comment="#",
     ).values
-    IQUVS_with_std_ref = seclect_iprt_IQUV(
+    iquvs_with_std_ref = seclect_iprt_IQUV(
         smartg_a5_al_ref, 1.0, change_U_sign=False, inv_thetas=True, stdev=True
     )
-    IQUVS_al_ref = np.zeros((4, NVAA), dtype=np.float32)
-    IQUVS_al_std_ref = np.zeros((4, NVAA), dtype=np.float32)
+    iquvs_al_ref = np.zeros((4, nvaa), dtype=np.float32)
+    iquvs_al_std_ref = np.zeros((4, nvaa), dtype=np.float32)
     for i in range(0, 4):
-        IQUVS_al_ref[i, :] = IQUVS_with_std_ref[i][0, :]
-        IQUVS_al_std_ref[i, :] = IQUVS_with_std_ref[i + 4][0, :]
-    IQUVS_al_ref_tot = IQUVS_al_ref.copy()
-    IQUVS_al_std_ref_tot = IQUVS_al_std_ref.copy()
-    IQUVS_with_std_ref = seclect_iprt_IQUV(
+        iquvs_al_ref[i, :] = iquvs_with_std_ref[i][0, :]
+        iquvs_al_std_ref[i, :] = iquvs_with_std_ref[i + 4][0, :]
+    iquvs_al_ref_tot = iquvs_al_ref.copy()
+    iquvs_al_std_ref_tot = iquvs_al_std_ref.copy()
+    iquvs_with_std_ref = seclect_iprt_IQUV(
         smartg_a5_al_ref, 0.0, change_U_sign=False, inv_thetas=True, stdev=True
     )
     for i in range(0, 4):
-        IQUVS_al_ref[i, :] = IQUVS_with_std_ref[i][0, :]
-        IQUVS_al_std_ref[i, :] = IQUVS_with_std_ref[i + 4][0, :]
-    IQUVS_al_ref_tot = np.concatenate((IQUVS_al_ref_tot, IQUVS_al_ref), axis=1)
-    IQUVS_al_std_ref_tot = np.concatenate(
-        (IQUVS_al_std_ref_tot, IQUVS_al_std_ref), axis=1
+        iquvs_al_ref[i, :] = iquvs_with_std_ref[i][0, :]
+        iquvs_al_std_ref[i, :] = iquvs_with_std_ref[i + 4][0, :]
+    iquvs_al_ref_tot = np.concatenate((iquvs_al_ref_tot, iquvs_al_ref), axis=1)
+    iquvs_al_std_ref_tot = np.concatenate(
+        (iquvs_al_std_ref_tot, iquvs_al_std_ref), axis=1
     )
 
     # Compute the delta_m values from the ref smartg results
     delta_m_ref = compute_deltam(
-        obs=IQUVM_al_tot, mod=IQUVS_al_ref_tot, print_res=False
+        obs=iquvm_al_tot, mod=iquvs_al_ref_tot, print_res=False
     )
     logger.info(
         f"A5_al - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; "
@@ -1521,20 +1523,20 @@ def test_a5_al(request, s1df):
     )
 
     # Compute the delta_m values from the ref smartg results +- err
-    delta_m_ref_P = compute_deltam(
-        obs=IQUVM_al_tot,
-        mod=IQUVS_al_ref_tot + STDFAC * IQUVS_al_std_ref_tot,
+    delta_m_ref_p = compute_deltam(
+        obs=iquvm_al_tot,
+        mod=iquvs_al_ref_tot + STDFAC * iquvs_al_std_ref_tot,
         print_res=False,
     )
-    delta_m_ref_M = compute_deltam(
-        obs=IQUVM_al_tot,
-        mod=IQUVS_al_ref_tot - STDFAC * IQUVS_al_std_ref_tot,
+    delta_m_ref_m = compute_deltam(
+        obs=iquvm_al_tot,
+        mod=iquvs_al_ref_tot - STDFAC * iquvs_al_std_ref_tot,
         print_res=False,
     )
 
     # Compute the delta_m values from the smartg test results
     delta_m = compute_deltam(
-        obs=IQUVM_al_tot, mod=IQUVS_al_tot, print_res=False
+        obs=iquvm_al_tot, mod=iquvs_al_tot, print_res=False
     )
     logger.info(
         f"A5_al - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; "
@@ -1543,12 +1545,12 @@ def test_a5_al(request, s1df):
 
     # Check if the the test is ok by comparing smartg ref and smartg
     # test
-    IQUV_name = ["I", "Q", "U", "V"]
-    for istk, stk in enumerate(IQUV_name):
-        maxVal = max(
-            delta_m_ref[istk], delta_m_ref_P[istk], delta_m_ref_M[istk]
+    iquv_name = ["I", "Q", "U", "V"]
+    for istk, stk in enumerate(iquv_name):
+        max_val = max(
+            delta_m_ref[istk], delta_m_ref_p[istk], delta_m_ref_m[istk]
         )
-        assert not (delta_m[istk] > maxVal), (
+        assert not (delta_m[istk] > max_val), (
             f"Problem with {stk} values, get {delta_m[istk]:.5f}."
-            + f" {stk} must be < to {maxVal:.5f}"
+            + f" {stk} must be < to {max_val:.5f}"
         )
