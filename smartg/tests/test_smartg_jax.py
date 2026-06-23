@@ -14,13 +14,10 @@ os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 import pytest
 from gc import collect
 
-try:
-    from smartg.histories import get_histories, BigSum, Si, Si2
-    import jax
-
-    SKIP = False
-except ModuleNotFoundError:
-    SKIP = True
+jax = pytest.importorskip(
+    "jax", reason="cannot test this since the jax package is not installed."
+)
+from smartg.histories import get_histories, BigSum, Si, Si2
 import numpy as np
 import matplotlib.pyplot as plt
 from smartg.smartg import Smartg
@@ -56,9 +53,6 @@ def cleanup_after_each_test():
 @pytest.mark.parametrize("N_WL_ABS", [301])
 @pytest.mark.parametrize("WMAX", [350.0])
 @pytest.mark.parametrize("WMIN", [320.0])
-@pytest.mark.skipif(
-    SKIP, reason="cannot test this since the jax package is not installed."
-)
 def test_smartg_jax2(
     N_WL_ABS, WMIN, WMAX, request, NBPHOTONS=5e4, MAX_HIST=1e6
 ):
@@ -69,7 +63,9 @@ def test_smartg_jax2(
     alb = ALB_SNOW.get(wl_abs)
     lez = {"th_deg": np.array([0.0]), "phi_deg": np.array([0.0]), "zip": False}
 
-    for AOD, fmt1 in zip(np.linspace(0.1, 0.5, num=2), ["-m", "-c"]):
+    for AOD, fmt1 in zip(
+        np.linspace(0.1, 0.5, num=2), ["-m", "-c"], strict=True
+    ):
         LEVEL = 0  # 1: BOA downward reflectance, 0 : TOA
         atm = Atm1D(
             "afglms",
@@ -180,9 +176,6 @@ def test_smartg_jax2(
     conftest.savefig(request)
 
 
-@pytest.mark.skipif(
-    SKIP, reason="cannot test this since the jax package is not installed."
-)
 def test_validation_artdeco(request, NB=5e5, VALPATH=DIR_AUXDATA):
     """
     Validation of SMART-G with ARTDECO validation data
