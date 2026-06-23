@@ -12,6 +12,7 @@ os.environ["JAX_PLATFORMS"] = "cpu"
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 import pytest
+import logging
 from gc import collect
 
 jax = pytest.importorskip(
@@ -28,6 +29,31 @@ from smartg.tools.smartg_view import mdesc
 from smartg import conftest
 from pathlib import Path
 from smartg.config import DIR_AUXDATA
+
+
+# ***************************** logging ********************************
+ROOTPATH = Path(__file__).resolve().parent.parent.parent
+Path(ROOTPATH / "smartg" / "tests" / "logs").mkdir(parents=True, exist_ok=True)
+
+logger = logging.getLogger("test_smartg_jax")
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.ERROR)
+formatter = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S%p",
+)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+file_handler = logging.FileHandler(
+    ROOTPATH / "smartg" / "tests" / "logs" / "smartg_jax.log", mode="w"
+)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+# **********************************************************************
 
 
 # Clean up JAX memory and stale PyCUDA atexit handlers after each test
@@ -325,6 +351,36 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
 
     #####################
     i_valid = data_valid[:, 1]
+
+    # Mask for "significant" reference values where relative error is meaningful
+    sig = np.abs(i_valid) > 1e-3
+
+    # --- no-hist ---
+    abs_err_no_hist = np.abs(m1["I_up (TOA)"][:] - i_valid)
+    rel_err_no_hist = abs_err_no_hist[sig] / np.abs(i_valid[sig])
+    logger.info(
+        f"no-hist vs ARTDECO (|ref|>1e-3) - "
+        f"max rel err = {np.max(rel_err_no_hist) * 100:.6f}% - "
+        f"max abs err = {np.max(abs_err_no_hist):.6e}"
+    )
+    assert np.all(rel_err_no_hist < 0.02), (
+        f"SMART-G no-hist exceeds 2% relative error vs ARTDECO reference "
+        f"(|ref|>1e-3): max rel err = {rel_err_no_hist.max():.4%}"
+    )
+
+    # --- hist+jax ---
+    abs_err_hist = np.abs(stk_i - i_valid)
+    rel_err_hist = abs_err_hist[sig] / np.abs(i_valid[sig])
+    logger.info(
+        f"hist+jax vs ARTDECO (|ref|>1e-3) - "
+        f"max rel err = {np.max(rel_err_hist) * 100:.6f}% - "
+        f"max abs err = {np.max(abs_err_hist):.6e}"
+    )
+    assert np.all(rel_err_hist < 0.02), (
+        f"SMART-G hist+jax exceeds 2% relative error vs ARTDECO reference "
+        f"(|ref|>1e-3): max rel err = {rel_err_hist.max():.4%}"
+    )
+
     plt.figure(figsize=(12, 4))
     plt.plot(w_valid, i_valid, "r", label="Doubling Adding: 32 streams")
     m1["I_up (TOA)"].plot("c", label="SMART-G no hist.")
