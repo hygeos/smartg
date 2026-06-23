@@ -44,7 +44,7 @@ DELTA_R_SSA = 0.2  # relative error in %
 Path(ROOTPATH / "smartg" / "tests" / "logs").mkdir(parents=True, exist_ok=True)
 
 # Create a named logger
-logger = logging.getLogger("test_OPAC")
+logger = logging.getLogger("test_opac")
 logger.setLevel(logging.INFO)
 
 # Create a console handler
