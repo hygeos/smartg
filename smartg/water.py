@@ -7,8 +7,7 @@ import xarray as xr
 from warnings import warn
 from smartg.atmosphere import diff1
 from smartg.albedo import AlbedoCst
-from smartg.phase import integ_phase, calc_iphase
-from smartg.tools.water.phase_functions import fournierForand
+from smartg.phase import integ_phase, calc_iphase, fournierForand
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
