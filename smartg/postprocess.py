@@ -9,11 +9,19 @@ fields over the upper hemisphere and produce irradiance-like
 diagnostics.
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import numpy as np
-from luts.luts import MLUT
+from luts.luts import LUT, MLUT
 
 
-def Irr(L, azimuth="Azimuth angles", zenith="Zenith angles"):
+def Irr(
+    L: LUT,
+    azimuth: str = "Azimuth angles",
+    zenith: str = "Zenith angles",
+) -> LUT | float:
     """
     Compute plane irradiance from a reflectance LUT.
 
@@ -38,8 +46,10 @@ def Irr(L, azimuth="Azimuth angles", zenith="Zenith angles"):
         dimensions remain after angular reduction, otherwise a
         LUT is returned.
     """
-    mu = (L.axis(zenith, aslut=True) * np.pi / 180.0).apply(np.cos)
-    phi = L.axis(azimuth, aslut=True) * np.pi / 180.0
+    zenith_axis = cast(LUT, L.axis(zenith, aslut=True))
+    azimuth_axis = cast(LUT, L.axis(azimuth, aslut=True))
+    mu = (zenith_axis * np.pi / 180.0).apply(np.cos)
+    phi = azimuth_axis * np.pi / 180.0
     return (
         1.0
         / np.pi
@@ -49,7 +59,11 @@ def Irr(L, azimuth="Azimuth angles", zenith="Zenith angles"):
     )
 
 
-def SpherIrr(L, azimuth="Azimuth angles", zenith="Zenith angles"):
+def SpherIrr(
+    L: LUT,
+    azimuth: str = "Azimuth angles",
+    zenith: str = "Zenith angles",
+) -> LUT | float:
     """
     Compute spherical irradiance from a reflectance LUT.
 
@@ -74,8 +88,10 @@ def SpherIrr(L, azimuth="Azimuth angles", zenith="Zenith angles"):
         dimensions remain after angular reduction, otherwise a
         LUT is returned.
     """
-    mu = (L.axis(zenith, aslut=True) * np.pi / 180.0).apply(np.cos)
-    phi = L.axis(azimuth, aslut=True) * np.pi / 180.0
+    zenith_axis = cast(LUT, L.axis(zenith, aslut=True))
+    azimuth_axis = cast(LUT, L.axis(azimuth, aslut=True))
+    mu = (zenith_axis * np.pi / 180.0).apply(np.cos)
+    phi = azimuth_axis * np.pi / 180.0
     return (
         1.0
         / np.pi
@@ -85,7 +101,7 @@ def SpherIrr(L, azimuth="Azimuth angles", zenith="Zenith angles"):
     )
 
 
-def reduce_Irr(m):
+def reduce_Irr(m: MLUT) -> MLUT:
     """
     Create a new irradiance MLUT from radiance datasets.
 
