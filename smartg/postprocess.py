@@ -35,7 +35,7 @@ def plane_irr(
 
     Parameters
     ----------
-    da_refl : LUT or xr.DataArray
+    da_refl : LUT or DataArray
         Reflectance field containing azimuth and zenith dimensions.
         LUT inputs are converted with ``to_xarray()``.
     azimuth_name : str, optional
@@ -45,7 +45,7 @@ def plane_irr(
 
     Returns
     -------
-    xr.DataArray
+    DataArray
         Normalized plane irradiance after angular reduction.
     """
     if isinstance(da_refl, LUT):
@@ -93,7 +93,7 @@ def spherical_irr(
 
     Parameters
     ----------
-    da_refl : LUT or xr.DataArray
+    da_refl : LUT or DataArray
         Reflectance field containing azimuth and zenith dimensions.
         LUT inputs are converted with ``to_xarray()``.
     azimuth_name : str, optional
@@ -103,7 +103,7 @@ def spherical_irr(
 
     Returns
     -------
-    xr.DataArray
+    DataArray
         Normalized spherical irradiance after angular reduction.
     """
     if isinstance(da_refl, LUT):
@@ -138,13 +138,13 @@ def irradiance_ds(ds_rad: MLUT | xr.Dataset) -> xr.Dataset:
 
     Parameters
     ----------
-    ds_rad : MLUT or xr.Dataset
+    ds_rad : MLUT or Dataset
         SMART-G reflectance container (dimensionless). MLUT inputs
         are converted with ``to_xarray()``.
 
     Returns
     -------
-    xr.Dataset
+    Dataset
         xarray Dataset containing normalized ``Pflux_`` and
         ``Sflux_`` variables for each ``I_`` input and copied
         ``direct`` variables. Multiply the normalized fluxes by the
