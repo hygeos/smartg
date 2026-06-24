@@ -15,7 +15,7 @@ import xarray as xr
 from luts.luts import LUT, MLUT
 
 
-def Irr(
+def plane_irr(
     L: LUT | xr.DataArray,
     azimuth: str = "Azimuth angles",
     zenith: str = "Zenith angles",
@@ -67,7 +67,7 @@ def Irr(
     return (integrand / np.pi).integrate("__mu_int").integrate("__phi_int")
 
 
-def SpherIrr(
+def spherical_irr(
     L: LUT | xr.DataArray,
     azimuth: str = "Azimuth angles",
     zenith: str = "Zenith angles",
@@ -115,14 +115,14 @@ def SpherIrr(
     return (integrand / np.pi).integrate("__mu_int").integrate("__phi_int")
 
 
-def reduce_Irr(m: MLUT | xr.Dataset) -> xr.Dataset:
+def irradiance_ds(m: MLUT | xr.Dataset) -> xr.Dataset:
     """
     Create an irradiance Dataset from radiance datasets.
 
     For each dataset whose name starts with ``I_``, this function
-    computes plane irradiance (``Pflux_``) with ``Irr`` and spherical
-    irradiance (``Sflux_``) with ``SpherIrr``. Datasets whose name
-    starts with ``direct`` are copied unchanged.
+    computes plane irradiance (``Pflux_``) with ``plane_irr`` and
+    spherical irradiance (``Sflux_``) with ``spherical_irr``.
+    Datasets whose name starts with ``direct`` are copied unchanged.
 
     Parameters
     ----------
@@ -150,8 +150,12 @@ def reduce_Irr(m: MLUT | xr.Dataset) -> xr.Dataset:
     for name, da in ds_in.data_vars.items():
         name_str = str(name)
         if name_str.startswith("I_"):
-            out_vars[name_str.replace("I_", "Pflux_")] = Irr(da)
-            out_vars[name_str.replace("I_", "Sflux_")] = SpherIrr(da)
+            out_vars[name_str.replace("I_", "Pflux_")] = (
+                plane_irr(da)
+            )
+            out_vars[name_str.replace("I_", "Sflux_")] = (
+                spherical_irr(da)
+            )
         if name_str.startswith("direct"):
             out_vars[name_str] = da
 
