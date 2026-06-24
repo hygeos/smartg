@@ -19,7 +19,7 @@ from warnings import warn
 from smartg.albedo import AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
 from smartg.progress import progress as make_progress
 from smartg.cdf import icdf_2d
-from smartg.modified_environ import modified_environ
+from smartg.environ import modified_environ
 from luts.luts import LUT, MLUT
 from scipy.interpolate import interp1d
 #from scipy.integrate import simpson
