@@ -4,81 +4,35 @@
 """
 Post-processing utilities for SMART-G output.
 
-This module provides helpers to integrate angular reflectance
-fields over the upper hemisphere and produce irradiance-like
-diagnostics.
+This module provides helpers to integrate angular reflectance fields
+over the upper hemisphere and produce irradiance-like diagnostics.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
-
 import numpy as np
+import xarray as xr
 from luts.luts import LUT, MLUT
-
-if TYPE_CHECKING:
-    import xarray as xr
 
 
 def Irr(
-    L: LUT,
+    L: LUT | xr.DataArray,
     azimuth: str = "Azimuth angles",
     zenith: str = "Zenith angles",
-) -> LUT | float:
+) -> xr.DataArray:
     """
-    Compute plane irradiance from a reflectance LUT.
+    Compute plane irradiance from a reflectance DataArray.
 
-    The quantity is obtained by integrating reflectance over
-    azimuth and zenith with a cos(theta) weighting, which gives
-    the flux crossing a horizontal plane. The output is
-    normalized by pi and keeps all non-angular dimensions.
-
-    Parameters
-    ----------
-    L : LUT
-        Reflectance LUT containing azimuth and zenith dimensions.
-    azimuth : str, optional
-        Name of the azimuth axis in degrees.
-    zenith : str, optional
-        Name of the zenith axis in degrees.
-
-    Returns
-    -------
-    LUT or scalar
-        Plane irradiance value. A scalar is returned when no
-        dimensions remain after angular reduction, otherwise a
-        LUT is returned.
-    """
-    zenith_axis = cast(LUT, L.axis(zenith, aslut=True))
-    azimuth_axis = cast(LUT, L.axis(azimuth, aslut=True))
-    mu = (zenith_axis * np.pi / 180.0).apply(np.cos)
-    phi = azimuth_axis * np.pi / 180.0
-    return (
-        1.0
-        / np.pi
-        * (mu * L)
-        .reduce(np.trapezoid, zenith, x=-mu[:])
-        .reduce(np.trapezoid, azimuth, x=phi[:])
-    )
-
-
-def SpherIrr(
-    L: LUT,
-    azimuth: str = "Azimuth angles",
-    zenith: str = "Zenith angles",
-) -> LUT | float:
-    """
-    Compute spherical irradiance from a reflectance LUT.
-
-    The quantity is obtained by integrating reflectance over
-    azimuth and zenith without a cos(theta) weighting, yielding
-    scalar (actinic) flux. The output is normalized by pi and
+    The quantity is obtained by integrating reflectance over azimuth
+    and zenith with a cos(theta) weighting, which gives the flux
+    crossing a horizontal plane. The output is normalized by pi and
     keeps all non-angular dimensions.
 
     Parameters
     ----------
-    L : LUT
-        Reflectance LUT containing azimuth and zenith dimensions.
+    L : LUT or xr.DataArray
+        Reflectance field containing azimuth and zenith dimensions.
+        LUT inputs are converted with ``to_xarray()``.
     azimuth : str, optional
         Name of the azimuth axis in degrees.
     zenith : str, optional
@@ -86,52 +40,119 @@ def SpherIrr(
 
     Returns
     -------
-    LUT or scalar
-        Spherical irradiance value. A scalar is returned when no
-        dimensions remain after angular reduction, otherwise a
-        LUT is returned.
+    xr.DataArray
+        Plane irradiance after angular reduction.
     """
-    zenith_axis = cast(LUT, L.axis(zenith, aslut=True))
-    azimuth_axis = cast(LUT, L.axis(azimuth, aslut=True))
-    mu = (zenith_axis * np.pi / 180.0).apply(np.cos)
-    phi = azimuth_axis * np.pi / 180.0
-    return (
-        1.0
-        / np.pi
-        * (L)
-        .reduce(np.trapezoid, zenith, x=-mu[:])
-        .reduce(np.trapezoid, azimuth, x=phi[:])
+    if isinstance(L, LUT):
+        da = L.to_xarray()
+    elif isinstance(L, xr.DataArray):
+        da = L
+    else:
+        raise TypeError(
+            f"L must be a LUT or xarray.DataArray, got {type(L).__name__}."
+        )
+
+    zenith_rad = np.deg2rad(da[zenith])
+    azimuth_rad = np.deg2rad(da[azimuth])
+    mu = np.cos(zenith_rad)
+    integrand = (
+        (da * mu)
+        .assign_coords(
+            __mu_int=(zenith, (-mu).data),
+            __phi_int=(azimuth, azimuth_rad.data),
+        )
+        .swap_dims({zenith: "__mu_int", azimuth: "__phi_int"})
     )
 
+    return (integrand / np.pi).integrate("__mu_int").integrate("__phi_int")
 
-def reduce_Irr(m: MLUT) -> xr.Dataset:
+
+def SpherIrr(
+    L: LUT | xr.DataArray,
+    azimuth: str = "Azimuth angles",
+    zenith: str = "Zenith angles",
+) -> xr.DataArray:
+    """
+    Compute spherical irradiance from a reflectance DataArray.
+
+    The quantity is obtained by integrating reflectance over azimuth
+    and zenith without a cos(theta) weighting, yielding scalar
+    (actinic) flux. The output is normalized by pi and keeps all
+    non-angular dimensions.
+
+    Parameters
+    ----------
+    L : LUT or xr.DataArray
+        Reflectance field containing azimuth and zenith dimensions.
+        LUT inputs are converted with ``to_xarray()``.
+    azimuth : str, optional
+        Name of the azimuth axis in degrees.
+    zenith : str, optional
+        Name of the zenith axis in degrees.
+
+    Returns
+    -------
+    xr.DataArray
+        Spherical irradiance after angular reduction.
+    """
+    if isinstance(L, LUT):
+        da = L.to_xarray()
+    elif isinstance(L, xr.DataArray):
+        da = L
+    else:
+        raise TypeError(
+            f"L must be a LUT or xarray.DataArray, got {type(L).__name__}."
+        )
+
+    zenith_rad = np.deg2rad(da[zenith])
+    azimuth_rad = np.deg2rad(da[azimuth])
+    mu = np.cos(zenith_rad)
+    integrand = da.assign_coords(
+        __mu_int=(zenith, (-mu).data),
+        __phi_int=(azimuth, azimuth_rad.data),
+    ).swap_dims({zenith: "__mu_int", azimuth: "__phi_int"})
+
+    return (integrand / np.pi).integrate("__mu_int").integrate("__phi_int")
+
+
+def reduce_Irr(m: MLUT | xr.Dataset) -> xr.Dataset:
     """
     Create an irradiance Dataset from radiance datasets.
 
     For each dataset whose name starts with ``I_``, this function
-    computes plane irradiance (``Pflux_``) with ``Irr`` and
-    spherical irradiance (``Sflux_``) with ``SpherIrr``. Datasets
-    whose name starts with ``direct`` are copied unchanged.
+    computes plane irradiance (``Pflux_``) with ``Irr`` and spherical
+    irradiance (``Sflux_``) with ``SpherIrr``. Datasets whose name
+    starts with ``direct`` are copied unchanged.
 
     Parameters
     ----------
-    m : MLUT
-        Multi-LUT containing SMART-G radiance datasets.
+    m : MLUT or xr.Dataset
+        SMART-G radiance container. MLUT inputs are converted with
+        ``to_xarray()``.
 
     Returns
     -------
     xr.Dataset
-        xarray Dataset containing generated ``Pflux_`` and
-        ``Sflux_`` variables for each ``I_`` input and copied
-        ``direct`` variables.
+        xarray Dataset containing generated ``Pflux_`` and ``Sflux_``
+        variables for each ``I_`` input and copied ``direct``
+        variables.
     """
-    res = MLUT()
-    for d in m.datasets():
-        if d.startswith("I_"):
-            l_tmp = Irr(m[d])
-            res.add_lut(l_tmp, desc=d.replace("I_", "Pflux_"))
-            l_tmp = SpherIrr(m[d])
-            res.add_lut(l_tmp, desc=d.replace("I_", "Sflux_"))
-        if d.startswith("direct"):
-            res.add_lut(m[d])
-    return res.to_xarray()
+    if isinstance(m, MLUT):
+        ds_in = m.to_xarray()
+    elif isinstance(m, xr.Dataset):
+        ds_in = m
+    else:
+        raise TypeError(
+            f"m must be an MLUT or xarray.Dataset, got {type(m).__name__}."
+        )
+
+    out_vars: dict[str, xr.DataArray] = {}
+    for name, da in ds_in.data_vars.items():
+        name_str = str(name)
+        if name_str.startswith("I_"):
+            out_vars[name_str.replace("I_", "Pflux_")] = Irr(da)
+            out_vars[name_str.replace("I_", "Sflux_")] = SpherIrr(da)
+        if name_str.startswith("direct"):
+            out_vars[name_str] = da
+
+    return xr.Dataset(data_vars=out_vars, attrs=ds_in.attrs)
