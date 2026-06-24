@@ -11,10 +11,13 @@ diagnostics.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from luts.luts import LUT, MLUT
+
+if TYPE_CHECKING:
+    import xarray as xr
 
 
 def Irr(
@@ -101,9 +104,9 @@ def SpherIrr(
     )
 
 
-def reduce_Irr(m: MLUT) -> MLUT:
+def reduce_Irr(m: MLUT) -> xr.Dataset:
     """
-    Create a new irradiance MLUT from radiance datasets.
+    Create an irradiance Dataset from radiance datasets.
 
     For each dataset whose name starts with ``I_``, this function
     computes plane irradiance (``Pflux_``) with ``Irr`` and
@@ -117,10 +120,10 @@ def reduce_Irr(m: MLUT) -> MLUT:
 
     Returns
     -------
-    MLUT
-        New multi-LUT containing generated ``Pflux_`` and
-        ``Sflux_`` datasets for each ``I_`` input and copied
-        ``direct*`` datasets.
+    xr.Dataset
+        xarray Dataset containing generated ``Pflux_`` and
+        ``Sflux_`` variables for each ``I_`` input and copied
+        ``direct`` variables.
     """
     res = MLUT()
     for d in m.datasets():
@@ -131,4 +134,4 @@ def reduce_Irr(m: MLUT) -> MLUT:
             res.add_lut(l_tmp, desc=d.replace("I_", "Sflux_"))
         if d.startswith("direct"):
             res.add_lut(m[d])
-    return res
+    return res.to_xarray()
