@@ -7,7 +7,7 @@ import xarray as xr
 from warnings import warn
 from smartg.atmosphere import diff1
 from smartg.albedo import AlbedoCst
-from smartg.phase import integ_phase, calc_iphase, fournierForand
+from smartg.phase import integ_phase, calc_iphase, fournier_forand
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
@@ -321,8 +321,8 @@ class IOP(IOP_base):
         # see Park & Ruddick, 05
         # https://odnature.naturalsciences.be/downloads/publications/park_appliedoptics_2005.pdf
         ang = np.linspace(0, np.pi, self.NANG, dtype='float64')    # angle in radians
-        ff1 = fournierForand(ang, 1.117,3.695)[None,None,:]
-        ff2 = fournierForand(ang, 1.05, 3.259)[None,None,:]
+        ff1 = fournier_forand(ang, 1.117,3.695)[None,None,:]
+        ff2 = fournier_forand(ang, 1.05, 3.259)[None,None,:]
 
         itronc = int(self.NANG * self.ang_trunc/180.)
         pha = np.zeros((nwav, nz, 6, self.NANG), dtype='float64')
@@ -643,8 +643,8 @@ class IOP_1(IOP_base):
         # see Park & Ruddick, 05
         # https://odnature.naturalsciences.be/downloads/publications/park_appliedoptics_2005.pdf
         ang = np.linspace(0, np.pi, self.NANG, dtype='float64')    # angle in radians
-        ff1 = fournierForand(ang, 1.117,3.695)[None,:]
-        ff2 = fournierForand(ang, 1.05, 3.259)[None,:]
+        ff1 = fournier_forand(ang, 1.117,3.695)[None,:]
+        ff2 = fournier_forand(ang, 1.05, 3.259)[None,:]
 
         itronc = int(self.NANG * self.ang_trunc/180.)
         pha = np.zeros((nwav, 1, 6, self.NANG), dtype='float64')
@@ -1037,8 +1037,8 @@ class IOP_profile(IOP_base):
         # see Park & Ruddick, 05
         # https://odnature.naturalsciences.be/downloads/publications/park_appliedoptics_2005.pdf
         ang = np.linspace(0, np.pi, self.NANG, dtype='float64')    # angle in radians
-        ff1 = fournierForand(ang, 1.117,3.695)[None,None,:]
-        ff2 = fournierForand(ang, 1.05, 3.259)[None,None,:]
+        ff1 = fournier_forand(ang, 1.117,3.695)[None,None,:]
+        ff2 = fournier_forand(ang, 1.05, 3.259)[None,None,:]
 
         itronc = int(self.NANG * self.ang_trunc/180.)
         pha = np.zeros((nwav, nz, 6, self.NANG), dtype='float64')
