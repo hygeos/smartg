@@ -1,5 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""Linear interpolation helpers for regular and irregular grids.
+
+This module provides thin wrappers around
+``scipy.ndimage.map_coordinates`` (for N-D arrays sampled at arbitrary
+query points) and ``numpy.interp`` (for 1-D coordinate arrays), with
+support for increasing or decreasing coordinate axes and optional
+boundary clipping.
+"""
 
 from __future__ import print_function, division
 from scipy.ndimage import map_coordinates
