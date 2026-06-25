@@ -23,7 +23,8 @@ from pylab import (
 )
 import numpy as np
 
-np.seterr(invalid="ignore", divide="ignore")  # ignore division by zero errors
+# ignore division by zero errors
+np.seterr(invalid="ignore", divide="ignore")
 import xarray as xr
 import mpl_toolkits.axisartist.angle_helper as angle_helper
 from matplotlib.transforms import Affine2D
@@ -112,6 +113,29 @@ def mdesc(desc: str, logI: bool = False) -> str:
             + desc[sep3 + 1 :]
             + "$"
         )
+
+
+def _interp_and_squeeze_scalar_dims(
+    da: xr.DataArray, interp_dict: dict[str, Any]
+) -> xr.DataArray:
+    """Interpolate then squeeze only existing singleton dimensions."""
+    valid_interp = {
+        dim: value for dim, value in interp_dict.items() if dim in da.dims
+    }
+    if valid_interp:
+        da_interp = da.interp(valid_interp)
+    else:
+        da_interp = da
+    dims_to_squeeze = [
+        dim
+        for dim, value in valid_interp.items()
+        if np.atleast_1d(value).size <= 1
+        and dim in da_interp.dims
+        and da_interp.sizes[dim] <= 1
+    ]
+    if dims_to_squeeze:
+        da_interp = da_interp.squeeze(dim=dims_to_squeeze, drop=True)
+    return da_interp
 
 
 def smartg_view(
@@ -234,10 +258,10 @@ def smartg_view(
         )
         ind = np.atleast_1d(np.round(index_values).astype(np.int32))
 
-    I = ds_sg[prefix + "I_" + field]
-    Q = ds_sg[prefix + "Q_" + field]
-    U = ds_sg[prefix + "U_" + field]
-    V = ds_sg[prefix + "V_" + field]
+    stk_i = ds_sg[prefix + "I_" + field]
+    stk_u = ds_sg[prefix + "Q_" + field]
+    stk_q = ds_sg[prefix + "U_" + field]
+    stk_v = ds_sg[prefix + "V_" + field]
 
     # Handle deprecated subdict parameter
     if subdict is not None and interp_dict is not None:
@@ -247,7 +271,7 @@ def smartg_view(
 
     if subdict is not None:
         warn_message = "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         # Convert Idx_base objects to values before converting
         # to interp_dict
         for dic_name in list(subdict.keys()):
@@ -259,41 +283,36 @@ def smartg_view(
 
     if interp_dict is not None:
         # Identify dimensions to drop (those with scalar values)
-        dims_to_drop = [
-            dim
-            for dim in interp_dict.keys()
-            if np.atleast_1d(interp_dict[dim]).size <= 1
-        ]
-        I = I.interp(interp_dict).drop(dims_to_drop)
-        Q = Q.interp(interp_dict).drop(dims_to_drop)
-        U = U.interp(interp_dict).drop(dims_to_drop)
-        V = V.interp(interp_dict).drop(dims_to_drop)
+        stk_i = _interp_and_squeeze_scalar_dims(stk_i, interp_dict)
+        stk_u = _interp_and_squeeze_scalar_dims(stk_u, interp_dict)
+        stk_q = _interp_and_squeeze_scalar_dims(stk_q, interp_dict)
+        stk_v = _interp_and_squeeze_scalar_dims(stk_v, interp_dict)
 
     # Linearly polarized reflectance
-    IPL = np.sqrt(Q * Q + U * U)
+    IPL = np.sqrt(stk_u * stk_u + stk_q * stk_q)
 
     # Polarized reflectance
-    IP = np.sqrt(Q * Q + U * U + V * V)
+    IP = np.sqrt(stk_u * stk_u + stk_q * stk_q + stk_v * stk_v)
 
     # Degree of Linear Polarization (%)
-    DoLP = 100 * IPL / I
+    DoLP = 100 * IPL / stk_i
 
     # Angle of Linear Polarization (deg)
-    AoLP = np.arctan(U / Q) * 90 / np.pi
+    AoLP = np.arctan(stk_q / stk_u) * 90 / np.pi
 
     # Degree of Circular Polarization (%)
-    DoCP = 100 * np.abs(V) / I
+    DoCP = 100 * np.abs(stk_v) / stk_i
 
     # Degree of Polarization (%)
-    DoP = 100 * IP / I
+    DoP = 100 * IP / stk_i
 
     if not full:
         if QU:
             if fig is None:
                 fig = figure(figsize=(9, 14))
             if logI:
-                lI = np.log10(I)
-                lI.attrs["latex_name"] = mdesc(I.name or "I", logI=True)
+                lI = np.log10(stk_i)
+                lI.attrs["latex_name"] = mdesc(stk_i.name or "I", logI=True)
                 plot_polar(
                     lI.assign_coords(lI.coords),
                     index=ind,
@@ -306,7 +325,7 @@ def smartg_view(
                 )
             else:
                 plot_polar(
-                    I.assign_coords(I.coords),
+                    stk_i.assign_coords(stk_i.coords),
                     index=ind,
                     rect=421,
                     sub=423,
@@ -316,7 +335,7 @@ def smartg_view(
                     vmax=Imax,
                 )
             plot_polar(
-                Q.assign_coords(Q.coords),
+                stk_u.assign_coords(stk_u.coords),
                 index=ind,
                 rect=422,
                 sub=424,
@@ -328,7 +347,7 @@ def smartg_view(
             else:
                 rectU = 423
             plot_polar(
-                U.assign_coords(U.coords),
+                stk_q.assign_coords(stk_q.coords),
                 index=ind,
                 rect=rectU,
                 sub=427,
@@ -341,7 +360,7 @@ def smartg_view(
                 else:
                     rectV = 424
                 plot_polar(
-                    V.assign_coords(V.coords),
+                    stk_v.assign_coords(stk_v.coords),
                     index=ind,
                     rect=rectV,
                     sub=428,
@@ -369,8 +388,8 @@ def smartg_view(
             if fig is None:
                 fig = figure(figsize=(9, 6))
             if logI:
-                lI = np.log10(I)
-                lI.attrs["latex_name"] = mdesc(I.name or "I", logI=True)
+                lI = np.log10(stk_i)
+                lI.attrs["latex_name"] = mdesc(stk_i.name or "I", logI=True)
                 plot_polar(
                     lI.assign_coords(lI.coords),
                     index=ind,
@@ -383,7 +402,7 @@ def smartg_view(
                 )
             else:
                 plot_polar(
-                    I.assign_coords(I.coords),
+                    stk_i.assign_coords(stk_i.coords),
                     index=ind,
                     rect=221,
                     sub=223,
@@ -419,8 +438,8 @@ def smartg_view(
                 )
     else:
         # full plots
-        lI = np.log10(I)
-        lI.attrs["latex_name"] = mdesc(I.name or "I", logI=True)
+        lI = np.log10(stk_i)
+        lI.attrs["latex_name"] = mdesc(stk_i.name or "I", logI=True)
         DoLP.attrs["latex_name"] = r"$DoLP$"
         DoCP.attrs["latex_name"] = r"$DoCP$"
         DoP.attrs["latex_name"] = r"$DoP$"
@@ -429,7 +448,7 @@ def smartg_view(
             fig = figure(figsize=(18, 14))
 
         plot_polar(
-            I.assign_coords(I.coords),
+            stk_i.assign_coords(stk_i.coords),
             index=ind,
             rect=441,
             sub=445,
@@ -439,7 +458,7 @@ def smartg_view(
             vmax=Imax,
         )
         plot_polar(
-            Q.assign_coords(Q.coords),
+            stk_u.assign_coords(stk_u.coords),
             index=ind,
             rect=442,
             sub=446,
@@ -447,7 +466,7 @@ def smartg_view(
             cmap=cmap,
         )
         plot_polar(
-            U.assign_coords(U.coords),
+            stk_q.assign_coords(stk_q.coords),
             index=ind,
             rect=443,
             sub=447,
@@ -455,7 +474,7 @@ def smartg_view(
             cmap=cmap,
         )
         plot_polar(
-            V.assign_coords(V.coords),
+            stk_v.assign_coords(stk_v.coords),
             index=ind,
             rect=444,
             sub=448,
@@ -634,15 +653,10 @@ def transect_view(
 
     if interp_dict is not None:
         # Identify dimensions to drop (those with scalar values)
-        dims_to_drop = [
-            dim
-            for dim in interp_dict.keys()
-            if np.atleast_1d(interp_dict[dim]).size <= 1
-        ]
-        I = I.interp(interp_dict).drop(dims_to_drop)
-        Q = Q.interp(interp_dict).drop(dims_to_drop)
-        U = U.interp(interp_dict).drop(dims_to_drop)
-        V = V.interp(interp_dict).drop(dims_to_drop)
+        I = _interp_and_squeeze_scalar_dims(I, interp_dict)
+        Q = _interp_and_squeeze_scalar_dims(Q, interp_dict)
+        U = _interp_and_squeeze_scalar_dims(U, interp_dict)
+        V = _interp_and_squeeze_scalar_dims(V, interp_dict)
 
     # Linearly polarized reflectance
     IPL = np.sqrt(Q * Q + U * U)
@@ -983,15 +997,10 @@ def spectrum_view(
     # Handle interpolation for multi-dimensional data
     if interp_dict is not None:
         # Identify dimensions to drop (those with scalar values)
-        dims_to_drop = [
-            dim
-            for dim in interp_dict.keys()
-            if np.atleast_1d(interp_dict[dim]).size <= 1
-        ]
-        I = I.interp(interp_dict).drop(dims_to_drop)
-        Q = Q.interp(interp_dict).drop(dims_to_drop)
-        U = U.interp(interp_dict).drop(dims_to_drop)
-        V = V.interp(interp_dict).drop(dims_to_drop)
+        I = _interp_and_squeeze_scalar_dims(I, interp_dict)
+        Q = _interp_and_squeeze_scalar_dims(Q, interp_dict)
+        U = _interp_and_squeeze_scalar_dims(U, interp_dict)
+        V = _interp_and_squeeze_scalar_dims(V, interp_dict)
 
     # Linearly polarized reflectance
     IPL = np.sqrt(Q * Q + U * U)
