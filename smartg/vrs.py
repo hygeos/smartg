@@ -1,10 +1,67 @@
+"""Ocean vibrational Raman scattering spectrum.
+
+This module provides the spectral response functions used to
+model inelastic (vibrational Raman) scattering by liquid water in
+ocean-color radiative-transfer simulations.
+
+The Raman shift of liquid water covers the O-H stretching band,
+roughly 2950-3850 cm-1. The spectral shape is modeled as a sum of
+four Gaussian peaks fitted to laboratory measurements. Two helpers
+are exposed:
+
+* :func:`V2d`     -- forward spectrum: from excitation
+  wavelength(s) to the Raman-shifted wavelength grid and response.
+* :func:`V2d_inv` -- inverse spectrum: from a detected
+  wavelength back to the excitation wavelength grid and response.
+
+The internal helpers :func:`Gauss` and :func:`fR` build the underlying
+Gaussian peaks and their normalized sum.
+"""
 import numpy as np
 
-def Gauss(ks, Aj, kj, Dkj):
 
+def Gauss(ks, Aj, kj, Dkj):
+    """Evaluate a single Gaussian Raman peak.
+
+    Parameters
+    ----------
+    ks : array_like
+        Wavenumber(s) at which the Gaussian is evaluated (cm-1).
+    Aj : float
+        Peak amplitude of the Gaussian (dimensionless weight).
+    kj : float
+        Center wavenumber of the Gaussian (cm-1).
+    Dkj : float
+        Full width at half maximum of the Gaussian (cm-1).
+
+    Returns
+    -------
+    ndarray
+        Gaussian values evaluated at ``ks``, with peak value
+        ``Aj / Dkj`` at ``ks == kj``.
+    """
     return Aj * 1./Dkj * np.exp(-4*np.log(2)*(ks-kj)**2/Dkj**2)
 
+
 def fR(ks):
+    """Normalized Raman spectral response of liquid water.
+
+    Builds the O-H stretching band as a sum of four Gaussian peaks
+    centered at 3250, 3425, 3530 and 3625 cm-1, with relative
+    amplitudes 0.41, 0.39, 0.10 and 0.10 and FWHM 210, 175, 140 and
+    140 cm-1. The result is normalized so that its integral over
+    wavenumber equals one.
+
+    Parameters
+    ----------
+    ks : array_like
+        Wavenumber(s) at which the response is evaluated (cm-1).
+
+    Returns
+    -------
+    ndarray
+        Normalized Raman spectral response evaluated at ``ks``.
+    """
     A  = np.array([0.41, 0.39, 0.10, 0.10])
     k  = np.array([3250., 3425., 3530., 3625.])
     Dk = np.array([210., 175., 140., 140.])
@@ -18,11 +75,28 @@ def fR(ks):
 
 
 def V2d(lam, Nl=16):
-    '''
-    Ocean Vibrational Raman Spectrum
+    """Ocean vibrational Raman spectrum (forward).
 
-    lam central wavelength in nm
-    '''
+    Given one or more excitation wavelengths, returns the Raman-shifted
+    wavelength grid covering the O-H stretching band (shifts between
+    2950 and 3850 cm-1) together with the corresponding spectral
+    response.
+
+    Parameters
+    ----------
+    lam : array_like
+        Excitation wavelength(s) in nm. Shape ``(N,)``.
+    Nl : int, optional
+        Number of points in the returned Raman-shifted wavelength grid.
+        Default is 16.
+
+    Returns
+    -------
+    wgrid : ndarray
+        Raman-shifted wavelength grid in nm, shape ``(Nl, N)``.
+    response : ndarray
+        Spectral response evaluated on ``wgrid``, shape ``(Nl, N)``.
+    """
     k   = 1e7/lam   # cm-1
     k0  = k - 2950. # cm-1
     k1  = k - 3850. # cm-1
@@ -30,16 +104,33 @@ def V2d(lam, Nl=16):
     w1  = 1e7/k1
     wgrid = np.linspace(w0, w1, num=Nl, dtype=np.float32)
     ks    = 1e7*(1./lam[np.newaxis,:]-1./wgrid)
-    
-    return wgrid, 1e7/wgrid**2 * fR(ks)
+    response = 1e7/wgrid**2 * fR(ks)
+    return wgrid, response
 
 
 def V2d_inv(lam, Nl=16):
-    '''
-    Inverse Ocean Vibrational Raman Spectrum
+    """Ocean vibrational Raman spectrum (inverse).
 
-    lam central wavelength in nm
-    '''
+    Given one or more detected wavelengths, returns the excitation
+    wavelength grid that would Raman-shift to those wavelengths,
+    covering the O-H stretching band (shifts between 2950 and 3850
+    cm-1), together with the corresponding spectral response.
+
+    Parameters
+    ----------
+    lam : array_like
+        Detected (Raman-shifted) wavelength(s) in nm. Shape ``(N,)``.
+    Nl : int, optional
+        Number of points in the returned excitation wavelength grid.
+        Default is 16.
+
+    Returns
+    -------
+    wgrid : ndarray
+        Excitation wavelength grid in nm, shape ``(N, Nl)``.
+    response : ndarray
+        Spectral response evaluated on ``wgrid``, shape ``(N, Nl)``.
+    """
     k   = 1e7/lam # cm-1
     k0  = k + 3850. # cm-1
     k1  = k + 2950. # cm-1
@@ -47,5 +138,6 @@ def V2d_inv(lam, Nl=16):
     w1  = 1e7/k1
     wgrid = np.linspace(w0, w1, num=Nl, dtype=np.float32).T
     ks    = 1e7*(1./wgrid - 1./lam[:,np.newaxis])
-    
-    return wgrid, 1e7/wgrid**2 * fR(ks)
+    response = 1e7/wgrid**2 * fR(ks)
+
+    return wgrid, response
