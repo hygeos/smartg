@@ -17,10 +17,17 @@ are exposed:
 The internal helpers :func:`Gauss` and :func:`fR` build the underlying
 Gaussian peaks and their normalized sum.
 """
+from __future__ import annotations
+
 import numpy as np
+from numpy.typing import NDArray
+
+from smartg.typing import NumericArrayLike
 
 
-def Gauss(ks, Aj, kj, Dkj):
+def Gauss(
+    ks: NumericArrayLike, Aj: float, kj: float, Dkj: float,
+) -> NDArray[np.floating]:
     """Evaluate a single Gaussian Raman peak.
 
     Parameters
@@ -40,10 +47,11 @@ def Gauss(ks, Aj, kj, Dkj):
         Gaussian values evaluated at ``ks``, with peak value
         ``Aj / Dkj`` at ``ks == kj``.
     """
+    ks = np.atleast_1d(np.asarray(ks, dtype=np.float64))
     return Aj * 1./Dkj * np.exp(-4*np.log(2)*(ks-kj)**2/Dkj**2)
 
 
-def fR(ks):
+def fR(ks: NumericArrayLike) -> NDArray[np.floating]:
     """Normalized Raman spectral response of liquid water.
 
     Builds the O-H stretching band as a sum of four Gaussian peaks
@@ -74,7 +82,9 @@ def fR(ks):
     return Su*norm
 
 
-def V2d(lam, Nl=16):
+def V2d(
+    lam: NumericArrayLike, Nl: int = 16,
+) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     """Ocean vibrational Raman spectrum (forward).
 
     Given one or more excitation wavelengths, returns the Raman-shifted
@@ -97,18 +107,21 @@ def V2d(lam, Nl=16):
     response : ndarray
         Spectral response evaluated on ``wgrid``, shape ``(Nl, N)``.
     """
+    lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
     k   = 1e7/lam   # cm-1
     k0  = k - 2950. # cm-1
     k1  = k - 3850. # cm-1
     w0  = 1e7/k0
     w1  = 1e7/k1
-    wgrid = np.linspace(w0, w1, num=Nl, dtype=np.float32)
+    wgrid = np.linspace(w0, w1, num=Nl, dtype=np.float64)
     ks    = 1e7*(1./lam[np.newaxis,:]-1./wgrid)
     response = 1e7/wgrid**2 * fR(ks)
     return wgrid, response
 
 
-def V2d_inv(lam, Nl=16):
+def V2d_inv(
+    lam: NumericArrayLike, Nl: int = 16,
+) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     """Ocean vibrational Raman spectrum (inverse).
 
     Given one or more detected wavelengths, returns the excitation
@@ -131,12 +144,13 @@ def V2d_inv(lam, Nl=16):
     response : ndarray
         Spectral response evaluated on ``wgrid``, shape ``(N, Nl)``.
     """
+    lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
     k   = 1e7/lam # cm-1
     k0  = k + 3850. # cm-1
     k1  = k + 2950. # cm-1
     w0  = 1e7/k0
     w1  = 1e7/k1
-    wgrid = np.linspace(w0, w1, num=Nl, dtype=np.float32).T
+    wgrid = np.linspace(w0, w1, num=Nl, dtype=np.float64).T
     ks    = 1e7*(1./wgrid - 1./lam[:,np.newaxis])
     response = 1e7/wgrid**2 * fR(ks)
 
