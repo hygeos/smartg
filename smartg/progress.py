@@ -4,21 +4,22 @@ from __future__ import annotations
 
 """Progress bar utilities for SMART-G.
 
-Provides a unified :func:`progress` factory that returns a progress bar
-adapted to the current execution environment:
+Provides a unified :func:`progress` factory that returns a progress
+bar adapted to the current execution environment:
 
-* ``notebook`` mode -- uses ``ipywidgets`` (``FloatProgress``) when running
-  inside an IPython/Jupyter kernel.
-* ``progressbar2`` mode -- uses the ``progressbar2`` library when available.
-* ``progressbar`` mode -- falls back to the legacy ``progressbar`` library.
+* ``notebook`` mode -- uses ``ipywidgets`` (``FloatProgress``) when
+    running inside an IPython/Jupyter kernel.
+* ``progressbar2`` mode -- uses the ``progressbar2`` library when
+    available.
+* ``progressbar`` mode -- falls back to the legacy ``progressbar``
+    library.
 
-The active mode is selected automatically at import time. Callers can also
-request an invisible (no-op) progress bar via ``activate=False``.
+The active mode is selected automatically at import time. Callers can
+also request an invisible (no-op) progress bar via ``activate=False``.
 """
 
 from typing import Any
-
-Number = int | float
+from smartg.typing import RealNumber
 
 FloatProgress: Any | None = None
 Label: Any | None = None
@@ -55,7 +56,7 @@ except (NameError, ImportError):
 
 
 def progress(
-    vmax: Number,
+    vmax: RealNumber,
     activate: bool = True,
 ) -> (
     ProgressInvisible
@@ -63,6 +64,22 @@ def progress(
     | ProgressProgressbar2
     | ProgressProgressbar
 ):
+    """Create a progress-bar adapter for the active runtime environment.
+
+    Parameters
+    ----------
+    vmax : int or float
+        Maximum value shown by the progress bar.
+    activate : bool, optional
+        If ``False``, return a no-op progress object.
+
+    Returns
+    -------
+    ProgressInvisible or ProgressNotebook or ProgressProgressbar2 or
+    ProgressProgressbar
+        A progress adapter exposing ``update(value, message='')`` and
+        ``finish(message='')``.
+    """
     if not activate:
         return ProgressInvisible()
     elif mode == "notebook":
@@ -76,23 +93,41 @@ def progress(
 
 
 class ProgressInvisible(object):
-    """
-    A progress bar that does nothing
-    """
+    """No-op progress adapter for disabled progress reporting."""
 
-    def update(self, value: Number, message: str = "") -> None:
+    def update(self, value: RealNumber, message: str = "") -> None:
+        """Ignore progress updates.
+
+        Parameters
+        ----------
+        value : int or float
+            Current progress value.
+        message : str, optional
+            Optional status message.
+        """
         pass
 
     def finish(self, message: str = "") -> None:
+        """Ignore completion notifications.
+
+        Parameters
+        ----------
+        message : str, optional
+            Optional final status message.
+        """
         pass
 
 
 class ProgressNotebook(object):
-    def __init__(self, vmax: Number) -> None:
-        """
-        Initialize the progress bar object in the notebook
+    """Notebook progress adapter based on ``ipywidgets`` widgets."""
 
-        vmax: maximum value of the progress bar
+    def __init__(self, vmax: RealNumber) -> None:
+        """Initialize a notebook progress bar and display it.
+
+        Parameters
+        ----------
+        vmax : int or float
+            Maximum value shown by the progress bar.
         """
         self.vmax = vmax
         self.pbar = FloatProgress(min=0, max=vmax)  # type: ignore
@@ -107,23 +142,44 @@ class ProgressNotebook(object):
         )
         display(self.box)  # type: ignore
 
-    def update(self, value: Number, message: str = "") -> None:
+    def update(self, value: RealNumber, message: str = "") -> None:
+        """Update the notebook progress value and label text.
+
+        Parameters
+        ----------
+        value : int or float
+            New progress value. Values above ``vmax`` are clamped.
+        message : str, optional
+            Text displayed next to the widget.
+        """
 
         value = min(value, self.vmax)  # don't exceed max
         self.pbar.value = value
         self.label.value = message
 
     def finish(self, message: str = "") -> None:
+        """Mark the notebook progress bar as complete.
+
+        Parameters
+        ----------
+        message : str, optional
+            Final status message.
+        """
         self.pbar.bar_style = "success"
         self.pbar.value = self.vmax
         self.label.value = message
 
 
 class ProgressProgressbar2(object):
-    def __init__(self, max: Number) -> None:
-        """
-        Initialize the progress bar objectusing library 'progressbar2'
-        max: maximum value of the progress bar
+    """Terminal progress adapter using the ``progressbar2`` package."""
+
+    def __init__(self, max: RealNumber) -> None:
+        """Initialize a ``progressbar2`` progress bar.
+
+        Parameters
+        ----------
+        max : int or float
+            Maximum value shown by the progress bar.
         """
         self.max = max
         self.label = FormatLabel("")  # type: ignore
@@ -138,22 +194,43 @@ class ProgressProgressbar2(object):
             max_value=max,
         ).start()
 
-    def update(self, value: Number, message: str = "") -> None:
+    def update(self, value: RealNumber, message: str = "") -> None:
+        """Update progress value and message for ``progressbar2``.
+
+        Parameters
+        ----------
+        value : int or float
+            New progress value. Values above ``max`` are clamped.
+        message : str, optional
+            Text rendered by the label widget.
+        """
 
         value = min(value, self.max)  # don't exceed max
         self.label.format = message
         self.pbar.update(value)
 
     def finish(self, message: str = "") -> None:
+        """Finalize the ``progressbar2`` progress bar.
+
+        Parameters
+        ----------
+        message : str, optional
+            Final status message.
+        """
         self.pbar.finish()
         self.label.format = message
 
 
 class ProgressProgressbar(object):
-    def __init__(self, max: Number) -> None:
-        """
-        Initialize the progress bar object using library 'progressbar'
-        max: maximum value of the progress bar
+    """Terminal progress adapter using legacy ``progressbar`` API."""
+
+    def __init__(self, max: RealNumber) -> None:
+        """Initialize a legacy ``progressbar`` progress bar.
+
+        Parameters
+        ----------
+        max : int or float
+            Maximum value shown by the progress bar.
         """
 
         class Custom(WidgetBase):  # type: ignore
@@ -179,12 +256,28 @@ class ProgressProgressbar(object):
             maxval=max,
         ).start()
 
-    def update(self, value: Number, message: str = "") -> None:
+    def update(self, value: RealNumber, message: str = "") -> None:
+        """Update progress value and custom text.
+
+        Parameters
+        ----------
+        value : int or float
+            New progress value. Values above ``max`` are clamped.
+        message : str, optional
+            Text shown before the percentage indicator.
+        """
 
         value = min(value, self.max)  # don't exceed max
         self.custom.set(message)
         self.pbar.update(value)
 
     def finish(self, message: str = "") -> None:
+        """Finalize the legacy progress bar.
+
+        Parameters
+        ----------
+        message : str, optional
+            Final status message.
+        """
         self.pbar.finish()
         self.custom.set(message)
