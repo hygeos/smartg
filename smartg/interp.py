@@ -12,7 +12,8 @@ def interp3(x, y, z, v, xi, yi, zi, **kwargs):
     """Sample a 3D array "v" with pixel corner locations at "x","y","z" at the
     points in "xi", "yi", "zi" using linear interpolation. Additional kwargs
     are passed on to ``scipy.ndimage.map_coordinates``."""
-    assert v.ndim==3
+    assert v.ndim == 3
+
     def index_coords(corner_locs, interp_locs):
         index = np.arange(len(corner_locs))
         if np.all(np.diff(corner_locs) < 0):
@@ -36,7 +37,8 @@ def interp2(x, y, v, xi, yi, **kwargs):
     """Sample a 2D array "v" with pixel corner locations at "x","y", at the
     points in "xi", "yi",  using linear interpolation. Additional kwargs
     are passed on to ``scipy.ndimage.map_coordinates``."""
-    assert v.ndim==2
+    assert v.ndim == 2
+
     def index_coords(corner_locs, interp_locs):
         index = np.arange(len(corner_locs))
         if np.all(np.diff(corner_locs) < 0):
@@ -56,8 +58,9 @@ def interp2(x, y, v, xi, yi, **kwargs):
     return output.reshape(orig_shape)
 
 
-def interp_1d_coord(da: xr.DataArray, coord_name: str, x: ArrayLike,
-                    extrema: bool = False) -> NDArray[np.float64]:
+def interp_1d_coord(
+    da: xr.DataArray, coord_name: str, x: ArrayLike, extrema: bool = False
+) -> NDArray[np.float64]:
     """Interpolate a 1-D coordinate with optional extrema clipping.
 
     Parameters
@@ -87,9 +90,9 @@ def interp_1d_coord(da: xr.DataArray, coord_name: str, x: ArrayLike,
         If ``extrema`` is ``False`` and at least one query point lies
         outside the coordinate bounds.
     """
-    coord = np.asarray(da.coords[coord_name].values, dtype='float64')
-    values = np.asarray(da.values, dtype='float64')
-    x_arr = np.asarray(x, dtype='float64')
+    coord = np.asarray(da.coords[coord_name].values, dtype="float64")
+    values = np.asarray(da.values, dtype="float64")
+    x_arr = np.asarray(x, dtype="float64")
     flat_x = x_arr.ravel()
 
     if extrema:
@@ -99,10 +102,9 @@ def interp_1d_coord(da: xr.DataArray, coord_name: str, x: ArrayLike,
         xmax = coord.max()
         if np.any((flat_x < xmin) | (flat_x > xmax)):
             raise ValueError(
-                f"Out-of-range interpolation requested on '{coord_name}' with extrema=False: "
-                f"valid range is [{xmin}, {xmax}]"
+                f"Out-of-range interpolation requested on '{coord_name}' "
+                f"with extrema=False: valid range is [{xmin}, {xmax}]"
             )
         y = np.interp(flat_x, coord, values)
 
     return y.reshape(x_arr.shape)
-
