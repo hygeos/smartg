@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+"""Visualization utilities for SMART-G outputs.
+
+This module provides plotting helpers for polar maps, transects,
+spectra, phase functions, profiles, and receiver/category diagnostics
+stored in SMART-G xarray datasets.
+"""
 
 from __future__ import print_function, division, absolute_import
 
