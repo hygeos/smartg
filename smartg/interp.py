@@ -9,14 +9,24 @@ support for increasing or decreasing coordinate axes and optional
 boundary clipping.
 """
 
-from __future__ import print_function, division
+from __future__ import annotations, print_function, division
 from scipy.ndimage import map_coordinates
+from typing import Any
 import numpy as np
 import xarray as xr
 from numpy.typing import ArrayLike, NDArray
 
 
-def interp3(x, y, z, v, xi, yi, zi, **kwargs):
+def interp3(
+    x: ArrayLike,
+    y: ArrayLike,
+    z: ArrayLike,
+    v: NDArray[np.number],
+    xi: ArrayLike,
+    yi: ArrayLike,
+    zi: ArrayLike,
+    **kwargs: Any,
+) -> NDArray[np.float64]:
     """Sample a 3-D array at arbitrary query points via linear
     interpolation.
 
@@ -46,11 +56,16 @@ def interp3(x, y, z, v, xi, yi, zi, **kwargs):
     """
     assert v.ndim == 3
 
-    def index_coords(corner_locs, interp_locs):
-        index = np.arange(len(corner_locs))
-        if np.all(np.diff(corner_locs) < 0):
-            corner_locs, index = corner_locs[::-1], index[::-1]
-        return np.interp(interp_locs, corner_locs, index)
+    def index_coords(
+        corner_locs: ArrayLike, interp_locs: ArrayLike
+    ) -> NDArray[np.float64]:
+        corner_locs_arr = np.asarray(corner_locs, dtype=np.float64)
+        interp_locs_arr = np.asarray(interp_locs, dtype=np.float64)
+        index = np.arange(len(corner_locs_arr))
+        if np.all(np.diff(corner_locs_arr) < 0):
+            corner_locs_arr = corner_locs_arr[::-1]
+            index = index[::-1]
+        return np.interp(interp_locs_arr, corner_locs_arr, index)
 
     orig_shape = np.asarray(xi).shape
     xi, yi, zi = np.atleast_1d(xi, yi, zi)
@@ -58,14 +73,24 @@ def interp3(x, y, z, v, xi, yi, zi, **kwargs):
         arr.shape = -1
 
     output = np.empty(xi.shape, dtype=float)
-    coords = [index_coords(*item) for item in zip([x, y, z], [xi, yi, zi])]
+    coords = [
+        index_coords(*item)
+        for item in zip([x, y, z], [xi, yi, zi], strict=True)
+    ]
 
     map_coordinates(v, coords, order=1, output=output, **kwargs)
 
     return output.reshape(orig_shape)
 
 
-def interp2(x, y, v, xi, yi, **kwargs):
+def interp2(
+    x: ArrayLike,
+    y: ArrayLike,
+    v: NDArray[np.number],
+    xi: ArrayLike,
+    yi: ArrayLike,
+    **kwargs: Any,
+) -> NDArray[np.float64]:
     """Sample a 2-D array at arbitrary query points via linear
     interpolation.
 
@@ -94,11 +119,16 @@ def interp2(x, y, v, xi, yi, **kwargs):
     """
     assert v.ndim == 2
 
-    def index_coords(corner_locs, interp_locs):
-        index = np.arange(len(corner_locs))
-        if np.all(np.diff(corner_locs) < 0):
-            corner_locs, index = corner_locs[::-1], index[::-1]
-        return np.interp(interp_locs, corner_locs, index)
+    def index_coords(
+        corner_locs: ArrayLike, interp_locs: ArrayLike
+    ) -> NDArray[np.float64]:
+        corner_locs_arr = np.asarray(corner_locs, dtype=np.float64)
+        interp_locs_arr = np.asarray(interp_locs, dtype=np.float64)
+        index = np.arange(len(corner_locs_arr))
+        if np.all(np.diff(corner_locs_arr) < 0):
+            corner_locs_arr = corner_locs_arr[::-1]
+            index = index[::-1]
+        return np.interp(interp_locs_arr, corner_locs_arr, index)
 
     orig_shape = np.asarray(xi).shape
     xi, yi = np.atleast_1d(xi, yi)
@@ -106,7 +136,10 @@ def interp2(x, y, v, xi, yi, **kwargs):
         arr.shape = -1
 
     output = np.empty(xi.shape, dtype=float)
-    coords = [index_coords(*item) for item in zip([x, y], [xi, yi])]
+    coords = [
+        index_coords(*item)
+        for item in zip([x, y], [xi, yi], strict=True)
+    ]
 
     map_coordinates(v, coords, order=1, output=output, **kwargs)
 
