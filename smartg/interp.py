@@ -9,9 +9,33 @@ from numpy.typing import ArrayLike, NDArray
 
 
 def interp3(x, y, z, v, xi, yi, zi, **kwargs):
-    """Sample a 3D array "v" with pixel corner locations at "x","y","z" at the
-    points in "xi", "yi", "zi" using linear interpolation. Additional kwargs
-    are passed on to ``scipy.ndimage.map_coordinates``."""
+    """Sample a 3-D array at arbitrary query points via linear
+    interpolation.
+
+    The array ``v`` has pixel corner locations at coordinates ``x``,
+    ``y``, ``z``. Values are interpolated at the points ``(xi, yi, zi)``
+    using ``scipy.ndimage.map_coordinates`` (order=1, i.e. linear).
+
+    Parameters
+    ----------
+    x, y, z : array_like
+        1-D coordinate vectors giving the pixel corner locations of
+        ``v`` along each axis. They may be increasing or decreasing.
+    v : ndarray
+        3-D array of values to interpolate (``v.ndim == 3``).
+    xi, yi, zi : array_like
+        Query point coordinates. Any shape is accepted and is
+        preserved in the output.
+    **kwargs
+        Additional keyword arguments forwarded to
+        ``scipy.ndimage.map_coordinates``.
+
+    Returns
+    -------
+    ndarray
+        Interpolated values with the same shape as ``xi`` (and ``yi``,
+        ``zi``).
+    """
     assert v.ndim == 3
 
     def index_coords(corner_locs, interp_locs):
@@ -34,9 +58,32 @@ def interp3(x, y, z, v, xi, yi, zi, **kwargs):
 
 
 def interp2(x, y, v, xi, yi, **kwargs):
-    """Sample a 2D array "v" with pixel corner locations at "x","y", at the
-    points in "xi", "yi",  using linear interpolation. Additional kwargs
-    are passed on to ``scipy.ndimage.map_coordinates``."""
+    """Sample a 2-D array at arbitrary query points via linear
+    interpolation.
+
+    The array ``v`` has pixel corner locations at coordinates ``x``,
+    ``y``. Values are interpolated at the points ``(xi, yi)`` using
+    ``scipy.ndimage.map_coordinates`` (order=1, i.e. linear).
+
+    Parameters
+    ----------
+    x, y : array_like
+        1-D coordinate vectors giving the pixel corner locations of
+        ``v`` along each axis. They may be increasing or decreasing.
+    v : ndarray
+        2-D array of values to interpolate (``v.ndim == 2``).
+    xi, yi : array_like
+        Query point coordinates. Any shape is accepted and is
+        preserved in the output.
+    **kwargs
+        Additional keyword arguments forwarded to
+        ``scipy.ndimage.map_coordinates``.
+
+    Returns
+    -------
+    ndarray
+        Interpolated values with the same shape as ``xi`` (and ``yi``).
+    """
     assert v.ndim == 2
 
     def index_coords(corner_locs, interp_locs):
@@ -65,23 +112,24 @@ def interp_1d_coord(
 
     Parameters
     ----------
-    da : xarray.DataArray
+    da : DataArray
         Input 1-D data array containing the values to interpolate.
     coord_name : str
         Name of the coordinate used as interpolation axis.
-    x : array-like
-        Query points where interpolated values are requested. Any shape is
-        accepted and preserved in the output.
+    x : array_like
+        Query points where interpolated values are requested. Any shape
+        is accepted and preserved in the output.
     extrema : bool, optional
         Boundary behavior:
 
-            - ``False``: strict mode. Values outside coordinate bounds raise an
-              exception.
-            - ``True``: clip to boundary values (legacy extrema behavior).
+            - ``False``: strict mode. Values outside coordinate bounds
+              raise an exception.
+            - ``True``: clip to boundary values (legacy extrema
+              behavior).
 
     Returns
     -------
-    numpy.ndarray
+    ndarray
         Interpolated values with the same shape as ``x``.
 
     Raises
