@@ -68,9 +68,7 @@ def interp3(
         return np.interp(interp_locs_arr, corner_locs_arr, index)
 
     orig_shape = np.asarray(xi).shape
-    xi, yi, zi = np.atleast_1d(xi, yi, zi)
-    for arr in [xi, yi, zi]:
-        arr.shape = -1
+    xi, yi, zi = (a.reshape(-1) for a in np.atleast_1d(xi, yi, zi))
 
     output = np.empty(xi.shape, dtype=float)
     coords = [
@@ -131,9 +129,7 @@ def interp2(
         return np.interp(interp_locs_arr, corner_locs_arr, index)
 
     orig_shape = np.asarray(xi).shape
-    xi, yi = np.atleast_1d(xi, yi)
-    for arr in [xi, yi]:
-        arr.shape = -1
+    xi, yi = (a.reshape(-1) for a in np.atleast_1d(xi, yi))
 
     output = np.empty(xi.shape, dtype=float)
     coords = [
