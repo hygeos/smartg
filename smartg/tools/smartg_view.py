@@ -30,16 +30,17 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.axisartist import floating_axes
 from matplotlib.projections import PolarAxes
 from matplotlib import cm, colors as mcolors
+from matplotlib.figure import Figure
 from matplotlib.ticker import ScalarFormatter
 import matplotlib.pyplot as plt
-from typing import Literal, Sequence
+from typing import Any, Literal, Sequence, cast
 import geoclide as gc
 from luts.luts import Idx, Idx_base, MLUT
 from smartg.atmosphere import diff1
 from smartg.water import diff2
 
 
-def mdesc(desc, logI=False):
+def mdesc(desc: str, logI: bool = False) -> str:
     """
     Format Stokes parameter description for display with LaTeX notation.
 
@@ -114,29 +115,29 @@ def mdesc(desc, logI=False):
 
 
 def smartg_view(
-    ds_sg,
-    logI=False,
-    QU=False,
-    Circ=False,
-    full=False,
-    field="up (TOA)",
-    prefix="",
-    ind=[0],
-    cmap=None,
-    fig=None,
-    subdict=None,
-    interp_dict=None,
-    Imin=None,
-    Imax=None,
-    Pmin=0,
-    Pmax=100,
-):
+    ds_sg: xr.Dataset | MLUT,
+    logI: bool = False,
+    QU: bool = False,
+    Circ: bool = False,
+    full: bool = False,
+    field: str = "up (TOA)",
+    prefix: str = "",
+    ind: int | list[int] | np.ndarray | Idx_base | None = None,
+    cmap: str | mcolors.Colormap | None = None,
+    fig: Figure | None = None,
+    subdict: dict[str, Any] | None = None,
+    interp_dict: dict[str, Any] | None = None,
+    Imin: float | None = None,
+    Imax: float | None = None,
+    Pmin: float = 0,
+    Pmax: float = 100,
+) -> Figure:
     """
     Visualization of SMART-G output in polar coordinates.
 
     Parameters
     ----------
-    ds_sg : xr.Dataset
+    ds_sg : Dataset
         An xarray Dataset from SMART-G simulation.
     logI : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
@@ -206,10 +207,15 @@ def smartg_view(
 
       DoCP = 100 * |V| / I
     """
+    if ind is None:
+        ind = [0]
 
     if isinstance(ds_sg, MLUT):
-        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warn_message = (
+            "\nUsing an MLUT for ds_sg is deprecated, use an "
+            + "xarray.Dataset instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
     if isinstance(ind, Idx_base):
@@ -217,12 +223,16 @@ def smartg_view(
             "\nUsing luts.Idx_base objects for the 'ind' parameter is "
             "deprecated and will result in an error in future versions."
         )
-        warnings.warn(warn_message, DeprecationWarning)
-        ind = np.round(
-            ind.index(ds_sg.coords["Azimuth angles"].values)
-        ).astype(int)
-        if not isinstance(ind, (list, np.ndarray)):
-            ind = [ind]
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
+        indexer = getattr(ind, "index", None)
+        if not callable(indexer):
+            raise TypeError(
+                "Expected an index-capable Idx_base object for 'ind'."
+            )
+        index_values = cast(Any, indexer)(
+            ds_sg.coords["Azimuth angles"].values
+        )
+        ind = np.atleast_1d(np.round(index_values).astype(np.int32))
 
     I = ds_sg[prefix + "I_" + field]
     Q = ds_sg[prefix + "Q_" + field]
@@ -497,26 +507,26 @@ def smartg_view(
 
 
 def transect_view(
-    ds_sg,
-    logI=False,
-    QU=False,
-    Circ=False,
-    full=False,
-    field="up (TOA)",
-    prefix="",
-    ind=[0],
-    fig=None,
-    color="k",
-    subdict=None,
-    interp_dict=None,
-    **kwargs,
-):
+    ds_sg: xr.Dataset | MLUT,
+    logI: bool = False,
+    QU: bool = False,
+    Circ: bool = False,
+    full: bool = False,
+    field: str = "up (TOA)",
+    prefix: str = "",
+    ind: int | list[int] | np.ndarray | Idx_base | None = None,
+    fig: Figure | tuple[Figure, Figure] | None = None,
+    color: str = "k",
+    subdict: dict[str, Any] | None = None,
+    interp_dict: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> Figure | tuple[Figure, Figure]:
     """
     Transect visualization of SMART-G output.
 
     Parameters
     ----------
-    ds_sg : xr.Dataset
+    ds_sg : Dataset
         An xarray Dataset from SMART-G simulation.
     logI : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
@@ -575,9 +585,12 @@ def transect_view(
         raw and processed Stokes parameters.
     """
 
+    if ind is None:
+        ind = [0]
+
     if isinstance(ds_sg, MLUT):
         warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
     if isinstance(ind, Idx_base):
@@ -585,12 +598,16 @@ def transect_view(
             "\nUsing luts.Idx_base objects for the 'ind' parameter is "
             "deprecated and will result in an error in future versions."
         )
-        warnings.warn(warn_message, DeprecationWarning)
-        ind = np.round(
-            ind.index(ds_sg.coords["Azimuth angles"].values)
-        ).astype(int)
-        if not isinstance(ind, (list, np.ndarray)):
-            ind = [ind]
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
+        indexer = getattr(ind, "index", None)
+        if not callable(indexer):
+            raise TypeError(
+                "Expected an index-capable Idx_base object for 'ind'."
+            )
+        index_values = cast(Any, indexer)(
+            ds_sg.coords["Azimuth angles"].values
+        )
+        ind = np.atleast_1d(np.round(index_values).astype(np.int32))
 
     I = ds_sg[prefix + "I_" + field]
     Q = ds_sg[prefix + "Q_" + field]
