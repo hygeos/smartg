@@ -37,9 +37,9 @@ def mdesc(desc, logI=False):
     """
     Format Stokes parameter description for display with LaTeX notation.
 
-    Parses a description string to extract Stokes parameter, direction, and other
-    components, then formats them with proper LaTeX notation including directional
-    arrows (up/down).
+    Parses a description string to extract Stokes parameter, direction,
+    and other components, then formats them with proper LaTeX notation
+    including directional arrows (up/down).
 
     Parameters
     ----------
@@ -47,8 +47,8 @@ def mdesc(desc, logI=False):
         Description string in format 'Stokes_direction(component)_info'
         (e.g., 'I_up(TOA)', 'Q_down(0+)').
     logI : bool, optional
-        If True and Stokes parameter is 'I', prepends 'log10' to the output.
-        Default is False.
+        If True and Stokes parameter is 'I', prepends 'log10' to the
+        output. Default is False.
 
     Returns
     -------
@@ -135,12 +135,15 @@ def smartg_view(
     logI : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
     QU : bool, optional
-        If True, show Q, U, and DoLP. If False, show only I and polarization metrics. Default is False.
+        If True, show Q, U, and DoLP. If False, show only I and
+        polarization metrics. Default is False.
     Circ : bool, optional
-        If True, display circular polarization metrics (V and DoCP - Degree of Circular Polarization).
-        If False, display linear polarization metrics (Q, U, and DoLP - Degree of Linear Polarization).
-        Effective with both ``QU=True`` and ``QU=False``. When ``full=True``, both circular and
-        linear polarization metrics are displayed. Default is False.
+        If True, display circular polarization metrics (V and DoCP -
+        Degree of Circular Polarization). If False, display linear
+        polarization metrics (Q, U, and DoLP - Degree of Linear
+        Polarization). Effective with both ``QU=True`` and ``QU=False``.
+        When ``full=True``, both circular and linear polarization
+        metrics are displayed. Default is False.
     full : bool, optional
         If True, display everything. Default is False.
     field : str, optional
@@ -150,21 +153,27 @@ def smartg_view(
     ind : int or list of int, optional
         Azimuthal plane indices to display. Default is [0].
     cmap : str, optional
-        Colormap name for polar plots. Default is None (uses default colormap).
+        Colormap name for polar plots. Default is None (uses default
+        colormap).
     fig : matplotlib.figure.Figure, optional
-        Existing figure to plot on. If None, creates a new figure. Default is None.
+        Existing figure to plot on. If None, creates a new figure.
+        Default is None.
     subdict : dict, optional
-        **Deprecated**. Use `interp_dict` instead. Dictionary of coordinate values for interpolation.
-        This parameter corresponds to the input dictionary of the `sub()` method of deprecated
-        LUT and MLUT objects, for backward compatibility. Default is None.
+        **Deprecated**. Use `interp_dict` instead. Dictionary of
+        coordinate values for interpolation. This parameter corresponds
+        to the input dictionary of the `sub()` method of deprecated LUT
+        and MLUT objects, for backward compatibility. Default is None.
     interp_dict : dict, optional
-        Dictionary of coordinate values for interpolation. Keys are dimension names,
-        values are the coordinate values to interpolate to. Uses xarray's `interp()` method.
-        Mutually exclusive with `subdict`. Default is None.
+        Dictionary of coordinate values for interpolation. Keys are
+        dimension names, values are the coordinate values to interpolate
+        to. Uses xarray's `interp()` method. Mutually exclusive with
+        `subdict`. Default is None.
     Imin : float, optional
-        Minimum value for Intensity display. If None, determined from data. Default is None.
+        Minimum value for Intensity display. If None, determined from
+        data. Default is None.
     Imax : float, optional
-        Maximum value for Intensity display. If None, determined from data. Default is None.
+        Maximum value for Intensity display. If None, determined from
+        data. Default is None.
     Pmin : float, optional
         Minimum value for polarization display. Default is 0.
     Pmax : float, optional
@@ -176,7 +185,8 @@ def smartg_view(
 
     Notes
     -----
-    Polarization metrics are computed from Stokes parameters (I, Q, U, V):
+    Polarization metrics are computed from Stokes parameters
+    (I, Q, U, V):
 
     - **Degree of Linear Polarization (DoLP)**:
 
@@ -222,7 +232,8 @@ def smartg_view(
     if subdict is not None:
         warn_message = "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
         warnings.warn(warn_message, DeprecationWarning)
-        # Convert Idx_base objects to values before converting to interp_dict
+        # Convert Idx_base objects to values before converting
+        # to interp_dict
         for dic_name in list(subdict.keys()):
             if isinstance(subdict[dic_name], Idx_base):
                 subdict[dic_name] = subdict[dic_name].value
@@ -504,11 +515,14 @@ def transect_view(
     logI : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
     QU : bool, optional
-        If True, show Q, U, and DoLP. If False, show only I and polarization metrics. Default is False.
+        If True, show Q, U, and DoLP. If False, show only I and
+        polarization metrics. Default is False.
     Circ : bool, optional
-        If True, show circular polarization metrics. If False, show linear polarization. Default is False.
+        If True, show circular polarization metrics. If False, show
+        linear polarization. Default is False.
     full : bool, optional
-        If True, return two figures with full and reduced polarization info. If False, return one figure. Default is False.
+        If True, return two figures with full and reduced polarization
+        info. If False, return one figure. Default is False.
     field : str, optional
         Name of the output level to visualize. Default is 'up (TOA)'.
     prefix : str, optional
@@ -516,31 +530,43 @@ def transect_view(
     ind : int or list of int, optional
         Azimuthal plane indices to display. Default is [0].
     fig : matplotlib.figure.Figure, optional
-        Existing figure to plot on. If None, creates a new figure. Default is None.
+        Existing figure to plot on. If None, creates a new figure.
+        Default is None.
     color : str, optional
         Color for the transect line. Default is 'k' (black).
     subdict : dict, optional
-        **Deprecated**. Use `interp_dict` instead. Dictionary of coordinate values for interpolation.
-        This parameter corresponds to the input dictionary of the `sub()` method of deprecated
-        LUT and MLUT objects, for backward compatibility. Default is None.
+        **Deprecated**. Use `interp_dict` instead. Dictionary of
+        coordinate values for interpolation. This parameter corresponds
+        to the input dictionary of the `sub()` method of deprecated LUT
+        and MLUT objects, for backward compatibility. Default is None.
     interp_dict : dict, optional
-        Dictionary of coordinate values for interpolation. Keys are dimension names,
-        values are the coordinate values to interpolate to. Uses xarray's `interp()` method.
-        Mutually exclusive with `subdict`. Default is None.
+        Dictionary of coordinate values for interpolation. Keys are
+        dimension names, values are the coordinate values to
+        interpolate to. Uses xarray's `interp()` method. Mutually
+        exclusive with `subdict`. Default is None.
     **kwargs
-        Additional keyword arguments passed to transect2D, including:
-            - vmin, vmax : float, optional. Minimum and maximum values for data range display.
-              If None, determined from data.
-            - sym : bool, optional. If True, use symmetrical axis for the transect. Default is True.
-            - swap : bool or 'auto', optional. If True or 'auto', swap the order of the 2 axes.
-              If 'auto', searches for 'azi' in dimension names. Default is 'auto'.
-            - fmt : str, optional. Plot format string (e.g., '-', '--', '.', etc.). Default is '-'.
+        Additional keyword arguments passed to transect2D,
+                including:
+                - vmin, vmax : float, optional.
+                    Minimum and maximum values for data range display.
+                    If None, determined from data.
+                - sym : bool, optional.
+                    If True, use symmetrical axis for the transect.
+                    Default is True.
+                - swap : bool or 'auto', optional.
+                    If True or 'auto', swap the order of the 2 axes.
+                    If 'auto', searches for 'azi' in dimension names.
+                    Default is 'auto'.
+                - fmt : str, optional.
+                    Plot format string (e.g., '-', '--', '.', etc.).
+                    Default is '-'.
 
     Returns
     -------
     fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
-        If full is False: single figure containing transect slices of Stokes parameters.
-        If full is True: tuple of (fig1, fig2) with raw and processed Stokes parameters.
+        If full is False: single figure containing transect slices of
+        Stokes parameters. If full is True: tuple of (fig1, fig2) with
+        raw and processed Stokes parameters.
     """
 
     if isinstance(ds_sg, MLUT):
@@ -574,7 +600,8 @@ def transect_view(
     if subdict is not None:
         warn_message = "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
         warnings.warn(warn_message, DeprecationWarning)
-        # Convert Idx_base objects to values before converting to interp_dict
+        # Convert Idx_base objects to values before converting
+        # to interp_dict
         for dic_name in list(subdict.keys()):
             if isinstance(subdict[dic_name], Idx_base):
                 subdict[dic_name] = subdict[dic_name].value
@@ -754,7 +781,8 @@ def spectrum(
     da : xr.DataArray
         One-dimensional xarray DataArray with 'wavelength' dimension.
     vmin, vmax : float, optional
-        Range of values. If None (default), determined from data min/max.
+        Range of values. If None (default), determined from data
+        min/max.
     sub : str, optional
         Subplot specification. Default is '111'.
     fig : matplotlib.figure.Figure, optional
@@ -853,7 +881,8 @@ def spectrum_view(
     **kwargs,
 ):
     """
-    Visualization of SMART-G spectrum (wavelength-dependent Stokes parameters).
+    Visualization of SMART-G spectrum (wavelength-dependent Stokes
+    parameters).
 
     Parameters
     ----------
@@ -862,36 +891,42 @@ def spectrum_view(
     logI : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
     QU : bool, optional
-        If True, show Q, U, and DoLP. If False, show only I and polarization metrics. Default is False.
+        If True, show Q, U, and DoLP. If False, show only I and
+        polarization metrics. Default is False.
     Circ : bool, optional
-        If True, show circular polarization metrics. If False, show linear polarization. Default is False.
+        If True, show circular polarization metrics. If False, show
+        linear polarization. Default is False.
     full : bool, optional
-        If True, return two figures with full and reduced polarization info. If False, return one figure. Default is False.
+        If True, return two figures with full and reduced polarization
+        info. If False, return one figure. Default is False.
     field : str, optional
         Name of the output level to visualize. Default is 'up (TOA)'.
     prefix : str, optional
         Prefix for field variable names. Default is empty string.
-    fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure, optional
-        Existing figure to plot on. If None, creates a new figure. Default is None.
+    fig : matplotlib.figure.Figure or tuple, optional
+        Existing figure to plot on. If None, creates a new figure.
+        Default is None.
     color : str, optional
         Color for the spectrum lines. Default is 'k' (black).
     subdict : dict, optional
-        **Deprecated**. Use `interp_dict` instead. Dictionary of coordinate values for interpolation.
-        This parameter corresponds to the input dictionary of the `sub()` method of deprecated
-        LUT and MLUT objects, for backward compatibility. Default is None.
+        **Deprecated**. Use `interp_dict` instead. Dictionary of
+        coordinate values for interpolation. This parameter corresponds
+        to the input dictionary of the `sub()` method of deprecated LUT
+        and MLUT objects, for backward compatibility. Default is None.
     interp_dict : dict, optional
-        Dictionary of coordinate values for interpolation. Keys are dimension names,
-        values are the coordinate values to interpolate to. Uses xarray's `interp()` method.
-        Mutually exclusive with `subdict`. Default is None.
-    **kwargs
-        Additional keyword arguments passed to the spectrum plotting function
-        (vmin, vmax, fmt, etc.).
+        Dictionary of coordinate values for interpolation. Keys are
+        dimension names, values are the coordinate values to interpolate
+        to. Uses xarray's `interp()` method. Mutually exclusive with
+        `subdict`. Default is None.
+    **kwargs Additional keyword arguments passed to the spectrum
+    plotting function (vmin, vmax, fmt, etc.).
 
     Returns
     -------
     fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
-        If full is False: single figure containing spectrum plots.
-        If full is True: tuple of (fig1, fig2) with raw Stokes parameters and processed metrics.
+        If full is False: single figure containing spectrum plots. If
+        full is True: tuple of (fig1, fig2) with raw Stokes parameters
+        and processed metrics.
     """
 
     if isinstance(ds_sg, MLUT):
@@ -908,7 +943,8 @@ def spectrum_view(
     if subdict is not None:
         warn_message = "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
         warnings.warn(warn_message, DeprecationWarning)
-        # Convert Idx_base objects to values before converting to interp_dict
+        # Convert Idx_base objects to values before converting
+        # to interp_dict
         for dic_name in list(subdict.keys()):
             if isinstance(subdict[dic_name], Idx_base):
                 subdict[dic_name] = subdict[dic_name].value
@@ -1047,25 +1083,28 @@ def phase_view(
     Parameters
     ----------
     ds_sg : xr.Dataset
-        An xarray Dataset from SMART-G, can be from simulation results or smartg input
-        profile, containing phase function data with variables 'phase_atm' or 'phase_oc',
-        and 'OD_atm' or 'OD_oc'.
+        An xarray Dataset from SMART-G, can be from simulation results
+        or smartg input profile, containing phase function data with
+        variables 'phase_atm' or 'phase_oc', and 'OD_atm' or 'OD_oc'.
     ipha : int | 1-D ndarray, optional
-        Absolute index (or indices) of the phase function(s) coming from Profile.
-        Can be an int (single index) or 1-D ndarray of int indices.
-        If None, uses all unique indices from iphase_kind.
+        Absolute index (or indices) of the phase function(s) coming from
+        Profile. Can be an int (single index) or 1-D ndarray of int
+        indices. If None, uses all unique indices from iphase_kind.
     fig : matplotlib.figure.Figure, optional
         Figure object. If None, creates a new figure.
     axarr : numpy.ndarray, optional
-        2D array of matplotlib axes. If None, creates appropriate subplot grid.
+        2D array of matplotlib axes. If None, creates appropriate
+        subplot grid.
     iw : int, optional
         Wavelength index for multi-wavelength simulations. Default is 0.
     kind : {'atm', 'oc'}, optional
-        Phase function type: 'atm' for atmospheric, 'oc' for oceanic. Default is 'atm'.
+        Phase function type: 'atm' for atmospheric, 'oc' for oceanic.
+        Default is 'atm'.
     show_trunc : bool, optional
         If True, also plots truncated phase function. Default is False.
     force_4stk : bool, optional
-        If True, forces 2x2 subplot layout even for 6-stokes. Default is False.
+        If True, forces 2x2 subplot layout even for 6-stokes. Default is
+        False.
 
     Returns
     -------
@@ -1118,7 +1157,8 @@ def phase_view(
         if iphase_key in ds_sg:
             iphase_data = ds_sg[iphase_key].values
             if nd > 1:
-                # Multi-wavelength case: get unique phases at the specific wavelength iw
+                # Multi-wavelength case: get unique phases at the
+                # specific wavelength iw
                 ni = np.unique(iphase_data[iw, :])
             else:
                 # Single wavelength case
@@ -1126,7 +1166,8 @@ def phase_view(
         else:
             ni = [0]
     else:
-        # Handle ipha as int-like scalar, DataArray scalar, or 1-D iterable.
+        # Handle ipha as int-like scalar, DataArray scalar,
+        # or 1-D iterable.
         if hasattr(ipha, "values"):
             ipha_arr = np.asarray(ipha.values)
         else:
@@ -1141,7 +1182,8 @@ def phase_view(
                 "ipha must be an int-like scalar or a 1-D array of int-like values"
             )
 
-        # Validate that all given ipha values exist in iphase_data at wavelength iw
+        # Validate that all given ipha values exist in iphase_data
+        # at wavelength iw
         iphase_key = "iphase_" + kind
         if iphase_key in ds_sg:
             iphase_data = ds_sg[iphase_key].values
@@ -1299,9 +1341,10 @@ def profile_view(ds_sg, fig=None, ax=None, iw=0, kind="atm", zmax=None):
     Parameters
     ----------
     ds_sg : xr.Dataset
-        An xarray Dataset from SMART-G, can be from simulation results or smartg input profile,
-        containing optical depth and other profile data with variables 'OD_atm' or 'OD_oc', and
-        related optical properties.
+        An xarray Dataset from SMART-G, can be from simulation results
+        or smartg input profile, containing optical depth and other
+        profile data with variables 'OD_atm' or 'OD_oc', and related
+        optical properties.
     fig : matplotlib.figure.Figure, optional
         Figure object. If None, creates a new figure.
     ax : matplotlib.axes.Axes, optional
@@ -1309,10 +1352,11 @@ def profile_view(ds_sg, fig=None, ax=None, iw=0, kind="atm", zmax=None):
     iw : int, optional
         Wavelength index for multi-wavelength simulations. Default is 0.
     kind : {'atm', 'oc'}, optional
-        Profile type: 'atm' for atmospheric, 'oc' for oceanic. Default is 'atm'.
+        Profile type: 'atm' for atmospheric, 'oc' for oceanic. Default
+        is 'atm'.
     zmax : float, optional
-        Maximum altitude (for 'atm') or depth (for 'oc') to plot.
-        If None, automatically determined from data.
+        Maximum altitude (for 'atm') or depth (for 'oc') to plot. If
+        None, automatically determined from data.
 
     Returns
     -------
@@ -1474,18 +1518,20 @@ def input_view(ds_sg, iw=0, kind="atm", zmax=None, ipha=None):
     Parameters
     ----------
     ds_sg : xr.Dataset
-        An xarray Dataset from SMART-G, can be from simulation results or smartg input profile,
-        containing phase function data and optical depth profiles.
+        An xarray Dataset from SMART-G, can be from simulation results
+        or smartg input profile, containing phase function data and
+        optical depth profiles.
     iw : int, optional
         Wavelength index for multi-wavelength simulations. Default is 0.
     kind : {'atm', 'oc'}, optional
-        Profile type: 'atm' for atmospheric, 'oc' for oceanic. Default is 'atm'.
+        Profile type: 'atm' for atmospheric, 'oc' for oceanic. Default
+        is 'atm'.
     zmax : float, optional
-        Maximum altitude (for 'atm') or depth (for 'oc') to plot.
-        If None, automatically determined from data.
+        Maximum altitude (for 'atm') or depth (for 'oc') to plot. If
+        None, automatically determined from data.
     ipha : int, optional
-        Absolute index of the phase function coming from Profile.
-        If None, uses all unique indices.
+        Absolute index of the phase function coming from Profile. If
+        None, uses all unique indices.
     """
 
     if isinstance(ds_sg, MLUT):
@@ -1555,7 +1601,8 @@ def compare(
     errref=None,
 ):
     """
-    Compare results of two SMART-G simulations in two different azimuth planes.
+    Compare results of two SMART-G simulations in two different azimuth
+    planes.
 
     Parameters
     ----------
@@ -1566,31 +1613,40 @@ def compare(
     field : str, optional
         Name of the output level to compare. Default is 'up (TOA)'.
     errb : bool, optional
-        If True, show error bars for ds_sg (requires stdev data). Default is False.
+        If True, show error bars for ds_sg (requires stdev data).
+        Default is False.
     logI : bool, optional
         If True, plot Intensity (I) in log10 scale. Default is False.
     U_sign : int, optional
         Sign convention for U parameter. Default is 1.
     same_U_convention : bool, optional
-        If True, ds_sg and ds_ref have the same U convention. Default is True.
+        If True, ds_sg and ds_ref have the same U convention. Default is
+        True.
     U_symetry : bool, optional
-        If True, U changes sign convention for the two halves of the plane. Default is True.
+        If True, U changes sign convention for the two halves of the
+        plane. Default is True.
     Nparam : int, optional
-        Number of parameters to plot: 4 for I,Q,U,DoLP (default); 5 adds V; 2 keeps only I,DoLP.
+        Number of parameters to plot: 4 for I,Q,U,DoLP (default); 5 adds
+        V; 2 keeps only I,DoLP.
     vmin, vmax : list, optional
-        List of min/max values for each parameter. If None, use defaults.
+        List of min/max values for each parameter. If None, use
+        defaults.
     emax : list, optional
-        List of max absolute error scales for each parameter. If None, use defaults.
+        List of max absolute error scales for each parameter. If None,
+        use defaults.
     ermax : list, optional
-        List of max relative error scales (in %) for each parameter. If None, use defaults.
+        List of max relative error scales (in %) for each parameter. If
+        None, use defaults.
     same_azimuth_convention : bool, optional
-        If True, ds_sg and ds_ref have the same azimuth convention. Default is True.
+        If True, ds_sg and ds_ref have the same azimuth convention.
+        Default is True.
     azimuth : list, optional
         List of two azimuth angles to display. Default is [0., 90.].
     title : str, optional
         Title for the figure. Default is empty string.
     SZA_MAX : float, optional
-        Maximum SZA (Solar Zenith Angle) for x-axis limits. Default is 89.
+        Maximum SZA (Solar Zenith Angle) for x-axis limits. Default is
+        89.
     zenith_title : str, optional
         Label for zenith angle axis. Default is '$SZA (°)$'.
     errref : array-like, optional
@@ -1652,7 +1708,8 @@ def compare(
             S = ds_sg[stokes[i] + "_" + field]
             Sref = ds_ref[stokes[i] + "_" + field]
 
-            # Determine which dimension is azimuth angle and get coordinate values
+            # Determine which dimension is azimuth angle and get
+            # coordinate values
             if "Azimuth angles" in S.dims:
                 az_idx = S.dims.index("Azimuth angles")
                 if az_idx == 0:
@@ -1718,11 +1775,13 @@ def compare(
             (azimuth[0], "r", "-", "ref."),
             (azimuth[1], "g", "-", ""),
         ]:
-            # for phi0,sym1,sym2,labref in [(azimuth[0],'r','.','ref.'),(azimuth[1],'g','.','')]:
+            # for phi0,sym1,sym2,labref in
+            # [(azimuth[0],'r','.','ref.'),(azimuth[1],'g','.','')]:
 
             # both points at their own abscissas
             if same_azimuth_convention:
-                # For xarray, use .sel() to select by azimuth angle value
+                # For xarray, use .sel() to select by azimuth
+                # angle value
                 if "Azimuth angles" in S.dims:
                     az_dim = "Azimuth angles"
                     other_dim = [d for d in S.dims if d != az_dim][0]
@@ -1938,7 +1997,8 @@ def compare(
                 ax[0, i].legend(
                     loc="upper center", fontsize=8, labelspacing=0.0
                 )
-                # ax[1,i].text(-50.,ema*0.75,r'$N_{\Phi}$:%i, $N_{\theta}$:%i'%\
+                # ax[1,i].text(
+                # -50.,ema*0.75,r'$N_{\Phi}$:%i, $N_{\theta}$:%i'%\
                 #         (S.axes[0].shape[0],S.axes[1].shape[0]))
                 ax[1, i].set_ylabel(r"$\Delta$")
                 ax[2, i].set_ylabel(r"$\Delta (\%)$")
@@ -1968,7 +2028,8 @@ def _parse_subplot_position(position):
     position : int, str, or tuple
         - int : 3-digit integer (e.g., 211)
         - str : converted to int (e.g., '211')
-        - tuple : 3-value tuple (rows, cols, position) for positions >= 10
+        - tuple : 3-value tuple (rows, cols, position)
+          for positions >= 10
 
     Returns
     -------
@@ -2001,32 +2062,35 @@ def plot_polar(
     semi=False,
 ):
     """
-    Contour and optionally transect of 2D DataArray on a semi-polar plot.
+    Contour and optionally transect of 2D DataArray on a semi-polar
+    plot.
 
-    xarray version of luts.plot_polar, compatible with xr.DataArray objects.
+    xarray version of luts.plot_polar, compatible with xr.DataArray
+    objects.
 
     Parameters
     ----------
     da : xr.DataArray
-        2D data array with dimensions (angle, radius) or similar
-        Angle is assumed to be in degrees and is not scaled
+        2D data array with dimensions (angle, radius) or similar Angle
+        is assumed to be in degrees and is not scaled
     index : int, array, or list, optional
-        Index/indices of the item to transect in the first dimension
-        If None (default), no transect
+        Index/indices of the item to transect in the first dimension If
+        None (default), no transect
     vmin, vmax : float, optional
         Range of values. If None, determined from data
     rect : int, str, or tuple
         Subplot position of the main plot
         - int: 3-digit integer (e.g., 211)
         - str: string converted to int (e.g., '211')
-        - tuple: (rows, cols, position) for positions >= 10 (e.g., (4, 4, 13))
+                - tuple: (rows, cols, position) for positions >= 10
+                    (e.g., (4, 4, 13))
     sub : int, str, or tuple
         Subplot position of the transect (same format options as rect)
     sym : bool
         If True, the transect uses symmetrical axis
     swap : bool or 'auto'
-        If True or 'auto', swap the order of the 2 axes
-        If 'auto', searches for 'azi' in both dimension names
+        If True or 'auto', swap the order of the 2 axes If 'auto',
+        searches for 'azi' in both dimension names
     fig : matplotlib.figure.Figure, optional
         Destination figure. If None, create a new figure
     cmap : matplotlib.cm.Colormap, optional
@@ -2325,7 +2389,8 @@ def transect2D(
         Subplot position
         - int: 3-digit integer (e.g., 121)
         - str: string converted to int (e.g., '121')
-        - tuple: (rows, cols, position) for positions >= 10 (e.g., (4, 4, 13))
+                - tuple: (rows, cols, position) for positions >= 10
+                    (e.g., (4, 4, 13))
     color : str
         Color for the plot
     percent : bool
@@ -2473,11 +2538,12 @@ def receiver_view(
     """
     Plot receiver irradiance from a SMART-G simulation output.
 
-    The function reads receiver weights from ``ds_sg_out['C_Receiver']``,
-    optionally selecting and summing one or more categories,
-    converts the cell size from km to m using ``ds_sg_out.attrs['S_Cell']``, normalizes
-    by cell area, multiplies by ``mtoa``, applies the selected power ``flux_unit``, and
-    displays the 2-D map with :func:`matplotlib.pyplot.imshow`.
+    The function reads receiver weights from
+    ``ds_sg_out['C_Receiver']``, optionally selecting and summing one or
+    more categories, converts the cell size from km to m using
+    ``ds_sg_out.attrs['S_Cell']``, normalizes by cell area, multiplies
+    by ``mtoa``, applies the selected power ``flux_unit``, and displays
+    the 2-D map with :func:`matplotlib.pyplot.imshow`.
 
     The displayed axes are labeled as relative receiver coordinates (m):
     ``x`` points upward and ``y`` points to the left.
@@ -2492,50 +2558,45 @@ def receiver_view(
         - ``0``: sum of all categories (scalar only).
         - ``1``-``8``: a single specific category.
         - A list / tuple / array of ints in ``1``-``8``: the selected
-          categories are summed together. ``0`` is not allowed in this case.
+          categories are summed together. ``0`` is not allowed in this
+          case.
     log_color_scale : bool, optional
-        If ``True``, use a logarithmic color normalization.
-        Default: False
+        If ``True``, use a logarithmic color normalization. Default:
+        False
     save_path : str, optional
-        Output filename (without extension). If provided, the figure is saved as
-        ``<save_path>.pdf``.
-        Default: None
+        Output filename (without extension). If provided, the figure is
+        saved as ``<save_path>.pdf``. Default: None
     mtoa : float, optional
         Solar flux at TOA (W/m²). Multiplicative factor applied to the
-        receiver weights before display. Typically the TOA solar irradiance for
-        physical units, but can be set to any value to rescale monochromatic
-        simulation outputs.
-        Default: 1320
+        receiver weights before display. Typically the TOA solar
+        irradiance for physical units, but can be set to any value to
+        rescale monochromatic simulation outputs. Default: 1320
     vmin : float, optional
         Lower color limit for linear scale. Ignored when
-        ``log_color_scale=True``.
-        Default: None
+        ``log_color_scale=True``. Default: None
     vmax : float, optional
         Upper color limit for linear scale. Ignored when
-        ``log_color_scale=True``.
-        Default: None
+        ``log_color_scale=True``. Default: None
     interpolation : str, optional
         Default: 'none'
     flux_unit : str, optional
-        Power unit used for displayed irradiance values. Choices are 'W' (Watt),
-        'kW' (kiloWatt), 'MW' (MegaWatt).
-        Default: 'W'.
+        Power unit used for displayed irradiance values. Choices are 'W'
+        (Watt), 'kW' (kiloWatt), 'MW' (MegaWatt). Default: 'W'.
 
 
     Returns
     -------
     None
-        This function creates a matplotlib figure and colorbar, and optionally
-        saves the figure to disk.
+        This function creates a matplotlib figure and colorbar, and
+        optionally saves the figure to disk.
 
     References
     ----------
     .. [1] Moulana, M., Elias, T., Cornet, C., & Ramon, D. (2019).
            First results to evaluate losses and gains in solar radiation
-           collected by solar tower plants.
-           *SOLARPACES 2018: International Conference on Concentrating Solar
-           Power and Chemical Energy Systems*.
-           https://doi.org/10.1063/1.5117709
+           collected by solar tower plants. *SOLARPACES 2018:
+           International Conference on Concentrating Solar Power and
+           Chemical Energy Systems*. https://doi.org/10.1063/1.5117709
     """
 
     if np.isscalar(cat):
@@ -2617,25 +2678,26 @@ def cat_view(
     kdis_rep_bands: object | None = None,
 ) -> xr.Dataset:
     """
-    Normalize photon weights from a SMART-G simulation output to flux, flux
-    density, or radiance with error estimates.
+    Normalize photon weights from a SMART-G simulation output to flux,
+    flux density, or radiance with error estimates.
 
     Processes receiver weights from ``ds_sg_out['wPhCats']`` and
-    ``ds_sg_out['wPhCats2']``, applies the specified ``output_unit``, multiplies
-    by ``mtoa``, applies the selected ``flux_unit``, and returns a new Dataset
-    with normalized intensity and error estimates for all 8 receiver categories.
+    ``ds_sg_out['wPhCats2']``, applies the specified ``output_unit``,
+    multiplies by ``mtoa``, applies the selected ``flux_unit``, and
+    returns a new Dataset with normalized intensity and error estimates
+    for all 8 receiver categories.
 
     Parameters
     ----------
     ds_sg_out : xr.Dataset
         SMART-G output Dataset containing simulation results.
     mtoa : float | 1-D ndarray, optional
-        Solar flux at TOA (W/m²). If there is a wavelength dimension, provide
-        an np.array with the flux as a function of wavelength.
+        Solar flux at TOA (W/m²). If there is a wavelength dimension,
+        provide an np.array with the flux as a function of wavelength.
         Default: 1320
     ncl : str, optional
-        Nominal Confidence Limit for the error estimation.
-        Default: "68%"
+        Nominal Confidence Limit for the error estimation. Default:
+        "68%"
     output_unit : str, optional
         Output unit type. Choices are:
         - 'FLUX' (Watt)
@@ -2643,29 +2705,26 @@ def cat_view(
         - 'RADIANCE' (Watt/meter²/sr)
         Default: "FLUX_DENSITY"
     flux_unit : str, optional
-        Power unit used for displayed irradiance values. Choices are 'W' (Watt),
-        'kW' (kiloWatt), 'MW' (MegaWatt).
-        Default: 'W'.
+        Power unit used for displayed irradiance values. Choices are 'W'
+        (Watt), 'kW' (kiloWatt), 'MW' (MegaWatt). Default: 'W'.
     length_unit : str, optional
-        Length unit for display. Choices are "cm" (centimeter), "m" (meter),
-        "km" (kilometer), etc.
-        Default: "m"
+        Length unit for display. Choices are "cm" (centimeter), "m"
+        (meter), "km" (kilometer), etc. Default: "m"
     print_results : bool, optional
-        If True, print results. If there is a wavelength dimension, prints
-        the spectrally integrated results.
-        Default: True
+        If True, print results. If there is a wavelength dimension,
+        prints the spectrally integrated results. Default: True
     accuracy : int, optional
         Accuracy: number of decimal points to display when printing.
         Default: 6
     kdis_rep_bands : KDIS_IBAND_LIST | REPTRAN_IBAND_LIST, optional
-        Band information object. Used for spectral processing.
-        Default: None
+        Band information object. Used for spectral processing. Default:
+        None
 
     Returns
     -------
     output : xr.Dataset
-        Dataset containing intensity (flux, flux density, or radiance) with
-        associated error estimates for each category.
+        Dataset containing intensity (flux, flux density, or radiance)
+        with associated error estimates for each category.
     """
 
     m = ds_sg_out
@@ -2673,7 +2732,8 @@ def cat_view(
     # Initialize the output Dataset
     output = xr.Dataset()
 
-    # Add the Categories dimension (See Moulana et al. 2019 for 8 Categories)
+    # Add the Categories dimension
+    # (See Moulana et al. 2019 for 8 Categories)
     categories = np.arange(9, dtype=np.float64)
     output = output.assign_coords(Categories=categories)
 
@@ -2689,7 +2749,8 @@ def cat_view(
     # Check if there is a dimension wavelength
     is_wave_axis = "wavelength" in m["wPhCats"].dims
 
-    # Fill needed parameters considering the case with and without the wl
+    # Fill needed parameters considering the case with and without
+    # the wl
     # dimension
     if is_wave_axis:
         nph = m["norm_npho"].values
@@ -2697,12 +2758,14 @@ def cat_view(
     else:
         nph = float(m.attrs["NPHOTONS"])
 
-    # DataArrays with sum of photon weight (and squared weight) as function of
+    # DataArrays with sum of photon weight (and squared weight)
+    # as function of
     # Categories and (if there is wl dim) wavelength
     mf = m["wPhCats"]
     mf2 = m["wPhCats2"]
 
-    # The desired unit of measurement between Watt, kiloWatt, MegaWatt...
+    # The desired unit of measurement between Watt, kiloWatt,
+    # MegaWatt...
     if flux_unit == "uW":
         k = 1e6
         flux_unit_long = "microWatt"
@@ -2771,7 +2834,8 @@ def cat_view(
     # Normalized intensity
     if is_wave_axis:
         if kdis_rep_bands is not None:
-            # Group wavelengths by band structure and sum within each band
+            # Group wavelengths by band structure and sum within
+            # each band
             mf_n = (
                 (mf * cst * mtoa).groupby("wavelength").sum(dim="wavelength")
             )
@@ -2914,7 +2978,8 @@ def cat_view(
     # Relative error calculation
     rel_err_da_n = (abs_err_da_n / mf_n) * 100
 
-    # Create DataArray for the number of photons as function of Categories
+    # Create DataArray for the number of photons as function
+    # of Categories
     nb_ph_da = xr.DataArray(
         m["cat_PhNb"].values,
         dims=["Categories"],
@@ -3026,8 +3091,8 @@ def nopt_view(
         SMART-G output Dataset containing simulation results.
     back : bool, optional
         False for forward mode (default), True for backward mode.
-        Determines which efficiency metrics are calculated and displayed.
-        Default: False
+        Determines which efficiency metrics are calculated and
+        displayed. Default: False
     acc : int, optional
         Accuracy: number of decimal points to display in the output.
         Default: 6
@@ -3041,8 +3106,8 @@ def nopt_view(
         Default: "68%"
     mtoa : None | 1-D ndarray, optional
         Solar flux at TOA for each wavelength band. If None, uses the
-        total power. If provided, weights the calculation by flux
-        per band. Default: None
+        total power. If provided, weights the calculation by flux per
+        band. Default: None
     natm_approx : bool, optional
         If True, calculate and display the analytic approximation of
         atmospheric transmission (natm_approx) in backward mode. Ignored
@@ -3066,7 +3131,8 @@ def nopt_view(
     - nref: Reflection efficiency
     - nsbsa: Product of blocking, shading, and atmospheric efficiencies
 
-    Each metric includes an estimate of absolute error and relative error.
+    Each metric includes an estimate of absolute error and relative
+    error.
     """
     ds = ds_sg_out
     # Number of photons launched
