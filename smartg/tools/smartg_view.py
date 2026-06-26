@@ -969,19 +969,19 @@ def spectrum(
 
 
 def spectrum_view(
-    ds_sg,
-    logI=False,
-    QU=False,
-    Circ=False,
-    full=False,
-    field="up (TOA)",
-    prefix="",
-    fig=None,
-    color="k",
-    subdict=None,
-    interp_dict=None,
-    **kwargs,
-):
+    ds_sg: xr.Dataset | MLUT,
+    logI: bool = False,
+    QU: bool = False,
+    Circ: bool = False,
+    full: bool = False,
+    field: str = "up (TOA)",
+    prefix: str = "",
+    fig: Figure | tuple[Figure, Figure] | None = None,
+    color: str = "k",
+    subdict: dict[str, Any] | None = None,
+    interp_dict: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> Figure | tuple[Figure, Figure]:
     """
     Visualization of SMART-G spectrum (wavelength-dependent Stokes
     parameters).
@@ -1005,9 +1005,15 @@ def spectrum_view(
         Name of the output level to visualize. Default is 'up (TOA)'.
     prefix : str, optional
         Prefix for field variable names. Default is empty string.
-    fig : matplotlib.figure.Figure or tuple, optional
-        Existing figure to plot on. If None, creates a new figure.
-        Default is None.
+    fig : Figure or tuple of Figure, optional
+        Existing figure container used for plotting, depending on
+        `full`:
+
+        - If `full` is False: pass a single Figure.
+        - If `full` is True: pass a tuple `(fig1, fig2)`.
+
+        If None, new figure(s) are created automatically. Default is
+        None.
     color : str, optional
         Color for the spectrum lines. Default is 'k' (black).
     subdict : dict, optional
@@ -1032,8 +1038,11 @@ def spectrum_view(
     """
 
     if isinstance(ds_sg, MLUT):
-        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warn_message = (
+            "\nUsing an MLUT for ds_sg is deprecated, use an "
+            + "xarray.Dataset instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
     # Handle deprecated subdict parameter
@@ -1043,8 +1052,11 @@ def spectrum_view(
         )
 
     if subdict is not None:
-        warn_message = "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warn_message = (
+            "\nThe 'subdict' parameter is deprecated. "
+            + "Use 'interp_dict' instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         # Convert Idx_base objects to values before converting
         # to interp_dict
         for dic_name in list(subdict.keys()):
@@ -1095,61 +1107,96 @@ def spectrum_view(
     DoP.attrs["latex_name"] = prefix + r"$DoP$"
 
     if not full:
+        if fig is None:
+            plot_fig: Figure | None = None
+        elif isinstance(fig, Figure):
+            plot_fig = fig
+        else:
+            raise ValueError(
+                "If 'full' is False, 'fig' must be None or a Figure."
+            )
+
         if QU:
-            if fig is None:
-                fig = figure(figsize=(8, 8))
+            if plot_fig is None:
+                plot_fig = figure(figsize=(8, 8))
             if logI:
                 lI = cast(xr.DataArray, np.log10(stk_i))
                 lI.attrs["latex_name"] = mdesc(
                     str(stk_i.name or "I"), logI=True
                 )
-                spectrum(lI, sub=221, fig=fig, color=color, **kwargs)
+                spectrum(lI, sub=221, fig=plot_fig, color=color, **kwargs)
             else:
                 stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
-                spectrum(stk_i, sub=221, fig=fig, color=color, **kwargs)
+                spectrum(stk_i, sub=221, fig=plot_fig, color=color, **kwargs)
             stk_u.attrs["latex_name"] = mdesc(str(stk_u.name or "Q"))
             stk_q.attrs["latex_name"] = mdesc(str(stk_q.name or "U"))
-            spectrum(stk_u, sub=222, fig=fig, color=color, **kwargs)
-            spectrum(stk_q, sub=223, fig=fig, color=color, **kwargs)
+            spectrum(stk_u, sub=222, fig=plot_fig, color=color, **kwargs)
+            spectrum(stk_q, sub=223, fig=plot_fig, color=color, **kwargs)
             if Circ:
                 stk_v.attrs["latex_name"] = mdesc(str(stk_v.name or "V"))
-                spectrum(stk_v, sub=224, fig=fig, color=color, **kwargs)
+                spectrum(stk_v, sub=224, fig=plot_fig, color=color, **kwargs)
             else:
                 spectrum(
-                    DoP, sub=224, fig=fig, color=color, percent=True, **kwargs
+                    DoP,
+                    sub=224,
+                    fig=plot_fig,
+                    color=color,
+                    percent=True,
+                    **kwargs,
                 )
         else:
             # show only I and polarization
-            if fig is None:
-                fig = figure(figsize=(8, 4))
+            if plot_fig is None:
+                plot_fig = figure(figsize=(8, 4))
             if logI:
                 lI = cast(xr.DataArray, np.log10(stk_i))
                 lI.attrs["latex_name"] = mdesc(
                     str(stk_i.name or "I"), logI=True
                 )
-                spectrum(lI, sub=121, fig=fig, color=color, **kwargs)
+                spectrum(lI, sub=121, fig=plot_fig, color=color, **kwargs)
             else:
                 stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
-                spectrum(stk_i, sub=121, fig=fig, color=color, **kwargs)
+                spectrum(stk_i, sub=121, fig=plot_fig, color=color, **kwargs)
 
             if Circ:
                 spectrum(
-                    DoCP, sub=122, fig=fig, color=color, percent=True, **kwargs
+                    DoCP,
+                    sub=122,
+                    fig=plot_fig,
+                    color=color,
+                    percent=True,
+                    **kwargs,
                 )
             else:
                 spectrum(
-                    DoP, sub=122, fig=fig, color=color, percent=True, **kwargs
+                    DoP,
+                    sub=122,
+                    fig=plot_fig,
+                    color=color,
+                    percent=True,
+                    **kwargs,
                 )
 
-        return fig
+        if plot_fig is None:
+            raise RuntimeError("Failed to initialize spectrum figure.")
+        return plot_fig
 
     else:
         # full plots
         if fig is None:
             fig1 = figure(figsize=(16, 4))
             fig2 = figure(figsize=(16, 4))
-        else:
+        elif (
+            (isinstance(fig, tuple) and len(fig) == 2)
+            and isinstance(fig[0], Figure)
+            and isinstance(fig[1], Figure)
+        ):
             fig1, fig2 = fig
+        else:
+            raise ValueError(
+                "If 'full' is True, 'fig' must be None or a tuple of "
+                "two Figure objects."
+            )
 
         lI = cast(xr.DataArray, np.log10(stk_i))
         lI.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
