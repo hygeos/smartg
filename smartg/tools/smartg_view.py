@@ -1219,15 +1219,19 @@ def spectrum_view(
 
 
 def phase_view(
-    ds_sg,
-    ipha=None,
-    fig=None,
-    axarr=None,
-    iw=0,
-    kind="atm",
-    show_trunc=False,
-    force_4stk=False,
-):
+    ds_sg: xr.Dataset | MLUT,
+    ipha: int
+    | Sequence[int]
+    | np.ndarray[Any, Any]
+    | xr.DataArray
+    | None = None,
+    fig: Figure | None = None,
+    axarr: np.ndarray[Any, Any] | None = None,
+    iw: int = 0,
+    kind: str = "atm",
+    show_trunc: bool = False,
+    force_4stk: bool = False,
+) -> tuple[Figure, np.ndarray[Any, Any]]:
     """
     Visualization of SMART-G phase function.
 
@@ -1266,8 +1270,11 @@ def phase_view(
     """
 
     if isinstance(ds_sg, MLUT):
-        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warn_message = (
+            "\nUsing an MLUT for ds_sg is deprecated, use an "
+            + "xarray.Dataset instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
     od_key = "OD_" + kind
@@ -1290,7 +1297,11 @@ def phase_view(
 
     phase = ds_sg[phase_key].values
     if show_trunc:
-        phase_tr = ds_sg["phase_" + kind + "_tr"].values
+        phase_tr: np.ndarray[Any, Any] | None = ds_sg[
+            "phase_" + kind + "_tr"
+        ].values
+    else:
+        phase_tr = None
 
     ang = ds_sg.coords[theta_key].values
     nstk = phase.shape[1]
@@ -1302,6 +1313,12 @@ def phase_view(
         elif nstk == 6:
             fig, axarr = subplots(nrows=3, ncols=2)
             fig.set_size_inches(10, 9)
+
+    if axarr is None:
+        raise ValueError("Unable to create axes for phase_view.")
+
+    if fig is None:
+        fig = cast(Figure, np.asarray(axarr).flat[0].figure)
 
     if ipha is None:
         iphase_key = "iphase_" + kind
@@ -1319,7 +1336,7 @@ def phase_view(
     else:
         # Handle ipha as int-like scalar, DataArray scalar,
         # or 1-D iterable.
-        if hasattr(ipha, "values"):
+        if isinstance(ipha, xr.DataArray):
             ipha_arr = np.asarray(ipha.values)
         else:
             ipha_arr = np.asarray(ipha)
@@ -1330,7 +1347,8 @@ def phase_view(
             ni = [int(x) for x in ipha_arr.tolist()]
         else:
             raise ValueError(
-                "ipha must be an int-like scalar or a 1-D array of int-like values"
+                "ipha must be an int-like scalar or a 1-D "
+                "array of int-like values"
             )
 
         # Validate that all given ipha values exist in iphase_data
@@ -1348,7 +1366,9 @@ def phase_view(
             for phase_idx in ni:
                 if phase_idx not in valid_phases_set:
                     raise ValueError(
-                        f"Phase index {phase_idx} not found in iphase_{kind} at wavelength index {iw}. Valid indices: {sorted(valid_phases.tolist())}"
+                        f"Phase index {phase_idx} not found in iphase_{kind} "
+                        f"at wavelength index {iw}. "
+                        f"Valid indices: {sorted(valid_phases.tolist())}"
                     )
 
     for i in ni:
@@ -1357,16 +1377,11 @@ def phase_view(
             P12 = phase[i, 1, :]  # P12 = P21
             P33 = phase[i, 2, :]
             P43 = phase[i, 3, :]
-            if show_trunc:
-                P11_tr = phase_tr[i, 0, :]  # P11
-                P12_tr = phase_tr[i, 1, :]  # P12 = P21
-                P33_tr = phase_tr[i, 2, :]
-                P43_tr = phase_tr[i, 3, :]
 
             if np.max(P11[:]) > 0.0:
                 axarr[0, 0].semilogy(ang, P11, label="%3i" % i)
-                if show_trunc:
-                    axarr[0, 0].semilogy(ang, P11_tr, "k--")
+                if show_trunc and phase_tr is not None:
+                    axarr[0, 0].semilogy(ang, phase_tr[i, 0, :], "k--")
             axarr[0, 0].set_title(r"$P_{11}$" + labw)
             axarr[0, 0].grid()
             axarr[0, 0].set_xlim([0, 180])
@@ -1374,8 +1389,8 @@ def phase_view(
 
             if np.max(P11[:]) > 0.0:
                 axarr[0, 1].plot(ang, -P12 / P11)
-                if show_trunc:
-                    axarr[0, 1].plot(ang, -P12_tr / P11, "k--")
+                if show_trunc and phase_tr is not None:
+                    axarr[0, 1].plot(ang, -phase_tr[i, 1, :] / P11, "k--")
             axarr[0, 1].set_title(r"-$P_{12}/P_{11}$")
             axarr[0, 1].grid()
             axarr[0, 1].set_xlim([0, 180])
@@ -1383,8 +1398,8 @@ def phase_view(
 
             if np.max(P11[:]) > 0.0:
                 axarr[1, 0].plot(ang, P33 / P11)
-                if show_trunc:
-                    axarr[1, 0].plot(ang, P33_tr / P11, "k--")
+                if show_trunc and phase_tr is not None:
+                    axarr[1, 0].plot(ang, phase_tr[i, 2, :] / P11, "k--")
             axarr[1, 0].set_title(r"$P_{33}/P_{11}$")
             axarr[1, 0].grid()
             axarr[1, 0].set_xlim([0, 180])
@@ -1393,8 +1408,8 @@ def phase_view(
 
             if np.max(P11[:]) > 0.0:
                 axarr[1, 1].plot(ang, P43 / P11)
-                if show_trunc:
-                    axarr[1, 1].plot(ang, P43_tr / P11, "k--")
+                if show_trunc and phase_tr is not None:
+                    axarr[1, 1].plot(ang, phase_tr[i, 3, :] / P11, "k--")
             axarr[1, 1].set_title(r"$P_{43}/P_{11}$")
             axarr[1, 1].grid()
             axarr[1, 1].set_xlim([0, 180])
@@ -1407,18 +1422,11 @@ def phase_view(
             P33 = phase[i, 2, :]  # P33
             P34 = phase[i, 3, :]  # P34 = -P43
             P44 = phase[i, 5, :]  # P44
-            if show_trunc:
-                P11_tr = phase_tr[i, 0, :]  # P11
-                P12_tr = phase_tr[i, 1, :]  # P12 = P21
-                P22_tr = phase_tr[i, 4, :]  # P22
-                P33_tr = phase_tr[i, 2, :]  # P33
-                P34_tr = phase_tr[i, 3, :]  # P34 = -P43
-                P44_tr = phase_tr[i, 5, :]  # P44
 
             if np.max(P11[:]) > 0.0:
                 axarr[0, 0].semilogy(ang, P11, label="%3i" % i)
-                if show_trunc:
-                    axarr[0, 0].semilogy(ang, P11_tr, "k--")
+                if show_trunc and phase_tr is not None:
+                    axarr[0, 0].semilogy(ang, phase_tr[i, 0, :], "k--")
             axarr[0, 0].set_title(r"$P_{11}$" + labw)
             axarr[0, 0].grid()
             axarr[0, 0].set_xlim([0, 180])
@@ -1426,8 +1434,8 @@ def phase_view(
 
             if np.max(P11[:]) > 0.0:
                 axarr[0, 1].plot(ang, -P12 / P11)
-                if show_trunc:
-                    axarr[0, 1].plot(ang, -P12_tr / P11, "k--")
+                if show_trunc and phase_tr is not None:
+                    axarr[0, 1].plot(ang, -phase_tr[i, 1, :] / P11, "k--")
             axarr[0, 1].set_title(r"-$P_{12}/P_{11}$")
             axarr[0, 1].grid()
             axarr[0, 1].set_xlim([0, 180])
@@ -1435,8 +1443,8 @@ def phase_view(
 
             if np.max(P11[:]) > 0.0:
                 axarr[1, 0].plot(ang, P33 / P11)
-                if show_trunc:
-                    axarr[1, 0].plot(ang, P33_tr / P11, "k--")
+                if show_trunc and phase_tr is not None:
+                    axarr[1, 0].plot(ang, phase_tr[i, 2, :] / P11, "k--")
             axarr[1, 0].set_title(r"$P_{33}/P_{11}$")
             axarr[1, 0].grid()
             axarr[1, 0].set_xlim([0, 180])
@@ -1446,8 +1454,8 @@ def phase_view(
 
             if np.max(P11[:]) > 0.0:
                 axarr[1, 1].plot(ang, P34 / P11)
-                if show_trunc:
-                    axarr[1, 1].plot(ang, P34_tr / P11, "k--")
+                if show_trunc and phase_tr is not None:
+                    axarr[1, 1].plot(ang, phase_tr[i, 3, :] / P11, "k--")
             axarr[1, 1].set_title(r"$P_{34}/P_{11}$")
             axarr[1, 1].grid()
             axarr[1, 1].set_xlim([0, 180])
@@ -1458,8 +1466,8 @@ def phase_view(
             if not force_4stk:
                 if np.max(P11[:]) > 0.0:
                     axarr[2, 0].plot(ang, P22 / P11)
-                    if show_trunc:
-                        axarr[2, 0].plot(ang, P22_tr / P11, "k--")
+                    if show_trunc and phase_tr is not None:
+                        axarr[2, 0].plot(ang, phase_tr[i, 4, :] / P11, "k--")
                 axarr[2, 0].set_title(r"$P_{22}/P_{11}$")
                 axarr[2, 0].grid()
                 axarr[2, 0].set_xlim([0, 180])
@@ -1468,8 +1476,8 @@ def phase_view(
 
                 if np.max(P11[:]) > 0.0:
                     axarr[2, 1].plot(ang, P44 / P11)
-                    if show_trunc:
-                        axarr[2, 1].plot(ang, P44_tr / P11, "k--")
+                    if show_trunc and phase_tr is not None:
+                        axarr[2, 1].plot(ang, phase_tr[i, 5, :] / P11, "k--")
                 axarr[2, 1].set_title(r"$P_{44}/P_{11}$")
                 axarr[2, 1].grid()
                 axarr[2, 1].set_xlim([0, 180])
