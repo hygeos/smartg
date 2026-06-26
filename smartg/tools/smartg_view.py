@@ -8,8 +8,6 @@ spectra, phase functions, profiles, and receiver/category diagnostics
 stored in SMART-G xarray datasets.
 """
 
-from __future__ import print_function, division, absolute_import
-
 import warnings
 from pylab import (
     figure,
@@ -36,7 +34,7 @@ from matplotlib.ticker import ScalarFormatter
 import matplotlib.pyplot as plt
 from typing import Any, Literal, Sequence, cast
 import geoclide as gc
-from luts.luts import Idx_base, MLUT
+from luts.luts import Idx_base, MLUT, LUT
 from smartg.atmosphere import diff1
 from smartg.water import diff2
 
@@ -812,18 +810,10 @@ def transect_view(
             "latex_name", "I"
         )
 
-        transect2D(
-            stk_i, index=ind, sub=141, fig=fig1, color=color, **kwargs
-        )
-        transect2D(
-            stk_u, index=ind, sub=142, fig=fig1, color=color, **kwargs
-        )
-        transect2D(
-            stk_q, index=ind, sub=143, fig=fig1, color=color, **kwargs
-        )
-        transect2D(
-            stk_v, index=ind, sub=144, fig=fig1, color=color, **kwargs
-        )
+        transect2D(stk_i, index=ind, sub=141, fig=fig1, color=color, **kwargs)
+        transect2D(stk_u, index=ind, sub=142, fig=fig1, color=color, **kwargs)
+        transect2D(stk_q, index=ind, sub=143, fig=fig1, color=color, **kwargs)
+        transect2D(stk_v, index=ind, sub=144, fig=fig1, color=color, **kwargs)
 
         transect2D(lI, index=ind, sub=141, fig=fig2, color=color, **kwargs)
         transect2D(
@@ -858,15 +848,15 @@ def transect_view(
 
 
 def spectrum(
-    da,
-    vmin=None,
-    vmax=None,
-    sub="111",
-    fig=None,
-    color="k",
-    percent=False,
-    fmt="-",
-):
+    da: xr.DataArray | LUT,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    sub: int | str | tuple[int, int, int] = "111",
+    fig: Figure | None = None,
+    color: str = "k",
+    percent: bool = False,
+    fmt: str = "-",
+) -> Figure:
     """
     Plot spectrum of a 1D DataArray.
 
@@ -895,9 +885,12 @@ def spectrum(
     """
     from pylab import figure
 
-    if isinstance(da, object) and hasattr(da, "names") and hasattr(da, "axes"):
-        warn_message = "\nUsing an LUT for da is deprecated, use an xarray.DataArray instead."
-        warnings.warn(warn_message, DeprecationWarning)
+    if isinstance(da, LUT):
+        warn_message = (
+            "\nUsing an LUT for da is deprecated, use "
+            + "an xarray.DataArray instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         da = da.to_xarray()
 
     assert "wavelength" in da.dims, (
@@ -911,9 +904,9 @@ def spectrum(
     data = da.values
 
     if vmin is None:
-        vmin = np.amin(data[~np.isnan(data)])
+        vmin = float(np.amin(data[~np.isnan(data)]))
     if vmax is None:
-        vmax = np.amax(data[~np.isnan(data)])
+        vmax = float(np.amax(data[~np.isnan(data)]))
     if vmin == vmax:
         vmin -= 0.001
         vmax += 0.001
@@ -926,16 +919,26 @@ def spectrum(
     ax1_min = np.amin(ax1)
     ax1_max = np.amax(ax1)
 
+    # Parse subplot specification and build a stable marker key
+    sub = _parse_subplot_position(sub)
+    if isinstance(sub, tuple):
+        marker_key = "_".join(map(str, sub))
+    else:
+        marker_key = str(sub)
+
     # Check if subplot already exists by using a marker attribute
-    marker_name = f"_spectrum_sub_{sub}"
-    ax_cart = None
+    marker_name = f"_spectrum_sub_{marker_key}"
+    ax_cart: Any | None = None
     is_new_axes = True
     if hasattr(fig, marker_name):
         ax_cart = getattr(fig, marker_name)
         is_new_axes = False
 
     if is_new_axes:
-        ax_cart = fig.add_subplot(sub)
+        if isinstance(sub, tuple):
+            ax_cart = fig.add_subplot(*sub)
+        else:
+            ax_cart = fig.add_subplot(sub)
         setattr(fig, marker_name, ax_cart)  # Store reference
         ax_cart.grid(True)
         ax_cart.set_xlim(ax1_min, ax1_max)
@@ -943,11 +946,16 @@ def spectrum(
         ax_cart.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
         ax_cart.set_xlabel(r"$\lambda$ (nm)")
     else:
+        if ax_cart is None:
+            raise RuntimeError("Failed to retrieve existing spectrum axes.")
         # Extend ylimits if needed
         current_ylim = ax_cart.get_ylim()
         new_vmin = min(current_ylim[0], vmin)
         new_vmax = max(current_ylim[1], vmax)
         ax_cart.set_ylim(new_vmin, new_vmax)
+
+    if ax_cart is None:
+        raise RuntimeError("Failed to initialize spectrum axes.")
 
     # Plot
     ax_cart.plot(ax1, data[:], fmt, color=color)
