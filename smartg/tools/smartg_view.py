@@ -699,38 +699,62 @@ def transect_view(
     DoP.attrs["latex_name"] = prefix + r"$DoP$"
 
     if not full:
+        if fig is None:
+            plot_fig: Figure | None = None
+        elif isinstance(fig, Figure):
+            plot_fig = fig
+        else:
+            raise ValueError(
+                "If 'full' is False, 'fig' must be None or a Figure."
+            )
+
         if QU:
-            if fig is None:
-                fig = figure(figsize=(8, 8))
+            if plot_fig is None:
+                plot_fig = figure(figsize=(8, 8))
             if logI:
                 lI = cast(xr.DataArray, np.log10(stk_i))
                 lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
                     "latex_name", "I"
                 )
                 transect2D(
-                    lI, index=ind, sub=221, fig=fig, color=color, **kwargs
+                    lI,
+                    index=ind,
+                    sub=221,
+                    fig=plot_fig,
+                    color=color,
+                    **kwargs,
                 )
             else:
                 transect2D(
                     stk_i,
                     index=ind,
                     sub=221,
-                    fig=fig,
+                    fig=plot_fig,
                     color=color,
                     **kwargs,
                 )
             transect2D(
-                stk_u, index=ind, sub=222, fig=fig, color=color, **kwargs
+                stk_u,
+                index=ind,
+                sub=222,
+                fig=plot_fig,
+                color=color,
+                **kwargs,
             )
             transect2D(
-                stk_q, index=ind, sub=223, fig=fig, color=color, **kwargs
+                stk_q,
+                index=ind,
+                sub=223,
+                fig=plot_fig,
+                color=color,
+                **kwargs,
             )
             if Circ:
                 transect2D(
                     stk_v,
                     index=ind,
                     sub=224,
-                    fig=fig,
+                    fig=plot_fig,
                     color=color,
                     **kwargs,
                 )
@@ -739,29 +763,34 @@ def transect_view(
                     DoP,
                     index=ind,
                     sub=224,
-                    fig=fig,
+                    fig=plot_fig,
                     color=color,
                     percent=True,
                     **kwargs,
                 )
         else:
             # show only I and PR
-            if fig is None:
-                fig = figure(figsize=(8, 4))
+            if plot_fig is None:
+                plot_fig = figure(figsize=(8, 4))
             if logI:
                 lI = cast(xr.DataArray, np.log10(stk_i))
                 lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
                     "latex_name", "I"
                 )
                 transect2D(
-                    lI, index=ind, sub=121, fig=fig, color=color, **kwargs
+                    lI,
+                    index=ind,
+                    sub=121,
+                    fig=plot_fig,
+                    color=color,
+                    **kwargs,
                 )
             else:
                 transect2D(
                     stk_i,
                     index=ind,
                     sub=121,
-                    fig=fig,
+                    fig=plot_fig,
                     color=color,
                     **kwargs,
                 )
@@ -771,7 +800,7 @@ def transect_view(
                     DoCP,
                     index=ind,
                     sub=122,
-                    fig=fig,
+                    fig=plot_fig,
                     color=color,
                     percent=True,
                     **kwargs,
@@ -781,13 +810,15 @@ def transect_view(
                     DoP,
                     index=ind,
                     sub=122,
-                    fig=fig,
+                    fig=plot_fig,
                     color=color,
                     percent=True,
                     **kwargs,
                 )
 
-        return fig
+        if plot_fig is None:
+            raise RuntimeError("Failed to initialize transect figure.")
+        return plot_fig
 
     else:
         # full plots
@@ -2617,24 +2648,24 @@ def plot_polar(
 
 
 def transect2D(
-    da,
-    index=None,
-    vmin=None,
-    vmax=None,
-    sym=True,
-    swap="auto",
-    fig=None,
-    sub=121,
-    color="k",
-    percent=False,
-    fmt="-",
-):
+    da: xr.DataArray,
+    index: int | Sequence[int] | np.ndarray[Any, Any] | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    sym: bool = True,
+    swap: bool | Literal["auto"] = "auto",
+    fig: Figure | None = None,
+    sub: int | str | tuple[int, int, int] = 121,
+    color: str = "k",
+    percent: bool = False,
+    fmt: str = "-",
+) -> Figure:
     """
     Transect of 2D DataArray
 
     Parameters
     ----------
-    da : xr.DataArray
+    da : DataArray
         2D data array to display
     index : int or array-like, optional
         Index/indices to transect
@@ -2644,7 +2675,7 @@ def transect2D(
         Use symmetrical axis
     swap : bool or 'auto'
         Swap axes if needed
-    fig : matplotlib.figure.Figure, optional
+    fig : Figure, optional
         Destination figure
     sub : int, str, or tuple
         Subplot position
@@ -2661,72 +2692,72 @@ def transect2D(
 
     Returns
     -------
-    fig : matplotlib.figure.Figure
+    fig : Figure
     """
 
     assert da.ndim == 2, "DataArray must be 2D"
 
     if fig is None:
-        fig = figure(figsize=(4.5, 2.5))
+        fig = cast(Figure, figure(figsize=(4.5, 2.5)))
 
     # Get dimension names
-    dim_names = list(da.dims)
+    dim_names = [str(dim) for dim in da.dims]
+    dim0_name, dim1_name = dim_names[0], dim_names[1]
 
     if swap == "auto":
-        if ("azi" in dim_names[1].lower()) and (
-            "azi" not in dim_names[0].lower()
-        ):
+        if ("azi" in dim1_name.lower()) and ("azi" not in dim0_name.lower()):
             swap = True
         else:
             swap = False
 
     # Get axes and data
     if swap:
-        ax1 = da.coords[dim_names[1]].values
-        ax2 = da.coords[dim_names[0]].values
-        name1 = dim_names[1]
-        name2 = dim_names[0]
+        ax1 = da.coords[dim1_name].values
+        ax2 = da.coords[dim0_name].values
+        name2 = dim0_name
         data = da.values.T
     else:
-        ax1 = da.coords[dim_names[0]].values
-        ax2 = da.coords[dim_names[1]].values
-        name1 = dim_names[0]
-        name2 = dim_names[1]
+        ax1 = da.coords[dim0_name].values
+        ax2 = da.coords[dim1_name].values
+        name2 = dim1_name
         data = da.values
 
     # Determine value range
     if vmin is None:
-        vmin = np.nanmin(data)
+        vmin = float(np.nanmin(data))
     if vmax is None:
-        vmax = np.nanmax(data)
-    if vmin == vmax:
-        vmin -= 0.001
-        vmax += 0.001
-    if vmin > vmax:
-        vmin, vmax = vmax, vmin
+        vmax = float(np.nanmax(data))
+    vmin_val = float(vmin)
+    vmax_val = float(vmax)
+    if vmin_val == vmax_val:
+        vmin_val -= 0.001
+        vmax_val += 0.001
+    if vmin_val > vmax_val:
+        vmin_val, vmax_val = vmax_val, vmin_val
     if percent:
-        vmin = 0.0
-        vmax = 100.0
+        vmin_val = 0.0
+        vmax_val = 100.0
 
     ax1_scaled = ax1
     label2 = da.coords[name2].attrs.get("latex_name", name2)
 
     # Ensure index is an integer
     if index is not None:
-        if isinstance(index, (list, tuple)) or (
-            isinstance(index, np.ndarray) and index.ndim == 1
-        ):
-            index = int(index[0])
+        if isinstance(index, (list, tuple)):
+            index_val = int(index[0])
         else:
-            index = int(index)
-    if index is None:
-        index = 0
+            index_arr = np.asarray(index)
+            if index_arr.ndim == 0:
+                index_val = int(index_arr.item())
+            else:
+                index_val = int(index_arr.reshape(-1)[0])
+    else:
+        index_val = 0
 
-    mirror_index = (ax1_scaled.shape[0] // 2 + index) % ax1_scaled.shape[0]
+    mirror_index = (ax1_scaled.shape[0] // 2 + index_val) % ax1_scaled.shape[0]
 
     ax2_min = np.amin(ax2)
     ax2_max = np.amax(ax2)
-    label1 = name1 + " {:7.2f}".format(ax1_scaled[index])
 
     # Parse subplot specification
     sub = _parse_subplot_position(sub)
@@ -2739,10 +2770,11 @@ def transect2D(
     marker_name = f"_transect2D_sub_{marker_key}"
 
     # Check if subplot already exists
-    ax_cart = None
-    marker_name = f"_transect2D_sub_{sub}"
+    ax_cart: Axes | None = None
     if hasattr(fig, marker_name):
-        ax_cart = getattr(fig, marker_name)
+        existing_ax = getattr(fig, marker_name)
+        if isinstance(existing_ax, Axes):
+            ax_cart = existing_ax
 
     is_new_axes = ax_cart is None
     if is_new_axes:
@@ -2758,29 +2790,33 @@ def transect2D(
             ax_cart.set_xlim(-ax2_max, ax2_max)
         else:
             ax_cart.set_xlim(ax2_min, ax2_max)
-        ax_cart.set_ylim(vmin, vmax)
-        ax_cart._transect2D_first = True
+        ax_cart.set_ylim(vmin_val, vmax_val)
     else:
+        if ax_cart is None:
+            raise RuntimeError("Failed to retrieve existing transect axes.")
         # Expand ylim to accommodate new data
         current_ylim = ax_cart.get_ylim()
-        new_vmin = min(current_ylim[0], vmin)
-        new_vmax = max(current_ylim[1], vmax)
+        new_vmin = min(current_ylim[0], vmin_val)
+        new_vmax = max(current_ylim[1], vmax_val)
         ax_cart.set_ylim(new_vmin, new_vmax)
+
+    if ax_cart is None:
+        raise RuntimeError("Failed to initialize transect axes.")
 
     ax_cart.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
 
     # Plot transects
-    ax_cart.plot(ax2, data[index, :], fmt, color=color)
+    ax_cart.plot(ax2, data[index_val, :], fmt, color=color)
     if sym:
         ax_cart.plot(-ax2, data[mirror_index, :], fmt, color=color)
 
     # Add title
-    if "latex_name" not in da.attrs and da.name != "":
-        da.attrs["latex_name"] = mdesc(da.name)
-    title = da.attrs["latex_name"]
+    if "latex_name" not in da.attrs and da.name is not None:
+        da.attrs["latex_name"] = mdesc(str(da.name))
+    title = da.attrs.get("latex_name")
 
     if title is not None:
-        ax_cart.set_title(title)
+        ax_cart.set_title(str(title))
 
     return fig
 
