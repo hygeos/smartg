@@ -591,25 +591,24 @@ def transect_view(
         and MLUT objects, for backward compatibility. Default is None.
     interp_dict : dict, optional
         Dictionary of coordinate values for interpolation. Keys are
-        dimension names, values are the coordinate values to
-        interpolate to. Uses xarray's `interp()` method. Mutually
-        exclusive with `subdict`. Default is None.
+        dimension names, values are the coordinate values to interpolate
+        to. Uses xarray's `interp()` method. Mutually exclusive with
+        `subdict`. Default is None.
     **kwargs
-        Additional keyword arguments passed to transect2D,
-                including:
-                - vmin, vmax : float, optional.
-                    Minimum and maximum values for data range display.
-                    If None, determined from data.
-                - sym : bool, optional.
-                    If True, use symmetrical axis for the transect.
-                    Default is True.
-                - swap : bool or 'auto', optional.
-                    If True or 'auto', swap the order of the 2 axes.
-                    If 'auto', searches for 'azi' in dimension names.
-                    Default is 'auto'.
-                - fmt : str, optional.
-                    Plot format string (e.g., '-', '--', '.', etc.).
-                    Default is '-'.
+        Additional keyword arguments passed to transect2D, including:
+        - vmin, vmax : float, optional.
+            Minimum and maximum values for data range display. If None,
+            determined from data.
+        - sym : bool, optional.
+            If True, use symmetrical axis for the transect. Default is
+            True.
+        - swap : bool or 'auto', optional.
+            If True or 'auto', swap the order of the 2 axes. If
+            'auto', searches for 'azi' in dimension names. Default is
+            'auto'.
+        - fmt : str, optional.
+            Plot format string (e.g., '-', '--', '.', etc.). Default is
+            '-'.
 
     Returns
     -------
@@ -894,7 +893,7 @@ def spectrum(
 
     Parameters
     ----------
-    da : xr.DataArray
+    da : DataArray
         One-dimensional xarray DataArray with 'wavelength' dimension.
     vmin, vmax : float, optional
         Range of values. If None (default), determined from data
@@ -1020,7 +1019,7 @@ def spectrum_view(
 
     Parameters
     ----------
-    ds_sg : xr.Dataset
+    ds_sg : Dataset
         An xarray Dataset from SMART-G simulation.
     logI : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
@@ -1058,8 +1057,9 @@ def spectrum_view(
         dimension names, values are the coordinate values to interpolate
         to. Uses xarray's `interp()` method. Mutually exclusive with
         `subdict`. Default is None.
-    **kwargs Additional keyword arguments passed to the spectrum
-    plotting function (vmin, vmax, fmt, etc.).
+    **kwargs
+        Additional keyword arguments passed to the spectrum plotting
+        function (vmin, vmax, fmt, etc.).
 
     Returns
     -------
@@ -1269,13 +1269,13 @@ def phase_view(
 
     Parameters
     ----------
-    ds_sg : xr.Dataset
+    ds_sg : Dataset
         An xarray Dataset from SMART-G, can be from simulation results
         or smartg input profile, containing phase function data with
         variables 'phase_atm' or 'phase_oc', and 'OD_atm' or 'OD_oc'.
-    ipha : int | 1-D ndarray, optional
+    ipha : int or ndarray, optional
         Absolute index (or indices) of the phase function(s) coming from
-        Profile. Can be an int (single index) or 1-D ndarray of int
+        Profile. Can be an int (single index) or a 1D ndarray of int
         indices. If None, uses all unique indices from iphase_kind.
     fig : matplotlib.figure.Figure, optional
         Figure object. If None, creates a new figure.
@@ -1820,9 +1820,9 @@ def compare(
 
     Parameters
     ----------
-    ds_sg : xr.Dataset
+    ds_sg : Dataset
         An xarray Dataset from SMART-G simulation.
-    ds_ref : xr.Dataset
+    ds_ref : Dataset
         Reference Dataset for comparison.
     field : str, optional
         Name of the output level to compare. Default is 'up (TOA)'.
@@ -2344,43 +2344,43 @@ def plot_polar(
     Contour and optionally transect of 2D DataArray on a semi-polar
     plot.
 
-    xarray version of luts.plot_polar, compatible with xr.DataArray
+    xarray version of luts.plot_polar, compatible with DataArray
     objects.
 
     Parameters
     ----------
     da : DataArray
-        2D data array with dimensions (angle, radius) or similar Angle
-        is assumed to be in degrees and is not scaled
-    index : int or ndarray or list, optional
-        Index/indices of the item to transect in the first dimension If
-        None (default), no transect
+        2D data array with dimensions (angle, radius) or similar.
+        Angle is assumed to be in degrees and is not scaled.
+    index : int, ndarray, or list, optional
+        Index or indices to transect in the first dimension. If None
+        (default), no transect is drawn.
     vmin, vmax : float, optional
         Range of values. If None, determined from data
-    rect : int or str or tuple, optional
-        Subplot position of the main plot
+    rect : int, str, or tuple, optional
+        Subplot position of the main plot.
         - int: 3-digit integer (e.g., 211)
         - str: string converted to int (e.g., '211')
-                - tuple: (rows, cols, position) for positions >= 10
-                    (e.g., (4, 4, 13))
-    sub : int or str or tuple, optional
-        Subplot position of the transect (same format options as rect)
+        - tuple: (rows, cols, position) for positions >= 10
+          (e.g., (4, 4, 13))
+    sub : int, str, or tuple, optional
+        Subplot position of the transect (same format options as rect).
     sym : bool, optional
         If True, the transect uses symmetrical axis
     swap : bool or str, optional
-        If True swap the order of the 2 axes. If 'auto', searches for
+        If True, swap the order of the 2 axes. If 'auto', searches for
         'azi' in both dimension names
     fig : Figure, optional
-        Destination figure. If None, create a new figure
+        Destination figure. If None, create a new figure.
     cmap : Colormap, optional
-        Color map to use
+        Colormap to use.
     semi : bool, optional
-        If True, use semi-polar (180 deg), otherwise polar (360 deg)
+        If True, use semi-polar (180 deg), otherwise polar (360 deg).
 
     Returns
     -------
     fig : Figure
-        The figure containing the plot
+        The figure containing the plot.
     """
 
     # Convert subplot positions
@@ -2661,38 +2661,40 @@ def transect2D(
     fmt: str = "-",
 ) -> Figure:
     """
-    Transect of 2D DataArray
+    Transect of a 2D DataArray.
 
     Parameters
     ----------
     da : DataArray
-        2D data array to display
+        2D data array to display.
     index : int or array-like, optional
-        Index/indices to transect
+        Index or indices to transect. If None, the first index (0) is
+        used.
     vmin, vmax : float, optional
-        Value range
+        Value range.
     sym : bool
-        Use symmetrical axis
+        Use a symmetrical x-axis.
     swap : bool or 'auto'
-        Swap axes if needed
+        Swap axes if needed.
     fig : Figure, optional
-        Destination figure
+        Destination figure.
     sub : int, str, or tuple
-        Subplot position
+        Subplot position.
         - int: 3-digit integer (e.g., 121)
         - str: string converted to int (e.g., '121')
-                - tuple: (rows, cols, position) for positions >= 10
-                    (e.g., (4, 4, 13))
+        - tuple: (rows, cols, position) for positions >= 10
+          (e.g., (4, 4, 13))
     color : str
-        Color for the plot
+        Color for the plot.
     percent : bool
-        If True, set scale to 0-100%
+        If True, set scale to 0-100%.
     fmt : str
-        Plot format string
+        Plot format string.
 
     Returns
     -------
     fig : Figure
+        Figure containing the transect plot.
     """
 
     assert da.ndim == 2, "DataArray must be 2D"
@@ -2847,7 +2849,7 @@ def receiver_view(
 
     Parameters
     ----------
-    ds_sg_out : xr.Dataset
+    ds_sg_out : Dataset
         SMART-G output Dataset containing simulation results.
     cat : int or sequence of int, default=0
         Receiver category index as defined in [1]_.
@@ -2990,15 +2992,16 @@ def cat_view(
     ``ds_sg_out['wPhCats2']``, applies the specified ``output_unit``,
     multiplies by ``mtoa``, applies the selected ``flux_unit``, and
     returns a new Dataset with normalized intensity and error estimates
-    for all 8 receiver categories.
+    for category 0 (sum of all) and categories 1-8.
 
     Parameters
     ----------
-    ds_sg_out : xr.Dataset
+    ds_sg_out : Dataset
         SMART-G output Dataset containing simulation results.
-    mtoa : float | 1-D ndarray, optional
+    mtoa : float or ndarray, optional
         Solar flux at TOA (W/m²). If there is a wavelength dimension,
-        provide an np.array with the flux as a function of wavelength.
+        provide a 1D NumPy array with the flux as a function of
+        wavelength.
         Default: 1320
     ncl : str, optional
         Nominal Confidence Limit for the error estimation. Default:
@@ -3010,8 +3013,9 @@ def cat_view(
         - 'RADIANCE' (Watt/meter²/sr)
         Default: "FLUX_DENSITY"
     flux_unit : str, optional
-        Power unit used for displayed irradiance values. Choices are 'W'
-        (Watt), 'kW' (kiloWatt), 'MW' (MegaWatt). Default: 'W'.
+        Power unit used for displayed irradiance values. Choices are
+        'uW' (microWatt), 'mW' (milliWatt), 'W' (Watt), 'kW'
+        (kiloWatt), and 'MW' (MegaWatt). Default: 'W'.
     length_unit : str, optional
         Length unit for display. Choices are "cm" (centimeter), "m"
         (meter), "km" (kilometer), etc. Default: "m"
@@ -3021,13 +3025,13 @@ def cat_view(
     accuracy : int, optional
         Accuracy: number of decimal points to display when printing.
         Default: 6
-    kdis_rep_bands : KDIS_IBAND_LIST | REPTRAN_IBAND_LIST, optional
+    kdis_rep_bands : KDIS_IBAND_LIST or REPTRAN_IBAND_LIST, optional
         Band information object. Used for spectral processing. Default:
         None
 
     Returns
     -------
-    output : xr.Dataset
+    output : Dataset
         Dataset containing intensity (flux, flux density, or radiance)
         with associated error estimates for each category.
     """
@@ -3430,7 +3434,7 @@ def nopt_view(
 
     Parameters
     ----------
-    ds_sg_out : xr.Dataset
+    ds_sg_out : Dataset
         SMART-G output Dataset containing simulation results.
     back : bool, optional
         False for forward mode (default), True for backward mode.
@@ -3447,10 +3451,10 @@ def nopt_view(
         - "99%" (3 sigma)
         - "99.99%" (4 sigma)
         Default: "68%"
-    mtoa : None | 1-D ndarray, optional
+    mtoa : None or ndarray, optional
         Solar flux at TOA for each wavelength band. If None, uses the
-        total power. If provided, weights the calculation by flux per
-        band. Default: None
+        total power. If provided, pass a 1D array and the computation
+        is weighted by flux per band. Default: None
     natm_approx : bool, optional
         If True, calculate and display the analytic approximation of
         atmospheric transmission (natm_approx) in backward mode. Ignored
