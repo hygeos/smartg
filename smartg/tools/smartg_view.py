@@ -1684,13 +1684,23 @@ def profile_view(
         return fig, ax
 
 
-def input_view(ds_sg, iw=0, kind="atm", zmax=None, ipha=None):
+def input_view(
+    ds_sg: xr.Dataset | MLUT,
+    iw: int = 0,
+    kind: str = "atm",
+    zmax: float | None = None,
+    ipha: int
+    | Sequence[int]
+    | np.ndarray[Any, Any]
+    | xr.DataArray
+    | None = None,
+) -> None:
     """
     Visualization of SMART-G input profile and phase functions.
 
     Parameters
     ----------
-    ds_sg : xr.Dataset
+    ds_sg : Dataset
         An xarray Dataset from SMART-G, can be from simulation results
         or smartg input profile, containing phase function data and
         optical depth profiles.
@@ -1709,7 +1719,7 @@ def input_view(ds_sg, iw=0, kind="atm", zmax=None, ipha=None):
 
     if isinstance(ds_sg, MLUT):
         warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
     if "phase_" + kind in ds_sg:
@@ -1723,7 +1733,7 @@ def input_view(ds_sg, iw=0, kind="atm", zmax=None, ipha=None):
             ax3 = subplot2grid((2, 3), (1, 0))
             ax4 = subplot2grid((2, 3), (1, 1))
 
-            axarr = np.array([[ax1, ax2], [ax3, ax4]])
+            axarr: np.ndarray[Any, Any] = np.array([[ax1, ax2], [ax3, ax4]])
 
             _, _ = phase_view(ds_sg, iw=iw, axarr=axarr, kind=kind, ipha=ipha)
 
@@ -1753,26 +1763,26 @@ def input_view(ds_sg, iw=0, kind="atm", zmax=None, ipha=None):
 
 
 def compare(
-    ds_sg,
-    ds_ref,
-    field="up (TOA)",
-    errb=False,
-    logI=False,
-    U_sign=1,
-    same_U_convention=True,
-    U_symetry=True,
-    Nparam=4,
-    vmax=None,
-    vmin=None,
-    emax=None,
-    ermax=None,
-    same_azimuth_convention=True,
-    azimuth=[0.0, 90.0],
-    title="",
-    SZA_MAX=89.0,
-    zenith_title=r"$SZA (°)$",
-    errref=None,
-):
+    ds_sg: xr.Dataset | MLUT,
+    ds_ref: xr.Dataset | MLUT,
+    field: str = "up (TOA)",
+    errb: bool = False,
+    logI: bool = False,
+    U_sign: int = 1,
+    same_U_convention: bool = True,
+    U_symetry: bool = True,
+    Nparam: int = 4,
+    vmax: Sequence[float] | None = None,
+    vmin: Sequence[float] | None = None,
+    emax: Sequence[float] | None = None,
+    ermax: Sequence[float] | None = None,
+    same_azimuth_convention: bool = True,
+    azimuth: Sequence[float] | None = None,
+    title: str = "",
+    SZA_MAX: float = 89.0,
+    zenith_title: str = r"$SZA (°)$",
+    errref: np.ndarray[Any, Any] | Sequence[float] | None = None,
+) -> Figure:
     """
     Compare results of two SMART-G simulations in two different azimuth
     planes.
@@ -1832,25 +1842,45 @@ def compare(
     """
 
     if isinstance(ds_sg, MLUT):
-        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warn_message = (
+            "\nUsing an MLUT for ds_sg is deprecated, "
+            + "use an xarray.Dataset instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
     if isinstance(ds_ref, MLUT):
-        warn_message = "\nUsing an MLUT for ds_ref is deprecated, use an xarray.Dataset instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warn_message = (
+            "\nUsing an MLUT for ds_ref is deprecated, "
+            + "use an xarray.Dataset instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_ref = ds_ref.to_xarray()
 
     from pylab import subplots
 
     if vmax is None:
-        vmax = [0.1] * Nparam
+        vmax_values = [0.1] * Nparam
+    else:
+        vmax_values = list(vmax)
     if vmin is None:
-        vmin = [-0.1] * Nparam
+        vmin_values = [-0.1] * Nparam
+    else:
+        vmin_values = list(vmin)
     if emax is None:
-        emax = [0.1] * Nparam
+        emax_values = [0.1] * Nparam
+    else:
+        emax_values = list(emax)
     if ermax is None:
-        ermax = [0.1] * Nparam
+        ermax_values = [0.1] * Nparam
+    else:
+        ermax_values = list(ermax)
+    if azimuth is None:
+        azimuth_values = [0.0, 90.0]
+    else:
+        azimuth_values = list(azimuth)
+    if len(azimuth_values) < 2:
+        raise ValueError("azimuth must contain at least two angles")
     stokesT = ["I", "Q", "U", "V"]
     stokes = stokesT[: Nparam - 1]
     signT = [1, 1, U_sign * 1, 1, 1]  # sign convention for both datasets
@@ -1873,13 +1903,21 @@ def compare(
         gridspec_kw=dict(hspace=0.2, wspace=0.3),
     )
     fig.set_size_inches(Nparam * 3, 8)
-    fig.set_dpi = 600
+    fig.set_dpi(600)
     fig.suptitle(title)
 
+    def _isel_values(
+        da: xr.DataArray, dim_name: str, idx: int
+    ) -> np.ndarray[Any, Any]:
+        return np.asarray(da.isel({dim_name: idx}).values)
+
     for i in range(Nparam):
+        S: xr.DataArray
+        Sref: xr.DataArray
+        E: xr.DataArray | None = None
         if i != Nparam - 1:
-            S = ds_sg[stokes[i] + "_" + field]
-            Sref = ds_ref[stokes[i] + "_" + field]
+            S = cast(xr.DataArray, ds_sg[stokes[i] + "_" + field])
+            Sref = cast(xr.DataArray, ds_ref[stokes[i] + "_" + field])
 
             # Determine which dimension is azimuth angle and get
             # coordinate values
@@ -1895,14 +1933,17 @@ def compare(
 
             # Extract description from attributes
             desc = S.attrs.get("latex_name", stokes[i])
-            desc = mdesc(desc)
+            desc = mdesc(str(desc))
 
             if errb:
-                E = ds_sg[stokes[i] + "_" + "stdev" + "_" + field]
+                E = cast(
+                    xr.DataArray,
+                    ds_sg[stokes[i] + "_" + "stdev" + "_" + field],
+                )
 
             if logI and stokes[i] == "I":
-                S = np.log10(S)
-                Sref = np.log10(Sref)
+                S = cast(xr.DataArray, np.log10(S))
+                Sref = cast(xr.DataArray, np.log10(Sref))
                 desc = r"$log_{10}$ " + desc
         else:
             stk_i = ds_sg["I" + "_" + field]
@@ -1910,17 +1951,20 @@ def compare(
             stk_q = ds_sg["U" + "_" + field]
 
             Ip = np.sqrt(stk_u * stk_u + stk_q * stk_q)
-            S = (Ip / stk_i) * 100
+            S = cast(xr.DataArray, (Ip / stk_i) * 100)
 
             Iref = ds_ref["I" + "_" + field]
             Qref = ds_ref["Q" + "_" + field]
             Uref = ds_ref["U" + "_" + field]
-            Sref = (np.sqrt(Qref * Qref + Uref * Uref) / Iref) * 100
+            Sref = cast(
+                xr.DataArray,
+                (np.sqrt(Qref * Qref + Uref * Uref) / Iref) * 100,
+            )
 
             # Get description
             I_desc = stk_i.attrs.get("latex_name", "I")
             desc = "DoLP" + I_desc[1:]
-            desc = mdesc(desc)
+            desc = mdesc(str(desc))
 
             # Determine azimuth coordinate
             if "Azimuth angles" in S.dims:
@@ -1937,16 +1981,16 @@ def compare(
                 dQ = ds_sg["Q" + "_" + "stdev" + "_" + field]
                 dU = ds_sg["U" + "_" + "stdev" + "_" + field]
                 dIp = np.sqrt(dQ * dQ + dU * dU)
-                E = (dI / stk_i + dIp / Ip) * S
+                E = cast(xr.DataArray, (dI / stk_i + dIp / Ip) * S)
 
-        vmi = vmin[i]
-        vma = vmax[i]
-        ema = emax[i]
-        erma = ermax[i]
+        vmi = vmin_values[i]
+        vma = vmax_values[i]
+        ema = emax_values[i]
+        erma = ermax_values[i]
 
         for phi0, sym1, sym2, labref in [
-            (azimuth[0], "r", "-", "ref."),
-            (azimuth[1], "g", "-", ""),
+            (azimuth_values[0], "r", "-", "ref."),
+            (azimuth_values[1], "g", "-", ""),
         ]:
             # for phi0,sym1,sym2,labref in
             # [(azimuth[0],'r','.','ref.'),(azimuth[1],'g','.','')]:
@@ -1957,30 +2001,36 @@ def compare(
                 # angle value
                 if "Azimuth angles" in S.dims:
                     az_dim = "Azimuth angles"
-                    other_dim = [d for d in S.dims if d != az_dim][0]
 
                     # Find closest azimuth angle values
                     az_vals = S.coords["Azimuth angles"].values
-                    phi0_idx = np.argmin(np.abs(az_vals - phi0))
-                    phi180_idx = np.argmin(np.abs(az_vals - (180.0 - phi0)))
+                    phi0_idx = int(np.argmin(np.abs(az_vals - phi0)))
+                    phi180_idx = int(
+                        np.argmin(np.abs(az_vals - (180.0 - phi0)))
+                    )
 
-                    refp = sign[i] * Sref.isel(**{az_dim: phi0_idx}).values
-                    refm = sign[i] * Sref.isel(**{az_dim: phi180_idx}).values
+                    refp = sign[i] * _isel_values(Sref, az_dim, phi0_idx)
+                    refm = sign[i] * _isel_values(Sref, az_dim, phi180_idx)
                     sp = (
                         diffsign[i]
                         * sign[i]
-                        * S.isel(**{az_dim: phi0_idx}).values
+                        * _isel_values(S, az_dim, phi0_idx)
                     )
                     sm = (
                         symetry[i]
                         * diffsign[i]
                         * sign[i]
-                        * S.isel(**{az_dim: phi180_idx}).values
+                        * _isel_values(S, az_dim, phi180_idx)
                     )
 
                     if errb:
-                        dsp = E.isel(**{az_dim: phi0_idx}).values
-                        dsm = E.isel(**{az_dim: phi180_idx}).values
+                        if E is None:
+                            raise RuntimeError(
+                                "Error data must be initialized when errb "
+                                + "is True"
+                            )
+                        dsp = _isel_values(E, az_dim, phi0_idx)
+                        dsm = _isel_values(E, az_dim, phi180_idx)
                     else:
                         (dsp, dsm) = (0, 0)
                 else:
@@ -1990,6 +2040,11 @@ def compare(
                     sp = diffsign[i] * sign[i] * S.values.ravel()
                     sm = symetry[i] * diffsign[i] * sign[i] * S.values.ravel()
                     if errb:
+                        if E is None:
+                            raise RuntimeError(
+                                "Error data must be initialized when errb "
+                                + "is True"
+                            )
                         dsp = E.values.ravel()
                         dsm = E.values.ravel()
                     else:
@@ -1999,26 +2054,33 @@ def compare(
                 if "Azimuth angles" in S.dims:
                     az_dim = "Azimuth angles"
                     az_vals = S.coords["Azimuth angles"].values
-                    phi0_idx = np.argmin(np.abs(az_vals - phi0))
-                    phi180_idx = np.argmin(np.abs(az_vals - (180.0 - phi0)))
+                    phi0_idx = int(np.argmin(np.abs(az_vals - phi0)))
+                    phi180_idx = int(
+                        np.argmin(np.abs(az_vals - (180.0 - phi0)))
+                    )
 
-                    refp = sign[i] * Sref.isel(**{az_dim: phi180_idx}).values
-                    refm = sign[i] * Sref.isel(**{az_dim: phi0_idx}).values
+                    refp = sign[i] * _isel_values(Sref, az_dim, phi180_idx)
+                    refm = sign[i] * _isel_values(Sref, az_dim, phi0_idx)
                     sp = (
                         diffsign[i]
                         * sign[i]
-                        * S.isel(**{az_dim: phi0_idx}).values
+                        * _isel_values(S, az_dim, phi0_idx)
                     )
                     sm = (
                         symetry[i]
                         * diffsign[i]
                         * sign[i]
-                        * S.isel(**{az_dim: phi180_idx}).values
+                        * _isel_values(S, az_dim, phi180_idx)
                     )
 
                     if errb:
-                        dsp = E.isel(**{az_dim: phi0_idx}).values
-                        dsm = E.isel(**{az_dim: phi180_idx}).values
+                        if E is None:
+                            raise RuntimeError(
+                                "Error data must be initialized when errb "
+                                + "is True"
+                            )
+                        dsp = _isel_values(E, az_dim, phi0_idx)
+                        dsm = _isel_values(E, az_dim, phi180_idx)
                     else:
                         (dsp, dsm) = (0, 0)
                 else:
@@ -2027,6 +2089,11 @@ def compare(
                     sp = diffsign[i] * sign[i] * S.values.ravel()
                     sm = symetry[i] * diffsign[i] * sign[i] * S.values.ravel()
                     if errb:
+                        if E is None:
+                            raise RuntimeError(
+                                "Error data must be initialized when errb "
+                                + "is True"
+                            )
                         dsp = E.values.ravel()
                         dsm = E.values.ravel()
                     else:
@@ -2134,10 +2201,11 @@ def compare(
                     capsize=2,
                 )
                 if i == 0 and errref is not None:
-                    ax[2, 0].plot(th, errref / refp * 100, sym1 + "-.")
-                    ax[2, 0].plot(th, -errref / refp * 100, sym1 + "-.")
-                    ax[2, 0].plot(-th, errref / refm * 100, sym1 + "-.")
-                    ax[2, 0].plot(-th, -errref / refm * 100, sym1 + "-.")
+                    errref_arr = np.asarray(errref)
+                    ax[2, 0].plot(th, errref_arr / refp * 100, sym1 + "-.")
+                    ax[2, 0].plot(th, -errref_arr / refp * 100, sym1 + "-.")
+                    ax[2, 0].plot(-th, errref_arr / refm * 100, sym1 + "-.")
+                    ax[2, 0].plot(-th, -errref_arr / refm * 100, sym1 + "-.")
             else:
                 ax[2, i].errorbar(
                     th,
