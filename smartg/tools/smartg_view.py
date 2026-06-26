@@ -2291,7 +2291,8 @@ def _parse_subplot_position(
         return position
     else:
         raise ValueError(
-            f"position must be int, str, or 3-element tuple, got {type(position)}: {position}"
+            "position must be int, str, or 3-element tuple, "
+            + f"got {type(position)}: {position}"
         )
 
 
@@ -2307,7 +2308,7 @@ def plot_polar(
     fig: Figure | None = None,
     cmap: str | mcolors.Colormap | None = None,
     semi: bool = False,
-):
+) -> Figure:
     """
     Contour and optionally transect of 2D DataArray on a semi-polar
     plot.
@@ -2338,16 +2339,16 @@ def plot_polar(
     swap : bool or str, optional
         If True swap the order of the 2 axes. If 'auto', searches for
         'azi' in both dimension names
-    fig : matplotlib.figure.Figure, optional
+    fig : Figure, optional
         Destination figure. If None, create a new figure
-    cmap : matplotlib.cm.Colormap, optional
+    cmap : Colormap, optional
         Color map to use
     semi : bool, optional
         If True, use semi-polar (180 deg), otherwise polar (360 deg)
 
     Returns
     -------
-    fig : matplotlib.figure.Figure
+    fig : Figure
         The figure containing the plot
     """
 
@@ -2365,13 +2366,16 @@ def plot_polar(
     show_sub = index is not None
     if fig is None:
         if show_sub:
-            fig = figure(figsize=(4.5, 4.5))
+            fig = cast(Figure, figure(figsize=(4.5, 4.5)))
         else:
-            fig = figure(figsize=(4.5, 6))
+            fig = cast(Figure, figure(figsize=(4.5, 6)))
+
+    if fig is None:
+        raise RuntimeError("Failed to initialize figure in plot_polar.")
 
     # Get dimension names
     dim_names = list(da.dims)
-    dim0_name, dim1_name = dim_names[0], dim_names[1]
+    dim0_name, dim1_name = str(dim_names[0]), str(dim_names[1])
 
     # Determine if we need to swap axes
     if swap == "auto":
@@ -2398,14 +2402,16 @@ def plot_polar(
 
     # Determine min/max values
     if vmin is None:
-        vmin = np.nanmin(data)
+        vmin = float(np.nanmin(data))
     if vmax is None:
-        vmax = np.nanmax(data)
-    if vmin == vmax:
-        vmin -= 0.001
-        vmax += 0.001
-    if vmin > vmax:
-        vmin, vmax = vmax, vmin
+        vmax = float(np.nanmax(data))
+    vmin_val = float(vmin)
+    vmax_val = float(vmax)
+    if vmin_val == vmax_val:
+        vmin_val -= 0.001
+        vmax_val += 0.001
+    if vmin_val > vmax_val:
+        vmin_val, vmax_val = vmax_val, vmin_val
 
     # Semi-polar axis setup
     ax1_scaled = ax1
@@ -2508,6 +2514,7 @@ def plot_polar(
     ax_polar.patch.zorder = 0.9
 
     # Initialize cartesian axis for transect
+    ax_cart: Axes | None = None
     if show_sub:
         # Unpack sub if it's a tuple
         if isinstance(sub, tuple):
@@ -2518,16 +2525,21 @@ def plot_polar(
             ax_cart.set_xlim(-ax2_max, ax2_max)
         else:
             ax_cart.set_xlim(ax2_min, ax2_max)
-        ax_cart.set_ylim(vmin, vmax)
+        ax_cart.set_ylim(vmin_val, vmax_val)
         ax_cart.ticklabel_format(axis="y", style="sci", scilimits=(-2, 2))
         ax_cart.grid(True)
 
     # Setup colormap
+    cmap_obj: mcolors.Colormap
     if cmap is None:
-        cmap = cm.rainbow.copy()
-        cmap.set_under("black")
-        cmap.set_over("white")
-        cmap.set_bad("0.5")
+        cmap_obj = cm.get_cmap("rainbow").copy()
+    elif isinstance(cmap, str):
+        cmap_obj = cm.get_cmap(cmap).copy()
+    else:
+        cmap_obj = cmap
+    cmap_obj.set_under("black")
+    cmap_obj.set_over("white")
+    cmap_obj.set_bad("0.5")
 
     # Draw colormesh
     r, t = np.meshgrid(
@@ -2535,11 +2547,13 @@ def plot_polar(
     )
     masked_data = np.ma.masked_where(np.isnan(data) | np.isinf(data), data)
     im = aux_ax_polar.pcolormesh(
-        t, r, masked_data, cmap=cmap, vmin=vmin, vmax=vmax
+        t, r, masked_data, cmap=cmap_obj, vmin=vmin_val, vmax=vmax_val
     )
 
     # Draw transects if requested
     if show_sub:
+        if ax_cart is None:
+            raise RuntimeError("Failed to initialize transect axis.")
         # Ensure index is array-like
         if isinstance(index, (int, np.integer)):
             indexes = [index]
@@ -2577,7 +2591,7 @@ def plot_polar(
         ax=ax_polar,
         orientation="horizontal",
         extend="both",
-        ticks=np.linspace(vmin, vmax, 5),
+        ticks=np.linspace(vmin_val, vmax_val, 5),
         shrink=1.0,
         pad=0.15,
         fraction=0.06,
@@ -2592,8 +2606,8 @@ def plot_polar(
     cbar.ax.xaxis.set_major_formatter(formatter)
 
     # Add title
-    if "latex_name" not in da.attrs and da.name != "":
-        da.attrs["latex_name"] = mdesc(da.name)
+    if "latex_name" not in da.attrs and da.name is not None:
+        da.attrs["latex_name"] = mdesc(str(da.name))
     title = da.attrs["latex_name"]
 
     if title is not None:
