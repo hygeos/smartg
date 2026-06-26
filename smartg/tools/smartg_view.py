@@ -3046,8 +3046,10 @@ def cat_view(
     aldeg = float(m.attrs["ALDEG"])
 
     # Parameters needed in case kdis or reptran is used
+    norm: Any | None = None
+    norm_dl: Any | None = None
     if kdis_rep_bands is not None:
-        _, _, _, _, norm, norm_dl = kdis_rep_bands.get_weights(
+        _, _, _, _, norm, norm_dl = cast(Any, kdis_rep_bands).get_weights(
             output_type="DataArray"
         )
 
@@ -3057,6 +3059,7 @@ def cat_view(
     # Fill needed parameters considering the case with and without
     # the wl
     # dimension
+    nph_int: float | None = None
     if is_wave_axis:
         nph = m["norm_npho"].values
         nph_int = float(m.attrs["NPHOTONS"])
@@ -3137,8 +3140,16 @@ def cat_view(
         cst *= float(m.attrs["n_cte"])
 
     # Normalized intensity
+    mf_n_int: xr.DataArray | None = None
+    mf_2_n_int: xr.DataArray | None = None
+    mf_2_n: xr.DataArray | None = None
+    abs_err_da_n_int: xr.DataArray | None = None
     if is_wave_axis:
         if kdis_rep_bands is not None:
+            if norm is None or norm_dl is None:
+                raise RuntimeError(
+                    "kdis/reptran normalization weights are required."
+                )
             # Group wavelengths by band structure and sum within
             # each band
             mf_n = (
@@ -3152,6 +3163,9 @@ def cat_view(
                 .sum(dim="wavelength")
             )
             mf_2_n_int /= norm
+
+            if mf_n_int is None:
+                raise RuntimeError("mf_n_int must be initialized.")
 
             # Convert to DataArray with proper coordinates
             mf_n_int = xr.DataArray(
@@ -3223,21 +3237,29 @@ def cat_view(
                 .groupby("wavelength")
                 .sum(dim="wavelength")
             )
+            if norm_dl is None:
+                raise RuntimeError(
+                    "kdis/reptran differential normalization is required."
+                )
             abs_err_da_n /= norm_dl
         else:
             abs_err_da_n = abs_err_da.values[:, :] * cst * mtoa * ld
+
+        abs_err_values: np.ndarray[Any, Any]
+        abs_err_wavelength: Any
+        if isinstance(abs_err_da_n, xr.DataArray):
+            abs_err_values = np.asarray(abs_err_da_n.values)
+            abs_err_wavelength = abs_err_da_n.wavelength
+        else:
+            abs_err_values = np.asarray(abs_err_da_n)
+            abs_err_wavelength = m.wavelength
+
         abs_err_da_n = xr.DataArray(
-            abs_err_da_n
-            if isinstance(abs_err_da_n, np.ndarray)
-            else abs_err_da_n.values,
+            abs_err_values,
             dims=["Categories", "wavelength"],
             coords={
                 "Categories": np.arange(9, dtype=np.float64),
-                "wavelength": (
-                    abs_err_da_n.wavelength
-                    if hasattr(abs_err_da_n, "wavelength")
-                    else m.wavelength
-                ),
+                "wavelength": abs_err_wavelength,
             },
         )
 
@@ -3245,12 +3267,20 @@ def cat_view(
         sum_2_z_int = np.zeros(9, dtype="float64")
         sum_z_2_int = np.zeros(9, dtype="float64")
 
+        if nph_int is None:
+            raise RuntimeError("nph_int must be defined for wave-axis mode.")
         n_bis_int = nph_int / (nph_int - 1)
 
         if kdis_rep_bands is not None:
+            if mf_n_int is None or mf_2_n_int is None:
+                raise RuntimeError(
+                    "Integrated band arrays must be initialized."
+                )
             mf_int = np.sum(mf_n_int.values[:, :], axis=1)
             mf_2_int = np.sum(mf_2_n_int.values[:, :], axis=1)
         else:
+            if mf_2_n is None:
+                raise RuntimeError("mf_2_n must be initialized.")
             mf_int = np.sum(mf_n.values[:, :], axis=1)
             mf_2_int = np.sum(mf_2_n.values[:, :], axis=1)
 
@@ -3306,7 +3336,9 @@ def cat_view(
     output["AbsoluteErr"] = abs_err_da_n
     output["RelativeErr"] = rel_err_da_n
 
-    if kdis_rep_bands is not None:
+    if kdis_rep_bands is not None and is_wave_axis:
+        if mf_n_int is None or abs_err_da_n_int is None:
+            raise RuntimeError("Integrated outputs are not initialized.")
         output[output_unit + "_int"] = mf_n_int
         mf_n_tot = xr.DataArray(
             np.sum(mf_n_int.values[:, :], axis=1),
@@ -3335,10 +3367,16 @@ def cat_view(
         mat = np.zeros((9, 4), dtype="float64")
         if is_wave_axis:
             if kdis_rep_bands is not None:
+                if mf_n_int is None or abs_err_da_n_int is None:
+                    raise RuntimeError(
+                        "Integrated outputs are not initialized."
+                    )
                 mat[:, 0] = np.sum(mf_n_int.values[:, :], axis=1)
             else:
                 mat[:, 0] = np.sum(mf_n.values[:, :], axis=1)
             mat[:, 1] = m["cat_PhNb"].values
+            if abs_err_da_n_int is None:
+                raise RuntimeError("Absolute integrated errors are missing.")
             mat[:, 2] = abs_err_da_n_int.values
             mat[:, 3] = (mat[:, 2] / mat[:, 0]) * 100
         else:
@@ -3446,12 +3484,14 @@ def nopt_view(
     nbis = nph / (nph - 1)
 
     if mtoa is None:
-        powc_h = ds["powc_H"].values
+        powc_h_values = np.asarray(ds["powc_H"].values)
+        powc_h = float(powc_h_values.reshape(-1)[0])
     else:
         powc_h = 0.0
         for i in range(0, len(mtoa)):
             powc_h += ds["powc_H"].values[i] * mtoa[i]
         powc_h /= np.sum(mtoa)
+        powc_h = float(powc_h)
 
     k = float(ds.attrs["n_cte"]) / powc_h
 
@@ -3473,7 +3513,7 @@ def nopt_view(
     print(" Optical Efficiencies")
     print("**********************************************")
 
-    if back == False:  # Forward mode ->
+    if not back:  # Forward mode ->
         # Sum of weights
         # w0=wI, w1=wrhoM, w2=wrhoP, w3=wBM, w4=wBP, w5=wSM, w6=wSP
         # w7=wREC
@@ -3588,9 +3628,9 @@ def nopt_view(
     else:  # Backward mode ->
         # Sum of weights
         # w0=wI, w1=wrhoM, w2=wREC
-        w0 = ds["wLoss"].values[0]
-        w1 = ds["wLoss"].values[1]
-        w2 = ds["cat_w"].values[2]
+        w0 = float(ds["wLoss"].values[0])
+        w1 = float(ds["wLoss"].values[1])
+        w2 = float(ds["cat_w"].values[2])
         # Sum of (weights²)
         w0_2 = ds["wLoss2"].values[0]
         w1_2 = ds["wLoss2"].values[1]
@@ -3605,8 +3645,10 @@ def nopt_view(
             dw.append(dw_temp)
         nopt = gc.clamp(k * w2, 0, 1)
         ncos = float(ds.attrs["n_cos"])
-        nref = gc.clamp(1 - (w1 / w0), 0, 1)
-        nsbsa = gc.clamp((k * w2) / (ncos * nref), 0, 1)
+        nref_raw = 1.0 - (w1 / w0)
+        nref_safe = max(0.0, min(1.0, nref_raw))
+        nref = gc.clamp(nref_raw, 0, 1)
+        nsbsa = gc.clamp((k * w2) / (ncos * nref_safe), 0, 1)
 
         d_nopt = abs(k) * dw[2]
         d_ncos = 0.0
