@@ -36,7 +36,7 @@ from matplotlib.ticker import ScalarFormatter
 import matplotlib.pyplot as plt
 from typing import Any, Literal, Sequence, cast
 import geoclide as gc
-from luts.luts import Idx, Idx_base, MLUT
+from luts.luts import Idx_base, MLUT
 from smartg.atmosphere import diff1
 from smartg.water import diff2
 
@@ -266,11 +266,15 @@ def smartg_view(
     # Handle deprecated subdict parameter
     if subdict is not None and interp_dict is not None:
         raise ValueError(
-            "Cannot specify both 'subdict' and 'interp_dict'. Use 'interp_dict' instead."
+            "Cannot specify both 'subdict' and 'interp_dict'. "
+            + "Use 'interp_dict' instead."
         )
 
     if subdict is not None:
-        warn_message = "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
+        warn_message = (
+            "\nThe 'subdict' parameter is deprecated. "
+            + "Use 'interp_dict' instead."
+        )
         warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         # Convert Idx_base objects to values before converting
         # to interp_dict
@@ -289,30 +293,34 @@ def smartg_view(
         stk_v = _interp_and_squeeze_scalar_dims(stk_v, interp_dict)
 
     # Linearly polarized reflectance
-    IPL = np.sqrt(stk_u * stk_u + stk_q * stk_q)
+    IPL = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
 
     # Polarized reflectance
-    IP = np.sqrt(stk_u * stk_u + stk_q * stk_q + stk_v * stk_v)
+    IP = cast(
+        xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q + stk_v * stk_v)
+    )
 
     # Degree of Linear Polarization (%)
-    DoLP = 100 * IPL / stk_i
+    DoLP = cast(xr.DataArray, 100 * IPL / stk_i)
 
     # Angle of Linear Polarization (deg)
-    AoLP = np.arctan(stk_q / stk_u) * 90 / np.pi
+    # AoLP = np.arctan(stk_q / stk_u) * 90 / np.pi
 
     # Degree of Circular Polarization (%)
-    DoCP = 100 * np.abs(stk_v) / stk_i
+    DoCP = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
 
     # Degree of Polarization (%)
-    DoP = 100 * IP / stk_i
+    DoP = cast(xr.DataArray, 100 * IP / stk_i)
 
     if not full:
         if QU:
             if fig is None:
                 fig = figure(figsize=(9, 14))
             if logI:
-                lI = np.log10(stk_i)
-                lI.attrs["latex_name"] = mdesc(stk_i.name or "I", logI=True)
+                lI = cast(xr.DataArray, np.log10(stk_i))
+                lI.attrs["latex_name"] = mdesc(
+                    str(stk_i.name or "I"), logI=True
+                )
                 plot_polar(
                     lI.assign_coords(lI.coords),
                     index=ind,
@@ -388,8 +396,10 @@ def smartg_view(
             if fig is None:
                 fig = figure(figsize=(9, 6))
             if logI:
-                lI = np.log10(stk_i)
-                lI.attrs["latex_name"] = mdesc(stk_i.name or "I", logI=True)
+                lI = cast(xr.DataArray, np.log10(stk_i))
+                lI.attrs["latex_name"] = mdesc(
+                    str(stk_i.name or "I"), logI=True
+                )
                 plot_polar(
                     lI.assign_coords(lI.coords),
                     index=ind,
@@ -438,8 +448,8 @@ def smartg_view(
                 )
     else:
         # full plots
-        lI = np.log10(stk_i)
-        lI.attrs["latex_name"] = mdesc(stk_i.name or "I", logI=True)
+        lI = cast(xr.DataArray, np.log10(stk_i))
+        lI.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
         DoLP.attrs["latex_name"] = r"$DoLP$"
         DoCP.attrs["latex_name"] = r"$DoCP$"
         DoP.attrs["latex_name"] = r"$DoP$"
@@ -564,9 +574,15 @@ def transect_view(
         Prefix for field variable names. Default is empty string.
     ind : int or list of int, optional
         Azimuthal plane indices to display. Default is [0].
-    fig : matplotlib.figure.Figure, optional
-        Existing figure to plot on. If None, creates a new figure.
-        Default is None.
+    fig : Figure or tuple of Figure, optional
+        Existing figure container used for plotting, depending on
+        `full`:
+
+        - If `full` is False: pass a single Figure.
+        - If `full` is True: pass a tuple `(fig1, fig2)`.
+
+        If None, new figure(s) are created automatically. Default is
+        None.
     color : str, optional
         Color for the transect line. Default is 'k' (black).
     subdict : dict, optional
@@ -628,10 +644,10 @@ def transect_view(
         )
         ind = np.atleast_1d(np.round(index_values).astype(np.int32))
 
-    I = ds_sg[prefix + "I_" + field]
-    Q = ds_sg[prefix + "Q_" + field]
-    U = ds_sg[prefix + "U_" + field]
-    V = ds_sg[prefix + "V_" + field]
+    stk_i = ds_sg[prefix + "I_" + field]
+    stk_u = ds_sg[prefix + "Q_" + field]
+    stk_q = ds_sg[prefix + "U_" + field]
+    stk_v = ds_sg[prefix + "V_" + field]
 
     # Handle deprecated subdict parameter
     if subdict is not None and interp_dict is not None:
@@ -641,7 +657,7 @@ def transect_view(
 
     if subdict is not None:
         warn_message = "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         # Convert Idx_base objects to values before converting
         # to interp_dict
         for dic_name in list(subdict.keys()):
@@ -653,31 +669,34 @@ def transect_view(
 
     if interp_dict is not None:
         # Identify dimensions to drop (those with scalar values)
-        I = _interp_and_squeeze_scalar_dims(I, interp_dict)
-        Q = _interp_and_squeeze_scalar_dims(Q, interp_dict)
-        U = _interp_and_squeeze_scalar_dims(U, interp_dict)
-        V = _interp_and_squeeze_scalar_dims(V, interp_dict)
+        stk_i = _interp_and_squeeze_scalar_dims(stk_i, interp_dict)
+        stk_u = _interp_and_squeeze_scalar_dims(stk_u, interp_dict)
+        stk_q = _interp_and_squeeze_scalar_dims(stk_q, interp_dict)
+        stk_v = _interp_and_squeeze_scalar_dims(stk_v, interp_dict)
 
     # Linearly polarized reflectance
-    IPL = np.sqrt(Q * Q + U * U)
+    IPL = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
 
     # Polarized reflectance
-    IP = np.sqrt(Q * Q + U * U + V * V)
+    IP = cast(
+        xr.DataArray,
+        np.sqrt(stk_u * stk_u + stk_q * stk_q + stk_v * stk_v),
+    )
 
     # Degree of Linear Polarization (%)
-    DoLP = 100 * IPL / I
+    DoLP = cast(xr.DataArray, 100 * IPL / stk_i)
     DoLP.attrs["latex_name"] = prefix + r"$DoLP$"
 
     # Angle of Linear Polarization (deg)
-    AoLP = np.arctan(U / Q) * 90 / np.pi
+    AoLP = cast(xr.DataArray, np.arctan(stk_q / stk_u) * 90 / np.pi)
     AoLP.attrs["latex_name"] = prefix + r"$AoLP$"
 
     # Degree of Circular Polarization (%)
-    DoCP = 100 * np.abs(V) / I
+    DoCP = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
     DoCP.attrs["latex_name"] = prefix + r"$DoCP$"
 
     # Degree of Polarization (%)
-    DoP = 100 * IP / I
+    DoP = cast(xr.DataArray, 100 * IP / stk_i)
     DoP.attrs["latex_name"] = prefix + r"$DoP$"
 
     if not full:
@@ -685,8 +704,8 @@ def transect_view(
             if fig is None:
                 fig = figure(figsize=(8, 8))
             if logI:
-                lI = np.log10(I)
-                lI.attrs["latex_name"] = "log$_{10}$ " + I.attrs.get(
+                lI = cast(xr.DataArray, np.log10(stk_i))
+                lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
                     "latex_name", "I"
                 )
                 transect2D(
@@ -694,13 +713,27 @@ def transect_view(
                 )
             else:
                 transect2D(
-                    I, index=ind, sub=221, fig=fig, color=color, **kwargs
+                    stk_i,
+                    index=ind,
+                    sub=221,
+                    fig=fig,
+                    color=color,
+                    **kwargs,
                 )
-            transect2D(Q, index=ind, sub=222, fig=fig, color=color, **kwargs)
-            transect2D(U, index=ind, sub=223, fig=fig, color=color, **kwargs)
+            transect2D(
+                stk_u, index=ind, sub=222, fig=fig, color=color, **kwargs
+            )
+            transect2D(
+                stk_q, index=ind, sub=223, fig=fig, color=color, **kwargs
+            )
             if Circ:
                 transect2D(
-                    V, index=ind, sub=224, fig=fig, color=color, **kwargs
+                    stk_v,
+                    index=ind,
+                    sub=224,
+                    fig=fig,
+                    color=color,
+                    **kwargs,
                 )
             else:
                 transect2D(
@@ -717,8 +750,8 @@ def transect_view(
             if fig is None:
                 fig = figure(figsize=(8, 4))
             if logI:
-                lI = np.log10(I)
-                lI.attrs["latex_name"] = "log$_{10}$ " + I.attrs.get(
+                lI = cast(xr.DataArray, np.log10(stk_i))
+                lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
                     "latex_name", "I"
                 )
                 transect2D(
@@ -726,7 +759,12 @@ def transect_view(
                 )
             else:
                 transect2D(
-                    I, index=ind, sub=121, fig=fig, color=color, **kwargs
+                    stk_i,
+                    index=ind,
+                    sub=121,
+                    fig=fig,
+                    color=color,
+                    **kwargs,
                 )
 
             if Circ:
@@ -757,16 +795,35 @@ def transect_view(
         if fig is None:
             fig1 = figure(figsize=(16, 4))
             fig2 = figure(figsize=(16, 4))
-        else:
+        elif (
+            (isinstance(fig, tuple) and len(fig) == 2)
+            and isinstance(fig[0], Figure)
+            and isinstance(fig[1], Figure)
+        ):
             fig1, fig2 = fig
+        else:
+            raise ValueError(
+                "If 'full' is True, 'fig' must be None or a tuple of "
+                "two Figure objects."
+            )
 
-        lI = np.log10(I)
-        lI.attrs["latex_name"] = "log$_{10}$ " + I.attrs.get("latex_name", "I")
+        lI = cast(xr.DataArray, np.log10(stk_i))
+        lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
+            "latex_name", "I"
+        )
 
-        transect2D(I, index=ind, sub=141, fig=fig1, color=color, **kwargs)
-        transect2D(Q, index=ind, sub=142, fig=fig1, color=color, **kwargs)
-        transect2D(U, index=ind, sub=143, fig=fig1, color=color, **kwargs)
-        transect2D(V, index=ind, sub=144, fig=fig1, color=color, **kwargs)
+        transect2D(
+            stk_i, index=ind, sub=141, fig=fig1, color=color, **kwargs
+        )
+        transect2D(
+            stk_u, index=ind, sub=142, fig=fig1, color=color, **kwargs
+        )
+        transect2D(
+            stk_q, index=ind, sub=143, fig=fig1, color=color, **kwargs
+        )
+        transect2D(
+            stk_v, index=ind, sub=144, fig=fig1, color=color, **kwargs
+        )
 
         transect2D(lI, index=ind, sub=141, fig=fig2, color=color, **kwargs)
         transect2D(
@@ -989,41 +1046,44 @@ def spectrum_view(
                 subdict[dic_name] = ds_sg[dic_name][subdict[dic_name]]
         interp_dict = subdict
 
-    I = ds_sg[prefix + "I_" + field]
-    Q = ds_sg[prefix + "Q_" + field]
-    U = ds_sg[prefix + "U_" + field]
-    V = ds_sg[prefix + "V_" + field]
+    stk_i = ds_sg[prefix + "I_" + field]
+    stk_u = ds_sg[prefix + "Q_" + field]
+    stk_q = ds_sg[prefix + "U_" + field]
+    stk_v = ds_sg[prefix + "V_" + field]
 
     # Handle interpolation for multi-dimensional data
     if interp_dict is not None:
         # Identify dimensions to drop (those with scalar values)
-        I = _interp_and_squeeze_scalar_dims(I, interp_dict)
-        Q = _interp_and_squeeze_scalar_dims(Q, interp_dict)
-        U = _interp_and_squeeze_scalar_dims(U, interp_dict)
-        V = _interp_and_squeeze_scalar_dims(V, interp_dict)
+        stk_i = _interp_and_squeeze_scalar_dims(stk_i, interp_dict)
+        stk_u = _interp_and_squeeze_scalar_dims(stk_u, interp_dict)
+        stk_q = _interp_and_squeeze_scalar_dims(stk_q, interp_dict)
+        stk_v = _interp_and_squeeze_scalar_dims(stk_v, interp_dict)
 
     # Linearly polarized reflectance
-    IPL = np.sqrt(Q * Q + U * U)
+    IPL = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
     IPL.attrs["latex_name"] = prefix + r"$Lin. Pol. ref.$"
 
     # Polarized reflectance
-    IP = np.sqrt(Q * Q + U * U + V * V)
+    IP = cast(
+        xr.DataArray,
+        np.sqrt(stk_u * stk_u + stk_q * stk_q + stk_v * stk_v),
+    )
     IP.attrs["latex_name"] = prefix + r"$Pol. ref.$"
 
     # Degree of Linear Polarization (%)
-    DoLP = 100 * IPL / I
+    DoLP = cast(xr.DataArray, 100 * IPL / stk_i)
     DoLP.attrs["latex_name"] = prefix + r"$DoLP$"
 
     # Angle of Linear Polarization (deg)
-    AoLP = np.arctan(U / Q) * 90 / np.pi
+    AoLP = cast(xr.DataArray, np.arctan(stk_q / stk_u) * 90 / np.pi)
     AoLP.attrs["latex_name"] = prefix + r"$AoLP$"
 
     # Degree of Circular Polarization (%)
-    DoCP = 100 * np.abs(V) / I
+    DoCP = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
     DoCP.attrs["latex_name"] = prefix + r"$DoCP$"
 
     # Degree of Polarization (%)
-    DoP = 100 * IP / I
+    DoP = cast(xr.DataArray, 100 * IP / stk_i)
     DoP.attrs["latex_name"] = prefix + r"$DoP$"
 
     if not full:
@@ -1031,19 +1091,21 @@ def spectrum_view(
             if fig is None:
                 fig = figure(figsize=(8, 8))
             if logI:
-                lI = np.log10(I)
-                lI.attrs["latex_name"] = mdesc(I.name or "I", logI=True)
+                lI = cast(xr.DataArray, np.log10(stk_i))
+                lI.attrs["latex_name"] = mdesc(
+                    str(stk_i.name or "I"), logI=True
+                )
                 spectrum(lI, sub=221, fig=fig, color=color, **kwargs)
             else:
-                I.attrs["latex_name"] = mdesc(I.name or "I")
-                spectrum(I, sub=221, fig=fig, color=color, **kwargs)
-            Q.attrs["latex_name"] = mdesc(Q.name or "Q")
-            U.attrs["latex_name"] = mdesc(U.name or "U")
-            spectrum(Q, sub=222, fig=fig, color=color, **kwargs)
-            spectrum(U, sub=223, fig=fig, color=color, **kwargs)
+                stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
+                spectrum(stk_i, sub=221, fig=fig, color=color, **kwargs)
+            stk_u.attrs["latex_name"] = mdesc(str(stk_u.name or "Q"))
+            stk_q.attrs["latex_name"] = mdesc(str(stk_q.name or "U"))
+            spectrum(stk_u, sub=222, fig=fig, color=color, **kwargs)
+            spectrum(stk_q, sub=223, fig=fig, color=color, **kwargs)
             if Circ:
-                V.attrs["latex_name"] = mdesc(V.name or "V")
-                spectrum(V, sub=224, fig=fig, color=color, **kwargs)
+                stk_v.attrs["latex_name"] = mdesc(str(stk_v.name or "V"))
+                spectrum(stk_v, sub=224, fig=fig, color=color, **kwargs)
             else:
                 spectrum(
                     DoP, sub=224, fig=fig, color=color, percent=True, **kwargs
@@ -1053,12 +1115,14 @@ def spectrum_view(
             if fig is None:
                 fig = figure(figsize=(8, 4))
             if logI:
-                lI = np.log10(I)
-                lI.attrs["latex_name"] = mdesc(I.name or "I", logI=True)
+                lI = cast(xr.DataArray, np.log10(stk_i))
+                lI.attrs["latex_name"] = mdesc(
+                    str(stk_i.name or "I"), logI=True
+                )
                 spectrum(lI, sub=121, fig=fig, color=color, **kwargs)
             else:
-                I.attrs["latex_name"] = mdesc(I.name or "I")
-                spectrum(I, sub=121, fig=fig, color=color, **kwargs)
+                stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
+                spectrum(stk_i, sub=121, fig=fig, color=color, **kwargs)
 
             if Circ:
                 spectrum(
@@ -1079,17 +1143,17 @@ def spectrum_view(
         else:
             fig1, fig2 = fig
 
-        lI = np.log10(I)
-        lI.attrs["latex_name"] = mdesc(I.name or "I", logI=True)
-        I.attrs["latex_name"] = mdesc(I.name or "I")
-        Q.attrs["latex_name"] = mdesc(Q.name or "Q")
-        U.attrs["latex_name"] = mdesc(U.name or "U")
-        V.attrs["latex_name"] = mdesc(V.name or "V")
+        lI = cast(xr.DataArray, np.log10(stk_i))
+        lI.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
+        stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
+        stk_u.attrs["latex_name"] = mdesc(str(stk_u.name or "Q"))
+        stk_q.attrs["latex_name"] = mdesc(str(stk_q.name or "U"))
+        stk_v.attrs["latex_name"] = mdesc(str(stk_v.name or "V"))
 
-        spectrum(I, sub=141, fig=fig1, color=color, **kwargs)
-        spectrum(Q, sub=142, fig=fig1, color=color, **kwargs)
-        spectrum(U, sub=143, fig=fig1, color=color, **kwargs)
-        spectrum(V, sub=144, fig=fig1, color=color, **kwargs)
+        spectrum(stk_i, sub=141, fig=fig1, color=color, **kwargs)
+        spectrum(stk_u, sub=142, fig=fig1, color=color, **kwargs)
+        spectrum(stk_q, sub=143, fig=fig1, color=color, **kwargs)
+        spectrum(stk_v, sub=144, fig=fig1, color=color, **kwargs)
 
         spectrum(lI, sub=141, fig=fig2, color=color, **kwargs)
         spectrum(DoLP, sub=142, fig=fig2, color=color, percent=True, **kwargs)
@@ -1764,12 +1828,12 @@ def compare(
                 Sref = np.log10(Sref)
                 desc = r"$log_{10}$ " + desc
         else:
-            I = ds_sg["I" + "_" + field]
-            Q = ds_sg["Q" + "_" + field]
-            U = ds_sg["U" + "_" + field]
+            stk_i = ds_sg["I" + "_" + field]
+            stk_u = ds_sg["Q" + "_" + field]
+            stk_q = ds_sg["U" + "_" + field]
 
-            Ip = np.sqrt(Q * Q + U * U)
-            S = (Ip / I) * 100
+            Ip = np.sqrt(stk_u * stk_u + stk_q * stk_q)
+            S = (Ip / stk_i) * 100
 
             Iref = ds_ref["I" + "_" + field]
             Qref = ds_ref["Q" + "_" + field]
@@ -1777,7 +1841,7 @@ def compare(
             Sref = (np.sqrt(Qref * Qref + Uref * Uref) / Iref) * 100
 
             # Get description
-            I_desc = I.attrs.get("latex_name", "I")
+            I_desc = stk_i.attrs.get("latex_name", "I")
             desc = "DoLP" + I_desc[1:]
             desc = mdesc(desc)
 
@@ -1796,7 +1860,7 @@ def compare(
                 dQ = ds_sg["Q" + "_" + "stdev" + "_" + field]
                 dU = ds_sg["U" + "_" + "stdev" + "_" + field]
                 dIp = np.sqrt(dQ * dQ + dU * dU)
-                E = (dI / I + dIp / Ip) * S
+                E = (dI / stk_i + dIp / Ip) * S
 
         vmi = vmin[i]
         vma = vmax[i]
@@ -2081,17 +2145,17 @@ def _parse_subplot_position(position):
 
 
 def plot_polar(
-    da,
-    index=None,
-    vmin=None,
-    vmax=None,
-    rect=211,
-    sub=212,
-    sym=True,
-    swap="auto",
-    fig=None,
-    cmap=None,
-    semi=False,
+    da: xr.DataArray,
+    index: int | np.ndarray | list[int] | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    rect: int | str | tuple[int, int, int] = 211,
+    sub: int | str | tuple[int, int, int] = 212,
+    sym: bool = True,
+    swap: bool | Literal["auto"] = "auto",
+    fig: Figure | None = None,
+    cmap: str | mcolors.Colormap | None = None,
+    semi: bool = False,
 ):
     """
     Contour and optionally transect of 2D DataArray on a semi-polar
@@ -2102,32 +2166,32 @@ def plot_polar(
 
     Parameters
     ----------
-    da : xr.DataArray
+    da : DataArray
         2D data array with dimensions (angle, radius) or similar Angle
         is assumed to be in degrees and is not scaled
-    index : int, array, or list, optional
+    index : int or ndarray or list, optional
         Index/indices of the item to transect in the first dimension If
         None (default), no transect
     vmin, vmax : float, optional
         Range of values. If None, determined from data
-    rect : int, str, or tuple
+    rect : int or str or tuple, optional
         Subplot position of the main plot
         - int: 3-digit integer (e.g., 211)
         - str: string converted to int (e.g., '211')
                 - tuple: (rows, cols, position) for positions >= 10
                     (e.g., (4, 4, 13))
-    sub : int, str, or tuple
+    sub : int or str or tuple, optional
         Subplot position of the transect (same format options as rect)
-    sym : bool
+    sym : bool, optional
         If True, the transect uses symmetrical axis
-    swap : bool or 'auto'
-        If True or 'auto', swap the order of the 2 axes If 'auto',
-        searches for 'azi' in both dimension names
+    swap : bool or str, optional
+        If True swap the order of the 2 axes. If 'auto', searches for
+        'azi' in both dimension names
     fig : matplotlib.figure.Figure, optional
         Destination figure. If None, create a new figure
     cmap : matplotlib.cm.Colormap, optional
         Color map to use
-    semi : bool
+    semi : bool, optional
         If True, use semi-polar (180 deg), otherwise polar (360 deg)
 
     Returns
