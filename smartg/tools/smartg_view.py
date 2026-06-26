@@ -2247,7 +2247,11 @@ def compare(
     return fig
 
 
-def bin_edges(x, min=None, max=None):
+def bin_edges(
+    x: np.ndarray[Any, Any],
+    min: float | None = None,
+    max: float | None = None,
+) -> np.ndarray[Any, Any]:
     """Helper function to compute bin edges from bin centers"""
     edges = np.zeros(len(x) + 1)
     edges[1:-1] = (x[1:] + x[:-1]) / 2.0
@@ -2260,7 +2264,9 @@ def bin_edges(x, min=None, max=None):
     return edges
 
 
-def _parse_subplot_position(position):
+def _parse_subplot_position(
+    position: int | str | tuple[int, int, int],
+) -> int | tuple[int, int, int]:
     """
     Convert subplot position to format for add_subplot.
 
