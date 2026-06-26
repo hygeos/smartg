@@ -29,6 +29,7 @@ from matplotlib.transforms import Affine2D
 from mpl_toolkits.axisartist import floating_axes
 from matplotlib.projections import PolarAxes
 from matplotlib import cm, colors as mcolors
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import ScalarFormatter
 import matplotlib.pyplot as plt
@@ -1493,13 +1494,20 @@ def phase_view(
     return fig, axarr
 
 
-def profile_view(ds_sg, fig=None, ax=None, iw=0, kind="atm", zmax=None):
+def profile_view(
+    ds_sg: xr.Dataset | MLUT,
+    fig: Figure | None = None,
+    ax: Axes | None = None,
+    iw: int = 0,
+    kind: str = "atm",
+    zmax: float | None = None,
+) -> tuple[Figure, Axes]:
     """
     Visualization of SMART-G vertical profile.
 
     Parameters
     ----------
-    ds_sg : xr.Dataset
+    ds_sg : Dataset
         An xarray Dataset from SMART-G, can be from simulation results
         or smartg input profile, containing optical depth and other
         profile data with variables 'OD_atm' or 'OD_oc', and related
@@ -1526,13 +1534,19 @@ def profile_view(ds_sg, fig=None, ax=None, iw=0, kind="atm", zmax=None):
     """
 
     if isinstance(ds_sg, MLUT):
-        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
-        warnings.warn(warn_message, DeprecationWarning)
+        warn_message = (
+            "\nUsing an MLUT for ds_sg is deprecated, use an "
+            + "xarray.Dataset instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
     if ax is None:
         fig, ax = subplots(1, 1)
         fig.set_size_inches(5, 5)
+
+    if fig is None:
+        fig = cast(Figure, ax.figure)
 
     od_key = "OD_" + kind
     z_key = "z_" + kind
@@ -1666,7 +1680,7 @@ def profile_view(ds_sg, fig=None, ax=None, iw=0, kind="atm", zmax=None):
         ax2.xaxis.set_major_formatter(FormatStrFormatter("%i"))
         return fig, ax
 
-    except:
+    except Exception:
         return fig, ax
 
 
