@@ -2897,9 +2897,11 @@ def receiver_view(
     """
 
     if np.isscalar(cat):
-        m = ds_sg_out["C_Receiver"].isel(Categories=cat).values
+        cat_index = int(cast(Any, cat))
+        m = ds_sg_out["C_Receiver"].isel(Categories=cat_index).values
     else:
-        cat_list = list(cat)
+        cat_seq = cast(Sequence[int], cat)
+        cat_list = [int(c) for c in cat_seq]
         if 0 in cat_list:
             raise ValueError(
                 "Category index 0 (sum of all) is not allowed when specifying "
@@ -2918,6 +2920,12 @@ def receiver_view(
     half_x = (ds_sg_out.dims["X_Cell_Index"] * cell_size) / 2.0
     half_y = (ds_sg_out.dims["Y_Cell_Index"] * cell_size) / 2.0
     cell_area = cell_size * cell_size
+    extent: tuple[float, float, float, float] = (
+        half_y,
+        -half_y,
+        -half_x,
+        half_x,
+    )
 
     if flux_unit == "W":
         unit_scale = 1.0
@@ -2940,7 +2948,7 @@ def receiver_view(
             interpolation=interpolation,
             vmin=vmin,
             vmax=vmax,
-            extent=[half_y, -half_y, -half_x, half_x],
+            extent=extent,
         )
     else:
         log_vmin = 0.00001 if np.amin(m) < 0.00001 else np.amin(m)
@@ -2949,7 +2957,7 @@ def receiver_view(
             cmap=plt.get_cmap("jet"),
             norm=mcolors.LogNorm(vmin=log_vmin * mtoa, vmax=np.amax(m * mtoa)),
             interpolation=interpolation,
-            extent=[half_y, -half_y, -half_x, half_x],
+            extent=extent,
         )
 
     cbar = plt.colorbar()
