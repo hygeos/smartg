@@ -595,7 +595,7 @@ def transect_view(
         to. Uses xarray's `interp()` method. Mutually exclusive with
         `subdict`. Default is None.
     **kwargs
-        Additional keyword arguments passed to transect2D, including:
+        Additional keyword arguments passed to transect_2d, including:
         - vmin, vmax : float, optional.
             Minimum and maximum values for data range display. If None,
             determined from data.
@@ -715,7 +715,7 @@ def transect_view(
                 lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
                     "latex_name", "I"
                 )
-                transect2D(
+                transect_2d(
                     lI,
                     index=ind,
                     sub=221,
@@ -724,7 +724,7 @@ def transect_view(
                     **kwargs,
                 )
             else:
-                transect2D(
+                transect_2d(
                     stk_i,
                     index=ind,
                     sub=221,
@@ -732,7 +732,7 @@ def transect_view(
                     color=color,
                     **kwargs,
                 )
-            transect2D(
+            transect_2d(
                 stk_u,
                 index=ind,
                 sub=222,
@@ -740,7 +740,7 @@ def transect_view(
                 color=color,
                 **kwargs,
             )
-            transect2D(
+            transect_2d(
                 stk_q,
                 index=ind,
                 sub=223,
@@ -749,7 +749,7 @@ def transect_view(
                 **kwargs,
             )
             if Circ:
-                transect2D(
+                transect_2d(
                     stk_v,
                     index=ind,
                     sub=224,
@@ -758,7 +758,7 @@ def transect_view(
                     **kwargs,
                 )
             else:
-                transect2D(
+                transect_2d(
                     DoP,
                     index=ind,
                     sub=224,
@@ -776,7 +776,7 @@ def transect_view(
                 lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
                     "latex_name", "I"
                 )
-                transect2D(
+                transect_2d(
                     lI,
                     index=ind,
                     sub=121,
@@ -785,7 +785,7 @@ def transect_view(
                     **kwargs,
                 )
             else:
-                transect2D(
+                transect_2d(
                     stk_i,
                     index=ind,
                     sub=121,
@@ -795,7 +795,7 @@ def transect_view(
                 )
 
             if Circ:
-                transect2D(
+                transect_2d(
                     DoCP,
                     index=ind,
                     sub=122,
@@ -805,7 +805,7 @@ def transect_view(
                     **kwargs,
                 )
             else:
-                transect2D(
+                transect_2d(
                     DoP,
                     index=ind,
                     sub=122,
@@ -841,13 +841,13 @@ def transect_view(
             "latex_name", "I"
         )
 
-        transect2D(stk_i, index=ind, sub=141, fig=fig1, color=color, **kwargs)
-        transect2D(stk_u, index=ind, sub=142, fig=fig1, color=color, **kwargs)
-        transect2D(stk_q, index=ind, sub=143, fig=fig1, color=color, **kwargs)
-        transect2D(stk_v, index=ind, sub=144, fig=fig1, color=color, **kwargs)
+        transect_2d(stk_i, index=ind, sub=141, fig=fig1, color=color, **kwargs)
+        transect_2d(stk_u, index=ind, sub=142, fig=fig1, color=color, **kwargs)
+        transect_2d(stk_q, index=ind, sub=143, fig=fig1, color=color, **kwargs)
+        transect_2d(stk_v, index=ind, sub=144, fig=fig1, color=color, **kwargs)
 
-        transect2D(lI, index=ind, sub=141, fig=fig2, color=color, **kwargs)
-        transect2D(
+        transect_2d(lI, index=ind, sub=141, fig=fig2, color=color, **kwargs)
+        transect_2d(
             DoLP,
             index=ind,
             sub=142,
@@ -856,7 +856,7 @@ def transect_view(
             percent=True,
             **kwargs,
         )
-        transect2D(
+        transect_2d(
             DoCP,
             index=ind,
             sub=143,
@@ -865,7 +865,7 @@ def transect_view(
             percent=True,
             **kwargs,
         )
-        transect2D(
+        transect_2d(
             DoP,
             index=ind,
             sub=144,
@@ -2647,7 +2647,7 @@ def plot_polar(
     return fig
 
 
-def transect2D(
+def transect_2d(
     da: xr.DataArray,
     index: int | Sequence[int] | np.ndarray[Any, Any] | None = None,
     vmin: float | None = None,
@@ -2769,7 +2769,7 @@ def transect2D(
         marker_key = "_".join(map(str, sub))
     else:
         marker_key = str(sub)
-    marker_name = f"_transect2D_sub_{marker_key}"
+    marker_name = f"_transect_2d_sub_{marker_key}"
 
     # Check if subplot already exists
     ax_cart: Axes | None = None
