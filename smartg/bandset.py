@@ -35,7 +35,7 @@ import scipy.constants as cst
 
 from luts.luts import LUT
 from smartg.rrs import l2d_inv
-from smartg.vrs import V2d_inv
+from smartg.vrs import raman_inverse
 from smartg.typing import BandLike, NumericArrayLike, RealNumber
 
 if TYPE_CHECKING:
@@ -214,7 +214,7 @@ def spectral_grids(
     raman : {'RRS', 'VRS'}, optional
         Raman scattering type: ``'RRS'`` (rotational Raman, default)
         uses a 90 deg scattering angle and 243 K temperature;
-        ``'VRS'`` (vibrational Raman) uses ``V2d_inv``.
+        ``'VRS'`` (vibrational Raman) uses ``raman_inverse``.
     unit : {'mW/m2/nm', 'photons/cm2/s/nm'}, optional
         Unit of the solar irradiance in ``datas``. If
         ``'photons/cm2/s/nm'``, the values are converted from
@@ -265,7 +265,7 @@ def spectral_grids(
         wl_rs, _ = l2d_inv(wl, 90.0, 243.0)
     else:
         # VRS excitation wavelength grid
-        wl_rs, _ = V2d_inv(wl)
+        wl_rs, _ = raman_inverse(wl)
 
     lmin_rs = min(wl_rs.min(), wl.min())
     lmax_rs = max(wl_rs.max(), wl.max())
