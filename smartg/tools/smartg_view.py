@@ -40,7 +40,7 @@ from smartg.atmosphere import diff1
 from smartg.water import diff2
 
 
-def mdesc(desc: str, logI: bool = False) -> str:
+def mdesc(desc: str, log_i: bool = False) -> str:
     """
     Format Stokes parameter description for display with LaTeX notation.
 
@@ -53,7 +53,7 @@ def mdesc(desc: str, logI: bool = False) -> str:
     desc : str
         Description string in format 'Stokes_direction(component)_info'
         (e.g., 'I_up(TOA)', 'Q_down(0+)').
-    logI : bool, optional
+    log_i : bool, optional
         If True and Stokes parameter is 'I', prepends 'log10' to the
         output. Default is False.
 
@@ -67,7 +67,7 @@ def mdesc(desc: str, logI: bool = False) -> str:
     --------
     >>> mdesc('I_up(TOA)')
     '$I^{\\uparrow}_{TOA}$'
-    >>> mdesc('I_up(TOA)', logI=True)
+    >>> mdesc('I_up(TOA)', log_i=True)
     '$log_{10} I^{\\uparrow}_{TOA}$'
     >>> mdesc('Q_down(0+)')
     '$Q^{\\downarrow}_{0+}$'
@@ -83,14 +83,14 @@ def mdesc(desc: str, logI: bool = False) -> str:
         stokes = desc[sep1 - 4 : sep1]
     else:
         stokes = desc[0:sep1]
-    dir = desc[sep1 + 1 : sep2 - 1]
+    direction = desc[sep1 + 1 : sep2 - 1]
 
-    if logI and stokes == "I":
+    if log_i and stokes == "I":
         pref = r"$log_{10} "
     else:
         pref = r"$"
 
-    if dir == "up":
+    if direction == "up":
         return (
             pref
             + stokes
@@ -211,24 +211,24 @@ def smartg_view(
 
     Returns
     -------
-    fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
+    fig : Figure or tuple of Figure
 
     Notes
     -----
     Polarization metrics are computed from Stokes parameters
     (I, Q, U, V):
 
-    - **Degree of Linear Polarization (DoLP)**:
+    - **Degree of Linear Polarization (dolp)**:
 
-      DoLP = 100 * sqrt(Q² + U²) / I
+      dolp = 100 * sqrt(Q² + U²) / I
 
-    - **Degree of Polarization (DoP)**:
+    - **Degree of Polarization (dop)**:
 
-      DoP = 100 * sqrt(Q² + U² + V²) / I
+      dop = 100 * sqrt(Q² + U² + V²) / I
 
-    - **Degree of Circular Polarization (DoCP)**:
+    - **Degree of Circular Polarization (docp)**:
 
-      DoCP = 100 * |V| / I
+      docp = 100 * |V| / I
     """
     if ind is None:
         ind = [0]
@@ -318,7 +318,7 @@ def smartg_view(
             if log_i:
                 li = cast(xr.DataArray, np.log10(stk_i))
                 li.attrs["latex_name"] = mdesc(
-                    str(stk_i.name or "I"), logI=True
+                    str(stk_i.name or "I"), log_i=True
                 )
                 plot_polar(
                     li.assign_coords(li.coords),
@@ -397,7 +397,7 @@ def smartg_view(
             if log_i:
                 li = cast(xr.DataArray, np.log10(stk_i))
                 li.attrs["latex_name"] = mdesc(
-                    str(stk_i.name or "I"), logI=True
+                    str(stk_i.name or "I"), log_i=True
                 )
                 plot_polar(
                     li.assign_coords(li.coords),
@@ -448,7 +448,7 @@ def smartg_view(
     else:
         # full plots
         li = cast(xr.DataArray, np.log10(stk_i))
-        li.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
+        li.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), log_i=True)
         dolp.attrs["latex_name"] = r"$DoLP$"
         docp.attrs["latex_name"] = r"$DoCP$"
         dop.attrs["latex_name"] = r"$DoP$"
@@ -612,7 +612,7 @@ def transect_view(
 
     Returns
     -------
-    fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
+    fig : Figure or tuple of Figure
         If full is False: single figure containing transect slices of
         Stokes parameters. If full is True: tuple of (fig1, fig2) with
         raw and processed Stokes parameters.
@@ -911,7 +911,7 @@ def spectrum(
 
     Returns
     -------
-    fig : matplotlib.figure.Figure
+    fig : Figure
         Figure object containing the spectrum plot.
     """
     from pylab import figure
@@ -1063,7 +1063,7 @@ def spectrum_view(
 
     Returns
     -------
-    fig : matplotlib.figure.Figure or tuple of matplotlib.figure.Figure
+    fig : Figure or tuple of Figure
         If full is False: single figure containing spectrum plots. If
         full is True: tuple of (fig1, fig2) with raw Stokes parameters
         and processed metrics.
@@ -1154,7 +1154,7 @@ def spectrum_view(
             if log_i:
                 li = cast(xr.DataArray, np.log10(stk_i))
                 li.attrs["latex_name"] = mdesc(
-                    str(stk_i.name or "I"), logI=True
+                    str(stk_i.name or "I"), log_i=True
                 )
                 spectrum(li, sub=221, fig=plot_fig, color=color, **kwargs)
             else:
@@ -1183,7 +1183,7 @@ def spectrum_view(
             if log_i:
                 li = cast(xr.DataArray, np.log10(stk_i))
                 li.attrs["latex_name"] = mdesc(
-                    str(stk_i.name or "I"), logI=True
+                    str(stk_i.name or "I"), log_i=True
                 )
                 spectrum(li, sub=121, fig=plot_fig, color=color, **kwargs)
             else:
@@ -1231,7 +1231,7 @@ def spectrum_view(
             )
 
         li = cast(xr.DataArray, np.log10(stk_i))
-        li.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
+        li.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), log_i=True)
         stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
         stk_u.attrs["latex_name"] = mdesc(str(stk_u.name or "Q"))
         stk_q.attrs["latex_name"] = mdesc(str(stk_q.name or "U"))
