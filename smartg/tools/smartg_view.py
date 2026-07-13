@@ -2278,7 +2278,7 @@ def compare(
     return fig
 
 
-def bin_edges(
+def _bin_edges(
     x: np.ndarray[Any, Any],
     min: float | None = None,
     max: float | None = None,
@@ -2574,7 +2574,7 @@ def plot_polar(
 
     # Draw colormesh
     r, t = np.meshgrid(
-        bin_edges(ax2_scaled, min=0, max=90), bin_edges(ax1_scaled)
+        _bin_edges(ax2_scaled, min=0, max=90), _bin_edges(ax1_scaled)
     )
     masked_data = np.ma.masked_where(np.isnan(data) | np.isinf(data), data)
     im = aux_ax_polar.pcolormesh(
