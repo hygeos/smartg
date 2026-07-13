@@ -25,7 +25,7 @@ from smartg.smartg import Smartg
 from smartg.smartg import LambSurface, AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, od2k, diff1
 from luts import LUT
-from smartg.tools.smartg_view import mdesc
+from smartg.smartg_view import mdesc
 from smartg import conftest
 from pathlib import Path
 from smartg.config import DIR_AUXDATA

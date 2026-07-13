@@ -11,7 +11,7 @@ from smartg.smartg import Smartg, RoughSurface, LambSurface, AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 from smartg.water import IOP_1
 from smartg.reptran import REPTRAN, reduce_reptran
-from smartg.tools.smartg_view import smartg_view
+from smartg.smartg_view import smartg_view
 from smartg import conftest
 
 NBPHOTONS = 1e4

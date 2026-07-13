@@ -19,7 +19,7 @@ from smartg.smartg import LambSurface, RoughSurface
 from smartg.atmosphere import Atm1D, AeroOPAC, CloudOPAC
 from luts.luts import merge
 from smartg.water import IOP_1
-from smartg.tools.smartg_view import smartg_view, input_view
+from smartg.smartg_view import smartg_view, input_view
 
 # other import (for comparaison between commits, ...)
 import numpy as np
@@ -532,10 +532,10 @@ if __name__ == '__main__' and '__file__' in globals():
                     delattr(sys.modules['smartg.tools.luts'], attr)
             reload(sys.modules['smartg.tools.luts'])
 
-            for attr in dir(sys.modules['smartg.tools.smartg_view']):
+            for attr in dir(sys.modules['smartg.smartg_view']):
                 if attr not in ('__name__', '__file__'):
-                    delattr(sys.modules['smartg.tools.smartg_view'], attr)
-            reload(sys.modules['smartg.tools.smartg_view'])
+                    delattr(sys.modules['smartg.smartg_view'], attr)
+            reload(sys.modules['smartg.smartg_view'])
 
             for attr in dir(sys.modules['smartg.smartg']):
                 if attr not in ('__name__', '__file__'):
@@ -546,7 +546,7 @@ if __name__ == '__main__' and '__file__' in globals():
             from smartg.atmosphere import Atm1D, AeroOPAC, CloudOPAC
             from luts.luts import merge
             from smartg.water import IOP_1
-            from smartg.tools.smartg_view import smartg_view, input_view
+            from smartg.smartg_view import smartg_view, input_view
                 
             if nimp == 0:
                 prepare_measure()
@@ -635,10 +635,10 @@ if __name__ == '__main__' and '__file__' in globals():
                         delattr(sys.modules['smartg.tools.luts'], attr)
                 reload(sys.modules['smartg.tools.luts'])
 
-                for attr in dir(sys.modules['smartg.tools.smartg_view']):
+                for attr in dir(sys.modules['smartg.smartg_view']):
                     if attr not in ('__name__', '__file__'):
-                        delattr(sys.modules['smartg.tools.smartg_view'], attr)
-                reload(sys.modules['smartg.tools.smartg_view'])
+                        delattr(sys.modules['smartg.smartg_view'], attr)
+                reload(sys.modules['smartg.smartg_view'])
 
                 for attr in dir(sys.modules['smartg.smartg']):
                     if attr not in ('__name__', '__file__'):
@@ -649,7 +649,7 @@ if __name__ == '__main__' and '__file__' in globals():
                 from smartg.atmosphere import Atm1D, AeroOPAC, CloudOPAC
                 from luts.luts import merge
                 from smartg.water import IOP_1
-                from smartg.tools.smartg_view import smartg_view, input_view
+                from smartg.smartg_view import smartg_view, input_view
                 
                 if nimp == 0:
                     # reload(smartg)

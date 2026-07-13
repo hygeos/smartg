@@ -28,7 +28,7 @@ from smartg.water import IOP_1
 from smartg.obselete_files.tools import SpecInt, SpecInt2
 from smartg.postprocess import plane_irr
 from luts.luts import LUT, MLUT, Idx, merge, read_mlut_hdf, plot_polar, read_mlut
-from smartg.tools.smartg_view import smartg_view, input_view
+from smartg.smartg_view import smartg_view, input_view
 import numpy as np
 from warnings import warn
 from warnings import filterwarnings
