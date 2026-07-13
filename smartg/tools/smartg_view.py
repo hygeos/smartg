@@ -1405,13 +1405,13 @@ def phase_view(
 
     for i in ni:
         if nstk == 4:
-            P11 = phase[i, 0, :]  # P11
-            P12 = phase[i, 1, :]  # P12 = P21
-            P33 = phase[i, 2, :]
-            P43 = phase[i, 3, :]
+            p_11 = phase[i, 0, :]  # P11
+            p_12 = phase[i, 1, :]  # P12 = P21
+            p_33 = phase[i, 2, :]
+            p_43 = phase[i, 3, :]
 
-            if np.max(P11[:]) > 0.0:
-                axarr[0, 0].semilogy(ang, P11, label="%3i" % i)
+            if np.max(p_11[:]) > 0.0:
+                axarr[0, 0].semilogy(ang, p_11, label="%3i" % i)
                 if show_trunc and phase_tr is not None:
                     axarr[0, 0].semilogy(ang, phase_tr[i, 0, :], "k--")
             axarr[0, 0].set_title(r"$P_{11}$" + labw)
@@ -1419,44 +1419,44 @@ def phase_view(
             axarr[0, 0].set_xlim([0, 180])
             axarr[0, 0].set_xticks([0, 30, 60, 90, 120, 150, 180])
 
-            if np.max(P11[:]) > 0.0:
-                axarr[0, 1].plot(ang, -P12 / P11)
+            if np.max(p_11[:]) > 0.0:
+                axarr[0, 1].plot(ang, -p_12 / p_11)
                 if show_trunc and phase_tr is not None:
-                    axarr[0, 1].plot(ang, -phase_tr[i, 1, :] / P11, "k--")
+                    axarr[0, 1].plot(ang, -phase_tr[i, 1, :] / p_11, "k--")
             axarr[0, 1].set_title(r"-$P_{12}/P_{11}$")
             axarr[0, 1].grid()
             axarr[0, 1].set_xlim([0, 180])
             axarr[0, 1].set_xticks([0, 30, 60, 90, 120, 150, 180])
 
-            if np.max(P11[:]) > 0.0:
-                axarr[1, 0].plot(ang, P33 / P11)
+            if np.max(p_11[:]) > 0.0:
+                axarr[1, 0].plot(ang, p_33 / p_11)
                 if show_trunc and phase_tr is not None:
-                    axarr[1, 0].plot(ang, phase_tr[i, 2, :] / P11, "k--")
+                    axarr[1, 0].plot(ang, phase_tr[i, 2, :] / p_11, "k--")
             axarr[1, 0].set_title(r"$P_{33}/P_{11}$")
             axarr[1, 0].grid()
             axarr[1, 0].set_xlim([0, 180])
             axarr[1, 0].set_xlabel(r"$\theta$")
             axarr[1, 0].set_xticks([0, 30, 60, 90, 120, 150, 180])
 
-            if np.max(P11[:]) > 0.0:
-                axarr[1, 1].plot(ang, P43 / P11)
+            if np.max(p_11[:]) > 0.0:
+                axarr[1, 1].plot(ang, p_43 / p_11)
                 if show_trunc and phase_tr is not None:
-                    axarr[1, 1].plot(ang, phase_tr[i, 3, :] / P11, "k--")
+                    axarr[1, 1].plot(ang, phase_tr[i, 3, :] / p_11, "k--")
             axarr[1, 1].set_title(r"$P_{43}/P_{11}$")
             axarr[1, 1].grid()
             axarr[1, 1].set_xlim([0, 180])
             axarr[1, 1].set_xlabel(r"$\theta$")
             axarr[1, 1].set_xticks([0, 30, 60, 90, 120, 150, 180])
         elif nstk == 6:
-            P11 = phase[i, 0, :]  # P11
-            P12 = phase[i, 1, :]  # P12 = P21
-            P22 = phase[i, 4, :]  # P22
-            P33 = phase[i, 2, :]  # P33
-            P34 = phase[i, 3, :]  # P34 = -P43
-            P44 = phase[i, 5, :]  # P44
+            p_11 = phase[i, 0, :]  # P11
+            p_12 = phase[i, 1, :]  # P12 = P21
+            p_22 = phase[i, 4, :]  # P22
+            p_33 = phase[i, 2, :]  # P33
+            p_34 = phase[i, 3, :]  # P34 = -P43
+            p_44 = phase[i, 5, :]  # P44
 
-            if np.max(P11[:]) > 0.0:
-                axarr[0, 0].semilogy(ang, P11, label="%3i" % i)
+            if np.max(p_11[:]) > 0.0:
+                axarr[0, 0].semilogy(ang, p_11, label="%3i" % i)
                 if show_trunc and phase_tr is not None:
                     axarr[0, 0].semilogy(ang, phase_tr[i, 0, :], "k--")
             axarr[0, 0].set_title(r"$P_{11}$" + labw)
@@ -1464,19 +1464,19 @@ def phase_view(
             axarr[0, 0].set_xlim([0, 180])
             axarr[0, 0].set_xticks([0, 30, 60, 90, 120, 150, 180])
 
-            if np.max(P11[:]) > 0.0:
-                axarr[0, 1].plot(ang, -P12 / P11)
+            if np.max(p_11[:]) > 0.0:
+                axarr[0, 1].plot(ang, -p_12 / p_11)
                 if show_trunc and phase_tr is not None:
-                    axarr[0, 1].plot(ang, -phase_tr[i, 1, :] / P11, "k--")
+                    axarr[0, 1].plot(ang, -phase_tr[i, 1, :] / p_11, "k--")
             axarr[0, 1].set_title(r"-$P_{12}/P_{11}$")
             axarr[0, 1].grid()
             axarr[0, 1].set_xlim([0, 180])
             axarr[0, 1].set_xticks([0, 30, 60, 90, 120, 150, 180])
 
-            if np.max(P11[:]) > 0.0:
-                axarr[1, 0].plot(ang, P33 / P11)
+            if np.max(p_11[:]) > 0.0:
+                axarr[1, 0].plot(ang, p_33 / p_11)
                 if show_trunc and phase_tr is not None:
-                    axarr[1, 0].plot(ang, phase_tr[i, 2, :] / P11, "k--")
+                    axarr[1, 0].plot(ang, phase_tr[i, 2, :] / p_11, "k--")
             axarr[1, 0].set_title(r"$P_{33}/P_{11}$")
             axarr[1, 0].grid()
             axarr[1, 0].set_xlim([0, 180])
@@ -1484,10 +1484,10 @@ def phase_view(
             if force_4stk:
                 axarr[1, 0].set_xlabel(r"$\theta$")
 
-            if np.max(P11[:]) > 0.0:
-                axarr[1, 1].plot(ang, P34 / P11)
+            if np.max(p_11[:]) > 0.0:
+                axarr[1, 1].plot(ang, p_34 / p_11)
                 if show_trunc and phase_tr is not None:
-                    axarr[1, 1].plot(ang, phase_tr[i, 3, :] / P11, "k--")
+                    axarr[1, 1].plot(ang, phase_tr[i, 3, :] / p_11, "k--")
             axarr[1, 1].set_title(r"$P_{34}/P_{11}$")
             axarr[1, 1].grid()
             axarr[1, 1].set_xlim([0, 180])
@@ -1496,20 +1496,20 @@ def phase_view(
                 axarr[1, 1].set_xlabel(r"$\theta$")
 
             if not force_4stk:
-                if np.max(P11[:]) > 0.0:
-                    axarr[2, 0].plot(ang, P22 / P11)
+                if np.max(p_11[:]) > 0.0:
+                    axarr[2, 0].plot(ang, p_22 / p_11)
                     if show_trunc and phase_tr is not None:
-                        axarr[2, 0].plot(ang, phase_tr[i, 4, :] / P11, "k--")
+                        axarr[2, 0].plot(ang, phase_tr[i, 4, :] / p_11, "k--")
                 axarr[2, 0].set_title(r"$P_{22}/P_{11}$")
                 axarr[2, 0].grid()
                 axarr[2, 0].set_xlim([0, 180])
                 axarr[2, 0].set_xlabel(r"$\theta$")
                 axarr[2, 0].set_xticks([0, 30, 60, 90, 120, 150, 180])
 
-                if np.max(P11[:]) > 0.0:
-                    axarr[2, 1].plot(ang, P44 / P11)
+                if np.max(p_11[:]) > 0.0:
+                    axarr[2, 1].plot(ang, p_44 / p_11)
                     if show_trunc and phase_tr is not None:
-                        axarr[2, 1].plot(ang, phase_tr[i, 5, :] / P11, "k--")
+                        axarr[2, 1].plot(ang, phase_tr[i, 5, :] / p_11, "k--")
                 axarr[2, 1].set_title(r"$P_{44}/P_{11}$")
                 axarr[2, 1].grid()
                 axarr[2, 1].set_xlim([0, 180])
@@ -1599,7 +1599,7 @@ def profile_view(
         sign = 1.0
         func = diff1
 
-    Dz = np.abs(func(z))
+    d_z = np.abs(func(z))
 
     # Select wavelength index if multi-wavelength data
     if nd > 1 and "wavelength" in od_data.dims:
@@ -1612,37 +1612,37 @@ def profile_view(
         abs_data = ds_sg["OD_abs_" + kind]
 
     # Extract and compute optical depths
-    Dtau = sign * func(od_data_sel.values)
-    Dtau_Sca = sign * func(sca_data.values)
-    Dtau_Abs = sign * func(abs_data.values)
+    d_tau = sign * func(od_data_sel.values)
+    d_tau_sca = sign * func(sca_data.values)
+    d_tau_abs = sign * func(abs_data.values)
     if kind == "atm":
         if nd > 1 and "wavelength" in od_data.dims:
-            Dtau_ExtA = sign * func(ds_sg["OD_p"].isel(wavelength=iw).values)
-            Dtau_ScaR = sign * func(ds_sg["OD_r"].isel(wavelength=iw).values)
-            Dtau_AbsG = sign * func(ds_sg["OD_g"].isel(wavelength=iw).values)
+            d_tau_ext_a = sign * func(ds_sg["OD_p"].isel(wavelength=iw).values)
+            d_tau_sca_r = sign * func(ds_sg["OD_r"].isel(wavelength=iw).values)
+            d_tau_abs_g = sign * func(ds_sg["OD_g"].isel(wavelength=iw).values)
         else:
-            Dtau_ExtA = sign * func(ds_sg["OD_p"].values)
-            Dtau_ScaR = sign * func(ds_sg["OD_r"].values)
-            Dtau_AbsG = sign * func(ds_sg["OD_g"].values)
+            d_tau_ext_a = sign * func(ds_sg["OD_p"].values)
+            d_tau_sca_r = sign * func(ds_sg["OD_r"].values)
+            d_tau_abs_g = sign * func(ds_sg["OD_g"].values)
         if nd > 1 and "wavelength" in od_data.dims:
             ssa_p = ds_sg["ssa_p_" + kind].isel(wavelength=iw).values
         else:
             ssa_p = ds_sg["ssa_p_" + kind].values
-        Dtau_ScaA = Dtau_ExtA * ssa_p
-        Dtau_AbsA = Dtau_ExtA * (1.0 - ssa_p)
-        if np.max(Dtau_AbsA) > 0.0:
+        d_tau_sca_a = d_tau_ext_a * ssa_p
+        d_tau_abs_a = d_tau_ext_a * (1.0 - ssa_p)
+        if np.max(d_tau_abs_a) > 0.0:
             ax.semilogx(
-                (Dtau_AbsA / Dz), z, "r--", label=r"$\sigma_{abs}^{a+c}$"
+                (d_tau_abs_a / d_z), z, "r--", label=r"$\sigma_{abs}^{a+c}$"
             )
-        if np.max(Dtau_ScaA) > 0.0:
+        if np.max(d_tau_sca_a) > 0.0:
             ax.semilogx(
-                (Dtau_ScaA / Dz), z, "r", label=r"$\sigma_{sca}^{a+c}$"
+                (d_tau_sca_a / d_z), z, "r", label=r"$\sigma_{sca}^{a+c}$"
             )
-        if np.max(Dtau_AbsG) > 0.0:
+        if np.max(d_tau_abs_g) > 0.0:
             ax.semilogx(
-                (Dtau_AbsG / Dz), z, "g--", label=r"$\sigma_{abs}^{gas}$"
+                (d_tau_abs_g / d_z), z, "g--", label=r"$\sigma_{abs}^{gas}$"
             )
-        ax.semilogx((Dtau_ScaR / Dz), z, "b", label=r"$\sigma_{sca}^{R}$")
+        ax.semilogx((d_tau_sca_r / d_z), z, "b", label=r"$\sigma_{sca}^{R}$")
         ax.set_xlim(1e-6, 10)
         xlabel("Vertical profile" + labw + r" $(km^{-1})$")
         ylabel(r"$z (km)$")
@@ -1651,52 +1651,52 @@ def profile_view(
         ax.set_ylim(0, zmax)
     else:
         if nd > 1 and "wavelength" in od_data.dims:
-            Dtau_ExtP = sign * func(
+            d_tau_ext_p = sign * func(
                 ds_sg["OD_p_oc"].isel(wavelength=iw).values
             )
-            Dtau_ExtW = sign * func(ds_sg["OD_w"].isel(wavelength=iw).values)
-            Dtau_AbsY = sign * func(ds_sg["OD_y"].isel(wavelength=iw).values)
+            d_tau_ext_w = sign * func(ds_sg["OD_w"].isel(wavelength=iw).values)
+            d_tau_abs_y = sign * func(ds_sg["OD_y"].isel(wavelength=iw).values)
             ssa_p = ds_sg["ssa_p_" + kind].isel(wavelength=iw).values
             ssa_w = ds_sg["ssa_w"].isel(wavelength=iw).values
             pine = ds_sg["pine_oc"].isel(wavelength=iw).values
         else:
-            Dtau_ExtP = sign * func(ds_sg["OD_p_oc"].values)
-            Dtau_ExtW = sign * func(ds_sg["OD_w"].values)
-            Dtau_AbsY = sign * func(ds_sg["OD_y"].values)
+            d_tau_ext_p = sign * func(ds_sg["OD_p_oc"].values)
+            d_tau_ext_w = sign * func(ds_sg["OD_w"].values)
+            d_tau_abs_y = sign * func(ds_sg["OD_y"].values)
             ssa_p = ds_sg["ssa_p_" + kind].values
             ssa_w = ds_sg["ssa_w"].values
             pine = ds_sg["pine_oc"].values
-        Dtau_ScaP = Dtau_ExtP * ssa_p
-        Dtau_AbsP = Dtau_ExtP * (1.0 - ssa_p)
-        Dtau_ScaW = Dtau_ExtW * ssa_w
-        Dtau_AbsW = Dtau_ExtW * (1.0 - ssa_w)
-        Dtau_Ine = Dtau_Sca * pine
-        if np.max(Dtau_AbsP) > 0.0:
+        d_tau_sca_p = d_tau_ext_p * ssa_p
+        d_tau_abs_p = d_tau_ext_p * (1.0 - ssa_p)
+        d_tau_sca_w = d_tau_ext_w * ssa_w
+        d_tau_abs_w = d_tau_ext_w * (1.0 - ssa_w)
+        d_tau_ine = d_tau_sca * pine
+        if np.max(d_tau_abs_p) > 0.0:
             ax.semilogx(
-                (Dtau_AbsP / Dz), z, "r--", label=r"$\sigma_{abs}^{p}$"
+                (d_tau_abs_p / d_z), z, "r--", label=r"$\sigma_{abs}^{p}$"
             )
-        if np.max(Dtau_ScaP) > 0.0:
-            ax.semilogx((Dtau_ScaP / Dz), z, "r", label=r"$\sigma_{sca}^{p}$")
-        if np.max(Dtau_AbsW) > 0.0:
+        if np.max(d_tau_sca_p) > 0.0:
+            ax.semilogx((d_tau_sca_p / d_z), z, "r", label=r"$\sigma_{sca}^{p}$")
+        if np.max(d_tau_abs_w) > 0.0:
             ax.semilogx(
-                (Dtau_AbsW / Dz), z, "b--", label=r"$\sigma_{abs}^{w}$"
+                (d_tau_abs_w / d_z), z, "b--", label=r"$\sigma_{abs}^{w}$"
             )
-        if np.max(Dtau_ScaW) > 0.0:
-            ax.semilogx((Dtau_ScaW / Dz), z, "b", label=r"$\sigma_{sca}^{w}$")
-        if np.max(Dtau_AbsY) > 0.0:
+        if np.max(d_tau_sca_w) > 0.0:
+            ax.semilogx((d_tau_sca_w / d_z), z, "b", label=r"$\sigma_{sca}^{w}$")
+        if np.max(d_tau_abs_y) > 0.0:
             ax.semilogx(
-                (Dtau_AbsY / Dz), z, "y--", label=r"$\sigma_{abs}^{y}$"
+                (d_tau_abs_y / d_z), z, "y--", label=r"$\sigma_{abs}^{y}$"
             )
-        if np.max(Dtau_Ine) > 0.0:
-            ax.semilogx((Dtau_Ine / Dz), z, "m:", label=r"$\sigma_{ine}^{}$")
+        if np.max(d_tau_ine) > 0.0:
+            ax.semilogx((d_tau_ine / d_z), z, "m:", label=r"$\sigma_{ine}^{}$")
         ax.set_xlim(1e-4, 10)
         xlabel("Vertical profile" + labw + r" $(m^{-1})$")
         ylabel(r"$z (m)$")
         if zmax is None:
             zmax = min(-100.0, z.min())
         ax.set_ylim(zmax, 0)
-    ax.semilogx((Dtau / Dz), z, "k.-", label=r"$\sigma_{ext}^{tot}$")
-    ax.semilogx((Dtau_Abs / Dz), z, "k.--", label=r"$\sigma_{abs}^{tot}$")
+    ax.semilogx((d_tau / d_z), z, "k.-", label=r"$\sigma_{ext}^{tot}$")
+    ax.semilogx((d_tau_abs / d_z), z, "k.--", label=r"$\sigma_{abs}^{tot}$")
     # ax.set_title('Vertical profile'+labw)
     ax.grid()
     ax.legend()
