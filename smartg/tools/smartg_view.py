@@ -292,36 +292,36 @@ def smartg_view(
         stk_v = _interp_and_squeeze_scalar_dims(stk_v, interp_dict)
 
     # Linearly polarized reflectance
-    IPL = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
+    ipl = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
 
     # Polarized reflectance
-    IP = cast(
+    ip = cast(
         xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q + stk_v * stk_v)
     )
 
     # Degree of Linear Polarization (%)
-    DoLP = cast(xr.DataArray, 100 * IPL / stk_i)
+    dolp = cast(xr.DataArray, 100 * ipl / stk_i)
 
     # Angle of Linear Polarization (deg)
-    # AoLP = np.arctan(stk_q / stk_u) * 90 / np.pi
+    # aolp = np.arctan(stk_q / stk_u) * 90 / np.pi
 
     # Degree of Circular Polarization (%)
-    DoCP = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
+    docp = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
 
     # Degree of Polarization (%)
-    DoP = cast(xr.DataArray, 100 * IP / stk_i)
+    dop = cast(xr.DataArray, 100 * ip / stk_i)
 
     if not full:
         if qu:
             if fig is None:
                 fig = figure(figsize=(9, 14))
             if log_i:
-                lI = cast(xr.DataArray, np.log10(stk_i))
-                lI.attrs["latex_name"] = mdesc(
+                li = cast(xr.DataArray, np.log10(stk_i))
+                li.attrs["latex_name"] = mdesc(
                     str(stk_i.name or "I"), logI=True
                 )
                 plot_polar(
-                    lI.assign_coords(lI.coords),
+                    li.assign_coords(li.coords),
                     index=ind,
                     rect=421,
                     sub=423,
@@ -350,40 +350,40 @@ def smartg_view(
                 cmap=cmap,
             )
             if ind is not None:
-                rectU = 425
+                rect_u = 425
             else:
-                rectU = 423
+                rect_u = 423
             plot_polar(
                 stk_q.assign_coords(stk_q.coords),
                 index=ind,
-                rect=rectU,
+                rect=rect_u,
                 sub=427,
                 fig=fig,
                 cmap=cmap,
             )
             if circ:
                 if ind is not None:
-                    rectV = 426
+                    rect_v = 426
                 else:
-                    rectV = 424
+                    rect_v = 424
                 plot_polar(
                     stk_v.assign_coords(stk_v.coords),
                     index=ind,
-                    rect=rectV,
+                    rect=rect_v,
                     sub=428,
                     fig=fig,
                     cmap=cmap,
                 )
             else:
                 if ind is not None:
-                    rectDoP = 426
+                    rect_dop = 426
                 else:
-                    rectDoP = 424
-                DoP.attrs["latex_name"] = r"$DoP$"
+                    rect_dop = 424
+                dop.attrs["latex_name"] = r"$DoP$"
                 plot_polar(
-                    DoP.assign_coords(DoP.coords),
+                    dop.assign_coords(dop.coords),
                     index=ind,
-                    rect=rectDoP,
+                    rect=rect_dop,
                     sub=428,
                     fig=fig,
                     vmin=p_min,
@@ -395,12 +395,12 @@ def smartg_view(
             if fig is None:
                 fig = figure(figsize=(9, 6))
             if log_i:
-                lI = cast(xr.DataArray, np.log10(stk_i))
-                lI.attrs["latex_name"] = mdesc(
+                li = cast(xr.DataArray, np.log10(stk_i))
+                li.attrs["latex_name"] = mdesc(
                     str(stk_i.name or "I"), logI=True
                 )
                 plot_polar(
-                    lI.assign_coords(lI.coords),
+                    li.assign_coords(li.coords),
                     index=ind,
                     rect=221,
                     sub=223,
@@ -422,9 +422,9 @@ def smartg_view(
                 )
 
             if circ:
-                DoCP.attrs["latex_name"] = r"$DoCP$"
+                docp.attrs["latex_name"] = r"$DoCP$"
                 plot_polar(
-                    DoCP.assign_coords(DoCP.coords),
+                    docp.assign_coords(docp.coords),
                     index=ind,
                     rect=222,
                     sub=224,
@@ -434,9 +434,9 @@ def smartg_view(
                     cmap=cmap,
                 )
             else:
-                DoP.attrs["latex_name"] = r"$DoP$"
+                dop.attrs["latex_name"] = r"$DoP$"
                 plot_polar(
-                    DoP.assign_coords(DoP.coords),
+                    dop.assign_coords(dop.coords),
                     index=ind,
                     rect=222,
                     sub=224,
@@ -447,11 +447,11 @@ def smartg_view(
                 )
     else:
         # full plots
-        lI = cast(xr.DataArray, np.log10(stk_i))
-        lI.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
-        DoLP.attrs["latex_name"] = r"$DoLP$"
-        DoCP.attrs["latex_name"] = r"$DoCP$"
-        DoP.attrs["latex_name"] = r"$DoP$"
+        li = cast(xr.DataArray, np.log10(stk_i))
+        li.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
+        dolp.attrs["latex_name"] = r"$DoLP$"
+        docp.attrs["latex_name"] = r"$DoCP$"
+        dop.attrs["latex_name"] = r"$DoP$"
 
         if fig is None:
             fig = figure(figsize=(18, 14))
@@ -492,7 +492,7 @@ def smartg_view(
         )
 
         plot_polar(
-            lI.assign_coords(lI.coords),
+            li.assign_coords(li.coords),
             index=ind,
             rect=449,
             sub=(4, 4, 13),
@@ -500,7 +500,7 @@ def smartg_view(
             cmap=cmap,
         )
         plot_polar(
-            DoLP.assign_coords(DoLP.coords),
+            dolp.assign_coords(dolp.coords),
             index=ind,
             rect=(4, 4, 10),
             sub=(4, 4, 14),
@@ -510,7 +510,7 @@ def smartg_view(
             cmap=cmap,
         )
         plot_polar(
-            DoCP.assign_coords(DoCP.coords),
+            docp.assign_coords(docp.coords),
             index=ind,
             rect=(4, 4, 11),
             sub=(4, 4, 15),
@@ -520,7 +520,7 @@ def smartg_view(
             cmap=cmap,
         )
         plot_polar(
-            DoP.assign_coords(DoP.coords),
+            dop.assign_coords(dop.coords),
             index=ind,
             rect=(4, 4, 12),
             sub=(4, 4, 16),
