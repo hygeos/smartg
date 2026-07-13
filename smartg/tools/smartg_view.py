@@ -1001,9 +1001,9 @@ def spectrum(
 
 def spectrum_view(
     ds_sg: xr.Dataset | MLUT,
-    logI: bool = False,
-    QU: bool = False,
-    Circ: bool = False,
+    log_i: bool = False,
+    qu: bool = False,
+    circ: bool = False,
     full: bool = False,
     field: str = "up (TOA)",
     prefix: str = "",
@@ -1021,12 +1021,12 @@ def spectrum_view(
     ----------
     ds_sg : Dataset
         An xarray Dataset from SMART-G simulation.
-    logI : bool, optional
+    log_i : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
-    QU : bool, optional
+    qu : bool, optional
         If True, show Q, U, and DoLP. If False, show only I and
         polarization metrics. Default is False.
-    Circ : bool, optional
+    circ : bool, optional
         If True, show circular polarization metrics. If False, show
         linear polarization. Default is False.
     full : bool, optional
@@ -1112,31 +1112,31 @@ def spectrum_view(
         stk_v = _interp_and_squeeze_scalar_dims(stk_v, interp_dict)
 
     # Linearly polarized reflectance
-    IPL = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
-    IPL.attrs["latex_name"] = prefix + r"$Lin. Pol. ref.$"
+    ipl = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
+    ipl.attrs["latex_name"] = prefix + r"$Lin. Pol. ref.$"
 
     # Polarized reflectance
-    IP = cast(
+    ip = cast(
         xr.DataArray,
         np.sqrt(stk_u * stk_u + stk_q * stk_q + stk_v * stk_v),
     )
-    IP.attrs["latex_name"] = prefix + r"$Pol. ref.$"
+    ip.attrs["latex_name"] = prefix + r"$Pol. ref.$"
 
     # Degree of Linear Polarization (%)
-    DoLP = cast(xr.DataArray, 100 * IPL / stk_i)
-    DoLP.attrs["latex_name"] = prefix + r"$DoLP$"
+    dolp = cast(xr.DataArray, 100 * ipl / stk_i)
+    dolp.attrs["latex_name"] = prefix + r"$DoLP$"
 
     # Angle of Linear Polarization (deg)
-    AoLP = cast(xr.DataArray, np.arctan(stk_q / stk_u) * 90 / np.pi)
-    AoLP.attrs["latex_name"] = prefix + r"$AoLP$"
+    aolp = cast(xr.DataArray, np.arctan(stk_q / stk_u) * 90 / np.pi)
+    aolp.attrs["latex_name"] = prefix + r"$AoLP$"
 
     # Degree of Circular Polarization (%)
-    DoCP = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
-    DoCP.attrs["latex_name"] = prefix + r"$DoCP$"
+    docp = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
+    docp.attrs["latex_name"] = prefix + r"$DoCP$"
 
     # Degree of Polarization (%)
-    DoP = cast(xr.DataArray, 100 * IP / stk_i)
-    DoP.attrs["latex_name"] = prefix + r"$DoP$"
+    dop = cast(xr.DataArray, 100 * ip / stk_i)
+    dop.attrs["latex_name"] = prefix + r"$DoP$"
 
     if not full:
         if fig is None:
@@ -1148,15 +1148,15 @@ def spectrum_view(
                 "If 'full' is False, 'fig' must be None or a Figure."
             )
 
-        if QU:
+        if qu:
             if plot_fig is None:
                 plot_fig = figure(figsize=(8, 8))
-            if logI:
-                lI = cast(xr.DataArray, np.log10(stk_i))
-                lI.attrs["latex_name"] = mdesc(
+            if log_i:
+                li = cast(xr.DataArray, np.log10(stk_i))
+                li.attrs["latex_name"] = mdesc(
                     str(stk_i.name or "I"), logI=True
                 )
-                spectrum(lI, sub=221, fig=plot_fig, color=color, **kwargs)
+                spectrum(li, sub=221, fig=plot_fig, color=color, **kwargs)
             else:
                 stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
                 spectrum(stk_i, sub=221, fig=plot_fig, color=color, **kwargs)
@@ -1164,12 +1164,12 @@ def spectrum_view(
             stk_q.attrs["latex_name"] = mdesc(str(stk_q.name or "U"))
             spectrum(stk_u, sub=222, fig=plot_fig, color=color, **kwargs)
             spectrum(stk_q, sub=223, fig=plot_fig, color=color, **kwargs)
-            if Circ:
+            if circ:
                 stk_v.attrs["latex_name"] = mdesc(str(stk_v.name or "V"))
                 spectrum(stk_v, sub=224, fig=plot_fig, color=color, **kwargs)
             else:
                 spectrum(
-                    DoP,
+                    dop,
                     sub=224,
                     fig=plot_fig,
                     color=color,
@@ -1180,19 +1180,19 @@ def spectrum_view(
             # show only I and polarization
             if plot_fig is None:
                 plot_fig = figure(figsize=(8, 4))
-            if logI:
-                lI = cast(xr.DataArray, np.log10(stk_i))
-                lI.attrs["latex_name"] = mdesc(
+            if log_i:
+                li = cast(xr.DataArray, np.log10(stk_i))
+                li.attrs["latex_name"] = mdesc(
                     str(stk_i.name or "I"), logI=True
                 )
-                spectrum(lI, sub=121, fig=plot_fig, color=color, **kwargs)
+                spectrum(li, sub=121, fig=plot_fig, color=color, **kwargs)
             else:
                 stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
                 spectrum(stk_i, sub=121, fig=plot_fig, color=color, **kwargs)
 
-            if Circ:
+            if circ:
                 spectrum(
-                    DoCP,
+                    docp,
                     sub=122,
                     fig=plot_fig,
                     color=color,
@@ -1201,7 +1201,7 @@ def spectrum_view(
                 )
             else:
                 spectrum(
-                    DoP,
+                    dop,
                     sub=122,
                     fig=plot_fig,
                     color=color,
@@ -1230,8 +1230,8 @@ def spectrum_view(
                 "two Figure objects."
             )
 
-        lI = cast(xr.DataArray, np.log10(stk_i))
-        lI.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
+        li = cast(xr.DataArray, np.log10(stk_i))
+        li.attrs["latex_name"] = mdesc(str(stk_i.name or "I"), logI=True)
         stk_i.attrs["latex_name"] = mdesc(str(stk_i.name or "I"))
         stk_u.attrs["latex_name"] = mdesc(str(stk_u.name or "Q"))
         stk_q.attrs["latex_name"] = mdesc(str(stk_q.name or "U"))
@@ -1242,10 +1242,10 @@ def spectrum_view(
         spectrum(stk_q, sub=143, fig=fig1, color=color, **kwargs)
         spectrum(stk_v, sub=144, fig=fig1, color=color, **kwargs)
 
-        spectrum(lI, sub=141, fig=fig2, color=color, **kwargs)
-        spectrum(DoLP, sub=142, fig=fig2, color=color, percent=True, **kwargs)
-        spectrum(DoCP, sub=143, fig=fig2, color=color, percent=True, **kwargs)
-        spectrum(DoP, sub=144, fig=fig2, color=color, percent=True, **kwargs)
+        spectrum(li, sub=141, fig=fig2, color=color, **kwargs)
+        spectrum(dolp, sub=142, fig=fig2, color=color, percent=True, **kwargs)
+        spectrum(docp, sub=143, fig=fig2, color=color, percent=True, **kwargs)
+        spectrum(dop, sub=144, fig=fig2, color=color, percent=True, **kwargs)
 
         return fig1, fig2
 
