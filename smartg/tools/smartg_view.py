@@ -28,7 +28,7 @@ import mpl_toolkits.axisartist.angle_helper as angle_helper
 from matplotlib.transforms import Affine2D
 from mpl_toolkits.axisartist import floating_axes
 from matplotlib.projections import PolarAxes
-from matplotlib import cm, colors as mcolors
+from matplotlib import colors as mcolors
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import ScalarFormatter
@@ -2563,9 +2563,9 @@ def plot_polar(
     # Setup colormap
     cmap_obj: mcolors.Colormap
     if cmap is None:
-        cmap_obj = cm.get_cmap("rainbow").copy()
+        cmap_obj = plt.get_cmap("rainbow").copy()
     elif isinstance(cmap, str):
-        cmap_obj = cm.get_cmap(cmap).copy()
+        cmap_obj = plt.get_cmap(cmap).copy()
     else:
         cmap_obj = cmap
     cmap_obj.set_under("black")
