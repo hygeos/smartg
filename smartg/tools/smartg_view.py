@@ -536,9 +536,9 @@ def smartg_view(
 
 def transect_view(
     ds_sg: xr.Dataset | MLUT,
-    logI: bool = False,
-    QU: bool = False,
-    Circ: bool = False,
+    log_i: bool = False,
+    qu: bool = False,
+    circ: bool = False,
     full: bool = False,
     field: str = "up (TOA)",
     prefix: str = "",
@@ -556,12 +556,12 @@ def transect_view(
     ----------
     ds_sg : Dataset
         An xarray Dataset from SMART-G simulation.
-    logI : bool, optional
+    log_i : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
-    QU : bool, optional
+    qu : bool, optional
         If True, show Q, U, and DoLP. If False, show only I and
         polarization metrics. Default is False.
-    Circ : bool, optional
+    circ : bool, optional
         If True, show circular polarization metrics. If False, show
         linear polarization. Default is False.
     full : bool, optional
@@ -673,29 +673,29 @@ def transect_view(
         stk_v = _interp_and_squeeze_scalar_dims(stk_v, interp_dict)
 
     # Linearly polarized reflectance
-    IPL = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
+    ipl = cast(xr.DataArray, np.sqrt(stk_u * stk_u + stk_q * stk_q))
 
     # Polarized reflectance
-    IP = cast(
+    ip = cast(
         xr.DataArray,
         np.sqrt(stk_u * stk_u + stk_q * stk_q + stk_v * stk_v),
     )
 
     # Degree of Linear Polarization (%)
-    DoLP = cast(xr.DataArray, 100 * IPL / stk_i)
-    DoLP.attrs["latex_name"] = prefix + r"$DoLP$"
+    dolp = cast(xr.DataArray, 100 * ipl / stk_i)
+    dolp.attrs["latex_name"] = prefix + r"$DoLP$"
 
     # Angle of Linear Polarization (deg)
-    AoLP = cast(xr.DataArray, np.arctan(stk_q / stk_u) * 90 / np.pi)
-    AoLP.attrs["latex_name"] = prefix + r"$AoLP$"
+    aolp = cast(xr.DataArray, np.arctan(stk_q / stk_u) * 90 / np.pi)
+    aolp.attrs["latex_name"] = prefix + r"$AoLP$"
 
     # Degree of Circular Polarization (%)
-    DoCP = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
-    DoCP.attrs["latex_name"] = prefix + r"$DoCP$"
+    docp = cast(xr.DataArray, 100 * np.abs(stk_v) / stk_i)
+    docp.attrs["latex_name"] = prefix + r"$DoCP$"
 
     # Degree of Polarization (%)
-    DoP = cast(xr.DataArray, 100 * IP / stk_i)
-    DoP.attrs["latex_name"] = prefix + r"$DoP$"
+    dop = cast(xr.DataArray, 100 * ip / stk_i)
+    dop.attrs["latex_name"] = prefix + r"$DoP$"
 
     if not full:
         if fig is None:
@@ -707,16 +707,16 @@ def transect_view(
                 "If 'full' is False, 'fig' must be None or a Figure."
             )
 
-        if QU:
+        if qu:
             if plot_fig is None:
                 plot_fig = figure(figsize=(8, 8))
-            if logI:
-                lI = cast(xr.DataArray, np.log10(stk_i))
-                lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
+            if log_i:
+                li = cast(xr.DataArray, np.log10(stk_i))
+                li.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
                     "latex_name", "I"
                 )
                 transect_2d(
-                    lI,
+                    li,
                     index=ind,
                     sub=221,
                     fig=plot_fig,
@@ -748,7 +748,7 @@ def transect_view(
                 color=color,
                 **kwargs,
             )
-            if Circ:
+            if circ:
                 transect_2d(
                     stk_v,
                     index=ind,
@@ -759,7 +759,7 @@ def transect_view(
                 )
             else:
                 transect_2d(
-                    DoP,
+                    dop,
                     index=ind,
                     sub=224,
                     fig=plot_fig,
@@ -771,13 +771,13 @@ def transect_view(
             # show only I and PR
             if plot_fig is None:
                 plot_fig = figure(figsize=(8, 4))
-            if logI:
-                lI = cast(xr.DataArray, np.log10(stk_i))
-                lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
+            if log_i:
+                li = cast(xr.DataArray, np.log10(stk_i))
+                li.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
                     "latex_name", "I"
                 )
                 transect_2d(
-                    lI,
+                    li,
                     index=ind,
                     sub=121,
                     fig=plot_fig,
@@ -794,9 +794,9 @@ def transect_view(
                     **kwargs,
                 )
 
-            if Circ:
+            if circ:
                 transect_2d(
-                    DoCP,
+                    docp,
                     index=ind,
                     sub=122,
                     fig=plot_fig,
@@ -806,7 +806,7 @@ def transect_view(
                 )
             else:
                 transect_2d(
-                    DoP,
+                    dop,
                     index=ind,
                     sub=122,
                     fig=plot_fig,
@@ -836,8 +836,8 @@ def transect_view(
                 "two Figure objects."
             )
 
-        lI = cast(xr.DataArray, np.log10(stk_i))
-        lI.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
+        li = cast(xr.DataArray, np.log10(stk_i))
+        li.attrs["latex_name"] = "log$_{10}$ " + stk_i.attrs.get(
             "latex_name", "I"
         )
 
@@ -846,9 +846,9 @@ def transect_view(
         transect_2d(stk_q, index=ind, sub=143, fig=fig1, color=color, **kwargs)
         transect_2d(stk_v, index=ind, sub=144, fig=fig1, color=color, **kwargs)
 
-        transect_2d(lI, index=ind, sub=141, fig=fig2, color=color, **kwargs)
+        transect_2d(li, index=ind, sub=141, fig=fig2, color=color, **kwargs)
         transect_2d(
-            DoLP,
+            dolp,
             index=ind,
             sub=142,
             fig=fig2,
@@ -857,7 +857,7 @@ def transect_view(
             **kwargs,
         )
         transect_2d(
-            DoCP,
+            docp,
             index=ind,
             sub=143,
             fig=fig2,
@@ -866,7 +866,7 @@ def transect_view(
             **kwargs,
         )
         transect_2d(
-            DoP,
+            dop,
             index=ind,
             sub=144,
             fig=fig2,
