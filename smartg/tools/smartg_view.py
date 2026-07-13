@@ -139,9 +139,9 @@ def _interp_and_squeeze_scalar_dims(
 
 def smartg_view(
     ds_sg: xr.Dataset | MLUT,
-    logI: bool = False,
-    QU: bool = False,
-    Circ: bool = False,
+    log_i: bool = False,
+    qu: bool = False,
+    circ: bool = False,
     full: bool = False,
     field: str = "up (TOA)",
     prefix: str = "",
@@ -150,10 +150,10 @@ def smartg_view(
     fig: Figure | None = None,
     subdict: dict[str, Any] | None = None,
     interp_dict: dict[str, Any] | None = None,
-    Imin: float | None = None,
-    Imax: float | None = None,
-    Pmin: float = 0,
-    Pmax: float = 100,
+    i_min: float | None = None,
+    i_max: float | None = None,
+    p_min: float = 0,
+    p_max: float = 100,
 ) -> Figure:
     """
     Visualization of SMART-G output in polar coordinates.
@@ -162,18 +162,18 @@ def smartg_view(
     ----------
     ds_sg : Dataset
         An xarray Dataset from SMART-G simulation.
-    logI : bool, optional
+    log_i : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
-    QU : bool, optional
+    qu : bool, optional
         If True, show Q, U, and DoLP. If False, show only I and
         polarization metrics. Default is False.
-    Circ : bool, optional
+    circ : bool, optional
         If True, display circular polarization metrics (V and DoCP -
         Degree of Circular Polarization). If False, display linear
         polarization metrics (Q, U, and DoLP - Degree of Linear
-        Polarization). Effective with both ``QU=True`` and ``QU=False``.
-        When ``full=True``, both circular and linear polarization
-        metrics are displayed. Default is False.
+        Polarization). Effective with both ``qu=True`` and
+        ``qu=False``. When ``full=True``, both circular and linear
+        polarization metrics are displayed. Default is False.
     full : bool, optional
         If True, display everything. Default is False.
     field : str, optional
@@ -198,15 +198,15 @@ def smartg_view(
         dimension names, values are the coordinate values to interpolate
         to. Uses xarray's `interp()` method. Mutually exclusive with
         `subdict`. Default is None.
-    Imin : float, optional
+    i_min : float, optional
         Minimum value for Intensity display. If None, determined from
         data. Default is None.
-    Imax : float, optional
+    i_max : float, optional
         Maximum value for Intensity display. If None, determined from
         data. Default is None.
-    Pmin : float, optional
+    p_min : float, optional
         Minimum value for polarization display. Default is 0.
-    Pmax : float, optional
+    p_max : float, optional
         Maximum value for polarization display. Default is 100.
 
     Returns
@@ -312,10 +312,10 @@ def smartg_view(
     DoP = cast(xr.DataArray, 100 * IP / stk_i)
 
     if not full:
-        if QU:
+        if qu:
             if fig is None:
                 fig = figure(figsize=(9, 14))
-            if logI:
+            if log_i:
                 lI = cast(xr.DataArray, np.log10(stk_i))
                 lI.attrs["latex_name"] = mdesc(
                     str(stk_i.name or "I"), logI=True
@@ -327,8 +327,8 @@ def smartg_view(
                     sub=423,
                     fig=fig,
                     cmap=cmap,
-                    vmin=Imin,
-                    vmax=Imax,
+                    vmin=i_min,
+                    vmax=i_max,
                 )
             else:
                 plot_polar(
@@ -338,8 +338,8 @@ def smartg_view(
                     sub=423,
                     fig=fig,
                     cmap=cmap,
-                    vmin=Imin,
-                    vmax=Imax,
+                    vmin=i_min,
+                    vmax=i_max,
                 )
             plot_polar(
                 stk_u.assign_coords(stk_u.coords),
@@ -361,7 +361,7 @@ def smartg_view(
                 fig=fig,
                 cmap=cmap,
             )
-            if Circ:
+            if circ:
                 if ind is not None:
                     rectV = 426
                 else:
@@ -386,15 +386,15 @@ def smartg_view(
                     rect=rectDoP,
                     sub=428,
                     fig=fig,
-                    vmin=Pmin,
-                    vmax=Pmax,
+                    vmin=p_min,
+                    vmax=p_max,
                     cmap=cmap,
                 )
         else:
             # show only I and PR
             if fig is None:
                 fig = figure(figsize=(9, 6))
-            if logI:
+            if log_i:
                 lI = cast(xr.DataArray, np.log10(stk_i))
                 lI.attrs["latex_name"] = mdesc(
                     str(stk_i.name or "I"), logI=True
@@ -406,8 +406,8 @@ def smartg_view(
                     sub=223,
                     fig=fig,
                     cmap=cmap,
-                    vmin=Imin,
-                    vmax=Imax,
+                    vmin=i_min,
+                    vmax=i_max,
                 )
             else:
                 plot_polar(
@@ -417,11 +417,11 @@ def smartg_view(
                     sub=223,
                     fig=fig,
                     cmap=cmap,
-                    vmin=Imin,
-                    vmax=Imax,
+                    vmin=i_min,
+                    vmax=i_max,
                 )
 
-            if Circ:
+            if circ:
                 DoCP.attrs["latex_name"] = r"$DoCP$"
                 plot_polar(
                     DoCP.assign_coords(DoCP.coords),
@@ -430,7 +430,7 @@ def smartg_view(
                     sub=224,
                     fig=fig,
                     vmin=0,
-                    vmax=Pmax,
+                    vmax=p_max,
                     cmap=cmap,
                 )
             else:
@@ -441,8 +441,8 @@ def smartg_view(
                     rect=222,
                     sub=224,
                     fig=fig,
-                    vmin=Pmin,
-                    vmax=Pmax,
+                    vmin=p_min,
+                    vmax=p_max,
                     cmap=cmap,
                 )
     else:
@@ -463,8 +463,8 @@ def smartg_view(
             sub=445,
             fig=fig,
             cmap=cmap,
-            vmin=Imin,
-            vmax=Imax,
+            vmin=i_min,
+            vmax=i_max,
         )
         plot_polar(
             stk_u.assign_coords(stk_u.coords),
@@ -505,8 +505,8 @@ def smartg_view(
             rect=(4, 4, 10),
             sub=(4, 4, 14),
             fig=fig,
-            vmin=Pmin,
-            vmax=Pmax,
+            vmin=p_min,
+            vmax=p_max,
             cmap=cmap,
         )
         plot_polar(
@@ -515,8 +515,8 @@ def smartg_view(
             rect=(4, 4, 11),
             sub=(4, 4, 15),
             fig=fig,
-            vmin=Pmin,
-            vmax=Pmax,
+            vmin=p_min,
+            vmax=p_max,
             cmap=cmap,
         )
         plot_polar(
@@ -525,8 +525,8 @@ def smartg_view(
             rect=(4, 4, 12),
             sub=(4, 4, 16),
             fig=fig,
-            vmin=Pmin,
-            vmax=Pmax,
+            vmin=p_min,
+            vmax=p_max,
             cmap=cmap,
         )
 
