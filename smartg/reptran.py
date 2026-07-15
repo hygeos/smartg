@@ -12,32 +12,75 @@ from scipy.integrate import quad, simpson
 from smartg.config import DIR_AUXDATA
 from scipy.interpolate import interp1d
 import netCDF4
+import warnings
 from smartg.interp import interp2, interp3
 
 dir_reptran = DIR_AUXDATA / 'reptran'
 
 def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
     '''
-    Compute the final spectral signal from mlut output of smart_g and
-    REPTRAN_IBAND_LIST weights
-    '''
-    we, wb, ex, dl, norm, norm_dl = ibands.get_weights()
-    res = MLUT()
-    for l in mlut:
-        for pref in ['I_','Q_','U_','V_','transmission','flux'] :
-            if pref in l.desc:
-                if extern_weights is not None:
-                    tmp = l.desc
-                    l = l*extern_weights 
-                    l.desc = tmp
-                if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-                else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)
-                if integrated: lr = lr/norm
-                else         : lr = lr/norm_dl
+    Compute the final spectral signal from an xarray Dataset and
+    REPTRAN_IBAND_LIST weights.
 
-                res.add_lut(lr, desc=l.desc)
-    res.attrs = mlut.attrs
-    return res
+    MLUT input is supported temporarily for backwards compatibility and is
+    converted to an xarray Dataset.
+    '''
+    if isinstance(mlut, MLUT):
+        warnings.warn(
+            "Passing an MLUT to reduce_reptran is deprecated; pass an "
+            "xarray Dataset instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        mlut = mlut.to_xarray()
+    elif isinstance(mlut, xr.DataArray):
+        mlut = mlut.to_dataset(name=mlut.name or 'data')
+    elif not isinstance(mlut, xr.Dataset):
+        raise TypeError("mlut must be an xarray Dataset or an MLUT")
+
+    we, wb, ex, dl, _, _ = ibands.get_weights(output_type='DataArray')
+    wavelength = mlut.coords['wavelength']
+    grouping = xr.DataArray(
+        wb.to_numpy(),
+        dims=('wavelength',),
+        coords={'wavelength': wavelength},
+        name='wavelength',
+    )
+
+    if extern_weights is not None:
+        if isinstance(extern_weights, LUT):
+            warnings.warn(
+                "Passing a LUT as extern_weights is deprecated; pass an "
+                "xarray DataArray instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            extern_weights = extern_weights.to_xarray()
+        elif not isinstance(extern_weights, xr.DataArray):
+            raise TypeError("extern_weights must be an xarray DataArray or LUT")
+
+    factor = we * ex * dl if use_solar else we * dl
+    norm = we.groupby(grouping).sum(dim='wavelength')
+    norm_dl = (we * dl).groupby(grouping).sum(dim='wavelength')
+
+    result = xr.Dataset(attrs=mlut.attrs)
+    prefixes = ('I_', 'Q_', 'U_', 'V_', 'transmission', 'flux')
+    for name, data_array in mlut.data_vars.items():
+        description = data_array.attrs.get('desc', name)
+        if not any(prefix in description for prefix in prefixes):
+            continue
+
+        attrs = dict(data_array.attrs)
+        weighted = data_array * factor
+        if extern_weights is not None:
+            weighted = weighted * extern_weights
+
+        reduced = weighted.groupby(grouping).sum(dim='wavelength')
+        reduced = reduced / (norm if integrated else norm_dl)
+        reduced.attrs = attrs
+        result[name] = reduced
+
+    return result
 
 
 def Reptran_Emission(mlut, ibands):
