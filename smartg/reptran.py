@@ -17,7 +17,7 @@ from smartg.interp import interp2, interp3
 
 dir_reptran = DIR_AUXDATA / 'reptran'
 
-def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
+def reduce_reptran(ds, ibands, use_solar=False, integrated=False, extern_weights=None):
     '''
     Compute the final spectral signal from an xarray Dataset and
     ReptranIbandList weights.
@@ -25,21 +25,19 @@ def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weigh
     MLUT input is supported temporarily for backwards compatibility and is
     converted to an xarray Dataset.
     '''
-    if isinstance(mlut, MLUT):
+    if isinstance(ds, MLUT):
         warnings.warn(
             "Passing an MLUT to reduce_reptran is deprecated; pass an "
             "xarray Dataset instead.",
             DeprecationWarning,
             stacklevel=2,
         )
-        mlut = mlut.to_xarray()
-    elif isinstance(mlut, xr.DataArray):
-        mlut = mlut.to_dataset(name=mlut.name or 'data')
-    elif not isinstance(mlut, xr.Dataset):
-        raise TypeError("mlut must be an xarray Dataset or an MLUT")
+        ds = ds.to_xarray()
+    elif not isinstance(ds, xr.Dataset):
+        raise TypeError("ds must be an xarray Dataset or an MLUT")
 
     we, wb, ex, dl, _, _ = ibands.get_weights(output_type='DataArray')
-    wavelength = mlut.coords['wavelength']
+    wavelength = ds.coords['wavelength']
     grouping = xr.DataArray(
         wb.to_numpy(),
         dims=('wavelength',),
@@ -63,9 +61,9 @@ def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weigh
     norm = we.groupby(grouping).sum(dim='wavelength')
     norm_dl = (we * dl).groupby(grouping).sum(dim='wavelength')
 
-    result = xr.Dataset(attrs=mlut.attrs)
+    result = xr.Dataset(attrs=ds.attrs)
     prefixes = ('I_', 'Q_', 'U_', 'V_', 'transmission', 'flux')
-    for name, data_array in mlut.data_vars.items():
+    for name, data_array in ds.data_vars.items():
         description = data_array.attrs.get('desc', name)
         if not any(prefix in description for prefix in prefixes):
             continue
@@ -83,32 +81,50 @@ def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weigh
     return result
 
 
-def reptran_emission(mlut, ibands):
+def reptran_emission(ds, ibands):
     '''
     Return Thermal emission
     '''
-    if hasattr(mlut, 'to_xarray'):
-        mlut = mlut.to_xarray()
+    if isinstance(ds, MLUT):
+        warnings.warn(
+            "Passing an MLUT to reduce_reptran is deprecated; pass an "
+            "xarray Dataset instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        ds = ds.to_xarray()
+    elif not isinstance(ds, xr.Dataset):
+        raise TypeError("ds must be an xarray Dataset or an MLUT")
 
-    z_axis = mlut.coords['z_atm'].to_numpy()
-    wavelength_axis = mlut.coords['wavelength'].to_numpy()
-    t_atm = mlut['T_atm'].to_numpy()
+    z_axis = ds.coords['z_atm'].to_numpy()
+    wavelength_axis = ds.coords['wavelength'].to_numpy()
+    t_atm = ds['T_atm'].to_numpy()
 
     bsgroup = ibands.get_groups()
-    kabs    = od2k(mlut, 'OD_abs_atm') * 1e-3 # m-1
+    kabs    = od2k(ds, 'OD_abs_atm') * 1e-3 # m-1
     z       = -z_axis * 1e3 # m
-    wmin = np.unique([ib.band.wmin for ib in ibands.l])
-    wmax = np.unique([ib.band.wmax for ib in ibands.l])
-    Avg_B  = np.zeros((len(wmin), len(z)))
-    for i,(wmin,wmax) in enumerate(zip(wmin,wmax)):    
-        for j,T in enumerate(t_atm):
-            lmin, lmax = wmin*1e-9, wmax*1e-9 # m
-            dl         = wmax-wmin # nm
-            Avg_B[i,j] = quad(blackbody_radiance, lmin, lmax, args=T)[0]/(dl)
-    Emission = LUT(kabs * Avg_B[bsgroup, :], 
+    band_wmin = np.unique([ib.band.wmin for ib in ibands.l])
+    band_wmax = np.unique([ib.band.wmax for ib in ibands.l])
+    avg_b = np.zeros((len(band_wmin), len(z)))
+    for i, (current_wmin, current_wmax) in enumerate(
+        zip(band_wmin, band_wmax, strict=True)
+    ):
+        for j, temperature in enumerate(t_atm):
+            wavelength_min, wavelength_max = (
+                current_wmin * 1e-9,
+                current_wmax * 1e-9,
+            )  # m
+            bandwidth = current_wmax - current_wmin  # nm
+            avg_b[i, j] = quad(
+                blackbody_radiance,
+                wavelength_min,
+                wavelength_max,
+                args=temperature,
+            )[0] / bandwidth
+    emission = LUT(kabs * avg_b[bsgroup, :],
                axes = [wavelength_axis, z], 
                names= ['wavelength','z_atm'])
-    return Emission
+    return emission
 
 
 def reptran_avg_emission(mlut, ibands):
