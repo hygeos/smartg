@@ -1081,7 +1081,7 @@ class Smartg(object):
         Parameters
         ----------
         wl : float | list | 1-D ndarray
-            Wavelength(s) in nm. It can be a list of REPTRAN_IBAND or KDIS_IBAND objects.
+            Wavelength(s) in nm. It can be a list of ReptranIband or KDIS_IBAND objects.
         atm : None | Atm1D | MLUT, optional
             The atmosphere profile. If None, there is no atmosphere.
         surf : None | RoughSurface | FlatSurface | LambSurface, optional

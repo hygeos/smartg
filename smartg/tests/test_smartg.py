@@ -10,7 +10,7 @@ import numpy as np
 from smartg.smartg import Smartg, RoughSurface, LambSurface, AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 from smartg.water import IOP_1
-from smartg.reptran import REPTRAN, reduce_reptran
+from smartg.reptran import Reptran, reduce_reptran
 from smartg.smartg_view import smartg_view
 from smartg import conftest
 
@@ -98,7 +98,7 @@ def test_reptran(sg):
     atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     surf = RoughSurface(WIND=2.0)
 
-    ibands = REPTRAN("reptran_solar_msg").to_smartg("msg1")
+    ibands = Reptran("reptran_solar_msg").to_smartg("msg1")
 
     res = sg.run(ibands.l, atm=atm, surf=surf, water=None, NBPHOTONS=NBPHOTONS)
     reduce_reptran(res, ibands)

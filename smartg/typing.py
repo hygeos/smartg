@@ -38,7 +38,7 @@ class BandLike(Protocol):
     Any object exposing a ``w`` wavelength attribute and a
     ``calc_profile`` method is considered a ``BandLike``. This covers
     both :class:`smartg.kdis.KDIS_IBAND` and
-    :class:`smartg.reptran.REPTRAN_IBAND` without importing them (which
+    :class:`smartg.reptran.ReptranIband` without importing them (which
     would create a circular import via ``atmosphere.py``).
 
     The ``@runtime_checkable`` decorator enables ``isinstance`` checks

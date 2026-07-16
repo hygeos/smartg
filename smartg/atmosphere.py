@@ -1627,7 +1627,7 @@ class Atm1D(Atmosphere):
         ----------
         wav : array_like or BandSet
             Wavelengths at which to calculate the profile. It can be a
-            list of REPTRAN_IBAND or KDIS_IBAND.
+            list of ReptranIband or KDIS_IBAND.
         n_theta : int, optional
             The number of angles to be considered for the phase matrix.
         use_old_calc_iphase : bool, optional
@@ -2271,7 +2271,7 @@ class Atm1D(Atmosphere):
                 # (already calculated in Kdis)
                 if not (
                     str(wav.type_wav)
-                    == "<class 'smartg.reptran.REPTRAN_IBAND'>"
+                    == "<class 'smartg.reptran.ReptranIband'>"
                 ):
                     assert wav.data is not None
                     all_kdis_gas = (

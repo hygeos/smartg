@@ -20,7 +20,7 @@ dir_reptran = DIR_AUXDATA / 'reptran'
 def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
     '''
     Compute the final spectral signal from an xarray Dataset and
-    REPTRAN_IBAND_LIST weights.
+    ReptranIbandList weights.
 
     MLUT input is supported temporarily for backwards compatibility and is
     converted to an xarray Dataset.
@@ -83,7 +83,7 @@ def reduce_reptran(mlut, ibands, use_solar=False, integrated=False, extern_weigh
     return result
 
 
-def Reptran_Emission(mlut, ibands):
+def reptran_emission(mlut, ibands):
     '''
     Return Thermal emission
     '''
@@ -111,7 +111,7 @@ def Reptran_Emission(mlut, ibands):
     return Emission
 
 
-def Reptran_Avg_Emission(mlut, ibands):
+def reptran_avg_emission(mlut, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
@@ -120,22 +120,22 @@ def Reptran_Avg_Emission(mlut, ibands):
 
     z_axis = mlut.coords['z_atm'].to_numpy()
 
-    return (4*np.pi)*Reptran_Emission(mlut, ibands).reduce(simpson, 'z_atm', x=-z_axis * 1e3)
+    return (4*np.pi)*reptran_emission(mlut, ibands).reduce(simpson, 'z_atm', x=-z_axis * 1e3)
 
 
 
-class REPTRAN_IBAND(object):
+class ReptranIband(object):
     '''
     REPTRAN internal band
 
     Arguments:
-        band: REPTRAN_BAND object
+        band: ReptranBand object
         index: band index
         iband: internal band index
     '''
     def __init__(self, band, index):
 
-        self.band = band     # parent REPTRAN_BAND
+        self.band = band     # parent ReptranBand
         self.index = index   # internal band index
         self.w = band.awvl[index]  # band wavelength
         self._iband=band._iband[index]
@@ -181,7 +181,7 @@ class REPTRAN_IBAND(object):
                 # on recupere la LUT d'absorption
                 crs_filename = self.filename.with_suffix('')  # supprime l'extension
                 crs_filename = crs_filename.with_name(f"{crs_filename.name}.lookup.{self.species[ig]}")
-                crs_mol = readCRS(crs_filename, self._iband)
+                crs_mol = ReadCrs(crs_filename, self._iband)
 
                 # interpolation du profil vertical de temperature de reference dans les LUT
                 f = interp1d(crs_mol.pressure,crs_mol.t_ref, fill_value='extrapolate')
@@ -205,7 +205,7 @@ class REPTRAN_IBAND(object):
         return datamol
 
 
-class REPTRAN_BAND(object):
+class ReptranBand(object):
     def __init__(self, reptran, band):
 
         self.band = band
@@ -233,7 +233,7 @@ class REPTRAN_BAND(object):
         '''
         returns internal band by its number (starting at zero)
         '''
-        return REPTRAN_IBAND(self, index)
+        return ReptranIband(self, index)
 
     def ibands(self):
         '''
@@ -243,7 +243,7 @@ class REPTRAN_BAND(object):
             yield self.iband(i)
             
 
-class REPTRAN(object):
+class Reptran(object):
     '''
     REPTRAN correlated-k file
     if provided without a directory, look to auxdata/reptran directory
@@ -259,9 +259,9 @@ class REPTRAN(object):
         if not filename.suffix == '.cdf':
             self.filename = self.filename.with_name(self.filename.name + '.cdf')
 
-        self._readFileGeneral()
+        self._read_file_general()
 
-    def _readFileGeneral(self):
+    def _read_file_general(self):
         nc = netCDF4.Dataset(self.filename)
         self.wvl = nc.variables['wvl'][:] # the wavelength grid
         if 'extra' in nc.variables.keys():
@@ -286,13 +286,13 @@ class REPTRAN(object):
 
     def band(self, band):
         '''
-        returns a REPTRAN_BAND
+        returns a ReptranBand
         band can be defined either by an integer, or a string
         '''
         if isinstance(band, str):
             return self.band(self.band_names.index(band))
         else:
-            return REPTRAN_BAND(self, band)
+            return ReptranBand(self, band)
 
     def bands(self):
         '''
@@ -303,7 +303,7 @@ class REPTRAN(object):
 
     def to_smartg(self, include='', lmin=-np.inf, lmax=np.inf,band_indices=None ):
         '''
-        return a REPTRAN_IBAND_LIST for Smartg.run() method
+        return a ReptranIbandList for Smartg.run() method
         '''
         ik_l=[]
         if band_indices is None:
@@ -323,11 +323,11 @@ class REPTRAN(object):
 
         assert len(ik_l) != 0
 
-        return REPTRAN_IBAND_LIST(sorted(ik_l, key=lambda x:x.w))
+        return ReptranIbandList(sorted(ik_l, key=lambda x:x.w))
 
-class REPTRAN_IBAND_LIST(object):
+class ReptranIbandList(object):
     '''
-    REPTRAN LIST OF IBANDS
+    Reptran list of internal bands
     '''
 
     def __init__(self, l):
@@ -408,12 +408,12 @@ class REPTRAN_IBAND_LIST(object):
         return list(set(names))
 
 
-class readCRS(object):
+class ReadCrs(object):
     def __init__(self,filename,iband):
         self.filename=Path(filename)
-        self._readFileGeneral(iband)
+        self._read_file_general(iband)
 
-    def _readFileGeneral(self,iband):
+    def _read_file_general(self,iband):
         nc=netCDF4.Dataset(dir_reptran / f'{self.filename.name}.cdf')
         self.wvl_index=nc.variables['wvl_index'][:]
         ii=list(self.wvl_index).index(iband)
