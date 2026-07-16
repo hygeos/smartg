@@ -101,7 +101,7 @@ def reptran_emission(ds, ibands):
     t_atm = ds['T_atm'].to_numpy()
 
     bsgroup = ibands.get_groups()
-    kabs    = od2k(ds, 'OD_abs_atm') * 1e-3 # m-1
+    kabs = np.asarray(od2k(ds, 'OD_abs_atm')) * 1e-3  # m-1
     z       = -z_axis * 1e3 # m
     band_wmin = np.unique([ib.band.wmin for ib in ibands.l])
     band_wmax = np.unique([ib.band.wmax for ib in ibands.l])
@@ -121,22 +121,38 @@ def reptran_emission(ds, ibands):
                 wavelength_max,
                 args=temperature,
             )[0] / bandwidth
-    emission = LUT(kabs * avg_b[bsgroup, :],
-               axes = [wavelength_axis, z], 
-               names= ['wavelength','z_atm'])
+    emission = xr.DataArray(
+        kabs * avg_b[bsgroup, :],
+        dims=('wavelength', 'z_atm'),
+        coords={'wavelength': wavelength_axis, 'z_atm': z},
+        name='emission',
+    )
     return emission
 
 
-def reptran_avg_emission(mlut, ibands):
+def reptran_avg_emission(ds, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
-    if hasattr(mlut, 'to_xarray'):
-        mlut = mlut.to_xarray()
+    if isinstance(ds, MLUT):
+        ds = ds.to_xarray()
+    elif not isinstance(ds, xr.Dataset):
+        raise TypeError("ds must be an xarray Dataset or an MLUT")
 
-    z_axis = mlut.coords['z_atm'].to_numpy()
+    emission = reptran_emission(ds, ibands)
+    z_axis = emission.coords['z_atm'].to_numpy()
+    emission_values = simpson(
+        emission.to_numpy(),
+        x=z_axis,
+        axis=emission.get_axis_num('z_atm'),
+    )
 
-    return (4*np.pi)*reptran_emission(mlut, ibands).reduce(simpson, 'z_atm', x=-z_axis * 1e3)
+    return xr.DataArray(
+        4 * np.pi * emission_values,
+        dims=('wavelength',),
+        coords={'wavelength': emission.coords['wavelength']},
+        name='emission',
+    )
 
 
 
