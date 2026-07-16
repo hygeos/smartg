@@ -180,61 +180,94 @@ class ReptranIband(object):
     def calc_profile(self, prof):
         '''
         calculate a gaseous absorption profile for this internal band
-        using temperature T and pressure P, and profile of molecular density of
+        using temperature and pressure, and profile of molecular density of
         various gases stored in the profile prof
         '''
-        Nmol = 8
-        T = prof.t
-        P = prof.p
-        M = len(T)
+        n_molecules = 8
+        temperature = prof.t
+        pressure = prof.p
+        profile_length = len(temperature)
 
-        densmol = np.zeros((M, Nmol), np.float64)
-        densmol[:,0] = prof.dens_h2o
-        densmol[:,1] = prof.dens_co2
-        densmol[:,2] = prof.dens_o3
-        densmol[:,3] = prof.dens_no2
-        densmol[:,4] = prof.dens_co
-        densmol[:,5] = prof.dens_ch4
-        densmol[:,6] = prof.dens_o2
-        densmol[:,7] = prof.dens_n2
+        density_molecules = np.zeros(
+            (profile_length, n_molecules), np.float64
+        )
+        density_molecules[:, 0] = prof.dens_h2o
+        density_molecules[:, 1] = prof.dens_co2
+        density_molecules[:, 2] = prof.dens_o3
+        density_molecules[:, 3] = prof.dens_no2
+        density_molecules[:, 4] = prof.dens_co
+        density_molecules[:, 5] = prof.dens_ch4
+        density_molecules[:, 6] = prof.dens_o2
+        density_molecules[:, 7] = prof.dens_n2
 
-        xh2o = prof.dens_h2o/prof.dens_air
+        x_h2o = prof.dens_h2o / prof.dens_air
 
-        datamol = np.zeros(M, np.float64)
+        data_molecules = np.zeros(profile_length, np.float64)
 
-        assert len(prof.t) == len(prof.p)
+        assert len(temperature) == len(pressure)
 
         # for each gas
-        for ig in np.arange(Nmol):
+        for molecule_index in np.arange(n_molecules):
 
             # si le gaz est absorbant a cette lambda
-            if self.crs_source[ig]==1:
+            if self.crs_source[molecule_index] == 1:
 
                 # on recupere la LUT d'absorption
                 crs_filename = self.filename.with_suffix('')  # supprime l'extension
-                crs_filename = crs_filename.with_name(f"{crs_filename.name}.lookup.{self.species[ig]}")
+                crs_filename = crs_filename.with_name(
+                    f"{crs_filename.name}.lookup."
+                    f"{self.species[molecule_index]}"
+                )
                 crs_mol = ReadCrs(crs_filename, self._iband)
 
                 # interpolation du profil vertical de temperature de reference dans les LUT
-                f = interp1d(crs_mol.pressure,crs_mol.t_ref, fill_value='extrapolate')
+                reference_temperature = interp1d(
+                    crs_mol.pressure,
+                    crs_mol.t_ref,
+                    fill_value='extrapolate',
+                )
                 #f = interp1d(crs_mol.pressure,crs_mol.t_ref)
 
                 # ecart en temperature par rapport au profil de reference (ou P de reference est en Pa et P AFGL en hPa)
-                dT = T - f(P*100)
+                delta_temperature = temperature - reference_temperature(
+                    pressure * 100
+                )
 
-                if ig == 0 :  # si h2o
+                if molecule_index == 0:  # si h2o
                     # interpolation dans la LUT d'absorption en fonction de
                     # pression, ecart en temperature et vmr de h2o et mutiplication par la densite,
                     # calcul de reptran avec LUT en 10^(-20) m2, passage en km-1
-                    datamol += interp3(crs_mol.t_pert,crs_mol.vmrs,crs_mol.pressure,crs_mol.xsec,dT,xh2o,P*100) * densmol[:,ig] * 1e-11
+                    data_molecules += (
+                        interp3(
+                            crs_mol.t_pert,
+                            crs_mol.vmrs,
+                            crs_mol.pressure,
+                            crs_mol.xsec,
+                            delta_temperature,
+                            x_h2o,
+                            pressure * 100,
+                        )
+                        * density_molecules[:, molecule_index]
+                        * 1e-11
+                    )
                 else:
                     tab = crs_mol.xsec
                     # interpolation dans la LUT d'absorption en fonction de
                     # pression, ecart en temperature et mutiplication par la densite,
                     # calcul de reptran avec LUT en 10^(-20) m2, passage en km-1 
-                    datamol += interp2(crs_mol.t_pert,crs_mol.pressure,np.squeeze(tab),dT,P*100) * densmol[:,ig] * 1e-11
+                    data_molecules += (
+                        interp2(
+                            crs_mol.t_pert,
+                            crs_mol.pressure,
+                            np.squeeze(tab),
+                            delta_temperature,
+                            pressure * 100,
+                        )
+                        * density_molecules[:, molecule_index]
+                        * 1e-11
+                    )
 
-        return datamol
+        return data_molecules
 
 
 class ReptranBand(object):
@@ -362,8 +395,8 @@ class ReptranIbandList(object):
     Reptran list of internal bands
     '''
 
-    def __init__(self, l):
-        self.l=l
+    def __init__(self, ibands):
+        self.l = ibands
 
     def get_weights(self, output_type='LUT'):
         '''
