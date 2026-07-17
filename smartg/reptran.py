@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 
-from __future__ import print_function, division, absolute_import
+from __future__ import annotations
+from collections.abc import Iterator, Sequence
+from typing import TYPE_CHECKING, Literal, overload
 import numpy as np
 from luts.luts import LUT, MLUT
 import xarray as xr
@@ -13,10 +15,20 @@ from smartg.config import DIR_AUXDATA
 from scipy.interpolate import make_interp_spline
 import warnings
 from smartg.interp import interp2, interp3
+from smartg.typing import NumericArrayLike, PathType
+
+if TYPE_CHECKING:
+    from smartg.atmosphere import ProfileBase
 
 dir_reptran = DIR_AUXDATA / 'reptran'
 
-def reduce_reptran(ds, ibands, use_solar=False, integrated=False, extern_weights=None):
+def reduce_reptran(
+    ds: xr.Dataset | MLUT,
+    ibands: ReptranIbandList,
+    use_solar: bool = False,
+    integrated: bool = False,
+    extern_weights: LUT | xr.DataArray | None = None,
+) -> xr.Dataset:
     '''
     Compute the final spectral signal from an xarray Dataset and
     ReptranIbandList weights.
@@ -80,7 +92,9 @@ def reduce_reptran(ds, ibands, use_solar=False, integrated=False, extern_weights
     return result
 
 
-def reptran_emission(ds, ibands):
+def reptran_emission(
+    ds: xr.Dataset | MLUT, ibands: ReptranIbandList
+) -> xr.DataArray:
     '''
     Return Thermal emission
     '''
@@ -129,7 +143,9 @@ def reptran_emission(ds, ibands):
     return emission
 
 
-def reptran_avg_emission(ds, ibands):
+def reptran_avg_emission(
+    ds: xr.Dataset | MLUT, ibands: ReptranIbandList
+) -> xr.DataArray:
     '''
     Return vertically integrated Thermal emission
     '''
@@ -164,7 +180,7 @@ class ReptranIband(object):
         index: band index
         iband: internal band index
     '''
-    def __init__(self, band, index):
+    def __init__(self, band: ReptranBand, index: int) -> None:
 
         self.band = band     # parent ReptranBand
         self.index = index   # internal band index
@@ -176,7 +192,7 @@ class ReptranIband(object):
         self.species=['H2O','CO2','O3','N2O','CO','CH4','O2','N2']
         self.filename = Path(band.filename)
 
-    def calc_profile(self, prof):
+    def calc_profile(self, prof: ProfileBase) -> np.ndarray:
         '''
         calculate a gaseous absorption profile for this internal band
         using temperature and pressure, and profile of molecular density of
@@ -269,7 +285,7 @@ class ReptranIband(object):
 
 
 class ReptranBand(object):
-    def __init__(self, reptran, band):
+    def __init__(self, reptran: Reptran, band: int) -> None:
 
         self.band = band
         self.nband = reptran.nwvl_in_band[self.band] # the number of internal bands (representative bands) in this channel
@@ -292,13 +308,13 @@ class ReptranBand(object):
             self.wmax = self.w + self.Rint/2.
 
 
-    def iband(self, index):
+    def iband(self, index: int) -> ReptranIband:
         '''
         returns internal band by its number (starting at zero)
         '''
         return ReptranIband(self, index)
 
-    def ibands(self):
+    def ibands(self) -> Iterator[ReptranIband]:
         '''
         iterate over each internal band
         '''
@@ -312,7 +328,7 @@ class Reptran(object):
     if provided without a directory, look to auxdata/reptran directory
     '''
 
-    def __init__(self,filename):
+    def __init__(self, filename: PathType) -> None:
         filename = Path(filename)
         if filename.parent == Path('.'):
             self.filename = dir_reptran / filename
@@ -324,7 +340,7 @@ class Reptran(object):
 
         self._read_file_general()
 
-    def _read_file_general(self):
+    def _read_file_general(self) -> None:
         with xr.open_dataset(self.filename) as dataset:
             self.wvl = dataset['wvl'].values  # the wavelength grid
             if 'extra' in dataset.variables:
@@ -351,13 +367,13 @@ class Reptran(object):
             for bname in dataset['band_name'].values:
                 self.band_names.append(str(bname.tobytes()).replace(' ', ''))
 
-    def nbands(self):
+    def nbands(self) -> int:
         '''
         number of bands
         '''
         return len(self.wvl_integral)
 
-    def band(self, band):
+    def band(self, band: int | str) -> ReptranBand:
         '''
         returns a ReptranBand
         band can be defined either by an integer, or a string
@@ -367,14 +383,20 @@ class Reptran(object):
         else:
             return ReptranBand(self, band)
 
-    def bands(self):
+    def bands(self) -> Iterator[ReptranBand]:
         '''
         iterates over all bands
         '''
         for i in range(self.nbands()):
             yield self.band(i)
 
-    def to_smartg(self, include='', lmin=-np.inf, lmax=np.inf,band_indices=None ):
+    def to_smartg(
+        self,
+        include: str = '',
+        lmin: NumericArrayLike = -np.inf,
+        lmax: NumericArrayLike = np.inf,
+        band_indices: Sequence[int] | None = None,
+    ) -> ReptranIbandList:
         '''
         return a ReptranIbandList for Smartg.run() method
         '''
@@ -404,10 +426,43 @@ class ReptranIbandList(object):
     Reptran list of internal bands
     '''
 
-    def __init__(self, ibands):
+    def __init__(self, ibands: Sequence[ReptranIband]) -> None:
         self.l = ibands
 
-    def get_weights(self, output_type='LUT'):
+    @overload
+    def get_weights(
+        self, output_type: Literal['LUT'] = 'LUT'
+    ) -> tuple[
+        LUT,
+        LUT,
+        LUT,
+        LUT,
+        LUT,
+        LUT,
+    ]: ...
+
+    @overload
+    def get_weights(
+        self, output_type: Literal['DataArray']
+    ) -> tuple[
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+    ]: ...
+
+    def get_weights(
+        self, output_type: str = 'LUT'
+    ) -> tuple[
+        LUT | xr.DataArray,
+        LUT | xr.DataArray,
+        LUT | xr.DataArray,
+        LUT | xr.DataArray,
+        LUT | xr.DataArray,
+        LUT | xr.DataArray,
+    ]:
         '''
         return weights, wavelengths, solarflux, bandwidth, bandwidth weighted normalization in postprocessing
         as MLUT objects
@@ -460,7 +515,7 @@ class ReptranIbandList(object):
         return we, wb, ex, dl, norm, norm_dl 
 
 
-    def get_groups(self):
+    def get_groups(self) -> np.ndarray:
         '''
         '''
         bsgroup=[]
@@ -470,7 +525,7 @@ class ReptranIbandList(object):
         return bsgroup-bsgroup[0]
 
         
-    def get_names(self):
+    def get_names(self) -> list[str]:
         '''
         return band names
         '''
@@ -483,11 +538,11 @@ class ReptranIbandList(object):
 
 
 class ReadCrs(object):
-    def __init__(self,filename,iband):
+    def __init__(self, filename: PathType, iband: int) -> None:
         self.filename=Path(filename)
         self._read_file_general(iband)
 
-    def _read_file_general(self,iband):
+    def _read_file_general(self, iband: int) -> None:
         filename = dir_reptran / f'{self.filename.name}.cdf'
         with xr.open_dataset(filename) as dataset:
             self.wvl_index = dataset['wvl_index'].values
