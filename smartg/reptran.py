@@ -396,7 +396,7 @@ class ReptranBand(object):
     w : float
         Mean internal-band wavelength, used when channel limits cannot be
         parsed from ``name``.
-    Rint : float
+    r_int : float
         Wavelength integral, or channel bandwidth, in nanometres.
     wmin, wmax : float
         Lower and upper wavelength limits of the channel in nanometres.
@@ -414,15 +414,15 @@ class ReptranBand(object):
         self.name = reptran.band_names[band]
         self.filename = Path(reptran.filename)    
         # the wavelength integral (width) of this channel
-        self.Rint = reptran.wvl_integral[self.band]
+        self.r_int = reptran.wvl_integral[self.band]
         
         try:
             self.wmin = float(self.name.split('to')[0].rstrip().split('bandfrom')[1])
             self.wmax = float(self.name.split('to')[1].rstrip().split('nm')[0])
         except (IndexError, ValueError):
             self.w    = np.mean(self.awvl)
-            self.wmin = self.w - self.Rint/2.
-            self.wmax = self.w + self.Rint/2.
+            self.wmin = self.w - self.r_int/2.
+            self.wmax = self.w + self.r_int/2.
 
 
     def iband(self, index: int) -> ReptranIband:
@@ -652,7 +652,7 @@ class ReptranIbandList(object):
                 we_l.append(we)
                 ex = iband.band.aextra[iband.index] # E0 of internal band
                 ex_l.append(ex)
-                dl = iband.band.Rint # bandwidth
+                dl = iband.band.r_int # bandwidth
                 dl_l.append(dl)
                 wb = np.mean(iband.band.awvl[:])
                 wb_l.append(wb)
