@@ -277,7 +277,7 @@ class ReptranIband(object):
     species : list of str
         Molecular species corresponding to the entries in
         ``crs_source``.
-    filename : pathlib.Path
+    fname : pathlib.Path
         REPTRAN file associated with the parent sensor channel.
     """
 
@@ -293,7 +293,7 @@ class ReptranIband(object):
             index, :
         ]  # table of absorbing gases
         self.species = ["H2O", "CO2", "O3", "N2O", "CO", "CH4", "O2", "N2"]
-        self.filename = Path(band.filename)
+        self.fname = Path(band.fname)
 
     def calc_profile(self, prof: ProfileBase) -> np.ndarray:
         """Calculate gaseous absorption for the atmospheric profile.
@@ -336,7 +336,7 @@ class ReptranIband(object):
             # si le gaz est absorbant a cette lambda
             if self.crs_source[molecule_index] == 1:
                 # on recupere la LUT d'absorption
-                crs_filename = self.filename.with_suffix(
+                crs_filename = self.fname.with_suffix(
                     ""
                 )  # supprime l'extension
                 crs_filename = crs_filename.with_name(
@@ -433,7 +433,7 @@ class ReptranBand(object):
         Molecular absorption-source flags for each internal band.
     name : str
         Sensor channel name.
-    filename : pathlib.Path
+    fname : pathlib.Path
         REPTRAN file associated with this sensor channel.
     w : float
         Mean internal-band wavelength, used when channel limits cannot
@@ -466,7 +466,7 @@ class ReptranBand(object):
             self._iband - 1
         ]
         self.name = reptran.band_names[band]
-        self.filename = Path(reptran.filename)
+        self.fname = Path(reptran.fname)
         # the wavelength integral (width) of this channel
         self.r_int = reptran.wvl_integral[self.band]
 
@@ -512,14 +512,14 @@ class Reptran(object):
 
     Parameters
     ----------
-    filename : path-like
+    fname : path-like
         REPTRAN file path. If no directory is provided, the file is
         looked up in the auxiliary REPTRAN directory. The ``.cdf``
         suffix is appended when it is absent.
 
     Attributes
     ----------
-    filename : pathlib.Path
+    fname : pathlib.Path
         Path to the REPTRAN correlated-k file.
     wvl : numpy.ndarray
         Internal REPTRAN wavelength grid in nanometres.
@@ -540,22 +540,22 @@ class Reptran(object):
         Names of the available sensor channels.
     """
 
-    def __init__(self, filename: PathType) -> None:
-        filename = Path(filename)
-        if filename.parent == Path("."):
-            self.filename = dir_reptran / filename
+    def __init__(self, fname: PathType) -> None:
+        fname = Path(fname)
+        if fname.parent == Path("."):
+            self.fname = dir_reptran / fname
         else:
-            self.filename = filename
+            self.fname = fname
 
-        if not filename.suffix == ".cdf":
-            self.filename = self.filename.with_name(
-                self.filename.name + ".cdf"
+        if not fname.suffix == ".cdf":
+            self.fname = self.fname.with_name(
+                self.fname.name + ".cdf"
             )
 
         self._read_file_general()
 
     def _read_file_general(self) -> None:
-        with xr.open_dataset(self.filename) as dataset:
+        with xr.open_dataset(self.fname) as dataset:
             self.wvl = dataset["wvl"].values  # the wavelength grid
             if "extra" in dataset.variables:
                 # the extra terrestrial solar irradiance for the
@@ -788,8 +788,8 @@ class ReadCrs(object):
 
     Parameters
     ----------
-    filename : path-like
-        Lookup-table filename without its final ``.cdf`` suffix.
+    fname : path-like
+        Lookup-table path without its final ``.cdf`` suffix.
     iband : int
         REPTRAN internal-band index to select from the lookup table.
 
@@ -802,13 +802,13 @@ class ReadCrs(object):
         water-vapour-mixing-ratio lookup axes.
     """
 
-    def __init__(self, filename: PathType, iband: int) -> None:
-        self.filename = Path(filename)
+    def __init__(self, fname: PathType, iband: int) -> None:
+        self.fname = Path(fname)
         self._read_file_general(iband)
 
     def _read_file_general(self, iband: int) -> None:
-        filename = dir_reptran / f"{self.filename.name}.cdf"
-        with xr.open_dataset(filename) as dataset:
+        fname = dir_reptran / f"{self.fname.name}.cdf"
+        with xr.open_dataset(fname) as dataset:
             self.wvl_index = dataset["wvl_index"].values
             ii = list(self.wvl_index).index(iband)
             self.xsec = dataset["xsec"].values[:, :, ii, :]

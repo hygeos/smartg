@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Spectral band definition and spectral grid construction for SMART-G.
 
 This module provides tools to define the wavelength bands used in
