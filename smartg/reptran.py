@@ -10,7 +10,7 @@ from smartg.atmosphere import od2k, blackbody_radiance
 from pathlib import Path
 from scipy.integrate import quad, simpson
 from smartg.config import DIR_AUXDATA
-from scipy.interpolate import interp1d
+from scipy.interpolate import make_interp_spline
 import netCDF4
 import warnings
 from smartg.interp import interp2, interp3
@@ -221,12 +221,11 @@ class ReptranIband(object):
                 crs_mol = ReadCrs(crs_filename, self._iband)
 
                 # interpolation du profil vertical de temperature de reference dans les LUT
-                reference_temperature = interp1d(
-                    crs_mol.pressure,
-                    crs_mol.t_ref,
-                    fill_value='extrapolate',
+                # k=1: linear interpolation; BSpline extrapolates linearly
+                # beyond the data range by default.
+                reference_temperature = make_interp_spline(
+                    crs_mol.pressure, crs_mol.t_ref, k=1
                 )
-                #f = interp1d(crs_mol.pressure,crs_mol.t_ref)
 
                 # ecart en temperature par rapport au profil de reference (ou P de reference est en Pa et P AFGL en hPa)
                 delta_temperature = temperature - reference_temperature(
