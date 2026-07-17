@@ -238,8 +238,11 @@ class ReptranIband(object):
                 # interpolation du profil vertical de temperature de reference dans les LUT
                 # k=1: linear interpolation; BSpline extrapolates linearly
                 # beyond the data range by default.
+                pressure_order = np.argsort(crs_mol.pressure)
                 reference_temperature = make_interp_spline(
-                    crs_mol.pressure, crs_mol.t_ref, k=1
+                    crs_mol.pressure[pressure_order],
+                    crs_mol.t_ref[pressure_order],
+                    k=1,
                 )
 
                 # ecart en temperature par rapport au profil de reference (ou P de reference est en Pa et P AFGL en hPa)
