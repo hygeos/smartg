@@ -11,7 +11,6 @@ from pathlib import Path
 from scipy.integrate import quad, simpson
 from smartg.config import DIR_AUXDATA
 from scipy.interpolate import make_interp_spline
-import netCDF4
 import warnings
 from smartg.interp import interp2, interp3
 
@@ -326,21 +325,31 @@ class Reptran(object):
         self._read_file_general()
 
     def _read_file_general(self):
-        nc = netCDF4.Dataset(self.filename)
-        self.wvl = nc.variables['wvl'][:] # the wavelength grid
-        if 'extra' in nc.variables.keys():
-            self.extra = nc.variables['extra'][:] # the extra terrestrial solar irradiance for the walength grid
-        else:
-            self.extra = np.ones_like(self.wvl)
-        self.wvl_integral = nc.variables['wvl_integral'][:] # the wavelength integral (width) of each sensor channel
-        self.nwvl_in_band = nc.variables['nwvl_in_band'][:] # the number of internal bands (representative bands) in each sensor channel
-        self.iwvl = nc.variables['iwvl'][:] # the indices of the internal bands within the wavelength grid for each sensor channel
-        self.iwvl_weight = nc.variables['iwvl_weight'][:] # the weight associated to each internal band
-        self.cross_section_source = nc.variables['cross_section_source'][:] # for each internal band, the list of species that participated to the absorption computation 
+        with xr.open_dataset(self.filename) as dataset:
+            self.wvl = dataset['wvl'].values  # the wavelength grid
+            if 'extra' in dataset.variables:
+                # the extra terrestrial solar irradiance for the wavelength
+                # grid
+                self.extra = dataset['extra'].values
+            else:
+                self.extra = np.ones_like(self.wvl)
+            # the wavelength integral (width) of each sensor channel
+            self.wvl_integral = dataset['wvl_integral'].values
+            # the number of internal bands in each sensor channel
+            self.nwvl_in_band = dataset['nwvl_in_band'].values
+            # the indices of internal bands within the wavelength grid
+            self.iwvl = dataset['iwvl'].values
+            # the weight associated with each internal band
+            self.iwvl_weight = dataset['iwvl_weight'].values
+            # the species contributing to absorption for each internal band
+            self.cross_section_source = dataset[
+                'cross_section_source'
+            ].values
 
-        self.band_names = []
-        for bname in nc.variables['band_name']:  # the names of the sensor channels
-            self.band_names.append(str(bname.tobytes()).replace(' ', ''))
+            self.band_names = []
+            # the names of the sensor channels
+            for bname in dataset['band_name'].values:
+                self.band_names.append(str(bname.tobytes()).replace(' ', ''))
 
     def nbands(self):
         '''
@@ -479,12 +488,12 @@ class ReadCrs(object):
         self._read_file_general(iband)
 
     def _read_file_general(self,iband):
-        nc=netCDF4.Dataset(dir_reptran / f'{self.filename.name}.cdf')
-        self.wvl_index=nc.variables['wvl_index'][:]
-        ii=list(self.wvl_index).index(iband)
-        dat=nc.variables['xsec'][:]
-        self.xsec=dat[:,:,ii,:]
-        self.pressure=nc.variables['pressure'][:]
-        self.t_ref=nc.variables['t_ref'][:]
-        self.t_pert=nc.variables['t_pert'][:]
-        self.vmrs=nc.variables['vmrs'][:]
+        filename = dir_reptran / f'{self.filename.name}.cdf'
+        with xr.open_dataset(filename) as dataset:
+            self.wvl_index = dataset['wvl_index'].values
+            ii = list(self.wvl_index).index(iband)
+            self.xsec = dataset['xsec'].values[:, :, ii, :]
+            self.pressure = dataset['pressure'].values
+            self.t_ref = dataset['t_ref'].values
+            self.t_pert = dataset['t_pert'].values
+            self.vmrs = dataset['vmrs'].values
