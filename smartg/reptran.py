@@ -287,7 +287,7 @@ class ReptranBand(object):
         try:
             self.wmin = float(self.name.split('to')[0].rstrip().split('bandfrom')[1])
             self.wmax = float(self.name.split('to')[1].rstrip().split('nm')[0])
-        except:
+        except (IndexError, ValueError):
             self.w    = np.mean(self.awvl)
             self.wmin = self.w - self.Rint/2.
             self.wmax = self.w + self.Rint/2.
@@ -375,13 +375,14 @@ class Reptran(object):
         else:
             bl = [self.band(i) for i in band_indices]
             
-        if not isinstance(lmin,(list,np.ndarray)):
-            lmin=[lmin]
-            lmax=[lmax]
+        lmin_values = np.atleast_1d(lmin)
+        lmax_values = np.atleast_1d(lmax)
         for k in bl:
             if (include in k.name):
-                for ii in range(len(lmin)):
-                    if (k.wmin >= lmin[ii]) and (k.wmax <= lmax[ii]):
+                for ii in range(len(lmin_values)):
+                    if (k.wmin >= lmin_values[ii]) and (
+                        k.wmax <= lmax_values[ii]
+                    ):
                         for ik in k.ibands():
                             ik_l.append(ik)
 
