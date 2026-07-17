@@ -1,5 +1,26 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""REPTRAN representative-wavelength absorption parameterization.
+
+REPTRAN (representative wavelengths absorption parameterization) provides a
+compact representation of molecular absorption for satellite channels and
+spectral bands. High-resolution absorption information is reduced to a set of
+representative wavelengths and associated weights for each channel or band,
+allowing radiative-transfer calculations to retain channel-integrated
+absorption while using fewer spectral points.
+
+This module loads the resulting REPTRAN correlated-k data and molecular
+cross-section lookup tables for SMART-G simulations. It represents sensor
+channels and internal absorption bands, calculates gaseous absorption and
+thermal emission for atmospheric profiles, and reduces spectrally resolved
+results to sensor-channel quantities.
+
+References
+----------
+.. [1] J. Gasteiger, C. Emde, B. Mayer, R. Buras, S. A. Buehler, and
+    O. Lemke, "Representative wavelengths absorption parameterization applied
+    to satellite channels and spectral bands," *Journal of Quantitative
+    Spectroscopy and Radiative Transfer*, vol. 148, pp. 99-115, 2014.
+    https://doi.org/10.1016/j.jqsrt.2014.06.024
+"""
 
 
 from __future__ import annotations
