@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 from collections.abc import Iterator, Sequence
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING
 import numpy as np
 from luts.luts import LUT, MLUT
 import xarray as xr
@@ -47,7 +47,7 @@ def reduce_reptran(
     elif not isinstance(ds, xr.Dataset):
         raise TypeError("ds must be an xarray Dataset or an MLUT")
 
-    we, wb, ex, dl, _, _ = ibands.get_weights(output_type='DataArray')
+    we, wb, ex, dl, _, _ = ibands.get_weights()
     wavelength = ds.coords['wavelength']
     grouping = xr.DataArray(
         wb.to_numpy(),
@@ -429,43 +429,17 @@ class ReptranIbandList(object):
     def __init__(self, ibands: Sequence[ReptranIband]) -> None:
         self.l = ibands
 
-    @overload
-    def get_weights(
-        self, output_type: Literal['LUT'] = 'LUT'
-    ) -> tuple[
-        LUT,
-        LUT,
-        LUT,
-        LUT,
-        LUT,
-        LUT,
-    ]: ...
-
-    @overload
-    def get_weights(
-        self, output_type: Literal['DataArray']
-    ) -> tuple[
+    def get_weights(self) -> tuple[
         xr.DataArray,
         xr.DataArray,
         xr.DataArray,
         xr.DataArray,
         xr.DataArray,
         xr.DataArray,
-    ]: ...
-
-    def get_weights(
-        self, output_type: str = 'LUT'
-    ) -> tuple[
-        LUT | xr.DataArray,
-        LUT | xr.DataArray,
-        LUT | xr.DataArray,
-        LUT | xr.DataArray,
-        LUT | xr.DataArray,
-        LUT | xr.DataArray,
     ]:
         '''
-        return weights, wavelengths, solarflux, bandwidth, bandwidth weighted normalization in postprocessing
-        as MLUT objects
+        Return weights, wavelengths, solar flux, bandwidth, and weighted
+        normalization values as xarray DataArrays.
 
         Outputs:
         weights, wavelengths, solarflux, bandwidth, norm_bandwidth , norm
@@ -489,28 +463,37 @@ class ReptranIbandList(object):
                 wb = np.mean(iband.band.awvl[:])
                 wb_l.append(wb)
         
-        if output_type == 'LUT':
-            wi_arr = np.array(wi_l, dtype=np.float32)
-            wb=LUT(np.array(wb_l, dtype=np.float32),axes=[wi_arr],names=['wavelength'],desc='wavelength central band')
-            we=LUT(np.array(we_l),axes=[wi_arr],names=['wavelength'],desc='Weight')
-            ex=LUT(np.array(ex_l),axes=[wi_arr],names=['wavelength'],desc='E0')
-            dl=LUT(np.array(dl_l),axes=[wi_arr],names=['wavelength'],desc='Dlambda')
-            norm_dl = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-            norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
-        elif output_type == 'DataArray':
-            wi_arr = np.array(wi_l, dtype=np.float32)
-            wb=xr.DataArray(np.array(wb_l, dtype=np.float32),dims=['wavelength'],coords={'wavelength': wi_arr},
-                            name='wavelength',attrs={'desc': 'wavelength central band'})
-            we=xr.DataArray(np.array(we_l),dims=['wavelength'],coords={'wavelength': wi_arr},
-                            name='weight',attrs={'desc': 'Weight'})
-            ex=xr.DataArray(np.array(ex_l),dims=['wavelength'],coords={'wavelength': wi_arr},
-                            name='solarflux',attrs={'desc': 'E0'})
-            dl=xr.DataArray(np.array(dl_l),dims=['wavelength'],coords={'wavelength': wi_arr},
-                            name='bandwidth',attrs={'desc': 'Dlambda'})
-            norm_dl = (we*dl).groupby('wavelength').sum(dim='wavelength')
-            norm = we.groupby('wavelength').sum(dim='wavelength')
-        else:
-            raise ValueError("output_type must be either 'LUT' or 'DataArray'")
+        wi_arr = np.array(wi_l, dtype=np.float32)
+        wb = xr.DataArray(
+            np.array(wb_l, dtype=np.float32),
+            dims=['wavelength'],
+            coords={'wavelength': wi_arr},
+            name='wavelength',
+            attrs={'desc': 'wavelength central band'},
+        )
+        we = xr.DataArray(
+            np.array(we_l),
+            dims=['wavelength'],
+            coords={'wavelength': wi_arr},
+            name='weight',
+            attrs={'desc': 'Weight'},
+        )
+        ex = xr.DataArray(
+            np.array(ex_l),
+            dims=['wavelength'],
+            coords={'wavelength': wi_arr},
+            name='solarflux',
+            attrs={'desc': 'E0'},
+        )
+        dl = xr.DataArray(
+            np.array(dl_l),
+            dims=['wavelength'],
+            coords={'wavelength': wi_arr},
+            name='bandwidth',
+            attrs={'desc': 'Dlambda'},
+        )
+        norm_dl = (we * dl).groupby('wavelength').sum(dim='wavelength')
+        norm = we.groupby('wavelength').sum(dim='wavelength')
         
         return we, wb, ex, dl, norm, norm_dl 
 
