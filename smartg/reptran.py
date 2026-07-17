@@ -29,13 +29,34 @@ def reduce_reptran(
     integrated: bool = False,
     extern_weights: LUT | xr.DataArray | None = None,
 ) -> xr.Dataset:
-    '''
-    Compute the final spectral signal from an xarray Dataset and
-    ReptranIbandList weights.
+    """Reduce spectral results to REPTRAN channel values.
 
-    MLUT input is supported temporarily for backwards compatibility and is
-    converted to an xarray Dataset.
-    '''
+    The spectral variables selected from ``ds`` are weighted by the
+    internal-band weights and grouped by their central channel wavelength.
+
+    Parameters
+    ----------
+    ds : Dataset or MLUT
+        Spectral SMART-G results containing a ``wavelength`` coordinate.
+    ibands : ReptranIbandList
+        REPTRAN internal bands providing weights, channel wavelengths,
+        and bandwidths.
+    use_solar : bool, optional
+        Include extraterrestrial solar irradiance in the weighting factor.
+        Default is False.
+    integrated : bool, optional
+        Normalize by the sum of weights instead of the bandwidth-weighted
+        sum. Default is False.
+    extern_weights : DataArray or LUT, optional
+        Additional wavelength-dependent weights. LUT input is deprecated.
+        Default is None.
+
+    Returns
+    -------
+    Dataset
+        Channel-reduced variables whose names contain an accepted output
+        prefix, with the source variable attributes preserved.
+    """
     if isinstance(ds, MLUT):
         warnings.warn(
             "Passing an MLUT to reduce_reptran is deprecated; pass an "
@@ -95,9 +116,25 @@ def reduce_reptran(
 def reptran_emission(
     ds: xr.Dataset | MLUT, ibands: ReptranIbandList
 ) -> xr.DataArray:
-    '''
-    Return Thermal emission
-    '''
+    """Calculate spectrally resolved thermal emission.
+
+    The absorption coefficient is multiplied by the Planck radiance
+    averaged over each REPTRAN channel and returned at every atmospheric
+    altitude.
+
+    Parameters
+    ----------
+    ds : Dataset or MLUT
+        Atmospheric optical properties containing ``OD_abs_atm``,
+        ``T_atm``, ``wavelength``, and ``z_atm``.
+    ibands : ReptranIbandList
+        REPTRAN internal bands used to determine channel limits and groups.
+
+    Returns
+    -------
+    DataArray
+        Thermal emission with dimensions ``("wavelength", "z_atm")``.
+    """
     if isinstance(ds, MLUT):
         warnings.warn(
             "Passing an MLUT to reduce_reptran is deprecated; pass an "
@@ -146,9 +183,21 @@ def reptran_emission(
 def reptran_avg_emission(
     ds: xr.Dataset | MLUT, ibands: ReptranIbandList
 ) -> xr.DataArray:
-    '''
-    Return vertically integrated Thermal emission
-    '''
+    """Calculate thermal emission integrated over atmospheric altitude.
+
+    Parameters
+    ----------
+    ds : Dataset or MLUT
+        Atmospheric optical properties accepted by
+        :func:`reptran_emission`.
+    ibands : ReptranIbandList
+        REPTRAN internal bands used to determine channel groups.
+
+    Returns
+    -------
+    DataArray
+        Vertically integrated emission with a ``wavelength`` dimension.
+    """
     if isinstance(ds, MLUT):
         ds = ds.to_xarray()
     elif not isinstance(ds, xr.Dataset):
@@ -172,14 +221,34 @@ def reptran_avg_emission(
 
 
 class ReptranIband(object):
-    '''
-    REPTRAN internal band
+    """Represent one internal REPTRAN absorption band.
 
-    Arguments:
-        band: ReptranBand object
-        index: band index
-        iband: internal band index
-    '''
+    Parameters
+    ----------
+    band : ReptranBand
+        Parent sensor band containing this internal band.
+    index : int
+        Zero-based index of the internal band within ``band``.
+
+    Attributes
+    ----------
+    band : ReptranBand
+        Parent sensor channel containing this internal band.
+    index : int
+        Zero-based index of this internal band within ``band``.
+    w : float
+        Representative wavelength of the internal band.
+    weight : float
+        Internal-band quadrature weight.
+    extra : float
+        Extraterrestrial solar irradiance at ``w``.
+    crs_source : numpy.ndarray
+        Flags indicating which molecular species contribute to absorption.
+    species : list of str
+        Molecular species corresponding to the entries in ``crs_source``.
+    filename : pathlib.Path
+        REPTRAN file associated with the parent sensor channel.
+    """
     def __init__(self, band: ReptranBand, index: int) -> None:
 
         self.band = band     # parent ReptranBand
@@ -193,11 +262,20 @@ class ReptranIband(object):
         self.filename = Path(band.filename)
 
     def calc_profile(self, prof: ProfileBase) -> np.ndarray:
-        '''
-        calculate a gaseous absorption profile for this internal band
-        using temperature and pressure, and profile of molecular density of
-        various gases stored in the profile prof
-        '''
+        """Calculate gaseous absorption for the atmospheric profile.
+
+        Parameters
+        ----------
+        prof : ProfileBase
+            Atmospheric profile containing pressure, temperature, air
+            density, and the densities of the absorbing gases.
+
+        Returns
+        -------
+        numpy.ndarray
+            Absorption coefficient profile in inverse kilometres, with one
+            value for each altitude in ``prof``.
+        """
         n_molecules = 8
         temperature = prof.t
         pressure = prof.p
@@ -288,6 +366,42 @@ class ReptranIband(object):
 
 
 class ReptranBand(object):
+    """Represent a REPTRAN sensor channel.
+
+    Parameters
+    ----------
+    reptran : Reptran
+        Parent REPTRAN dataset.
+    band : int
+        Zero-based index of the sensor channel.
+
+    Attributes
+    ----------
+    band : int
+        Zero-based index of this sensor channel in the parent REPTRAN file.
+    nband : int
+        Number of internal bands in this sensor channel.
+    awvl : numpy.ndarray
+        Representative wavelengths of the internal bands in nanometres.
+    awvl_weight : numpy.ndarray
+        Quadrature weights of the internal bands.
+    aextra : numpy.ndarray
+        Extraterrestrial solar irradiance at the internal-band wavelengths.
+    across_section_source : numpy.ndarray
+        Molecular absorption-source flags for each internal band.
+    name : str
+        Sensor channel name.
+    filename : pathlib.Path
+        REPTRAN file associated with this sensor channel.
+    w : float
+        Mean internal-band wavelength, used when channel limits cannot be
+        parsed from ``name``.
+    Rint : float
+        Wavelength integral, or channel bandwidth, in nanometres.
+    wmin, wmax : float
+        Lower and upper wavelength limits of the channel in nanometres.
+    """
+
     def __init__(self, reptran: Reptran, band: int) -> None:
 
         self.band = band
@@ -312,24 +426,63 @@ class ReptranBand(object):
 
 
     def iband(self, index: int) -> ReptranIband:
-        '''
-        returns internal band by its number (starting at zero)
-        '''
+        """Return an internal band by its zero-based index.
+
+        Parameters
+        ----------
+        index : int
+            Zero-based index within the sensor channel.
+
+        Returns
+        -------
+        ReptranIband
+            The selected internal band.
+        """
         return ReptranIband(self, index)
 
     def ibands(self) -> Iterator[ReptranIband]:
-        '''
-        iterate over each internal band
-        '''
+        """Iterate over the internal bands in this sensor channel.
+
+        Yields
+        ------
+        ReptranIband
+            Each internal band in increasing index order.
+        """
         for i in range(self.nband):
             yield self.iband(i)
             
 
 class Reptran(object):
-    '''
-    REPTRAN correlated-k file
-    if provided without a directory, look to auxdata/reptran directory
-    '''
+    """Read and expose a REPTRAN correlated-k file.
+
+    Parameters
+    ----------
+    filename : path-like
+        REPTRAN file path. If no directory is provided, the file is looked
+        up in the auxiliary REPTRAN directory. The ``.cdf`` suffix is
+        appended when it is absent.
+
+    Attributes
+    ----------
+    filename : pathlib.Path
+        Path to the REPTRAN correlated-k file.
+    wvl : numpy.ndarray
+        Internal REPTRAN wavelength grid in nanometres.
+    extra : numpy.ndarray
+        Extraterrestrial solar irradiance at the internal wavelengths.
+    wvl_integral : numpy.ndarray
+        Wavelength integral, or bandwidth, of each sensor channel.
+    nwvl_in_band : numpy.ndarray
+        Number of internal bands in each sensor channel.
+    iwvl : numpy.ndarray
+        Indices of internal bands in the wavelength grid for each channel.
+    iwvl_weight : numpy.ndarray
+        Quadrature weights associated with the internal bands.
+    cross_section_source : numpy.ndarray
+        Molecular absorption-source flags for each internal band.
+    band_names : list of str
+        Names of the available sensor channels.
+    """
 
     def __init__(self, filename: PathType) -> None:
         filename = Path(filename)
@@ -371,25 +524,41 @@ class Reptran(object):
                 self.band_names.append(str(bname.tobytes()).replace(' ', ''))
 
     def nbands(self) -> int:
-        '''
-        number of bands
-        '''
+        """Return the number of sensor channels in the file.
+
+        Returns
+        -------
+        int
+            Number of sensor channels.
+        """
         return len(self.wvl_integral)
 
     def band(self, band: int | str) -> ReptranBand:
-        '''
-        returns a ReptranBand
-        band can be defined either by an integer, or a string
-        '''
+        """Return a sensor channel by index or name.
+
+        Parameters
+        ----------
+        band : int or str
+            Zero-based channel index or exact channel name.
+
+        Returns
+        -------
+        ReptranBand
+            The selected sensor channel.
+        """
         if isinstance(band, str):
             return self.band(self.band_names.index(band))
         else:
             return ReptranBand(self, band)
 
     def bands(self) -> Iterator[ReptranBand]:
-        '''
-        iterates over all bands
-        '''
+        """Iterate over all sensor channels in file order.
+
+        Yields
+        ------
+        ReptranBand
+            Each available sensor channel.
+        """
         for i in range(self.nbands()):
             yield self.band(i)
 
@@ -400,9 +569,26 @@ class Reptran(object):
         lmax: NumericArrayLike = np.inf,
         band_indices: Sequence[int] | None = None,
     ) -> ReptranIbandList:
-        '''
-        return a ReptranIbandList for Smartg.run() method
-        '''
+        """Select internal bands for use with ``Smartg.run``.
+
+        Parameters
+        ----------
+        include : str, optional
+            Substring that must occur in a channel name. The empty string
+            selects all channels. Default is ``''``.
+        lmin, lmax : scalar or array-like, optional
+            Lower and upper wavelength limits in nanometres. Multiple
+            intervals can be supplied as matching sequences. Defaults are
+            negative and positive infinity, respectively.
+        band_indices : sequence of int, optional
+            Explicit channel indices to consider. If None, all channels
+            are considered.
+
+        Returns
+        -------
+        ReptranIbandList
+            Selected internal bands sorted by representative wavelength.
+        """
         ik_l=[]
         if band_indices is None:
             bl = self.bands()
@@ -425,9 +611,13 @@ class Reptran(object):
         return ReptranIbandList(sorted(ik_l, key=lambda x:x.w))
 
 class ReptranIbandList(object):
-    '''
-    Reptran list of internal bands
-    '''
+    """Store a selected list of internal REPTRAN bands.
+
+    Parameters
+    ----------
+    ibands : sequence of ReptranIband
+        Internal bands included in the list.
+    """
 
     def __init__(self, ibands: Sequence[ReptranIband]) -> None:
         self.l = ibands
@@ -440,14 +630,15 @@ class ReptranIbandList(object):
         xr.DataArray,
         xr.DataArray,
     ]:
-        '''
-        Return weights, wavelengths, solar flux, bandwidth, and weighted
-        normalization values as xarray DataArrays.
+        """Return channel weights and metadata as xarray DataArrays.
 
-        Outputs:
-        weights, wavelengths, solarflux, bandwidth, norm_bandwidth , norm
-
-        '''
+        Returns
+        -------
+        tuple of DataArray
+            Six arrays containing, in order, internal-band weights, channel
+            central wavelengths, solar irradiance, bandwidth, weight sums,
+            and bandwidth-weighted sums.
+        """
         we_l=[]
         ex_l=[]
         dl_l=[]
@@ -502,8 +693,14 @@ class ReptranIbandList(object):
 
 
     def get_groups(self) -> np.ndarray:
-        '''
-        '''
+        """Return the zero-based channel group for each internal band.
+
+        Returns
+        -------
+        numpy.ndarray
+            Channel indices shifted so that the first selected channel is
+            group zero.
+        """
         bsgroup=[]
         for iband in self.l:
             bsgroup.append(iband.band.band)
@@ -512,9 +709,13 @@ class ReptranIbandList(object):
 
         
     def get_names(self) -> list[str]:
-        '''
-        return band names
-        '''
+        """Return the unique channel names represented by this list.
+
+        Returns
+        -------
+        list of str
+            Unique sensor channel names.
+        """
         names=[]
 
         for iband in self.l:
@@ -524,6 +725,24 @@ class ReptranIbandList(object):
 
 
 class ReadCrs(object):
+    """Read a REPTRAN molecular cross-section lookup table.
+
+    Parameters
+    ----------
+    filename : path-like
+        Lookup-table filename without its final ``.cdf`` suffix.
+    iband : int
+        REPTRAN internal-band index to select from the lookup table.
+
+    Attributes
+    ----------
+    xsec : ndarray
+        Cross-section values for the selected internal band.
+    pressure, t_ref, t_pert, vmrs : ndarray
+        Pressure, reference-temperature, temperature-perturbation, and
+        water-vapour-mixing-ratio lookup axes.
+    """
+
     def __init__(self, filename: PathType, iband: int) -> None:
         self.filename=Path(filename)
         self._read_file_general(iband)
