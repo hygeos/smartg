@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from itertools import product
 from pathlib import Path
-from typing import TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, TextIO, cast
 
 import numpy as np
 from luts.luts import LUT, MLUT
@@ -731,8 +731,14 @@ class Kdis(object):
 
             filename = dir_data / f'kdis_{model}.h5'
             hdf5_file = h5py.File(filename, "r")
-            self.nmaxai = np.copy(hdf5_file["def"]["maxnai"])
-            species_names = list(hdf5_file["coeff"].keys())
+
+            def h5_dataset(group: h5py.Group, name: str) -> h5py.Dataset:
+                return cast(h5py.Dataset, group[name])
+
+            definition_group = cast(h5py.Group, hdf5_file["def"])
+            coefficient_group = cast(h5py.Group, hdf5_file["coeff"])
+            self.nmaxai = int(np.asarray(h5_dataset(definition_group, "maxnai")[()]))
+            species_names = list(coefficient_group.keys())
             self.nsp_tot = len(species_names)
             self.nsp     = 0
             self.fcont   = []
@@ -741,38 +747,50 @@ class Kdis(object):
             self.fcont_c   = []
             self.species_c = []
             for species_name in species_names:
-                if "rho_dep" in list(hdf5_file["coeff"][species_name].attrs.keys()):
+                species_group = cast(
+                    h5py.Group, coefficient_group[species_name]
+                )
+                if "rho_dep" in species_group.attrs:
                     rho_dependent = bool(
-                        hdf5_file["coeff"][species_name].attrs["rho_dep"]
+                        species_group.attrs["rho_dep"]
                     )
                 else:
                     rho_dependent = False
                 if not rho_dependent:
                     self.nsp  = self.nsp  + 1
                     self.species.append(species_name)
-                    self.fcont.append(
-                        hdf5_file["coeff"][species_name].attrs["add_continuum"]
-                    )
+                    self.fcont.append(species_group.attrs["add_continuum"])
                 else:
                     self.nsp_c  = self.nsp_c  + 1
                     self.species_c.append(species_name)
-                    self.fcont_c.append(
-                        hdf5_file["coeff"][species_name].attrs["add_continuum"]
-                    )
+                    self.fcont_c.append(species_group.attrs["add_continuum"])
             self.fcont = np.array(self.fcont)
             self.fcont_c = np.array(self.fcont_c)
-            self.nwvl = len(hdf5_file["def"]["central_wvl"])
+            self.nwvl = len(h5_dataset(definition_group, "central_wvl"))
             self.wvlband = np.zeros((3, self.nwvl))
-            self.wvlband[0, :] = np.copy(hdf5_file["def"]["central_wvl"]) * 1e3
-            self.wvlband[1, :] = np.copy(hdf5_file["def"]["min_wvl"]) * 1e3
-            self.wvlband[2, :] = np.copy(hdf5_file["def"]["max_wvl"]) * 1e3
-            self.p = np.copy(hdf5_file["def"]["pressure"])
-            self.t = np.copy(hdf5_file["def"]["temperature"])
+            self.wvlband[0, :] = np.asarray(
+                h5_dataset(definition_group, "central_wvl")[()]
+            ) * 1e3
+            self.wvlband[1, :] = np.asarray(
+                h5_dataset(definition_group, "min_wvl")[()]
+            ) * 1e3
+            self.wvlband[2, :] = np.asarray(
+                h5_dataset(definition_group, "max_wvl")[()]
+            ) * 1e3
+            self.p = np.asarray(h5_dataset(definition_group, "pressure")[()])
+            self.t = np.asarray(
+                h5_dataset(definition_group, "temperature")[()]
+            )
             self.np = len(self.p)
             self.nt = len(self.t)            
             if self.nsp_c > 0:
-                self.c = np.copy(hdf5_file["def"]["rho"])
-                self.c_desc = hdf5_file["def"]["rho"].attrs["desc"].decode()
+                rho_dataset = h5_dataset(definition_group, "rho")
+                self.c = np.asarray(rho_dataset[()])
+                concentration_description = rho_dataset.attrs["desc"]
+                if isinstance(concentration_description, bytes):
+                    self.c_desc = concentration_description.decode()
+                else:
+                    self.c_desc = str(concentration_description)
                 self.nc = len(self.c)
                 if not is_sorted(self.c):
                     print(" kdis_coeff ERROR")
@@ -797,34 +815,49 @@ class Kdis(object):
                 self.ki    = np.zeros((self.nsp,self.nwvl,self.nmaxai,self.np,self.nt))
                 self.ai    = np.zeros((self.nsp,self.nwvl,self.nmaxai))
                 for species_index, species_name in enumerate(self.species):
-                    self.nai[species_index, :] = np.copy(
-                        hdf5_file["coeff"][species_name]["nai"]
+                    species_group = cast(
+                        h5py.Group, coefficient_group[species_name]
                     )
-                    coefficient_count = np.nanmax(self.nai[species_index, :])
+                    nai_dataset = h5_dataset(species_group, "nai")
+                    ki_dataset = h5_dataset(species_group, "ki")
+                    ai_dataset = h5_dataset(species_group, "ai")
+                    self.nai[species_index, :] = np.asarray(nai_dataset[()])
+                    coefficient_count = int(np.nanmax(self.nai[species_index, :]))
                     self.ki[species_index, :, 0:coefficient_count, :, :] = np.copy(
-                        hdf5_file["coeff"][species_name]["ki"][:, 0:coefficient_count, :, :]
+                        ki_dataset[
+                            :, 0:coefficient_count, :, :
+                        ]
                     )
                     self.ai[species_index, :, 0:coefficient_count] = np.copy(
-                        hdf5_file["coeff"][species_name]["ai"][:, 0:coefficient_count]
+                        ai_dataset[..., 0:coefficient_count]
                     )
             if self.nsp_c > 0:
                 self.nai_c   = np.zeros((self.nsp_c,self.nwvl), dtype='int')
                 self.ki_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai,self.np,self.nt,self.nc))
                 self.ai_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai))
                 for species_index, species_name in enumerate(self.species_c):
-                    self.nai_c[species_index, :] = np.copy(
-                        hdf5_file["coeff"][species_name]["nai"]
+                    species_group = cast(
+                        h5py.Group, coefficient_group[species_name]
                     )
-                    coefficient_count = np.nanmax(self.nai_c[species_index, :])
+                    nai_dataset = h5_dataset(species_group, "nai")
+                    ki_dataset = h5_dataset(species_group, "ki")
+                    ai_dataset = h5_dataset(species_group, "ai")
+                    self.nai_c[species_index, :] = np.asarray(nai_dataset[()])
+                    coefficient_count = int(
+                        np.nanmax(self.nai_c[species_index, :])
+                    )
                     self.ki_c[species_index, :, 0:coefficient_count, :, :] = np.copy(
-                        hdf5_file["coeff"][species_name]["ki"][:, 0:coefficient_count, :, :]
+                        ki_dataset[
+                            :, 0:coefficient_count, :, :
+                        ]
                     )
                     self.ai_c[species_index, :, 0:coefficient_count] = np.copy(
-                        hdf5_file["coeff"][species_name]["ai"][:, 0:coefficient_count]
+                        ai_dataset[..., 0:coefficient_count]
                     )
             #solar flux
             solar_group = hdf5_file.require_group("solrad")
-            self.solarflux = solar_group["solrad"][:]
+            solar_dataset = h5_dataset(solar_group, "solrad")
+            self.solarflux = solar_dataset[:]
             hdf5_file.close()
 
             for species_index, species_name in enumerate(self.species):
