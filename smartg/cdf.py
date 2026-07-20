@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Inverse cumulative distribution function (icdf) utilities.
 
 This module provides helpers to sample indices according to a

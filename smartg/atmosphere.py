@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Preprocessing of atmospheric optical properties for SMART-G
 simulations.
 

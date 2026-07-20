@@ -1,5 +1,10 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""Download and extract SMART-G auxiliary data.
+
+This module defines remote sources for SMART-G auxiliary datasets and
+provides helpers for downloading ZIP and TAR archives. The public
+``download`` function creates the destination directory, retrieves the
+requested dataset, and extracts its contents for use by SMART-G.
+"""
 
 from pathlib import Path
 from urllib.request import urlretrieve

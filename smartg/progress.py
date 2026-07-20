@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import annotations
-
 """Progress bar utilities for SMART-G.
 
 Provides a unified :func:`progress` factory that returns a progress
@@ -18,6 +14,7 @@ The active mode is selected automatically at import time. Callers can
 also request an invisible (no-op) progress bar via ``activate=False``.
 """
 
+from __future__ import annotations
 from typing import Any
 from smartg.typing import RealNumber
 

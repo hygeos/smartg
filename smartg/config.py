@@ -1,10 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-from os import environ
-from pathlib import Path
-from dotenv import load_dotenv
-
 """
 SMART-G module-level constants.
 
@@ -28,6 +21,11 @@ DIR_AUXDATA : pathlib.Path
     (aerosols, surface BRDFs, etc.). Resolved from the
     ``SMARTG_DIR_AUXDATA`` environment variable.
 """
+
+from os import environ
+from pathlib import Path
+from dotenv import load_dotenv
+
 
 DIR_ROOT = Path(__file__).resolve().parent.parent
 

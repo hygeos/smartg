@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Linear interpolation helpers for regular and irregular grids.
 
 This module provides thin wrappers around

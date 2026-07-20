@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# encoding: utf-8
-
 """Visualization utilities for SMART-G outputs.
 
 This module provides plotting helpers for polar maps, transects,

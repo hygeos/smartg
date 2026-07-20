@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Surface albedo models for SMART-G simulations.
 
 This module provides classes defining the spectral albedo of the

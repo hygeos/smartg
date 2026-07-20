@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Scattering phase matrix utilities for SMART-G.
 
 This module provides phase matrix readers for multiple file formats,

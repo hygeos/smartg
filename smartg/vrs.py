@@ -17,16 +17,19 @@ are exposed:
 The internal helpers :func:`gaussian_peak` and :func:`raman_response`
 build the underlying Gaussian peaks and their normalized sum.
 """
+
 from __future__ import annotations
 
 import numpy as np
 from numpy.typing import NDArray
-
 from smartg.typing import NumericArrayLike
 
 
 def gaussian_peak(
-    ks: NumericArrayLike, aj: float, kj: float, dkj: float,
+    ks: NumericArrayLike,
+    aj: float,
+    kj: float,
+    dkj: float,
 ) -> NDArray[np.floating]:
     """Evaluate a single Gaussian Raman peak.
 
@@ -48,7 +51,7 @@ def gaussian_peak(
         ``aj / dkj`` at ``ks == kj``.
     """
     ks = np.atleast_1d(np.asarray(ks, dtype=np.float64))
-    return aj * 1./dkj * np.exp(-4*np.log(2)*(ks-kj)**2/dkj**2)
+    return aj * 1.0 / dkj * np.exp(-4 * np.log(2) * (ks - kj) ** 2 / dkj**2)
 
 
 def raman_response(ks: NumericArrayLike) -> NDArray[np.floating]:
@@ -70,20 +73,21 @@ def raman_response(ks: NumericArrayLike) -> NDArray[np.floating]:
     ndarray
         Normalized Raman spectral response evaluated at ``ks``.
     """
-    a  = np.array([0.41, 0.39, 0.10, 0.10])
-    k  = np.array([3250., 3425., 3530., 3625.])
-    dk = np.array([210., 175., 140., 140.])
-    norm = np.sum(a) * np.sqrt(np.pi/4/np.log(2))
-    norm = 1./norm
-    su=np.zeros_like(ks)
+    a = np.array([0.41, 0.39, 0.10, 0.10])
+    k = np.array([3250.0, 3425.0, 3530.0, 3625.0])
+    dk = np.array([210.0, 175.0, 140.0, 140.0])
+    norm = np.sum(a) * np.sqrt(np.pi / 4 / np.log(2))
+    norm = 1.0 / norm
+    su = np.zeros_like(ks)
     for j in range(4):
-        su+= gaussian_peak(ks, a[j], k[j], dk[j])
+        su += gaussian_peak(ks, a[j], k[j], dk[j])
 
-    return su*norm
+    return su * norm
 
 
 def raman_forward(
-    lam: NumericArrayLike, nl: int = 16,
+    lam: NumericArrayLike,
+    nl: int = 16,
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     """Ocean vibrational Raman spectrum (forward).
 
@@ -108,19 +112,20 @@ def raman_forward(
         Spectral response evaluated on ``wgrid``, shape ``(nl, N)``.
     """
     lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
-    k   = 1e7/lam   # cm-1
-    k0  = k - 2950. # cm-1
-    k1  = k - 3850. # cm-1
-    w0  = 1e7/k0
-    w1  = 1e7/k1
+    k = 1e7 / lam  # cm-1
+    k0 = k - 2950.0  # cm-1
+    k1 = k - 3850.0  # cm-1
+    w0 = 1e7 / k0
+    w1 = 1e7 / k1
     wgrid = np.linspace(w0, w1, num=nl, dtype=np.float64)
-    ks    = 1e7*(1./lam[np.newaxis,:]-1./wgrid)
-    response = 1e7/wgrid**2 * raman_response(ks)
+    ks = 1e7 * (1.0 / lam[np.newaxis, :] - 1.0 / wgrid)
+    response = 1e7 / wgrid**2 * raman_response(ks)
     return wgrid, response
 
 
 def raman_inverse(
-    lam: NumericArrayLike, nl: int = 16,
+    lam: NumericArrayLike,
+    nl: int = 16,
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     """Ocean vibrational Raman spectrum (inverse).
 
@@ -145,13 +150,13 @@ def raman_inverse(
         Spectral response evaluated on ``wgrid``, shape ``(N, nl)``.
     """
     lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
-    k   = 1e7/lam # cm-1
-    k0  = k + 3850. # cm-1
-    k1  = k + 2950. # cm-1
-    w0  = 1e7/k0
-    w1  = 1e7/k1
+    k = 1e7 / lam  # cm-1
+    k0 = k + 3850.0  # cm-1
+    k1 = k + 2950.0  # cm-1
+    w0 = 1e7 / k0
+    w1 = 1e7 / k1
     wgrid = np.linspace(w0, w1, num=nl, dtype=np.float64).T
-    ks    = 1e7*(1./wgrid - 1./lam[:,np.newaxis])
-    response = 1e7/wgrid**2 * raman_response(ks)
+    ks = 1e7 * (1.0 / wgrid - 1.0 / lam[:, np.newaxis])
+    response = 1e7 / wgrid**2 * raman_response(ks)
 
     return wgrid, response

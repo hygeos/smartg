@@ -1,5 +1,12 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+
+
+"""Shared type aliases and structural protocols for SMART-G.
+
+This module centralizes common numeric, path, and spectral-band typing
+used throughout SMART-G. Runtime imports are kept minimal to avoid
+circular dependencies between the typing definitions and atmospheric
+profile implementations.
+"""
 
 from __future__ import annotations
 
