@@ -123,27 +123,58 @@ def reduce_kdis(
 
 
 
-def kdis_emission(ds, ibands):
-    '''
-    Return Thermal emission
-    '''
+def kdis_emission(
+    ds: xr.Dataset | MLUT, ibands: KdisIbandList
+) -> xr.DataArray:
+    """Calculate spectrally resolved thermal emission.
+
+    The absorption coefficient is multiplied by the Planck radiance
+    averaged over each KDIS channel and returned at every atmospheric
+    altitude.
+
+    Parameters
+    ----------
+    ds : Dataset or MLUT
+        Atmospheric optical properties containing ``OD_abs_atm``,
+        ``T_atm``, ``wavelength``, and ``z_atm``.
+    ibands : KdisIbandList
+        KDIS internal bands used to determine channel limits and groups.
+
+    Returns
+    -------
+    DataArray
+        Thermal emission with dimensions ``("wavelength", "z_atm")``.
+    """
+    if isinstance(ds, MLUT):
+        warnings.warn(
+            "Passing an MLUT to kdis_emission is deprecated; pass an "
+            "xarray Dataset instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        ds = ds.to_xarray()
+    elif not isinstance(ds, xr.Dataset):
+        raise TypeError("ds must be an xarray Dataset or an MLUT")
+
+    z_axis = ds.coords["z_atm"].to_numpy()
+    wavelength_axis = ds.coords["wavelength"].to_numpy()
+    t_atm = ds["T_atm"].to_numpy()
+
     bsgroup = ibands.get_groups()
-    kabs = od2k(ds, 'OD_abs_atm') * 1e-3 # m-1
-    z = -ds.axis('z_atm') * 1e3 # m
-    band_wmin = np.unique(
-        [internal_band.band.wmin for internal_band in ibands.l]
-    )
-    band_wmax = np.unique(
-        [internal_band.band.wmax for internal_band in ibands.l]
-    )
+    kabs = np.asarray(od2k(ds, "OD_abs_atm")) * 1e-3  # m-1
+    z = -z_axis * 1e3  # m
+    band_wmin = np.unique([ib.band.wmin for ib in ibands.l])
+    band_wmax = np.unique([ib.band.wmax for ib in ibands.l])
     avg_b = np.zeros((len(band_wmin), len(z)))
     for i, (current_wmin, current_wmax) in enumerate(
         zip(band_wmin, band_wmax, strict=True)
     ):
-        for j, temperature in enumerate(ds['T_atm'].data):
-            wavelength_min = current_wmin * 1e-9
-            wavelength_max = current_wmax * 1e-9
-            bandwidth = current_wmax - current_wmin
+        for j, temperature in enumerate(t_atm):
+            wavelength_min, wavelength_max = (
+                current_wmin * 1e-9,
+                current_wmax * 1e-9,
+            )  # m
+            bandwidth = current_wmax - current_wmin  # nm
             avg_b[i, j] = (
                 quad(
                     blackbody_radiance,
@@ -153,19 +184,51 @@ def kdis_emission(ds, ibands):
                 )[0]
                 / bandwidth
             )
-    emission = LUT(kabs * avg_b[bsgroup, :],
-               axes = [ds.axis('wavelength'), z],
-               names= ['wavelength','z_atm'])
-
+    emission = xr.DataArray(
+        kabs * avg_b[bsgroup, :],
+        dims=("wavelength", "z_atm"),
+        coords={"wavelength": wavelength_axis, "z_atm": z},
+        name="emission",
+    )
     return emission
 
 
-def kdis_avg_emission(ds, ibands):
-    '''
-    Return vertically integrated Thermal emission
-    '''
-    return (4*np.pi)*kdis_emission(ds, ibands).reduce(
-        simpson, 'z_atm', x=-ds.axis('z_atm') * 1e3
+def kdis_avg_emission(
+    ds: xr.Dataset | MLUT, ibands: KdisIbandList
+) -> xr.DataArray:
+    """Calculate thermal emission integrated over atmospheric altitude.
+
+    Parameters
+    ----------
+    ds : Dataset or MLUT
+        Atmospheric optical properties accepted by
+        :func:`kdis_emission`.
+    ibands : KdisIbandList
+        KDIS internal bands used to determine channel groups.
+
+    Returns
+    -------
+    DataArray
+        Vertically integrated emission with a ``wavelength`` dimension.
+    """
+    if isinstance(ds, MLUT):
+        ds = ds.to_xarray()
+    elif not isinstance(ds, xr.Dataset):
+        raise TypeError("ds must be an xarray Dataset or an MLUT")
+
+    emission = kdis_emission(ds, ibands)
+    z_axis = emission.coords["z_atm"].to_numpy()
+    emission_values = simpson(
+        emission.to_numpy(),
+        x=z_axis,
+        axis=emission.get_axis_num("z_atm"),
+    )
+
+    return xr.DataArray(
+        4 * np.pi * emission_values,
+        dims=("wavelength",),
+        coords={"wavelength": emission.coords["wavelength"]},
+        name="emission",
     )
 
 
