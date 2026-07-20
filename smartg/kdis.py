@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations, print_function, division, absolute_import
+from collections.abc import Iterator
 import numpy as np
 from numpy.core.fromnumeric import shape
 from luts.luts import LUT, MLUT
@@ -9,7 +10,7 @@ import xarray as xr
 from smartg.atmosphere import od2k, blackbody_radiance
 from scipy.integrate import quad, simpson
 import sys
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from scipy.interpolate import interp1d
 from scipy.interpolate import interpn
 import os
@@ -23,6 +24,9 @@ dir_kdis = DIR_AUXDATA / 'kdis'
 import warnings
 
 import glob
+
+if TYPE_CHECKING:
+    from smartg.atmosphere import ProfileBase
 
 def reduce_kdis(
     ds: xr.Dataset | MLUT,
@@ -230,6 +234,208 @@ def kdis_avg_emission(
         coords={"wavelength": emission.coords["wavelength"]},
         name="emission",
     )
+
+
+class KdisIband(object):
+    """Represent one internal KDIS absorption band.
+
+    Parameters
+    ----------
+    band : KdisBand
+        Parent KDIS channel containing this internal band.
+    index : int
+        Zero-based index of the internal band within ``band``.
+
+    Attributes
+    ----------
+    band : KdisBand
+        Parent KDIS channel containing this internal band.
+    index : int
+        Zero-based index of the internal band within ``band``.
+    w : float
+        Representative wavelength of the internal band.
+    weight : float
+        Internal-band quadrature weight.
+    ex : float
+        Extraterrestrial solar irradiance associated with the band.
+    dl : float
+        Bandwidth of the parent KDIS channel.
+    """
+
+    def __init__(self, band: KdisBand, index: int) -> None:
+        self.band = band
+        self.index = index
+        self.w = band.awvl[index]
+        self.ex = band.solarflux
+        self.dl = band.dl
+        self.weight = band.awvl_weight[index]
+
+    def calc_profile(self, prof: ProfileBase) -> np.ndarray:
+        """Calculate gaseous absorption for the atmospheric profile.
+
+        Parameters
+        ----------
+        prof : ProfileBase
+            Atmospheric profile containing pressure, temperature, air
+            density, and molecular densities for the absorbing gases.
+
+        Returns
+        -------
+        numpy.ndarray
+            Absorption coefficient profile in inverse kilometres, with
+            one value for each altitude in ``prof``.
+        """
+
+        species = ['h2o', 'co2', 'o3', 'no2', 'co', 'ch4', 'o2', 'n2', 'n2o', 'so2']
+        #species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
+        temperature = prof.t.copy()
+        pressure = prof.p.copy()
+        n_molecules = 10
+        profile_length = len(temperature)
+        data_molecules = np.zeros(profile_length, np.float64)
+
+        density_molecules = np.zeros((profile_length, n_molecules), np.float64)
+        density_molecules[:, 0] = prof.dens_h2o[:]
+        density_molecules[:, 1] = prof.dens_co2[:]
+        density_molecules[:, 2] = prof.dens_o3[:]
+        density_molecules[:, 3] = prof.dens_no2[:]
+        density_molecules[:, 4] = prof.dens_co[:]
+        density_molecules[:, 5] = prof.dens_ch4[:]
+        density_molecules[:, 6] = prof.dens_o2[:]
+        density_molecules[:, 7] = prof.dens_n2[:]
+        density_molecules[:, 8] = prof.dens_n2o[:]
+        density_molecules[:, 9] = prof.dens_so2[:]
+
+
+        # for each gas
+        for species_index in range(self.band.kdis.nsp_c):
+            species_name = self.band.kdis.species_c[species_index]
+            molecular_index = species.index(species_name)
+            coefficient_index = self.band.kdis.iki_eff_c[
+                species_index, self.band.band, self.index
+            ]
+            coefficient_table = self.band.kdis.ki_c[
+                species_index, self.band.band, coefficient_index, :, :, :
+            ]
+            interpolation_points = (
+                self.band.kdis.p,
+                self.band.kdis.t,
+                self.band.kdis.c,
+            )
+            if self.band.kdis.c_desc == "density":
+                concentration = density_molecules[:, molecular_index]
+            elif self.band.kdis.c_desc == "molar_fraction":
+                concentration = density_molecules[:, molecular_index] / prof.dens_air.copy()
+            else:
+                raise ValueError(
+                    "Unsupported KDIS concentration description: "
+                    f"{self.band.kdis.c_desc}"
+                )
+            concentration[concentration > np.max(self.band.kdis.c)] = np.max(self.band.kdis.c) * 0.99
+            concentration[concentration < np.min(self.band.kdis.c)] = np.min(self.band.kdis.c) * 1.01
+            pressure[pressure > np.max(self.band.kdis.p)] = np.max(self.band.kdis.p) * 0.99
+            pressure[pressure < np.min(self.band.kdis.p)] = np.min(self.band.kdis.p) * 1.01
+            temperature[temperature > np.max(self.band.kdis.t)] = np.max(self.band.kdis.t) * 0.99
+            temperature[temperature < np.min(self.band.kdis.t)] = np.min(self.band.kdis.t) * 1.01
+            interpolation_values = np.concatenate(
+                (np.array([pressure]), np.array([temperature]), np.array([concentration])),
+                axis=0,
+            ).T
+            data_molecules += interpn(
+                interpolation_points,
+                coefficient_table,
+                interpolation_values,
+            ) * density_molecules[:, molecular_index]
+
+        for species_index in range(self.band.kdis.nsp):
+            species_name = self.band.kdis.species[species_index]
+            molecular_index = species.index(species_name)
+            coefficient_index = self.band.kdis.iki_eff[
+                species_index, self.band.band, self.index
+            ]
+            coefficient_table = self.band.kdis.ki[
+                species_index, self.band.band, coefficient_index, :, :
+            ]
+            data_molecules += interp2(
+                self.band.kdis.p,
+                self.band.kdis.t,
+                np.squeeze(coefficient_table),
+                pressure,
+                temperature,
+            ) * density_molecules[:, molecular_index]
+
+        return data_molecules * 1e5
+
+
+class KdisBand(object):
+    """Represent a KDIS sensor channel.
+
+    Parameters
+    ----------
+    kdis : Kdis
+        Parent KDIS dataset.
+    band_index : int
+        Zero-based index of the sensor channel.
+
+    Attributes
+    ----------
+    kdis : Kdis
+        Parent KDIS dataset containing this channel.
+    band : int
+        Zero-based index of this channel in the parent KDIS dataset.
+    nband : int
+        Number of internal bands in this channel.
+    awvl : list of float
+        Representative wavelengths of the internal bands in nanometres.
+    awvl_weight : numpy.ndarray
+        Quadrature weights of the internal bands.
+    solarflux : float
+        Extraterrestrial solar irradiance per nanometre for this channel.
+    dl : float
+        Wavelength bandwidth of this channel in nanometres.
+    w : float
+        Central wavelength of this channel in nanometres.
+    wmin, wmax : float
+        Lower and upper wavelength limits of this channel in nanometres.
+    """
+
+    def __init__(self, kdis: Kdis, band_index: int) -> None:
+        self.kdis = kdis
+        self.band = band_index
+        self.w = kdis.wvlband[0, self.band]
+        self.wmin = kdis.wvlband[1, self.band]
+        self.wmax = kdis.wvlband[2, self.band]
+        self.nband = kdis.nai_eff[self.band]
+        self.awvl = [self.w] * self.nband
+        self.awvl_weight = kdis.ai_eff[self.band, :self.nband]
+        self.dl = kdis.wvlband[2, self.band] - kdis.wvlband[1, self.band]
+        self.solarflux = kdis.solarflux[self.band] / self.dl
+
+    def iband(self, internal_band_index: int) -> KdisIband:
+        """Return an internal band by its zero-based index.
+
+        Parameters
+        ----------
+        internal_band_index : int
+            Zero-based index within this sensor channel.
+
+        Returns
+        -------
+        KdisIband
+            The selected internal band.
+        """
+        return KdisIband(self, internal_band_index)
+
+    def ibands(self) -> Iterator[KdisIband]:
+        """Iterate over the internal bands in this sensor channel.
+
+        Yields
+        ------
+        KdisIband
+            Each internal band in increasing index order.
+        """
+        for internal_band_index in range(self.nband):
+            yield self.iband(internal_band_index)
 
 
 class Kdis(object):
@@ -698,151 +904,7 @@ class Kdis(object):
         )
         norm = we.reduce(np.sum, 'wavelength', grouping=wb.data)
         return we, wb, ex, dl, norm
-   
-class KdisIband(object):
-    '''
-    Kdis internal band
 
-    Arguments:
-        band: KdisBand object
-        index: band index
-        iband: internal band index
-    '''
-    def __init__(self, band, index):
-
-        self.band = band     # parent KdisBand
-        self.index = index   # internal band index
-        self.w = band.awvl[index]  # band wavelength
-        self.ex= band.solarflux # solar irradiance
-        self.dl= band.dl  #bandwidth
-#        if self.xsect != 0 : self.weight =  band.awvl_weight[index]  # weight
-#        else : self.weight = 1.
-        self.weight =  band.awvl_weight[index]  # weight
-        #self.species=['H2O','CO2','O3','N2O','CO','CH4','O2','N2']
-           
-                
-    # def ki_interp(P, T, ki, Pout, Tout):
-    #     ki_t = np.zeros(len(T))
-    #     for it in range(len(T)):
-    #         fki        = interp1d(P, ki[:,it], kind='linear')
-    #         ki_t[it] = fki(Pout)
-    #     fki = interp1d(T, ki_t, kind='linear')
-    #     return fki(Tout)
-        
-
-    def calc_profile(self, prof):
-        '''
-        calculate a gaseous absorption profile for this internal band
-        using temperature T and pressure P, and profile of molecular density of
-        various gases stored in densmol
-        '''
-
-        species = ['h2o', 'co2', 'o3', 'no2', 'co', 'ch4', 'o2', 'n2', 'n2o', 'so2']
-        #species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
-        temperature = prof.t.copy()
-        pressure = prof.p.copy()
-        n_molecules = 10
-        profile_length = len(temperature)
-        data_molecules = np.zeros(profile_length, np.float64)
-
-        density_molecules = np.zeros((profile_length, n_molecules), np.float64)
-        density_molecules[:, 0] = prof.dens_h2o[:]
-        density_molecules[:, 1] = prof.dens_co2[:]
-        density_molecules[:, 2] = prof.dens_o3[:]
-        density_molecules[:, 3] = prof.dens_no2[:]
-        density_molecules[:, 4] = prof.dens_co[:]
-        density_molecules[:, 5] = prof.dens_ch4[:]
-        density_molecules[:, 6] = prof.dens_o2[:]
-        density_molecules[:, 7] = prof.dens_n2[:]
-        density_molecules[:, 8] = prof.dens_n2o[:]
-        density_molecules[:, 9] = prof.dens_so2[:]
-
-    
-        # for each gas
-        for species_index in range(self.band.kdis.nsp_c):
-            species_name = self.band.kdis.species_c[species_index]
-            molecular_index = species.index(species_name)
-            coefficient_index = self.band.kdis.iki_eff_c[
-                species_index, self.band.band, self.index
-            ]
-            coefficient_table = self.band.kdis.ki_c[
-                species_index, self.band.band, coefficient_index, :, :, :
-            ]
-            interpolation_points = (
-                self.band.kdis.p,
-                self.band.kdis.t,
-                self.band.kdis.c,
-            )
-            if self.band.kdis.c_desc == "density":
-                concentration = density_molecules[:, molecular_index]
-            elif self.band.kdis.c_desc == "molar_fraction":
-                concentration = density_molecules[:, molecular_index] / prof.dens_air.copy()
-            concentration[concentration > np.max(self.band.kdis.c)] = np.max(self.band.kdis.c) * 0.99
-            concentration[concentration < np.min(self.band.kdis.c)] = np.min(self.band.kdis.c) * 1.01
-            pressure[pressure > np.max(self.band.kdis.p)] = np.max(self.band.kdis.p) * 0.99
-            pressure[pressure < np.min(self.band.kdis.p)] = np.min(self.band.kdis.p) * 1.01
-            temperature[temperature > np.max(self.band.kdis.t)] = np.max(self.band.kdis.t) * 0.99
-            temperature[temperature < np.min(self.band.kdis.t)] = np.min(self.band.kdis.t) * 1.01
-            interpolation_values = np.concatenate(
-                (np.array([pressure]), np.array([temperature]), np.array([concentration])),
-                axis=0,
-            ).T
-            data_molecules += interpn(
-                interpolation_points,
-                coefficient_table,
-                interpolation_values,
-            ) * density_molecules[:, molecular_index]
-
-        for species_index in range(self.band.kdis.nsp):
-            species_name = self.band.kdis.species[species_index]
-            molecular_index = species.index(species_name)
-            coefficient_index = self.band.kdis.iki_eff[
-                species_index, self.band.band, self.index
-            ]
-            coefficient_table = self.band.kdis.ki[
-                species_index, self.band.band, coefficient_index, :, :
-            ]
-            data_molecules += interp2(
-                self.band.kdis.p,
-                self.band.kdis.t,
-                np.squeeze(coefficient_table),
-                pressure,
-                temperature,
-            ) * density_molecules[:, molecular_index]
-
-        return data_molecules * 1e5
-
-
-class KdisBand(object):
-    def __init__(self, kdis, band_index):
-
-        self.kdis = kdis # parent kdis coeff
-        self.band = band_index
-        self.w = kdis.wvlband[0, self.band]
-        self.wmin = kdis.wvlband[1, self.band]
-        self.wmax = kdis.wvlband[2, self.band]
-        #self.nband = kdis.nai[0, self.band] # the number of internal bands (representative bands) in this channel
-        self.nband = kdis.nai_eff[self.band] # the number of internal bands (representative bands) in this channel
-        #self.iband= np.arange(self.nband)
-        self.awvl = [self.w]*self.nband # the corresponsing wavelenghts of the internal bands
-        self.awvl_weight = kdis.ai_eff[self.band, :self.nband] # the weights of the internal bands for this channel
-        #self.awvl_weight = kdis.ai[0, self.band, :self.nband] # the weights of the internal bands for this channel
-        self.dl = (kdis.wvlband[2,self.band] - kdis.wvlband[1,self.band]) # bandwidth
-        self.solarflux = kdis.solarflux[self.band]/self.dl # the extra terrestrial solar irradiance of the internal bands for this channel    
-
-
-    def iband(self, internal_band_index):
-        '''
-        returns internal band by its number (starting at zero)
-        '''
-        return KdisIband(self, internal_band_index)
-
-    def ibands(self):
-        '''
-        iterate over each internal band
-        '''
-        for internal_band_index in range(self.nband):
-            yield self.iband(internal_band_index)
 
 class KdisIbandList(object):
     '''
