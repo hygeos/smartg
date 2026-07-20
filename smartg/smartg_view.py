@@ -2974,8 +2974,8 @@ def receiver_view(
 
 
 def cat_view(
-    ds_sg_out: xr.Dataset,
-    mtoa: float | np.ndarray = 1320,
+    ds: xr.Dataset | MLUT,
+    mtoa: float | np.ndarray | xr.DataArray | LUT = 1320,
     ncl: Literal["68%", "87%", "95%", "99%", "99.99%"] = "68%",
     output_unit: Literal["FLUX", "FLUX_DENSITY", "RADIANCE"] = "FLUX_DENSITY",
     flux_unit: Literal["uW", "mW", "W", "kW", "MW"] = "W",
@@ -2988,20 +2988,22 @@ def cat_view(
     Normalize photon weights from a SMART-G simulation output to flux,
     flux density, or radiance with error estimates.
 
-    Processes receiver weights from ``ds_sg_out['wPhCats']`` and
-    ``ds_sg_out['wPhCats2']``, applies the specified ``output_unit``,
+    Processes receiver weights from ``ds['wPhCats']`` and
+    ``ds['wPhCats2']``, applies the specified ``output_unit``,
     multiplies by ``mtoa``, applies the selected ``flux_unit``, and
     returns a new Dataset with normalized intensity and error estimates
     for category 0 (sum of all) and categories 1-8.
 
     Parameters
     ----------
-    ds_sg_out : Dataset
-        SMART-G output Dataset containing simulation results.
-    mtoa : float or ndarray, optional
+    ds : Dataset or MLUT
+        SMART-G output Dataset containing simulation results. An MLUT is
+        converted to a Dataset and emits a deprecation warning.
+    mtoa : float, ndarray, DataArray, or LUT, optional
         Solar flux at TOA (W/m²). If there is a wavelength dimension,
-        provide a 1D NumPy array with the flux as a function of
-        wavelength.
+        provide a 1D array with the flux as a function of wavelength. A
+        legacy LUT is converted to a DataArray and emits a deprecation
+        warning.
         Default: 1320
     ncl : str, optional
         Nominal Confidence Limit for the error estimation. Default:
@@ -3036,7 +3038,21 @@ def cat_view(
         with associated error estimates for each category.
     """
 
-    m = ds_sg_out
+    if isinstance(ds, MLUT):
+        warn_message = (
+            "\nUsing an MLUT for ds is deprecated, use an "
+            "xarray.Dataset instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
+        ds = ds.to_xarray()
+
+    if isinstance(mtoa, LUT):
+        warn_message = (
+            "\nUsing a LUT for mtoa is deprecated, use an "
+            "xarray.DataArray instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
+        mtoa = mtoa.to_xarray()
 
     # Initialize the output Dataset
     output = xr.Dataset()
@@ -3047,34 +3063,32 @@ def cat_view(
     output = output.assign_coords(Categories=categories)
 
     # Parameters not dependant on the wavelength
-    aldeg = float(m.attrs["ALDEG"])
+    aldeg = float(ds.attrs["ALDEG"])
 
     # Parameters needed in case kdis or reptran is used
     norm: Any | None = None
     norm_dl: Any | None = None
     if kdis_rep_bands is not None:
-        _, _, _, _, norm, norm_dl = cast(Any, kdis_rep_bands).get_weights(
-            output_type="DataArray"
-        )
+        _, _, _, _, norm, norm_dl = cast(Any, kdis_rep_bands).get_weights()
 
     # Check if there is a dimension wavelength
-    is_wave_axis = "wavelength" in m["wPhCats"].dims
+    is_wave_axis = "wavelength" in ds["wPhCats"].dims
 
     # Fill needed parameters considering the case with and without
     # the wl
     # dimension
     nph_int: float | None = None
     if is_wave_axis:
-        nph = m["norm_npho"].values
-        nph_int = float(m.attrs["NPHOTONS"])
+        nph = ds["norm_npho"].values
+        nph_int = float(ds.attrs["NPHOTONS"])
     else:
-        nph = float(m.attrs["NPHOTONS"])
+        nph = float(ds.attrs["NPHOTONS"])
 
     # DataArrays with sum of photon weight (and squared weight)
     # as function of
     # Categories and (if there is wl dim) wavelength
-    mf = m["wPhCats"]
-    mf2 = m["wPhCats2"]
+    mf = ds["wPhCats"]
+    mf2 = ds["wPhCats2"]
 
     # The desired unit of measurement between Watt, kiloWatt,
     # MegaWatt...
@@ -3120,14 +3134,14 @@ def cat_view(
         str_print = f"Flux in {flux_unit_long} for each categories"
         str_type = "flux"
     elif output_unit == "FLUX_DENSITY":
-        cst = (1.0 * k * kl) / (float(m.attrs["S_Receiver"]) * 1e6)
+        cst = (1.0 * k * kl) / (float(ds.attrs["S_Receiver"]) * 1e6)
         str_print = (
             f"Irradiance in {flux_unit_long}/"
             f"{length_unit_long}² for each categories"
         )
         str_type = "irradiance"
     elif output_unit == "RADIANCE":
-        cst = (1.0 * k * kl) / (float(m.attrs["S_Receiver"]) * 1e6)
+        cst = (1.0 * k * kl) / (float(ds.attrs["S_Receiver"]) * 1e6)
         cst *= 2.0 / (np.pi * (1 - np.cos(np.radians(2 * aldeg))))
         str_print = (
             f"Radiance in {flux_unit_long}/"
@@ -3138,10 +3152,10 @@ def cat_view(
         raise NameError("Unknown argument for output_unit!")
 
     if is_wave_axis:
-        cst *= float(m.attrs["n_cte"])
+        cst *= float(ds.attrs["n_cte"])
         cst *= np.sum(nph) / nph
     else:
-        cst *= float(m.attrs["n_cte"])
+        cst *= float(ds.attrs["n_cte"])
 
     # Normalized intensity
     mf_n_int: xr.DataArray | None = None
@@ -3192,7 +3206,7 @@ def cat_view(
                 dims=["Categories", "wavelength"],
                 coords={
                     "Categories": np.arange(9, dtype=np.float64),
-                    "wavelength": m.wavelength,
+                    "wavelength": ds.wavelength,
                 },
             )
 
@@ -3216,7 +3230,7 @@ def cat_view(
 
     # Absolute error calculation and normalization
     if is_wave_axis:
-        s_wl = len(m.wavelength)
+        s_wl = len(ds.wavelength)
         abs_err = np.zeros((9, s_wl), dtype="float64")
         sum_2_z = np.zeros((9, s_wl), dtype="float64")
         sum_z_2 = np.zeros((9, s_wl), dtype="float64")
@@ -3231,7 +3245,7 @@ def cat_view(
             dims=["Categories", "wavelength"],
             coords={
                 "Categories": np.arange(9, dtype=np.float64),
-                "wavelength": m.wavelength,
+                "wavelength": ds.wavelength,
             },
         )
         if kdis_rep_bands is not None:
@@ -3256,7 +3270,7 @@ def cat_view(
             abs_err_wavelength = abs_err_da_n.wavelength
         else:
             abs_err_values = np.asarray(abs_err_da_n)
-            abs_err_wavelength = m.wavelength
+            abs_err_wavelength = ds.wavelength
 
         abs_err_da_n = xr.DataArray(
             abs_err_values,
@@ -3320,7 +3334,7 @@ def cat_view(
     # Create DataArray for the number of photons as function
     # of Categories
     nb_ph_da = xr.DataArray(
-        m["cat_PhNb"].values,
+        ds["cat_PhNb"].values,
         dims=["Categories"],
         coords={"Categories": np.arange(9, dtype=np.float64)},
     )
@@ -3378,14 +3392,14 @@ def cat_view(
                 mat[:, 0] = np.sum(mf_n_int.values[:, :], axis=1)
             else:
                 mat[:, 0] = np.sum(mf_n.values[:, :], axis=1)
-            mat[:, 1] = m["cat_PhNb"].values
+            mat[:, 1] = ds["cat_PhNb"].values
             if abs_err_da_n_int is None:
                 raise RuntimeError("Absolute integrated errors are missing.")
             mat[:, 2] = abs_err_da_n_int.values
             mat[:, 3] = (mat[:, 2] / mat[:, 0]) * 100
         else:
             mat[:, 0] = mf_n.values
-            mat[:, 1] = m["cat_PhNb"].values
+            mat[:, 1] = ds["cat_PhNb"].values
             mat[:, 2] = abs_err_da_n.values
             mat[:, 3] = rel_err_da_n.values
 
@@ -3420,11 +3434,11 @@ def cat_view(
 
 
 def nopt_view(
-    ds_sg_out: xr.Dataset,
+    ds: xr.Dataset | MLUT,
     back: bool = False,
     acc: int = 6,
     ncl: Literal["68%", "87%", "95%", "99%", "99.99%"] = "68%",
-    mtoa: None | np.ndarray = None,
+    mtoa: None | np.ndarray | xr.DataArray | LUT = None,
     natm_approx: bool = False,
 ) -> None:
     """
@@ -3434,8 +3448,9 @@ def nopt_view(
 
     Parameters
     ----------
-    ds_sg_out : Dataset
-        SMART-G output Dataset containing simulation results.
+    ds : Dataset or MLUT
+        SMART-G output Dataset containing simulation results. An MLUT is
+        converted to a Dataset and emits a deprecation warning.
     back : bool, optional
         False for forward mode (default), True for backward mode.
         Determines which efficiency metrics are calculated and
@@ -3451,10 +3466,11 @@ def nopt_view(
         - "99%" (3 sigma)
         - "99.99%" (4 sigma)
         Default: "68%"
-    mtoa : None or ndarray, optional
+    mtoa : None, ndarray, DataArray, or LUT, optional
         Solar flux at TOA for each wavelength band. If None, uses the
         total power. If provided, pass a 1D array and the computation
-        is weighted by flux per band. Default: None
+        is weighted by flux per band. A legacy LUT is converted to a
+        DataArray and emits a deprecation warning. Default: None
     natm_approx : bool, optional
         If True, calculate and display the analytic approximation of
         atmospheric transmission (natm_approx) in backward mode. Ignored
@@ -3481,7 +3497,22 @@ def nopt_view(
     Each metric includes an estimate of absolute error and relative
     error.
     """
-    ds = ds_sg_out
+    if isinstance(ds, MLUT):
+        warn_message = (
+            "\nUsing an MLUT for ds is deprecated, use an "
+            "xarray.Dataset instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
+        ds = ds.to_xarray()
+
+    if isinstance(mtoa, LUT):
+        warn_message = (
+            "\nUsing a LUT for mtoa is deprecated, use an "
+            "xarray.DataArray instead."
+        )
+        warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
+        mtoa = mtoa.to_xarray()
+
     # Number of photons launched
     nph = float(ds.attrs["NPHOTONS"])
     # n/(n-1)
