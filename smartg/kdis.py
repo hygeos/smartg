@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function, division, absolute_import
+from __future__ import annotations, print_function, division, absolute_import
 import numpy as np
 from numpy.core.fromnumeric import shape
 from luts.luts import LUT, MLUT
@@ -9,6 +9,7 @@ import xarray as xr
 from smartg.atmosphere import od2k, blackbody_radiance
 from scipy.integrate import quad, simpson
 import sys
+from typing import cast
 from scipy.interpolate import interp1d
 from scipy.interpolate import interpn
 import os
@@ -23,27 +24,102 @@ import warnings
 
 import glob
 
-def reduce_kdis(mlut, ibands, use_solar=False, integrated=False, extern_weights=None):
-    '''
-    Compute the final spectral signal from mlut output of smart_g and
-    KDIS_IBAND_LIST weights
-    '''
-    we, wb, ex, dl, norm, norm_dl = ibands.get_weights()
-    res = MLUT()
-    for l in mlut:
-        for pref in ['I_','Q_','U_','V_','N_','transmission','flux'] :
-             if pref in l.desc:
-                if extern_weights is not None:
-                    tmp = l.desc
-                    l = l*extern_weights 
-                    l.desc = tmp
-                if use_solar : lr = (l*we*ex*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-                else         : lr = (l*we*dl   ).reduce(np.sum,'wavelength',grouping=wb.data)
-                if integrated: lr = lr/norm
-                else         : lr = lr/norm_dl
-                res.add_lut(lr, desc=l.desc)
-    res.attrs = mlut.attrs
-    return res
+def reduce_kdis(
+    ds: xr.Dataset | MLUT,
+    ibands: KDIS_IBAND_LIST,
+    use_solar: bool = False,
+    integrated: bool = False,
+    extern_weights: LUT | xr.DataArray | None = None,
+) -> xr.Dataset:
+    """Reduce spectral results to KDIS channel values.
+
+    The spectral variables selected from ``ds`` are weighted by the
+    internal-band weights and grouped by their central channel
+    wavelength.
+
+    Parameters
+    ----------
+    ds : Dataset or MLUT
+        Spectral SMART-G results containing a ``wavelength`` coordinate.
+    ibands : KDIS_IBAND_LIST
+        KDIS internal bands providing weights, channel wavelengths, and
+        bandwidths.
+    use_solar : bool, optional
+        Include extraterrestrial solar irradiance in the weighting factor.
+        Default is False.
+    integrated : bool, optional
+        Normalize by the sum of weights instead of the bandwidth-weighted
+        sum. Default is False.
+    extern_weights : DataArray or LUT, optional
+        Additional wavelength-dependent weights. LUT input is deprecated.
+        Default is None.
+
+    Returns
+    -------
+    Dataset
+        Channel-reduced variables whose names contain an accepted output
+        prefix, with the source variable attributes preserved.
+    """
+    if isinstance(ds, MLUT):
+        warnings.warn(
+            "Passing an MLUT to reduce_kdis is deprecated; pass an "
+            "xarray Dataset instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        ds = ds.to_xarray()
+    elif not isinstance(ds, xr.Dataset):
+        raise TypeError("ds must be an xarray Dataset or an MLUT")
+
+    weights = cast(
+        tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray],
+        ibands.get_weights(output_type="DataArray"),
+    )
+    we, wb, ex, dl, _, _ = weights
+    wavelength = ds.coords["wavelength"]
+    grouping = xr.DataArray(
+        wb.to_numpy(),
+        dims=("wavelength",),
+        coords={"wavelength": wavelength},
+        name="wavelength",
+    )
+
+    if extern_weights is not None:
+        if isinstance(extern_weights, LUT):
+            warnings.warn(
+                "Passing a LUT as extern_weights is deprecated; pass an "
+                "xarray DataArray instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            extern_weights = extern_weights.to_xarray()
+        elif not isinstance(extern_weights, xr.DataArray):
+            raise TypeError(
+                "extern_weights must be an xarray DataArray or LUT"
+            )
+
+    factor = we * ex * dl if use_solar else we * dl
+    norm = we.groupby(grouping).sum(dim="wavelength")
+    norm_dl = (we * dl).groupby(grouping).sum(dim="wavelength")
+
+    result = xr.Dataset(attrs=ds.attrs)
+    prefixes = ("I_", "Q_", "U_", "V_", "N_", "transmission", "flux")
+    for name, data_array in ds.data_vars.items():
+        description = data_array.attrs.get("desc", name)
+        if not any(prefix in description for prefix in prefixes):
+            continue
+
+        attrs = dict(data_array.attrs)
+        weighted = data_array * factor
+        if extern_weights is not None:
+            weighted = weighted * extern_weights
+
+        reduced = weighted.groupby(grouping).sum(dim="wavelength")
+        reduced = reduced / (norm if integrated else norm_dl)
+        reduced.attrs = attrs
+        result[name] = reduced
+
+    return result
 
 
 
