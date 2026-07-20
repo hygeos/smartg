@@ -123,33 +123,50 @@ def reduce_kdis(
 
 
 
-def kdis_emission(mlut, ibands):
+def kdis_emission(ds, ibands):
     '''
     Return Thermal emission
     '''
     bsgroup = ibands.get_groups()
-    kabs    = od2k(mlut, 'OD_abs_atm') * 1e-3 # m-1
-    z       = -mlut.axis('z_atm') * 1e3 # m
-    wmin = np.unique([ib.band.wmin for ib in ibands.l])
-    wmax = np.unique([ib.band.wmax for ib in ibands.l])
-    Avg_B  = np.zeros((len(wmin), len(z)))
-    for i,(wmin,wmax) in enumerate(zip(wmin,wmax)):    
-        for j,T in enumerate(mlut['T_atm'].data):
-            lmin, lmax = wmin*1e-9, wmax*1e-9 # m
-            dl         = wmax-wmin # nm
-            Avg_B[i,j] = quad(blackbody_radiance, lmin, lmax, args=T)[0]/(dl)
-    Emission = LUT(kabs * Avg_B[bsgroup, :], 
-               axes = [mlut.axis('wavelength'), z], 
+    kabs = od2k(ds, 'OD_abs_atm') * 1e-3 # m-1
+    z = -ds.axis('z_atm') * 1e3 # m
+    band_wmin = np.unique(
+        [internal_band.band.wmin for internal_band in ibands.l]
+    )
+    band_wmax = np.unique(
+        [internal_band.band.wmax for internal_band in ibands.l]
+    )
+    avg_b = np.zeros((len(band_wmin), len(z)))
+    for i, (current_wmin, current_wmax) in enumerate(
+        zip(band_wmin, band_wmax, strict=True)
+    ):
+        for j, temperature in enumerate(ds['T_atm'].data):
+            wavelength_min = current_wmin * 1e-9
+            wavelength_max = current_wmax * 1e-9
+            bandwidth = current_wmax - current_wmin
+            avg_b[i, j] = (
+                quad(
+                    blackbody_radiance,
+                    wavelength_min,
+                    wavelength_max,
+                    args=temperature,
+                )[0]
+                / bandwidth
+            )
+    emission = LUT(kabs * avg_b[bsgroup, :],
+               axes = [ds.axis('wavelength'), z],
                names= ['wavelength','z_atm'])
 
-    return Emission
+    return emission
 
 
-def kdis_avg_emission(mlut, ibands):
+def kdis_avg_emission(ds, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
-    return (4*np.pi)*kdis_emission(mlut, ibands).reduce(simpson, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
+    return (4*np.pi)*kdis_emission(ds, ibands).reduce(
+        simpson, 'z_atm', x=-ds.axis('z_atm') * 1e3
+    )
 
 
 class Kdis(object):
@@ -167,7 +184,8 @@ class Kdis(object):
         dir_data = Path(dir_data)
         if dir_data.parent == Path('.') : dir_data = dir_kdis / dir_kdis / model
     
-        is_sorted = lambda a: np.all(a[:-1] <= a[1:])
+        def is_sorted(values):
+            return np.all(values[:-1] <= values[1:])
 
         if format is None:
             if (len(glob.glob(str(dir_data) + '/*.h5')) > 0) : format = 'h5'
@@ -184,88 +202,88 @@ class Kdis(object):
                 print("(kdis_coef) ERROR")
                 print("            Missing file:", filename)
                 sys.exit()
-            fdef = open(filename,'r')
-            skip_comment(fdef)
-            tmp = fdef.readline()
-            self.nmaxai = int(tmp.split()[0])
-            skip_comment(fdef)
-            tmp = fdef.readline()
-            self.nsp_tot =  int(tmp.split()[0])
+            definition_file = open(filename,'r')
+            skip_comment(definition_file)
+            line = definition_file.readline()
+            self.nmaxai = int(line.split()[0])
+            skip_comment(definition_file)
+            line = definition_file.readline()
+            self.nsp_tot = int(line.split()[0])
             self.nsp     = 0
             self.fcont   = []
             self.species = []
             self.nsp_c     = 0
             self.fcont_c   = []
             self.species_c = []
-            skip_comment(fdef)
-            for i in range(self.nsp_tot):
-                tmp = fdef.readline()
-                if int(tmp.split()[1]) == 0:
+            skip_comment(definition_file)
+            for _species_index in range(self.nsp_tot):
+                line = definition_file.readline()
+                if int(line.split()[1]) == 0:
                     self.nsp  = self.nsp  + 1
-                    self.species.append(tmp.split()[0])
-                    self.fcont.append( float(tmp.split()[2] ) )
-                elif  int(tmp.split()[1]) == 1:
+                    self.species.append(line.split()[0])
+                    self.fcont.append(float(line.split()[2]))
+                elif int(line.split()[1]) == 1:
                     self.nsp_c  = self.nsp_c  + 1
-                    self.species_c.append(tmp.split()[0])
-                    self.fcont_c.append( float(tmp.split()[2] ) )
-            self.fcont   = np.array(self.fcont)        
-            self.fcont_c = np.array(self.fcont_c)        
-            skip_comment(fdef)
-            tmp = fdef.readline()
-            self.nwvl = int(tmp.split()[0])
+                    self.species_c.append(line.split()[0])
+                    self.fcont_c.append(float(line.split()[2]))
+            self.fcont = np.array(self.fcont)
+            self.fcont_c = np.array(self.fcont_c)
+            skip_comment(definition_file)
+            line = definition_file.readline()
+            self.nwvl = int(line.split()[0])
             self.wvlband = np.zeros((3, self.nwvl))
-            skip_comment(fdef)
-            for i in range(self.nwvl):
-                tmp = fdef.readline()                
-                self.wvlband[0,i] = float(tmp.split()[1])*1e3
-                self.wvlband[1,i] = float(tmp.split()[2])*1e3
-                self.wvlband[2,i] = float(tmp.split()[3])*1e3
-                if i>0:
-                    if self.wvlband[0,i] < self.wvlband[0,i-1]:
+            skip_comment(definition_file)
+            for wavelength_index in range(self.nwvl):
+                line = definition_file.readline()
+                self.wvlband[0, wavelength_index] = float(line.split()[1]) * 1e3
+                self.wvlband[1, wavelength_index] = float(line.split()[2]) * 1e3
+                self.wvlband[2, wavelength_index] = float(line.split()[3]) * 1e3
+                if wavelength_index > 0:
+                    if self.wvlband[0, wavelength_index] < self.wvlband[0, wavelength_index - 1]:
                         print(" kdis_coeff ERROR")
                         print("            wavelengths must be sorted in increasing order")
                         sys.exit()
-            skip_comment(fdef)
-            tmp = fdef.readline()
-            skip_comment(fdef)
-            self.np = int(tmp.split()[0])
+            skip_comment(definition_file)
+            line = definition_file.readline()
+            skip_comment(definition_file)
+            self.np = int(line.split()[0])
             self.p = np.zeros(self.np)
-            for i in range(self.np):
-                tmp = fdef.readline()                
-                self.p[i] = float(tmp.split()[0])
-                if i>0:
-                    if self.p[i] < self.p[i-1]:
+            for pressure_index in range(self.np):
+                line = definition_file.readline()
+                self.p[pressure_index] = float(line.split()[0])
+                if pressure_index > 0:
+                    if self.p[pressure_index] < self.p[pressure_index - 1]:
                         print(" kdis_coeff ERROR")
                         print("            pressure must be sorted in increasing order")
                         sys.exit()
-            skip_comment(fdef)
-            tmp = fdef.readline()
-            skip_comment(fdef)
-            self.nt = int(tmp.split()[0])
+            skip_comment(definition_file)
+            line = definition_file.readline()
+            skip_comment(definition_file)
+            self.nt = int(line.split()[0])
             self.t = np.zeros(self.nt)
-            for i in range(self.nt):
-                tmp = fdef.readline()                
-                self.t[i] = float(tmp.split()[0])
-                if i>0:
-                    if self.t[i] < self.t[i-1]:
+            for temperature_index in range(self.nt):
+                line = definition_file.readline()
+                self.t[temperature_index] = float(line.split()[0])
+                if temperature_index > 0:
+                    if self.t[temperature_index] < self.t[temperature_index - 1]:
                         print(" kdis_coeff ERROR")
                         print("            temperature must be sorted in increasing order")
                         sys.exit()
             if self.nsp_c > 0:
-                skip_comment(fdef)
-                tmp = fdef.readline()
-                skip_comment(fdef)
-                self.nc = int(tmp.split()[0])
+                skip_comment(definition_file)
+                line = definition_file.readline()
+                skip_comment(definition_file)
+                self.nc = int(line.split()[0])
                 self.c = np.zeros(self.nc)
-                for i in range(self.nc):
-                    tmp = fdef.readline()                
-                    self.c[i] = float(tmp.split()[0])
-                    if i>0:
-                        if self.c[i] < self.c[i-1]:
+                for concentration_index in range(self.nc):
+                    line = definition_file.readline()
+                    self.c[concentration_index] = float(line.split()[0])
+                    if concentration_index > 0:
+                        if self.c[concentration_index] < self.c[concentration_index - 1]:
                             print(" kdis_coeff ERROR")
                             print("            concentration must be sorted in increasing order")
                             sys.exit()
-            fdef.close()
+            definition_file.close()
             if self.nsp > 0:
                 self.nai   = np.zeros((self.nsp,self.nwvl), dtype='int')
                 self.ki    = np.zeros((self.nsp,self.nwvl,self.nmaxai,self.np,self.nt))
@@ -274,59 +292,74 @@ class Kdis(object):
                 self.nai_c   = np.zeros((self.nsp_c,self.nwvl), dtype='int')
                 self.ki_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai,self.np,self.nt,self.nc))
                 self.ai_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai))
-            for isp in range(self.nsp):
-                filename = dir_data / f'kdis_{model}_{self.species[isp]}.dat'
+            for species_index in range(self.nsp):
+                filename = dir_data / f'kdis_{model}_{self.species[species_index]}.dat'
                 if not filename.is_file():
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
                     sys.exit()                    
-                f = open(filename,'r')
-                skip_comment(f)
-                for iwvl in range(self.nwvl):
-                    tmp = f.readline()
-                    self.nai[isp,iwvl]   = int(tmp.split()[1])
-                for iwvl in range(self.nwvl):
-                    if self.nai[isp,iwvl]>1:
-                        skip_comment(f)
-                        tmp = f.readline()
-                        #print 'nai, nmaxai=',self.nai[isp,iwvl], self.nmaxai
-                        for iai in range(self.nai[isp,iwvl]):
-                            #print iai, float(tmp.split()[iai])  
-                            self.ai[isp,iwvl,iai] = float(tmp.split()[iai])  
-                        for it in range(self.nt):
-                            for ip in range(self.np):
-                                tmp = f.readline()
-                                for iai in range(self.nai[isp,iwvl]):
-                                    self.ki[isp,iwvl,iai,ip,it] = float(tmp.split()[iai])                                  
-                f.close()
+                species_file = open(filename, 'r')
+                skip_comment(species_file)
+                for wavelength_index in range(self.nwvl):
+                    line = species_file.readline()
+                    self.nai[species_index, wavelength_index] = int(line.split()[1])
+                for wavelength_index in range(self.nwvl):
+                    if self.nai[species_index, wavelength_index] > 1:
+                        skip_comment(species_file)
+                        line = species_file.readline()
+                        for coefficient_index in range(self.nai[species_index, wavelength_index]):
+                            self.ai[species_index, wavelength_index, coefficient_index] = float(
+                                line.split()[coefficient_index]
+                            )
+                        for temperature_index in range(self.nt):
+                            for pressure_index in range(self.np):
+                                line = species_file.readline()
+                                for coefficient_index in range(self.nai[species_index, wavelength_index]):
+                                    self.ki[
+                                        species_index,
+                                        wavelength_index,
+                                        coefficient_index,
+                                        pressure_index,
+                                        temperature_index,
+                                    ] = float(line.split()[coefficient_index])
+                species_file.close()
             if self.nsp_c > 0:
                 self.c_desc = "density"
             else:
                 self.c_desc = "none"
-            for isp in range(self.nsp_c):
-                filename = dir_data / f'kdis_{model}_{self.species_c[isp]}.dat'
+            for species_index in range(self.nsp_c):
+                filename = dir_data / f'kdis_{model}_{self.species_c[species_index]}.dat'
                 if not filename.is_file():
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
                     sys.exit()                    
-                f = open(filename,'r')
-                skip_comment(f)
-                for iwvl in range(self.nwvl):
-                    tmp = f.readline()
-                    self.nai_c[isp,iwvl]   = int(tmp.split()[1])
-                for iwvl in range(self.nwvl):
-                    if self.nai_c[isp,iwvl]>1:
-                        skip_comment(f)
-                        tmp = f.readline()
-                        for iai in range(self.nai_c[isp,iwvl]):
-                            self.ai_c[isp,iwvl,iai] = float(tmp.split()[iai])  
-                        for ic in range(self.nc):
-                            for it in range(self.nt):
-                                for ip in range(self.np):
-                                    tmp = f.readline()
-                                    for iai in range(self.nai_c[isp,iwvl]):
-                                        self.ki_c[isp,iwvl,iai,ip,it,ic] = float(tmp.split()[iai])                                  
-                f.close()
+                species_file = open(filename, 'r')
+                skip_comment(species_file)
+                for wavelength_index in range(self.nwvl):
+                    line = species_file.readline()
+                    self.nai_c[species_index, wavelength_index] = int(line.split()[1])
+                for wavelength_index in range(self.nwvl):
+                    if self.nai_c[species_index, wavelength_index] > 1:
+                        skip_comment(species_file)
+                        line = species_file.readline()
+                        for coefficient_index in range(self.nai_c[species_index, wavelength_index]):
+                            self.ai_c[species_index, wavelength_index, coefficient_index] = float(
+                                line.split()[coefficient_index]
+                            )
+                        for concentration_index in range(self.nc):
+                            for temperature_index in range(self.nt):
+                                for pressure_index in range(self.np):
+                                    line = species_file.readline()
+                                    for coefficient_index in range(self.nai_c[species_index, wavelength_index]):
+                                        self.ki_c[
+                                            species_index,
+                                            wavelength_index,
+                                            coefficient_index,
+                                            pressure_index,
+                                            temperature_index,
+                                            concentration_index,
+                                        ] = float(line.split()[coefficient_index])
+                species_file.close()
             
             filename = dir_data / f'kdis_{model}_solarflux.dat'
             if not filename.is_file():
@@ -335,66 +368,69 @@ class Kdis(object):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
                     sys.exit()
-            fsol = open(filename,'r')
-            skip_comment(fsol)
-            tmp = fsol.readline()
-            skip_comment(fsol)
-            tmp = fsol.readline()
-            nn = float(tmp.split()[0])
-            if nn != self.nwvl :
+            solar_file = open(filename, 'r')
+            skip_comment(solar_file)
+            line = solar_file.readline()
+            skip_comment(solar_file)
+            line = solar_file.readline()
+            band_count = float(line.split()[0])
+            if band_count != self.nwvl:
                 print(" solar flux and kdis have uncompatible band number")
                 sys.exit()
-            skip_comment(fsol)
+            skip_comment(solar_file)
             self.solarflux = np.zeros(self.nwvl)
-            skip_comment(fsol)
-            for i in range(self.nwvl):
-                tmp = fsol.readline()
-                self.solarflux[i] = float(tmp.split()[0])
-            fsol.close()
+            skip_comment(solar_file)
+            for wavelength_index in range(self.nwvl):
+                line = solar_file.readline()
+                self.solarflux[wavelength_index] = float(line.split()[0])
+            solar_file.close()
         
         elif format in ["h5","hdf5"]:
 
             filename = dir_data / f'kdis_{model}.h5'
-            f = h5py.File(filename,"r")
-            self.nmaxai = np.copy(f["def"]["maxnai"])
-            species_tot = list(f["coeff"].keys())
-            self.nsp_tot =  len(species_tot)
+            hdf5_file = h5py.File(filename, "r")
+            self.nmaxai = np.copy(hdf5_file["def"]["maxnai"])
+            species_names = list(hdf5_file["coeff"].keys())
+            self.nsp_tot = len(species_names)
             self.nsp     = 0
             self.fcont   = []
             self.species = []
             self.nsp_c     = 0
             self.fcont_c   = []
             self.species_c = []
-            for isp, specie in enumerate(species_tot):
-                if "rho_dep" in list(f["coeff"][specie].attrs.keys()):
-                    if f["coeff"][specie].attrs['rho_dep']:
-                        rho_dep = True
-                    else:
-                        rho_dep = False
+            for species_name in species_names:
+                if "rho_dep" in list(hdf5_file["coeff"][species_name].attrs.keys()):
+                    rho_dependent = bool(
+                        hdf5_file["coeff"][species_name].attrs["rho_dep"]
+                    )
                 else:
-                    rho_dep = False
-                if not rho_dep:
+                    rho_dependent = False
+                if not rho_dependent:
                     self.nsp  = self.nsp  + 1
-                    self.species.append(specie)
-                    self.fcont.append( f["coeff"][specie].attrs['add_continuum'] )
+                    self.species.append(species_name)
+                    self.fcont.append(
+                        hdf5_file["coeff"][species_name].attrs["add_continuum"]
+                    )
                 else:
                     self.nsp_c  = self.nsp_c  + 1
-                    self.species_c.append(specie)
-                    self.fcont_c.append(  f["coeff"][specie].attrs['add_continuum'] )
-            self.fcont   = np.array(self.fcont)        
-            self.fcont_c = np.array(self.fcont_c)        
-            self.nwvl = len(f['def']['central_wvl'])
+                    self.species_c.append(species_name)
+                    self.fcont_c.append(
+                        hdf5_file["coeff"][species_name].attrs["add_continuum"]
+                    )
+            self.fcont = np.array(self.fcont)
+            self.fcont_c = np.array(self.fcont_c)
+            self.nwvl = len(hdf5_file["def"]["central_wvl"])
             self.wvlband = np.zeros((3, self.nwvl))
-            self.wvlband[0,:] = np.copy(f['def']['central_wvl'])*1e3
-            self.wvlband[1,:] = np.copy(f['def']['min_wvl'])*1e3
-            self.wvlband[2,:] = np.copy(f['def']['max_wvl'])*1e3
-            self.p = np.copy(f['def']['pressure'])
-            self.t = np.copy(f['def']['temperature'])
+            self.wvlband[0, :] = np.copy(hdf5_file["def"]["central_wvl"]) * 1e3
+            self.wvlband[1, :] = np.copy(hdf5_file["def"]["min_wvl"]) * 1e3
+            self.wvlband[2, :] = np.copy(hdf5_file["def"]["max_wvl"]) * 1e3
+            self.p = np.copy(hdf5_file["def"]["pressure"])
+            self.t = np.copy(hdf5_file["def"]["temperature"])
             self.np = len(self.p)
             self.nt = len(self.t)            
             if self.nsp_c > 0:
-                self.c = np.copy(f['def']['rho'])
-                self.c_desc = f['def']['rho'].attrs["desc"].decode()
+                self.c = np.copy(hdf5_file["def"]["rho"])
+                self.c_desc = hdf5_file["def"]["rho"].attrs["desc"].decode()
                 self.nc = len(self.c)
                 if not is_sorted(self.c):
                     print(" kdis_coeff ERROR")
@@ -402,7 +438,7 @@ class Kdis(object):
                     sys.exit()
             else:
                 self.c_desc = "none"
-            if not is_sorted(self.wvlband[0,:]):
+            if not is_sorted(self.wvlband[0, :]):
                 print(" kdis_coeff ERROR")
                 print("            (h5 format) read NOT implemented for concentration dependent species")
                 sys.exit()
@@ -414,33 +450,45 @@ class Kdis(object):
                 print(" kdis_coeff ERROR")
                 print("            temperature must be sorted in increasing order")
                 sys.exit()
-            if self.nsp>0:
+            if self.nsp > 0:
                 self.nai   = np.zeros((self.nsp,self.nwvl), dtype='int')
                 self.ki    = np.zeros((self.nsp,self.nwvl,self.nmaxai,self.np,self.nt))
                 self.ai    = np.zeros((self.nsp,self.nwvl,self.nmaxai))
-                for isp, specie in enumerate(self.species):
-                    self.nai[isp,:]      = np.copy(f["coeff"][specie]["nai"])
-                    nai_tmp = np.nanmax(self.nai[isp,:])    
-                    self.ki[isp,:,0:nai_tmp,:,:] = np.copy(f["coeff"][specie]["ki"][:,0:nai_tmp,:,:]) 
-                    self.ai[isp,:,0:nai_tmp]     = np.copy(f["coeff"][specie]["ai"][:,0:nai_tmp]) 
-            if self.nsp_c>0:
+                for species_index, species_name in enumerate(self.species):
+                    self.nai[species_index, :] = np.copy(
+                        hdf5_file["coeff"][species_name]["nai"]
+                    )
+                    coefficient_count = np.nanmax(self.nai[species_index, :])
+                    self.ki[species_index, :, 0:coefficient_count, :, :] = np.copy(
+                        hdf5_file["coeff"][species_name]["ki"][:, 0:coefficient_count, :, :]
+                    )
+                    self.ai[species_index, :, 0:coefficient_count] = np.copy(
+                        hdf5_file["coeff"][species_name]["ai"][:, 0:coefficient_count]
+                    )
+            if self.nsp_c > 0:
                 self.nai_c   = np.zeros((self.nsp_c,self.nwvl), dtype='int')
                 self.ki_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai,self.np,self.nt,self.nc))
                 self.ai_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai))
-                for isp, specie in enumerate(self.species_c):
-                    self.nai_c[isp,:]      = np.copy(f["coeff"][specie]["nai"])
-                    nai_tmp = np.nanmax(self.nai_c[isp,:])    
-                    self.ki_c[isp,:,0:nai_tmp,:,:] = np.copy(f["coeff"][specie]["ki"][:,0:nai_tmp,:,:]) 
-                    self.ai_c[isp,:,0:nai_tmp]     = np.copy(f["coeff"][specie]["ai"][:,0:nai_tmp]) 
+                for species_index, species_name in enumerate(self.species_c):
+                    self.nai_c[species_index, :] = np.copy(
+                        hdf5_file["coeff"][species_name]["nai"]
+                    )
+                    coefficient_count = np.nanmax(self.nai_c[species_index, :])
+                    self.ki_c[species_index, :, 0:coefficient_count, :, :] = np.copy(
+                        hdf5_file["coeff"][species_name]["ki"][:, 0:coefficient_count, :, :]
+                    )
+                    self.ai_c[species_index, :, 0:coefficient_count] = np.copy(
+                        hdf5_file["coeff"][species_name]["ai"][:, 0:coefficient_count]
+                    )
             #solar flux
-            grp  = f.require_group("solrad")
-            self.solarflux = grp["solrad"][:]            
-            f.close()
+            solar_group = hdf5_file.require_group("solrad")
+            self.solarflux = solar_group["solrad"][:]
+            hdf5_file.close()
 
-            for isp, specie in enumerate(self.species):
-                self.species[isp] = self.species[isp].lower() 
-            for isp, specie in enumerate(self.species_c):
-                self.species_c[isp] = self.species_c[isp].lower()
+            for species_index, species_name in enumerate(self.species):
+                self.species[species_index] = species_name.lower()
+            for species_index, species_name in enumerate(self.species_c):
+                self.species_c[species_index] = species_name.lower()
 
         # support for multi species   
         if  (self.nsp>0) and (self.nsp_c>0) : 
@@ -455,26 +503,50 @@ class Kdis(object):
             self.iki_eff    = np.zeros((self.nsp,  self.nwvl,self.nmaxai_eff), dtype='int')
         if  self.nsp_c>0:    
             self.iki_eff_c  = np.zeros((self.nsp_c,self.nwvl,self.nmaxai_eff), dtype='int')
-        for iwvl in range(self.nwvl):
-            iai_eff = 0
-            nested_list = []
-            for isp in range(self.nsp):
-                nested_list.append(range(self.nai[isp,iwvl]))
-            for isp_c in range(self.nsp_c):
-                nested_list.append(range(self.nai_c[isp_c,iwvl]))
-            for k in product(*nested_list):
-                if self.nsp>0:
-                    self.iki_eff[:,iwvl, iai_eff]   = k[0:self.nsp]
-                if self.nsp_c>0:
-                    self.iki_eff_c[:,iwvl, iai_eff] = k[self.nsp:self.nsp+self.nsp_c]
-                self.ai_eff[iwvl, iai_eff]    = 1.0                
-                for isp in range(self.nsp):
-                    if (self.nai[isp,iwvl] >= 1) and (self.ai[isp,iwvl,self.iki_eff[isp,iwvl,iai_eff]] != 0.0):
-                        self.ai_eff[iwvl, iai_eff ] *= self.ai[isp,iwvl,self.iki_eff[isp,iwvl,iai_eff]]    
-                for isp_c in range(self.nsp_c):
-                    if (self.nai_c[isp_c,iwvl] >= 1) and (self.ai_c[isp_c,iwvl,self.iki_eff_c[isp_c,iwvl,iai_eff]]!= 0.0):
-                        self.ai_eff[iwvl, iai_eff ] *= self.ai_c[isp_c,iwvl,self.iki_eff_c[isp_c,iwvl,iai_eff]]
-                iai_eff += 1
+        for wavelength_index in range(self.nwvl):
+            effective_index = 0
+            coefficient_index_ranges = []
+            for species_index in range(self.nsp):
+                coefficient_index_ranges.append(
+                    range(self.nai[species_index, wavelength_index])
+                )
+            for species_index in range(self.nsp_c):
+                coefficient_index_ranges.append(
+                    range(self.nai_c[species_index, wavelength_index])
+                )
+            for coefficient_indices in product(*coefficient_index_ranges):
+                if self.nsp > 0:
+                    self.iki_eff[:, wavelength_index, effective_index] = (
+                        coefficient_indices[0:self.nsp]
+                    )
+                if self.nsp_c > 0:
+                    self.iki_eff_c[:, wavelength_index, effective_index] = (
+                        coefficient_indices[self.nsp:self.nsp + self.nsp_c]
+                    )
+                self.ai_eff[wavelength_index, effective_index] = 1.0
+                for species_index in range(self.nsp):
+                    coefficient_index = self.iki_eff[
+                        species_index, wavelength_index, effective_index
+                    ]
+                    if (
+                        self.nai[species_index, wavelength_index] >= 1
+                        and self.ai[species_index, wavelength_index, coefficient_index] != 0.0
+                    ):
+                        self.ai_eff[wavelength_index, effective_index] *= self.ai[
+                            species_index, wavelength_index, coefficient_index
+                        ]
+                for species_index in range(self.nsp_c):
+                    coefficient_index = self.iki_eff_c[
+                        species_index, wavelength_index, effective_index
+                    ]
+                    if (
+                        self.nai_c[species_index, wavelength_index] >= 1
+                        and self.ai_c[species_index, wavelength_index, coefficient_index] != 0.0
+                    ):
+                        self.ai_eff[wavelength_index, effective_index] *= self.ai_c[
+                            species_index, wavelength_index, coefficient_index
+                        ]
+                effective_index += 1
 
                 
     def nbands(self):
@@ -483,63 +555,85 @@ class Kdis(object):
         '''
         return self.nwvl
 
-    def band(self, band):
+    def band(self, band_index):
         '''
         returns a KdisBand
         '''
-        return KdisBand(self, band)
+        return KdisBand(self, band_index)
 
     def bands(self):
         '''
         iterates over all bands
         '''
-        for i in range(self.nbands()):
-            yield self.band(i)    
+        for band_index in range(self.nbands()):
+            yield self.band(band_index)
             
 
     def to_smartg(self, include='', lmin=-np.inf, lmax=np.inf, band_indices=None):
         '''
         return a list of KDIS_IBANDS for Smartg.run() method
         '''
-        ik_l=[]
+        internal_bands = []
         if band_indices is None:
-            bl = self.bands()
+            bands = self.bands()
         else:
-            bl = [self.band(i) for i in band_indices]
+            bands = [self.band(band_index) for band_index in band_indices]
 
         if not isinstance(lmin,(list,np.ndarray)):
             lmin=[lmin]
             lmax=[lmax]
-        for k in bl:
-            for ii in range(len(lmin)):
-                if (k.wmin >= lmin[ii]) and (k.wmax <= lmax[ii]):
-                    for ik in k.ibands():
-                        ik_l.append(ik)
+        for band in bands:
+            for interval_index in range(len(lmin)):
+                if (band.wmin >= lmin[interval_index]) and (
+                    band.wmax <= lmax[interval_index]
+                ):
+                    for internal_band in band.ibands():
+                        internal_bands.append(internal_band)
 
-        assert len(ik_l) != 0
+        assert len(internal_bands) != 0
 
-        return KdisIbandList(sorted(ik_l, key=lambda x:x.w))
+        return KdisIbandList(
+            sorted(internal_bands, key=lambda internal_band: internal_band.w)
+        )
 
 
     def get_weight(self):
         '''
         return weights, wavelengths, solarflux, band width and normalization in postprocessing
         '''
-        wb_l=[]
-        we_l=[]
-        ex_l=[]
-        dl_l=[]
-        for k in self.bands():
-            for ik in k.ibands():
-                wb_l.append(ik.w)
-                we_l.append(ik.weight)
-                ex_l.append(ik.ex)
-                dl_l.append(ik.dl)
-        wb=LUT(np.array(wb_l),axes=[wb_l],names=['wavelength'],desc='wavelength')
-        we=LUT(np.array(we_l),axes=[wb_l],names=['wavelength'],desc='weight')
-        ex=LUT(np.array(ex_l),axes=[wb_l],names=['wavelength'],desc='solarflux')
-        dl=LUT(np.array(dl_l),axes=[wb_l],names=['wavelength'],desc='bandwidth')
-        norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
+        wi_l = []
+        we_l = []
+        ex_l = []
+        dl_l = []
+        for band in self.bands():
+            for internal_band in band.ibands():
+                wi_l.append(internal_band.w)
+                we_l.append(internal_band.weight)
+                ex_l.append(internal_band.ex)
+                dl_l.append(internal_band.dl)
+        wi_arr = np.array(wi_l, dtype=np.float32)
+        wb = LUT(
+            wi_arr,
+            axes=[wi_arr],
+            names=['wavelength'],
+            desc='wavelength',
+        )
+        we = LUT(
+            np.array(we_l), axes=[wi_arr], names=['wavelength'], desc='weight'
+        )
+        ex = LUT(
+            np.array(ex_l),
+            axes=[wi_arr],
+            names=['wavelength'],
+            desc='solarflux',
+        )
+        dl = LUT(
+            np.array(dl_l),
+            axes=[wi_arr],
+            names=['wavelength'],
+            desc='bandwidth',
+        )
+        norm = we.reduce(np.sum, 'wavelength', grouping=wb.data)
         return we, wb, ex, dl, norm
    
 class KdisIband(object):
@@ -582,63 +676,85 @@ class KdisIband(object):
 
         species = ['h2o', 'co2', 'o3', 'no2', 'co', 'ch4', 'o2', 'n2', 'n2o', 'so2']
         #species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
-        T = prof.t.copy()
-        P = prof.p.copy()
-        Ngas = 10
-        #Ngas = 8
-        M = len(T)
-        datamol = np.zeros(M, np.float64)
+        temperature = prof.t.copy()
+        pressure = prof.p.copy()
+        n_molecules = 10
+        profile_length = len(temperature)
+        data_molecules = np.zeros(profile_length, np.float64)
 
-        densmol = np.zeros((M, Ngas), np.float64)
-        densmol[:,0] = prof.dens_h2o[:]
-        densmol[:,1] = prof.dens_co2[:]
-        densmol[:,2] = prof.dens_o3[:]
-        densmol[:,3] = prof.dens_no2[:]
-        densmol[:,4] = prof.dens_co[:]
-        densmol[:,5] = prof.dens_ch4[:]
-        densmol[:,6] = prof.dens_o2[:]
-        densmol[:,7] = prof.dens_n2[:]
-        densmol[:,8] = prof.dens_n2o[:]
-        densmol[:,9] = prof.dens_so2[:]
+        density_molecules = np.zeros((profile_length, n_molecules), np.float64)
+        density_molecules[:, 0] = prof.dens_h2o[:]
+        density_molecules[:, 1] = prof.dens_co2[:]
+        density_molecules[:, 2] = prof.dens_o3[:]
+        density_molecules[:, 3] = prof.dens_no2[:]
+        density_molecules[:, 4] = prof.dens_co[:]
+        density_molecules[:, 5] = prof.dens_ch4[:]
+        density_molecules[:, 6] = prof.dens_o2[:]
+        density_molecules[:, 7] = prof.dens_n2[:]
+        density_molecules[:, 8] = prof.dens_n2o[:]
+        density_molecules[:, 9] = prof.dens_so2[:]
 
     
         # for each gas
-        for ig_c in range(self.band.kdis.nsp_c):
-            specie_c = self.band.kdis.species_c[ig_c]
-            ispecie_c= species.index(specie_c)
-            ikig_c = self.band.kdis.iki_eff_c[ig_c, self.band.band, self.index]
-            tab = self.band.kdis.ki_c[ig_c, self.band.band, ikig_c, :, :, :]
-            points = ( self.band.kdis.p, self.band.kdis.t, self.band.kdis.c )
+        for species_index in range(self.band.kdis.nsp_c):
+            species_name = self.band.kdis.species_c[species_index]
+            molecular_index = species.index(species_name)
+            coefficient_index = self.band.kdis.iki_eff_c[
+                species_index, self.band.band, self.index
+            ]
+            coefficient_table = self.band.kdis.ki_c[
+                species_index, self.band.band, coefficient_index, :, :, :
+            ]
+            interpolation_points = (
+                self.band.kdis.p,
+                self.band.kdis.t,
+                self.band.kdis.c,
+            )
             if self.band.kdis.c_desc == "density":
-                C = densmol[:,ispecie_c] 
+                concentration = density_molecules[:, molecular_index]
             elif self.band.kdis.c_desc == "molar_fraction":
-                C = densmol[:,ispecie_c] / prof.dens_air.copy()
-            C[C>np.max(self.band.kdis.c)]=np.max(self.band.kdis.c)*0.99
-            C[C<np.min(self.band.kdis.c)]=np.min(self.band.kdis.c)*1.01            
-            P[P>np.max(self.band.kdis.p)]=np.max(self.band.kdis.p)*0.99
-            P[P<np.min(self.band.kdis.p)]=np.min(self.band.kdis.p)*1.01            
-            T[T>np.max(self.band.kdis.t)]=np.max(self.band.kdis.t)*0.99
-            T[T<np.min(self.band.kdis.t)]=np.min(self.band.kdis.t)*1.01            
-            values = np.concatenate( (np.array([P]), np.array([T]), np.array([C])), axis=0).T
-            #print(values)
-            #print(interpn(points, tab, values))
-            datamol +=  interpn(points, tab, values) * densmol[:,ispecie_c]
+                concentration = density_molecules[:, molecular_index] / prof.dens_air.copy()
+            concentration[concentration > np.max(self.band.kdis.c)] = np.max(self.band.kdis.c) * 0.99
+            concentration[concentration < np.min(self.band.kdis.c)] = np.min(self.band.kdis.c) * 1.01
+            pressure[pressure > np.max(self.band.kdis.p)] = np.max(self.band.kdis.p) * 0.99
+            pressure[pressure < np.min(self.band.kdis.p)] = np.min(self.band.kdis.p) * 1.01
+            temperature[temperature > np.max(self.band.kdis.t)] = np.max(self.band.kdis.t) * 0.99
+            temperature[temperature < np.min(self.band.kdis.t)] = np.min(self.band.kdis.t) * 1.01
+            interpolation_values = np.concatenate(
+                (np.array([pressure]), np.array([temperature]), np.array([concentration])),
+                axis=0,
+            ).T
+            data_molecules += interpn(
+                interpolation_points,
+                coefficient_table,
+                interpolation_values,
+            ) * density_molecules[:, molecular_index]
 
-        for ig in range(self.band.kdis.nsp):
-            specie = self.band.kdis.species[ig]
-            ispecie= species.index(specie)
-            ikig = self.band.kdis.iki_eff[ig, self.band.band, self.index]
-            tab = self.band.kdis.ki[ig, self.band.band, ikig, :, :]
-            datamol += interp2(self.band.kdis.p, self.band.kdis.t, np.squeeze(tab), P, T) * densmol[:,ispecie]
+        for species_index in range(self.band.kdis.nsp):
+            species_name = self.band.kdis.species[species_index]
+            molecular_index = species.index(species_name)
+            coefficient_index = self.band.kdis.iki_eff[
+                species_index, self.band.band, self.index
+            ]
+            coefficient_table = self.band.kdis.ki[
+                species_index, self.band.band, coefficient_index, :, :
+            ]
+            data_molecules += interp2(
+                self.band.kdis.p,
+                self.band.kdis.t,
+                np.squeeze(coefficient_table),
+                pressure,
+                temperature,
+            ) * density_molecules[:, molecular_index]
 
-        return datamol*1e5
+        return data_molecules * 1e5
 
 
 class KdisBand(object):
-    def __init__(self, kdis, band):
+    def __init__(self, kdis, band_index):
 
         self.kdis = kdis # parent kdis coeff
-        self.band = band
+        self.band = band_index
         self.w = kdis.wvlband[0, self.band]
         self.wmin = kdis.wvlband[1, self.band]
         self.wmax = kdis.wvlband[2, self.band]
@@ -652,80 +768,126 @@ class KdisBand(object):
         self.solarflux = kdis.solarflux[self.band]/self.dl # the extra terrestrial solar irradiance of the internal bands for this channel    
 
 
-    def iband(self, index):
+    def iband(self, internal_band_index):
         '''
         returns internal band by its number (starting at zero)
         '''
-        return KdisIband(self, index)
+        return KdisIband(self, internal_band_index)
 
     def ibands(self):
         '''
         iterate over each internal band
         '''
-        for i in range(self.nband):
-            yield self.iband(i)
+        for internal_band_index in range(self.nband):
+            yield self.iband(internal_band_index)
 
 class KdisIbandList(object):
     '''
     Kdis list of ibands
     '''
-    def __init__(self, l):
-        self.l=l
+    def __init__(self, ibands):
+        self.l = ibands
 
     def get_weights(self, output_type='LUT'):
         '''
         return weights, wavelengths, solarflux, band width and normalization in postprocessing
         '''
-        wb_l=[]
-        we_l=[]
-        ex_l=[]
-        dl_l=[]
-        for ik in self.l:
-            wb_l.append(ik.w)
-            we_l.append(ik.weight)
-            ex_l.append(ik.ex)
-            dl_l.append(ik.dl)
+        wi_l = []
+        we_l = []
+        ex_l = []
+        dl_l = []
+        for internal_band in self.l:
+            wi_l.append(internal_band.w)
+            we_l.append(internal_band.weight)
+            ex_l.append(internal_band.ex)
+            dl_l.append(internal_band.dl)
         if output_type == 'LUT':
-            wb_arr = np.array(wb_l, dtype=np.float32)
-            wb=LUT(wb_arr,axes=[wb_arr],names=['wavelength'],desc='wavelength')
-            we=LUT(np.array(we_l),axes=[wb_arr],names=['wavelength'],desc='weight')
-            ex=LUT(np.array(ex_l),axes=[wb_arr],names=['wavelength'],desc='solarflux')
-            dl=LUT(np.array(dl_l),axes=[wb_arr],names=['wavelength'],desc='bandwidth')
-            norm_dl = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-            norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
+            wi_arr = np.array(wi_l, dtype=np.float32)
+            wb = LUT(
+                wi_arr,
+                axes=[wi_arr],
+                names=['wavelength'],
+                desc='wavelength',
+            )
+            we = LUT(
+                np.array(we_l),
+                axes=[wi_arr],
+                names=['wavelength'],
+                desc='weight',
+            )
+            ex = LUT(
+                np.array(ex_l),
+                axes=[wi_arr],
+                names=['wavelength'],
+                desc='solarflux',
+            )
+            dl = LUT(
+                np.array(dl_l),
+                axes=[wi_arr],
+                names=['wavelength'],
+                desc='bandwidth',
+            )
+            norm_dl = (we * dl).reduce(
+                np.sum, 'wavelength', grouping=wb.data
+            )
+            norm = we.reduce(
+                np.sum, 'wavelength', grouping=wb.data
+            )
         elif output_type == 'DataArray':
-            wb_arr = np.array(wb_l, dtype=np.float32)
-            wb=xr.DataArray(wb_arr,dims=['wavelength'],coords={'wavelength': wb_arr},
-                            name='wavelength',attrs={'desc': 'wavelength'})
-            we=xr.DataArray(np.array(we_l),dims=['wavelength'],coords={'wavelength': wb_arr},
-                            name='weight',attrs={'desc': 'weight'})
-            ex=xr.DataArray(np.array(ex_l),dims=['wavelength'],coords={'wavelength': wb_arr},
-                            name='solarflux',attrs={'desc': 'solarflux'})
-            dl=xr.DataArray(np.array(dl_l),dims=['wavelength'],coords={'wavelength': wb_arr},
-                            name='bandwidth',attrs={'desc': 'bandwidth'})
+            wi_arr = np.array(wi_l, dtype=np.float32)
+            wb = xr.DataArray(
+                wi_arr,
+                dims=['wavelength'],
+                coords={'wavelength': wi_arr},
+                name='wavelength',
+                attrs={'desc': 'wavelength'},
+            )
+            we = xr.DataArray(
+                np.array(we_l),
+                dims=['wavelength'],
+                coords={'wavelength': wi_arr},
+                name='weight',
+                attrs={'desc': 'weight'},
+            )
+            ex = xr.DataArray(
+                np.array(ex_l),
+                dims=['wavelength'],
+                coords={'wavelength': wi_arr},
+                name='solarflux',
+                attrs={'desc': 'solarflux'},
+            )
+            dl = xr.DataArray(
+                np.array(dl_l),
+                dims=['wavelength'],
+                coords={'wavelength': wi_arr},
+                name='bandwidth',
+                attrs={'desc': 'bandwidth'},
+            )
 
             #norm_dl = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-            norm_dl = (we*dl).groupby('wavelength').sum(dim='wavelength')
+            norm_dl = (we * dl).groupby(
+                'wavelength'
+            ).sum(dim='wavelength')
             norm = we.groupby('wavelength').sum(dim='wavelength')
         else:
             raise ValueError("output_type must be either 'LUT' or 'DataArray'")
-        return we, wb, ex, dl, norm, norm_dl    
+        return we, wb, ex, dl, norm, norm_dl
 
 
 
     def get_groups(self):
         '''
         '''
-        bsgroup=[]
-        for iband in self.l:
-            bsgroup.append(iband.band.band)
+        bsgroup = []
+        for internal_band in self.l:
+            bsgroup.append(internal_band.band.band)
         bsgroup = np.array(bsgroup)
-        return bsgroup-bsgroup[0]
+        return bsgroup - bsgroup[0]
 
 
 
-def skip_comment(f):
+def skip_comment(file_handle):
     while(True):
-        pos=f.tell()
-        if not f.readline().strip().startswith('#'): break
-    f.seek(pos,0)    
+        position = file_handle.tell()
+        if not file_handle.readline().strip().startswith('#'): break
+    file_handle.seek(position, 0)
