@@ -1,17 +1,14 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """K-distribution absorption parameterization.
 
 KDIS provides a compact representation of molecular absorption using
 correlated-k coefficients tabulated over pressure, temperature, and,
 for selected species, concentration. This module reads KDIS definition
 files, represents sensor channels and internal absorption bands, and
-calculates gaseous absorption and thermal emission for SMART-G
-atmospheric profiles.
+calculates gaseous absorption and thermal emission for SMART-G profiles.
 
-The public reduction and emission functions use xarray datasets and
-data arrays. Legacy LUT and MLUT inputs remain accepted at compatibility
-boundaries where required by existing SMART-G workflows.
+The public reduction and emission functions use xarray datasets and data
+arrays. Legacy LUT and MLUT inputs remain accepted at compatibility
+boundaries required by existing SMART-G workflows.
 """
 
 from __future__ import annotations
@@ -59,25 +56,26 @@ def reduce_kdis(
     Parameters
     ----------
     ds : Dataset or MLUT
-        Spectral SMART-G results containing a ``wavelength`` coordinate.
+        Spectral SMART-G results containing a ``wavelength``
+        coordinate.
     ibands : KdisIbandList
-        KDIS internal bands providing weights, channel wavelengths, and
-        bandwidths.
+        KDIS internal bands providing weights, channel wavelengths,
+        and bandwidths.
     use_solar : bool, optional
-        Include extraterrestrial solar irradiance in the weighting factor.
-        Default is False.
+        Include extraterrestrial solar irradiance in the weighting
+        factor. Default is False.
     integrated : bool, optional
-        Normalize by the sum of weights instead of the bandwidth-weighted
-        sum. Default is False.
+        Normalize by the sum of weights instead of the
+        bandwidth-weighted sum. Default is False.
     extern_weights : DataArray or LUT, optional
-        Additional wavelength-dependent weights. LUT input is deprecated.
-        Default is None.
+        Additional wavelength-dependent weights. LUT input is
+        deprecated. Default is None.
 
     Returns
     -------
     Dataset
-        Channel-reduced variables whose names contain an accepted output
-        prefix, with the source variable attributes preserved.
+        Channel-reduced variables whose names contain an accepted
+        output prefix, with source variable attributes preserved.
     """
     if isinstance(ds, MLUT):
         warnings.warn(
@@ -292,13 +290,21 @@ class KdisIband(object):
         Returns
         -------
         numpy.ndarray
-            Absorption coefficient profile in inverse kilometres, with
-            one value for each altitude in ``prof``.
+            Absorption coefficient profile in inverse kilometres,
+            with one value for each altitude in ``prof``.
         """
 
         species = [
-            "h2o", "co2", "o3", "no2", "co", "ch4", "o2", "n2",
-            "n2o", "so2",
+            "h2o",
+            "co2",
+            "o3",
+            "no2",
+            "co",
+            "ch4",
+            "o2",
+            "n2",
+            "n2o",
+            "so2",
         ]
         temperature = prof.t.copy()
         pressure = prof.p.copy()
@@ -369,11 +375,14 @@ class KdisIband(object):
                 ),
                 axis=0,
             ).T
-            data_molecules += interpn(
-                interpolation_points,
-                coefficient_table,
-                interpolation_values,
-            ) * density_molecules[:, molecular_index]
+            data_molecules += (
+                interpn(
+                    interpolation_points,
+                    coefficient_table,
+                    interpolation_values,
+                )
+                * density_molecules[:, molecular_index]
+            )
 
         for species_index in range(self.band.kdis.nsp):
             species_name = self.band.kdis.species[species_index]
@@ -384,13 +393,16 @@ class KdisIband(object):
             coefficient_table = self.band.kdis.ki[
                 species_index, self.band.band, coefficient_index, :, :
             ]
-            data_molecules += interp2(
-                self.band.kdis.p,
-                self.band.kdis.t,
-                np.squeeze(coefficient_table),
-                pressure,
-                temperature,
-            ) * density_molecules[:, molecular_index]
+            data_molecules += (
+                interp2(
+                    self.band.kdis.p,
+                    self.band.kdis.t,
+                    np.squeeze(coefficient_table),
+                    pressure,
+                    temperature,
+                )
+                * density_molecules[:, molecular_index]
+            )
 
         return data_molecules * 1e5
 
@@ -414,11 +426,13 @@ class KdisBand(object):
     nband : int
         Number of internal bands in this channel.
     awvl : list of float
-        Representative wavelengths of the internal bands in nanometres.
+        Representative wavelengths of the internal bands in
+        nanometres.
     awvl_weight : numpy.ndarray
         Quadrature weights of the internal bands.
     solarflux : float
-        Extraterrestrial solar irradiance per nanometre for this channel.
+        Extraterrestrial solar irradiance per nanometre for this
+        channel.
     dl : float
         Wavelength bandwidth of this channel in nanometres.
     w : float
@@ -435,10 +449,8 @@ class KdisBand(object):
         self.wmax = kdis.wvlband[2, self.band]
         self.nband = kdis.nai_eff[self.band]
         self.awvl = [self.w] * self.nband
-        self.awvl_weight = kdis.ai_eff[self.band, :self.nband]
-        self.dl = (
-            kdis.wvlband[2, self.band] - kdis.wvlband[1, self.band]
-        )
+        self.awvl_weight = kdis.ai_eff[self.band, : self.nband]
+        self.dl = kdis.wvlband[2, self.band] - kdis.wvlband[1, self.band]
         self.solarflux = kdis.solarflux[self.band] / self.dl
 
     def iband(self, index: int) -> KdisIband:
@@ -508,20 +520,23 @@ class Kdis(object):
         format: str | None = None,
     ) -> None:
 
-        # read the entire K-distribution definition from files
+        # Read the entire K-distribution definition from files.
         #
-        # Selection of the desired KDIS band or absorbing gases
-        # must be done later while setting up the artdeco variables
-        # if dir_data is not specified, standard dir is assumed to be auxdata/kdis dir
+        # Selection of the desired KDIS band or absorbing gases must be
+        # done later while setting up the artdeco variables.
+        # If dir_data is not specified, the standard directory is
+        # assumed to be auxdata/kdis.
 
         self.model = model
 
         dir_data = Path(dir_data)
         if dir_data == Path("."):
             dir_data = dir_kdis / model
-    
+
         def is_sorted(values: NDArray[np.floating]) -> bool:
-            """Return whether values are monotonically non-decreasing."""
+            """Return whether values are monotonically non-
+            decreasing.
+            """
             return bool(np.all(values[:-1] <= values[1:]))
 
         if format is None:
@@ -530,7 +545,7 @@ class Kdis(object):
             else:
                 format = "ascii"
         else:
-            warnings.simplefilter('always', DeprecationWarning)
+            warnings.simplefilter("always", DeprecationWarning)
             warn_message = (
                 "\nThe key argument 'format' is now useless and deprecated "
                 "as of SMART-G 1.0.0,\n"
@@ -544,28 +559,28 @@ class Kdis(object):
                 print("(kdis_coef) ERROR")
                 print("            Missing file:", filename)
                 sys.exit()
-            definition_file = open(filename,'r')
+            definition_file = open(filename, "r")
             skip_comment(definition_file)
             line = definition_file.readline()
             self.nmaxai = int(line.split()[0])
             skip_comment(definition_file)
             line = definition_file.readline()
             self.nsp_tot = int(line.split()[0])
-            self.nsp     = 0
-            self.fcont   = []
+            self.nsp = 0
+            self.fcont = []
             self.species = []
-            self.nsp_c     = 0
-            self.fcont_c   = []
+            self.nsp_c = 0
+            self.fcont_c = []
             self.species_c = []
             skip_comment(definition_file)
             for _species_index in range(self.nsp_tot):
                 line = definition_file.readline()
                 if int(line.split()[1]) == 0:
-                    self.nsp  = self.nsp  + 1
+                    self.nsp = self.nsp + 1
                     self.species.append(line.split()[0])
                     self.fcont.append(float(line.split()[2]))
                 elif int(line.split()[1]) == 1:
-                    self.nsp_c  = self.nsp_c  + 1
+                    self.nsp_c = self.nsp_c + 1
                     self.species_c.append(line.split()[0])
                     self.fcont_c.append(float(line.split()[2]))
             self.fcont = np.array(self.fcont)
@@ -577,13 +592,24 @@ class Kdis(object):
             skip_comment(definition_file)
             for wavelength_index in range(self.nwvl):
                 line = definition_file.readline()
-                self.wvlband[0, wavelength_index] = float(line.split()[1]) * 1e3
-                self.wvlband[1, wavelength_index] = float(line.split()[2]) * 1e3
-                self.wvlband[2, wavelength_index] = float(line.split()[3]) * 1e3
+                self.wvlband[0, wavelength_index] = (
+                    float(line.split()[1]) * 1e3
+                )
+                self.wvlband[1, wavelength_index] = (
+                    float(line.split()[2]) * 1e3
+                )
+                self.wvlband[2, wavelength_index] = (
+                    float(line.split()[3]) * 1e3
+                )
                 if wavelength_index > 0:
-                    if self.wvlband[0, wavelength_index] < self.wvlband[0, wavelength_index - 1]:
+                    if (
+                        self.wvlband[0, wavelength_index]
+                        < self.wvlband[0, wavelength_index - 1]
+                    ):
                         print(" kdis_coeff ERROR")
-                        print("            wavelengths must be sorted in increasing order")
+                        print(
+                            "            wavelengths must be sorted in increasing order"
+                        )
                         sys.exit()
             skip_comment(definition_file)
             line = definition_file.readline()
@@ -596,7 +622,9 @@ class Kdis(object):
                 if pressure_index > 0:
                     if self.p[pressure_index] < self.p[pressure_index - 1]:
                         print(" kdis_coeff ERROR")
-                        print("            pressure must be sorted in increasing order")
+                        print(
+                            "            pressure must be sorted in increasing order"
+                        )
                         sys.exit()
             skip_comment(definition_file)
             line = definition_file.readline()
@@ -607,9 +635,14 @@ class Kdis(object):
                 line = definition_file.readline()
                 self.t[temperature_index] = float(line.split()[0])
                 if temperature_index > 0:
-                    if self.t[temperature_index] < self.t[temperature_index - 1]:
+                    if (
+                        self.t[temperature_index]
+                        < self.t[temperature_index - 1]
+                    ):
                         print(" kdis_coeff ERROR")
-                        print("            temperature must be sorted in increasing order")
+                        print(
+                            "            temperature must be sorted in increasing order"
+                        )
                         sys.exit()
             if self.nsp_c > 0:
                 skip_comment(definition_file)
@@ -621,42 +654,69 @@ class Kdis(object):
                     line = definition_file.readline()
                     self.c[concentration_index] = float(line.split()[0])
                     if concentration_index > 0:
-                        if self.c[concentration_index] < self.c[concentration_index - 1]:
+                        if (
+                            self.c[concentration_index]
+                            < self.c[concentration_index - 1]
+                        ):
                             print(" kdis_coeff ERROR")
-                            print("            concentration must be sorted in increasing order")
+                            print(
+                                "            concentration must be sorted in increasing order"
+                            )
                             sys.exit()
             definition_file.close()
             if self.nsp > 0:
-                self.nai   = np.zeros((self.nsp,self.nwvl), dtype='int')
-                self.ki    = np.zeros((self.nsp,self.nwvl,self.nmaxai,self.np,self.nt))
-                self.ai    = np.zeros((self.nsp,self.nwvl,self.nmaxai))
+                self.nai = np.zeros((self.nsp, self.nwvl), dtype="int")
+                self.ki = np.zeros(
+                    (self.nsp, self.nwvl, self.nmaxai, self.np, self.nt)
+                )
+                self.ai = np.zeros((self.nsp, self.nwvl, self.nmaxai))
             if self.nsp_c > 0:
-                self.nai_c   = np.zeros((self.nsp_c,self.nwvl), dtype='int')
-                self.ki_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai,self.np,self.nt,self.nc))
-                self.ai_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai))
+                self.nai_c = np.zeros((self.nsp_c, self.nwvl), dtype="int")
+                self.ki_c = np.zeros(
+                    (
+                        self.nsp_c,
+                        self.nwvl,
+                        self.nmaxai,
+                        self.np,
+                        self.nt,
+                        self.nc,
+                    )
+                )
+                self.ai_c = np.zeros((self.nsp_c, self.nwvl, self.nmaxai))
             for species_index in range(self.nsp):
-                filename = dir_data / f'kdis_{model}_{self.species[species_index]}.dat'
+                filename = (
+                    dir_data
+                    / f"kdis_{model}_{self.species[species_index]}.dat"
+                )
                 if not filename.is_file():
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
-                    sys.exit()                    
-                species_file = open(filename, 'r')
+                    sys.exit()
+                species_file = open(filename, "r")
                 skip_comment(species_file)
                 for wavelength_index in range(self.nwvl):
                     line = species_file.readline()
-                    self.nai[species_index, wavelength_index] = int(line.split()[1])
+                    self.nai[species_index, wavelength_index] = int(
+                        line.split()[1]
+                    )
                 for wavelength_index in range(self.nwvl):
                     if self.nai[species_index, wavelength_index] > 1:
                         skip_comment(species_file)
                         line = species_file.readline()
-                        for coefficient_index in range(self.nai[species_index, wavelength_index]):
-                            self.ai[species_index, wavelength_index, coefficient_index] = float(
-                                line.split()[coefficient_index]
-                            )
+                        for coefficient_index in range(
+                            self.nai[species_index, wavelength_index]
+                        ):
+                            self.ai[
+                                species_index,
+                                wavelength_index,
+                                coefficient_index,
+                            ] = float(line.split()[coefficient_index])
                         for temperature_index in range(self.nt):
                             for pressure_index in range(self.np):
                                 line = species_file.readline()
-                                for coefficient_index in range(self.nai[species_index, wavelength_index]):
+                                for coefficient_index in range(
+                                    self.nai[species_index, wavelength_index]
+                                ):
                                     self.ki[
                                         species_index,
                                         wavelength_index,
@@ -670,29 +730,42 @@ class Kdis(object):
             else:
                 self.c_desc = "none"
             for species_index in range(self.nsp_c):
-                filename = dir_data / f'kdis_{model}_{self.species_c[species_index]}.dat'
+                filename = (
+                    dir_data
+                    / f"kdis_{model}_{self.species_c[species_index]}.dat"
+                )
                 if not filename.is_file():
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
-                    sys.exit()                    
-                species_file = open(filename, 'r')
+                    sys.exit()
+                species_file = open(filename, "r")
                 skip_comment(species_file)
                 for wavelength_index in range(self.nwvl):
                     line = species_file.readline()
-                    self.nai_c[species_index, wavelength_index] = int(line.split()[1])
+                    self.nai_c[species_index, wavelength_index] = int(
+                        line.split()[1]
+                    )
                 for wavelength_index in range(self.nwvl):
                     if self.nai_c[species_index, wavelength_index] > 1:
                         skip_comment(species_file)
                         line = species_file.readline()
-                        for coefficient_index in range(self.nai_c[species_index, wavelength_index]):
-                            self.ai_c[species_index, wavelength_index, coefficient_index] = float(
-                                line.split()[coefficient_index]
-                            )
+                        for coefficient_index in range(
+                            self.nai_c[species_index, wavelength_index]
+                        ):
+                            self.ai_c[
+                                species_index,
+                                wavelength_index,
+                                coefficient_index,
+                            ] = float(line.split()[coefficient_index])
                         for concentration_index in range(self.nc):
                             for temperature_index in range(self.nt):
                                 for pressure_index in range(self.np):
                                     line = species_file.readline()
-                                    for coefficient_index in range(self.nai_c[species_index, wavelength_index]):
+                                    for coefficient_index in range(
+                                        self.nai_c[
+                                            species_index, wavelength_index
+                                        ]
+                                    ):
                                         self.ki_c[
                                             species_index,
                                             wavelength_index,
@@ -700,17 +773,19 @@ class Kdis(object):
                                             pressure_index,
                                             temperature_index,
                                             concentration_index,
-                                        ] = float(line.split()[coefficient_index])
+                                        ] = float(
+                                            line.split()[coefficient_index]
+                                        )
                 species_file.close()
-            
-            filename = dir_data / f'kdis_{model}_solarflux.dat'
+
+            filename = dir_data / f"kdis_{model}_solarflux.dat"
             if not filename.is_file():
-                filename = dir_data /f'solrad_kdis_{model}_thuillier2003.dat'
+                filename = dir_data / f"solrad_kdis_{model}_thuillier2003.dat"
                 if not filename.is_file():
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", filename)
                     sys.exit()
-            solar_file = open(filename, 'r')
+            solar_file = open(filename, "r")
             skip_comment(solar_file)
             line = solar_file.readline()
             skip_comment(solar_file)
@@ -726,10 +801,9 @@ class Kdis(object):
                 line = solar_file.readline()
                 self.solarflux[wavelength_index] = float(line.split()[0])
             solar_file.close()
-        
-        elif format in ["h5","hdf5"]:
 
-            filename = dir_data / f'kdis_{model}.h5'
+        elif format in ["h5", "hdf5"]:
+            filename = dir_data / f"kdis_{model}.h5"
             hdf5_file = h5py.File(filename, "r")
 
             def h5_dataset(group: h5py.Group, name: str) -> h5py.Dataset:
@@ -737,52 +811,53 @@ class Kdis(object):
 
             definition_group = cast(h5py.Group, hdf5_file["def"])
             coefficient_group = cast(h5py.Group, hdf5_file["coeff"])
-            self.nmaxai = int(np.asarray(h5_dataset(definition_group, "maxnai")[()]))
+            self.nmaxai = int(
+                np.asarray(h5_dataset(definition_group, "maxnai")[()])
+            )
             species_names = list(coefficient_group.keys())
             self.nsp_tot = len(species_names)
-            self.nsp     = 0
-            self.fcont   = []
+            self.nsp = 0
+            self.fcont = []
             self.species = []
-            self.nsp_c     = 0
-            self.fcont_c   = []
+            self.nsp_c = 0
+            self.fcont_c = []
             self.species_c = []
             for species_name in species_names:
                 species_group = cast(
                     h5py.Group, coefficient_group[species_name]
                 )
                 if "rho_dep" in species_group.attrs:
-                    rho_dependent = bool(
-                        species_group.attrs["rho_dep"]
-                    )
+                    rho_dependent = bool(species_group.attrs["rho_dep"])
                 else:
                     rho_dependent = False
                 if not rho_dependent:
-                    self.nsp  = self.nsp  + 1
+                    self.nsp = self.nsp + 1
                     self.species.append(species_name)
                     self.fcont.append(species_group.attrs["add_continuum"])
                 else:
-                    self.nsp_c  = self.nsp_c  + 1
+                    self.nsp_c = self.nsp_c + 1
                     self.species_c.append(species_name)
                     self.fcont_c.append(species_group.attrs["add_continuum"])
             self.fcont = np.array(self.fcont)
             self.fcont_c = np.array(self.fcont_c)
             self.nwvl = len(h5_dataset(definition_group, "central_wvl"))
             self.wvlband = np.zeros((3, self.nwvl))
-            self.wvlband[0, :] = np.asarray(
-                h5_dataset(definition_group, "central_wvl")[()]
-            ) * 1e3
-            self.wvlband[1, :] = np.asarray(
-                h5_dataset(definition_group, "min_wvl")[()]
-            ) * 1e3
-            self.wvlband[2, :] = np.asarray(
-                h5_dataset(definition_group, "max_wvl")[()]
-            ) * 1e3
+            self.wvlband[0, :] = (
+                np.asarray(h5_dataset(definition_group, "central_wvl")[()])
+                * 1e3
+            )
+            self.wvlband[1, :] = (
+                np.asarray(h5_dataset(definition_group, "min_wvl")[()]) * 1e3
+            )
+            self.wvlband[2, :] = (
+                np.asarray(h5_dataset(definition_group, "max_wvl")[()]) * 1e3
+            )
             self.p = np.asarray(h5_dataset(definition_group, "pressure")[()])
             self.t = np.asarray(
                 h5_dataset(definition_group, "temperature")[()]
             )
             self.np = len(self.p)
-            self.nt = len(self.t)            
+            self.nt = len(self.t)
             if self.nsp_c > 0:
                 rho_dataset = h5_dataset(definition_group, "rho")
                 self.c = np.asarray(rho_dataset[()])
@@ -794,26 +869,36 @@ class Kdis(object):
                 self.nc = len(self.c)
                 if not is_sorted(self.c):
                     print(" kdis_coeff ERROR")
-                    print("            concentration must be sorted in increasing order")
+                    print(
+                        "            concentration must be sorted in increasing order"
+                    )
                     sys.exit()
             else:
                 self.c_desc = "none"
             if not is_sorted(self.wvlband[0, :]):
                 print(" kdis_coeff ERROR")
-                print("            (h5 format) read NOT implemented for concentration dependent species")
+                print(
+                    "            (h5 format) read NOT implemented for concentration dependent species"
+                )
                 sys.exit()
             if not is_sorted(self.p):
                 print(" kdis_coeff ERROR")
-                print("            pressure must be sorted in increasing order")
+                print(
+                    "            pressure must be sorted in increasing order"
+                )
                 sys.exit()
             if not is_sorted(self.t):
                 print(" kdis_coeff ERROR")
-                print("            temperature must be sorted in increasing order")
+                print(
+                    "            temperature must be sorted in increasing order"
+                )
                 sys.exit()
             if self.nsp > 0:
-                self.nai   = np.zeros((self.nsp,self.nwvl), dtype='int')
-                self.ki    = np.zeros((self.nsp,self.nwvl,self.nmaxai,self.np,self.nt))
-                self.ai    = np.zeros((self.nsp,self.nwvl,self.nmaxai))
+                self.nai = np.zeros((self.nsp, self.nwvl), dtype="int")
+                self.ki = np.zeros(
+                    (self.nsp, self.nwvl, self.nmaxai, self.np, self.nt)
+                )
+                self.ai = np.zeros((self.nsp, self.nwvl, self.nmaxai))
                 for species_index, species_name in enumerate(self.species):
                     species_group = cast(
                         h5py.Group, coefficient_group[species_name]
@@ -822,19 +907,28 @@ class Kdis(object):
                     ki_dataset = h5_dataset(species_group, "ki")
                     ai_dataset = h5_dataset(species_group, "ai")
                     self.nai[species_index, :] = np.asarray(nai_dataset[()])
-                    coefficient_count = int(np.nanmax(self.nai[species_index, :]))
-                    self.ki[species_index, :, 0:coefficient_count, :, :] = np.copy(
-                        ki_dataset[
-                            :, 0:coefficient_count, :, :
-                        ]
+                    coefficient_count = int(
+                        np.nanmax(self.nai[species_index, :])
+                    )
+                    self.ki[species_index, :, 0:coefficient_count, :, :] = (
+                        np.copy(ki_dataset[:, 0:coefficient_count, :, :])
                     )
                     self.ai[species_index, :, 0:coefficient_count] = np.copy(
                         ai_dataset[..., 0:coefficient_count]
                     )
             if self.nsp_c > 0:
-                self.nai_c   = np.zeros((self.nsp_c,self.nwvl), dtype='int')
-                self.ki_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai,self.np,self.nt,self.nc))
-                self.ai_c    = np.zeros((self.nsp_c,self.nwvl,self.nmaxai))
+                self.nai_c = np.zeros((self.nsp_c, self.nwvl), dtype="int")
+                self.ki_c = np.zeros(
+                    (
+                        self.nsp_c,
+                        self.nwvl,
+                        self.nmaxai,
+                        self.np,
+                        self.nt,
+                        self.nc,
+                    )
+                )
+                self.ai_c = np.zeros((self.nsp_c, self.nwvl, self.nmaxai))
                 for species_index, species_name in enumerate(self.species_c):
                     species_group = cast(
                         h5py.Group, coefficient_group[species_name]
@@ -846,15 +940,13 @@ class Kdis(object):
                     coefficient_count = int(
                         np.nanmax(self.nai_c[species_index, :])
                     )
-                    self.ki_c[species_index, :, 0:coefficient_count, :, :] = np.copy(
-                        ki_dataset[
-                            :, 0:coefficient_count, :, :
-                        ]
+                    self.ki_c[species_index, :, 0:coefficient_count, :, :] = (
+                        np.copy(ki_dataset[:, 0:coefficient_count, :, :])
                     )
                     self.ai_c[species_index, :, 0:coefficient_count] = np.copy(
                         ai_dataset[..., 0:coefficient_count]
                     )
-            #solar flux
+            # solar flux
             solar_group = hdf5_file.require_group("solrad")
             solar_dataset = h5_dataset(solar_group, "solrad")
             self.solarflux = solar_dataset[:]
@@ -865,19 +957,25 @@ class Kdis(object):
             for species_index, species_name in enumerate(self.species_c):
                 self.species_c[species_index] = species_name.lower()
 
-        # support for multi species   
-        if  (self.nsp>0) and (self.nsp_c>0) : 
-            self.nai_eff    = np.prod( np.append(self.nai, self.nai_c, axis=0 ) , axis=0 )
-        elif self.nsp>0 :
-            self.nai_eff    = np.prod( self.nai , axis=0 )
-        elif self.nsp_c>0 :
-            self.nai_eff    = np.prod( self.nai_c, axis=0 )
-        self.nmaxai_eff = np.max(self.nai_eff)        
-        self.ai_eff     = np.zeros((self.nwvl,self.nmaxai_eff))
-        if  self.nsp>0:
-            self.iki_eff    = np.zeros((self.nsp,  self.nwvl,self.nmaxai_eff), dtype='int')
-        if  self.nsp_c>0:    
-            self.iki_eff_c  = np.zeros((self.nsp_c,self.nwvl,self.nmaxai_eff), dtype='int')
+        # support for multi species
+        if (self.nsp > 0) and (self.nsp_c > 0):
+            self.nai_eff = np.prod(
+                np.append(self.nai, self.nai_c, axis=0), axis=0
+            )
+        elif self.nsp > 0:
+            self.nai_eff = np.prod(self.nai, axis=0)
+        elif self.nsp_c > 0:
+            self.nai_eff = np.prod(self.nai_c, axis=0)
+        self.nmaxai_eff = np.max(self.nai_eff)
+        self.ai_eff = np.zeros((self.nwvl, self.nmaxai_eff))
+        if self.nsp > 0:
+            self.iki_eff = np.zeros(
+                (self.nsp, self.nwvl, self.nmaxai_eff), dtype="int"
+            )
+        if self.nsp_c > 0:
+            self.iki_eff_c = np.zeros(
+                (self.nsp_c, self.nwvl, self.nmaxai_eff), dtype="int"
+            )
         for wavelength_index in range(self.nwvl):
             effective_index = 0
             coefficient_index_ranges = []
@@ -892,11 +990,11 @@ class Kdis(object):
             for coefficient_indices in product(*coefficient_index_ranges):
                 if self.nsp > 0:
                     self.iki_eff[:, wavelength_index, effective_index] = (
-                        coefficient_indices[0:self.nsp]
+                        coefficient_indices[0 : self.nsp]
                     )
                 if self.nsp_c > 0:
                     self.iki_eff_c[:, wavelength_index, effective_index] = (
-                        coefficient_indices[self.nsp:self.nsp + self.nsp_c]
+                        coefficient_indices[self.nsp : self.nsp + self.nsp_c]
                     )
                 self.ai_eff[wavelength_index, effective_index] = 1.0
                 for species_index in range(self.nsp):
@@ -905,25 +1003,38 @@ class Kdis(object):
                     ]
                     if (
                         self.nai[species_index, wavelength_index] >= 1
-                        and self.ai[species_index, wavelength_index, coefficient_index] != 0.0
-                    ):
-                        self.ai_eff[wavelength_index, effective_index] *= self.ai[
+                        and self.ai[
                             species_index, wavelength_index, coefficient_index
                         ]
+                        != 0.0
+                    ):
+                        self.ai_eff[wavelength_index, effective_index] *= (
+                            self.ai[
+                                species_index,
+                                wavelength_index,
+                                coefficient_index,
+                            ]
+                        )
                 for species_index in range(self.nsp_c):
                     coefficient_index = self.iki_eff_c[
                         species_index, wavelength_index, effective_index
                     ]
                     if (
                         self.nai_c[species_index, wavelength_index] >= 1
-                        and self.ai_c[species_index, wavelength_index, coefficient_index] != 0.0
-                    ):
-                        self.ai_eff[wavelength_index, effective_index] *= self.ai_c[
+                        and self.ai_c[
                             species_index, wavelength_index, coefficient_index
                         ]
+                        != 0.0
+                    ):
+                        self.ai_eff[wavelength_index, effective_index] *= (
+                            self.ai_c[
+                                species_index,
+                                wavelength_index,
+                                coefficient_index,
+                            ]
+                        )
                 effective_index += 1
 
-                
     def nbands(self) -> int:
         """Return the number of KDIS channels.
 
@@ -985,7 +1096,8 @@ class Kdis(object):
         Returns
         -------
         KdisIbandList
-            Selected internal bands sorted by representative wavelength.
+                Selected internal bands sorted by representative
+                wavelength.
 
         Raises
         ------
@@ -1019,7 +1131,6 @@ class Kdis(object):
             sorted(internal_bands, key=lambda internal_band: internal_band.w)
         )
 
-
     def get_weights(
         self,
     ) -> tuple[
@@ -1035,8 +1146,9 @@ class Kdis(object):
         Returns
         -------
         tuple of DataArray
-            Internal-band weights, channel wavelengths, solar irradiance,
-            bandwidth, weight sums, and bandwidth-weighted sums.
+            Internal-band weights, channel wavelengths, solar
+            irradiance, bandwidth, weight sums, and bandwidth-weighted
+            sums.
         """
         return KdisIbandList(
             [
@@ -1080,8 +1192,9 @@ class KdisIbandList(object):
         Returns
         -------
         tuple of DataArray
-            Internal-band weights, channel wavelengths, solar irradiance,
-            bandwidth, weight sums, and bandwidth-weighted sums.
+            Internal-band weights, channel wavelengths, solar
+            irradiance, bandwidth, weight sums, and bandwidth-weighted
+            sums.
         """
         wi_l = [internal_band.w for internal_band in self.l]
         we_l = [internal_band.weight for internal_band in self.l]
@@ -1124,8 +1237,6 @@ class KdisIbandList(object):
         norm = we.groupby("wavelength").sum(dim="wavelength")
         return we, wb, ex, dl, norm, norm_dl
 
-
-
     def get_groups(self) -> np.ndarray:
         """Return the zero-based channel group for each internal band.
 
@@ -1140,7 +1251,6 @@ class KdisIbandList(object):
             bsgroup.append(iband.band.band)
         bsgroup = np.array(bsgroup)
         return bsgroup - bsgroup[0]
-
 
 
 def skip_comment(file_handle: TextIO) -> None:
