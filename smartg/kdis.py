@@ -1,32 +1,47 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""K-distribution absorption parameterization.
 
-from __future__ import annotations, print_function, division, absolute_import
-from collections.abc import Iterator
-import numpy as np
-from numpy.core.fromnumeric import shape
-from luts.luts import LUT, MLUT
-import xarray as xr
-from smartg.atmosphere import od2k, blackbody_radiance
-from scipy.integrate import quad, simpson
-import sys
-from typing import TYPE_CHECKING, cast
-from scipy.interpolate import interp1d
-from scipy.interpolate import interpn
-import os
+KDIS provides a compact representation of molecular absorption using
+correlated-k coefficients tabulated over pressure, temperature, and,
+for selected species, concentration. This module reads KDIS definition
+files, represents sensor channels and internal absorption bands, and
+calculates gaseous absorption and thermal emission for SMART-G
+atmospheric profiles.
+
+The public reduction and emission functions use xarray datasets and
+data arrays. Legacy LUT and MLUT inputs remain accepted at compatibility
+boundaries where required by existing SMART-G workflows.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator, Sequence
 from itertools import product
-from smartg.interp import interp2
-import h5py
-
-from smartg.config import DIR_AUXDATA
 from pathlib import Path
-dir_kdis = DIR_AUXDATA / 'kdis'
+from typing import TYPE_CHECKING, TextIO
+
+import numpy as np
+from luts.luts import LUT, MLUT
+from numpy.typing import NDArray
+import xarray as xr
+from scipy.integrate import quad, simpson
+from scipy.interpolate import interpn
+import h5py
+import glob
+import sys
 import warnings
 
-import glob
+from smartg.atmosphere import od2k, blackbody_radiance
+from smartg.config import DIR_AUXDATA
+from smartg.interp import interp2
+from smartg.typing import NumericArrayLike, PathType
+
+dir_kdis = DIR_AUXDATA / "kdis"
 
 if TYPE_CHECKING:
     from smartg.atmosphere import ProfileBase
+
 
 def reduce_kdis(
     ds: xr.Dataset | MLUT,
@@ -75,11 +90,7 @@ def reduce_kdis(
     elif not isinstance(ds, xr.Dataset):
         raise TypeError("ds must be an xarray Dataset or an MLUT")
 
-    weights = cast(
-        tuple[xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray, xr.DataArray],
-        ibands.get_weights(output_type="DataArray"),
-    )
-    we, wb, ex, dl, _, _ = weights
+    we, wb, ex, dl, _, _ = ibands.get_weights()
     wavelength = ds.coords["wavelength"]
     grouping = xr.DataArray(
         wb.to_numpy(),
@@ -124,7 +135,6 @@ def reduce_kdis(
         result[name] = reduced
 
     return result
-
 
 
 def kdis_emission(
@@ -270,7 +280,7 @@ class KdisIband(object):
         self.dl = band.dl
         self.weight = band.awvl_weight[index]
 
-    def calc_profile(self, prof: ProfileBase) -> np.ndarray:
+    def calc_profile(self, prof: ProfileBase) -> NDArray[np.float64]:
         """Calculate gaseous absorption for the atmospheric profile.
 
         Parameters
@@ -286,8 +296,10 @@ class KdisIband(object):
             one value for each altitude in ``prof``.
         """
 
-        species = ['h2o', 'co2', 'o3', 'no2', 'co', 'ch4', 'o2', 'n2', 'n2o', 'so2']
-        #species = ['h2o', 'co2', 'o3', 'n2o', 'co', 'ch4', 'o2', 'n2']
+        species = [
+            "h2o", "co2", "o3", "no2", "co", "ch4", "o2", "n2",
+            "n2o", "so2",
+        ]
         temperature = prof.t.copy()
         pressure = prof.p.copy()
         n_molecules = 10
@@ -306,8 +318,6 @@ class KdisIband(object):
         density_molecules[:, 8] = prof.dens_n2o[:]
         density_molecules[:, 9] = prof.dens_so2[:]
 
-
-        # for each gas
         for species_index in range(self.band.kdis.nsp_c):
             species_name = self.band.kdis.species_c[species_index]
             molecular_index = species.index(species_name)
@@ -325,20 +335,38 @@ class KdisIband(object):
             if self.band.kdis.c_desc == "density":
                 concentration = density_molecules[:, molecular_index]
             elif self.band.kdis.c_desc == "molar_fraction":
-                concentration = density_molecules[:, molecular_index] / prof.dens_air.copy()
+                concentration = density_molecules[:, molecular_index] / (
+                    prof.dens_air.copy()
+                )
             else:
                 raise ValueError(
                     "Unsupported KDIS concentration description: "
                     f"{self.band.kdis.c_desc}"
                 )
-            concentration[concentration > np.max(self.band.kdis.c)] = np.max(self.band.kdis.c) * 0.99
-            concentration[concentration < np.min(self.band.kdis.c)] = np.min(self.band.kdis.c) * 1.01
-            pressure[pressure > np.max(self.band.kdis.p)] = np.max(self.band.kdis.p) * 0.99
-            pressure[pressure < np.min(self.band.kdis.p)] = np.min(self.band.kdis.p) * 1.01
-            temperature[temperature > np.max(self.band.kdis.t)] = np.max(self.band.kdis.t) * 0.99
-            temperature[temperature < np.min(self.band.kdis.t)] = np.min(self.band.kdis.t) * 1.01
+            concentration[concentration > np.max(self.band.kdis.c)] = (
+                np.max(self.band.kdis.c) * 0.99
+            )
+            concentration[concentration < np.min(self.band.kdis.c)] = (
+                np.min(self.band.kdis.c) * 1.01
+            )
+            pressure[pressure > np.max(self.band.kdis.p)] = (
+                np.max(self.band.kdis.p) * 0.99
+            )
+            pressure[pressure < np.min(self.band.kdis.p)] = (
+                np.min(self.band.kdis.p) * 1.01
+            )
+            temperature[temperature > np.max(self.band.kdis.t)] = (
+                np.max(self.band.kdis.t) * 0.99
+            )
+            temperature[temperature < np.min(self.band.kdis.t)] = (
+                np.min(self.band.kdis.t) * 1.01
+            )
             interpolation_values = np.concatenate(
-                (np.array([pressure]), np.array([temperature]), np.array([concentration])),
+                (
+                    np.array([pressure]),
+                    np.array([temperature]),
+                    np.array([concentration]),
+                ),
                 axis=0,
             ).T
             data_molecules += interpn(
@@ -399,24 +427,26 @@ class KdisBand(object):
         Lower and upper wavelength limits of this channel in nanometres.
     """
 
-    def __init__(self, kdis: Kdis, band_index: int) -> None:
+    def __init__(self, kdis: Kdis, band: int) -> None:
         self.kdis = kdis
-        self.band = band_index
+        self.band = band
         self.w = kdis.wvlband[0, self.band]
         self.wmin = kdis.wvlband[1, self.band]
         self.wmax = kdis.wvlband[2, self.band]
         self.nband = kdis.nai_eff[self.band]
         self.awvl = [self.w] * self.nband
         self.awvl_weight = kdis.ai_eff[self.band, :self.nband]
-        self.dl = kdis.wvlband[2, self.band] - kdis.wvlband[1, self.band]
+        self.dl = (
+            kdis.wvlband[2, self.band] - kdis.wvlband[1, self.band]
+        )
         self.solarflux = kdis.solarflux[self.band] / self.dl
 
-    def iband(self, internal_band_index: int) -> KdisIband:
+    def iband(self, index: int) -> KdisIband:
         """Return an internal band by its zero-based index.
 
         Parameters
         ----------
-        internal_band_index : int
+        index : int
             Zero-based index within this sensor channel.
 
         Returns
@@ -424,7 +454,7 @@ class KdisBand(object):
         KdisIband
             The selected internal band.
         """
-        return KdisIband(self, internal_band_index)
+        return KdisIband(self, index)
 
     def ibands(self) -> Iterator[KdisIband]:
         """Iterate over the internal bands in this sensor channel.
@@ -434,13 +464,49 @@ class KdisBand(object):
         KdisIband
             Each internal band in increasing index order.
         """
-        for internal_band_index in range(self.nband):
-            yield self.iband(internal_band_index)
+        for index in range(self.nband):
+            yield self.iband(index)
 
 
 class Kdis(object):
+    """Read and expose a KDIS correlated-k definition.
 
-    def __init__(self, model, dir_data='', format=None):
+    Parameters
+    ----------
+    model : str
+        KDIS model name.
+    dir_data : path-like, optional
+        Directory containing the model files. The auxiliary KDIS
+        directory is used when omitted.
+    format : str, optional
+        Input format, either ``"ascii"`` or ``"h5"``. When omitted,
+        the format is detected from the available files.
+
+    Attributes
+    ----------
+    model : str
+        KDIS model name.
+    wvlband : numpy.ndarray
+        Central, lower, and upper wavelengths for each channel in nm.
+    solarflux : numpy.ndarray
+        Solar flux integrated over each channel.
+    nsp, nsp_c : int
+        Number of ordinary and concentration-dependent absorbing
+        species.
+    species, species_c : list of str
+        Names of ordinary and concentration-dependent species.
+    p, t, c : numpy.ndarray
+        Pressure, temperature, and concentration lookup axes.
+    nai_eff : numpy.ndarray
+        Number of effective quadrature coefficients for each channel.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        dir_data: PathType = "",
+        format: str | None = None,
+    ) -> None:
 
         # read the entire K-distribution definition from files
         #
@@ -451,22 +517,29 @@ class Kdis(object):
         self.model = model
 
         dir_data = Path(dir_data)
-        if dir_data.parent == Path('.') : dir_data = dir_kdis / dir_kdis / model
+        if dir_data == Path("."):
+            dir_data = dir_kdis / model
     
-        def is_sorted(values):
-            return np.all(values[:-1] <= values[1:])
+        def is_sorted(values: NDArray[np.floating]) -> bool:
+            """Return whether values are monotonically non-decreasing."""
+            return bool(np.all(values[:-1] <= values[1:]))
 
         if format is None:
-            if (len(glob.glob(str(dir_data) + '/*.h5')) > 0) : format = 'h5'
-            else                                             : format = 'ascii'
+            if len(glob.glob(str(dir_data) + "/*.h5")) > 0:
+                format = "h5"
+            else:
+                format = "ascii"
         else:
             warnings.simplefilter('always', DeprecationWarning)
-            warn_message = "\nThe key argument 'format' is now useless and deprecated as of SMART-G 1.0.0,\n" + \
-                        "and will be removed in one of the next release."
-            warnings.warn(warn_message, DeprecationWarning)
- 
-        if format == 'ascii':
-            filename = dir_data / f'kdis_{model}_def.dat'
+            warn_message = (
+                "\nThe key argument 'format' is now useless and deprecated "
+                "as of SMART-G 1.0.0,\n"
+                "and will be removed in one of the next release."
+            )
+            warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
+
+        if format == "ascii":
+            filename = dir_data / f"kdis_{model}_def.dat"
             if not filename.is_file():
                 print("(kdis_coef) ERROR")
                 print("            Missing file:", filename)
@@ -818,43 +891,91 @@ class Kdis(object):
                 effective_index += 1
 
                 
-    def nbands(self):
-        '''
-        number of bands
-        '''
+    def nbands(self) -> int:
+        """Return the number of KDIS channels.
+
+        Returns
+        -------
+        int
+            Number of channels in the KDIS definition.
+        """
         return self.nwvl
 
-    def band(self, band_index):
-        '''
-        returns a KdisBand
-        '''
-        return KdisBand(self, band_index)
+    def band(self, band: int) -> KdisBand:
+        """Return a KDIS channel by its zero-based index.
 
-    def bands(self):
-        '''
-        iterates over all bands
-        '''
+        Parameters
+        ----------
+        band : int
+            Zero-based channel index.
+
+        Returns
+        -------
+        KdisBand
+            The selected KDIS channel.
+        """
+        return KdisBand(self, band)
+
+    def bands(self) -> Iterator[KdisBand]:
+        """Iterate over all KDIS channels in file order.
+
+        Yields
+        ------
+        KdisBand
+            Each available KDIS channel.
+        """
         for band_index in range(self.nbands()):
             yield self.band(band_index)
-            
 
-    def to_smartg(self, include='', lmin=-np.inf, lmax=np.inf, band_indices=None):
-        '''
-        return a list of KDIS_IBANDS for Smartg.run() method
-        '''
+    def to_smartg(
+        self,
+        include: str = "",
+        lmin: NumericArrayLike = -np.inf,
+        lmax: NumericArrayLike = np.inf,
+        band_indices: Sequence[int] | None = None,
+    ) -> KdisIbandList:
+        """Select internal KDIS bands for use with ``Smartg.run``.
+
+        Parameters
+        ----------
+        include : str, optional
+            Retained for API compatibility. KDIS channels have no names,
+            so this value does not filter the selection.
+        lmin, lmax : scalar or array-like, optional
+            Lower and upper wavelength limits in nanometres. Multiple
+            intervals can be supplied as matching sequences. Defaults
+            are negative and positive infinity, respectively.
+        band_indices : sequence of int, optional
+            Explicit channel indices to consider. If None, all channels
+            are considered.
+
+        Returns
+        -------
+        KdisIbandList
+            Selected internal bands sorted by representative wavelength.
+
+        Raises
+        ------
+        ValueError
+            If ``lmin`` and ``lmax`` contain different numbers of
+            intervals.
+        AssertionError
+            If no internal bands match the selection.
+        """
         internal_bands = []
         if band_indices is None:
             bands = self.bands()
         else:
             bands = [self.band(band_index) for band_index in band_indices]
 
-        if not isinstance(lmin,(list,np.ndarray)):
-            lmin=[lmin]
-            lmax=[lmax]
+        lmin_values = np.atleast_1d(lmin)
+        lmax_values = np.atleast_1d(lmax)
+        if len(lmin_values) != len(lmax_values):
+            raise ValueError("lmin and lmax must contain matching intervals")
         for band in bands:
-            for interval_index in range(len(lmin)):
-                if (band.wmin >= lmin[interval_index]) and (
-                    band.wmax <= lmax[interval_index]
+            for interval_index in range(len(lmin_values)):
+                if (band.wmin >= lmin_values[interval_index]) and (
+                    band.wmax <= lmax_values[interval_index]
                 ):
                     for internal_band in band.ibands():
                         internal_bands.append(internal_band)
@@ -866,153 +987,133 @@ class Kdis(object):
         )
 
 
-    def get_weight(self):
-        '''
-        return weights, wavelengths, solarflux, band width and normalization in postprocessing
-        '''
-        wi_l = []
-        we_l = []
-        ex_l = []
-        dl_l = []
-        for band in self.bands():
-            for internal_band in band.ibands():
-                wi_l.append(internal_band.w)
-                we_l.append(internal_band.weight)
-                ex_l.append(internal_band.ex)
-                dl_l.append(internal_band.dl)
-        wi_arr = np.array(wi_l, dtype=np.float32)
-        wb = LUT(
-            wi_arr,
-            axes=[wi_arr],
-            names=['wavelength'],
-            desc='wavelength',
-        )
-        we = LUT(
-            np.array(we_l), axes=[wi_arr], names=['wavelength'], desc='weight'
-        )
-        ex = LUT(
-            np.array(ex_l),
-            axes=[wi_arr],
-            names=['wavelength'],
-            desc='solarflux',
-        )
-        dl = LUT(
-            np.array(dl_l),
-            axes=[wi_arr],
-            names=['wavelength'],
-            desc='bandwidth',
-        )
-        norm = we.reduce(np.sum, 'wavelength', grouping=wb.data)
-        return we, wb, ex, dl, norm
+    def get_weights(
+        self,
+    ) -> tuple[
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+    ]:
+        """Return all internal-band weights and channel metadata.
+
+        Returns
+        -------
+        tuple of DataArray
+            Internal-band weights, channel wavelengths, solar irradiance,
+            bandwidth, weight sums, and bandwidth-weighted sums.
+        """
+        return KdisIbandList(
+            [
+                internal_band
+                for band in self.bands()
+                for internal_band in band.ibands()
+            ]
+        ).get_weights()
 
 
 class KdisIbandList(object):
-    '''
-    Kdis list of ibands
-    '''
-    def __init__(self, ibands):
+    """Store a selected list of internal KDIS bands.
+
+    Parameters
+    ----------
+    ibands : sequence of KdisIband
+        Internal bands included in the list.
+
+    Attributes
+    ----------
+    l : sequence of KdisIband
+        Internal bands included in the list, in wavelength order when
+        returned by :meth:`Kdis.to_smartg`.
+    """
+
+    def __init__(self, ibands: Sequence[KdisIband]) -> None:
         self.l = ibands
 
-    def get_weights(self, output_type='LUT'):
-        '''
-        return weights, wavelengths, solarflux, band width and normalization in postprocessing
-        '''
-        wi_l = []
-        we_l = []
+    def get_weights(
+        self,
+    ) -> tuple[
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+        xr.DataArray,
+    ]:
+        """Return channel weights and metadata as xarray DataArrays.
+
+        Returns
+        -------
+        tuple of DataArray
+            Internal-band weights, channel wavelengths, solar irradiance,
+            bandwidth, weight sums, and bandwidth-weighted sums.
+        """
+        wi_l = [internal_band.w for internal_band in self.l]
+        we_l = [internal_band.weight for internal_band in self.l]
         ex_l = []
         dl_l = []
         for internal_band in self.l:
-            wi_l.append(internal_band.w)
-            we_l.append(internal_band.weight)
             ex_l.append(internal_band.ex)
             dl_l.append(internal_band.dl)
-        if output_type == 'LUT':
-            wi_arr = np.array(wi_l, dtype=np.float32)
-            wb = LUT(
-                wi_arr,
-                axes=[wi_arr],
-                names=['wavelength'],
-                desc='wavelength',
-            )
-            we = LUT(
-                np.array(we_l),
-                axes=[wi_arr],
-                names=['wavelength'],
-                desc='weight',
-            )
-            ex = LUT(
-                np.array(ex_l),
-                axes=[wi_arr],
-                names=['wavelength'],
-                desc='solarflux',
-            )
-            dl = LUT(
-                np.array(dl_l),
-                axes=[wi_arr],
-                names=['wavelength'],
-                desc='bandwidth',
-            )
-            norm_dl = (we * dl).reduce(
-                np.sum, 'wavelength', grouping=wb.data
-            )
-            norm = we.reduce(
-                np.sum, 'wavelength', grouping=wb.data
-            )
-        elif output_type == 'DataArray':
-            wi_arr = np.array(wi_l, dtype=np.float32)
-            wb = xr.DataArray(
-                wi_arr,
-                dims=['wavelength'],
-                coords={'wavelength': wi_arr},
-                name='wavelength',
-                attrs={'desc': 'wavelength'},
-            )
-            we = xr.DataArray(
-                np.array(we_l),
-                dims=['wavelength'],
-                coords={'wavelength': wi_arr},
-                name='weight',
-                attrs={'desc': 'weight'},
-            )
-            ex = xr.DataArray(
-                np.array(ex_l),
-                dims=['wavelength'],
-                coords={'wavelength': wi_arr},
-                name='solarflux',
-                attrs={'desc': 'solarflux'},
-            )
-            dl = xr.DataArray(
-                np.array(dl_l),
-                dims=['wavelength'],
-                coords={'wavelength': wi_arr},
-                name='bandwidth',
-                attrs={'desc': 'bandwidth'},
-            )
 
-            #norm_dl = (we*dl).reduce(np.sum,'wavelength',grouping=wb.data)
-            norm_dl = (we * dl).groupby(
-                'wavelength'
-            ).sum(dim='wavelength')
-            norm = we.groupby('wavelength').sum(dim='wavelength')
-        else:
-            raise ValueError("output_type must be either 'LUT' or 'DataArray'")
+        wi_arr = np.array(wi_l, dtype=np.float32)
+        wb = xr.DataArray(
+            np.array(wi_l, dtype=np.float32),
+            dims=["wavelength"],
+            coords={"wavelength": wi_arr},
+            name="wavelength",
+            attrs={"desc": "wavelength central band"},
+        )
+        we = xr.DataArray(
+            np.array(we_l),
+            dims=["wavelength"],
+            coords={"wavelength": wi_arr},
+            name="weight",
+            attrs={"desc": "Weight"},
+        )
+        ex = xr.DataArray(
+            np.array(ex_l),
+            dims=["wavelength"],
+            coords={"wavelength": wi_arr},
+            name="solarflux",
+            attrs={"desc": "E0"},
+        )
+        dl = xr.DataArray(
+            np.array(dl_l),
+            dims=["wavelength"],
+            coords={"wavelength": wi_arr},
+            name="bandwidth",
+            attrs={"desc": "Dlambda"},
+        )
+        norm_dl = (we * dl).groupby("wavelength").sum(dim="wavelength")
+        norm = we.groupby("wavelength").sum(dim="wavelength")
         return we, wb, ex, dl, norm, norm_dl
 
 
 
-    def get_groups(self):
-        '''
-        '''
+    def get_groups(self) -> np.ndarray:
+        """Return the zero-based channel group for each internal band.
+
+        Returns
+        -------
+        numpy.ndarray
+            Channel indices shifted so that the first selected channel
+            is group zero.
+        """
         bsgroup = []
-        for internal_band in self.l:
-            bsgroup.append(internal_band.band.band)
+        for iband in self.l:
+            bsgroup.append(iband.band.band)
         bsgroup = np.array(bsgroup)
         return bsgroup - bsgroup[0]
 
 
 
-def skip_comment(file_handle):
-    while(True):
+def skip_comment(file_handle: TextIO) -> None:
+    """Skip consecutive comment lines and rewind to the first data line."""
+    while True:
         position = file_handle.tell()
-        if not file_handle.readline().strip().startswith('#'): break
+        if not file_handle.readline().strip().startswith("#"):
+            break
     file_handle.seek(position, 0)
