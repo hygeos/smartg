@@ -1627,7 +1627,7 @@ class Atm1D(Atmosphere):
         ----------
         wav : array_like or BandSet
             Wavelengths at which to calculate the profile. It can be a
-            list of ReptranIband or KDIS_IBAND.
+            list of ReptranIband or KdisIband.
         n_theta : int, optional
             The number of angles to be considered for the phase matrix.
         use_old_calc_iphase : bool, optional

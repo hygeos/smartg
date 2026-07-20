@@ -3025,7 +3025,7 @@ def cat_view(
     accuracy : int, optional
         Accuracy: number of decimal points to display when printing.
         Default: 6
-    kdis_rep_bands : KDIS_IBAND_LIST or ReptranIbandList, optional
+    kdis_rep_bands : KdisIbandList or ReptranIbandList, optional
         Band information object. Used for spectral processing. Default:
         None
 

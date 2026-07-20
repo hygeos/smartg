@@ -26,7 +26,7 @@ import glob
 
 def reduce_kdis(
     ds: xr.Dataset | MLUT,
-    ibands: KDIS_IBAND_LIST,
+    ibands: KdisIbandList,
     use_solar: bool = False,
     integrated: bool = False,
     extern_weights: LUT | xr.DataArray | None = None,
@@ -41,7 +41,7 @@ def reduce_kdis(
     ----------
     ds : Dataset or MLUT
         Spectral SMART-G results containing a ``wavelength`` coordinate.
-    ibands : KDIS_IBAND_LIST
+    ibands : KdisIbandList
         KDIS internal bands providing weights, channel wavelengths, and
         bandwidths.
     use_solar : bool, optional
@@ -123,7 +123,7 @@ def reduce_kdis(
 
 
 
-def Kdis_Emission(mlut, ibands):
+def kdis_emission(mlut, ibands):
     '''
     Return Thermal emission
     '''
@@ -145,14 +145,14 @@ def Kdis_Emission(mlut, ibands):
     return Emission
 
 
-def Kdis_Avg_Emission(mlut, ibands):
+def kdis_avg_emission(mlut, ibands):
     '''
     Return vertically integrated Thermal emission
     '''
-    return (4*np.pi)*Kdis_Emission(mlut, ibands).reduce(simpson, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
+    return (4*np.pi)*kdis_emission(mlut, ibands).reduce(simpson, 'z_atm', x=-mlut.axis('z_atm') * 1e3)
 
 
-class KDIS(object):
+class Kdis(object):
 
     def __init__(self, model, dir_data='', format=None):
 
@@ -185,10 +185,10 @@ class KDIS(object):
                 print("            Missing file:", filename)
                 sys.exit()
             fdef = open(filename,'r')
-            skipcomment(fdef)
+            skip_comment(fdef)
             tmp = fdef.readline()
             self.nmaxai = int(tmp.split()[0])
-            skipcomment(fdef)
+            skip_comment(fdef)
             tmp = fdef.readline()
             self.nsp_tot =  int(tmp.split()[0])
             self.nsp     = 0
@@ -197,7 +197,7 @@ class KDIS(object):
             self.nsp_c     = 0
             self.fcont_c   = []
             self.species_c = []
-            skipcomment(fdef)
+            skip_comment(fdef)
             for i in range(self.nsp_tot):
                 tmp = fdef.readline()
                 if int(tmp.split()[1]) == 0:
@@ -210,11 +210,11 @@ class KDIS(object):
                     self.fcont_c.append( float(tmp.split()[2] ) )
             self.fcont   = np.array(self.fcont)        
             self.fcont_c = np.array(self.fcont_c)        
-            skipcomment(fdef)
+            skip_comment(fdef)
             tmp = fdef.readline()
             self.nwvl = int(tmp.split()[0])
             self.wvlband = np.zeros((3, self.nwvl))
-            skipcomment(fdef)
+            skip_comment(fdef)
             for i in range(self.nwvl):
                 tmp = fdef.readline()                
                 self.wvlband[0,i] = float(tmp.split()[1])*1e3
@@ -225,9 +225,9 @@ class KDIS(object):
                         print(" kdis_coeff ERROR")
                         print("            wavelengths must be sorted in increasing order")
                         sys.exit()
-            skipcomment(fdef)
+            skip_comment(fdef)
             tmp = fdef.readline()
-            skipcomment(fdef)
+            skip_comment(fdef)
             self.np = int(tmp.split()[0])
             self.p = np.zeros(self.np)
             for i in range(self.np):
@@ -238,9 +238,9 @@ class KDIS(object):
                         print(" kdis_coeff ERROR")
                         print("            pressure must be sorted in increasing order")
                         sys.exit()
-            skipcomment(fdef)
+            skip_comment(fdef)
             tmp = fdef.readline()
-            skipcomment(fdef)
+            skip_comment(fdef)
             self.nt = int(tmp.split()[0])
             self.t = np.zeros(self.nt)
             for i in range(self.nt):
@@ -252,9 +252,9 @@ class KDIS(object):
                         print("            temperature must be sorted in increasing order")
                         sys.exit()
             if self.nsp_c > 0:
-                skipcomment(fdef)
+                skip_comment(fdef)
                 tmp = fdef.readline()
-                skipcomment(fdef)
+                skip_comment(fdef)
                 self.nc = int(tmp.split()[0])
                 self.c = np.zeros(self.nc)
                 for i in range(self.nc):
@@ -281,13 +281,13 @@ class KDIS(object):
                     print("            Missing file:", filename)
                     sys.exit()                    
                 f = open(filename,'r')
-                skipcomment(f)
+                skip_comment(f)
                 for iwvl in range(self.nwvl):
                     tmp = f.readline()
                     self.nai[isp,iwvl]   = int(tmp.split()[1])
                 for iwvl in range(self.nwvl):
                     if self.nai[isp,iwvl]>1:
-                        skipcomment(f)
+                        skip_comment(f)
                         tmp = f.readline()
                         #print 'nai, nmaxai=',self.nai[isp,iwvl], self.nmaxai
                         for iai in range(self.nai[isp,iwvl]):
@@ -310,13 +310,13 @@ class KDIS(object):
                     print("            Missing file:", filename)
                     sys.exit()                    
                 f = open(filename,'r')
-                skipcomment(f)
+                skip_comment(f)
                 for iwvl in range(self.nwvl):
                     tmp = f.readline()
                     self.nai_c[isp,iwvl]   = int(tmp.split()[1])
                 for iwvl in range(self.nwvl):
                     if self.nai_c[isp,iwvl]>1:
-                        skipcomment(f)
+                        skip_comment(f)
                         tmp = f.readline()
                         for iai in range(self.nai_c[isp,iwvl]):
                             self.ai_c[isp,iwvl,iai] = float(tmp.split()[iai])  
@@ -336,17 +336,17 @@ class KDIS(object):
                     print("            Missing file:", filename)
                     sys.exit()
             fsol = open(filename,'r')
-            skipcomment(fsol)
+            skip_comment(fsol)
             tmp = fsol.readline()
-            skipcomment(fsol)
+            skip_comment(fsol)
             tmp = fsol.readline()
             nn = float(tmp.split()[0])
             if nn != self.nwvl :
                 print(" solar flux and kdis have uncompatible band number")
                 sys.exit()
-            skipcomment(fsol)
+            skip_comment(fsol)
             self.solarflux = np.zeros(self.nwvl)
-            skipcomment(fsol)
+            skip_comment(fsol)
             for i in range(self.nwvl):
                 tmp = fsol.readline()
                 self.solarflux[i] = float(tmp.split()[0])
@@ -485,9 +485,9 @@ class KDIS(object):
 
     def band(self, band):
         '''
-        returns a KDIS_BAND
+        returns a KdisBand
         '''
-        return KDIS_BAND(self, band)
+        return KdisBand(self, band)
 
     def bands(self):
         '''
@@ -518,7 +518,7 @@ class KDIS(object):
 
         assert len(ik_l) != 0
 
-        return KDIS_IBAND_LIST(sorted(ik_l, key=lambda x:x.w))
+        return KdisIbandList(sorted(ik_l, key=lambda x:x.w))
 
 
     def get_weight(self):
@@ -542,18 +542,18 @@ class KDIS(object):
         norm = we.reduce(np.sum,'wavelength',grouping=wb.data)
         return we, wb, ex, dl, norm
    
-class KDIS_IBAND(object):
+class KdisIband(object):
     '''
-    KDIS internal band
+    Kdis internal band
 
     Arguments:
-        band: KDIS_BAND object
+        band: KdisBand object
         index: band index
         iband: internal band index
     '''
     def __init__(self, band, index):
 
-        self.band = band     # parent KDIS_BAND
+        self.band = band     # parent KdisBand
         self.index = index   # internal band index
         self.w = band.awvl[index]  # band wavelength
         self.ex= band.solarflux # solar irradiance
@@ -634,7 +634,7 @@ class KDIS_IBAND(object):
         return datamol*1e5
 
 
-class KDIS_BAND(object):
+class KdisBand(object):
     def __init__(self, kdis, band):
 
         self.kdis = kdis # parent kdis coeff
@@ -656,7 +656,7 @@ class KDIS_BAND(object):
         '''
         returns internal band by its number (starting at zero)
         '''
-        return KDIS_IBAND(self, index)
+        return KdisIband(self, index)
 
     def ibands(self):
         '''
@@ -665,9 +665,9 @@ class KDIS_BAND(object):
         for i in range(self.nband):
             yield self.iband(i)
 
-class KDIS_IBAND_LIST(object):  
+class KdisIbandList(object):
     '''
-    KDIS list of IBANDS
+    Kdis list of ibands
     '''
     def __init__(self, l):
         self.l=l
@@ -724,7 +724,7 @@ class KDIS_IBAND_LIST(object):
 
 
 
-def skipcomment(f):
+def skip_comment(f):
     while(True):
         pos=f.tell()
         if not f.readline().strip().startswith('#'): break
