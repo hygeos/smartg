@@ -1,5 +1,3 @@
-
-
 """Shared type aliases and structural protocols for SMART-G.
 
 This module centralizes common numeric, path, and spectral-band typing

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 
 import geoclide as gc
@@ -570,7 +568,7 @@ class GroupE(object):
         self.check = "GroupE"
 
 
-def findRots(UI=None, UO=None, vecNF=None):
+def find_rots(UI=None, UO=None, vecNF=None):
     """Compute rotation angles to reflect an incoming ray toward an outgoing direction.
 
     Determines the Y and Z rotation angles necessary to orient a surface so that
@@ -669,7 +667,7 @@ def findRots(UI=None, UO=None, vecNF=None):
     return [rotYD, rotZD, TTT]
 
 
-def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
+def generate_mtf(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
     """Compute transformations for curved heliostat facet orientation.
 
     Generates transformation matrices for each facet of a heliostat to enable
@@ -715,13 +713,13 @@ def generateMTF(HELIO=Heliostat(), PR = gc.Point(0., 0., 0.)):
             UI = gc.normalize(UI)
             UO = MPF[i][j] - APOSR
             UO = gc.normalize(UO)
-            RINF  = findRots(UI=UI, UO=UO)
+            RINF  = find_rots(UI=UI, UO=UO)
             MTF[i][j] = gc.Transform(RINF[2])
 
     return MTF
 
 
-def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=None):
+def generate_lef_h(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=None):
     """Convert a heliostat to well-oriented plane facets for receiver reflection.
 
     Generates a list of properly oriented planar entity/facets from a heliostat object.
@@ -839,14 +837,14 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
                 UI = gc.normalize(UI)
                 UO = MPF[i][j] - APOSR
                 UO = gc.normalize(UO)
-                RINF  = findRots(UI=UI, UO=UO)
+                RINF  = find_rots(UI=UI, UO=UO)
                 MTF[i][j] = gc.Transform(RINF[2])
 
 
     # Find the general heliostat rotation transform (like helistat is a unique facet)
     UI = gc.Vector(vSun.x, vSun.y, vSun.z); UO = POSH - PR;
     UI = gc.normalize(UI); UO = gc.normalize(UO);
-    RINF2  = findRots(UI=UI, UO=UO)
+    RINF2  = find_rots(UI=UI, UO=UO)
     TTZY = RINF2[2]
 
     # Apply the general rotation transform to each facet point and then apply translation.
@@ -894,7 +892,7 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
             vecNF = gc.normalize(vecNF)
     
             # Find the rotation transform
-            RINF3 = findRots(vecNF=vecNF)
+            RINF3 = find_rots(vecNF=vecNF)
 
             # Once the rotation angles have been found, create the facet as entity object
             tempF1 = Entity(F1)
@@ -910,7 +908,7 @@ def generateLEfH(HELIO = Heliostat(), PR = None, THEDEG = 0., PHIDEG = 0., MTF=N
     return LF
 
 
-def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "LambMirror",
+def generate_box(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "LambMirror",
         ref=[1., 1., 1., 1., 1., 1.], rough=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rotZ = 0., gap=0.0001,
         obj_type="environment", colors=None, alpha_color=None):
     """Create a 3D box/building composed of six planar faces.
@@ -1069,7 +1067,7 @@ def generateBox(dimXYZ=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), matAV = "La
     return GOBJ
 
 
-def Ref_Fresnel(dirEnt, geoTrans):
+def ref_fresnel(dirEnt, geoTrans):
     """Calculate Fresnel reflection direction for a ray on a transformed surface.
 
     Computes the direction of a reflected ray using simple Fresnel reflection
@@ -1157,7 +1155,7 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
         raise NameError('The only objects accepted for entities parameter are: Entity or GroupE')
 
     # ensure we have only Entity objects (converts if necessary GroupE to Entity objects)
-    entities = convertLGtoLE(entities)
+    entities = convert_lg_to_le(entities)
 
     E = entities
     E_tf = []
@@ -1236,7 +1234,7 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
             xr[k] = photon.o.x + tr*photon.d.x
             yr[k] = photon.o.y + tr*photon.d.y
             zr[k] = photon.o.z + tr*photon.d.z
-            vecTemp = Ref_Fresnel(dirEnt = photon.d, geoTrans = tt)
+            vecTemp = ref_fresnel(dirEnt = photon.d, geoTrans = tt)
             TabPhoton2 = np.append(TabPhoton2, gc.Ray(o=p_hit, d=vecTemp, maxt=120))
 
 
@@ -1361,7 +1359,7 @@ def visualize_entity(entities, th_deg = 0., ph_deg = 0., draw_method = 'SM', ray
     return fig
 
 
-def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Point(0., 0., 0.), \
+def generate_h_p(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Point(0., 0., 0.), \
                 HSX = 0.001, HSY = 0.001, REF = 1, ROUGH=0, HTYPE = None, LMTF = None):
     """Generate well-oriented Heliostats from their positions.
 
@@ -1428,7 +1426,7 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Poi
             vecHR = gc.normalize(vecHR)
 
             # 2) Find the necessary rotations to apply on the heliostat to reflect to the receiver
-            rInfo = findRots(UI=vSun, UO=vecHR)
+            rInfo = find_rots(UI=vSun, UO=vecHR)
             rotYD = rInfo[0]; rotZD = rInfo[1];
 
             # 3) Once the rotation angles have been found, create heliostat objects
@@ -1447,15 +1445,15 @@ def generateHfP(THEDEG=0., PHIDEG = 0., PH = [gc.Point(0., 0., 0.)], PR = gc.Poi
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(PH)):
             H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=PH_[i], REF=REF, ROUGH=ROUGH)
-            if LMTF is None: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
-            else: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
+            if LMTF is None: TLE = generate_lef_h(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
+            else: TLE = generate_lef_h(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
             GTEMP = GroupE(LE = TLE)
             lObj.append(GTEMP)
 
     return lObj
 
 
-def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
+def generate_h_a(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
                 MAXANG=360., GAPDEG = 5., FDRH = 0.1, NBH = 10, GAPDIST = 0.01, \
                 HSX = 0.001, HSY = 0.001, PILLH = 0.006, REF = 1, ROUGH=0,
                 HTYPE=None, LMTF = None, RLPH = False):
@@ -1590,7 +1588,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
 
             # 2) The incoming (vSun) and outcoming (vecHR) directions are known then find
             #    the rotation angles
-            rInfo = findRots(UI=vSun, UO=vecHR)
+            rInfo = find_rots(UI=vSun, UO=vecHR)
             rotYD = rInfo[0]; rotZD = rInfo[1]
 
             # 3) Once the rotation angles have been found, create heliostat objects 
@@ -1610,8 +1608,8 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
         # Generate all the facets and store them as entity object in a list 
         for i in range (0, len(pH)):
             H0 = Heliostat(SPX=SPX, SPY=SPY, HSX=HSX, HSY=HSY, CURVE_FL=CURVE_FL, POS=pH[i], REF=REF, ROUGH=ROUGH)
-            if LMTF is None: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
-            else: TLE = generateLEfH(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
+            if LMTF is None: TLE = generate_lef_h(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG)
+            else: TLE = generate_lef_h(HELIO=H0, PR=PR, THEDEG=THEDEG, PHIDEG=PHIDEG, MTF = LMTF[i])
             GTEMP = GroupE(LE = TLE)
             lObj.append(GTEMP)
     
@@ -1621,7 +1619,7 @@ def generateHfA(THEDEG=0., PHIDEG = 0., PR = gc.Point(0., 0., 50.), MINANG=0., \
         return lObj
     
 
-def convertLGtoLE(LGOBJ):
+def convert_lg_to_le(LGOBJ):
     """Convert a mixed list of Entity and GroupE objects to Entity objects only.
 
     Flattens groups by expanding all GroupE objects into their constituent
@@ -1734,7 +1732,7 @@ def is_comment(s):
     return s.startswith('#')
 
 
-def extractPoints(filename):
+def extract_points(filename):
     """Extract heliostat coordinates from a file.
 
     Reads a file and extracts the (x, y, z) coordinates of each heliostat,
