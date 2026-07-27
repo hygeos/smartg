@@ -3859,12 +3859,12 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
     # Build a flat list of entities and a GPU table of object-group parameters.
     for i in range(0, n_gobj):
         lgobj_gpu['index'][i] = index_offset
-        lgobj_gpu['bPminx'][i] = lgobj[i].bboxGPmin.x
-        lgobj_gpu['bPminy'][i] = lgobj[i].bboxGPmin.y
-        lgobj_gpu['bPminz'][i] = lgobj[i].bboxGPmin.z
-        lgobj_gpu['bPmaxx'][i] = lgobj[i].bboxGPmax.x
-        lgobj_gpu['bPmaxy'][i] = lgobj[i].bboxGPmax.y
-        lgobj_gpu['bPmaxz'][i] = lgobj[i].bboxGPmax.z
+        lgobj_gpu['bPminx'][i] = lgobj[i].bbox_pmin.x
+        lgobj_gpu['bPminy'][i] = lgobj[i].bbox_pmin.y
+        lgobj_gpu['bPminz'][i] = lgobj[i].bbox_pmin.z
+        lgobj_gpu['bPmaxx'][i] = lgobj[i].bbox_pmax.x
+        lgobj_gpu['bPmaxy'][i] = lgobj[i].bbox_pmax.y
+        lgobj_gpu['bPmaxz'][i] = lgobj[i].bbox_pmax.z
         if lgobj[i].check == "GroupE":
             lgobj_gpu['nObj'][i] = lgobj[i].nob
             index_offset += lgobj[i].nob
@@ -3881,7 +3881,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
 
     if cus_l is not None and cus_l.dict['LMODE'] == "BR":
         lobj_gpu = np.zeros(n_obj + 1, dtype=type_IObjets, order='C')
-        tc = cus_l.dict['REC'].TC
+        tc = cus_l.dict['REC'].tc
         size_x_min = min(cus_l.dict['REC'].geo.p1.x, cus_l.dict['REC'].geo.p2.x,
                          cus_l.dict['REC'].geo.p3.x, cus_l.dict['REC'].geo.p4.x)
         size_x_max = max(cus_l.dict['REC'].geo.p1.x, cus_l.dict['REC'].geo.p2.x,
@@ -3897,17 +3897,17 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         lobj_gpu['mvRx'][n_obj] = cus_l.dict['REC'].transformation.rotx
         lobj_gpu['mvRy'][n_obj] = cus_l.dict['REC'].transformation.roty
         lobj_gpu['mvRz'][n_obj] = cus_l.dict['REC'].transformation.rotz
-        if cus_l.dict['REC'].transformation.rotOrder == "XYZ":
+        if cus_l.dict['REC'].transformation.rot_order == "XYZ":
             lobj_gpu['rotOrder'][n_obj] = 1
-        elif cus_l.dict['REC'].transformation.rotOrder == "XZY":
+        elif cus_l.dict['REC'].transformation.rot_order == "XZY":
             lobj_gpu['rotOrder'][n_obj] = 2
-        elif cus_l.dict['REC'].transformation.rotOrder == "YXZ":
+        elif cus_l.dict['REC'].transformation.rot_order == "YXZ":
             lobj_gpu['rotOrder'][n_obj] = 3
-        elif cus_l.dict['REC'].transformation.rotOrder == "YZX":
+        elif cus_l.dict['REC'].transformation.rot_order == "YZX":
             lobj_gpu['rotOrder'][n_obj] = 4
-        elif cus_l.dict['REC'].transformation.rotOrder == "ZXY":
+        elif cus_l.dict['REC'].transformation.rot_order == "ZXY":
             lobj_gpu['rotOrder'][n_obj] = 5
-        elif cus_l.dict['REC'].transformation.rotOrder == "ZYX":
+        elif cus_l.dict['REC'].transformation.rot_order == "ZYX":
             lobj_gpu['rotOrder'][n_obj] = 6
         else:
             raise NameError('Unknown rotation order')
@@ -3971,17 +3971,17 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             tp_rx0 = gc.get_rotateX_tf(lobj[i].transformation.rotation[0])
             tp_ry0 = gc.get_rotateY_tf(lobj[i].transformation.rotation[1])
             tp_rz0 = gc.get_rotateZ_tf(lobj[i].transformation.rotation[2])
-            if lobj[i].transformation.rotOrder == "XYZ":
+            if lobj[i].transformation.rot_order == "XYZ":
                 tp_t0 = tp_rx0 * tp_ry0 * tp_rz0
-            elif lobj[i].transformation.rotOrder == "XZY":
+            elif lobj[i].transformation.rot_order == "XZY":
                 tp_t0 = tp_rx0 * tp_rz0 * tp_ry0
-            elif lobj[i].transformation.rotOrder == "YXZ":
+            elif lobj[i].transformation.rot_order == "YXZ":
                 tp_t0 = tp_ry0 * tp_rx0 * tp_rz0
-            elif lobj[i].transformation.rotOrder == "YZX":
+            elif lobj[i].transformation.rot_order == "YZX":
                 tp_t0 = tp_ry0 * tp_rz0 * tp_rx0
-            elif lobj[i].transformation.rotOrder == "ZXY":
+            elif lobj[i].transformation.rot_order == "ZXY":
                 tp_t0 = tp_rz0 * tp_rx0 * tp_ry0
-            elif lobj[i].transformation.rotOrder == "ZYX":
+            elif lobj[i].transformation.rot_order == "ZYX":
                 tp_t0 = tp_rz0 * tp_ry0 * tp_rx0
             else:
                 raise NameError('Unknown rotation order')
@@ -3998,17 +3998,17 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         lobj_gpu['mvRx'][i] = lobj[i].transformation.rotx
         lobj_gpu['mvRy'][i] = lobj[i].transformation.roty
         lobj_gpu['mvRz'][i] = lobj[i].transformation.rotz
-        if lobj[i].transformation.rotOrder == "XYZ":
+        if lobj[i].transformation.rot_order == "XYZ":
             lobj_gpu['rotOrder'][i] = 1
-        elif lobj[i].transformation.rotOrder == "XZY":
+        elif lobj[i].transformation.rot_order == "XZY":
             lobj_gpu['rotOrder'][i] = 2
-        elif lobj[i].transformation.rotOrder == "YXZ":
+        elif lobj[i].transformation.rot_order == "YXZ":
             lobj_gpu['rotOrder'][i] = 3
-        elif lobj[i].transformation.rotOrder == "YZX":
+        elif lobj[i].transformation.rot_order == "YZX":
             lobj_gpu['rotOrder'][i] = 4
-        elif lobj[i].transformation.rotOrder == "ZXY":
+        elif lobj[i].transformation.rot_order == "ZXY":
             lobj_gpu['rotOrder'][i] = 5
-        elif lobj[i].transformation.rotOrder == "ZYX":
+        elif lobj[i].transformation.rot_order == "ZYX":
             lobj_gpu['rotOrder'][i] = 6
         else:
             raise NameError('Unknown rotation order')
@@ -4022,25 +4022,25 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         lobj_gpu['nindAV'][i] = 1
         lobj_gpu['distAV'][i] = 0
         lobj_gpu['reflectAV'][i] = 0
-        if np.array(lobj[i].materialAV.reflectivity).size == 1:
-            lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].materialAV.reflectivity)
-        elif lobj[i].materialAV.reflectivity.size != nlam:
+        if np.array(lobj[i].material_front.reflectivity).size == 1:
+            lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].material_front.reflectivity)
+        elif lobj[i].material_front.reflectivity.size != nlam:
             raise NameError('The number of reflectivities must be equal to the number of wavelengths!')
         else:
-            lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = lobj[i].materialAV.reflectivity[:]
+            lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = lobj[i].material_front.reflectivity[:]
 
-        if isinstance(lobj[i].materialAV, LambMirror):
+        if isinstance(lobj[i].material_front, LambMirror):
             lobj_gpu['materialAV'][i] = 1
             lobj_gpu['roughAV'][i] = 0.
-        elif isinstance(lobj[i].materialAV, Matte):
+        elif isinstance(lobj[i].material_front, Matte):
             lobj_gpu['materialAV'][i] = 2
-            lobj_gpu['roughAV'][i] = lobj[i].materialAV.roughness
-        elif isinstance(lobj[i].materialAV, Mirror):
+            lobj_gpu['roughAV'][i] = lobj[i].material_front.roughness
+        elif isinstance(lobj[i].material_front, Mirror):
             lobj_gpu['materialAV'][i] = 3
-            lobj_gpu['shdAV'][i] = int(lobj[i].materialAV.shadow)
-            lobj_gpu['nindAV'][i] = lobj[i].materialAV.nind
-            lobj_gpu['distAV'][i] = lobj[i].materialAV.distribution
-            lobj_gpu['roughAV'][i] = lobj[i].materialAV.roughness
+            lobj_gpu['shdAV'][i] = int(lobj[i].material_front.shadow)
+            lobj_gpu['nindAV'][i] = lobj[i].material_front.nind
+            lobj_gpu['distAV'][i] = lobj[i].material_front.distribution
+            lobj_gpu['roughAV'][i] = lobj[i].material_front.roughness
         else:
             raise NameError('Unknown material AV')
 
@@ -4050,25 +4050,25 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         lobj_gpu['nindAR'][i] = 1
         lobj_gpu['distAR'][i] = 0
         lobj_gpu['reflectAR'][i] = 0
-        if np.array(lobj[i].materialAR.reflectivity).size == 1:
-            lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].materialAR.reflectivity)
-        elif lobj[i].materialAR.reflectivity.size != nlam:
+        if np.array(lobj[i].material_back.reflectivity).size == 1:
+            lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].material_back.reflectivity)
+        elif lobj[i].material_back.reflectivity.size != nlam:
             raise NameError('The number of reflectivities must be equal to the number of wavelengths!')
         else:
-            lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = lobj[i].materialAR.reflectivity[:]
+            lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = lobj[i].material_back.reflectivity[:]
 
-        if isinstance(lobj[i].materialAR, LambMirror):
+        if isinstance(lobj[i].material_back, LambMirror):
             lobj_gpu['materialAR'][i] = 1
             lobj_gpu['roughAR'][i] = 0.
-        elif isinstance(lobj[i].materialAR, Matte):
+        elif isinstance(lobj[i].material_back, Matte):
             lobj_gpu['materialAR'][i] = 2
-            lobj_gpu['roughAR'][i] = lobj[i].materialAR.roughness
-        elif isinstance(lobj[i].materialAR, Mirror):
+            lobj_gpu['roughAR'][i] = lobj[i].material_back.roughness
+        elif isinstance(lobj[i].material_back, Mirror):
             lobj_gpu['materialAR'][i] = 3
-            lobj_gpu['shdAR'][i] = int(lobj[i].materialAR.shadow)
-            lobj_gpu['nindAR'][i] = lobj[i].materialAR.nind
-            lobj_gpu['distAR'][i] = lobj[i].materialAR.distribution
-            lobj_gpu['roughAR'][i] = lobj[i].materialAR.roughness
+            lobj_gpu['shdAR'][i] = int(lobj[i].material_back.shadow)
+            lobj_gpu['nindAR'][i] = lobj[i].material_back.nind
+            lobj_gpu['distAR'][i] = lobj[i].material_back.distribution
+            lobj_gpu['roughAR'][i] = lobj[i].material_back.roughness
         else:
             raise NameError('Unknown material AR')
 
@@ -4077,7 +4077,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             lobj_gpu['type'][i] = 1
 
             if (isinstance(lobj[i].geo, Plane)
-                    and (isinstance(lobj[i].materialAR, Mirror) or isinstance(lobj[i].materialAV, Mirror))):
+                    and (isinstance(lobj[i].material_back, Mirror) or isinstance(lobj[i].material_front, Mirror))):
                 nb_h += 1
                 z_alt_h += lobj[i].transformation.transz
                 tot_s_h += abs(lobj[i].geo.p1.x) * abs(lobj[i].geo.p1.y) * 4
@@ -4094,7 +4094,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
                 surf_lph += surf_lph_bis
         elif lobj[i].name == "receiver":
             lobj_gpu['type'][i] = 2
-            tc = lobj[i].TC
+            tc = lobj[i].tc
             size_x_min = min(lobj[i].geo.p1.x, lobj[i].geo.p2.x,
                              lobj[i].geo.p3.x, lobj[i].geo.p4.x)
             size_x_max = max(lobj[i].geo.p1.x, lobj[i].geo.p2.x,
