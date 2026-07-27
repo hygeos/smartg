@@ -253,8 +253,8 @@ def test_objForward(**kwargv):
     wRx = 0.006; wRy = 0.007
     wMx = 0.004725; wMy = 0.00642
     MirA = Entity(name = "reflector", \
-                  materialAV = Mirror(reflectivity = 0.88), \
-                  materialAR = Matte(reflectivity = 0.), \
+                  material_av = Mirror(reflectivity = 0.88), \
+                  material_ar = Matte(reflectivity = 0.), \
                   geo = Plane( p1 = Point(-wMx, -wMy, 0.),
                                p2 = Point(wMx, -wMy, 0.),
                                p3 = Point(-wMx, wMy, 0.),
@@ -276,9 +276,9 @@ def test_objForward(**kwargv):
     MirD.transformation = Transformation( rotation = np.array([0., 38.715473, 0.]), \
                                           translation = np.array([0.8, 0., 0.00517]) )
     
-    Recept1 = Entity(name = "receiver", TC = 0.0005, \
-                     materialAV = Matte(reflectivity = 0.), \
-                     materialAR = Matte(reflectivity = 0.), \
+    Recept1 = Entity(name = "receiver", tc = 0.0005, \
+                     material_av = Matte(reflectivity = 0.), \
+                     material_ar = Matte(reflectivity = 0.), \
                      geo = Plane( p1 = Point(-wRx, -wRy, 0.),
                                   p2 = Point(wRx, -wRy, 0.),
                                   p3 = Point(-wRx, wRy, 0.),
