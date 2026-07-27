@@ -4,13 +4,15 @@ import geoclide as gc
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
-import mpl_toolkits.mplot3d as mp3d
+from mpl_toolkits.mplot3d import art3d
 from matplotlib import colors as mcolors
 from matplotlib.figure import Figure
 import re
 from itertools import dropwhile
 from pathlib import Path
 from scipy import interpolate
+from typing import cast
+from xarray import Dataset
 
 
 class Mirror(object):
@@ -795,9 +797,9 @@ class GroupE(object):
 
 
 def find_rots(
-    dir_in: gc.Vector | None = None,
-    dir_out: gc.Vector | None = None,
-    normal: gc.Vector | None = None,
+    dir_in: gc.Vector | gc.Normal | None = None,
+    dir_out: gc.Vector | gc.Normal | None = None,
+    normal: gc.Vector | gc.Normal | None = None,
 ) -> list:
     """Compute rotation angles to reflect an incoming ray toward an outgoing direction.
 
@@ -807,17 +809,22 @@ def find_rots(
 
     Parameters
     ----------
-    dir_in : gc.Vector, optional
+    dir_in : gc.Vector | gc.Normal, optional
         Direction vector of the incoming ray or sun direction (geoclide.Vector).
         Required unless normal is provided. Default is None.
-    dir_out : gc.Vector, optional
+    dir_out : gc.Vector | gc.Normal, optional
         Direction vector of the outgoing ray, typically from receiver to facet center.
         The surface will be oriented to reflect dir_in toward -dir_out.
         Required unless normal is provided. Default is None.
-    normal : gc.Vector, optional
+    normal : gc.Vector | gc.Normal, optional
         Pre-computed normal vector of the reflection surface (geoclide.Vector).
         If provided, dir_in and dir_out are not used. Allows direct specification of the
         desired surface normal. Default is None.
+
+    Raises
+    ------
+    ValueError
+        If normal is None and either dir_in or dir_out is also None.
 
     Returns
     -------
@@ -844,8 +851,13 @@ def find_rots(
     # 1)Find the normal of the facet but filled in a vector class
     if normal is not None:
         facet_normal = gc.Vector(normal)
+    elif dir_in is None or dir_out is None:
+        raise ValueError(
+            "find_rots needs either the normal parameter, or both the dir_in "
+            "and dir_out parameters"
+        )
     else:
-        facet_normal = (dir_in + dir_out) * (-0.5)
+        facet_normal = (gc.Vector(dir_in) + gc.Vector(dir_out)) * (-0.5)
     facet_normal = gc.normalize(facet_normal)
     facet_normal.z = np.clip(
         facet_normal.z, -1, 1
@@ -857,6 +869,11 @@ def find_rots(
     rot_y = 0
     rot_z = 0
     ope_z = 0
+    # Values returned if no rotation is needed, i.e. if the while loop below is
+    # never entered (identity transform and no rotation in y and z)
+    rot_y_deg = 0.0
+    rot_z_deg = 0.0
+    combined_tf = gc.Transform()
     # The initial value of the facet normal is (0, 0, 1) but forced to (0, 0, 0)
     # to be sure to activate the while loop below
     initial_normal = gc.Vector(0.0, 0.0, 0.0)
@@ -958,7 +975,7 @@ def generate_mtf(
 
     heliostat_pos = gc.Point(heliostat.pos.x, heliostat.pos.y, heliostat.pos.z)
     assumed_receiver_pos = gc.Point(
-        0.0, 0.0, 0.0 + (heliostat_pos - receiver_pos).Length()
+        0.0, 0.0, 0.0 + gc.Vector(heliostat_pos - receiver_pos).length()
     )
 
     # Find the positions of facets and store them in matrix facet_points[i][j]
@@ -1089,7 +1106,9 @@ def generate_lef_h(
         assumed_receiver_pos = gc.Point(0.0, 0.0, 0.0 + focal_length)
     else:
         heliostat_pos_copy = gc.Point(heliostat_pos)
-        receiver_distance = (heliostat_pos_copy - receiver_pos).length()
+        receiver_distance = gc.Vector(
+            heliostat_pos_copy - receiver_pos
+        ).length()
         assumed_receiver_pos = gc.Point(0.0, 0.0, 0.0 + receiver_distance)
     # For the bounding box
     bbox_dist = (
@@ -1358,7 +1377,7 @@ def generate_box(
 
     # Material AV = front part (i.e. part outside the box) of Face 0 to Face 5,
     # back part (i.e. part inside the box) will be definite as matte (totally absorbant)
-    material_front_list = []
+    material_front_list: list[MaterialType] = []
     if material_front == "Mirror":
         for i in range(0, 6):
             material_front_list.append(
@@ -1369,6 +1388,13 @@ def generate_box(
             material_front_list.append(
                 LambMirror(reflectivity=reflectivity[i])
             )
+    elif isinstance(material_front, str):
+        raise NameError(
+            "Unknown material_front value: '"
+            + material_front
+            + "'. It must be 'Mirror', 'LambMirror', or a list of 6 material"
+            + " objects"
+        )
     else:
         material_front_list = material_front
 
@@ -1557,7 +1583,7 @@ def ref_fresnel(dir_in: gc.Vector, geo_transform: gc.Transform) -> gc.Vector:
     ray_dir = incident_dir + normal_vec * (2 * gc.dot(normal_vec, ray_dir))
 
     # Be sure ray_dir is normalized
-    ray_dir = gc.normalize(ray_dir)
+    ray_dir = gc.Vector(gc.normalize(ray_dir))
 
     return ray_dir
 
@@ -1615,9 +1641,7 @@ def visualize_entity(
         )
 
     # ensure we have only Entity objects (converts if necessary GroupE to Entity objects)
-    entities = convert_lg_to_le(entities)
-
-    entity_list = entities
+    entity_list: list[Entity] = convert_lg_to_le(entities)
     entity_tfs = []
     box = gc.BBox()
     for i in range(0, len(entity_list)):
@@ -1660,11 +1684,11 @@ def visualize_entity(
             rec_tfs.append(entity_tfs[i])
 
     n_ref = len(ref_entities)
-    xr = [None] * n_ref
-    yr = [None] * n_ref
-    zr = [None] * n_ref
+    xr: list[np.ndarray | None] = [None] * n_ref
+    yr: list[np.ndarray | None] = [None] * n_ref
+    zr: list[np.ndarray | None] = [None] * n_ref
     has_intersection = [False] * n_ref
-    reflected_photons = []
+    reflected_photons: list[gc.Ray] = []
 
     for k in range(0, len(ref_entities)):
         # Get the transformation
@@ -1737,7 +1761,9 @@ def visualize_entity(
         tmesh.apply_tf(tt)
         ltmesh.append(tmesh)
 
-        ds = gc.calc_intersection(tmesh, photon)
+        # cast: calc_intersection always forces ds_output=True, so it always
+        # returns a Dataset
+        ds = cast(Dataset, gc.calc_intersection(tmesh, photon))
         if ds["is_intersection"].values and ds["thit"].values < float("inf"):
             has_intersection[k] = True
             n_mirror_hits += int(1)
@@ -1748,13 +1774,13 @@ def visualize_entity(
             yr[k] = photon.o.y + tr * photon.d.y
             zr[k] = photon.o.z + tr * photon.d.z
             reflected_dir = ref_fresnel(dir_in=photon.d, geo_transform=tt)
-            reflected_photons = np.append(
-                reflected_photons, gc.Ray(o=p_hit, d=reflected_dir, maxt=120)
+            reflected_photons.append(
+                gc.Ray(o=p_hit, d=reflected_dir, maxt=120)
             )
 
-    xr2 = [None] * n_mirror_hits
-    yr2 = [None] * n_mirror_hits
-    zr2 = [None] * n_mirror_hits
+    xr2: list[np.ndarray | None] = [None] * n_mirror_hits
+    yr2: list[np.ndarray | None] = [None] * n_mirror_hits
+    zr2: list[np.ndarray | None] = [None] * n_mirror_hits
     rec_has_intersection = [False] * n_mirror_hits
 
     for k in range(0, len(rec_entities)):
@@ -1821,14 +1847,20 @@ def visualize_entity(
         ltmesh.append(tmesh)
 
         for i in range(0, n_mirror_hits):
-            ds = gc.calc_intersection(tmesh, reflected_photons[i])
+            ds = cast(
+                Dataset, gc.calc_intersection(tmesh, reflected_photons[i])
+            )
             if ds["is_intersection"].values and ds["thit"].values < float(
                 "inf"
             ):
                 rec_has_intersection[i] = True
                 p_hit = gc.Point(ds["phit"].values)
                 t_hit = ds["thit"].values
-                tr = np.linspace(reflected_photons[i].mint, t_hit, 100)
+                # cast: mint is a scalar, but its type is wrongly inferred
+                # from the untyped Ray constructor of geoclide
+                tr = np.linspace(
+                    cast(float, reflected_photons[i].mint), t_hit, 100
+                )
                 xr2[i] = (
                     reflected_photons[i].o.x + tr * reflected_photons[i].d.x
                 )
@@ -1841,8 +1873,12 @@ def visualize_entity(
 
     # create the matplotlib figure
     fig = plt.figure()  # figsize=[128, 96])
-    ax = fig.add_subplot(111, projection=Axes3D.name)
-    ax.scatter([-1, 1], [-1, 1], [-1, 1], alpha=0.0)
+    # cast: with a 3d projection add_subplot returns an Axes3D, but it is only
+    # annotated as returning the base Axes class
+    ax = cast(Axes3D, fig.add_subplot(111, projection=Axes3D.name))
+    # type: ignore -> zs accepts an array-like, but being unannotated its type
+    # is wrongly inferred from its default value 0, i.e. as an int
+    ax.scatter([-1, 1], [-1, 1], [-1, 1], alpha=0.0)  # type: ignore
 
     for itmesh, tmesh in enumerate(ltmesh):
         # Triangles mesh parameters for plot
@@ -1860,7 +1896,7 @@ def visualize_entity(
                         [p2.x, p2.y, p2.z],
                     ]
                 )
-                face1 = mp3d.art3d.Poly3DCollection(
+                face1 = art3d.Poly3DCollection(
                     [face_pts],
                     alpha=entity_list[itmesh].alpha_color,
                     linewidths=0.2,
@@ -1970,7 +2006,6 @@ def visualize_entity(
     ax.set_zlabel("Z Label")
 
     # Show the geometries
-    fig = ax.get_figure()
     return fig
 
 
@@ -2401,13 +2436,14 @@ def convert_lg_to_le(obj_list: list[Entity | GroupE]) -> list[Entity]:
         converted into their constituent Entity objects.
     """
     n_objs = len(obj_list)
-    flat_list = []
+    flat_list: list[Entity] = []
 
     for i in range(0, n_objs):
-        if isinstance(obj_list[i], GroupE):
-            flat_list.extend(obj_list[i].le)
-        elif isinstance(obj_list[i], Entity):
-            flat_list.append(obj_list[i])
+        obj = obj_list[i]
+        if isinstance(obj, GroupE):
+            flat_list.extend(obj.le)
+        elif isinstance(obj, Entity):
+            flat_list.append(obj)
         else:
             raise NameError(
                 "In the list, only Entity and GroupE classes are autorised!"
@@ -2463,7 +2499,7 @@ def rotate_vector(
     else:
         raise NameError("Unknown rotation_order value!")
     rotated_vector = tt(vector)
-    rotated_vector = gc.normalize(rotated_vector)
+    rotated_vector = gc.Vector(gc.normalize(rotated_vector))
 
     return rotated_vector
 
@@ -2487,15 +2523,19 @@ def interpolate_refls_from_wls(
     refls_new : numpy array with the interpolated reflectivities
     """
 
+    # type: ignore -> fill_value is documented as accepting an array-like, a
+    # 2 element tuple or "extrapolate", but its stub only allows a float
     if extrapolate:
         f = interpolate.interp1d(
-            wavelengths, reflectivities, fill_value="extrapolate"
+            wavelengths,
+            reflectivities,
+            fill_value="extrapolate",  # type: ignore
         )
     else:
         f = interpolate.interp1d(
             wavelengths,
             reflectivities,
-            fill_value=(reflectivities[0], reflectivities[-1]),
+            fill_value=(reflectivities[0], reflectivities[-1]),  # type: ignore
             bounds_error=False,
         )
 
@@ -2543,6 +2583,7 @@ def extract_points(filename: str | Path) -> list[gc.Point]:
     """
 
     # First check if filename is an str type
+    file_content = ""
     try:
         with open(filename, "r") as file:
             for _curline in dropwhile(is_comment, file):
