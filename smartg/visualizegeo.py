@@ -1,4 +1,4 @@
-
+from __future__ import annotations
 
 import geoclide as gc
 import matplotlib.pyplot as plt
@@ -6,8 +6,10 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import mpl_toolkits.mplot3d as mp3d
 from matplotlib import colors as mcolors
+from matplotlib.figure import Figure
 import re
 from itertools import dropwhile
+from pathlib import Path
 from scipy import interpolate
 
 
@@ -45,8 +47,8 @@ class Mirror(object):
     Walter, B., Marschner, S. R., Li, H., & Torrance, K. E. (2007).
     Microfacet models for refraction through rough surfaces.
     """
-    def __init__(self, reflectivity = 1., roughness = 0., shadow = False, nind = None,
-                 distribution = "Beckmann"):
+    def __init__(self, reflectivity: float = 1., roughness: float = 0., shadow: bool = False,
+                 nind: float | None = None, distribution: str = "Beckmann") -> None:
         self.reflectivity = reflectivity
         self.roughness    = roughness
         self.shadow       = shadow
@@ -61,7 +63,7 @@ class Mirror(object):
         else:
             NameError('Please choose a distribution between str(Beckmann) or str(GGX)')
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'Material -> Mirror : ' \
             'reflectivity=' + str(self.reflectivity) + ', roughness=' + str(self.roughness) \
             + ', shadow=' + str(self.shadow) + ', nind=' + str(self.nind) \
@@ -82,11 +84,11 @@ class LambMirror(object):
         Controls the fraction of incident light that is reflected.
         Default: 0.5
     """
-    def __init__(self, reflectivity = 0.5):
+    def __init__(self, reflectivity: float = 0.5) -> None:
         self.reflectivity = reflectivity
-        
 
-    def __str__(self):
+
+    def __str__(self) -> str:
         return 'Material -> Lambertian Mirror : ' \
             'reflectivity=' + str(self.reflectivity)
 
@@ -113,11 +115,11 @@ class Matte(object):
 
     - For the moment this material is only used for totally absorbant surfaces.
     """
-    def __init__(self, reflectivity = 0., roughness = 0.):
+    def __init__(self, reflectivity: float = 0., roughness: float = 0.) -> None:
         self.reflectivity = reflectivity
         self.roughness = roughness
-        
-    def __str__(self):
+
+    def __str__(self) -> str:
         return 'Material -> Matte : ' \
             'reflectivity=' + str(self.reflectivity) + ', roughness=' + str(self.roughness)
 
@@ -152,8 +154,8 @@ class Plane(object):
     - p1 and p2 have the same negative y-coordinate
     - p3 and p4 have the same positive y-coordinate
     """
-    def __init__(self, p1 = gc.Point(-0.5, -0.5, 0.), p2 = gc.Point(0.5, -0.5, 0.), \
-                 p3 = gc.Point(-0.5, 0.5, 0.), p4 = gc.Point(0.5, 0.5, 0.)):
+    def __init__(self, p1: gc.Point = gc.Point(-0.5, -0.5, 0.), p2: gc.Point = gc.Point(0.5, -0.5, 0.), \
+                 p3: gc.Point = gc.Point(-0.5, 0.5, 0.), p4: gc.Point = gc.Point(0.5, 0.5, 0.)) -> None:
         if (isinstance(p1, gc.Point) and isinstance(p2, gc.Point) and \
             isinstance(p3, gc.Point) and isinstance(p4, gc.Point)):
             if (  ( (p1.x == p3.x) and (p1.x < 0) )  and \
@@ -177,7 +179,7 @@ class Plane(object):
         else:
             raise NameError('All arguments must be Point type!')
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'Coordinates of the Plane :\n' \
             '-> p1=(' + str(self.p1.x) + ', ' + str(self.p1.y) + ', ' + str(self.p1.z) + ')\n' + \
             '-> p2=(' + str(self.p2.x) + ', ' + str(self.p2.y) + ', ' + str(self.p2.z) + ')\n' + \
@@ -216,7 +218,8 @@ class Spheric(object):
     -----
     For a full sphere, use default values: z0 = -radius, z1 = +radius, phi = 360°
     """
-    def __init__(self, radius = 10., z0 = None, z1 = None, phi = 360.):
+    def __init__(self, radius: float = 10., z0: float | None = None, z1: float | None = None,
+                 phi: float = 360.) -> None:
         self.radius = radius
         self.phi = phi
         if (z0 == None):
@@ -228,7 +231,7 @@ class Spheric(object):
         else:
             self.z1 = z1
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'Sphere with the following caracteristics :\n' + \
             '-> radius = ' + str(self.radius) + '\n' + \
             '-> z0 = ' + str(self.z0) + '\n' + \
@@ -264,8 +267,9 @@ class Transformation():
         - "ZYX": Rotate around Z, then Y, then X
         Default: "XYZ"
     """
-    def __init__(self, rotation = np.zeros(3, dtype=float), translation=np.zeros(3, dtype=float), \
-                 rotation_order = "XYZ"):
+    def __init__(self, rotation: np.ndarray = np.zeros(3, dtype=float),
+                 translation: np.ndarray = np.zeros(3, dtype=float), \
+                 rotation_order: str = "XYZ") -> None:
         self.rotation = rotation
         self.rotx = rotation[0]
         self.roty = rotation[1]
@@ -276,11 +280,14 @@ class Transformation():
         self.transy = translation[1]
         self.transz = translation[2]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'Transformation : rotation=(' + str(self.rotx) + ', ' + str(self.roty) + ', ' + \
             str(self.rotz) + ') and translation =(' + str(self.transx) + ', ' + \
             str(self.transy) + ', ' + str(self.transz) + ')'
-    
+
+MaterialType = Mirror | LambMirror | Matte
+GeometryType = Plane | Spheric
+
 class Entity(object):
     """
     3D object representation with geometry and material properties.
@@ -331,9 +338,11 @@ class Entity(object):
         Transparency alpha value for visualization (0.0 to 1.0).
         Default: 0.5
     """
-    def __init__(self, entity = None, name="reflector", tc = 0.01, material_av=Matte(), \
-                 material_ar=Matte(), geo=Plane(), transformation=Transformation(), \
-                 bbox_pmin = None, bbox_pmax = None, color = 'grey', alpha_color = 0.5):
+    def __init__(self, entity: Entity | None = None, name: str = "reflector", tc: float = 0.01, \
+                 material_av: MaterialType = Matte(), material_ar: MaterialType = Matte(), \
+                 geo: GeometryType = Plane(), transformation: Transformation = Transformation(), \
+                 bbox_pmin: gc.Point | None = None, bbox_pmax: gc.Point | None = None, \
+                 color: str = 'grey', alpha_color: float = 0.5) -> None:
         if isinstance(entity, Entity) :
             self.name = entity.name; self.TC = entity.TC; self.materialAV = entity.materialAV
             self.materialAR = entity.materialAR; self.geo = entity.geo
@@ -376,13 +385,13 @@ class Entity(object):
             self.alpha_color = alpha_color
         self.check = "Entity"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'The entity is a ' + str(self.name) + ' with the following carac:\n' + \
             str(self.materialAV) + '\n' + \
             str(self.geo) + '\n' + \
             str(self.transformation)
-    
-    def get_transformation(self):
+
+    def get_transformation(self) -> gc.Transform:
         """
         Compute the combined transformation matrix for the entity.
 
@@ -425,7 +434,7 @@ class Entity(object):
 
         return tt
 
-    def set_transformation(self, transformation, recompute_bbox=True):
+    def set_transformation(self, transformation: Transformation, recompute_bbox: bool = True) -> None:
         """
         Update the entity's transformation and optionally recompute bounding box.
 
@@ -513,8 +522,9 @@ class Heliostat(object):
         Surface roughness of the heliostat facets.
         Default: 0
     """
-    def __init__(self, pos = gc.Point(0., 0., 0.), n_facets_x=int(2), n_facets_y=int(2), helio_size_x=0.02,
-                 helio_size_y=0.02, curve_focal_length=None, reflectivity=1., roughness=0):
+    def __init__(self, pos: gc.Point = gc.Point(0., 0., 0.), n_facets_x: int = int(2), n_facets_y: int = int(2),
+                 helio_size_x: float = 0.02, helio_size_y: float = 0.02,
+                 curve_focal_length: float | None = None, reflectivity: float = 1., roughness: float = 0) -> None:
         # Be sure that we split a heliostat by at least 2
         if (n_facets_x*n_facets_y < 2):
             raise Exception("The number of facets must be >= 2!")
@@ -530,7 +540,7 @@ class Heliostat(object):
         self.ref = reflectivity
         self.rough = roughness
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "POS=" + str(self.pos) + '; ' + "SPX=" + str(self.sPx) + '; ' + \
                 "SPY=" + str(self.sPy) + '; ' + "HSX=" + str(self.hSx) + '; ' + \
                 "HSY=" + str(self.hSy)  + '; ' + "CURVE_FL=" + str(self.curveFL) + \
@@ -552,7 +562,7 @@ class GroupE(object):
         Custom bounding box as [Pmin, Pmax] where Pmin and Pmax are geoclide.Point
         objects. If None (default), bounding box is computed from entities[0].
     """
-    def __init__(self, entities=[Entity()], bbox=None):
+    def __init__(self, entities: list[Entity] = [Entity()], bbox: list[gc.Point] | None = None) -> None:
         self.le  = entities
         self.nob = len(entities)
         if bbox is None:
@@ -568,7 +578,8 @@ class GroupE(object):
         self.check = "GroupE"
 
 
-def find_rots(dir_in=None, dir_out=None, normal=None):
+def find_rots(dir_in: gc.Vector | None = None, dir_out: gc.Vector | None = None,
+              normal: gc.Vector | None = None) -> list:
     """Compute rotation angles to reflect an incoming ray toward an outgoing direction.
 
     Determines the Y and Z rotation angles necessary to orient a surface so that
@@ -667,7 +678,7 @@ def find_rots(dir_in=None, dir_out=None, normal=None):
     return [rot_y_deg, rot_z_deg, combined_tf]
 
 
-def generate_mtf(heliostat=Heliostat(), receiver_pos = gc.Point(0., 0., 0.)):
+def generate_mtf(heliostat: Heliostat = Heliostat(), receiver_pos: gc.Point = gc.Point(0., 0., 0.)) -> np.ndarray:
     """Compute transformations for curved heliostat facet orientation.
 
     Generates transformation matrices for each facet of a heliostat to enable
@@ -720,7 +731,9 @@ def generate_mtf(heliostat=Heliostat(), receiver_pos = gc.Point(0., 0., 0.)):
     return facet_transforms
 
 
-def generate_lef_h(heliostat = Heliostat(), receiver_pos = None, theta_deg = 0., phi_deg = 0., facet_transforms=None):
+def generate_lef_h(heliostat: Heliostat = Heliostat(), receiver_pos: gc.Point | None = None,
+                    theta_deg: float = 0., phi_deg: float = 0.,
+                    facet_transforms: np.ndarray | None = None) -> list[Entity]:
     """Convert a heliostat to well-oriented plane facets for receiver reflection.
 
     Generates a list of properly oriented planar entity/facets from a heliostat object.
@@ -909,9 +922,12 @@ def generate_lef_h(heliostat = Heliostat(), receiver_pos = None, theta_deg = 0.,
     return facets
 
 
-def generate_box(dim_xyz=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), material_av = "LambMirror",
-        reflectivity=[1., 1., 1., 1., 1., 1.], roughness=[0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rot_z = 0., gap=0.0001,
-        obj_type="environment", colors=None, alpha_color=None):
+def generate_box(dim_xyz: list[float] = [0.05, 0.05, 0.05], pos: gc.Point = gc.Point(0., 0., 0.),
+        material_av: str | list[MaterialType] = "LambMirror",
+        reflectivity: list[float] = [1., 1., 1., 1., 1., 1.],
+        roughness: list[float] = [0.2, 0.2, 0.2, 0.2, 0.2, 0.2], rot_z: float = 0., gap: float = 0.0001,
+        obj_type: str = "environment", colors: list[str] | None = None,
+        alpha_color: list[float] | None = None) -> GroupE:
     """Create a 3D box/building composed of six planar faces.
 
     Generates a box with six faces following Didier's 3D atmosphere convention in SMART-G.
@@ -1068,7 +1084,7 @@ def generate_box(dim_xyz=[0.05, 0.05, 0.05], pos=gc.Point(0., 0., 0.), material_
     return box_group
 
 
-def ref_fresnel(dir_in, geo_transform):
+def ref_fresnel(dir_in: gc.Vector, geo_transform: gc.Transform) -> gc.Vector:
     """Calculate Fresnel reflection direction for a ray on a transformed surface.
 
     Computes the direction of a reflected ray using simple Fresnel reflection
@@ -1115,8 +1131,10 @@ def ref_fresnel(dir_in, geo_transform):
     return ray_dir
 
 
-def visualize_entity(entities, theta_deg = 0., phi_deg = 0., draw_method = 'SM', ray_color = 'r',
-                     sr_view=1, xyz_limit = None, show_rays=True, rs_fac = 1):
+def visualize_entity(entities: list[Entity | GroupE] | Entity | GroupE, theta_deg: float = 0.,
+                     phi_deg: float = 0., draw_method: str = 'SM', ray_color: str = 'r',
+                     sr_view: int = 1, xyz_limit: dict | None = None, show_rays: bool = True,
+                     rs_fac: float = 1) -> Figure:
     """Enable a 3D visualization of created objects.
 
     Parameters
@@ -1360,8 +1378,12 @@ def visualize_entity(entities, theta_deg = 0., phi_deg = 0., draw_method = 'SM',
     return fig
 
 
-def generate_h_p(theta_deg=0., phi_deg = 0., heliostat_pos_list = [gc.Point(0., 0., 0.)], receiver_pos = gc.Point(0., 0., 0.), \
-                helio_size_x = 0.001, helio_size_y = 0.001, reflectivity = 1, roughness=0, heliostat_type = None, facet_transforms_list = None):
+def generate_h_p(theta_deg: float = 0., phi_deg: float = 0.,
+                heliostat_pos_list: list[gc.Point] = [gc.Point(0., 0., 0.)],
+                receiver_pos: gc.Point = gc.Point(0., 0., 0.), \
+                helio_size_x: float = 0.001, helio_size_y: float = 0.001, reflectivity: float = 1,
+                roughness: float = 0, heliostat_type: Heliostat | None = None,
+                facet_transforms_list: list[np.ndarray] | None = None) -> list[Entity | GroupE]:
     """Generate well-oriented Heliostats from their positions.
 
     Generates a list of heliostat entities oriented to reflect sun rays toward
@@ -1454,10 +1476,15 @@ def generate_h_p(theta_deg=0., phi_deg = 0., heliostat_pos_list = [gc.Point(0., 
     return obj_list
 
 
-def generate_h_a(theta_deg=0., phi_deg = 0., receiver_pos = gc.Point(0., 0., 50.), min_ang_deg=0., \
-                max_ang_deg=360., gap_ang_deg = 5., first_dist = 0.1, n_heliostats = 10, gap_dist = 0.01, \
-                helio_size_x = 0.001, helio_size_y = 0.001, pillar_height = 0.006, reflectivity = 1, roughness=0,
-                heliostat_type=None, facet_transforms_list = None, return_positions = False):
+def generate_h_a(theta_deg: float = 0., phi_deg: float = 0., receiver_pos: gc.Point = gc.Point(0., 0., 50.),
+                min_ang_deg: float = 0., \
+                max_ang_deg: float = 360., gap_ang_deg: float = 5., first_dist: float = 0.1,
+                n_heliostats: int = 10, gap_dist: float = 0.01, \
+                helio_size_x: float = 0.001, helio_size_y: float = 0.001, pillar_height: float = 0.006,
+                reflectivity: float = 1, roughness: float = 0,
+                heliostat_type: Heliostat | None = None,
+                facet_transforms_list: list[np.ndarray] | None = None,
+                return_positions: bool = False) -> list[Entity | GroupE] | tuple[list[Entity | GroupE], list[gc.Point]]:
     """Generate well-oriented Heliostats arranged in an angular sector around receiver.
 
     Generates heliostats positioned between min_ang_deg and max_ang_deg angles, properly
@@ -1620,7 +1647,7 @@ def generate_h_a(theta_deg=0., phi_deg = 0., receiver_pos = gc.Point(0., 0., 50.
         return obj_list
     
 
-def convert_lg_to_le(obj_list):
+def convert_lg_to_le(obj_list: list[Entity | GroupE]) -> list[Entity]:
     """Convert a mixed list of Entity and GroupE objects to Entity objects only.
 
     Flattens groups by expanding all GroupE objects into their constituent
@@ -1651,7 +1678,8 @@ def convert_lg_to_le(obj_list):
     return flat_list
 
 
-def rotate_vector(vector, rot_x, rot_y, rot_z, rotation_order="xyz"):
+def rotate_vector(vector: gc.Vector, rot_x: float, rot_y: float, rot_z: float,
+                   rotation_order: str = "xyz") -> gc.Vector:
     """
     Definition of the function rotate_vector
 
@@ -1697,7 +1725,8 @@ def rotate_vector(vector, rot_x, rot_y, rot_z, rotation_order="xyz"):
     return rotated_vector
 
 
-def interpolate_refls_from_wls (wavelengths, reflectivities, new_wavelengths, extrapolate=False):
+def interpolate_refls_from_wls (wavelengths: np.ndarray | list[float], reflectivities: np.ndarray | list[float],
+                                 new_wavelengths: np.ndarray | list[float], extrapolate: bool = False) -> np.ndarray:
     """
         Definition: Giving a set of wavelengths (wavelengths) and reflectivities (reflectivities),
                     get the interpolated reflectivities folowing the new set of wavelengths (new_wavelengths)
@@ -1723,7 +1752,7 @@ def interpolate_refls_from_wls (wavelengths, reflectivities, new_wavelengths, ex
     return refls_new
 
 
-def is_comment(line):
+def is_comment(line: str) -> bool:
     """
     function to check if a line
     starts with some character.
@@ -1733,7 +1762,7 @@ def is_comment(line):
     return line.startswith('#')
 
 
-def extract_points(filename):
+def extract_points(filename: str | Path) -> list[gc.Point]:
     """Extract heliostat coordinates from a file.
 
     Reads a file and extracts the (x, y, z) coordinates of each heliostat,
