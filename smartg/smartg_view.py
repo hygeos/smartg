@@ -21,6 +21,7 @@ import numpy as np
 # ignore division by zero errors
 np.seterr(invalid="ignore", divide="ignore")
 import xarray as xr
+from xarray import Dataset
 import mpl_toolkits.axisartist.angle_helper as angle_helper
 from matplotlib.transforms import Affine2D
 from mpl_toolkits.axisartist import floating_axes
@@ -29,12 +30,22 @@ from matplotlib import colors as mcolors
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import ScalarFormatter
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import art3d
 import matplotlib.pyplot as plt
 from typing import Any, Literal, Sequence, cast
 import geoclide as gc
 from luts.luts import Idx_base, MLUT, LUT
 from smartg.atmosphere import diff1
 from smartg.water import diff2
+from smartg.visualizegeo import (
+    Entity,
+    GroupE,
+    Plane,
+    Spheric,
+    convert_lg_to_le,
+    ref_fresnel,
+)
 
 
 def mdesc(desc: str, log_i: bool = False) -> str:
@@ -3734,3 +3745,429 @@ def nopt_view(
                     naatm += ds["n_aatm"].values[i] * mtoa[i]
                 naatm /= np.sum(mtoa)
             print("naatm =", str_acc % naatm, " -> analytic approx of natm")
+
+
+def visualize_entity(
+    entities: list[Entity | GroupE] | Entity | GroupE,
+    theta_deg: float = 0.0,
+    phi_deg: float = 0.0,
+    draw_method: str = "SM",
+    ray_color: str = "r",
+    sr_view: int = 1,
+    xyz_limit: dict | None = None,
+    show_rays: bool = True,
+    rs_fac: float = 1,
+) -> Figure:
+    """Enable a 3D visualization of created objects.
+
+    Parameters
+    ----------
+    entities : list | Entity
+        A list of Entity objects to visualize.
+    theta_deg : float, optional
+        The zenith angle of the sun in degrees. Default is 0.
+    phi_deg : float, optional
+        The azimuth angle of the sun in degrees. Default is 0.
+    draw_method : str, optional
+        The drawing method. 'SM' (Second Method) is the default and
+        recommended. 'FM' (First Method) is useful for debugging
+        issues.
+    ray_color : str, optional
+        Sun rays color, e.g., 'r', 'b', 'g', etc. Default is 'r'.
+    sr_view : int, optional
+        Number of sun rays that can be seen in the figure. Default is 1.
+    xyz_limit : dict, optional
+        Dictionary specifying x, y, z view limits in km. If None
+        (default), limits are automatically chosen. Example format:
+        {'x_min': 0., 'x_max': 10., 'y_min': 0., 'y_max': 10.,
+         'z_min': 0., 'z_max': 10.}
+    show_rays : bool, optional
+        Whether to show sun rays. Default is True.
+    rs_fac : float, optional
+        Ray scale factor. Default is 1.
+
+    Returns
+    -------
+    out : matplotlib.figure.Figure
+        A matplotlib figure object containing the 3D visualization.
+    """
+
+    if not isinstance(entities, (list)):
+        entities = [entities]
+
+    if not (all(isinstance(x, (Entity, GroupE)) for x in entities)):
+        raise NameError(
+            "The only objects accepted for entities parameter are: "
+            "Entity or GroupE"
+        )
+
+    # ensure we have only Entity objects (converts if necessary GroupE
+    # to Entity objects)
+    entity_list: list[Entity] = convert_lg_to_le(entities)
+    entity_tfs = []
+    box = gc.BBox()
+    for i in range(0, len(entity_list)):
+        entity_tfs.append(entity_list[i].get_transformation())
+        box = box.union((entity_list[i].bbox_pmin))
+        box = box.union((entity_list[i].bbox_pmax))
+
+    box_center = box.pmin + 0.5 * (box.pmax - box.pmin)
+    box_max_size = gc.vmax(box.pmax - box.pmin)
+    pmin_n = gc.Point(
+        box_center.x - 0.5 * box_max_size,
+        box_center.y - 0.5 * box_max_size,
+        box_center.z - 0.5 * box_max_size,
+    )
+    pmax_n = gc.Point(
+        box_center.x + 0.5 * box_max_size,
+        box_center.y + 0.5 * box_max_size,
+        box_center.z + 0.5 * box_max_size,
+    )
+    box_n = gc.BBox(pmin_n, pmax_n)
+
+    # calculate the sun direction vector
+    sun_dir = gc.ang2vec(theta_deg, phi_deg, vec_view="nadir")
+    wsx = -sun_dir.x
+    wsy = -sun_dir.y
+    wsz = -sun_dir.z
+
+    ltmesh = []
+    n_mirror_hits = int(0)
+    rec_entities = []
+    ref_entities = []
+    rec_tfs = []
+    ref_tfs = []
+    for i in range(0, len(entity_list)):
+        if entity_list[i].name == "reflector":
+            ref_entities.append(entity_list[i])
+            ref_tfs.append(entity_tfs[i])
+        if entity_list[i].name == "receiver":
+            rec_entities.append(entity_list[i])
+            rec_tfs.append(entity_tfs[i])
+
+    n_ref = len(ref_entities)
+    xr: list[np.ndarray | None] = [None] * n_ref
+    yr: list[np.ndarray | None] = [None] * n_ref
+    zr: list[np.ndarray | None] = [None] * n_ref
+    has_intersection = [False] * n_ref
+    reflected_photons: list[gc.Ray] = []
+
+    for k in range(0, len(ref_entities)):
+        # Get the transformation
+        tt = ref_tfs[k]
+
+        photon_pos = gc.Point(
+            wsx + ref_entities[k].transformation.transx,
+            wsy + ref_entities[k].transformation.transy,
+            wsz + ref_entities[k].transformation.transz,
+        )
+        photon = gc.Ray(o=photon_pos, d=sun_dir, maxt=1200.0)
+
+        if isinstance(ref_entities[k].geo, Plane):
+            # Vertex triangle indices
+            vi = np.array(
+                [
+                    np.array([0, 1, 2]),  # indices or triangle 1
+                    np.array([2, 3, 1]),
+                ],
+                dtype=np.int32,
+            )  # indices of triangle 2
+
+            # List of points of the plane
+            pts = np.array(
+                [
+                    np.array(
+                        [
+                            ref_entities[k].geo.p1.x,
+                            ref_entities[k].geo.p1.y,
+                            ref_entities[k].geo.p1.z,
+                        ]
+                    ),
+                    np.array(
+                        [
+                            ref_entities[k].geo.p2.x,
+                            ref_entities[k].geo.p2.y,
+                            ref_entities[k].geo.p2.z,
+                        ]
+                    ),
+                    np.array(
+                        [
+                            ref_entities[k].geo.p3.x,
+                            ref_entities[k].geo.p3.y,
+                            ref_entities[k].geo.p3.z,
+                        ]
+                    ),
+                    np.array(
+                        [
+                            ref_entities[k].geo.p4.x,
+                            ref_entities[k].geo.p4.y,
+                            ref_entities[k].geo.p4.z,
+                        ]
+                    ),
+                ],
+                dtype=np.float64,
+            )
+
+            tmesh = gc.TriangleMesh(vertices=pts, faces=vi)
+        elif isinstance(ref_entities[k].geo, Spheric):
+            sphere = gc.Sphere(
+                ref_entities[k].geo.radius,
+                ref_entities[k].geo.z0,
+                ref_entities[k].geo.z1,
+                ref_entities[k].geo.phi,
+            )
+            tmesh = sphere.to_trianglemesh()
+        else:
+            raise NameError("This geometry is unknown or not yet accepted!")
+
+        tmesh.apply_tf(tt)
+        ltmesh.append(tmesh)
+
+        # cast: calc_intersection always forces ds_output=True, so it
+        # always returns a Dataset
+        ds = cast(Dataset, gc.calc_intersection(tmesh, photon))
+        if ds["is_intersection"].values and ds["thit"].values < float("inf"):
+            has_intersection[k] = True
+            n_mirror_hits += int(1)
+            p_hit = gc.Point(ds["phit"].values)
+            t_hit = ds["thit"].values
+            tr = np.linspace(t_hit * 0.98 * (1 / rs_fac), t_hit, 100)
+            xr[k] = photon.o.x + tr * photon.d.x
+            yr[k] = photon.o.y + tr * photon.d.y
+            zr[k] = photon.o.z + tr * photon.d.z
+            reflected_dir = ref_fresnel(dir_in=photon.d, geo_transform=tt)
+            reflected_photons.append(
+                gc.Ray(o=p_hit, d=reflected_dir, maxt=120)
+            )
+
+    xr2: list[np.ndarray | None] = [None] * n_mirror_hits
+    yr2: list[np.ndarray | None] = [None] * n_mirror_hits
+    zr2: list[np.ndarray | None] = [None] * n_mirror_hits
+    rec_has_intersection = [False] * n_mirror_hits
+
+    for k in range(0, len(rec_entities)):
+        # Get the transformation
+        tt = rec_entities[k].get_transformation()
+
+        if isinstance(rec_entities[k].geo, Plane):
+            # Vertex triangle indices
+            vi = np.array(
+                [
+                    np.array([0, 1, 2]),  # indices or triangle 1
+                    np.array([2, 3, 1]),
+                ],
+                dtype=np.int32,
+            )  # indices of triangle 2
+
+            # List of points of the plane
+            pts = np.array(
+                [
+                    np.array(
+                        [
+                            rec_entities[k].geo.p1.x,
+                            rec_entities[k].geo.p1.y,
+                            rec_entities[k].geo.p1.z,
+                        ]
+                    ),
+                    np.array(
+                        [
+                            rec_entities[k].geo.p2.x,
+                            rec_entities[k].geo.p2.y,
+                            rec_entities[k].geo.p2.z,
+                        ]
+                    ),
+                    np.array(
+                        [
+                            rec_entities[k].geo.p3.x,
+                            rec_entities[k].geo.p3.y,
+                            rec_entities[k].geo.p3.z,
+                        ]
+                    ),
+                    np.array(
+                        [
+                            rec_entities[k].geo.p4.x,
+                            rec_entities[k].geo.p4.y,
+                            rec_entities[k].geo.p4.z,
+                        ]
+                    ),
+                ],
+                dtype=np.float64,
+            )
+
+            tmesh = gc.TriangleMesh(vertices=pts, faces=vi)
+        elif isinstance(rec_entities[k].geo, Spheric):
+            sphere = gc.Sphere(
+                rec_entities[k].geo.radius,
+                rec_entities[k].geo.z0,
+                rec_entities[k].geo.z1,
+                rec_entities[k].geo.phi,
+            )
+            tmesh = sphere.to_trianglemesh()
+        else:
+            raise NameError("This geometry is unknown or not yet accepted!")
+        tmesh.apply_tf(tt)
+        ltmesh.append(tmesh)
+
+        for i in range(0, n_mirror_hits):
+            ds = cast(
+                Dataset, gc.calc_intersection(tmesh, reflected_photons[i])
+            )
+            if ds["is_intersection"].values and ds["thit"].values < float(
+                "inf"
+            ):
+                rec_has_intersection[i] = True
+                p_hit = gc.Point(ds["phit"].values)
+                t_hit = ds["thit"].values
+                # cast: mint is a scalar, but its type is wrongly
+                # inferred from the untyped Ray constructor of geoclide
+                tr = np.linspace(
+                    cast(float, reflected_photons[i].mint), t_hit, 100
+                )
+                xr2[i] = (
+                    reflected_photons[i].o.x + tr * reflected_photons[i].d.x
+                )
+                yr2[i] = (
+                    reflected_photons[i].o.y + tr * reflected_photons[i].d.y
+                )
+                zr2[i] = (
+                    reflected_photons[i].o.z + tr * reflected_photons[i].d.z
+                )
+
+    # create the matplotlib figure
+    fig = plt.figure()  # figsize=[128, 96])
+    # cast: with a 3d projection add_subplot returns an Axes3D, but it
+    # is only annotated as returning the base Axes class
+    ax = cast(Axes3D, fig.add_subplot(111, projection=Axes3D.name))
+    # type: ignore -> zs accepts an array-like, but being unannotated
+    # its type is wrongly inferred from its default value 0, i.e. as
+    # an int
+    ax.scatter([-1, 1], [-1, 1], [-1, 1], alpha=0.0)  # type: ignore
+
+    for itmesh, tmesh in enumerate(ltmesh):
+        # Triangles mesh parameters for plot
+        # First method (draw even if there is error with an object,
+        # useful for debug):
+        # ----------------------------->
+        if draw_method == "FM":
+            for itri in range(0, tmesh.ntriangles):
+                p0 = gc.Point(tmesh.vertices[tmesh.faces[itri, 0], :])
+                p1 = gc.Point(tmesh.vertices[tmesh.faces[itri, 1], :])
+                p2 = gc.Point(tmesh.vertices[tmesh.faces[itri, 2], :])
+                face_pts = np.array(
+                    [
+                        [p0.x, p0.y, p0.z],
+                        [p1.x, p1.y, p1.z],
+                        [p2.x, p2.y, p2.z],
+                    ]
+                )
+                face1 = art3d.Poly3DCollection(
+                    [face_pts],
+                    alpha=entity_list[itmesh].alpha_color,
+                    linewidths=0.2,
+                )
+                face1.set_facecolor(mcolors.to_rgba(entity_list[itmesh].color))
+                ax.add_collection3d(face1)
+
+        # Second method (better visual, avoid some matplotlib bugs):
+        # ----------------------------->
+        if draw_method == "SM":
+            p0_t0 = gc.Point(tmesh.vertices[tmesh.faces[0, 0], :])
+            p1_t0 = gc.Point(tmesh.vertices[tmesh.faces[0, 1], :])
+            p2_t0 = gc.Point(tmesh.vertices[tmesh.faces[0, 2], :])
+            p0_t1 = gc.Point(tmesh.vertices[tmesh.faces[1, 0], :])
+            p1_t1 = gc.Point(tmesh.vertices[tmesh.faces[1, 1], :])
+            p2_t1 = gc.Point(tmesh.vertices[tmesh.faces[1, 2], :])
+            face_pts = np.array(
+                [
+                    [p0_t0.x, p0_t0.y, p0_t0.z],
+                    [p1_t0.x, p1_t0.y, p1_t0.z],
+                    [p2_t0.x, p2_t0.y, p2_t0.z],
+                    [p0_t1.x, p0_t1.y, p0_t1.z],
+                    [p1_t1.x, p1_t1.y, p1_t1.z],
+                    [p2_t1.x, p2_t1.y, p2_t1.z],
+                ]
+            )
+
+            if np.array_equal(face_pts[:, 0], np.full((6), face_pts[0, 0])):
+                yy, zz = np.meshgrid(face_pts[:, 0], face_pts[:, 2])
+                xx = np.full((6, 6), face_pts[0, 0])
+                ax.plot_surface(
+                    xx,
+                    yy,
+                    zz,
+                    color=mcolors.to_rgba(entity_list[itmesh].color),
+                    alpha=entity_list[itmesh].alpha_color,
+                    linewidth=0.2,
+                    antialiased=True,
+                )
+            elif np.array_equal(face_pts[:, 1], np.full((6), face_pts[0, 1])):
+                xx, zz = np.meshgrid(face_pts[:, 0], face_pts[:, 2])
+                yy = np.full((6, 6), face_pts[0, 1])
+                ax.plot_surface(
+                    xx,
+                    yy,
+                    zz,
+                    color=mcolors.to_rgba(entity_list[itmesh].color),
+                    alpha=entity_list[itmesh].alpha_color,
+                    linewidth=0.2,
+                    antialiased=True,
+                )
+            elif np.array_equal(
+                face_pts[:, 2], np.full((6), face_pts[0, 2])
+            ):  # need to be verified
+                xx, yy = np.meshgrid(face_pts[:, 0], face_pts[:, 1])
+                zz = np.full((6, 6), face_pts[0, 2])
+                ax.plot_surface(
+                    xx,
+                    yy,
+                    zz,
+                    color=mcolors.to_rgba(entity_list[itmesh].color),
+                    alpha=entity_list[itmesh].alpha_color,
+                    linewidth=0.2,
+                    antialiased=True,
+                )
+            else:
+                ax.plot_trisurf(
+                    face_pts[:, 0],
+                    face_pts[:, 1],
+                    face_pts[:, 2],
+                    color=mcolors.to_rgba(entity_list[itmesh].color),
+                    alpha=0.5,
+                    linewidth=0.2,
+                    antialiased=True,
+                )
+
+    # ==============================================
+    # plot all the geometries
+    if show_rays:
+        for i in range(0, n_ref):
+            if has_intersection[i] and i % sr_view == 0:
+                ax.plot(
+                    xr[i], yr[i], zr[i], color=ray_color, linewidth=1 * rs_fac
+                )
+
+        for i in range(0, n_mirror_hits):
+            if rec_has_intersection[i] and i % sr_view == 0:
+                ax.plot(
+                    xr2[i],
+                    yr2[i],
+                    zr2[i],
+                    color=ray_color,
+                    linewidth=1 * rs_fac,
+                )
+
+    if xyz_limit is not None:
+        ax.set_xlim3d(xyz_limit["x_min"], xyz_limit["x_max"])
+        ax.set_ylim3d(xyz_limit["y_min"], xyz_limit["y_max"])
+        ax.set_zlim3d(xyz_limit["z_min"], xyz_limit["z_max"])
+    else:  # generic local visualization
+        ax.set_xlim3d(box_n.pmin.x, box_n.pmax.x)
+        ax.set_ylim3d(box_n.pmin.y, box_n.pmax.y)
+        ax.set_zlim3d(box_n.pmin.z, box_n.pmax.z)
+
+    ax.set_xlabel("X Label")
+    ax.set_ylabel("Y Label")
+    ax.set_zlabel("Z Label")
+
+    # Show the geometries
+    return fig
