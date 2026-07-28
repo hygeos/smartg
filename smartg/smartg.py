@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
 from smartg.phase import convert_phase_to_iparper
-from smartg.water import IOP_base
+from smartg.water import Water
 from warnings import warn
 from smartg.albedo import AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
 from smartg.progress import progress as make_progress
@@ -1086,7 +1086,7 @@ class Smartg(object):
             The atmosphere profile. If None, there is no atmosphere.
         surf : None | RoughSurface | FlatSurface | LambSurface, optional
             The surface profile. If None, there is no surface.
-        water : None | IOP | IOP_1, optional
+        water : None | Water1D | MLUT, optional
             The water profile. If None, there is no water.
         env : None | Environemnt, optional
             The environment (adjacency effect) profile. If None, there is no environment.
@@ -1265,9 +1265,9 @@ class Smartg(object):
         --------
         >>> from smartg.smartg import Smartg, RoughSurface
         >>> from smartg.atmosphere import Atm1D, AerOPAC
-        >>> from smartg.water import IOP_1
+        >>> from smartg.water import Water1D, HydrosolPR
         >>> atm = Atm1D('afglt', comp=[AerOPAC('maritime_clean', 0.5, 550.)])
-        >>> water = IOP_1(chl=0.5, DEPTH=5.)
+        >>> water = Water1D(Z=[0, -5.], comp=[HydrosolPR(chl=0.5)])
         >>> surf = RoughSurface(WIND=5., NH2O=1.34)
         >>> m = Smartg().run(wl=550., atm=atm, water=water, surf=surf)
         >>> # Look at the top of atmosphere radiance/reflectance (key: 'I_up (TOA)')
@@ -1541,14 +1541,14 @@ class Smartg(object):
         #
         # ocean
         #
-        if isinstance(water, IOP_base):
+        if isinstance(water, Water):
             prof_oc = water.calc(wl)
         elif isinstance(water, xr.Dataset) or (water is None):
             prof_oc = water
         elif hasattr(water, 'to_xarray'):
             prof_oc = water.to_xarray()
         else:
-            raise NameError('water must be an IOP_base class, an xr.Dataset, an MLUT-like object or equal to None!')
+            raise NameError('water must be a Water class, an xr.Dataset, an MLUT-like object or equal to None!')
 
         if hasattr(prof_oc, 'to_xarray'):
             prof_oc = prof_oc.to_xarray()

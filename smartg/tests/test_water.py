@@ -12,7 +12,7 @@ from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
 from smartg.phase import read_phase
 from smartg.smartg import RoughSurface, Smartg
-from smartg.water import IOP
+from smartg.water import Hydrosol, Water1D
 
 # -------------------------------------------------
 # Logging
@@ -172,7 +172,7 @@ SZA_DEG = 30.0
 WATER_GRID = [0, -9990, -10000]  # metres; sea bottom at 10 km ≈ ∞
 
 
-def _build_water_iop() -> IOP:
+def _build_water_iop() -> Water1D:
     """Build a custom pure-water IOP profile for SMART-G.
 
     Pure water is treated as a general scatterer with the analytic
@@ -210,14 +210,11 @@ def _build_water_iop() -> IOP:
 
     phase = read_phase(pure_water_path, kind="oc")
 
-    return IOP(
-        phase=phase,
-        aw=aw,
-        ap=aph,
-        aCDOM=ag,
-        bw=bw,
-        bp=bph,
+    return Water1D(
         Z=WATER_GRID,
+        aw=aw,
+        bw=bw,
+        comp=[Hydrosol(phase=phase, ap=aph, aCDOM=ag, bp=bph)],
     )
 
 

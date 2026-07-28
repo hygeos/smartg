@@ -9,7 +9,7 @@ import pytest
 import numpy as np
 from smartg.smartg import Smartg, RoughSurface, LambSurface, AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
-from smartg.water import IOP_1
+from smartg.water import HydrosolPR, Water1D
 from smartg.reptran import Reptran, reduce_reptran
 from smartg.smartg_view import smartg_view
 from smartg import conftest
@@ -77,7 +77,7 @@ def test_atm_surf(sg, wav, surf, thv):
 
 def test_surf_iop1_1():
     surf = RoughSurface(WIND=10.0)
-    water = IOP_1(chl=1.0)
+    water = Water1D(comp=[HydrosolPR(chl=1.0)])
     Smartg().run([400.0, 500.0], surf=surf, water=water, NBPHOTONS=NBPHOTONS)
 
 
@@ -89,7 +89,9 @@ def test_atm_surf_iop1():
         pfgrid=[100.0, 5.0, 0.0],
     )
     surf = RoughSurface(WIND=10.0)
-    water = IOP_1(chl=1.0, pfwav=np.array([450, 550, 650, 750]))
+    water = Water1D(
+        comp=[HydrosolPR(chl=1.0, pfwav=np.array([450, 550, 650, 750]))]
+    )
     wav = np.linspace(400, 800, 12)
     Smartg().run(wav, atm=atm, surf=surf, water=water, NBPHOTONS=NBPHOTONS)
 
@@ -136,7 +138,7 @@ def test_adjacency():
 
 def test_no_aer_output():
     atm1 = Atm1D("afglt")
-    water = IOP_1(chl=0.5, DEPTH=5.0)
+    water = Water1D(Z=[0, -5.0], comp=[HydrosolPR(chl=0.5)])
     surf = RoughSurface(WIND=5.0, NH2O=1.34)
     sg = Smartg()
     le = {
