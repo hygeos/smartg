@@ -1050,7 +1050,7 @@ def generate_mtf(
     return facet_transforms
 
 
-def generate_lef_h(
+def generate_le_h(
     heliostat: Heliostat | None = None,
     receiver_pos: gc.Point | None = None,
     theta_deg: float = 0.0,
@@ -2239,14 +2239,14 @@ def generate_h_p(
                 roughness=roughness,
             )
             if facet_transforms_list is None:
-                facet_entities = generate_lef_h(
+                facet_entities = generate_le_h(
                     heliostat=heliostat_obj,
                     receiver_pos=receiver_pos,
                     theta_deg=theta_deg,
                     phi_deg=phi_deg,
                 )
             else:
-                facet_entities = generate_lef_h(
+                facet_entities = generate_le_h(
                     heliostat=heliostat_obj,
                     receiver_pos=receiver_pos,
                     theta_deg=theta_deg,
@@ -2494,14 +2494,14 @@ def generate_h_a(
                 roughness=roughness,
             )
             if facet_transforms_list is None:
-                facet_entities = generate_lef_h(
+                facet_entities = generate_le_h(
                     heliostat=heliostat_obj,
                     receiver_pos=receiver_pos,
                     theta_deg=theta_deg,
                     phi_deg=phi_deg,
                 )
             else:
-                facet_entities = generate_lef_h(
+                facet_entities = generate_le_h(
                     heliostat=heliostat_obj,
                     receiver_pos=receiver_pos,
                     theta_deg=theta_deg,
