@@ -8,11 +8,12 @@ import xarray as xr
 import logging
 from pathlib import Path
 
+from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
 from smartg.phase import read_phase
 from smartg.smartg import RoughSurface, Smartg
-from smartg.water import Hydrosol, Water1D
+from smartg.water import Hydrosol, Water1D, WaterRw
 
 # -------------------------------------------------
 # Logging
@@ -392,5 +393,172 @@ def test_hydrolight(hl_pw, hl_pw_rrs, _smartg_run):
             f"  HydroLight: {rrs_hl}\n"
             f"  |diff|    : {np.abs(rrs_smartg - rrs_hl)}\n"
             f"  4*sigma   : {4.0 * rrs_stdev}"
+        ),
+    )
+
+
+# -----------------------------------------------------------------
+# WaterRw vs Water1D equivalence
+# -----------------------------------------------------------------
+
+RW_ALBEDO = 0.5
+
+# Variables the CUDA kernel reads from a water profile, see the
+# prof_oc handling in Smartg.run
+KERNEL_WATER_VARS = [
+    "T_oc",
+    "OD_w",
+    "OD_p_oc",
+    "OD_y",
+    "OD_oc",
+    "OD_sca_oc",
+    "OD_abs_oc",
+    "pmol_oc",
+    "ssa_oc",
+    "albedo_seafloor",
+]
+
+
+def test_waterrw_profile_matches_water1d():
+    """WaterRw must match the equivalent Water1D profile.
+
+    WaterRw is a fast path for a lambertian reflector placed just
+    below the air-water interface.  It is the degenerate case of a
+    Water1D profile holding no hydrosol and no water column, and must
+    stay numerically identical to it for every variable the kernel
+    reads.
+    """
+    alb = AlbedoCst(RW_ALBEDO)
+    pro_rw = WaterRw(ALB=alb).calc(WAVELENGTHS)
+    pro_w1d = Water1D(Z=[0.0, 0.0], comp=[], ALB=alb).calc(WAVELENGTHS)
+
+    for name in KERNEL_WATER_VARS:
+        assert name in pro_rw.data_vars, f"{name} missing from WaterRw"
+        assert name in pro_w1d.data_vars, f"{name} missing from Water1D"
+        np.testing.assert_allclose(
+            pro_rw[name].values,
+            pro_w1d[name].values,
+            rtol=1e-12,
+            atol=0.0,
+            err_msg=(
+                f"WaterRw and Water1D disagree on '{name}'\n"
+                f"  WaterRw : {pro_rw[name].values}\n"
+                f"  Water1D : {pro_w1d[name].values}"
+            ),
+        )
+
+    # neither model scatters, so no phase matrix is expected
+    for pro, label in ((pro_rw, "WaterRw"), (pro_w1d, "Water1D")):
+        assert "phase_oc" not in pro.data_vars, (
+            f"{label} should not define a phase matrix"
+        )
+
+
+STOKES = ["I", "Q", "U", "V"]
+
+# Absolute floor added to the 4-sigma criterion. V stays exactly zero
+# for a Rayleigh atmosphere over a lambertian reflector, and so does its
+# stdev, so a purely relative criterion would compare 0 < 0 and fail.
+# The floor is orders of magnitude below the smallest non-zero Stokes
+# component, so it masks nothing real.
+STOKES_ATOL = 1e-9
+
+
+@pytest.fixture(scope="module")
+def _atm_rayleigh():
+    """Rayleigh-only atmosphere: no aerosol, no cloud, no absorption."""
+    return Atm1D("afglt", tco3=0.0, tcwp=0.0, no2=False)
+
+
+@pytest.fixture(scope="module")
+def _rw_vs_w1d_run(_atm_rayleigh, _surf):
+    """Run SMART-G with WaterRw and with the equivalent Water1D.
+
+    Both runs use a Rayleigh atmosphere above a rough ocean surface, so
+    the comparison exercises the air-water interface, including its
+    effect on polarization.
+
+    The local estimate is taken out of the principal plane, so that U
+    does not vanish by symmetry.
+
+    Returns
+    -------
+    list of (dict, dict)
+        One (values, stdev) pair per water model, each keyed by Stokes
+        component and holding one value per wavelength.
+    """
+    sg = Smartg()
+    alb = AlbedoCst(RW_ALBEDO)
+    local_est = {
+        "th_deg": np.array([30.0]),
+        "phi_deg": np.array([45.0]),
+    }
+    out = []
+    for water in (
+        WaterRw(ALB=alb),
+        Water1D(Z=[0.0, 0.0], comp=[], ALB=alb),
+    ):
+        m = sg.run(
+            wl=WAVELENGTHS,
+            THVDEG=SZA_DEG,
+            atm=_atm_rayleigh,
+            surf=_surf,
+            water=water,
+            NBPHOTONS=2e7,
+            NBLOOP=1e6,
+            le=local_est,
+            stdev=True,
+        ).to_xarray()
+        out.append(
+            (
+                {s: m[f"{s}_up (TOA)"].values[:, 0, 0] for s in STOKES},
+                {s: m[f"{s}_stdev_up (TOA)"].values[:, 0, 0] for s in STOKES},
+            )
+        )
+    return out
+
+
+def test_atm_rayleigh_is_purely_scattering(_atm_rayleigh):
+    """The test atmosphere must hold no absorption and no particle."""
+    pro = _atm_rayleigh.calc(WAVELENGTHS, phase=False)
+    assert np.abs(pro["OD_g"].values).max() == 0.0, "gaseous absorption left"
+    assert np.abs(pro["OD_p"].values).max() == 0.0, "particles left"
+    assert (pro["OD_r"].values[:, -1] > 0).all(), "no Rayleigh scattering"
+
+
+@pytest.mark.parametrize("stokes", STOKES)
+def test_waterrw_simulation_matches_water1d(_rw_vs_w1d_run, stokes):
+    """Both models must give the same Stokes vector within MC noise.
+
+    The two runs are independent, so the difference is compared to the
+    quadratic sum of their stdevs.
+    """
+    (val_rw, sd_rw), (val_w1d, sd_w1d) = _rw_vs_w1d_run
+    a, b = val_rw[stokes], val_w1d[stokes]
+    sigma = np.hypot(sd_rw[stokes], sd_w1d[stokes])
+    tol = 4.0 * sigma + STOKES_ATOL
+
+    logger.info(f"---- WaterRw vs Water1D, {stokes}_up (TOA) ----")
+    for i, wl in enumerate(WAVELENGTHS):
+        diff = abs(a[i] - b[i])
+        status = "PASS" if diff < tol[i] else "FAIL"
+        logger.info(
+            f"wl={wl:.0f}nm - "
+            f"WaterRw={a[i]:.4E} - "
+            f"Water1D={b[i]:.4E} - "
+            f"diff={diff:.3E} - "
+            f"tol={tol[i]:.3E} - "
+            f"{status}"
+        )
+
+    np.testing.assert_array_less(
+        np.abs(a - b),
+        tol,
+        err_msg=(
+            f"WaterRw and Water1D {stokes} differ by more than 4 sigma\n"
+            f"  WaterRw : {a}\n"
+            f"  Water1D : {b}\n"
+            f"  |diff|  : {np.abs(a - b)}\n"
+            f"  tol     : {tol}"
         ),
     )
