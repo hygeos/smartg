@@ -24,7 +24,7 @@ spectral_grids
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -97,6 +97,12 @@ class BandSet(object):
             self.wav = self.wav.reshape(1)
         self.size: int = int(self.wav.size)
 
+    @overload
+    def __getitem__(self, key: int) -> np.floating: ...
+    @overload
+    def __getitem__(
+        self, key: slice | NDArray[np.integer]
+    ) -> NDArray[np.float32]: ...
     def __getitem__(
         self, key: int | slice | NDArray[np.integer]
     ) -> NDArray[np.float32] | np.floating:

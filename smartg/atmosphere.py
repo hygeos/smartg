@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import numpy as np
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Sequence, TYPE_CHECKING
 from smartg.phase import calc_iphase
 from scipy.interpolate import make_interp_spline
 from scipy.integrate import simpson
@@ -72,6 +72,11 @@ from smartg.typing import NumericArrayLike, PathType, RealNumber
 from numpy.typing import NDArray
 from typing import Any, cast
 from luts.luts import LUT
+
+if TYPE_CHECKING:
+    # Imported only for type checking to avoid a circular import
+    # (kdis.py imports od2k/blackbody_radiance from atmosphere.py).
+    from smartg.kdis import KdisIband
 
 
 # constants
@@ -1672,7 +1677,7 @@ class Atm1D(Atmosphere):
                 # If truncation parameter is given compute truncated
                 # phase function
                 f = None
-                pha_tr = None
+                pha_tr: NDArray[np.float64] | None = None
                 if truncation is not None:
                     if self.opt3d:
                         theta = profile.coords["theta_atm"].values
@@ -2272,9 +2277,10 @@ class Atm1D(Atmosphere):
                     == "<class 'smartg.reptran.ReptranIband'>"
                 ):
                     assert wav.data is not None
+                    kdis_iband = cast("KdisIband", wav.data[0])
                     all_kdis_gas = (
-                        wav.data[0].band.kdis.species
-                        + wav.data[0].band.kdis.species_c
+                        kdis_iband.band.kdis.species
+                        + kdis_iband.band.kdis.species_c
                     )
                     if "no2" in all_kdis_gas:
                         use_no2_acs = False
@@ -4041,9 +4047,8 @@ def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
         wavelength and theta_atm
     """
     pfn = pd.read_csv(file, sep=",", skiprows=6)
-    pfn = pfn[
-        pfn["Phase_Function_Mode"] == "Total"
-    ]  # take only total of fine + coarse
+    # take only total of fine + coarse
+    pfn = cast(pd.DataFrame, pfn[pfn["Phase_Function_Mode"] == "Total"])
     ntime_pfn = pfn.index.size
 
     check_date(dates=pfn["Date(dd:mm:yyyy)"].values, year=year)
@@ -4167,7 +4172,7 @@ def atm_pro_from_aeronet(
     )
     day_year_frac = pd_date.day_of_year + day_frac
     print("day_year_frac =", day_year_frac)
-    year = pd_date.year
+    year = int(pd_date.year)
 
     if isinstance(aod_file, xr.DataArray):
         aod_lut = aod_file
