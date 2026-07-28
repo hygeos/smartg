@@ -1,18 +1,21 @@
+"""3D scene objects for SMART-G.
+
+Defines materials (Mirror, LambMirror, Matte), primitive shapes
+(Plane, Spheric), and the Entity/Heliostat/GroupE object model used
+to describe reflectors and receivers (e.g. heliostat fields) for
+SMART-G. Also provides related helpers: heliostat-field generation and
+facet curvature, rotation/reflection computations, and reading heliostat
+position files.
+"""
+
 from __future__ import annotations
 
 import geoclide as gc
-import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
-from mpl_toolkits.mplot3d import art3d
-from matplotlib import colors as mcolors
-from matplotlib.figure import Figure
 import re
 from itertools import dropwhile
 from pathlib import Path
 from scipy import interpolate
-from typing import cast
-from xarray import Dataset
 
 
 class Mirror(object):
