@@ -19,9 +19,10 @@ class Mirror(object):
     """
     Glossy/specular mirror material surface model.
 
-    Represents glossy/specular reflective materials such as pure and highly
-    polished aluminum, silver-backed glass mirrors, and similar surfaces. Uses
-    microfacet theory with configurable roughness distribution models.
+    Represents glossy/specular reflective materials such as pure and
+    highly polished aluminum, silver-backed glass mirrors, and similar
+    surfaces. Uses microfacet theory with configurable roughness
+    distribution models.
 
     Attributes
     ----------
@@ -29,14 +30,16 @@ class Mirror(object):
         Albedo (reflectance) of the object. Must be between 0 and 1.
         Default: 1.0
     roughness : float, optional
-        Surface roughness parameter (alpha) according to Walter et al. 2007.
-        Characterizes the distribution of microfacet slopes. Default: 0.0
+        Surface roughness parameter (alpha) according to Walter et
+        al. 2007. Characterizes the distribution of microfacet
+        slopes. Default: 0.0
     shadow : bool, optional
-        Whether to include shadowing-masking effects from surface roughness.
-        Default: False
+        Whether to include shadowing-masking effects from surface
+        roughness. Default: False
     nind : float or None, optional
-        Relative refractive index (air/material). If None, represents a perfect
-        mirror (nind = infinity). The internal value becomes -1 for perfect mirrors.
+        Relative refractive index (air/material). If None,
+        represents a perfect mirror (nind = infinity). The internal
+        value becomes -1 for perfect mirrors.
         Default: None
     distribution : str, optional
         Microfacet distribution model. Options are:
@@ -71,7 +74,8 @@ class Mirror(object):
             self.distribution = 2
         else:
             NameError(
-                "Please choose a distribution between str(Beckmann) or str(GGX)"
+                "Please choose a distribution between str(Beckmann) or "
+                "str(GGX)"
             )
 
     def __str__(self) -> str:
@@ -94,8 +98,9 @@ class LambMirror(object):
     """
     Lambertian mirror material surface model.
 
-    Represents a Lambertian reflective material with equal probability of reflection
-    in all directions within the hemisphere normal to the object surface
+    Represents a Lambertian reflective material with equal probability
+    of reflection in all directions within the hemisphere normal to the
+    object surface
 
     Parameters
     ----------
@@ -134,7 +139,8 @@ class Matte(object):
     -----
     Be careful !!
 
-    - For the moment this material is only used for totally absorbant surfaces.
+    - For the moment this material is only used for totally
+      absorbant surfaces.
     """
 
     def __init__(
@@ -157,8 +163,9 @@ class Plane(object):
     """
     Planar surface defined by four corner points.
 
-    Defines a rectangular plane surface constructed from four corner points.
-    The plane must satisfy specific coordinate constraints for each point.
+    Defines a rectangular plane surface constructed from four corner
+    points. The plane must satisfy specific coordinate constraints
+    for each point.
 
     Parameters
     ----------
@@ -275,9 +282,9 @@ class Spheric(object):
     """
     Spherical surface model.
 
-    Represents a spherical (or partial spherical) surface defined by radius
-    and optional height constraints. Can represent a full sphere or a partial
-    sphere.
+    Represents a spherical (or partial spherical) surface defined by
+    radius and optional height constraints. Can represent a full
+    sphere or a partial sphere.
 
     Parameters
     ----------
@@ -285,14 +292,14 @@ class Spheric(object):
         Radius of the sphere. Must be positive.
         Default: 10.0
     z0 : float or None, optional
-        Minimum height (bottom) of the spherical surface. If None, defaults
-        to -radius (full sphere from bottom). For partial spheres, specify
-        custom z0 value.
+        Minimum height (bottom) of the spherical surface. If None,
+        defaults to -radius (full sphere from bottom). For partial
+        spheres, specify custom z0 value.
         Default: None (becomes -radius)
     z1 : float or None, optional
-        Maximum height (top) of the spherical surface. If None, defaults
-        to +radius (full sphere to top). For partial spheres, specify
-        custom z1 value.
+        Maximum height (top) of the spherical surface. If None,
+        defaults to +radius (full sphere to top). For partial
+        spheres, specify custom z1 value.
         Default: None (becomes +radius)
     phi : float, optional
         Azimuthal angle range in degrees. 360 degrees represents a full
@@ -301,7 +308,8 @@ class Spheric(object):
 
     Notes
     -----
-    For a full sphere, use default values: z0 = -radius, z1 = +radius, phi = 360°
+    For a full sphere, use default values: z0 = -radius, z1 = +radius,
+    phi = 360°
     """
 
     def __init__(
@@ -343,19 +351,20 @@ class Transformation:
     """
     Apply rotation and translation transformations to objects.
 
-    Enables flexible transformation of objects through rotation and translation
-    operations. Supports multiple rotation order conventions for specifying
-    the sequence of rotations around different axes.
+    Enables flexible transformation of objects through rotation and
+    translation operations. Supports multiple rotation order
+    conventions for specifying the sequence of rotations around
+    different axes.
 
     Parameters
     ----------
     rotation : 1-D ndarray, optional
-        An array with 3 elements specifying rotation angles (in degrees)
-        around the x, y, and z axes respectively.
+        An array with 3 elements specifying rotation angles (in
+        degrees) around the x, y, and z axes respectively.
         Default: np.zeros(3, dtype=float) (no rotation)
     translation : 1-D ndarray, optional
-        An array with 3 elements specifying translation distances (in kilometers)
-        along the x, y, and z axes respectively.
+        An array with 3 elements specifying translation distances
+        (in kilometers) along the x, y, and z axes respectively.
         Default: np.zeros(3, dtype=float) (no translation)
     rotation_order : str, optional
         Specifies the order in which rotations are applied. Options are:
@@ -432,8 +441,8 @@ class Entity(object):
         - "receiver": Active receiver that tracks flux distribution
         Default: "reflector"
     tc : float, optional
-        Cell size for flux distribution calculation (Taille Cellules in km).
-        Defines the spatial resolution for flux binning.
+        Cell size for flux distribution calculation (Taille Cellules in
+        km). Defines the spatial resolution for flux binning.
         Default: 0.01
     material_front : Material, optional
         Material for the object's front surface (above-view side).
@@ -490,7 +499,8 @@ class Entity(object):
             self.material_back = entity.material_back
             self.geo = entity.geo
             self.transformation = entity.transformation
-            # TODO: Compute automatically bbox_pmin and bbox_pmax from geo and transformation
+            # TODO: Compute automatically bbox_pmin and bbox_pmax
+            # from geo and transformation
             self.bbox_pmin = entity.bbox_pmin
             self.bbox_pmax = entity.bbox_pmax
             self.color = entity.color
@@ -508,8 +518,8 @@ class Entity(object):
             self.geo = geo
             self.transformation = transformation
 
-            # if bbox pmin and pmax are not provided compute them automatically
-            # based on the geometry and transformation
+            # if bbox pmin and pmax are not provided compute them
+            # automatically based on the geometry and transformation
             if bbox_pmin is None or bbox_pmax is None:
                 box = gc.BBox()
                 entity_tf = self.get_transformation()
@@ -559,9 +569,10 @@ class Entity(object):
         Returns
         -------
         out : gc.Transform
-            Combined transformation matrix (translation * rotations in specified order).
-            The rotation order is determined by the entity's transformation.rot_order
-            attribute (e.g., "XYZ", "ZYX", etc.).
+            Combined transformation matrix (translation * rotations
+            in specified order). The rotation order is determined by
+            the entity's transformation.rot_order attribute (e.g.,
+            "XYZ", "ZYX", etc.).
 
         Notes
         -----
@@ -611,30 +622,40 @@ class Entity(object):
         self, transformation: Transformation, recompute_bbox: bool = True
     ) -> None:
         """
-        Update the entity's transformation and optionally recompute bounding box.
+        Update the entity's transformation and optionally recompute
+        bounding box.
 
         Parameters
         ----------
         transformation : Transformation
-            New transformation object containing rotation angles (rotx, roty, rotz),
-            rotation order (rot_order), and translation components (transx, transy, transz).
+            New transformation object containing rotation angles
+            (rotx, roty, rotz), rotation order (rot_order), and
+            translation components (transx, transy, transz).
         recompute_bbox : bool, optional
-            If True (default), recompute the bounding box (bbox_pmin and bbox_pmax)
-            based on the new transformation and the entity's geometry.
-            If False, keep the existing bounding box values.
+            If True (default), recompute the bounding box (bbox_pmin
+            and bbox_pmax) based on the new transformation and the
+            entity's geometry. If False, keep the existing bounding
+            box values.
             Default: True
 
         Notes
         -----
-        The bounding box is automatically recomputed by transforming all geometry
-        points using the new transformation matrix and computing their extent.
+        The bounding box is automatically recomputed by transforming
+        all geometry points using the new transformation matrix and
+        computing their extent.
 
         Examples
         --------
-        >>> entity = Entity(geo=Plane(...), transformation=Transformation())
+        >>> entity = Entity(
+        ...     geo=Plane(...), transformation=Transformation()
+        ... )
         >>> new_tf = Transformation(translation=np.array([1., 2., 3.]))
-        >>> entity.set_transformation(new_tf)  # Update position and recompute bbox
-        >>> entity.set_transformation(new_tf, recompute_bbox=False)  # Update without bbox update
+        >>> entity.set_transformation(
+        ...     new_tf
+        ... )  # Update position and recompute bbox
+        >>> entity.set_transformation(
+        ...     new_tf, recompute_bbox=False
+        ... )  # Update without bbox update
         """
         self.transformation = transformation
 
@@ -666,8 +687,8 @@ class Heliostat(object):
     """
     Composite heliostat assembly consisting of multiple facets.
 
-    Represents a heliostat composed of multiple individual facets arranged
-    in a grid pattern.
+    Represents a heliostat composed of multiple individual facets
+    arranged in a grid pattern.
 
     Parameters
     ----------
@@ -675,12 +696,14 @@ class Heliostat(object):
         Heliostat position (center point) stored as a Point class.
         Default: gc.Point(0., 0., 0.)
     n_facets_x : int, optional
-        Number of facet divisions in the x direction. Controls how many times
-        the heliostat is split along the x-axis. Must be >= 1 (total facets >= 2).
+        Number of facet divisions in the x direction. Controls how
+        many times the heliostat is split along the x-axis. Must be
+        >= 1 (total facets >= 2).
         Default: 2
     n_facets_y : int, optional
-        Number of facet divisions in the y direction. Controls how many times
-        the heliostat is split along the y-axis. Must be >= 1 (total facets >= 2).
+        Number of facet divisions in the y direction. Controls how
+        many times the heliostat is split along the y-axis. Must be
+        >= 1 (total facets >= 2).
         Default: 2
     helio_size_x : float, optional
         Heliostat size in the x direction (meters).
@@ -689,9 +712,10 @@ class Heliostat(object):
         Heliostat size in the y direction (meters).
         Default: 0.02
     curve_focal_length : float | None, optional
-        Focal length (in km) for curvature. If None, the focal length is computed
-        automatically based on the distance to the receiver. A virtual value of
-        infinity means a flat heliostat with no curvature.
+        Focal length (in km) for curvature. If None, the focal length
+        is computed automatically based on the distance to the
+        receiver. A virtual value of infinity means a flat heliostat
+        with no curvature.
         Default: None
     reflectivity : float, optional
         Reflectivity of the heliostat (between 0 and 1). Represents the
@@ -761,17 +785,19 @@ class Heliostat(object):
 class GroupE(object):
     """Container for grouping multiple Entity objects.
 
-    A GroupE instance represents a collection of Entity objects with a shared
-    bounding box. This is useful for managing related geometric objects as a
-    single unit, such as a set of heliostats or building components.
+    A GroupE instance represents a collection of Entity objects with
+    a shared bounding box. This is useful for managing related
+    geometric objects as a single unit, such as a set of heliostats
+    or building components.
 
     Parameters
     ----------
     entities : list, optional
         List of Entity objects to group. Default is [Entity()].
     bbox : None | list, optional
-        Custom bounding box as [Pmin, Pmax] where Pmin and Pmax are geoclide.Point
-        objects. If None (default), bounding box is computed from entities[0].
+        Custom bounding box as [Pmin, Pmax] where Pmin and Pmax are
+        geoclide.Point objects. If None (default), bounding box is
+        computed from entities[0].
     """
 
     def __init__(
@@ -801,25 +827,30 @@ def find_rots(
     dir_out: gc.Vector | gc.Normal | None = None,
     normal: gc.Vector | gc.Normal | None = None,
 ) -> list:
-    """Compute rotation angles to reflect an incoming ray toward an outgoing direction.
+    """Compute rotation angles to reflect an incoming ray toward an
+    outgoing direction.
 
-    Determines the Y and Z rotation angles necessary to orient a surface so that
-    it reflects an incoming ray (dir_in) toward an outgoing direction (-dir_out). Can work
-    with either incoming/outgoing ray directions or a pre-computed surface normal.
+    Determines the Y and Z rotation angles necessary to orient a surface
+    so that it reflects an incoming ray (dir_in) toward an outgoing
+    direction (-dir_out). Can work with either incoming/outgoing ray
+    directions or a pre-computed surface normal.
 
     Parameters
     ----------
     dir_in : gc.Vector | gc.Normal, optional
-        Direction vector of the incoming ray or sun direction (geoclide.Vector).
-        Required unless normal is provided. Default is None.
+        Direction vector of the incoming ray or sun direction
+        (geoclide.Vector). Required unless normal is provided. Default
+        is None.
     dir_out : gc.Vector | gc.Normal, optional
-        Direction vector of the outgoing ray, typically from receiver to facet center.
-        The surface will be oriented to reflect dir_in toward -dir_out.
-        Required unless normal is provided. Default is None.
+        Direction vector of the outgoing ray, typically from receiver to
+        facet center. The surface will be oriented to reflect dir_in
+        toward -dir_out. Required unless normal is provided.
+        Default is None.
     normal : gc.Vector | gc.Normal, optional
-        Pre-computed normal vector of the reflection surface (geoclide.Vector).
-        If provided, dir_in and dir_out are not used. Allows direct specification of the
-        desired surface normal. Default is None.
+        Pre-computed normal vector of the reflection surface
+        (geoclide.Vector). If provided, dir_in and dir_out are not used.
+        Allows direct specification of the desired surface normal.
+        Default is None.
 
     Raises
     ------
@@ -836,17 +867,19 @@ def find_rots(
         - **list[1]** : rot_z_deg (float)
             Rotation angle around Z-axis in radians
         - **list[2]** : combined_tf (gc.Transform)
-            Combined rotation transformation (geoclide.Transform object) that applies
-            both rotations to orient the surface normal from (0, 0, 1) to the target direction
+            Combined rotation transformation (geoclide.Transform
+            object) that applies both rotations to orient the surface
+            normal from (0, 0, 1) to the target direction
 
     Notes
     -----
-    The function uses an iterative method to find rotation angles that align the
-    initial surface normal (0, 0, 1) with the target normal computed from dir_in and dir_out.
-    The algorithm applies Y-rotation first, then Z-rotation to achieve the desired
-    reflection geometry.
+    The function uses an iterative method to find rotation angles that
+    align the initial surface normal (0, 0, 1) with the target normal
+    computed from dir_in and dir_out. The algorithm applies Y-rotation
+    first, then Z-rotation to achieve the desired reflection geometry.
 
-    If normal is provided, it takes precedence and dir_in/dir_out are ignored.
+    If normal is provided, it takes precedence and dir_in/dir_out are
+    ignored.
     """
     # 1)Find the normal of the facet but filled in a vector class
     if normal is not None:
@@ -863,25 +896,28 @@ def find_rots(
         facet_normal.z, -1, 1
     )  # Avoid nan value in next operations
 
-    # 2) Apply the inverse rotation operations to find the necessary angles
+    # 2) Apply the inverse rotation operations to find the necessary
+    # angles
     # 2.a) Initialisation
     loop = int(0)
     rot_y = 0
     rot_z = 0
     ope_z = 0
-    # Values returned if no rotation is needed, i.e. if the while loop below is
-    # never entered (identity transform and no rotation in y and z)
+    # Values returned if no rotation is needed, i.e. if the while
+    # loop below is never entered (identity transform and no
+    # rotation in y and z)
     rot_y_deg = 0.0
     rot_z_deg = 0.0
     combined_tf = gc.Transform()
-    # The initial value of the facet normal is (0, 0, 1) but forced to (0, 0, 0)
-    # to be sure to activate the while loop below
+    # The initial value of the facet normal is (0, 0, 1) but forced
+    # to (0, 0, 0) to be sure to activate the while loop below
     initial_normal = gc.Vector(0.0, 0.0, 0.0)
 
-    # 2.b) Rotations are found in the loop bellow, at the end we check if after applying
-    #      the transform to the initial normal of the facet 'initial_normal' we have the same
-    #      value as the known well oriented facet normal 'facet_normal'. If no rotation has been
-    #      found an error message will appear
+    # 2.b) Rotations are found in the loop bellow, at the end we check
+    #      if after applying the transform to the initial normal of the
+    #      facet 'initial_normal' we have the same value as the known
+    #      well oriented facet normal 'facet_normal'. If no rotation has
+    #      been found an error message will appear
     while (
         abs(initial_normal.x - facet_normal.x) > 1e-4
         or abs(initial_normal.y - facet_normal.y) > 1e-4
@@ -939,14 +975,16 @@ def generate_mtf(
 ) -> np.ndarray:
     """Compute transformations for curved heliostat facet orientation.
 
-    Generates transformation matrices for each facet of a heliostat to enable
-    facet curvature. Each facet is oriented such that it reflects solar rays
-    toward the center of a specified receiver position.
+    Generates transformation matrices for each facet of a heliostat to
+    enable facet curvature. Each facet is oriented such that it
+    reflects solar rays toward the center of a specified receiver
+    position.
 
     Parameters
     ----------
     heliostat : Heliostat, optional
-        A Heliostat class object defining the base heliostat geometry and segmentation.
+        A Heliostat class object defining the base heliostat geometry
+        and segmentation.
         Default is Heliostat().
     receiver_pos : gc.Point, optional
         Position of the receiver center as a geoclide Point object.
@@ -956,9 +994,10 @@ def generate_mtf(
     Returns
     -------
     facet_transforms : 2-D ndarray of Transform
-        2D array of transformation matrices (geoclide.Transform objects) of shape
-        (n_facets_x, n_facets_y), one for each facet. Each transformation positions
-        and orients the corresponding facet.
+        2D array of transformation matrices (geoclide.Transform
+        objects) of shape (n_facets_x, n_facets_y), one for each
+        facet. Each transformation positions and orients the
+        corresponding facet.
     """
     if heliostat is None:
         heliostat = Heliostat()
@@ -978,7 +1017,8 @@ def generate_mtf(
         0.0, 0.0, 0.0 + gc.Vector(heliostat_pos - receiver_pos).length()
     )
 
-    # Find the positions of facets and store them in matrix facet_points[i][j]
+    # Find the positions of facets and store them in matrix
+    # facet_points[i][j]
     facet_points = np.zeros(
         (n_facets_x, n_facets_y), dtype="object"
     )  # Matrix of Point object of each facets
@@ -1017,38 +1057,44 @@ def generate_lef_h(
     phi_deg: float = 0.0,
     facet_transforms: np.ndarray | None = None,
 ) -> list[Entity]:
-    """Convert a heliostat to well-oriented plane facets for receiver reflection.
+    """Convert a heliostat to well-oriented plane facets for receiver
+    reflection.
 
-    Generates a list of properly oriented planar entity/facets from a heliostat object.
-    Each facet is independently oriented to reflect solar rays toward a given receiver.
-    This function manages the conversion of curved or segmented heliostats into their
-    constituent facet entities.
+    Generates a list of properly oriented planar entity/facets from a
+    heliostat object. Each facet is independently oriented to reflect
+    solar rays toward a given receiver. This function manages the
+    conversion of curved or segmented heliostats into their constituent
+    facet entities.
 
-    The facet indexing follows a matrix convention based on the heliostat's segmentation
-    in x and y directions. See Notes section for the indexing convention.
+    The facet indexing follows a matrix convention based on the
+    heliostat's segmentation in x and y directions. See Notes section
+    for the indexing convention.
 
     Parameters
     ----------
     heliostat : Heliostat, optional
-        A Heliostat class object representing the heliostat to be converted.
+        A Heliostat class object representing the heliostat to be
+        converted.
         Default is Heliostat().
     receiver_pos : gc.Point, optional
-        Position of the receiver as a geoclide.Point object. Used to orient facets
-        toward the target. If None, a default point is used. Default is None.
+        Position of the receiver as a geoclide.Point object. Used to
+        orient facets toward the target. If None, a default point is
+        used. Default is None.
     theta_deg : float, optional
         Solar zenith angle in degrees. Default is 0.
     phi_deg : float, optional
         Solar azimuth angle in degrees. Default is 0.
     facet_transforms : None | 2-D ndarray, optional
-        A 2D ndarray of Transform objects of dim (n_facets_x, n_facets_y) representing the
-        orientation of each facet. If None, The transforms are computed automatically based on
-        the heliostat and receiver positions.
+        A 2D ndarray of Transform objects of dim (n_facets_x,
+        n_facets_y) representing the orientation of each facet. If
+        None, The transforms are computed automatically based on the
+        heliostat and receiver positions.
 
     Returns
     -------
     out : list
-        List of plane Entity objects, each representing a facet properly oriented
-        to reflect solar rays toward the receiver.
+        List of plane Entity objects, each representing a facet
+        properly oriented to reflect solar rays toward the receiver.
 
     Notes
     -----
@@ -1056,8 +1102,10 @@ def generate_lef_h(
 
     Each facet is identified by a two-index notation **fij** where:
 
-    - **i** is the row index (0 to n_facets_x-1), representing position along the x-direction
-    - **j** is the column index (0 to n_facets_y-1), representing position along the y-direction
+    - **i** is the row index (0 to n_facets_x-1), representing
+      position along the x-direction
+    - **j** is the column index (0 to n_facets_y-1), representing
+      position along the y-direction
 
     Example with 4x4 segmentation::
 
@@ -1074,9 +1122,10 @@ def generate_lef_h(
                    ↑ y
               ← x
 
-    The first row contains f00, f01, f02, f03; the second row contains f10, f11, f12, f13,
-    and so on. This row-major ordering allows easy identification of any facet
-    from its position in the segmented heliostat grid.
+    The first row contains f00, f01, f02, f03; the second row contains
+    f10, f11, f12, f13, and so on. This row-major ordering allows easy
+    identification of any facet from its position in the segmented
+    heliostat grid.
     """
     if heliostat is None:
         heliostat = Heliostat()
@@ -1142,7 +1191,8 @@ def generate_lef_h(
         ),
     )
 
-    # Find the positions of facets and store them in matrix facet_points[i][j]
+    # Find the positions of facets and store them in matrix
+    # facet_points[i][j]
     facet_points = np.zeros(
         (n_facets_x, n_facets_y), dtype="object"
     )  # Matrix of Point object of each facets
@@ -1172,7 +1222,8 @@ def generate_lef_h(
                 rot_info = find_rots(dir_in=dir_in, dir_out=dir_out)
                 facet_transforms[i][j] = gc.Transform(rot_info[2])
 
-    # Find the general heliostat rotation transform (like helistat is a unique facet)
+    # Find the general heliostat rotation transform (like helistat is
+    # a unique facet)
     dir_in = gc.Vector(sun_dir.x, sun_dir.y, sun_dir.z)
     dir_out = heliostat_pos - receiver_pos
     dir_in = gc.normalize(dir_in)
@@ -1180,9 +1231,10 @@ def generate_lef_h(
     heliostat_rot_info = find_rots(dir_in=dir_in, dir_out=dir_out)
     heliostat_tf = heliostat_rot_info[2]
 
-    # Apply the general rotation transform to each facet point and then apply translation.
-    # This gives the final position of each facet after rotation and translation of
-    # the heliostat, stored in the matrix transformed_facet_points
+    # Apply the general rotation transform to each facet point and then
+    # apply translation. This gives the final position of each facet
+    # after rotation and translation of the heliostat, stored in the
+    # matrix transformed_facet_points
     transformed_facet_points = np.zeros(
         (n_facets_x, n_facets_y), dtype="object"
     )  # equals to facet_points after application of transform
@@ -1195,12 +1247,14 @@ def generate_lef_h(
             tmp_point.z += heliostat_pos.z
             transformed_facet_points[i][j] = gc.Point(tmp_point)
 
-    # Write the initial coordinate system in term of vectors (x, y and z)
+    # Write the initial coordinate system in term of vectors (x, y
+    # and z)
     vec_x = gc.Vector(1.0, 0.0, 0.0)
     vec_y = gc.Vector(0.0, 1.0, 0.0)
     vec_z = gc.Vector(0.0, 0.0, 1.0)
 
-    # Apply the general rotation transform to find the new coordinate system of the heliostat
+    # Apply the general rotation transform to find the new coordinate
+    # system of the heliostat
     vec_x = heliostat_tf(vec_x)
     vec_y = heliostat_tf(vec_y)
     vec_z = heliostat_tf(vec_z)
@@ -1208,7 +1262,8 @@ def generate_lef_h(
     vec_y = gc.normalize(vec_y)
     vec_z = gc.normalize(vec_z)
 
-    # Create the transformation matrix allowing to move between the 2 coordinate systems
+    # Create the transformation matrix allowing to move between the 2
+    # coordinate systems
     nn1 = vec_x
     nn2 = vec_y
     nn3 = vec_z
@@ -1230,7 +1285,8 @@ def generate_lef_h(
     mm2[3, 1] = 0.0
     mm2[3, 2] = 0.0
     mm2[3, 3] = 1.0
-    # Now create the transform object with the transformation matrix and its inverse
+    # Now create the transform object with the transformation matrix and
+    # its inverse
     mm2_inv = np.transpose(mm2)
     world_to_obj = gc.Transform(
         m=mm2, mInv=mm2_inv
@@ -1239,7 +1295,8 @@ def generate_lef_h(
         m=mm2_inv, mInv=mm2
     )  # move from object∕new to world/initial basis
 
-    # The normal of the heliostat heliostat_normal = z axis of the new coordinate system
+    # The normal of the heliostat heliostat_normal = z axis of the new
+    # coordinate system
     heliostat_normal = gc.Vector(
         vec_z
     )  # stored as a vector for transformation purposes
@@ -1247,17 +1304,20 @@ def generate_lef_h(
         for j in range(0, n_facets_y):
             # come back to the initial coordinate system
             facet_normal = obj_to_world(heliostat_normal)
-            # apply the transform of the facet to consider the curve effect
+            # apply the transform of the facet to consider the curve
+            # effect
             facet_normal = facet_transforms[i][j](facet_normal)
             # Now we return to the new coordinate system, which gives
-            # then the normal of the facet (not heliostat) stored in facet_transforms[i][j]
+            # then the normal of the facet (not heliostat) stored in
+            # facet_transforms[i][j]
             facet_normal = world_to_obj(facet_normal)
             facet_normal = gc.normalize(facet_normal)
 
             # Find the rotation transform
             facet_rot_info = find_rots(normal=facet_normal)
 
-            # Once the rotation angles have been found, create the facet as entity object
+            # Once the rotation angles have been found, create the facet
+            # as entity object
             facet_entity = Entity(base_facet)
             facet_entity.transformation = Transformation(
                 rotation=np.array([0.0, facet_rot_info[0], facet_rot_info[1]]),
@@ -1301,9 +1361,10 @@ def generate_box(
 ) -> GroupE:
     """Create a 3D box/building composed of six planar faces.
 
-    Generates a box with six faces following Didier's 3D atmosphere convention in SMART-G.
-    Each face can have different materials and properties. The origin is located at the
-    center of the bottom face (Face 5), not at the center of the box.
+    Generates a box with six faces following Didier's 3D atmosphere
+    convention in SMART-G. Each face can have different materials and
+    properties. The origin is located at the center of the bottom face
+    (Face 5), not at the center of the box.
 
     Face convention and orientation:
 
@@ -1317,54 +1378,61 @@ def generate_box(
     Parameters
     ----------
     dim_xyz : list, optional
-        Dimensions of the box in [x, y, z] in kilometers. Default is [0.05, 0.05, 0.05].
+        Dimensions of the box in [x, y, z] in kilometers. Default is
+        [0.05, 0.05, 0.05].
     pos : gc.Point, optional
-        Position of the box center. Origin is at the center of Face 5 (bottom).
+        Position of the box center. Origin is at the center of Face 5
+        (bottom).
         Default is gc.Point(0., 0., 0.).
     material_front : str | list, optional
         Material for the front side of faces. Either:
 
-        - "LambMirror" : Lambertian mirror for all faces (constant reflectivity)
+        - "LambMirror" : Lambertian mirror for all faces (constant
+          reflectivity)
         - "Mirror" : Specular mirror for all faces (with roughness)
-        - list : List containing 6 material objects (e.g., Matte, LambMirror, Mirror)
-                 for each face
+        - list : List containing 6 material objects (e.g., Matte,
+          LambMirror, Mirror) for each face
 
         Default is "LambMirror".
     reflectivity : list, optional
-        Reflectivity values for each face when material_front is "Mirror" or "LambMirror".
-        List of 6 floats, one per face. Default is [1., 1., 1., 1., 1., 1.].
-        Else ignored if material_front is a list of material objects.
+        Reflectivity values for each face when material_front is
+        "Mirror" or "LambMirror". List of 6 floats, one per face.
+        Default is [1., 1., 1., 1., 1., 1.]. Else ignored if
+        material_front is a list of material objects.
     roughness : list, optional
         Surface roughness for each face when material_front is "Mirror".
-        List of 6 floats, one per face. Default is [0.2, 0.2, 0.2, 0.2, 0.2, 0.2].
-        Else ignored if material_front is "LambMirror" or a list of material objects.
+        List of 6 floats, one per face. Default is [0.2, 0.2, 0.2,
+        0.2, 0.2, 0.2]. Else ignored if material_front is
+        "LambMirror" or a list of material objects.
     rot_z : float, optional
-        Global rotation angle in degrees around the Z-axis. Default is 0.
+        Global rotation angle in degrees around the Z-axis. Default
+        is 0.
     gap : float, optional
-        Gap to add to the global bounding box, useful for very small objects.
-        Default is 0.0001.
+        Gap to add to the global bounding box, useful for very small
+        objects. Default is 0.0001.
     obj_type : str, optional
-        Type of object. Choices are: 'environment', 'reflector', or 'receiver'.
-        Default is 'environment'.
+        Type of object. Choices are: 'environment', 'reflector', or
+        'receiver'. Default is 'environment'.
     colors : list, optional
-        List of str colors for each of the 6 faces. If None, all faces are colored grey.
-        Default is None.
+        List of str colors for each of the 6 faces. If None, all faces
+        are colored grey. Default is None.
     alpha_color : list, optional
-        List of transparency float values (0-1) for each of the 6 faces. If None, all faces have 0.5.
-        Default is None.
+        List of transparency float values (0-1) for each of the 6
+        faces. If None, all faces have 0.5. Default is None.
 
     Returns
     -------
     out : GroupE
-        A group object (GroupE class) composed of six plane objects representing
-        the box faces.
+        A group object (GroupE class) composed of six plane objects
+        representing the box faces.
 
     Notes
     -----
-    - Origin is at the center of Face 5 (bottom), NOT at the center of the box.
+    - Origin is at the center of Face 5 (bottom), NOT at the center of
+      the box.
     - Global rotation in Z-axis only (other rotations not yet enabled).
-    - Front side of each face uses the specified material (material_front);
-      back side is always Matte (totally absorptive).
+    - Front side of each face uses the specified material
+      (material_front); back side is always Matte (totally absorptive).
     """
     if dim_xyz is None:
         dim_xyz = [0.05, 0.05, 0.05]
@@ -1375,8 +1443,9 @@ def generate_box(
     if roughness is None:
         roughness = [0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
 
-    # Material AV = front part (i.e. part outside the box) of Face 0 to Face 5,
-    # back part (i.e. part inside the box) will be definite as matte (totally absorbant)
+    # Material AV = front part (i.e. part outside the box) of Face 0
+    # to Face 5, back part (i.e. part inside the box) will be definite
+    # as matte (totally absorbant)
     material_front_list: list[MaterialType] = []
     if material_front == "Mirror":
         for i in range(0, 6):
@@ -1410,7 +1479,8 @@ def generate_box(
     half_dim_y = dim_xyz[1] / 2.0
     half_dim_z = dim_xyz[2] / 2.0
 
-    # With the global Z rotation, 4 translations are needed in the direction after the rotation, for Face 0 to 3
+    # With the global Z rotation, 4 translations are needed in the
+    # direction after the rotation, for Face 0 to 3
     tt = gc.get_rotateZ_tf(rot_z)
     offset_x = gc.Vector(1.0, 0.0, 0.0)
     offset_x = tt(offset_x)
@@ -1419,7 +1489,8 @@ def generate_box(
     offset_y = tt(offset_y)
     offset_y = gc.normalize(offset_y) * half_dim_y
 
-    # Initialize a numpy array list of Points (p1 to p4 to construct a face) for all faces (from face 0 to 5)
+    # Initialize a numpy array list of Points (p1 to p4 to construct a
+    # face) for all faces (from face 0 to 5)
     p1_faces = np.empty(6, dtype=object)
     p2_faces = np.empty(6, dtype=object)
     p3_faces = np.empty(6, dtype=object)
@@ -1528,7 +1599,8 @@ def generate_box(
         )
         faces.append(face)
 
-    # Create a group of object with a global bounding box (can improve significantly the computational time!)
+    # Create a group of object with a global bounding box (can improve
+    # significantly the computational time!)
     max_xy = max(pos.x, 2 * max(half_dim_x, half_dim_y))
     p_min = gc.Point(pos.x - max_xy - gap, pos.y - max_xy - gap, pos.z - gap)
     p_max = gc.Point(
@@ -1542,17 +1614,21 @@ def generate_box(
 
 
 def ref_fresnel(dir_in: gc.Vector, geo_transform: gc.Transform) -> gc.Vector:
-    """Calculate Fresnel reflection direction for a ray on a transformed surface.
+    """Calculate Fresnel reflection direction for a ray on a
+    transformed surface.
 
-    Computes the direction of a reflected ray using simple Fresnel reflection
-    based on the incident ray direction and the surface transformation.
+    Computes the direction of a reflected ray using simple Fresnel
+    reflection based on the incident ray direction and the surface
+    transformation.
 
     Parameters
     ----------
     dir_in : gc.Vector
-        Direction vector of the incident ray entering the reflecting surface.
+        Direction vector of the incident ray entering the reflecting
+        surface.
     geo_transform : gc.Transform
-        Transformation (rotation and translation) of the surface where reflection occurs.
+        Transformation (rotation and translation) of the surface where
+        reflection occurs.
 
     Returns
     -------
@@ -1579,7 +1655,8 @@ def ref_fresnel(dir_in: gc.Vector, geo_transform: gc.Transform) -> gc.Vector:
     ray_dir = incident_dir
     ray_dir = gc.Vector(-ray_dir.x, -ray_dir.y, -ray_dir.z)
 
-    # Use the equation of Fresnel reflection (plenty explained in pbrtv3 book)
+    # Use the equation of Fresnel reflection (plenty explained in
+    # pbrtv3 book)
     ray_dir = incident_dir + normal_vec * (2 * gc.dot(normal_vec, ray_dir))
 
     # Be sure ray_dir is normalized
@@ -1610,15 +1687,16 @@ def visualize_entity(
     phi_deg : float, optional
         The azimuth angle of the sun in degrees. Default is 0.
     draw_method : str, optional
-        The drawing method. 'SM' (Second Method) is the default and recommended.
-        'FM' (First Method) is useful for debugging issues.
+        The drawing method. 'SM' (Second Method) is the default and
+        recommended. 'FM' (First Method) is useful for debugging
+        issues.
     ray_color : str, optional
         Sun rays color, e.g., 'r', 'b', 'g', etc. Default is 'r'.
     sr_view : int, optional
         Number of sun rays that can be seen in the figure. Default is 1.
     xyz_limit : dict, optional
-        Dictionary specifying x, y, z view limits in km. If None (default),
-        limits are automatically chosen. Example format:
+        Dictionary specifying x, y, z view limits in km. If None
+        (default), limits are automatically chosen. Example format:
         {'x_min': 0., 'x_max': 10., 'y_min': 0., 'y_max': 10.,
          'z_min': 0., 'z_max': 10.}
     show_rays : bool, optional
@@ -1637,10 +1715,12 @@ def visualize_entity(
 
     if not (all(isinstance(x, (Entity, GroupE)) for x in entities)):
         raise NameError(
-            "The only objects accepted for entities parameter are: Entity or GroupE"
+            "The only objects accepted for entities parameter are: "
+            "Entity or GroupE"
         )
 
-    # ensure we have only Entity objects (converts if necessary GroupE to Entity objects)
+    # ensure we have only Entity objects (converts if necessary GroupE
+    # to Entity objects)
     entity_list: list[Entity] = convert_lg_to_le(entities)
     entity_tfs = []
     box = gc.BBox()
@@ -1761,8 +1841,8 @@ def visualize_entity(
         tmesh.apply_tf(tt)
         ltmesh.append(tmesh)
 
-        # cast: calc_intersection always forces ds_output=True, so it always
-        # returns a Dataset
+        # cast: calc_intersection always forces ds_output=True, so it
+        # always returns a Dataset
         ds = cast(Dataset, gc.calc_intersection(tmesh, photon))
         if ds["is_intersection"].values and ds["thit"].values < float("inf"):
             has_intersection[k] = True
@@ -1856,8 +1936,8 @@ def visualize_entity(
                 rec_has_intersection[i] = True
                 p_hit = gc.Point(ds["phit"].values)
                 t_hit = ds["thit"].values
-                # cast: mint is a scalar, but its type is wrongly inferred
-                # from the untyped Ray constructor of geoclide
+                # cast: mint is a scalar, but its type is wrongly
+                # inferred from the untyped Ray constructor of geoclide
                 tr = np.linspace(
                     cast(float, reflected_photons[i].mint), t_hit, 100
                 )
@@ -1873,16 +1953,18 @@ def visualize_entity(
 
     # create the matplotlib figure
     fig = plt.figure()  # figsize=[128, 96])
-    # cast: with a 3d projection add_subplot returns an Axes3D, but it is only
-    # annotated as returning the base Axes class
+    # cast: with a 3d projection add_subplot returns an Axes3D, but it
+    # is only annotated as returning the base Axes class
     ax = cast(Axes3D, fig.add_subplot(111, projection=Axes3D.name))
-    # type: ignore -> zs accepts an array-like, but being unannotated its type
-    # is wrongly inferred from its default value 0, i.e. as an int
+    # type: ignore -> zs accepts an array-like, but being unannotated
+    # its type is wrongly inferred from its default value 0, i.e. as
+    # an int
     ax.scatter([-1, 1], [-1, 1], [-1, 1], alpha=0.0)  # type: ignore
 
     for itmesh, tmesh in enumerate(ltmesh):
         # Triangles mesh parameters for plot
-        # First method (draw even if there is error with an object, useful for debug):
+        # First method (draw even if there is error with an object,
+        # useful for debug):
         # ----------------------------->
         if draw_method == "FM":
             for itri in range(0, tmesh.ntriangles):
@@ -2023,9 +2105,9 @@ def generate_h_p(
 ) -> list[Entity | GroupE]:
     """Generate well-oriented Heliostats from their positions.
 
-    Generates a list of heliostat entities oriented to reflect sun rays toward
-    a receiver. Can handle either planar heliostats or curved (faceted) heliostats
-    depending on the heliostat_type parameter.
+    Generates a list of heliostat entities oriented to reflect sun rays
+    toward a receiver. Can handle either planar heliostats or curved
+    (faceted) heliostats depending on the heliostat_type parameter.
 
     Parameters
     ----------
@@ -2034,11 +2116,11 @@ def generate_h_p(
     phi_deg : float, optional
         Sun azimuth angle in degrees. Default is 0.
     heliostat_pos_list : list of Point, optional
-        Coordinates of the center of heliostats. List of Point objects (geoclide).
-        Default is [gc.Point(0., 0., 0.)].
+        Coordinates of the center of heliostats. List of Point objects
+        (geoclide). Default is [gc.Point(0., 0., 0.)].
     receiver_pos : Point, optional
-        Coordinate of the center of the receiver (geoclide Point object).
-        Default is gc.Point(0., 0., 0.).
+        Coordinate of the center of the receiver (geoclide Point
+        object). Default is gc.Point(0., 0., 0.).
     helio_size_x : float, optional
         Heliostat size in x-axis in kilometers. Default is 0.001.
     helio_size_y : float, optional
@@ -2048,8 +2130,9 @@ def generate_h_p(
     roughness : float, optional
         Surface roughness of the heliostats. Default is 0.
     heliostat_type : Heliostat or None, optional
-        If specified, must be a Heliostat class instance for generating curved
-        (faceted) heliostats. If None (default), generates planar heliostats.
+        If specified, must be a Heliostat class instance for generating
+        curved (faceted) heliostats. If None (default), generates planar
+        heliostats.
     facet_transforms_list : None or object, optional
         Under development. Default is None.
 
@@ -2096,16 +2179,19 @@ def generate_h_p(
         )
 
         for i in range(0, len(heliostat_pos_list)):
-            # 1) Find the normalized vector colinear (and same dir) to the normal of heliostat surface
+            # 1) Find the normalized vector colinear (and same dir) to
+            # the normal of heliostat surface
             dir_to_receiver = pos_list_copy[i] - receiver_pos
             dir_to_receiver = gc.normalize(dir_to_receiver)
 
-            # 2) Find the necessary rotations to apply on the heliostat to reflect to the receiver
+            # 2) Find the necessary rotations to apply on the heliostat
+            # to reflect to the receiver
             rot_info = find_rots(dir_in=sun_dir, dir_out=dir_to_receiver)
             rot_y_deg = rot_info[0]
             rot_z_deg = rot_info[1]
 
-            # 3) Once the rotation angles have been found, create heliostat objects
+            # 3) Once the rotation angles have been found, create
+            # heliostat objects
             heliostat_entity = Entity(template_entity)
             heliostat_entity.bbox_pmin = gc.Point(
                 pos_list_copy[i].x - bbox_dist,
@@ -2129,7 +2215,8 @@ def generate_h_p(
                 rotation_order="ZYX",
             )
             obj_list.append(heliostat_entity)
-    # Case where the heliostat is composed by facets (i.g. to consider the curvature)
+    # Case where the heliostat is composed by facets (i.g. to consider
+    # the curvature)
     else:
         # Take the commun parameters of all heliostats
         n_facets_x = heliostat_type.n_facets_x
@@ -2138,7 +2225,8 @@ def generate_h_p(
         helio_size_y = heliostat_type.helio_size_y
         curve_focal_length = heliostat_type.curve_focal_length
 
-        # Generate all the facets and store them as entity object in a list
+        # Generate all the facets and store them as entity object in
+        # a list
         for i in range(0, len(heliostat_pos_list)):
             heliostat_obj = Heliostat(
                 n_facets_x=n_facets_x,
@@ -2190,11 +2278,13 @@ def generate_h_a(
     facet_transforms_list: list[np.ndarray] | None = None,
     return_positions: bool = False,
 ) -> list[Entity | GroupE] | tuple[list[Entity | GroupE], list[gc.Point]]:
-    """Generate well-oriented Heliostats arranged in an angular sector around receiver.
+    """Generate well-oriented Heliostats arranged in an angular sector
+    around receiver.
 
-    Generates heliostats positioned between min_ang_deg and max_ang_deg angles, properly
-    oriented to reflect sun rays toward a central receiver. Heliostats are arranged
-    in concentric patterns with specified angular and radial gaps.
+    Generates heliostats positioned between min_ang_deg and max_ang_deg
+    angles, properly oriented to reflect sun rays toward a central
+    receiver. Heliostats are arranged in concentric patterns with
+    specified angular and radial gaps.
 
     The angular coordinate system is defined as:
 
@@ -2214,25 +2304,26 @@ def generate_h_a(
     phi_deg : float, optional
         Sun azimuth angle in degrees. Default is 0.
     receiver_pos : Point, optional
-        Coordinate of the center of the receiver (geoclide Point object).
-        Heliostats are filled between min_ang_deg and max_ang_deg around this receiver.
-        Default is gc.Point(0., 0., 50.).
+        Coordinate of the center of the receiver (geoclide Point
+        object). Heliostats are filled between min_ang_deg and
+        max_ang_deg around this receiver. Default is gc.Point(0.,
+        0., 50.).
     min_ang_deg : float, optional
         Minimum angular position in degrees. Default is 0.
     max_ang_deg : float, optional
         Maximum angular position in degrees. Default is 360.
     gap_ang_deg : float, optional
-        Angular spacing in degrees for placing heliostats between min_ang_deg and max_ang_deg.
-        Default is 5.
+        Angular spacing in degrees for placing heliostats between
+        min_ang_deg and max_ang_deg. Default is 5.
     first_dist : float, optional
-        First distance between receiver and heliostat center in kilometers.
-        Default is 0.1.
+        First distance between receiver and heliostat center in
+        kilometers. Default is 0.1.
     n_heliostats : int, optional
-        Number of heliostats to place at each angular position (radial direction).
-        Default is 10.
+        Number of heliostats to place at each angular position (radial
+        direction). Default is 10.
     gap_dist : float, optional
-        Radial gap between heliostats in kilometers after the first distance first_dist.
-        Default is 0.01.
+        Radial gap between heliostats in kilometers after the first
+        distance first_dist. Default is 0.01.
     helio_size_x : float, optional
         Heliostat size in x-axis in kilometers. Default is 0.001.
     helio_size_y : float, optional
@@ -2245,20 +2336,23 @@ def generate_h_a(
     roughness : float, optional
         Surface roughness of the heliostats. Default is 0.
     heliostat_type : Heliostat or None, optional
-        If specified, must be a Heliostat class instance for generating curved
-        (faceted) heliostats. If None (default), generates planar heliostats.
+        If specified, must be a Heliostat class instance for generating
+        curved (faceted) heliostats. If None (default), generates planar
+        heliostats.
     facet_transforms_list : None or object, optional
         Under development. Default is None.
     return_positions : bool, optional
-        If True, also return the list of heliostat positions. Default is False.
+        If True, also return the list of heliostat positions. Default
+        is False.
 
     Returns
     -------
     out1 : list
-        List of heliostat Entity or GroupE objects arranged in the angular sector.
+        List of heliostat Entity or GroupE objects arranged in the
+        angular sector.
     out2 : list
-        If return_positions is True, also returns the list of heliostat center positions
-        (geoclide Point objects).
+        If return_positions is True, also returns the list of heliostat
+        center positions (geoclide Point objects).
     """
     if receiver_pos is None:
         receiver_pos = gc.Point(0.0, 0.0, 50.0)
@@ -2338,17 +2432,20 @@ def generate_h_a(
         )
 
         for i in range(0, len(heliostat_positions)):
-            # 1) The vector of the photon after a reflection (here the opposite direction)
+            # 1) The vector of the photon after a reflection (here the
+            # opposite direction)
             dir_to_receiver = heliostat_positions[i] - receiver_pos
             dir_to_receiver = gc.normalize(dir_to_receiver)
 
-            # 2) The incoming (sun_dir) and outcoming (dir_to_receiver) directions are known then find
-            #    the rotation angles
+            # 2) The incoming (sun_dir) and outcoming
+            #    (dir_to_receiver) directions are known then find the
+            #    rotation angles
             rot_info = find_rots(dir_in=sun_dir, dir_out=dir_to_receiver)
             rot_y_deg = rot_info[0]
             rot_z_deg = rot_info[1]
 
-            # 3) Once the rotation angles have been found, create heliostat objects
+            # 3) Once the rotation angles have been found, create
+            # heliostat objects
             heliostat_entity = Entity(template_entity)
             heliostat_entity.bbox_pmin = gc.Point(
                 heliostat_positions[i].x - bbox_dist,
@@ -2373,7 +2470,8 @@ def generate_h_a(
             )
             obj_list.append(heliostat_entity)
 
-    # Case where the heliostat is composed by facets (i.g. to consider the curvature)
+    # Case where the heliostat is composed by facets (i.g. to consider
+    # the curvature)
     else:
         # Take the commun parameters of all heliostats
         n_facets_x = heliostat_type.n_facets_x
@@ -2382,7 +2480,8 @@ def generate_h_a(
         helio_size_y = heliostat_type.helio_size_y
         curve_focal_length = heliostat_type.curve_focal_length
 
-        # Generate all the facets and store them as entity object in a list
+        # Generate all the facets and store them as entity object in
+        # a list
         for i in range(0, len(heliostat_positions)):
             heliostat_obj = Heliostat(
                 n_facets_x=n_facets_x,
@@ -2419,10 +2518,12 @@ def generate_h_a(
 
 
 def convert_lg_to_le(obj_list: list[Entity | GroupE]) -> list[Entity]:
-    """Convert a mixed list of Entity and GroupE objects to Entity objects only.
+    """Convert a mixed list of Entity and GroupE objects to Entity
+    objects only.
 
-    Flattens groups by expanding all GroupE objects into their constituent
-    Entity objects, resulting in a list containing only Entity objects.
+    Flattens groups by expanding all GroupE objects into their
+    constituent Entity objects, resulting in a list containing only
+    Entity objects.
 
     Parameters
     ----------
@@ -2432,8 +2533,8 @@ def convert_lg_to_le(obj_list: list[Entity | GroupE]) -> list[Entity]:
     Returns
     -------
     out : list
-        Flattened list containing only Entity objects. GroupE objects are
-        converted into their constituent Entity objects.
+        Flattened list containing only Entity objects. GroupE objects
+        are converted into their constituent Entity objects.
     """
     n_objs = len(obj_list)
     flat_list: list[Entity] = []
@@ -2475,10 +2576,12 @@ def rotate_vector(
     Arg:
     v              : A direction described by Vector class object
     rotx,y,z       : Rotations in x,y and z in degrees
-    rotation_order : str with the order of rotations i.g. 'xyz', zxy', ...
+    rotation_order : str with the order of rotations i.g. 'xyz', zxy',
+                     ...
 
     Return:
-    rotated_vector : The rotated (normalized) direction (also a Vector class)
+    rotated_vector : The rotated (normalized) direction (also
+                     a Vector class)
     """
     tt = gc.Transform()
     tr_x = gc.get_rotateX_tf(rot_x)
@@ -2511,20 +2614,25 @@ def interpolate_refls_from_wls(
     extrapolate: bool = False,
 ) -> np.ndarray:
     """
-        Definition: Giving a set of wavelengths (wavelengths) and reflectivities (reflectivities),
-                    get the interpolated reflectivities folowing the new set of wavelengths (new_wavelengths)
+        Definition: Giving a set of wavelengths (wavelengths) and
+                    reflectivities (reflectivities), get the
+                    interpolated reflectivities folowing the new set of
+                    wavelengths (new_wavelengths)
 
     ==== ARGS:
     wavelengths     : List/array of wavelengths
-    reflectivities  : List/array with reflectivities at each wavelength of wavelengths
-    new_wavelengths : List/array of the new wavelengths where we want to interpolate
+    reflectivities  : List/array with reflectivities at each wavelength
+                      of wavelengths
+    new_wavelengths : List/array of the new wavelengths where we want
+                      to interpolate
 
     ==== RETURN:
     refls_new : numpy array with the interpolated reflectivities
     """
 
-    # type: ignore -> fill_value is documented as accepting an array-like, a
-    # 2 element tuple or "extrapolate", but its stub only allows a float
+    # type: ignore -> fill_value is documented as accepting an
+    # array-like, a 2 element tuple or "extrapolate", but its stub only
+    # allows a float
     if extrapolate:
         f = interpolate.interp1d(
             wavelengths,
@@ -2550,9 +2658,8 @@ def interpolate_refls_from_wls(
 
 def is_comment(line: str) -> bool:
     """
-    function to check if a line
-    starts with some character.
-    Here # for comment
+    function to check if a line starts with some character. Here #
+    for comment
     """
     # return true if a line starts with #
     return line.startswith("#")
@@ -2561,14 +2668,15 @@ def is_comment(line: str) -> bool:
 def extract_points(filename: str | Path) -> list[gc.Point]:
     """Extract heliostat coordinates from a file.
 
-    Reads a file and extracts the (x, y, z) coordinates of each heliostat,
-    returning them as geoclide Point objects.
+    Reads a file and extracts the (x, y, z) coordinates of each
+    heliostat, returning them as geoclide Point objects.
 
     The input file must follow this format:
 
     - First line: comment line beginning with '#'
     - Second line: empty line
-    - Subsequent lines: x, y, and z coordinates of each heliostat, separated by commas
+    - Subsequent lines: x, y, and z coordinates of each heliostat,
+      separated by commas
 
     Parameters
     ----------
@@ -2578,8 +2686,8 @@ def extract_points(filename: str | Path) -> list[gc.Point]:
     Returns
     -------
     out : list
-        List of geoclide.Point objects, each containing the x, y, and z coordinates
-        of a heliostat.
+        List of geoclide.Point objects, each containing the x, y, and z
+        coordinates of a heliostat.
     """
 
     # First check if filename is an str type
