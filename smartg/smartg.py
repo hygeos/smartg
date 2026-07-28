@@ -30,7 +30,7 @@ import pycuda.driver as cuda
 from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
 # bellow necessary for object incorporation
-from smartg.visualizegeo import Mirror, Plane, Spheric, \
+from smartg.objects3d import Mirror, Plane, Spheric, \
     Entity, LambMirror, Matte
 import xarray as xr
 from copy import deepcopy

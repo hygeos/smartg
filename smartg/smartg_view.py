@@ -38,7 +38,7 @@ import geoclide as gc
 from luts.luts import Idx_base, MLUT, LUT
 from smartg.atmosphere import diff1
 from smartg.water import diff2
-from smartg.visualizegeo import (
+from smartg.objects3d import (
     Entity,
     GroupE,
     Plane,
