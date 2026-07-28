@@ -1000,12 +1000,46 @@ class Water1D(Water):
 
 
 class WaterRw(Water):
-    def __init__(self, ALB):
-        '''
-        Defines a model of water reflectance (lambertian under the surface)
+    '''
+    Initialize the water reflectance model
 
-        ALB: albedo object of the lambertian reflector
-        '''
+    The water is defined as a lambertian reflector placed just below the
+    air-water interface, without any water column: the water body has
+    neither geometric nor optical thickness.
+
+    Parameters
+    ----------
+    ALB : albedo object
+        Albedo of the lambertian reflector, i.e. the water reflectance
+        just below the surface
+
+    Notes
+    -----
+    This gives the reflectance at the 0- level, just below the interface,
+    which is not the same as a lambertian surface at the 0+ level, just
+    above it: here the photons still cross the air-water interface, so
+    the Fresnel transmission and the total internal reflection of the
+    upwelling light are still accounted for by the `surf` parameter of
+    `smartg.run()`.
+
+    The same model can be obtained with an empty Water1D profile of null
+    thickness:
+
+    >>> Water1D(Z=[0., 0.], comp=[], ALB=ALB)
+
+    Both give the same optical thicknesses, single scattering albedo and
+    seafloor albedo (pure water drops out on its own, since the layer has
+    no thickness), but WaterRw is faster: it neither reads the pure water
+    absorption auxiliary data nor computes any phase matrix.
+
+    Examples
+    --------
+    >>> from smartg.water import WaterRw
+    >>> from smartg.albedo import AlbedoCst
+    >>> water = WaterRw(ALB=AlbedoCst(0.05))
+    '''
+
+    def __init__(self, ALB):
         self.ALB = ALB
 
     def calc(self, wav):
