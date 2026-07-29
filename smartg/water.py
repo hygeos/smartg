@@ -191,12 +191,20 @@ def _expand_phase_4_to_6(
     DataArray or None
         The 6-term phase matrices, or the input unchanged if it already
         has 6 terms or is None.
+
+    Raises
+    ------
+    TypeError
+        If `phase` is neither a DataArray, a LUT nor None.
     """
     if phase is None:
         return None
-    if hasattr(phase, 'to_xarray'):
+    if isinstance(phase, LUT):
         phase = phase.to_xarray()
-    phase = cast(xr.DataArray, phase)
+    if not isinstance(phase, xr.DataArray):
+        raise TypeError(
+            'The phase matrices must be provided as a DataArray or as '
+            + f'a LUT, not as a {type(phase).__name__}.')
     if phase.shape[2] != 4:
         return phase
 
@@ -248,6 +256,11 @@ class Hydrosol(object):
     pfwav : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
+
+    Raises
+    ------
+    TypeError
+        If `phase` is neither a DataArray, a LUT nor None.
 
     Notes
     -----
