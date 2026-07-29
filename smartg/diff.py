@@ -42,9 +42,9 @@ def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> NDArray:
     Calculate the first difference of an array along a specified axis.
 
     Computes the difference between consecutive elements of the array
-    along
-    the specified axis using `numpy.diff`. By default (samesize=True),
-    preserves the original array shape by padding with zeros.
+    along the specified axis using `numpy.diff`. By default
+    (samesize=True), preserves the original array shape by padding with
+    zeros.
 
     Parameters
     ----------
@@ -54,20 +54,17 @@ def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> NDArray:
         Axis along which differences are computed. Default is 0.
     samesize : bool, optional
         If True (default), the output has the same shape as the input
-        array
-        with the first slice along the specified axis set to zero. If
-        False,
-        the output has size reduced by 1 along the specified axis.
+        array with the first slice along the specified axis set to zero.
+        If False, the output has size reduced by 1 along the specified
+        axis.
 
     Returns
     -------
     ndarray
         Differences between consecutive elements along the specified
-        axis.
-        If `samesize=True`, the result has the same shape as `a`.
+        axis. If `samesize=True`, the result has the same shape as `a`.
         If `samesize=False`, the result has shape ``a.shape[axis] - 1``
-        along
-        the specified axis.
+        along the specified axis.
 
     See Also
     --------
