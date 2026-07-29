@@ -305,7 +305,7 @@ class Hydrosol(object):
 
         Returns
         -------
-        P : DataArray
+        pha_da : DataArray
             Phase matrices with dimensions [wav_phase, z_phase, stk,
             theta_oc]
         coef_trunc : DataArray
@@ -342,14 +342,14 @@ class Hydrosol(object):
         integ_ff = integ_phase(ang, pha[:,:,0,:])
         pha *= 2./integ_ff[:,:,None,None]
 
-        P = xr.DataArray(pha,
+        pha_da = xr.DataArray(pha,
             dims=['wav_phase', 'z_phase', 'stk', 'theta_oc'],
             coords={'wav_phase': wav, 'z_phase': z, 'theta_oc': np.rad2deg(ang)},
            )
         coef_trunc = xr.DataArray(integ_ff*0.5, dims=['wav_phase', 'z_phase'],
                                   coords={'wav_phase': wav, 'z_phase': z})
 
-        return P, coef_trunc
+        return pha_da, coef_trunc
 
     def phase(self, wav, z, use_old_calc_iphase=False):
         '''
@@ -537,11 +537,11 @@ class HydrosolPR(Hydrosol):
         fa = 1.
         acdm443 = fa * 0.069 * (chl**1.070)
 
-        S = 0.00262*(acdm443**(-0.448))
-        if (S > 0.025): S=0.025
-        if (S < 0.011): S=0.011
+        s_cdom = 0.00262*(acdm443**(-0.448))
+        if (s_cdom > 0.025): s_cdom=0.025
+        if (s_cdom < 0.011): s_cdom=0.011
 
-        acdm = acdm443 * np.exp(-S*(wav - 443))
+        acdm = acdm443 * np.exp(-s_cdom*(wav - 443))
 
         bp = 0.416*(chl**0.766)*550./wav
 
@@ -629,19 +629,21 @@ class HydrosolZhai(Hydrosol):
                                    delimiter=',', skip_header=12)  # header is lambda,Ap,Ep,Aphi,Ephi
         # Add extension to 360 nm (Wei et al., 2016)
         # spectral slope of aph is symetrical wrt 440 nm in the 360-520 spectral range
-        wUV = np.linspace(360., 398., num=20)
-        A   = ap_bricaud[:,1]
-        B   = 1.-ap_bricaud[:,2]
-        w   = ap_bricaud[:,0]
-        ii  = np.where((w<=520.) & (w>480.))
-        AUV = np.zeros_like(wUV)
-        BUV = np.zeros_like(wUV)
-        AUV[::-1] = A[ii]
-        BUV[::-1] = B[ii]
+        w_uv      = np.linspace(360., 398., num=20)
+        a_bricaud = ap_bricaud[:,1]
+        e_bricaud = 1.-ap_bricaud[:,2]
+        w         = ap_bricaud[:,0]
+        ii        = np.where((w<=520.) & (w>480.))
+        a_uv      = np.zeros_like(w_uv)
+        e_uv      = np.zeros_like(w_uv)
+        a_uv[::-1] = a_bricaud[ii]
+        e_uv[::-1] = e_bricaud[ii]
         self.bricaud = xr.Dataset()
-        self.bricaud = self.bricaud.assign_coords(wav=np.concatenate((wUV,ap_bricaud[:,0])))
-        self.bricaud['A'] = xr.DataArray(np.concatenate((AUV,A)), dims=['wav'])
-        self.bricaud['E'] = xr.DataArray(np.concatenate((BUV,B)), dims=['wav'])
+        self.bricaud = self.bricaud.assign_coords(wav=np.concatenate((w_uv,ap_bricaud[:,0])))
+        self.bricaud['A'] = xr.DataArray(np.concatenate((a_uv,a_bricaud)),
+                                         dims=['wav'])
+        self.bricaud['E'] = xr.DataArray(np.concatenate((e_uv,e_bricaud)),
+                                         dims=['wav'])
 
         # Chlorophyll integrated over the euphotic column, from which the
         # euphotic depth is derived when it is not provided
@@ -715,13 +717,13 @@ class HydrosolZhai(Hydrosol):
 
         # CDOM covariant absorption
         acdm440 = 0.24*aphy440**0.43
-        S=0.02
-        acdom = acdm440 * np.exp(-S*(wav2 - 440))
+        s_cdom=0.02
+        acdom = acdm440 * np.exp(-s_cdom*(wav2 - 440))
 
         # non-algal particles backscattering
-        SPM = 0. # g/m3
+        spm = 0. # g/m3
         gamma=0.5
-        bbpnap650 = 10**(1.03*np.log10(SPM) - 2.06) # Neukermans et al 2012
+        bbpnap650 = 10**(1.03*np.log10(spm) - 2.06) # Neukermans et al 2012
         bbpnap = bbpnap650*(wav2/650.)**(-gamma)
         bbp_ratio_nap = np.zeros_like(aphy)
         bbp_ratio_nap[:] = 0.04
@@ -1005,7 +1007,7 @@ class Water1D(Water):
                         + f'same {dim} grid to be averaged. Use a common '
                         + 'pfwav, or provide the phase matrices directly.')
 
-        P_tot = 0.
+        pha_tot = 0.
         bsca = 0.
         for comp, pha in phases:
             # weight each hydrosol by its scattering coefficient, on the
@@ -1016,11 +1018,11 @@ class Water1D(Water):
                 coords={'wav_phase': pha.coords['wav_phase'].values,
                         'z_phase': pha.coords['z_phase'].values})
             bsca = bsca + bsca_
-            P_tot = P_tot + pha * bsca_
+            pha_tot = pha_tot + pha * bsca_
 
         with np.errstate(divide='ignore', invalid='ignore'):
-            P_tot = P_tot/bsca
-        return P_tot.fillna(0.)
+            pha_tot = pha_tot/bsca
+        return pha_tot.fillna(0.)
 
 
 class WaterRw(Water):
