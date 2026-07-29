@@ -176,12 +176,6 @@ def _expand_phase_4_to_6(phase):
     return xr.DataArray(pha_6, dims=axes, coords=coords)
 
 
-class Water(object):
-    """Base class for water."""
-
-    pass
-
-
 class Hydrosol(object):
     '''
     Initialize the user-defined hydrosol model
@@ -190,19 +184,19 @@ class Hydrosol(object):
     ----------
     phase : None or DataArray or LUT, optional
         Phase matrices with dimensions [nwav, nz, stk, angle]. If None,
-        the phase matrices are derived from `Bp` (see notes).
+        the phase matrices are derived from `bbp_ratio` (see notes).
     bp : None or 2-D ndarray, optional
         Particle scattering coefficient in m-1, dimensions [nwav, nz]
     ap : None or 2-D ndarray, optional
         Particle absorption coefficient in m-1, dimensions [nwav, nz]
-    aCDOM : None or 2-D ndarray, optional
+    acdom : None or 2-D ndarray, optional
         CDOM absorption coefficient in m-1, dimensions [nwav, nz]
-    Bp : None or 2-D ndarray, optional
+    bbp_ratio : None or 2-D ndarray, optional
         Backscattering ratio, dimensions [nwav, nz]. Only used if `phase`
         is not provided.
-    NANG : int, optional
+    n_theta : int, optional
         Number of angles of the derived phase matrices
-    ang_trunc : float, optional
+    theta_trunc : float, optional
         Truncation angle in degrees of the derived phase matrices
     pfwav : None or array_like, optional
         Wavelengths at which the phase matrices are calculated. If None,
@@ -211,9 +205,9 @@ class Hydrosol(object):
     Notes
     -----
     When `phase` is not provided, the phase matrices are derived from the
-    backscattering ratio `Bp` following Park & Ruddick (2005), as a
+    backscattering ratio `bbp_ratio` following Park & Ruddick (2005), as a
     mixture of two Fournier-Forand phase functions. Their forward peak is
-    truncated at `ang_trunc`, and the scattering coefficient `bp` is
+    truncated at `theta_trunc`, and the scattering coefficient `bp` is
     scaled accordingly.
 
     The pure water absorption and scattering coefficients are not defined
@@ -226,15 +220,15 @@ class Hydrosol(object):
        waters," Appl. Opt. 44, 1236-1249 (2005).
     '''
 
-    def __init__(self, phase=None, bp=None, ap=None, aCDOM=None, Bp=None,
-                 NANG=721, ang_trunc=5., pfwav=None):
+    def __init__(self, phase=None, bp=None, ap=None, acdom=None,
+                 bbp_ratio=None, n_theta=721, theta_trunc=5., pfwav=None):
         self.bp = bp
         self.ap = ap
-        self.aCDOM = aCDOM
-        self.Bp = Bp
+        self.acdom = acdom
+        self.bbp_ratio = bbp_ratio
         self._phase = _expand_phase_4_to_6(phase)
-        self.NANG = NANG
-        self.ang_trunc = ang_trunc
+        self.n_theta = n_theta
+        self.theta_trunc = theta_trunc
         self.pfwav = None if pfwav is None else np.array(pfwav)
 
         self._pha = None
@@ -257,10 +251,10 @@ class Hydrosol(object):
         -------
         dict
             Coefficients in m-1 with dimensions [len(wav), len(z)]:
-            'ap' and 'aCDOM' (particle and CDOM absorption), 'bp'
+            'ap' and 'acdom' (particle and CDOM absorption), 'bp'
             (particle scattering, before truncation correction), 'aphy'
-            (fluorescing absorption) and 'FQYC' (fluorescence quantum
-            yield), plus 'Bp' (backscattering ratio) or None.
+            (fluorescing absorption) and 'fqyc' (fluorescence quantum
+            yield), plus 'bbp_ratio' (backscattering ratio) or None.
         '''
         shp = (len(wav), len(z))
         zeros = np.zeros(shp, dtype='float')
@@ -280,10 +274,11 @@ class Hydrosol(object):
         ap = as_2d(self.ap)
         return {'ap': ap,
                 'bp': as_2d(self.bp),
-                'aCDOM': as_2d(self.aCDOM),
-                'Bp': None if self.Bp is None else as_2d(self.Bp),
+                'acdom': as_2d(self.acdom),
+                'bbp_ratio': (None if self.bbp_ratio is None
+                              else as_2d(self.bbp_ratio)),
                 'aphy': ap,
-                'FQYC': zeros.copy(),
+                'fqyc': zeros.copy(),
                 }
 
     def _trunc_scaling(self):
@@ -293,7 +288,7 @@ class Hydrosol(object):
         '''
         return 1.
 
-    def calc_phase(self, wav, z, Bp):
+    def calc_phase(self, wav, z, bbp_ratio):
         '''
         Calculate the phase matrices and the associated truncation
         factor, as a mixture of two Fournier-Forand phase functions
@@ -305,7 +300,7 @@ class Hydrosol(object):
             Wavelengths in nm
         z : ndarray
             Profile of depths in m
-        Bp : 2-D ndarray
+        bbp_ratio : 2-D ndarray
             Backscattering ratio, dimensions [len(wav), len(z)]
 
         Returns
@@ -322,13 +317,13 @@ class Hydrosol(object):
         # particles phase function
         # see Park & Ruddick, 05
         # https://odnature.naturalsciences.be/downloads/publications/park_appliedoptics_2005.pdf
-        ang = np.linspace(0, np.pi, self.NANG, dtype='float64')    # angle in radians
+        ang = np.linspace(0, np.pi, self.n_theta, dtype='float64')    # angle in radians
         ff1 = fournier_forand(ang, 1.117,3.695)[None,None,:]
         ff2 = fournier_forand(ang, 1.05, 3.259)[None,None,:]
 
-        itronc = int(self.NANG * self.ang_trunc/180.)
-        pha = np.zeros((nwav, nz, 6, self.NANG), dtype='float64')
-        r1 = ((Bp - 0.002)/0.028)[:,:,None]
+        itronc = int(self.n_theta * self.theta_trunc/180.)
+        pha = np.zeros((nwav, nz, 6, self.n_theta), dtype='float64')
+        r1 = ((bbp_ratio - 0.002)/0.028)[:,:,None]
 
         pha[:,:,0,:] = r1*ff1 + (1-r1)*ff2
 
@@ -377,8 +372,8 @@ class Hydrosol(object):
         iop = self.iop(wav, z)
         if not (np.asarray(iop['bp']) > 0).any():
             return None
-        if iop['Bp'] is None:
-            raise Exception('No phase function nor Bp has been provided, but bp>0')
+        if iop['bbp_ratio'] is None:
+            raise Exception('No phase function nor bbp_ratio has been provided, but bp>0')
 
         self._resolve_truncation(wav, z, use_old_calc_iphase)
         return self._pha
@@ -396,17 +391,19 @@ class Hydrosol(object):
         wav_pha = wav if self.pfwav is None else self.pfwav
         z = np.asarray(z, dtype='float')
         iop = self.iop(wav_pha, z)
-        Bp, bp = iop['Bp'], iop['bp']
+        bbp_ratio, bp = iop['bbp_ratio'], iop['bp']
 
         # tabulate a single depth if neither the phase matrices nor the
         # scattering coefficient vary vertically, to avoid duplicating
         # the phase matrices
-        if np.allclose(Bp, Bp[:,:1]) and np.allclose(bp, bp[:,:1]):
+        if (np.allclose(bbp_ratio, bbp_ratio[:,:1])
+                and np.allclose(bp, bp[:,:1])):
             sl = slice(0, 1)
         else:
             sl = slice(None)
 
-        self._pha, self._coef_trunc = self.calc_phase(wav_pha, z[sl], Bp[:,sl])
+        self._pha, self._coef_trunc = self.calc_phase(wav_pha, z[sl],
+                                                      bbp_ratio[:,sl])
         self._bsca = bp[:,sl] * self._coef_trunc.values * self._trunc_scaling()
 
     def _coef_trunc_on(self, wav, z, use_old_calc_iphase=False):
@@ -458,8 +455,8 @@ class Hydrosol(object):
         iop = self.iop(wav, z)
 
         if (self._phase is None) and (np.asarray(iop['bp']) > 0).any():
-            if iop['Bp'] is None:
-                raise Exception('No phase function nor Bp has been provided, but bp>0')
+            if iop['bbp_ratio'] is None:
+                raise Exception('No phase function nor bbp_ratio has been provided, but bp>0')
             if phase:
                 self._resolve_truncation(wav, z, use_old_calc_iphase)
                 coef_trunc = self._coef_trunc_on(wav, z, use_old_calc_iphase)
@@ -477,34 +474,35 @@ class HydrosolPR(Hydrosol):
     ----------
     chl : float
         Chlorophyll concentration in mg/m3
-    NANG : int, optional
+    n_theta : int, optional
         Number of angles of the derived phase matrices
-    ang_trunc : float, optional
+    theta_trunc : float, optional
         Truncation angle in degrees of the derived phase matrices
     pfwav : None or array_like, optional
         Wavelengths at which the phase matrices are calculated. If None,
         they are calculated at all wavelengths.
-    FQYC : float, optional
+    fqyc : float, optional
         Chlorophyll a fluorescence quantum yield
 
     Examples
     --------
     >>> from smartg.water import Water1D, HydrosolPR
-    >>> water = Water1D(Z=[0, -5.], comp=[HydrosolPR(chl=0.5)])
+    >>> water = Water1D(grid=[0, -5.], comp=[HydrosolPR(chl=0.5)])
     '''
 
-    def __init__(self, chl, NANG=72001, ang_trunc=5., pfwav=None, FQYC=0.0):
-        super().__init__(NANG=NANG, ang_trunc=ang_trunc, pfwav=pfwav)
+    def __init__(self, chl, n_theta=72001, theta_trunc=5., pfwav=None,
+                 fqyc=0.0):
+        super().__init__(n_theta=n_theta, theta_trunc=theta_trunc, pfwav=pfwav)
         self.chl = chl
-        self.FQYC = FQYC
+        self.fqyc = fqyc
 
         # Bricaud (98)
         ap_bricaud = np.genfromtxt(dir_aux / 'water' / 'aph_bricaud_1998.txt',
                                    delimiter=',', skip_header=12)  # header is lambda,Ap,Ep,Aphi,Ephi
-        self.BRICAUD = xr.Dataset()
-        self.BRICAUD = self.BRICAUD.assign_coords(wav=ap_bricaud[:,0])
-        self.BRICAUD['A'] = xr.DataArray(ap_bricaud[:,1], dims=['wav'])
-        self.BRICAUD['E'] = xr.DataArray(1-ap_bricaud[:,2], dims=['wav'])
+        self.bricaud = xr.Dataset()
+        self.bricaud = self.bricaud.assign_coords(wav=ap_bricaud[:,0])
+        self.bricaud['A'] = xr.DataArray(ap_bricaud[:,1], dims=['wav'])
+        self.bricaud['E'] = xr.DataArray(1-ap_bricaud[:,2], dims=['wav'])
 
     def _trunc_scaling(self):
         return 0.5
@@ -526,24 +524,24 @@ class HydrosolPR(Hydrosol):
         chl = self.chl
 
         # phytoplankton absorption
-        aphy = (interp_1d_coord(self.BRICAUD['A'], 'wav', wav, extrema=True)
-            * (chl**interp_1d_coord(self.BRICAUD['E'], 'wav', wav, extrema=True)))
+        aphy = (interp_1d_coord(self.bricaud['A'], 'wav', wav, extrema=True)
+            * (chl**interp_1d_coord(self.bricaud['E'], 'wav', wav, extrema=True)))
 
         # chlorophyll fluorescence (scattering coefficient)
-        FQYC = np.full_like(aphy, self.FQYC) # Fluorescence Quantum Yield for Chlorophyll
-        FQYC[wav<370.]=0.
-        FQYC[wav>690.]=0.
+        fqyc = np.full_like(aphy, self.fqyc) # Fluorescence Quantum Yield for Chlorophyll
+        fqyc[wav<370.]=0.
+        fqyc[wav>690.]=0.
 
         # CDM absorption central value
         # from Bricaud et al GBC, 2012 (data from nov 2007)
         fa = 1.
-        aCDM443 = fa * 0.069 * (chl**1.070)
+        acdm443 = fa * 0.069 * (chl**1.070)
 
-        S = 0.00262*(aCDM443**(-0.448))
+        S = 0.00262*(acdm443**(-0.448))
         if (S > 0.025): S=0.025
         if (S < 0.011): S=0.011
 
-        aCDM = aCDM443 * np.exp(-S*(wav - 443))
+        acdm = acdm443 * np.exp(-S*(wav - 443))
 
         bp = 0.416*(chl**0.766)*550./wav
 
@@ -554,7 +552,7 @@ class HydrosolPR(Hydrosol):
             v = 0.5*(np.log10(chl) - 0.3)
         else:
             v = 0
-        Bp = 0.002 + 0.01*( 0.5-0.25*np.log10(chl))*((wav/550.)**v)
+        bbp_ratio = 0.002 + 0.01*( 0.5-0.25*np.log10(chl))*((wav/550.)**v)
 
         shp = (len(wav), len(z))
 
@@ -564,10 +562,10 @@ class HydrosolPR(Hydrosol):
         aphy_2d = as_2d(aphy)
         return {'ap': aphy_2d,
                 'bp': as_2d(bp),
-                'aCDOM': as_2d(aCDM),
-                'Bp': as_2d(Bp),
+                'acdom': as_2d(acdm),
+                'bbp_ratio': as_2d(bbp_ratio),
                 'aphy': aphy_2d,
-                'FQYC': as_2d(FQYC),
+                'fqyc': as_2d(fqyc),
                 }
 
 
@@ -578,20 +576,27 @@ class HydrosolZhai(Hydrosol):
 
     Parameters
     ----------
-    chls : float
-        Chlorophyll concentration in mg/m3 at the surface
-    NANG : int, optional
+    chl_surf : float
+        Chlorophyll concentration in mg/m3 at the surface. The
+        concentration at depth is derived from it (see notes), so this is
+        the surface value only, unlike the depth-independent `chl` of
+        HydrosolPR.
+    n_theta : int, optional
         Number of angles of the derived phase matrices
-    ang_trunc : float, optional
+    theta_trunc : float, optional
         Truncation angle in degrees of the derived phase matrices
     pfwav : None or array_like, optional
         Wavelengths at which the phase matrices are calculated. If None,
         they are calculated at all wavelengths.
-    Zeu : float or None, optional
-        Euphotic depth in m. If None, computed from climatology.
-    MIXED : bool, optional
+    euphotic_depth : float or None, optional
+        Euphotic depth in m, noted Z_eu in [2]_. This is a positive
+        depth, measured downwards from the surface, and not a z
+        coordinate: unlike the `grid` of Water1D, it does not follow the
+        convention of being negative below the surface. If None, it is
+        computed from the chlorophyll climatology of [2]_.
+    mixed : bool, optional
         Mixed or stratified waters
-    FQYC : float, optional
+    fqyc : float, optional
         Chlorophyll a fluorescence quantum yield
 
     Notes
@@ -612,11 +617,11 @@ class HydrosolZhai(Hydrosol):
        C08005 (2006).
     '''
 
-    def __init__(self, chls, NANG=7201, ang_trunc=5., pfwav=None,
-                 Zeu=None, MIXED=False, FQYC=0.):
-        super().__init__(NANG=NANG, ang_trunc=ang_trunc, pfwav=pfwav)
-        self.chls = chls
-        self.FQYC = FQYC
+    def __init__(self, chl_surf, n_theta=7201, theta_trunc=5., pfwav=None,
+                 euphotic_depth=None, mixed=False, fqyc=0.):
+        super().__init__(n_theta=n_theta, theta_trunc=theta_trunc, pfwav=pfwav)
+        self.chl_surf = chl_surf
+        self.fqyc = fqyc
 
         # Bricaud (98)
         # Absorption of the phytoplankton
@@ -633,20 +638,21 @@ class HydrosolZhai(Hydrosol):
         BUV = np.zeros_like(wUV)
         AUV[::-1] = A[ii]
         BUV[::-1] = B[ii]
-        self.BRICAUD = xr.Dataset()
-        self.BRICAUD = self.BRICAUD.assign_coords(wav=np.concatenate((wUV,ap_bricaud[:,0])))
-        self.BRICAUD['A'] = xr.DataArray(np.concatenate((AUV,A)), dims=['wav'])
-        self.BRICAUD['E'] = xr.DataArray(np.concatenate((BUV,B)), dims=['wav'])
+        self.bricaud = xr.Dataset()
+        self.bricaud = self.bricaud.assign_coords(wav=np.concatenate((wUV,ap_bricaud[:,0])))
+        self.bricaud['A'] = xr.DataArray(np.concatenate((AUV,A)), dims=['wav'])
+        self.bricaud['E'] = xr.DataArray(np.concatenate((BUV,B)), dims=['wav'])
 
-        # Determine chlorophyll integrated column until euphotic depth Zeu
-        if Zeu is None:
-            if not MIXED:
-                if (chls > 1.): chl_zeu = 37.7*chls**0.615
-                else: chl_zeu = 36.1*chls**0.357
+        # Chlorophyll integrated over the euphotic column, from which the
+        # euphotic depth is derived when it is not provided
+        if euphotic_depth is None:
+            if not mixed:
+                if (chl_surf > 1.): chl_euphotic = 37.7*chl_surf**0.615
+                else: chl_euphotic = 36.1*chl_surf**0.357
             else:
-                chl_zeu = 42.1*chls**0.538
-            Zeu = 568.2*chl_zeu**(-0.746)
-        self.Zeu = Zeu
+                chl_euphotic = 42.1*chl_surf**0.538
+            euphotic_depth = 568.2*chl_euphotic**(-0.746)
+        self.euphotic_depth = euphotic_depth
 
         # Reduced concentration chi and reduced depth zeta,
         # stratified trophic case 1 parametrization (Uitz et al., 2006)
@@ -654,23 +660,23 @@ class HydrosolZhai(Hydrosol):
         self.s        = 0.135
         self.chi_max  = 1.572
         self.zeta_max = 0.969
-        self.Dzeta    = 0.393
+        self.dzeta    = 0.393
 
     def chi(self, zeta):
-        return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.Dzeta)**2)
+        return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.dzeta)**2)
 
     def chl(self, z):
         '''
         Chlorophyll concentration in mg/m3 at the depths z (in m)
         '''
-        zeta = np.abs(np.asarray(z, dtype='float')/self.Zeu)
-        chl = self.chls*self.chi(zeta)/self.chi(0.)
+        zeta = np.abs(np.asarray(z, dtype='float')/self.euphotic_depth)
+        chl = self.chl_surf*self.chi(zeta)/self.chi(0.)
         return np.where(chl < 0., 1e-8, chl)
 
     def _trunc_scaling(self):
         return 0.5
 
-    def iop(self, wav, z, p1=0.33, R1=0.5, R2=0.5):
+    def iop(self, wav, z, p1=0.33, r1=0.5, r2=0.5):
         '''
         Inherent optical properties calculation
 
@@ -680,9 +686,9 @@ class HydrosolZhai(Hydrosol):
             Wavelengths in nm
         z : ndarray
             Profile of depths in m
-        p1, R1 : float, optional
+        p1, r1 : float, optional
             Parameters related to particles extinction, see Zhai et al. 2017
-        R2 : float, optional
+        r2 : float, optional
             Parameter related to CDOM absorption, see Zhai et al. 2017
         '''
         wav = np.asarray(wav, dtype='float')
@@ -690,11 +696,11 @@ class HydrosolZhai(Hydrosol):
 
         # specific phytoplankton absorption
         chl2star=np.full_like(chl2, 1.)
-        aphystar = (interp_1d_coord(self.BRICAUD['A'], 'wav', wav2, extrema=True)
-            * (chl2star**interp_1d_coord(self.BRICAUD['E'], 'wav', wav2, extrema=True)))
+        aphystar = (interp_1d_coord(self.bricaud['A'], 'wav', wav2, extrema=True)
+            * (chl2star**interp_1d_coord(self.bricaud['E'], 'wav', wav2, extrema=True)))
         aphy = aphystar * chl2
-        aphystar440 = (interp_1d_coord(self.BRICAUD['A'], 'wav', 440., extrema=True)
-            * (chl2star**interp_1d_coord(self.BRICAUD['E'], 'wav', wav2, extrema=True)))
+        aphystar440 = (interp_1d_coord(self.bricaud['A'], 'wav', 440., extrema=True)
+            * (chl2star**interp_1d_coord(self.bricaud['E'], 'wav', wav2, extrema=True)))
         aphy440 = aphystar440 * chl2
 
         # phytoplankton covariant particles extinction
@@ -703,32 +709,38 @@ class HydrosolZhai(Hydrosol):
         bp = bp440 *(wav2/440.)**(-1.)
 
         # chlorophyll fluorescence (scattering coefficient)
-        FQYC = np.full_like(aphy, self.FQYC) # Fluorescence Quantum Yield for Chlorophyll
-        FQYC[wav2<370.]=0.
-        FQYC[wav2>690.]=0.
+        fqyc = np.full_like(aphy, self.fqyc) # Fluorescence Quantum Yield for Chlorophyll
+        fqyc[wav2<370.]=0.
+        fqyc[wav2>690.]=0.
 
         # CDOM covariant absorption
-        aCDM440 = 0.24*aphy440**0.43
+        acdm440 = 0.24*aphy440**0.43
         S=0.02
-        aCDOM = aCDM440 * np.exp(-S*(wav2 - 440))
+        acdom = acdm440 * np.exp(-S*(wav2 - 440))
 
         # non-algal particles backscattering
         SPM = 0. # g/m3
         gamma=0.5
         bbpnap650 = 10**(1.03*np.log10(SPM) - 2.06) # Neukermans et al 2012
         bbpnap = bbpnap650*(wav2/650.)**(-gamma)
-        Bpnap = np.zeros_like(aphy)
-        Bpnap[:] = 0.04
-        bpnap  = bbpnap/Bpnap
+        bbp_ratio_nap = np.zeros_like(aphy)
+        bbp_ratio_nap[:] = 0.04
+        bpnap  = bbpnap/bbp_ratio_nap
         bp += bpnap
 
         return {'ap': aphy,
                 'bp': bp,
-                'aCDOM': aCDOM,
-                'Bp': Bpnap,
+                'acdom': acdom,
+                'bbp_ratio': bbp_ratio_nap,
                 'aphy': aphy,
-                'FQYC': FQYC,
+                'fqyc': fqyc,
                 }
+
+
+class Water(object):
+    """Base class for water."""
+
+    pass
 
 
 class Water1D(Water):
@@ -740,22 +752,34 @@ class Water1D(Water):
 
     Parameters
     ----------
-    Z : array_like, optional
-        Profile of depths in m, from the surface to the sea floor.
-        Note that the first item of Z is not used.
+    grid : array_like, optional
+        Vertical grid of the water column, in m, from the surface down to
+        the sea floor. These are z coordinates, not depths: z is 0 at the
+        surface and becomes more negative downwards, so the grid must be
+        decreasing (e.g. [0., -2.5, -5.]). This is the oceanic
+        counterpart of the `grid` parameter of `Atm1D`, and it defines
+        the `z_oc` coordinate of the profile returned by `calc()`.
+        Note that the first item of the grid is not used.
     comp : list, optional
         Hydrosols to consider, i.e. a list of Hydrosol, HydrosolPR or/and
         HydrosolZhai objects.
     aw : None or 2-D ndarray, optional
         Force the pure water absorption coefficient in m-1, with
-        dimensions [nwav, nZ]. If None, it is read from the auxiliary
+        dimensions [nwav, nz]. If None, it is read from the auxiliary
         data (see `_read_aw`).
     bw : None or 2-D ndarray, optional
         Force the pure water scattering coefficient in m-1, with
-        dimensions [nwav, nZ]. If None, it is computed as
+        dimensions [nwav, nz]. If None, it is computed as
         19.3e-4*(wav/550)**-4.3.
-    ALB : albedo object, optional
-        Sea floor albedo
+    alb : albedo object, optional
+        Albedo of the sea floor, i.e. of the reflector placed at the
+        bottom of the water column, at the deepest level of `grid`. This
+        is the reflectance of the sea bottom seen from within the water,
+        and it is not related to the albedo of the air-water interface:
+        the latter is set by the `surf` parameter of `smartg.run()`
+        (e.g. `LambSurface(ALB=...)` or `RoughSurface(...)`). It fills
+        the `albedo_seafloor` variable of the profile returned by
+        `calc()`.
 
     Examples
     --------
@@ -763,15 +787,15 @@ class Water1D(Water):
     >>> water = Water1D(comp=[HydrosolPR(chl=0.5)])
     '''
 
-    def __init__(self, Z=[0, -10000], comp=None, aw=None, bw=None,
-                 ALB=AlbedoCst(0.)):
-        self.Z = np.array(Z, dtype='float')
+    def __init__(self, grid=[0, -10000], comp=None, aw=None, bw=None,
+                 alb=AlbedoCst(0.)):
+        self.grid = np.array(grid, dtype='float')
         self.comp = [] if comp is None else comp
         self.aw = aw
         self.bw = bw
-        self.ALB = ALB
+        self.alb = alb
 
-        self.AW = _read_aw(dir_aux)
+        self.aw_table = _read_aw(dir_aux)
 
     def calc(self, wav, phase=True, use_old_calc_iphase=False):
         '''
@@ -796,7 +820,7 @@ class Water1D(Water):
             wav = BandSet(wav)
         wav = np.array(wav)
 
-        z = self.Z
+        z = self.grid
         shp = (len(wav), len(z))
         wav2 = np.stack([wav]*len(z), axis=1)
 
@@ -804,7 +828,7 @@ class Water1D(Water):
         # pure water absorption and scattering
         #
         if self.aw is None:
-            aw = interp_1d_coord(self.AW, 'wavelength', wav2)
+            aw = interp_1d_coord(self.aw_table, 'wavelength', wav2)
         else:
             aw = self.aw
 
@@ -818,7 +842,7 @@ class Water1D(Water):
         #
         ap = np.zeros(shp, dtype='float')
         bp = np.zeros(shp, dtype='float')
-        aCDOM = np.zeros(shp, dtype='float')
+        acdom = np.zeros(shp, dtype='float')
         aphy_fluo = np.zeros(shp, dtype='float')
         aphy = np.zeros(shp, dtype='float')
 
@@ -827,13 +851,13 @@ class Water1D(Water):
                               use_old_calc_iphase=use_old_calc_iphase)
             ap += iop['ap']
             bp += iop['bp']
-            aCDOM += iop['aCDOM']
+            acdom += iop['acdom']
             aphy += iop['aphy']
-            aphy_fluo += iop['aphy'] * iop['FQYC']
+            aphy_fluo += iop['aphy'] * iop['fqyc']
 
         # the fluorescing fraction of the phytoplankton absorption is
         # counted as (inelastic) scattering instead of absorption
-        atot = aw + ap - aphy_fluo + aCDOM
+        atot = aw + ap - aphy_fluo + acdom
         btot = bw + bp + aphy_fluo
 
         pro = xr.Dataset()
@@ -858,7 +882,7 @@ class Water1D(Water):
         dz = - diff1(z)
         tau_w   = - (aw   + bw  ) * dz
         tau_p   = - (ap   + bp  ) * dz
-        tau_y   = - (aCDOM      ) * dz
+        tau_y   = - (acdom      ) * dz
         tau_tot = - (atot + btot) * dz
         tau_sca = - (btot       ) * dz
         tau_abs = - (atot       ) * dz
@@ -935,7 +959,7 @@ class Water1D(Water):
         pro['FQY1_oc'] = xr.DataArray(fqy1,
                         dims=['wavelength', 'z_oc'])
 
-        pro['albedo_seafloor'] = xr.DataArray(self.ALB.get(wav),
+        pro['albedo_seafloor'] = xr.DataArray(self.alb.get(wav),
                         dims=['wavelength'])
 
         return pro
@@ -958,7 +982,7 @@ class Water1D(Water):
             The phase matrices with dimensions [wav_phase, z_phase, stk,
             theta_oc], or None if no hydrosol scatters.
         '''
-        z = self.Z
+        z = self.grid
 
         phases = []
         for comp in self.comp:
@@ -1009,9 +1033,16 @@ class WaterRw(Water):
 
     Parameters
     ----------
-    ALB : albedo object
+    alb : albedo object
         Albedo of the lambertian reflector, i.e. the water reflectance
-        just below the surface
+        just below the surface. Although it is passed as an albedo (it is
+        implemented as a lambertian reflector), the quantity to supply
+        here is the subsurface irradiance reflectance R(0-) =
+        Eu(0-)/Ed(0-). Do not supply a water-leaving reflectance such as
+        rho_w or Rrs: those are defined above the interface, at the 0+
+        level, and the air-water transmission would then be counted
+        twice (see notes). Use an AlbedoSpectrum object to supply a
+        spectrally varying R(0-).
 
     Notes
     -----
@@ -1022,10 +1053,19 @@ class WaterRw(Water):
     upwelling light are still accounted for by the `surf` parameter of
     `smartg.run()`.
 
+    Note that, unlike the `alb` of Water1D, this reflector is not a sea
+    floor: it stands for the water body itself, and it is placed at the
+    top of the water column rather than at its bottom.
+
+    Being lambertian, the reflector is isotropic, whereas the upwelling
+    field of real water is not (Q = Eu/Lu differs from pi). The angular
+    shape of the reflected light is therefore an approximation, even
+    when the magnitude of R(0-) is exact.
+
     The same model can be obtained with an empty Water1D profile of null
     thickness:
 
-    >>> Water1D(Z=[0., 0.], comp=[], ALB=ALB)
+    >>> Water1D(grid=[0., 0.], comp=[], alb=alb)
 
     Both give the same optical thicknesses, single scattering albedo and
     seafloor albedo (pure water drops out on its own, since the layer has
@@ -1036,11 +1076,11 @@ class WaterRw(Water):
     --------
     >>> from smartg.water import WaterRw
     >>> from smartg.albedo import AlbedoCst
-    >>> water = WaterRw(ALB=AlbedoCst(0.05))
+    >>> water = WaterRw(alb=AlbedoCst(0.05))
     '''
 
-    def __init__(self, ALB):
-        self.ALB = ALB
+    def __init__(self, alb):
+        self.alb = alb
 
     def calc(self, wav):
         '''
@@ -1065,6 +1105,6 @@ class WaterRw(Water):
         pro['pine_oc'] = xr.DataArray(np.ones(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
         pro['FQY1_oc'] = xr.DataArray(np.ones(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
         pro['ssa_oc'] = xr.DataArray(np.ones(shp, dtype='float32'), dims=['wavelength', 'z_oc'])
-        pro['albedo_seafloor'] = xr.DataArray(self.ALB.get(wav), dims=['wavelength'])
+        pro['albedo_seafloor'] = xr.DataArray(self.alb.get(wav), dims=['wavelength'])
 
         return pro

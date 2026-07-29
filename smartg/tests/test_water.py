@@ -212,10 +212,10 @@ def _build_water_iop() -> Water1D:
     phase = read_phase(pure_water_path, kind="oc")
 
     return Water1D(
-        Z=WATER_GRID,
+        grid=WATER_GRID,
         aw=aw,
         bw=bw,
-        comp=[Hydrosol(phase=phase, ap=aph, aCDOM=ag, bp=bph)],
+        comp=[Hydrosol(phase=phase, ap=aph, acdom=ag, bp=bph)],
     )
 
 
@@ -429,8 +429,8 @@ def test_waterrw_profile_matches_water1d():
     reads.
     """
     alb = AlbedoCst(RW_ALBEDO)
-    pro_rw = WaterRw(ALB=alb).calc(WAVELENGTHS)
-    pro_w1d = Water1D(Z=[0.0, 0.0], comp=[], ALB=alb).calc(WAVELENGTHS)
+    pro_rw = WaterRw(alb=alb).calc(WAVELENGTHS)
+    pro_w1d = Water1D(grid=[0.0, 0.0], comp=[], alb=alb).calc(WAVELENGTHS)
 
     for name in KERNEL_WATER_VARS:
         assert name in pro_rw.data_vars, f"{name} missing from WaterRw"
@@ -495,8 +495,8 @@ def _rw_vs_w1d_run(_atm_rayleigh, _surf):
     }
     out = []
     for water in (
-        WaterRw(ALB=alb),
-        Water1D(Z=[0.0, 0.0], comp=[], ALB=alb),
+        WaterRw(alb=alb),
+        Water1D(grid=[0.0, 0.0], comp=[], alb=alb),
     ):
         m = sg.run(
             wl=WAVELENGTHS,

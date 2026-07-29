@@ -138,7 +138,7 @@ def test_adjacency():
 
 def test_no_aer_output():
     atm1 = Atm1D("afglt")
-    water = Water1D(Z=[0, -5.0], comp=[HydrosolPR(chl=0.5)])
+    water = Water1D(grid=[0, -5.0], comp=[HydrosolPR(chl=0.5)])
     surf = RoughSurface(WIND=5.0, NH2O=1.34)
     sg = Smartg()
     le = {

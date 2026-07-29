@@ -1267,7 +1267,7 @@ class Smartg(object):
         >>> from smartg.atmosphere import Atm1D, AerOPAC
         >>> from smartg.water import Water1D, HydrosolPR
         >>> atm = Atm1D('afglt', comp=[AerOPAC('maritime_clean', 0.5, 550.)])
-        >>> water = Water1D(Z=[0, -5.], comp=[HydrosolPR(chl=0.5)])
+        >>> water = Water1D(grid=[0, -5.], comp=[HydrosolPR(chl=0.5)])
         >>> surf = RoughSurface(WIND=5., NH2O=1.34)
         >>> m = Smartg().run(wl=550., atm=atm, water=water, surf=surf)
         >>> # Look at the top of atmosphere radiance/reflectance (key: 'I_up (TOA)')
