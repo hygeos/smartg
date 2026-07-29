@@ -57,7 +57,9 @@ import numpy as np
 import xarray as xr
 from smartg.atmosphere import diff1
 from smartg.albedo import AlbedoCst, AlbedoLike
-from smartg.phase import integ_phase, calc_iphase, fournier_forand
+from smartg.phase import (
+    integ_phase, calc_iphase, fournier_forand, expand_phase_4_to_6
+)
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
@@ -165,60 +167,6 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
     return aw
 
 
-def _expand_phase_4_to_6(
-    phase: xr.DataArray | LUT | None,
-) -> xr.DataArray | None:
-    """
-    Convert a 4-term phase matrix into its 6-term equivalent.
-
-    The 4 terms (F11, F21, F33, F34) of a spherical particle are
-    completed into the 6 terms expected by SMART-G by duplicating
-    F22 = F11 and F44 = F33.
-
-    Parameters
-    ----------
-    phase : DataArray or LUT or None
-        Phase matrices with dimensions [nwav, nz, stk, angle]. A LUT is
-        converted to a DataArray first.
-
-    Returns
-    -------
-    DataArray or None
-        The 6-term phase matrices, or the input unchanged if it already
-        has 6 terms or is None.
-
-    Raises
-    ------
-    TypeError
-        If `phase` is neither a DataArray, a LUT nor None.
-    """
-    if phase is None:
-        return None
-    if isinstance(phase, LUT):
-        phase = phase.to_xarray()
-    if not isinstance(phase, xr.DataArray):
-        raise TypeError(
-            'The phase matrices must be provided as a DataArray or as '
-            + f'a LUT, not as a {type(phase).__name__}.')
-    if phase.shape[2] != 4:
-        return phase
-
-    pha_6 = np.zeros((phase.shape[0], phase.shape[1], 6, phase.shape[3]), dtype=np.float64)
-    pha_6[:,:,0:4,:] = phase[:,:,:,:].copy() # F11, F12, F33, F34
-    pha_6[:,:,4,:] = phase[:,:,0,:].copy() # F22 = F11
-    pha_6[:,:,5,:] = phase[:,:,2,:].copy() # F44 = F33
-    axes = list(phase.dims)
-    coords = {}
-    for i, dim in enumerate(axes):
-        if i == 2:
-            coords[dim] = np.arange(6)
-        elif dim in phase.coords and phase.coords[dim].size == pha_6.shape[i]:
-            coords[dim] = phase.coords[dim].values
-        else:
-            coords[dim] = np.arange(pha_6.shape[i])
-    return xr.DataArray(pha_6, dims=axes, coords=coords)
-
-
 class Hydrosol(object):
     '''
     User-defined hydrosol model.
@@ -290,7 +238,7 @@ class Hydrosol(object):
         self.ap = ap
         self.acdom = acdom
         self.bbp_ratio = bbp_ratio
-        self._phase = _expand_phase_4_to_6(phase)
+        self._phase = expand_phase_4_to_6(phase)
         self.n_theta = n_theta
         self.theta_trunc = theta_trunc
         self.pfwav = None if pfwav is None else np.array(pfwav)

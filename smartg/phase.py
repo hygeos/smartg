@@ -30,6 +30,9 @@ calc_iphase
 get_ipha_a
     Map the phase-function altitude grid onto the model
     altitude grid by maximum vertical overlap.
+expand_phase_4_to_6
+    Complete a 4-term phase matrix (spherical particles) into its
+    6-term equivalent, by duplicating F22 = F11 and F44 = F33.
 convert_phase_to_iparper
     Convert a phase matrix from the IQUV Stokes convention to the
     parallel/perpendicular intensity convention used by SMART-G.
@@ -905,6 +908,76 @@ def read_phase(
             f"Unsupported phase function file format: "
             f"{fname.suffix}. Supported formats: {supported_formats}"
         )
+
+
+def expand_phase_4_to_6(
+    phase: xr.DataArray | LUT | None,
+) -> xr.DataArray | None:
+    """
+    Convert a 4-term phase matrix into its 6-term equivalent.
+
+    The 4 terms (F11, F21, F33, F34) of a spherical particle are
+    completed into the 6 terms expected by SMART-G by duplicating
+    F22 = F11 and F44 = F33. This is the companion of the ``read_phase``
+    family, whose readers return 4 terms for files describing spherical
+    particles only.
+
+    Parameters
+    ----------
+    phase : DataArray or LUT or None
+        Phase matrices with dimensions [nwav, nz, stk, angle]. A LUT is
+        converted to a DataArray first.
+
+    Returns
+    -------
+    DataArray or None
+        The 6-term phase matrices, with the dimensions and coordinates
+        of the input, or the input unchanged if it already has 6 terms
+        or is None.
+
+    Raises
+    ------
+    TypeError
+        If `phase` is neither a DataArray, a LUT nor None.
+
+    See Also
+    --------
+    convert_phase_to_iparper : Same completion applied to a plain
+        ndarray, followed by the conversion of the IQUV convention into
+        the parallel/perpendicular one used by SMART-G.
+    """
+    if phase is None:
+        return None
+    if isinstance(phase, LUT):
+        phase = phase.to_xarray()
+    if not isinstance(phase, xr.DataArray):
+        raise TypeError(
+            "The phase matrices must be provided as a DataArray or as "
+            f"a LUT, not as a {type(phase).__name__}."
+        )
+    if phase.shape[2] != 4:
+        return phase
+
+    pha_6 = np.zeros(
+        (phase.shape[0], phase.shape[1], 6, phase.shape[3]),
+        dtype=np.float64,
+    )
+    pha_6[:, :, 0:4, :] = phase[:, :, :, :].copy()  # F11, F21, F33, F34
+    pha_6[:, :, 4, :] = phase[:, :, 0, :].copy()  # F22 = F11
+    pha_6[:, :, 5, :] = phase[:, :, 2, :].copy()  # F44 = F33
+    axes = list(phase.dims)
+    coords = {}
+    for i, dim in enumerate(axes):
+        if i == 2:
+            coords[dim] = np.arange(6)
+        elif (
+            dim in phase.coords
+            and phase.coords[dim].size == pha_6.shape[i]
+        ):
+            coords[dim] = phase.coords[dim].values
+        else:
+            coords[dim] = np.arange(pha_6.shape[i])
+    return xr.DataArray(pha_6, dims=axes, coords=coords)
 
 
 def convert_phase_to_iparper(
