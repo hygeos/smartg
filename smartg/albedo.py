@@ -38,7 +38,7 @@ AlbedoMap
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TypeAlias, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -290,3 +290,12 @@ class AlbedoMap(object):
                 Idx(y0, round=True, fill_value="extrema"),
             ]
         ).astype(int)
+
+
+#: Any of the albedo objects of this module, i.e. any object exposing
+#: the common ``get(wl)`` interface. Use it to annotate the parameters
+#: that accept a spectral albedo, such as the ``alb`` of
+#: ``smartg.water.Water1D`` or the ``ALB`` of the surfaces of
+#: ``smartg.smartg``. ``typing.get_args(AlbedoLike)`` gives the
+#: corresponding tuple of classes, suitable for an ``isinstance`` check.
+AlbedoLike: TypeAlias = AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap

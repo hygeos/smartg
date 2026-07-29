@@ -56,21 +56,16 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 from smartg.atmosphere import diff1
-from smartg.albedo import (
-    AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
-)
+from smartg.albedo import AlbedoCst, AlbedoLike
 from smartg.phase import integ_phase, calc_iphase, fournier_forand
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
 from smartg.typing import PathType, NumericArrayLike
 from pathlib import Path
-from typing import TypeAlias, TypedDict, cast
+from typing import TypedDict, cast
 from numpy.typing import NDArray
 from luts.luts import LUT
-
-
-AlbedoLike: TypeAlias = AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap
 
 
 class IOPDict(TypedDict):
