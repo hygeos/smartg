@@ -174,9 +174,23 @@ def _expand_phase_4_to_6(
     phase: xr.DataArray | LUT | None,
 ) -> xr.DataArray | None:
     """
-    Convert a 4-term (F11, F21, F33, F34) phase matrix into its 6-term
-    equivalent by duplicating F22 = F11 and F44 = F33. Returns the input
-    unchanged if it already has 6 terms, or is None.
+    Convert a 4-term phase matrix into its 6-term equivalent.
+
+    The 4 terms (F11, F21, F33, F34) of a spherical particle are
+    completed into the 6 terms expected by SMART-G by duplicating
+    F22 = F11 and F44 = F33.
+
+    Parameters
+    ----------
+    phase : DataArray or LUT or None
+        Phase matrices with dimensions [nwav, nz, stk, angle]. A LUT is
+        converted to a DataArray first.
+
+    Returns
+    -------
+    DataArray or None
+        The 6-term phase matrices, or the input unchanged if it already
+        has 6 terms or is None.
     """
     if phase is None:
         return None
@@ -204,29 +218,36 @@ def _expand_phase_4_to_6(
 
 class Hydrosol(object):
     '''
-    Initialize the user-defined hydrosol model
+    User-defined hydrosol model.
+
+    The inherent optical properties are supplied directly, either as
+    scalars or as arrays over the wavelength and depth grids of the
+    Water1D profile the hydrosol is added to.
 
     Parameters
     ----------
-    phase : None or DataArray or LUT, optional
+    phase : DataArray or LUT or None, optional
         Phase matrices with dimensions [nwav, nz, stk, angle]. If None,
         the phase matrices are derived from `bbp_ratio` (see notes).
-    bp : None or 2-D ndarray, optional
-        Particle scattering coefficient in m-1, dimensions [nwav, nz]
-    ap : None or 2-D ndarray, optional
-        Particle absorption coefficient in m-1, dimensions [nwav, nz]
-    acdom : None or 2-D ndarray, optional
-        CDOM absorption coefficient in m-1, dimensions [nwav, nz]
-    bbp_ratio : None or 2-D ndarray, optional
-        Backscattering ratio, dimensions [nwav, nz]. Only used if `phase`
-        is not provided.
+    bp : array_like or None, optional
+        Particle scattering coefficient in m-1, dimensions [nwav, nz].
+        If None, it is taken as null. A scalar or a lower-dimensional
+        array is broadcast over [nwav, nz].
+    ap : array_like or None, optional
+        Particle absorption coefficient in m-1, same shape rules as
+        `bp`.
+    acdom : array_like or None, optional
+        CDOM absorption coefficient in m-1, same shape rules as `bp`.
+    bbp_ratio : array_like or None, optional
+        Backscattering ratio (dimensionless), same shape rules as `bp`.
+        Only used if `phase` is not provided.
     n_theta : int, optional
-        Number of angles of the derived phase matrices
+        Number of angles of the derived phase matrices.
     theta_trunc : float, optional
-        Truncation angle in degrees of the derived phase matrices
-    pfwav : None or array_like, optional
-        Wavelengths at which the phase matrices are calculated. If None,
-        they are calculated at all wavelengths.
+        Truncation angle in degrees of the derived phase matrices.
+    pfwav : array_like or None, optional
+        Wavelengths in nm at which the phase matrices are calculated. If
+        None, they are calculated at all wavelengths.
 
     Notes
     -----
@@ -275,26 +296,47 @@ class Hydrosol(object):
         Inherent optical properties of the hydrosol at the given
         wavelengths and depths.
 
+        The coefficients supplied at construction time are broadcast
+        over the wavelength and depth grids; those left to None are
+        taken as null.
+
         Parameters
         ----------
         wav : ndarray
-            Wavelengths in nm
+            Wavelengths in nm.
         z : ndarray
-            Profile of depths in m
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
 
         Returns
         -------
-        dict
-            Coefficients in m-1 with dimensions [len(wav), len(z)]:
-            'ap' and 'acdom' (particle and CDOM absorption), 'bp'
-            (particle scattering, before truncation correction), 'aphy'
-            (fluorescing absorption) and 'fqyc' (fluorescence quantum
-            yield), plus 'bbp_ratio' (backscattering ratio) or None.
+        IOPDict
+            Inherent optical properties, each with dimensions
+            [len(wav), len(z)]:
+
+            - 'ap' : particle absorption coefficient in m-1
+            - 'bp' : particle scattering coefficient in m-1, before the
+              truncation correction
+            - 'acdom' : CDOM absorption coefficient in m-1
+            - 'bbp_ratio' : backscattering ratio (dimensionless), or
+              None if none was provided
+            - 'aphy' : phytoplankton absorption coefficient in m-1, of
+              which the fraction 'fqyc' fluoresces. Here it is taken
+              equal to 'ap'.
+            - 'fqyc' : fluorescence quantum yield (dimensionless), null
+              for a user-defined hydrosol
+
+        Raises
+        ------
+        ValueError
+            If a supplied coefficient cannot be broadcast over
+            [len(wav), len(z)].
         '''
         shp = (len(wav), len(z))
         zeros = np.zeros(shp, dtype='float')
 
         def as_2d(x: NumericArrayLike | None) -> NDArray:
+            '''Broadcast `x` over [len(wav), len(z)], None giving 0.'''
             if x is None:
                 return zeros.copy()
             x = np.asarray(x, dtype='float')
@@ -320,6 +362,15 @@ class Hydrosol(object):
         '''
         Factor applied to the scattering coefficient to account for the
         truncation of the phase matrix forward peak.
+
+        It multiplies the truncation factor `coef_trunc` returned by
+        `calc_phase`, and is meant to be overridden by the subclasses
+        whose phase matrices follow a different normalization.
+
+        Returns
+        -------
+        float
+            Always 1., i.e. `coef_trunc` is applied unchanged.
         '''
         return 1.
 
@@ -334,22 +385,37 @@ class Hydrosol(object):
         factor, as a mixture of two Fournier-Forand phase functions
         weighted by the backscattering ratio.
 
+        The forward peak is truncated at `theta_trunc`, and the phase
+        matrices are normalized to 2 over the angular grid. Only the
+        F11 (and F22 = F11) terms are non-null: the mixture is treated
+        as a scalar phase function.
+
         Parameters
         ----------
         wav : ndarray
-            Wavelengths in nm
+            Wavelengths in nm.
         z : ndarray
-            Profile of depths in m
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
         bbp_ratio : 2-D ndarray
-            Backscattering ratio, dimensions [len(wav), len(z)]
+            Backscattering ratio (dimensionless), dimensions
+            [len(wav), len(z)].
 
         Returns
         -------
         pha_da : DataArray
             Phase matrices with dimensions [wav_phase, z_phase, stk,
-            theta_oc]
+            theta_oc].
         coef_trunc : DataArray
-            Truncation factor with dimensions [wav_phase, z_phase]
+            Truncation factor with dimensions [wav_phase, z_phase], by
+            which the scattering coefficient must be scaled to
+            compensate for the truncated peak.
+
+        References
+        ----------
+        .. [1] Y.-J. Park and K. Ruddick, "Model of remote-sensing
+           reflectance including bidirectional effects for case 1 and
+           case 2 waters," Appl. Opt. 44, 1236-1249 (2005).
         '''
         nwav = len(wav)
         nz = len(z)
@@ -398,18 +464,33 @@ class Hydrosol(object):
         use_old_calc_iphase: bool = False,
     ) -> xr.DataArray | None:
         '''
-        Phase matrices of the hydrosol, with dimensions [wav_phase,
-        z_phase, stk, theta_oc]. Returns None if the hydrosol does not
-        scatter.
+        Phase matrices of the hydrosol.
+
+        The phase matrices supplied at construction time are returned
+        as such; otherwise they are derived from the backscattering
+        ratio (see `calc_phase`) and memoized.
 
         Parameters
         ----------
         wav : ndarray
-            Wavelengths in nm
+            Wavelengths in nm.
         z : ndarray
-            Profile of depths in m
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
+
+        Returns
+        -------
+        DataArray or None
+            Phase matrices with dimensions [wav_phase, z_phase, stk,
+            theta_oc], or None if the hydrosol does not scatter.
+
+        Raises
+        ------
+        Exception
+            If the hydrosol scatters but neither the phase matrices nor
+            the backscattering ratio have been provided.
         '''
         if self._phase is not None:
             return self._phase
@@ -431,9 +512,31 @@ class Hydrosol(object):
     ) -> None:
         '''
         Compute the phase matrices at the tabulation wavelengths `pfwav`,
-        along with the associated truncation factor. The result is
-        memoized, so that the scattering coefficient and the phase
-        matrices stay consistent whichever is requested first.
+        along with the associated truncation factor.
+
+        The result is memoized in `_pha`, `_coef_trunc` and `_bsca`, so
+        that the scattering coefficient and the phase matrices stay
+        consistent whichever is requested first. Returns immediately if
+        the cache is already filled. A single depth is tabulated when
+        neither the backscattering ratio nor the scattering coefficient
+        varies vertically.
+
+        Parameters
+        ----------
+        wav : ndarray
+            Wavelengths in nm. Only used if `pfwav` is None.
+        z : ndarray
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
+        use_old_calc_iphase : bool, optional
+            Use the old way to compute iphase (deprecated). Currently
+            unused.
+
+        Raises
+        ------
+        Exception
+            If the backscattering ratio is not defined at the
+            tabulation wavelengths.
         '''
         if self._coef_trunc is not None:
             return
@@ -468,6 +571,23 @@ class Hydrosol(object):
         '''
         Truncation factor mapped from the tabulation grid of the phase
         matrices onto the given wavelength and depth grids.
+
+        Must be called after `_resolve_truncation` has filled the cache.
+
+        Parameters
+        ----------
+        wav : ndarray
+            Wavelengths in nm.
+        z : ndarray
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
+        use_old_calc_iphase : bool, optional
+            Use the old way to compute iphase (deprecated).
+
+        Returns
+        -------
+        ndarray
+            Truncation factor with dimensions [len(wav), len(z)].
         '''
         # only called once _resolve_truncation has filled the cache
         assert (self._pha is not None) and (self._coef_trunc is not None)
@@ -481,9 +601,24 @@ class Hydrosol(object):
     def scattering(self, pha: xr.DataArray) -> NDArray | None:
         '''
         Scattering coefficient in m-1 of the hydrosol, on the tabulation
-        grid of the given phase matrices `pha`, i.e. with dimensions
-        [wav_phase, z_phase]. Used to weight the hydrosols when averaging
-        their phase matrices.
+        grid of the given phase matrices.
+
+        Used to weight the hydrosols when averaging their phase
+        matrices in `Water1D.phase`.
+
+        Parameters
+        ----------
+        pha : DataArray
+            Phase matrices of this hydrosol, whose `wav_phase` and
+            `z_phase` coordinates define the grid of the output.
+
+        Returns
+        -------
+        ndarray or None
+            Scattering coefficient in m-1 with dimensions [wav_phase,
+            z_phase], corrected for the phase matrix truncation when
+            the phase matrices are derived rather than supplied. None
+            if the truncation has not been resolved yet.
         '''
         if self._phase is None:
             return self._bsca
@@ -504,9 +639,10 @@ class Hydrosol(object):
         Parameters
         ----------
         wav : ndarray
-            Wavelengths in nm
+            Wavelengths in nm.
         z : ndarray
-            Profile of depths in m
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
         phase : bool, optional
             Whether the phase matrices are calculated. If False, no
             truncation correction is applied.
@@ -515,9 +651,15 @@ class Hydrosol(object):
 
         Returns
         -------
-        dict
+        IOPDict
             Same as the `iop` method, with 'bp' scaled by the truncation
             factor.
+
+        Raises
+        ------
+        Exception
+            If the hydrosol scatters but neither the phase matrices nor
+            the backscattering ratio have been provided.
         '''
         iop = self.iop(wav, z)
 
@@ -534,22 +676,43 @@ class Hydrosol(object):
 
 class HydrosolPR(Hydrosol):
     '''
-    Initialize the chlorophyll-driven hydrosol model, using a similar IOP
+    Chlorophyll-driven hydrosol model, using a similar IOP
     parameterization as Polymer's PR model.
+
+    The absorption, scattering and backscattering ratio are all derived
+    from a single chlorophyll concentration, which does not vary with
+    depth.
 
     Parameters
     ----------
     chl : float
-        Chlorophyll concentration in mg/m3
+        Chlorophyll concentration in mg/m3.
     n_theta : int, optional
-        Number of angles of the derived phase matrices
+        Number of angles of the derived phase matrices.
     theta_trunc : float, optional
-        Truncation angle in degrees of the derived phase matrices
-    pfwav : None or array_like, optional
-        Wavelengths at which the phase matrices are calculated. If None,
-        they are calculated at all wavelengths.
+        Truncation angle in degrees of the derived phase matrices.
+    pfwav : array_like or None, optional
+        Wavelengths in nm at which the phase matrices are calculated. If
+        None, they are calculated at all wavelengths.
     fqyc : float, optional
-        Chlorophyll a fluorescence quantum yield
+        Chlorophyll a fluorescence quantum yield.
+
+    Notes
+    -----
+    The phytoplankton absorption follows Bricaud et al. (1998), the CDM
+    absorption Bricaud et al. (2012), and the phase matrices are derived
+    from the backscattering ratio as in the base class.
+
+    References
+    ----------
+    .. [1] A. Bricaud, A. Morel, M. Babin, K. Allali, and H. Claustre,
+       "Variations of light absorption by suspended particles with
+       chlorophyll a concentration in oceanic (case 1) waters," J.
+       Geophys. Res. 103, 31033-31044 (1998).
+    .. [2] A. Bricaud, A. M. Ciotti, and B. Gentili, "Spatial-temporal
+       variations in phytoplankton size and colored detrital matter
+       absorption at global and regional scales," Global Biogeochem.
+       Cycles 26, GB1010 (2012).
 
     Examples
     --------
@@ -578,20 +741,41 @@ class HydrosolPR(Hydrosol):
         self.bricaud['E'] = xr.DataArray(1-ap_bricaud[:,2], dims=['wav'])
 
     def _trunc_scaling(self) -> float:
+        '''
+        Factor applied to the scattering coefficient, on top of the
+        truncation factor (see `Hydrosol._trunc_scaling`).
+
+        Returns
+        -------
+        float
+            Always 0.5, the normalization of the Park & Ruddick phase
+            function mixture used by this model.
+        '''
         return 0.5
 
     def iop(self, wav: NDArray, z: NDArray) -> IOPDict:
         '''
-        Inherent optical properties calculation. The chlorophyll
-        concentration does not vary with depth, so the coefficients are
-        broadcast over the depth profile.
+        Inherent optical properties derived from the chlorophyll
+        concentration.
+
+        The chlorophyll concentration does not vary with depth, so the
+        coefficients are computed spectrally and then broadcast over the
+        depth profile.
 
         Parameters
         ----------
         wav : ndarray
-            Wavelengths in nm
+            Wavelengths in nm.
         z : ndarray
-            Profile of depths in m
+            Vertical grid of the water column in m. Only its length is
+            used, since the coefficients are depth-independent.
+
+        Returns
+        -------
+        IOPDict
+            Same entries as `Hydrosol.iop`. Here 'ap' and 'aphy' are
+            both the phytoplankton absorption, 'acdom' is the CDM
+            absorption, and 'bbp_ratio' is always defined.
         '''
         wav = np.asarray(wav, dtype='float')
         chl = self.chl
@@ -630,6 +814,7 @@ class HydrosolPR(Hydrosol):
         shp = (len(wav), len(z))
 
         def as_2d(x: NDArray) -> NDArray:
+            '''Broadcast the spectrum `x` over the depth profile.'''
             return np.broadcast_to(x[:,None], shp).copy()
 
         aphy_2d = as_2d(aphy)
@@ -644,8 +829,8 @@ class HydrosolPR(Hydrosol):
 
 class HydrosolZhai(Hydrosol):
     '''
-    Initialize the chlorophyll-driven hydrosol model described in Zhai et
-    al. (2017), where the chlorophyll concentration varies with depth.
+    Chlorophyll-driven hydrosol model described in Zhai et al. (2017),
+    where the chlorophyll concentration varies with depth.
 
     Parameters
     ----------
@@ -655,12 +840,12 @@ class HydrosolZhai(Hydrosol):
         the surface value only, unlike the depth-independent `chl` of
         HydrosolPR.
     n_theta : int, optional
-        Number of angles of the derived phase matrices
+        Number of angles of the derived phase matrices.
     theta_trunc : float, optional
-        Truncation angle in degrees of the derived phase matrices
-    pfwav : None or array_like, optional
-        Wavelengths at which the phase matrices are calculated. If None,
-        they are calculated at all wavelengths.
+        Truncation angle in degrees of the derived phase matrices.
+    pfwav : array_like or None, optional
+        Wavelengths in nm at which the phase matrices are calculated. If
+        None, they are calculated at all wavelengths.
     euphotic_depth : float or None, optional
         Euphotic depth in m, noted Z_eu in [2]_. This is a positive
         depth, measured downwards from the surface, and not a z
@@ -668,15 +853,23 @@ class HydrosolZhai(Hydrosol):
         convention of being negative below the surface. If None, it is
         computed from the chlorophyll climatology of [2]_.
     mixed : bool, optional
-        Mixed or stratified waters
+        Mixed (True) or stratified (False) waters. Only used to derive
+        `euphotic_depth` from the climatology when it is not provided.
     fqyc : float, optional
-        Chlorophyll a fluorescence quantum yield
+        Chlorophyll a fluorescence quantum yield.
 
     Notes
     -----
     The chlorophyll profile is a continuous function of depth, so the
     coefficients are evaluated at whichever depths the Water1D profile
     provides.
+
+    The vertical shape of the chlorophyll profile is the stratified
+    trophic case 1 parametrization of [2]_, a Gaussian on a linear
+    background expressed in reduced depth (see `chi` and `chl`). The
+    Bricaud (1998) phytoplankton absorption is extended down to 360 nm
+    following Wei et al. (2016), the spectral slope being taken
+    symmetrical with respect to 440 nm over the 360-520 nm range.
 
     References
     ----------
@@ -746,17 +939,61 @@ class HydrosolZhai(Hydrosol):
         self.dzeta    = 0.393
 
     def chi(self, zeta: float | NDArray) -> float | NDArray:
+        '''
+        Reduced chlorophyll concentration at the reduced depth zeta.
+
+        This is the dimensionless vertical shape of the chlorophyll
+        profile: a Gaussian deep maximum on a linearly decreasing
+        background, as parametrized by Uitz et al. (2006).
+
+        Parameters
+        ----------
+        zeta : float or ndarray
+            Reduced depth, i.e. the depth divided by the euphotic depth
+            (positive, 1 at the euphotic depth).
+
+        Returns
+        -------
+        float or ndarray
+            Reduced chlorophyll concentration (dimensionless), same
+            shape as `zeta`.
+        '''
         return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.dzeta)**2)
 
     def chl(self, z: NumericArrayLike) -> NDArray:
         '''
-        Chlorophyll concentration in mg/m3 at the depths z (in m)
+        Chlorophyll concentration at the given z coordinates.
+
+        The reduced profile `chi` is rescaled so that its value at the
+        surface is `chl_surf`, and clipped to a small positive value
+        where the parametrization would turn negative.
+
+        Parameters
+        ----------
+        z : array_like
+            Vertical grid of the water column in m. The sign is
+            irrelevant, since only the distance to the surface matters.
+
+        Returns
+        -------
+        ndarray
+            Chlorophyll concentration in mg/m3, same shape as `z`.
         '''
         zeta = np.abs(np.asarray(z, dtype='float')/self.euphotic_depth)
         chl = self.chl_surf*self.chi(zeta)/self.chi(0.)
         return np.where(chl < 0., 1e-8, chl)
 
     def _trunc_scaling(self) -> float:
+        '''
+        Factor applied to the scattering coefficient, on top of the
+        truncation factor (see `Hydrosol._trunc_scaling`).
+
+        Returns
+        -------
+        float
+            Always 0.5, the normalization of the Park & Ruddick phase
+            function mixture used by this model.
+        '''
         return 0.5
 
     def iop(
@@ -768,18 +1005,34 @@ class HydrosolZhai(Hydrosol):
         r2: float = 0.5,
     ) -> IOPDict:
         '''
-        Inherent optical properties calculation
+        Inherent optical properties derived from the chlorophyll
+        profile.
+
+        The chlorophyll concentration is evaluated at each z coordinate
+        (see `chl`), and the absorption, scattering and backscattering
+        are made covariant with it.
 
         Parameters
         ----------
         wav : ndarray
-            Wavelengths in nm
+            Wavelengths in nm.
         z : ndarray
-            Profile of depths in m
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
         p1, r1 : float, optional
-            Parameters related to particles extinction, see Zhai et al. 2017
+            Parameters related to particles extinction, see Zhai et al.
+            2017. Currently unused.
         r2 : float, optional
-            Parameter related to CDOM absorption, see Zhai et al. 2017
+            Parameter related to CDOM absorption, see Zhai et al. 2017.
+            Currently unused.
+
+        Returns
+        -------
+        IOPDict
+            Same entries as `Hydrosol.iop`, all varying with depth.
+            Here 'ap' and 'aphy' are both the phytoplankton absorption,
+            'acdom' is the CDOM absorption covariant with it, and
+            'bbp_ratio' is that of the non-algal particles.
         '''
         wav = np.asarray(wav, dtype='float')
         chl2, wav2 = np.meshgrid(self.chl(z), wav)
@@ -835,7 +1088,7 @@ class Water(object):
 
 class Water1D(Water):
     '''
-    1D water column profile definition
+    1D water column profile definition.
 
     Pure water absorption and scattering are always present and computed
     here; hydrosols are added through the `comp` parameter.
@@ -901,22 +1154,37 @@ class Water1D(Water):
         use_old_calc_iphase: bool = False,
     ) -> xr.Dataset:
         '''
-        Profile and phase matrix calculation at bands / wav
+        Profile and phase matrix calculation at the given wavelengths.
+
+        The pure water and hydrosol coefficients are summed over the
+        water column and cumulated into optical thicknesses along
+        `grid`. The fluorescing fraction of the phytoplankton absorption
+        is counted as (inelastic) scattering rather than absorption.
 
         Parameters
         ----------
         wav : array_like or BandSet
-            Wavelengths at which to calculate the profile.
+            Wavelengths in nm at which to calculate the profile.
         phase : bool, optional
-            Whether to calculate the phase matrices.
+            Whether to calculate the phase matrices. If False, the
+            scattering coefficients are not corrected for the phase
+            matrix truncation either.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
 
         Returns
         -------
         out : Dataset
-            An xarray Dataset object with the profile and (if phase =
-            True) the phase matrices.
+            The profile, with coordinates `wavelength` and `z_oc`. It
+            holds the cumulated optical thicknesses ('OD_oc' and its
+            decomposition into 'OD_w', 'OD_p_oc', 'OD_y', 'OD_sca_oc'
+            and 'OD_abs_oc'), the single scattering albedos ('ssa_oc',
+            'ssa_p_oc', 'ssa_w'), the scattering ratios ('pmol_oc',
+            'pine_oc'), the fluorescence quantum yield ('FQY1_oc'), the
+            temperature ('T_oc') and the sea floor albedo
+            ('albedo_seafloor'). If `phase` is True and at least one
+            hydrosol scatters, it also holds 'phase_oc' and 'iphase_oc'
+            on the added `theta_oc` coordinate.
         '''
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
@@ -1075,10 +1343,13 @@ class Water1D(Water):
         Calculate the phase matrices of the hydrosols, averaged over the
         hydrosols and weighted by their scattering coefficient.
 
+        The depths are those of `grid`. When a single hydrosol
+        scatters, its phase matrices are returned unchanged.
+
         Parameters
         ----------
         wav : ndarray
-            Wavelengths in nm
+            Wavelengths in nm.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
 
@@ -1087,6 +1358,13 @@ class Water1D(Water):
         out : DataArray or None
             The phase matrices with dimensions [wav_phase, z_phase, stk,
             theta_oc], or None if no hydrosol scatters.
+
+        Raises
+        ------
+        ValueError
+            If several hydrosols scatter but their phase matrices are
+            not tabulated on the same `wav_phase`, `z_phase` and
+            `theta_oc` grids, so that they cannot be averaged.
         '''
         z = self.grid
 
@@ -1131,7 +1409,7 @@ class Water1D(Water):
 
 class WaterRw(Water):
     '''
-    Initialize the water reflectance model
+    Water reflectance model.
 
     The water is defined as a lambertian reflector placed just below the
     air-water interface, without any water column: the water body has
@@ -1169,9 +1447,9 @@ class WaterRw(Water):
     when the magnitude of R(0-) is exact.
 
     The same model can be obtained with an empty Water1D profile of null
-    thickness:
+    thickness::
 
-    >>> Water1D(grid=[0., 0.], comp=[], alb=alb)
+        Water1D(grid=[0., 0.], comp=[], alb=alb)
 
     Both give the same optical thicknesses, single scattering albedo and
     seafloor albedo (pure water drops out on its own, since the layer has
@@ -1190,7 +1468,24 @@ class WaterRw(Water):
 
     def calc(self, wav: NumericArrayLike | BandSet) -> xr.Dataset:
         '''
-        Profile and phase function calculation at bands wav (nm)
+        Profile calculation at the given wavelengths.
+
+        The water body has no thickness, so all the optical thicknesses
+        are null and no phase matrix is computed. The only meaningful
+        variable is 'albedo_seafloor', which carries the reflectance of
+        the lambertian reflector.
+
+        Parameters
+        ----------
+        wav : array_like or BandSet
+            Wavelengths in nm at which to calculate the profile.
+
+        Returns
+        -------
+        out : Dataset
+            The profile, with the same variables as the one returned by
+            `Water1D.calc` except the phase matrices, 'ssa_p_oc' and
+            'ssa_w'. The `z_oc` coordinate holds two null levels.
         '''
         if not isinstance(wav, BandSet):
             wav = BandSet(wav)
