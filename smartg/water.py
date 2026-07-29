@@ -65,18 +65,28 @@ from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
 from smartg.typing import PathType, NumericArrayLike
 from pathlib import Path
-from typing import TypeAlias
+from typing import TypeAlias, TypedDict, cast
 from numpy.typing import NDArray
 from luts.luts import LUT
 
 
 AlbedoLike: TypeAlias = AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap
 
-# Inherent optical properties returned by the `iop` and `coeffs` methods
-# of the hydrosols: coefficients with dimensions [nwav, nz], keyed by
-# name. The 'bbp_ratio' entry is None when no backscattering ratio is
-# available.
-IOPDict: TypeAlias = dict[str, NDArray | None]
+
+class IOPDict(TypedDict):
+    """
+    Inherent optical properties returned by the `iop` and `coeffs`
+    methods of the hydrosols. All entries are coefficients in m-1 with
+    dimensions [nwav, nz], except `bbp_ratio` which is dimensionless and
+    may be None when no backscattering ratio is available.
+    """
+
+    ap: NDArray
+    bp: NDArray
+    acdom: NDArray
+    bbp_ratio: NDArray | None
+    aphy: NDArray
+    fqyc: NDArray
 
 
 def diff2(x: NumericArrayLike) -> NDArray:
@@ -134,7 +144,7 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
 
     # Pope&Fry
     with open(Path(dir_aux) / "water" / "pope97.dat", "rb") as fp:
-        for i in range(6):
+        for _ in range(6):
             fp.readline()  # skip the first 6 lines
         data_pf = np.genfromtxt(fp)
     aw_pf = data_pf[:, 1] * 100  #  convert from cm-1 to m-1
@@ -172,6 +182,7 @@ def _expand_phase_4_to_6(
         return None
     if hasattr(phase, 'to_xarray'):
         phase = phase.to_xarray()
+    phase = cast(xr.DataArray, phase)
     if phase.shape[2] != 4:
         return phase
 
@@ -293,7 +304,7 @@ class Hydrosol(object):
                 raise ValueError(
                     'Cannot evaluate the hydrosol coefficients over '
                     + f'{len(wav)} wavelengths and {len(z)} depths: the '
-                    + f'provided arrays have shape {x.shape}.')
+                    + f'provided arrays have shape {x.shape}.') from None
 
         ap = as_2d(self.ap)
         return {'ap': ap,
@@ -431,6 +442,9 @@ class Hydrosol(object):
         z = np.asarray(z, dtype='float')
         iop = self.iop(wav_pha, z)
         bbp_ratio, bp = iop['bbp_ratio'], iop['bp']
+        if bbp_ratio is None:
+            raise Exception('No phase function nor bbp_ratio has been '
+                            'provided, but bp>0')
 
         # tabulate a single depth if neither the phase matrices nor the
         # scattering coefficient vary vertically, to avoid duplicating
@@ -455,6 +469,9 @@ class Hydrosol(object):
         Truncation factor mapped from the tabulation grid of the phase
         matrices onto the given wavelength and depth grids.
         '''
+        # only called once _resolve_truncation has filled the cache
+        assert (self._pha is not None) and (self._coef_trunc is not None)
+
         # index with ipha, so that each wavelength/depth gets the factor
         # of the phase matrix it is actually assigned to
         _, ipha = calc_iphase(self._pha, np.asarray(wav), np.asarray(z),
@@ -728,7 +745,7 @@ class HydrosolZhai(Hydrosol):
         self.zeta_max = 0.969
         self.dzeta    = 0.393
 
-    def chi(self, zeta: NumericArrayLike) -> float | NDArray:
+    def chi(self, zeta: float | NDArray) -> float | NDArray:
         return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.dzeta)**2)
 
     def chl(self, z: NumericArrayLike) -> NDArray:
@@ -852,7 +869,8 @@ class Water1D(Water):
         the latter is set by the `surf` parameter of `smartg.run()`
         (e.g. `LambSurface(ALB=...)` or `RoughSurface(...)`). It fills
         the `albedo_seafloor` variable of the profile returned by
-        `calc()`.
+        `calc()`. If None, a black (non-reflecting) sea floor is used,
+        i.e. `AlbedoCst(0.)`.
 
     Examples
     --------
@@ -862,17 +880,17 @@ class Water1D(Water):
 
     def __init__(
         self,
-        grid: NumericArrayLike = [0, -10000],
+        grid: NumericArrayLike = (0, -10000),
         comp: list[Hydrosol] | None = None,
-        aw: NumericArrayLike | None = None,
-        bw: NumericArrayLike | None = None,
-        alb: AlbedoLike = AlbedoCst(0.),
+        aw: NDArray | None = None,
+        bw: NDArray | None = None,
+        alb: AlbedoLike | None = None,
     ) -> None:
         self.grid = np.array(grid, dtype='float')
         self.comp = [] if comp is None else comp
         self.aw = aw
         self.bw = bw
-        self.alb = alb
+        self.alb = AlbedoCst(0.) if alb is None else alb
 
         self.aw_table = _read_aw(dir_aux)
 
@@ -1093,8 +1111,8 @@ class Water1D(Water):
                         + f'same {dim} grid to be averaged. Use a common '
                         + 'pfwav, or provide the phase matrices directly.')
 
-        pha_tot = 0.
-        bsca = 0.
+        pha_tot: xr.DataArray | float = 0.
+        bsca: xr.DataArray | float = 0.
         for comp, pha in phases:
             # weight each hydrosol by its scattering coefficient, on the
             # tabulation grid of its phase matrices
@@ -1108,7 +1126,7 @@ class Water1D(Water):
 
         with np.errstate(divide='ignore', invalid='ignore'):
             pha_tot = pha_tot/bsca
-        return pha_tot.fillna(0.)
+        return cast(xr.DataArray, pha_tot).fillna(0.)
 
 
 class WaterRw(Water):
