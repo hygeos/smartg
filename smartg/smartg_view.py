@@ -36,8 +36,7 @@ import matplotlib.pyplot as plt
 from typing import Any, Literal, Sequence, cast
 import geoclide as gc
 from luts.luts import Idx_base, MLUT, LUT
-from smartg.atmosphere import diff1
-from smartg.water import diff2
+from smartg.diff import diff1, diff1_end
 from smartg.objects3d import (
     Entity,
     GroupE,
@@ -1602,7 +1601,7 @@ def profile_view(
     z = ds_sg.coords[z_key].values
     if kind == "oc":
         sign = -1.0
-        func = diff2
+        func = diff1_end
     else:
         sign = 1.0
         func = diff1

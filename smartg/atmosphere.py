@@ -69,6 +69,7 @@ import xarray as xr
 import re
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 from smartg.typing import NumericArrayLike, PathType, RealNumber
+from smartg.diff import diff1
 from numpy.typing import NDArray
 from typing import Any, cast
 from luts.luts import LUT
@@ -3694,57 +3695,6 @@ def refractivity(
         1.0 + p_pa * (60.1 - 0.972 * t_c) * 1e-10
     ) / (96095.43 * (1 + 0.003661 * t_c))
     return ntp
-
-
-def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> NDArray:
-    """
-    Calculate the first difference of an array along a specified axis.
-
-    Computes the difference between consecutive elements of the array
-    along
-    the specified axis using `numpy.diff`. By default (samesize=True),
-    preserves the original array shape by padding with zeros.
-
-    Parameters
-    ----------
-    a : ndarray
-        Input array for which to compute differences.
-    axis : int, optional
-        Axis along which differences are computed. Default is 0.
-    samesize : bool, optional
-        If True (default), the output has the same shape as the input
-        array
-        with the first slice along the specified axis set to zero. If
-        False,
-        the output has size reduced by 1 along the specified axis.
-
-    Returns
-    -------
-    ndarray
-        Differences between consecutive elements along the specified
-        axis.
-        If `samesize=True`, the result has the same shape as `a`.
-        If `samesize=False`, the result has shape ``a.shape[axis] - 1``
-        along
-        the specified axis.
-
-    Examples
-    --------
-    >>> a = np.array([[1, 2, 4, 8], [10, 20, 40, 80]])
-    >>> diff1(a, axis=0, samesize=True)
-    array([[ 0,  0,  0,  0],
-           [ 9, 18, 36, 72]])
-    >>> diff1(a, axis=0, samesize=False) # equivalent to np.diff(a, axis=0)
-    array([[ 9, 18, 36, 72]])
-    """
-    if samesize:
-        b = np.zeros_like(a)
-        key = [slice(None)] * a.ndim
-        key[axis] = slice(1, None, None)
-        b[tuple(key)] = np.diff(a, axis=axis)[:]
-        return b
-    else:
-        return np.diff(a, axis=axis)
 
 
 def od2k(

@@ -23,7 +23,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from smartg.smartg import Smartg
 from smartg.smartg import LambSurface, AlbedoCst
-from smartg.atmosphere import Atm1D, AerOPAC, od2k, diff1
+from smartg.atmosphere import Atm1D, AerOPAC, od2k
+from smartg.diff import diff1
 from luts import LUT
 from smartg.smartg_view import mdesc
 from smartg import conftest

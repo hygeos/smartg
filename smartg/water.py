@@ -55,7 +55,7 @@ WaterRw
 from __future__ import annotations
 import numpy as np
 import xarray as xr
-from smartg.atmosphere import diff1
+from smartg.diff import diff1
 from smartg.albedo import AlbedoCst, AlbedoLike
 from smartg.phase import (
     integ_phase, calc_iphase, fournier_forand, expand_phase_4_to_6
@@ -84,28 +84,6 @@ class IOPDict(TypedDict):
     bbp_ratio: NDArray | None
     aphy: NDArray
     fqyc: NDArray
-
-
-def diff2(x: NumericArrayLike) -> NDArray:
-    """
-    Compute the discrete difference of an array with a zero appended at the end.
-
-    This is equivalent to ``numpy.ediff1d(x, to_end=[0.])``, which computes
-    ``x[i+1] - x[i]`` for each element and appends a zero as the final value,
-    so the output has the same length as the input.
-
-    Parameters
-    ----------
-    x : array_like
-        Input array.
-
-    Returns
-    -------
-    ndarray
-        The discrete difference array, same shape as `x`, with a zero
-        appended at the end.
-    """
-    return np.ediff1d(x, to_end=[0.])
 
 
 def _read_aw(dir_aux: PathType) -> xr.DataArray:
