@@ -52,18 +52,31 @@ WaterRw
     without any water column optics.
 """
 
-from __future__ import print_function, division, absolute_import
+from __future__ import annotations
 import numpy as np
 import xarray as xr
 from smartg.atmosphere import diff1
-from smartg.albedo import AlbedoCst
+from smartg.albedo import (
+    AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
+)
 from smartg.phase import integ_phase, calc_iphase, fournier_forand
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
 from smartg.typing import PathType, NumericArrayLike
 from pathlib import Path
+from typing import TypeAlias
 from numpy.typing import NDArray
+from luts.luts import LUT
+
+
+AlbedoLike: TypeAlias = AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap
+
+# Inherent optical properties returned by the `iop` and `coeffs` methods
+# of the hydrosols: coefficients with dimensions [nwav, nz], keyed by
+# name. The 'bbp_ratio' entry is None when no backscattering ratio is
+# available.
+IOPDict: TypeAlias = dict[str, NDArray | None]
 
 
 def diff2(x: NumericArrayLike) -> NDArray:
@@ -147,7 +160,9 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
     return aw
 
 
-def _expand_phase_4_to_6(phase):
+def _expand_phase_4_to_6(
+    phase: xr.DataArray | LUT | None,
+) -> xr.DataArray | None:
     """
     Convert a 4-term (F11, F21, F33, F34) phase matrix into its 6-term
     equivalent by duplicating F22 = F11 and F44 = F33. Returns the input
@@ -220,8 +235,17 @@ class Hydrosol(object):
        waters," Appl. Opt. 44, 1236-1249 (2005).
     '''
 
-    def __init__(self, phase=None, bp=None, ap=None, acdom=None,
-                 bbp_ratio=None, n_theta=721, theta_trunc=5., pfwav=None):
+    def __init__(
+        self,
+        phase: xr.DataArray | LUT | None = None,
+        bp: NumericArrayLike | None = None,
+        ap: NumericArrayLike | None = None,
+        acdom: NumericArrayLike | None = None,
+        bbp_ratio: NumericArrayLike | None = None,
+        n_theta: int = 721,
+        theta_trunc: float = 5.,
+        pfwav: NumericArrayLike | None = None,
+    ) -> None:
         self.bp = bp
         self.ap = ap
         self.acdom = acdom
@@ -231,11 +255,11 @@ class Hydrosol(object):
         self.theta_trunc = theta_trunc
         self.pfwav = None if pfwav is None else np.array(pfwav)
 
-        self._pha = None
-        self._coef_trunc = None
-        self._bsca = None
+        self._pha: xr.DataArray | None = None
+        self._coef_trunc: xr.DataArray | None = None
+        self._bsca: NDArray | None = None
 
-    def iop(self, wav, z):
+    def iop(self, wav: NDArray, z: NDArray) -> IOPDict:
         '''
         Inherent optical properties of the hydrosol at the given
         wavelengths and depths.
@@ -259,7 +283,7 @@ class Hydrosol(object):
         shp = (len(wav), len(z))
         zeros = np.zeros(shp, dtype='float')
 
-        def as_2d(x):
+        def as_2d(x: NumericArrayLike | None) -> NDArray:
             if x is None:
                 return zeros.copy()
             x = np.asarray(x, dtype='float')
@@ -281,14 +305,19 @@ class Hydrosol(object):
                 'fqyc': zeros.copy(),
                 }
 
-    def _trunc_scaling(self):
+    def _trunc_scaling(self) -> float:
         '''
         Factor applied to the scattering coefficient to account for the
         truncation of the phase matrix forward peak.
         '''
         return 1.
 
-    def calc_phase(self, wav, z, bbp_ratio):
+    def calc_phase(
+        self,
+        wav: NDArray,
+        z: NDArray,
+        bbp_ratio: NDArray,
+    ) -> tuple[xr.DataArray, xr.DataArray]:
         '''
         Calculate the phase matrices and the associated truncation
         factor, as a mixture of two Fournier-Forand phase functions
@@ -351,7 +380,12 @@ class Hydrosol(object):
 
         return pha_da, coef_trunc
 
-    def phase(self, wav, z, use_old_calc_iphase=False):
+    def phase(
+        self,
+        wav: NDArray,
+        z: NDArray,
+        use_old_calc_iphase: bool = False,
+    ) -> xr.DataArray | None:
         '''
         Phase matrices of the hydrosol, with dimensions [wav_phase,
         z_phase, stk, theta_oc]. Returns None if the hydrosol does not
@@ -378,7 +412,12 @@ class Hydrosol(object):
         self._resolve_truncation(wav, z, use_old_calc_iphase)
         return self._pha
 
-    def _resolve_truncation(self, wav, z, use_old_calc_iphase=False):
+    def _resolve_truncation(
+        self,
+        wav: NDArray,
+        z: NDArray,
+        use_old_calc_iphase: bool = False,
+    ) -> None:
         '''
         Compute the phase matrices at the tabulation wavelengths `pfwav`,
         along with the associated truncation factor. The result is
@@ -406,7 +445,12 @@ class Hydrosol(object):
                                                       bbp_ratio[:,sl])
         self._bsca = bp[:,sl] * self._coef_trunc.values * self._trunc_scaling()
 
-    def _coef_trunc_on(self, wav, z, use_old_calc_iphase=False):
+    def _coef_trunc_on(
+        self,
+        wav: NDArray,
+        z: NDArray,
+        use_old_calc_iphase: bool = False,
+    ) -> NDArray:
         '''
         Truncation factor mapped from the tabulation grid of the phase
         matrices onto the given wavelength and depth grids.
@@ -417,7 +461,7 @@ class Hydrosol(object):
                               use_old_calc_iphase)
         return self._coef_trunc.values.ravel()[ipha]
 
-    def scattering(self, pha):
+    def scattering(self, pha: xr.DataArray) -> NDArray | None:
         '''
         Scattering coefficient in m-1 of the hydrosol, on the tabulation
         grid of the given phase matrices `pha`, i.e. with dimensions
@@ -429,7 +473,13 @@ class Hydrosol(object):
         return self.iop(pha.coords['wav_phase'].values,
                         pha.coords['z_phase'].values)['bp']
 
-    def coeffs(self, wav, z, phase=True, use_old_calc_iphase=False):
+    def coeffs(
+        self,
+        wav: NDArray,
+        z: NDArray,
+        phase: bool = True,
+        use_old_calc_iphase: bool = False,
+    ) -> IOPDict:
         '''
         Inherent optical properties of the hydrosol, with the scattering
         coefficient corrected for the phase matrix truncation.
@@ -490,8 +540,14 @@ class HydrosolPR(Hydrosol):
     >>> water = Water1D(grid=[0, -5.], comp=[HydrosolPR(chl=0.5)])
     '''
 
-    def __init__(self, chl, n_theta=72001, theta_trunc=5., pfwav=None,
-                 fqyc=0.0):
+    def __init__(
+        self,
+        chl: float,
+        n_theta: int = 72001,
+        theta_trunc: float = 5.,
+        pfwav: NumericArrayLike | None = None,
+        fqyc: float = 0.0,
+    ) -> None:
         super().__init__(n_theta=n_theta, theta_trunc=theta_trunc, pfwav=pfwav)
         self.chl = chl
         self.fqyc = fqyc
@@ -504,10 +560,10 @@ class HydrosolPR(Hydrosol):
         self.bricaud['A'] = xr.DataArray(ap_bricaud[:,1], dims=['wav'])
         self.bricaud['E'] = xr.DataArray(1-ap_bricaud[:,2], dims=['wav'])
 
-    def _trunc_scaling(self):
+    def _trunc_scaling(self) -> float:
         return 0.5
 
-    def iop(self, wav, z):
+    def iop(self, wav: NDArray, z: NDArray) -> IOPDict:
         '''
         Inherent optical properties calculation. The chlorophyll
         concentration does not vary with depth, so the coefficients are
@@ -556,7 +612,7 @@ class HydrosolPR(Hydrosol):
 
         shp = (len(wav), len(z))
 
-        def as_2d(x):
+        def as_2d(x: NDArray) -> NDArray:
             return np.broadcast_to(x[:,None], shp).copy()
 
         aphy_2d = as_2d(aphy)
@@ -617,8 +673,16 @@ class HydrosolZhai(Hydrosol):
        C08005 (2006).
     '''
 
-    def __init__(self, chl_surf, n_theta=7201, theta_trunc=5., pfwav=None,
-                 euphotic_depth=None, mixed=False, fqyc=0.):
+    def __init__(
+        self,
+        chl_surf: float,
+        n_theta: int = 7201,
+        theta_trunc: float = 5.,
+        pfwav: NumericArrayLike | None = None,
+        euphotic_depth: float | None = None,
+        mixed: bool = False,
+        fqyc: float = 0.,
+    ) -> None:
         super().__init__(n_theta=n_theta, theta_trunc=theta_trunc, pfwav=pfwav)
         self.chl_surf = chl_surf
         self.fqyc = fqyc
@@ -664,10 +728,10 @@ class HydrosolZhai(Hydrosol):
         self.zeta_max = 0.969
         self.dzeta    = 0.393
 
-    def chi(self, zeta):
+    def chi(self, zeta: NumericArrayLike) -> float | NDArray:
         return self.chi_b - self.s*zeta + self.chi_max*np.exp(-((zeta-self.zeta_max)/self.dzeta)**2)
 
-    def chl(self, z):
+    def chl(self, z: NumericArrayLike) -> NDArray:
         '''
         Chlorophyll concentration in mg/m3 at the depths z (in m)
         '''
@@ -675,10 +739,17 @@ class HydrosolZhai(Hydrosol):
         chl = self.chl_surf*self.chi(zeta)/self.chi(0.)
         return np.where(chl < 0., 1e-8, chl)
 
-    def _trunc_scaling(self):
+    def _trunc_scaling(self) -> float:
         return 0.5
 
-    def iop(self, wav, z, p1=0.33, r1=0.5, r2=0.5):
+    def iop(
+        self,
+        wav: NDArray,
+        z: NDArray,
+        p1: float = 0.33,
+        r1: float = 0.5,
+        r2: float = 0.5,
+    ) -> IOPDict:
         '''
         Inherent optical properties calculation
 
@@ -789,8 +860,14 @@ class Water1D(Water):
     >>> water = Water1D(comp=[HydrosolPR(chl=0.5)])
     '''
 
-    def __init__(self, grid=[0, -10000], comp=None, aw=None, bw=None,
-                 alb=AlbedoCst(0.)):
+    def __init__(
+        self,
+        grid: NumericArrayLike = [0, -10000],
+        comp: list[Hydrosol] | None = None,
+        aw: NumericArrayLike | None = None,
+        bw: NumericArrayLike | None = None,
+        alb: AlbedoLike = AlbedoCst(0.),
+    ) -> None:
         self.grid = np.array(grid, dtype='float')
         self.comp = [] if comp is None else comp
         self.aw = aw
@@ -799,7 +876,12 @@ class Water1D(Water):
 
         self.aw_table = _read_aw(dir_aux)
 
-    def calc(self, wav, phase=True, use_old_calc_iphase=False):
+    def calc(
+        self,
+        wav: NumericArrayLike | BandSet,
+        phase: bool = True,
+        use_old_calc_iphase: bool = False,
+    ) -> xr.Dataset:
         '''
         Profile and phase matrix calculation at bands / wav
 
@@ -966,7 +1048,11 @@ class Water1D(Water):
 
         return pro
 
-    def phase(self, wav, use_old_calc_iphase=False):
+    def phase(
+        self,
+        wav: NDArray,
+        use_old_calc_iphase: bool = False,
+    ) -> xr.DataArray | None:
         '''
         Calculate the phase matrices of the hydrosols, averaged over the
         hydrosols and weighted by their scattering coefficient.
@@ -1081,10 +1167,10 @@ class WaterRw(Water):
     >>> water = WaterRw(alb=AlbedoCst(0.05))
     '''
 
-    def __init__(self, alb):
+    def __init__(self, alb: AlbedoLike) -> None:
         self.alb = alb
 
-    def calc(self, wav):
+    def calc(self, wav: NumericArrayLike | BandSet) -> xr.Dataset:
         '''
         Profile and phase function calculation at bands wav (nm)
         '''
