@@ -188,25 +188,10 @@ def read_cld_nth_cte(filename, nb_theta=int(721)):
 
                     P.data[iwav, ireff, istk, :] = np.interp(theta, th[:nth], phase[iwav,ireff,istk,:nth],  period=np.inf)
 
-
         if (NBSTK == 4): # spherical particles
             P.data[:,:,4,:] = P.data[:,:,0,:].copy()
             P.data[:,:,5,:] = P.data[:,:,2,:].copy()
-            P0 = P.data[:,:,0,:].copy()
-            P1 = P.data[:,:,1,:].copy()
-            P4 = P.data[:,:,4,:].copy()
-            P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
-            P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
-            P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
-        elif(NBSTK == 6): # non spherical particles
-            P0 = P.data[:,:,0,:].copy()
-            P1 = P.data[:,:,1,:].copy()
-            P4 = P.data[:,:,4,:].copy()
-            P.data[:,:,0,:] = 0.5*(P0+2*P1+P4) # P11
-            P.data[:,:,1,:] = 0.5*(P0-P4)      # P12=P21
-            P.data[:,:,4,:] = 0.5*(P0-2*P1+P4) # P22
-        else:
-            raise NameError("Number of unique phase components is different than 4 or 6!")
+
         return P
 
 
