@@ -14,6 +14,7 @@ import pytest
 from smartg import conftest
 from smartg.atmosphere import Atm1D
 from smartg.config import DIR_AUXDATA
+from smartg.diff import diff1
 from smartg.iprt.iprt import compute_deltam, groupIQUV
 from smartg.libATM3D import (
     Atm3D,
@@ -65,6 +66,19 @@ GT_TRUNC = GT_trunc(
     lobatto_optimization=True,
 )
 NBPHOTONS_TRUNC = NBPHOTONS / 50
+
+# The with atmosphere cases add a homogeneous Rayleigh layer of total
+# optical depth 0.5, without depolarization. Only a subset of the cases
+# is covered: 1 and 5 in backward (a transmittance and a reflectance
+# one), and in forward the first group only, which is about 3 times
+# faster than the second one.
+TAU_RAYLEIGH = 0.5
+DEPO_ATM = 0.0
+ATM_BACKWARD_CASES = (1, 5)
+ATM_FORWARD_GROUP = 1
+# The case 5, in the nadir direction, is the slowest one: the notebook
+# reduces its photon count, which is kept here.
+NBPHOTONS_ATM_B = {1: NBPHOTONS, 5: 1e9}
 
 # Reference delta_m values (in percent) of I, Q, U and V, measured with
 # the settings above (SEED, XBLOCK, XGRID, NBPHOTONS). They are within
@@ -124,6 +138,24 @@ DELTAM_REF_NOATM_F_GT = {
     7: (0.594, 3.166, 3.282, 65.703),
     8: (0.584, 14.176, 5.457, 284.017),
     9: (0.632, 9.282, 55.220, 363.366),
+}
+
+# Same, with the Rayleigh atmosphere. The notebook saved no output at
+# all for its with atmosphere section, so unlike the tables above these
+# have no independent counterpart to be compared with. The backward
+# and the forward case 1 agree on I, Q and U (0.145 / 0.181 / 15.606
+# against 0.153 / 0.179 / 15.250), which is the only cross-check
+# available here.
+DELTAM_REF_ATM_B = {
+    1: (0.145, 0.181, 15.606, 29.253),
+    # 49 times fewer photons than the case 1, hence the larger values
+    5: (0.655, 2.749, 198.337, 161.134),
+}
+DELTAM_REF_ATM_F = {
+    1: (0.153, 0.179, 15.250, 64.613),
+    2: (0.172, 0.297, 0.296, 53.137),
+    3: (0.166, 1.158, 0.456, 65.336),
+    4: (0.168, 1.766, 21.157, 111.205),
 }
 
 # Viewing and sun geometry of the 9 IPRT C2 cases:
@@ -207,14 +239,15 @@ logger.addHandler(file_handler)
 # **********************************************************************
 
 
-def _build_atm_c2(truncation=None, **atm3_kwargs):
+def _build_atm_c2(truncation=None, tau_ray=None, **atm3_kwargs):
     """
     Build the IPRT C2 cubic cloud atmosphere.
 
     Only the molecular arguments of Atm3D differ between the with and
-    without atmosphere sections, hence the **atm3_kwargs. truncation is
-    the scattering phase truncation, applied to the 3D phase matrices
-    by Atm1D.calc.
+    without atmosphere sections, hence the **atm3_kwargs. tau_ray, if
+    given, adds a homogeneous Rayleigh layer of that total optical
+    depth. truncation is the scattering phase truncation, applied to
+    the 3D phase matrices by Atm1D.calc.
 
     Returns
     -------
@@ -251,6 +284,17 @@ def _build_atm_c2(truncation=None, **atm3_kwargs):
         reff=reff,
         phase=cld_phase,
     )
+
+    # ========= homogeneous Rayleigh layer
+    if tau_ray is not None:
+        dz = diff1(grid3.zGRID)
+        tau_ray_cs = np.cumsum((dz / grid3.zGRID[-1]) * tau_ray).reshape(
+            1, len(dz)
+        )
+        sca_ray = abs(diff1(tau_ray_cs, axis=1) / dz)
+        sca_ray[np.isnan(sca_ray)] = 0
+        atm3_kwargs["mol_sca_1d"] = sca_ray
+        atm3_kwargs["mol_abs_1d"] = np.zeros_like(sca_ray)
 
     atm3 = Atm3D(
         "afglt",
@@ -330,6 +374,14 @@ def atm_c2_noatm_gt():
 
 
 @pytest.fixture(scope="module")
+def atm_c2_atm():
+    """
+    IPRT C2 atmosphere with a homogeneous Rayleigh layer
+    """
+    return _build_atm_c2(tau_ray=TAU_RAYLEIGH)
+
+
+@pytest.fixture(scope="module")
 def sensor_grid():
     """
     The 70x70 sensor grid, identical for the 9 cases
@@ -387,9 +439,14 @@ def _find_optimal_xb_xg(sg, **run_kwargs):
     return best_xb, best_xg
 
 
-def _run_case_backward(s3db, atm_c2, sensor_grid, case):
+def _run_case_backward(
+    s3db, atm_c2, sensor_grid, case, nbphotons=NBPHOTONS, depo=None
+):
     """
     Run one backward IPRT C2 case
+
+    depo is the depolarization factor: it is only given when there is a
+    Rayleigh atmosphere, otherwise the SMART-G default is left alone.
 
     Returns
     -------
@@ -427,11 +484,13 @@ def _run_case_backward(s3db, atm_c2, sensor_grid, case):
         NF=NTH,
         stdev=True,
     )
+    if depo is not None:
+        kw["DEPO"] = depo
     xb, xg = _find_optimal_xb_xg(s3db, **kw)
 
     m = s3db.run(
         **kw,
-        NBPHOTONS=NBPHOTONS,
+        NBPHOTONS=nbphotons,
         NBLOOP=NBLOOP,
         XBLOCK=xb,
         XGRID=xg,
@@ -442,7 +501,7 @@ def _run_case_backward(s3db, atm_c2, sensor_grid, case):
 
 
 def _run_group_forward(
-    s3df, atm_c2, sensor_grid, group, nbphotons=NBPHOTONS
+    s3df, atm_c2, sensor_grid, group, nbphotons=NBPHOTONS, depo=None
 ):
     """
     Run one forward group of IPRT C2 cases
@@ -492,6 +551,8 @@ def _run_group_forward(
         NF=NTH,
         OUTPUT_LAYERS=group["output_layers"],
     )
+    if depo is not None:
+        kw["DEPO"] = depo
     xb, xg = _find_optimal_xb_xg(s3df, **kw)
 
     m = s3df.run(
@@ -724,10 +785,24 @@ def test_c2_noatm_backward(request, s3db, atm_c2_noatm, sensor_grid, case):
 
 
 def _check_group_forward(
-    request, m, norm, group, sensor_grid, refs, title_suffix, label_suffix
+    request,
+    m,
+    norm,
+    group,
+    sensor_grid,
+    refs,
+    title_suffix,
+    label_suffix,
+    mystic_offset=0,
+    i_vmin=None,
+    v_diff_frac=0.015,
 ):
     """
     Plot and check every case held by a single forward run
+
+    mystic_offset is added to the case number to reach the MYSTIC rows:
+    it is 9 for the with atmosphere cases. i_vmin, if None, is taken
+    from the SMART-G values themselves.
 
     Returns the failure messages of the whole group, so that one noisy
     case does not hide the others.
@@ -745,7 +820,7 @@ def _check_group_forward(
             mU=m[f"U{layer}"][:, iza],
             mV=m[f"V{layer}"][:, iza],
         )
-        iquv_my = _mystic_iquv(case)
+        iquv_my = _mystic_iquv(case + mystic_offset)
 
         _plot_case(
             request,
@@ -755,8 +830,10 @@ def _check_group_forward(
             case,
             sensor_grid,
             title_suffix=title_suffix,
-            i_vmin=np.min(np.abs(iquv_sg[0])),
-            v_diff_frac=0.015,
+            i_vmin=(
+                np.min(np.abs(iquv_sg[0])) if i_vmin is None else i_vmin
+            ),
+            v_diff_frac=v_diff_frac,
         )
 
         errors += _check_deltam(
@@ -832,5 +909,77 @@ def test_c2_noatm_forward_gt(
         DELTAM_REF_NOATM_F_GT,
         title_suffix="without atm - forward - GT trunc",
         label_suffix="F GT",
+    )
+    assert not errors, "\n".join(errors)
+
+
+@pytest.mark.parametrize(
+    "case", ATM_BACKWARD_CASES, ids=[f"case{i}" for i in ATM_BACKWARD_CASES]
+)
+def test_c2_atm_backward(request, s3db, atm_c2_atm, sensor_grid, case):
+    """
+    IPRT phase B, cubic cloud C2, backward, with atmosphere
+    """
+    print(f"=== Test C2 case {case} - backward - with atmosphere")
+
+    m, norm = _run_case_backward(
+        s3db,
+        atm_c2_atm,
+        sensor_grid,
+        case,
+        nbphotons=NBPHOTONS_ATM_B[case],
+        depo=DEPO_ATM,
+    )
+    iquv_sg = _smartg_iquv(m, norm)
+    iquv_my = _mystic_iquv(case + 9)
+
+    _plot_case(
+        request,
+        m,
+        iquv_sg,
+        iquv_my,
+        case,
+        sensor_grid,
+        title_suffix="with atm",
+        i_vmin=0.0,
+        v_diff_frac=0.05,
+    )
+
+    errors = _check_deltam(
+        DELTAM_REF_ATM_B.get(case),
+        iquv_my,
+        iquv_sg,
+        f"C2 - case {case} - atm",
+    )
+    assert not errors, "\n".join(errors)
+
+
+def test_c2_atm_forward(request, s3df, atm_c2_atm, sensor_grid):
+    """
+    IPRT phase B, cubic cloud C2, forward, with atmosphere
+    """
+    group = FORWARD_GROUPS[ATM_FORWARD_GROUP]
+    cases = group["cases"]
+    print(
+        f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
+        + " - with atmosphere"
+    )
+
+    m, norm = _run_group_forward(
+        s3df, atm_c2_atm, sensor_grid, group, depo=DEPO_ATM
+    )
+
+    errors = _check_group_forward(
+        request,
+        m,
+        norm,
+        group,
+        sensor_grid,
+        DELTAM_REF_ATM_F,
+        title_suffix="with atm - forward",
+        label_suffix="F atm",
+        mystic_offset=9,
+        i_vmin=0.0,
+        v_diff_frac=0.05,
     )
     assert not errors, "\n".join(errors)
