@@ -4,7 +4,7 @@
 import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-from luts.luts import Idx, MLUT, LUT
+from luts.luts import Idx, MLUT, LUT, from_xarray
 import pandas as pd
 from pathlib import Path
 import os
@@ -1111,6 +1111,15 @@ class Atm3D(object):
 
         if aer_ssa_1d is not None : self.ssa_aer_1d = aer_ssa_1d
         else                      : self.ssa_aer_1d = atm_1d['ssa_p_atm'][:,:]
+
+        # Atm1D.calc returns xarray objects, while the 3D optical properties are
+        # numpy arrays and LUT. The 1d aerosol ones are converted once here, so
+        # that the get_glob_aer_* methods can mix the 1d and the 3d ones.
+        if isinstance(self.pha_aer_1d, xr.DataArray):
+            self.pha_aer_1d = from_xarray(self.pha_aer_1d)
+        for attr_name in ['ipha_aer_1d', 'ext_aer_1d', 'ssa_aer_1d']:
+            attr = getattr(self, attr_name)
+            if isinstance(attr, xr.DataArray): setattr(self, attr_name, attr.values)
         # ===
 
     def get_glob_molecular_sca(self):
