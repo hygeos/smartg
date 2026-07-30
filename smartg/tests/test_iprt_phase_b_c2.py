@@ -24,6 +24,7 @@ from smartg.libATM3D import (
     satellite_view,
 )
 from smartg.smartg import AlbedoCst, LambSurface, Smartg
+from smartg.truncation import GT_trunc
 
 # *********************** Global variable(s) ***************************
 # Fixed seed: SEED=-1 would derive it from the clock, giving a new
@@ -50,6 +51,20 @@ XGRID = 1024  # (values accepted by most GPUs after 10xx)
 
 SCALE = 1  # can be useful for grid with very small cells
 ROOTPATH = Path(__file__).resolve().parent.parent
+
+# GT truncation, as in Iwabuchi and Suzuki (2009), with the parameters
+# of the notebook notebooks/demo_notebook.ipynb: simple GT truncation
+# without correction, i.e. scheme S of the paper. Truncating the
+# forward peak of the cloud phase matrix converges much faster, so the
+# truncated tests use fewer photons.
+GT_TRUNC = GT_trunc(
+    trunc_frac=0.435,
+    theta_tol=20,
+    theta_tr=None,
+    integral_method="lobatto",
+    lobatto_optimization=True,
+)
+NBPHOTONS_TRUNC = NBPHOTONS / 50
 
 # Reference delta_m values (in percent) of I, Q, U and V, measured with
 # the settings above (SEED, XBLOCK, XGRID, NBPHOTONS). They are within
@@ -85,6 +100,30 @@ DELTAM_REF_NOATM_F = {
     7: (0.179, 1.528, 1.331, 91.253),
     8: (0.175, 18.513, 7.059, 355.751),
     9: (0.157, 10.352, 64.669, 388.765),
+}
+
+# Same, for the forward simulations with the GT truncation. They are
+# expected to differ from the untruncated ones above, by the truncation
+# bias and by the MC noise left by 50 times fewer photons. Measured
+# separately on the cases 5 to 9: at NBPHOTONS_TRUNC the truncated run
+# is 6 to 8 times less noisy than the untruncated one, which is the
+# point of the truncation. Their I rising from ~0.17 to ~0.6 is mostly
+# that residual noise, plus a small bias: at the full photon count the
+# truncated I only comes back down to ~0.5.
+# The case 6 is the exception. Its I of 2.731 is truncation bias
+# alone, in the exact backscattering direction: multiplying the photon
+# count by 50 leaves it at 2.721. Pinning it here is deliberate, it is
+# a stable property of the GT scheme S, which is uncorrected.
+DELTAM_REF_NOATM_F_GT = {
+    1: (0.532, 1.836, 65.012, 379.106),
+    2: (0.495, 2.044, 2.269, 290.020),
+    3: (0.456, 3.575, 2.081, 218.844),
+    4: (0.543, 4.360, 25.772, 275.192),
+    5: (0.636, 2.279, 19.292, 189.583),
+    6: (2.731, 24.971, 71.257, 719.034),
+    7: (0.594, 3.166, 3.282, 65.703),
+    8: (0.584, 14.176, 5.457, 284.017),
+    9: (0.632, 9.282, 55.220, 363.366),
 }
 
 # Viewing and sun geometry of the 9 IPRT C2 cases:
@@ -168,12 +207,14 @@ logger.addHandler(file_handler)
 # **********************************************************************
 
 
-def _build_atm_c2(**atm3_kwargs):
+def _build_atm_c2(truncation=None, **atm3_kwargs):
     """
     Build the IPRT C2 cubic cloud atmosphere.
 
     Only the molecular arguments of Atm3D differ between the with and
-    without atmosphere sections, hence the **atm3_kwargs.
+    without atmosphere sections, hence the **atm3_kwargs. truncation is
+    the scattering phase truncation, applied to the 3D phase matrices
+    by Atm1D.calc.
 
     Returns
     -------
@@ -243,7 +284,7 @@ def _build_atm_c2(**atm3_kwargs):
         prof_phases=prof_phases,
         cells=cells,
     )
-    pro = atm3d.calc(atm3.wls, n_theta=NTH)
+    pro = atm3d.calc(atm3.wls, n_theta=NTH, truncation=truncation)
 
     surf = LambSurface(ALB=AlbedoCst(0.2))
 
@@ -276,6 +317,16 @@ def atm_c2_noatm():
     IPRT C2 atmosphere without the molecular contribution
     """
     return _build_atm_c2(tauR=0.0, NO2=False, O3=0.0, H2O=0.0)
+
+
+@pytest.fixture(scope="module")
+def atm_c2_noatm_gt():
+    """
+    Same as atm_c2_noatm, with the GT truncated phase matrices
+    """
+    return _build_atm_c2(
+        truncation=GT_TRUNC, tauR=0.0, NO2=False, O3=0.0, H2O=0.0
+    )
 
 
 @pytest.fixture(scope="module")
@@ -390,7 +441,9 @@ def _run_case_backward(s3db, atm_c2, sensor_grid, case):
     return m, np.cos(np.radians(theta_0)) / np.pi
 
 
-def _run_group_forward(s3df, atm_c2, sensor_grid, group):
+def _run_group_forward(
+    s3df, atm_c2, sensor_grid, group, nbphotons=NBPHOTONS
+):
     """
     Run one forward group of IPRT C2 cases
 
@@ -443,7 +496,7 @@ def _run_group_forward(s3df, atm_c2, sensor_grid, group):
 
     m = s3df.run(
         **kw,
-        NBPHOTONS=NBPHOTONS,
+        NBPHOTONS=nbphotons,
         NBLOOP=NBLOOP,
         XBLOCK=xb,
         XGRID=xg,
@@ -670,26 +723,18 @@ def test_c2_noatm_backward(request, s3db, atm_c2_noatm, sensor_grid, case):
     assert not errors, "\n".join(errors)
 
 
-@pytest.mark.parametrize(
-    "group", list(FORWARD_GROUPS), ids=[f"group{i}" for i in FORWARD_GROUPS]
-)
-def test_c2_noatm_forward(request, s3df, atm_c2_noatm, sensor_grid, group):
+def _check_group_forward(
+    request, m, norm, group, sensor_grid, refs, title_suffix, label_suffix
+):
     """
-    IPRT phase B, cubic cloud C2, forward, without atmosphere
+    Plot and check every case held by a single forward run
+
+    Returns the failure messages of the whole group, so that one noisy
+    case does not hide the others.
     """
-    cases = FORWARD_GROUPS[group]["cases"]
-    print(
-        f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
-        + " - without atmosphere"
-    )
-
-    m, norm = _run_group_forward(
-        s3df, atm_c2_noatm, sensor_grid, FORWARD_GROUPS[group]
-    )
-
-    layer = FORWARD_GROUPS[group]["layer"]
+    layer = group["layer"]
     errors = []
-    for iza, case in enumerate(cases):
+    for iza, case in enumerate(group["cases"]):
         iquv_sg = _smartg_iquv(
             m,
             norm,
@@ -709,16 +754,83 @@ def test_c2_noatm_forward(request, s3df, atm_c2_noatm, sensor_grid, group):
             iquv_my,
             case,
             sensor_grid,
-            title_suffix="without atm - forward",
+            title_suffix=title_suffix,
             i_vmin=np.min(np.abs(iquv_sg[0])),
             v_diff_frac=0.015,
         )
 
         errors += _check_deltam(
-            DELTAM_REF_NOATM_F.get(case),
+            refs.get(case),
             iquv_my,
             iquv_sg,
-            f"C2 - case {case} - F",
+            f"C2 - case {case} - {label_suffix}",
         )
 
+    return errors
+
+
+@pytest.mark.parametrize(
+    "group", list(FORWARD_GROUPS), ids=[f"group{i}" for i in FORWARD_GROUPS]
+)
+def test_c2_noatm_forward(request, s3df, atm_c2_noatm, sensor_grid, group):
+    """
+    IPRT phase B, cubic cloud C2, forward, without atmosphere
+    """
+    cases = FORWARD_GROUPS[group]["cases"]
+    print(
+        f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
+        + " - without atmosphere"
+    )
+
+    m, norm = _run_group_forward(
+        s3df, atm_c2_noatm, sensor_grid, FORWARD_GROUPS[group]
+    )
+
+    errors = _check_group_forward(
+        request,
+        m,
+        norm,
+        FORWARD_GROUPS[group],
+        sensor_grid,
+        DELTAM_REF_NOATM_F,
+        title_suffix="without atm - forward",
+        label_suffix="F",
+    )
+    assert not errors, "\n".join(errors)
+
+
+@pytest.mark.parametrize(
+    "group", list(FORWARD_GROUPS), ids=[f"group{i}" for i in FORWARD_GROUPS]
+)
+def test_c2_noatm_forward_gt(
+    request, s3df, atm_c2_noatm_gt, sensor_grid, group
+):
+    """
+    IPRT phase B, cubic cloud C2, forward, without atmosphere, with the
+    GT truncated cloud phase matrices
+    """
+    cases = FORWARD_GROUPS[group]["cases"]
+    print(
+        f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
+        + " - without atmosphere - GT truncation"
+    )
+
+    m, norm = _run_group_forward(
+        s3df,
+        atm_c2_noatm_gt,
+        sensor_grid,
+        FORWARD_GROUPS[group],
+        nbphotons=NBPHOTONS_TRUNC,
+    )
+
+    errors = _check_group_forward(
+        request,
+        m,
+        norm,
+        FORWARD_GROUPS[group],
+        sensor_grid,
+        DELTAM_REF_NOATM_F_GT,
+        title_suffix="without atm - forward - GT trunc",
+        label_suffix="F GT",
+    )
     assert not errors, "\n".join(errors)
