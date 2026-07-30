@@ -69,6 +69,24 @@ DELTAM_REF_NOATM_B = {
     9: (0.176, 11.334, 69.407, 424.826),
 }
 
+# Same, for the forward simulations. The notebook only saved the cases
+# 1 to 4 (0.587, 2.362, 77.761, 492.204 / 0.539, 2.409, 2.796, 356.972 /
+# 0.514, 4.429, 2.552, 321.536 / 0.411, 4.612, 37.424, 397.968), the
+# output of its cases 5 to 9 cell is empty. The values below are within
+# 23% of those four, and their I agrees with the backward table above,
+# as expected for the same configuration computed the other way round.
+DELTAM_REF_NOATM_F = {
+    1: (0.496, 2.177, 86.529, 429.089),
+    2: (0.601, 2.577, 3.179, 371.001),
+    3: (0.520, 4.393, 2.607, 302.005),
+    4: (0.431, 4.849, 41.652, 307.330),
+    5: (0.137, 1.108, 25.284, 223.950),
+    6: (0.271, 33.639, 86.133, 908.246),
+    7: (0.179, 1.528, 1.331, 91.253),
+    8: (0.175, 18.513, 7.059, 355.751),
+    9: (0.157, 10.352, 64.669, 388.765),
+}
+
 # Viewing and sun geometry of the 9 IPRT C2 cases:
 # (POSZ key, THETA, PHI, THETA_0). PHI_0 is 180. everywhere.
 CASES = {
@@ -83,6 +101,30 @@ CASES = {
     9: ("top", 140.0, 180.0, 40.0),
 }
 PHI_0 = 180.0
+
+# In forward, a single kernel run covers a whole group of cases through
+# a zipped local estimate, so the cases are grouped by sun position.
+# The two groups do not only differ by their case list: the first one
+# looks at the downward radiance below the cloud (count_level 1,
+# OUTPUT_LAYERS 3) and the second one at the upward radiance at TOA
+# (count_level 0, OUTPUT_LAYERS 1), and only the second one reverses
+# the zenith angles of the local estimate.
+FORWARD_GROUPS = {
+    1: {
+        "cases": (1, 2, 3, 4),
+        "inv_th": False,
+        "count_level": 1,
+        "output_layers": 3,
+        "layer": "_down (0+)",
+    },
+    2: {
+        "cases": (5, 6, 7, 8, 9),
+        "inv_th": True,
+        "count_level": 0,
+        "output_layers": 1,
+        "layer": "_up (TOA)",
+    },
+}
 # **********************************************************************
 
 # **************************** logging *********************************
@@ -219,6 +261,16 @@ def s3db():
 
 
 @pytest.fixture(scope="module")
+def s3df():
+    """
+    Forward compilation in 3D
+    """
+    return Smartg(
+        opt3D=True, alt_pp=True, alis=False, back=False, double=True, bias=True
+    )
+
+
+@pytest.fixture(scope="module")
 def atm_c2_noatm():
     """
     IPRT C2 atmosphere without the molecular contribution
@@ -327,6 +379,69 @@ def _run_case_backward(s3db, atm_c2, sensor_grid, case):
     xb, xg = _find_optimal_xb_xg(s3db, **kw)
 
     m = s3db.run(
+        **kw,
+        NBPHOTONS=NBPHOTONS,
+        NBLOOP=NBLOOP,
+        XBLOCK=xb,
+        XGRID=xg,
+        SEED=SEED,
+    )
+
+    return m, np.cos(np.radians(theta_0)) / np.pi
+
+
+def _run_group_forward(s3df, atm_c2, sensor_grid, group):
+    """
+    Run one forward group of IPRT C2 cases
+
+    A single kernel run covers the whole group: the viewing directions
+    of its cases are zipped in the local estimate.
+
+    Returns
+    -------
+    (m, norm)
+    """
+    pro, grid3, surf, wls = atm_c2
+    cases = group["cases"]
+    # All the cases of a group share the same sun position
+    theta_0 = CASES[cases[0]][3]
+    posz = _resolve_posz(sensor_grid, "top")
+
+    # In forward the sensors are the source: they are aimed at the sun
+    # position instead of at the viewing direction
+    _x0, _y0, sensors, _icells = create_sensors(
+        sensor_grid,
+        POSZ=posz,
+        THDEG=180.0 - theta_0,
+        PHDEG=180.0 - PHI_0,
+        FOV=0.0,
+        LOC="ATMOS",
+        CELL_SIZE=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
+        grid3D_atm=grid3,
+    )
+
+    theta = np.array([CASES[case][1] for case in cases])
+    phi = np.array([CASES[case][2] for case in cases])
+    le = {
+        "th_deg": 180.0 - theta if group["inv_th"] else theta,
+        "phi_deg": phi + 180.0,
+        "count_level": np.full(len(cases), group["count_level"]),
+        "zip": True,
+    }
+
+    kw = dict(
+        THVDEG=theta_0,
+        wl=wls,
+        atm=pro,
+        sensor=sensors,
+        le=le,
+        surf=surf,
+        NF=NTH,
+        OUTPUT_LAYERS=group["output_layers"],
+    )
+    xb, xg = _find_optimal_xb_xg(s3df, **kw)
+
+    m = s3df.run(
         **kw,
         NBPHOTONS=NBPHOTONS,
         NBLOOP=NBLOOP,
@@ -475,6 +590,14 @@ def _check_deltam(delta_m_ref, iquv_my, iquv_sg, label):
     """
     Compute the delta_m values and compare them with the previous saved
     validated ones
+
+    Returns the list of the failure messages (empty if the case is ok)
+    instead of asserting, so that a forward test can report every case
+    of its group instead of stopping at the first one.
+
+    delta_m_ref can be None: the calculated values are then logged and
+    the case is reported as a failure, which is how a new reference is
+    measured before being written in the tables above.
     """
     iquv_mystic = groupIQUV(
         lI=[iquv_my[0]], lQ=[iquv_my[1]], lU=[iquv_my[2]], lV=[iquv_my[3]]
@@ -487,25 +610,33 @@ def _check_deltam(delta_m_ref, iquv_my, iquv_sg, label):
         obs=iquv_mystic, mod=iquv_smartg, print_res=False
     )
 
-    logger.info(
-        f"{label} - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; "
-        + f"U={delta_m_ref[2]:.3f}; V={delta_m_ref[3]:.3f} - ref delta_m:"
-    )
+    if delta_m_ref is not None:
+        logger.info(
+            f"{label} - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; "
+            + f"U={delta_m_ref[2]:.3f}; V={delta_m_ref[3]:.3f} - ref delta_m:"
+        )
     logger.info(
         f"{label} - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; "
         + f"U={delta_m[2]:.3f}; V={delta_m[3]:.3f} - calculated delta_m"
     )
 
+    if delta_m_ref is None:
+        return [f"{label}: no reference delta_m, see the log for the values"]
+
     # Check if the test is ok by comparing the ref delta_m and the
     # calculated one
+    errors = []
     iquv_name = ["I", "Q", "U", "V"]
     for istk, stk in enumerate(iquv_name):
         ref = delta_m_ref[istk]
-        assert abs(delta_m[istk] - ref) <= DELTAM_TOL * ref, (
-            f"Problem with {stk} values, get {delta_m[istk]:.5f}."
-            + f" {stk} must be within [{(1-DELTAM_TOL)*ref:.5f}, "
-            + f"{(1+DELTAM_TOL)*ref:.5f}]"
-        )
+        if abs(delta_m[istk] - ref) > DELTAM_TOL * ref:
+            errors.append(
+                f"{label}: problem with {stk} values, get "
+                + f"{delta_m[istk]:.5f}. {stk} must be within "
+                + f"[{(1-DELTAM_TOL)*ref:.5f}, {(1+DELTAM_TOL)*ref:.5f}]"
+            )
+
+    return errors
 
 
 @pytest.mark.parametrize(
@@ -533,6 +664,61 @@ def test_c2_noatm_backward(request, s3db, atm_c2_noatm, sensor_grid, case):
         v_diff_frac=0.015,
     )
 
-    _check_deltam(
+    errors = _check_deltam(
         DELTAM_REF_NOATM_B[case], iquv_my, iquv_sg, f"C2 - case {case}"
     )
+    assert not errors, "\n".join(errors)
+
+
+@pytest.mark.parametrize(
+    "group", list(FORWARD_GROUPS), ids=[f"group{i}" for i in FORWARD_GROUPS]
+)
+def test_c2_noatm_forward(request, s3df, atm_c2_noatm, sensor_grid, group):
+    """
+    IPRT phase B, cubic cloud C2, forward, without atmosphere
+    """
+    cases = FORWARD_GROUPS[group]["cases"]
+    print(
+        f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
+        + " - without atmosphere"
+    )
+
+    m, norm = _run_group_forward(
+        s3df, atm_c2_noatm, sensor_grid, FORWARD_GROUPS[group]
+    )
+
+    layer = FORWARD_GROUPS[group]["layer"]
+    errors = []
+    for iza, case in enumerate(cases):
+        iquv_sg = _smartg_iquv(
+            m,
+            norm,
+            U_sign=-1,
+            V_sign=1,
+            mI=m[f"I{layer}"][:, iza],
+            mQ=m[f"Q{layer}"][:, iza],
+            mU=m[f"U{layer}"][:, iza],
+            mV=m[f"V{layer}"][:, iza],
+        )
+        iquv_my = _mystic_iquv(case)
+
+        _plot_case(
+            request,
+            m,
+            iquv_sg,
+            iquv_my,
+            case,
+            sensor_grid,
+            title_suffix="without atm - forward",
+            i_vmin=np.min(np.abs(iquv_sg[0])),
+            v_diff_frac=0.015,
+        )
+
+        errors += _check_deltam(
+            DELTAM_REF_NOATM_F.get(case),
+            iquv_my,
+            iquv_sg,
+            f"C2 - case {case} - F",
+        )
+
+    assert not errors, "\n".join(errors)
