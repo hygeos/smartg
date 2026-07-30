@@ -1760,8 +1760,8 @@ class Atm1D(Atmosphere):
                             pha_tr[iph, 1, :] = pha_[iph, 1, :] * beta2
                             pha_tr[iph, 3, :] = pha_[iph, 3, :] * beta2
 
-                assert pha is not None
                 if not self.opt3d:
+                    assert pha is not None
                     theta_atm = (
                         pha.coords["theta_atm"].values
                         if hasattr(pha, "coords")
@@ -1786,7 +1786,8 @@ class Atm1D(Atmosphere):
                         },
                     )
                 else:
-                    assert ipha is not None
+                    # In 3D the phase matrices and their indices come
+                    # from the profile itself, so pha and ipha are None
                     attrs_tmp = (
                         profile["phase_atm"].attrs.copy()
                         if "phase_atm" in profile.data_vars
