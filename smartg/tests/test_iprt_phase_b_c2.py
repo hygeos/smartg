@@ -158,6 +158,18 @@ DELTAM_REF_ATM_F = {
     4: (0.168, 1.766, 21.157, 111.205),
 }
 
+# Same, with the GT truncation. This is the only test where the
+# truncation rescaling of the optical coefficients sees a non zero
+# Rayleigh contribution. As without atmosphere, the truncated values
+# stay of the same order as the untruncated ones, with 50 times fewer
+# photons.
+DELTAM_REF_ATM_F_GT = {
+    1: (0.327, 0.446, 24.791, 52.853),
+    2: (0.325, 0.607, 0.590, 46.042),
+    3: (0.343, 2.214, 0.862, 46.240),
+    4: (0.344, 3.285, 39.361, 76.719),
+}
+
 # Viewing and sun geometry of the 9 IPRT C2 cases:
 # (POSZ key, THETA, PHI, THETA_0). PHI_0 is 180. everywhere.
 CASES = {
@@ -379,6 +391,14 @@ def atm_c2_atm():
     IPRT C2 atmosphere with a homogeneous Rayleigh layer
     """
     return _build_atm_c2(tau_ray=TAU_RAYLEIGH)
+
+
+@pytest.fixture(scope="module")
+def atm_c2_atm_gt():
+    """
+    Same as atm_c2_atm, with the GT truncated phase matrices
+    """
+    return _build_atm_c2(truncation=GT_TRUNC, tau_ray=TAU_RAYLEIGH)
 
 
 @pytest.fixture(scope="module")
@@ -978,6 +998,43 @@ def test_c2_atm_forward(request, s3df, atm_c2_atm, sensor_grid):
         DELTAM_REF_ATM_F,
         title_suffix="with atm - forward",
         label_suffix="F atm",
+        mystic_offset=9,
+        i_vmin=0.0,
+        v_diff_frac=0.05,
+    )
+    assert not errors, "\n".join(errors)
+
+
+def test_c2_atm_forward_gt(request, s3df, atm_c2_atm_gt, sensor_grid):
+    """
+    IPRT phase B, cubic cloud C2, forward, with atmosphere, with the GT
+    truncated cloud phase matrices
+    """
+    group = FORWARD_GROUPS[ATM_FORWARD_GROUP]
+    cases = group["cases"]
+    print(
+        f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
+        + " - with atmosphere - GT truncation"
+    )
+
+    m, norm = _run_group_forward(
+        s3df,
+        atm_c2_atm_gt,
+        sensor_grid,
+        group,
+        nbphotons=NBPHOTONS_TRUNC,
+        depo=DEPO_ATM,
+    )
+
+    errors = _check_group_forward(
+        request,
+        m,
+        norm,
+        group,
+        sensor_grid,
+        DELTAM_REF_ATM_F_GT,
+        title_suffix="with atm - forward - GT trunc",
+        label_suffix="F atm GT",
         mystic_offset=9,
         i_vmin=0.0,
         v_diff_frac=0.05,
