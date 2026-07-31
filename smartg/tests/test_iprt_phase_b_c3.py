@@ -129,22 +129,22 @@ NSENSORS = 50
 # is a trapezoid one. Atm1D.calc truncates one phase matrix at a time
 # (smartg/atmosphere.py:1716) and, with aerosols, the C3 field holds one
 # mixed matrix per cloudy cell, so pytrunc.gt_phase_approx is called
-# 20489 times. Its cost per call, measured at this NTH on a Ryzen 9
-# 5950X, the loop being single threaded:
+# 20489 times. Its cost per call, measured with pytrunc 1.1.0 at this
+# NTH on a Ryzen 9 5950X, the loop being single threaded:
 #
 #     method     angle                 ms/call   total
-#     lobatto    searched, th_tol=20     195.4   66.7 min
-#     lobatto    forced 8 deg             93.1   31.8 min
-#     trapezoid  searched, th_tol=20      31.8   10.8 min
-#     trapezoid  forced 8 deg              2.5    0.9 min
+#     lobatto    searched, th_tol=20      25.0    8.5 min
+#     lobatto    forced 8 deg              2.6    0.9 min
+#     trapezoid  searched, th_tol=20      30.2   10.3 min
+#     trapezoid  forced 8 deg              2.6    0.9 min
 #
-# Imposing the angle only halves the Lobatto cost, because the 1801
-# point quadrature and its Legendre polynomials are rebuilt at every
-# call and dominate. It removes almost all of the trapezoid cost, the
-# search being the whole of it. And once the angle is imposed the
-# quadrature stops mattering: the truncated phase matrices of the two
-# methods then agree to 2.9e-3 (worst case over the 25 effective radii
-# of the cloud file), against 0.3 to 1.7 when the angle is searched.
+# The Lobatto rows are the ones with lobatto_optimization, as in the C2
+# test; without it the search costs 8.9 s per call. Imposing the angle
+# removes almost all of the cost of either method, the search being the
+# whole of it, and the quadrature then stops mattering: the truncated
+# phase matrices of the two methods agree to 2.9e-3 (worst case over the
+# 25 effective radii of the cloud file), against 0.3 to 1.7 when the
+# angle is searched.
 THETA_TR = 8.0
 GT_TRUNC = GT_trunc(
     trunc_frac=0.435,
