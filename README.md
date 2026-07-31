@@ -154,6 +154,19 @@ addopts= --html=test_reportv1.html --self-contained-html -s -v
 ```
 The arguments "--html=test_reportv1.html --self-contained-html" are used to generate an html report containing the results of the tests (sometime with more details e.g. plots), named "test_reportv1.html".
 
+### 5.1 The IPRT phase B tests
+
+`test_iprt_phase_b_c2.py` (cubic cloud) and `test_iprt_phase_b_c3.py` (cumulus cloud with aerosols) check the 3D atmosphere mode (`opt3D=True`) against the MYSTIC reference of the IPRT phase B benchmark. Reproducing the benchmark photon counts takes hours, so each of their tests exists in two tiers: a fast one, run by default, and a slow one selected with `-m slow`.
+
+```bash
+pytest smartg/tests/test_iprt_phase_b_c3.py           # fast, ~4 min
+pytest -m slow smartg/tests/test_iprt_phase_b_c3.py   # slow, ~38 min
+```
+
+Both files together take 7 min in the fast tier and 1 h 23 in the slow one. These durations were measured on a Ryzen 9 5950X with a GeForce RTX 5070 Ti; the CPU counts as much as the GPU for C3, whose atmosphere is built by a single threaded loop over the cloudy cells.
+
+The fast tier detects a 5 % error on the cloud optical properties, the slow one 1 %: run it before a release, or after a change to the 3D kernel, to the phase matrices or to the truncation.
+
 ## 6. Hardware tested
 
 GeForce GTX 1070, GeForce TITAN V, GeForce RTX 2080 Ti, Geforce RTX 3070, Geforce RTX 3090, Geforce RTX 4090, A100, Geforce RTX 5070 ti, A6000 blackwell
