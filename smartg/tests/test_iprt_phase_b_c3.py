@@ -125,8 +125,7 @@ NSENSORS = 50
 # left unchanged, so that the difference between the two tests below is
 # the truncation bias alone and not a difference of MC noise.
 #
-# Unlike the C2 test, the truncation angle is imposed and the integral
-# is a trapezoid one. Atm1D.calc truncates one phase matrix at a time
+# The truncation is applied to one phase matrix at a time by Atm1D.calc
 # (smartg/atmosphere.py:1716) and, with aerosols, the C3 field holds one
 # mixed matrix per cloudy cell, so pytrunc.gt_phase_approx is called
 # 20489 times. Its cost per call, measured with pytrunc 1.1.0 at this
@@ -139,19 +138,19 @@ NSENSORS = 50
 #     trapezoid  forced 8 deg              2.6    0.9 min
 #
 # The Lobatto rows are the ones with lobatto_optimization, as in the C2
-# test; without it the search costs 8.9 s per call. Imposing the angle
-# removes almost all of the cost of either method, the search being the
-# whole of it, and the quadrature then stops mattering: the truncated
-# phase matrices of the two methods agree to 2.9e-3 (worst case over the
-# 25 effective radii of the cloud file), against 0.3 to 1.7 when the
-# angle is searched.
+# test; without it the search costs 8.9 s per call. The angle is imposed
+# here, and not only for the 8.5 min a build that it saves: measured on
+# the slow tier, searching it degrades the delta_m of Q by 4.0 % and
+# that of U by 8.9 %, for 2.2 % gained on the one of I. The fast tier
+# reverses that verdict, but wrongly, its Q and U being noise dominated
+# and a change of truncation drawing a different noise.
 THETA_TR = 8.0
 GT_TRUNC = GT_trunc(
     trunc_frac=0.435,
     theta_tol=20,  # unused, the angle below is imposed
     theta_tr=THETA_TR,
-    integral_method="trapezoid",
-    lobatto_optimization=False,
+    integral_method="lobatto",
+    lobatto_optimization=True,
 )
 
 # The single scattering albedo of the 1D aerosol at W_REF, as given by
@@ -182,14 +181,14 @@ DELTAM_REF_AER_B = {
 # unchanged, the difference with the table above is the truncation
 # alone, and it goes both ways: Q, U and V improve by a factor 2.5 to 4
 # because they are noise dominated and the truncation is a variance
-# reduction, while I degrades from 1.308 to 3.741. That degradation is
+# reduction, while I degrades from 1.308 to 3.758. That degradation is
 # a bias, not noise: the noise demonstrably went down, as the three
 # other components show. It is the price of the uncorrected GT scheme S
 # with the truncation angle imposed at THETA_TR.
 DELTAM_REF_AER_B_GT = {
-    "slow": {4: (3.741, 14.446, 28.861, 105.682)},
+    "slow": {4: (3.758, 14.663, 28.646, 102.196)},
     "fast": {
-        4: (4.000, 41.554, 111.144, 537.885),
+        4: (3.978, 41.559, 109.220, 462.115),
     },
 }
 
@@ -201,7 +200,7 @@ MEAN_REF_AER_B = {
     4: (1.073469e-01, -9.372497e-04, 3.520986e-05, 1.951276e-06),
 }
 MEAN_REF_AER_B_GT = {
-    4: (1.081260e-01, -8.196375e-04, 4.031983e-05, -5.349416e-07),
+    4: (1.081335e-01, -8.164488e-04, 3.969879e-05, -3.099173e-07),
 }
 
 # Mean absolute value of each Stokes component, measured on the fast
