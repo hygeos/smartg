@@ -129,7 +129,8 @@ NSENSORS = 50
 # is a trapezoid one. Atm1D.calc truncates one phase matrix at a time
 # (smartg/atmosphere.py:1716) and, with aerosols, the C3 field holds one
 # mixed matrix per cloudy cell, so pytrunc.gt_phase_approx is called
-# 20489 times. Its cost per call, measured at this NTH:
+# 20489 times. Its cost per call, measured at this NTH on a Ryzen 9
+# 5950X, the loop being single threaded:
 #
 #     method     angle                 ms/call   total
 #     lobatto    searched, th_tol=20     195.4   66.7 min
