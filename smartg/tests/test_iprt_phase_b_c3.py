@@ -35,7 +35,6 @@ from smartg.truncation import GT_trunc
 # noise realisation at every run. The reference delta_m values below
 # were measured with this seed.
 SEED = 1234
-DELTAM_TOL = 0.25  # two-sided fractional band around the ref delta_m
 
 # The IPRT C3 benchmark uses 1e10 photons (see the report
 # others/rapport_simulateur_3MI_HYGEOS_v1.2.pdf, section 4.5). A tenth
@@ -44,6 +43,46 @@ DELTAM_TOL = 0.25  # two-sided fractional band around the ref delta_m
 # the benchmark.
 NBPHOTONS = 1e9
 NBLOOP = 1e7
+
+# Every test runs in two tiers. The slow one uses the photon count
+# above, a tenth of the IPRT benchmark, and is what the reference
+# delta_m values below were measured with: it is deselected by default
+# (see pytest.ini). The fast one divides it by PHOTON_DIVIDER and is
+# the one that runs routinely.
+#
+# Dividing the photons multiplies the MC noise, and delta_m is then
+# dominated by it: a small systematic bias would hide inside the
+# DELTAM_TOL band. This is why the fast tier does not rely on delta_m
+# alone, see MEAN_TOL below.
+TIERS = ["fast", pytest.param("slow", marks=pytest.mark.slow)]
+PHOTON_DIVIDER = {"fast": 30, "slow": 1}
+
+# Two sided fractional band around the reference delta_m. The fast tier
+# gets a wider one because dividing the photons by 30 multiplies its MC
+# noise by sqrt(30). See the C2 test file for the measurement.
+DELTAM_TOL = {"fast": 0.4, "slow": 0.25}
+
+# Second observable, and the sensitive one at the fast tier, where
+# delta_m is dominated by the MC noise and a small systematic bias would
+# hide inside its band. The spatial mean of a Stokes component over the
+# 2500 sensors averages that noise down by a factor ~50, and being a
+# linear functional it is an unbiased estimator: its expected value
+# depends neither on the photon count nor on the noise realisation. One
+# reference therefore serves both tiers.
+#
+# It is compared with an absolute tolerance of MEAN_TOL times the mean
+# of I, for all four components: the means of Q, U and V are small
+# compared with the one of I, so a relative band on them would be
+# meaningless.
+MEAN_TOL = 0.01
+
+# A component whose mean absolute value falls below SIGNAL_FLOOR times
+# the one of I carries no usable signal in these configurations: it is
+# Monte Carlo noise, which is why the IPRT benchmark itself reports
+# delta_m of 300 to 900% on V. Such a component is logged but not
+# asserted, by any of the checks. See the C2 test file for the
+# measurements behind this.
+SIGNAL_FLOOR = 1e-3
 
 # Number of scattering angles of the phase matrices. The benchmark uses
 # 18001 but, unlike the C2 cubic cloud which has a single cloudy cell,
@@ -132,7 +171,10 @@ SSA_AER_1D = 0.931184
 # remaining difference comes from the cropped sensor grid, which does
 # not see the same part of the cumulus field.
 DELTAM_REF_AER_B = {
-    4: (1.308, 36.348, 92.629, 442.742),
+    "slow": {4: (1.308, 36.348, 92.629, 442.742)},
+    "fast": {
+        4: (6.516, 155.448, 455.981, 2287.887),
+    },
 }
 
 # Same, with the GT truncated phase matrices. The photon count being
@@ -144,7 +186,32 @@ DELTAM_REF_AER_B = {
 # other components show. It is the price of the uncorrected GT scheme S
 # with the truncation angle imposed at THETA_TR.
 DELTAM_REF_AER_B_GT = {
-    4: (3.741, 14.446, 28.861, 105.682),
+    "slow": {4: (3.741, 14.446, 28.861, 105.682)},
+    "fast": {
+        4: (4.000, 41.554, 111.144, 537.885),
+    },
+}
+
+# Reference spatial means of I, Q, U and V, shared by the two tiers,
+# see MEAN_TOL above. They are measured on the slow tier, which is the
+# most precise estimate available, and the fast tier is required to
+# reproduce them.
+MEAN_REF_AER_B = {
+    4: (1.073469e-01, -9.372497e-04, 3.520986e-05, 1.951276e-06),
+}
+MEAN_REF_AER_B_GT = {
+    4: (1.081260e-01, -8.196375e-04, 4.031983e-05, -5.349416e-07),
+}
+
+# Mean absolute value of each Stokes component, measured on the fast
+# tier. These are not checked: they are the signal scale against
+# which SIGNAL_FLOOR above decides which components are worth
+# asserting at all.
+SIGNAL_REF_AER_B = {
+    4: (1.073562e-01, 1.789515e-03, 1.212019e-03, 1.675291e-04),
+}
+SIGNAL_REF_AER_B_GT = {
+    4: (1.081096e-01, 1.143670e-03, 5.018751e-04, 5.779069e-05),
 }
 
 # Viewing and sun geometry of the 9 IPRT C3 cases:
@@ -628,7 +695,31 @@ def _plot_case(request, m, iquv_sg, iquv_my, case, sensor_grid, title_suffix):
     conftest.savefig(request, bbox_inches="tight")
 
 
-def _check_deltam(delta_m_ref, iquv_my, iquv_sg, label):
+def _is_significant(signal_ref, istk):
+    """
+    Whether a Stokes component carries enough signal to be asserted on
+
+    See SIGNAL_FLOOR. A signal_ref of None, i.e. not yet measured, keeps
+    every component so that a new reference gets fully logged.
+    """
+    if signal_ref is None:
+        return True
+
+    return signal_ref[istk] > SIGNAL_FLOOR * signal_ref[0]
+
+
+def _skipped(signal_ref):
+    """
+    Names of the components left unasserted, for the log
+    """
+    return [
+        stk
+        for istk, stk in enumerate(["I", "Q", "U", "V"])
+        if not _is_significant(signal_ref, istk)
+    ]
+
+
+def _check_deltam(delta_m_ref, signal_ref, iquv_my, iquv_sg, label, tol):
     """
     Compute the delta_m values and compare them with the previous saved
     validated ones
@@ -663,30 +754,91 @@ def _check_deltam(delta_m_ref, iquv_my, iquv_sg, label):
 
     # Check if the test is ok by comparing the ref delta_m and the
     # calculated one
+    skipped = _skipped(signal_ref)
+    if skipped:
+        logger.info(
+            f"{label} - {', '.join(skipped)} below SIGNAL_FLOOR, "
+            + "not asserted"
+        )
+
     errors = []
     iquv_name = ["I", "Q", "U", "V"]
     for istk, stk in enumerate(iquv_name):
+        if not _is_significant(signal_ref, istk):
+            continue
         ref = delta_m_ref[istk]
-        if abs(delta_m[istk] - ref) > DELTAM_TOL * ref:
+        if abs(delta_m[istk] - ref) > tol * ref:
             errors.append(
                 f"{label}: problem with {stk} values, get "
                 + f"{delta_m[istk]:.5f}. {stk} must be within "
-                + f"[{(1-DELTAM_TOL)*ref:.5f}, {(1+DELTAM_TOL)*ref:.5f}]"
+                + f"[{(1-tol)*ref:.5f}, {(1+tol)*ref:.5f}]"
             )
 
     return errors
 
 
+def _check_means(mean_ref, signal_ref, iquv_sg, label):
+    """
+    Compare the spatial mean of each Stokes component with its previous
+    saved validated one
+
+    Unlike delta_m, this averages the Monte Carlo noise out, so it is
+    the observable that keeps the fast tier sensitive to a systematic
+    bias. Same contract as _check_deltam: returns the list of the
+    failure messages, and a mean_ref of None logs the calculated values
+    and reports a failure, which is how a new reference is measured.
+    """
+    means = tuple(float(np.mean(stk)) for stk in iquv_sg)
+
+    if mean_ref is not None:
+        logger.info(
+            f"{label} - I={mean_ref[0]:.6e}; Q={mean_ref[1]:.6e}; "
+            + f"U={mean_ref[2]:.6e}; V={mean_ref[3]:.6e} - ref mean:"
+        )
+    logger.info(
+        f"{label} - I={means[0]:.6e}; Q={means[1]:.6e}; "
+        + f"U={means[2]:.6e}; V={means[3]:.6e} - calculated mean"
+    )
+
+    if mean_ref is None:
+        return [f"{label}: no reference mean, see the log for the values"]
+
+    # The mean of I sets the scale of the four tolerances, the means of
+    # Q, U and V being much smaller than it
+    tol = MEAN_TOL * abs(mean_ref[0])
+
+    errors = []
+    for istk, stk in enumerate(["I", "Q", "U", "V"]):
+        if not _is_significant(signal_ref, istk):
+            continue
+        ref = mean_ref[istk]
+        if abs(means[istk] - ref) > tol:
+            errors.append(
+                f"{label}: problem with the mean of {stk}, get "
+                + f"{means[istk]:.6e}. It must be within "
+                + f"[{ref-tol:.6e}, {ref+tol:.6e}]"
+            )
+
+    return errors
+
+
+@pytest.mark.parametrize("tier", TIERS)
 @pytest.mark.parametrize(
     "case", BACKWARD_CASES, ids=[f"case{i}" for i in BACKWARD_CASES]
 )
-def test_c3_aer_backward(request, s3db, atm_c3_aer, sensor_grid, case):
+def test_c3_aer_backward(request, s3db, atm_c3_aer, sensor_grid, case, tier):
     """
     IPRT phase B, cumulus cloud C3, backward, with aerosols
     """
-    print(f"=== Test C3 case {case} - backward - with aerosols")
+    print(f"=== Test C3 case {case} - backward - with aerosols - {tier}")
 
-    m, norm = _run_case_backward(s3db, atm_c3_aer, sensor_grid, case)
+    m, norm = _run_case_backward(
+        s3db,
+        atm_c3_aer,
+        sensor_grid,
+        case,
+        nbphotons=NBPHOTONS / PHOTON_DIVIDER[tier],
+    )
     iquv_sg = _smartg_iquv(m, norm)
     iquv_my = _mystic_iquv(case + 9)
 
@@ -700,26 +852,45 @@ def test_c3_aer_backward(request, s3db, atm_c3_aer, sensor_grid, case):
         title_suffix="with aer",
     )
 
+    label = f"C3 - case {case} - aer - {tier}"
+    signal_ref = SIGNAL_REF_AER_B.get(case)
     errors = _check_deltam(
-        DELTAM_REF_AER_B.get(case),
+        DELTAM_REF_AER_B[tier].get(case),
+        signal_ref,
         iquv_my,
         iquv_sg,
-        f"C3 - case {case} - aer",
+        label,
+        DELTAM_TOL[tier],
+    )
+    errors += _check_means(
+        MEAN_REF_AER_B.get(case), signal_ref, iquv_sg, label
     )
     assert not errors, "\n".join(errors)
 
 
+@pytest.mark.parametrize("tier", TIERS)
 @pytest.mark.parametrize(
     "case", BACKWARD_CASES, ids=[f"case{i}" for i in BACKWARD_CASES]
 )
-def test_c3_aer_backward_gt(request, s3db, atm_c3_aer_gt, sensor_grid, case):
+def test_c3_aer_backward_gt(
+    request, s3db, atm_c3_aer_gt, sensor_grid, case, tier
+):
     """
     IPRT phase B, cumulus cloud C3, backward, with aerosols, with the GT
     truncated phase matrices
     """
-    print(f"=== Test C3 case {case} - backward - with aerosols - GT trunc")
+    print(
+        f"=== Test C3 case {case} - backward - with aerosols - GT trunc"
+        + f" - {tier}"
+    )
 
-    m, norm = _run_case_backward(s3db, atm_c3_aer_gt, sensor_grid, case)
+    m, norm = _run_case_backward(
+        s3db,
+        atm_c3_aer_gt,
+        sensor_grid,
+        case,
+        nbphotons=NBPHOTONS / PHOTON_DIVIDER[tier],
+    )
     iquv_sg = _smartg_iquv(m, norm)
     iquv_my = _mystic_iquv(case + 9)
 
@@ -733,10 +904,17 @@ def test_c3_aer_backward_gt(request, s3db, atm_c3_aer_gt, sensor_grid, case):
         title_suffix="with aer - GT trunc",
     )
 
+    label = f"C3 - case {case} - aer GT - {tier}"
+    signal_ref = SIGNAL_REF_AER_B_GT.get(case)
     errors = _check_deltam(
-        DELTAM_REF_AER_B_GT.get(case),
+        DELTAM_REF_AER_B_GT[tier].get(case),
+        signal_ref,
         iquv_my,
         iquv_sg,
-        f"C3 - case {case} - aer GT",
+        label,
+        DELTAM_TOL[tier],
+    )
+    errors += _check_means(
+        MEAN_REF_AER_B_GT.get(case), signal_ref, iquv_sg, label
     )
     assert not errors, "\n".join(errors)
