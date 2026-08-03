@@ -1,101 +1,75 @@
-# =============================================================================
-# Workflow: Automatic publishing to PyPI
-# =============================================================================
-# This workflow is triggered when a tag (e.g. v1.2.0) is pushed.
-# It checks that only the authorized user pushed the tag,
-# then builds the Python package and publishes it to PyPI.
+# Publish to PyPI when a version tag (e.g. v1.0.3) is pushed, provided the
+# tagged commit is on the main (or master) branch.
 #
-# Prerequisites:
-#   - Configure a "Trusted Publisher" on pypi.org for this GitHub repository.
-#     (PyPI project Settings > Publishing > Add a new publisher)
-#     with: owner = <org/user>, repo = <repo>, workflow = push_pypi.yml,
-#           environment = pypi
-# =============================================================================
+# Prerequisites (one-time, per repository):
+#   - Create the "pypi" environment in the repo Settings > Environments.
+#   - Configure a Trusted Publisher on pypi.org for the project
+#     (PyPI project Settings > Publishing > Add a new publisher) with:
+#     owner = <org/user>, repo = <repo>, workflow = push_pypi.yml, environment = pypi
+#
+# Assumes the project name and version are declared statically under [project]
+# in pyproject.toml (the PyPI project name may differ from the repository name).
 
 name: Publish to PyPI
 
-# ---------------------------------------------------------------------------
-# Trigger: the workflow runs when a tag starting with "v" is pushed
-# (e.g. v1.0.0, v2.3.1, etc.)
-# ---------------------------------------------------------------------------
+# The tag filter uses + (one or more digits) so that pre-release tags such as
+# v1.0.0dev1 or v1.0.0rc1 do not trigger a publish.
 on:
   push:
     tags:
-      - "v*"   # Filter on version-like tags (v1.0.0, v1.2.3, etc.)
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
-# ---------------------------------------------------------------------------
-# Workflow jobs
-# ---------------------------------------------------------------------------
 jobs:
-
-  # ==========================================================================
-  # Job 1: Build the Python package
-  # ==========================================================================
   build:
-    name: "Build package"
-
-    # Run this job ONLY if the authorized user triggered the workflow
-    # (i.e. the user who pushed the tag).
-    if: github.actor == 'Mustapha-hygeos'
-
+    name: Build package
     runs-on: ubuntu-latest
 
+    outputs:
+      package-name: ${{ steps.metadata.outputs.name }}
+
     steps:
-      # ----------------------------------------------------------------------
-      # Step 1: Checkout the source code
-      # "checkout" clones the repository into the GitHub runner environment.
-      # We fetch all branches so we can check if the tag belongs to master.
-      # ----------------------------------------------------------------------
       - name: Checkout source code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # Fetch full history (needed to check branch ancestry)
+          fetch-depth: 0  # full history + all branches, needed for the ancestry check
 
-      # ----------------------------------------------------------------------
-      # Step 2: Verify the tag is on the master branch
-      # "git branch --contains" lists all branches that contain the tagged
-      # commit. We check that "master" is among them. If not, the workflow
-      # stops here with an error.
-      # ----------------------------------------------------------------------
-      - name: Verify tag is on master branch
+      # A tag push event does not know which branch the commit came from, so
+      # check that the tagged commit is an ancestor of main (or master).
+      # GITHUB_SHA is peeled with ^{commit} because for annotated tags it
+      # points to the tag object, not the commit.
+      - name: Verify tag is on main or master
         run: |
-          if ! git branch -r --contains "${{ github.sha }}" | grep -q 'origin/master'; then
-            echo "::error::Tag ${{ github.ref_name }} is not on the master branch. Aborting."
+          commit=$(git rev-parse "${GITHUB_SHA}^{commit}")
+          if git merge-base --is-ancestor "$commit" origin/main 2>/dev/null || \
+             git merge-base --is-ancestor "$commit" origin/master 2>/dev/null; then
+            echo "Tag $GITHUB_REF_NAME is on the default branch. Proceeding."
+          else
+            echo "::error::Tag $GITHUB_REF_NAME is not on main/master. Aborting."
             exit 1
           fi
-          echo "Tag ${{ github.ref_name }} is on master branch. Proceeding."
 
-      # ----------------------------------------------------------------------
-      # Step 3: Set up Python
-      # Install the desired Python version on the runner.
-      # ----------------------------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      # ----------------------------------------------------------------------
-      # Step 3: Install build tools
-      # - build: standard tool to build Python packages
-      #          (generates the sdist .tar.gz and the wheel .whl)
-      # ----------------------------------------------------------------------
-      - name: Install build tools
-        run: python -m pip install --upgrade pip build
+      - name: Verify tag matches the package version
+        id: metadata
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_name=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['name'])")
+          pkg_version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "name=$pkg_name" >> "$GITHUB_OUTPUT"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::Tag version ($tag_version) does not match pyproject.toml version ($pkg_version)."
+            exit 1
+          fi
 
-      # ----------------------------------------------------------------------
-      # Step 4: Build the package
-      # "python -m build" reads pyproject.toml and produces:
-      #   - dist/smartg-x.y.z.tar.gz          (source distribution)
-      #   - dist/smartg-x.y.z-py3-none-any.whl (wheel / binary distribution)
-      # ----------------------------------------------------------------------
       - name: Build package (sdist + wheel)
-        run: python -m build
+        run: |
+          python -m pip install --upgrade build
+          python -m build
 
-      # ----------------------------------------------------------------------
-      # Step 5: Upload build artifacts
-      # Store the contents of the dist/ folder so they are available to the
-      # next job (publish). Artifacts are retained for 1 day.
-      # ----------------------------------------------------------------------
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -103,51 +77,26 @@ jobs:
           path: dist/
           retention-days: 1
 
-  # ==========================================================================
-  # Job 2: Publish to PyPI
-  # ==========================================================================
   publish:
-    name: "Publish to PyPI"
-
-    # This job runs only after the "build" job succeeds
+    name: Publish to PyPI
     needs: build
-
     runs-on: ubuntu-latest
 
-    # -----------------------------------------------------------------------
-    # GitHub environment "pypi"
-    # This environment must be created in the repo's Settings > Environments.
-    # It enables Trusted Publishing (OIDC) with PyPI, which removes the need
-    # to store an API token in the repository secrets.
-    # -----------------------------------------------------------------------
+    # The "pypi" environment enables Trusted Publishing (OIDC): no API token
+    # to store in the repo. id-token: write lets GitHub mint the OIDC token
+    # that PyPI validates.
     environment:
       name: pypi
-      url: https://pypi.org/p/smartg
-
-    # -----------------------------------------------------------------------
-    # OIDC permissions
-    # "id-token: write" is required so GitHub can generate an OIDC token
-    # that will be validated by PyPI (Trusted Publishing).
-    # -----------------------------------------------------------------------
+      url: https://pypi.org/p/${{ needs.build.outputs.package-name }}
     permissions:
       id-token: write
 
     steps:
-      # ----------------------------------------------------------------------
-      # Step 1: Download build artifacts from the "build" job
-      # Retrieves the .tar.gz and .whl files into dist/
-      # ----------------------------------------------------------------------
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: python-package-distributions
           path: dist/
 
-      # ----------------------------------------------------------------------
-      # Step 2: Publish to PyPI
-      # The official pypa/gh-action-pypi-publish action uses
-      # Trusted Publishing (OIDC): no API token needed.
-      # It automatically uploads all files from the dist/ folder to PyPI.
-      # ----------------------------------------------------------------------
-      - name: Publish to PyPI via Trusted Publishing
+      - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
