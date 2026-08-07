@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 800" width="2400" height="800" role="img" aria-labelledby="title">
+  <title id="title">SMART-G horizontal C lockup</title>
+  
+<g transform="translate(70 65) scale(0.67)">
+  <defs>
+    <mask id="cut-horizontal-light" maskUnits="userSpaceOnUse" x="-50" y="-50" width="1100" height="1100">
+      <rect x="-50" y="-50" width="1100" height="1100" fill="white"/>
+      <path d="M 820 230 C 665 270 395 320 300 430 C 215 530 285 610 480 640" fill="none" stroke="black" stroke-width="146" stroke-linecap="round"/>
+      <path d="M 480 640 C 685 690 690 785 500 830 C 420 850 340 885 255 925" fill="none" stroke="black" stroke-width="146" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <g mask="url(#cut-horizontal-light)" fill="none" stroke="#172554" stroke-width="112" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M 815 238 C 680 85 405 70 235 235 C 70 395 80 690 260 830"/>
+    <path d="M 355 882 C 590 948 842 788 845 560 L 615 560"/>
+  </g>
+  <path d="M 820 230 C 665 270 395 320 300 430 C 215 530 285 610 480 640" fill="none" stroke="#22B8F0" stroke-width="104" stroke-linecap="round"/>
+  <path d="M 480 640 C 685 690 690 785 500 830 C 420 850 340 885 255 925" fill="none" stroke="#2563EB" stroke-width="104" stroke-linecap="round"/>
+  <rect x="790" y="155" width="126" height="126" rx="14" fill="#F5B942"/>
+</g><g fill="#172554" transform="translate(790.0000 502.5000) scale(0.1373074 -0.1373074)"><path d="M1227 1446V1130Q1104 1185 987.0 1213.0Q870 1241 766 1241Q628 1241 562.0 1203.0Q496 1165 496 1085Q496 1025 540.5 991.5Q585 958 702 934L866 901Q1115 851 1220.0 749.0Q1325 647 1325 459Q1325 212 1178.5 91.5Q1032 -29 731 -29Q589 -29 446.0 -2.0Q303 25 160 78V403Q303 327 436.5 288.5Q570 250 694 250Q820 250 887.0 292.0Q954 334 954 412Q954 482 908.5 520.0Q863 558 727 588L578 621Q354 669 250.5 774.0Q147 879 147 1057Q147 1280 291.0 1400.0Q435 1520 705 1520Q828 1520 958.0 1501.5Q1088 1483 1227 1446Z" transform="translate(0.0000 0)"/><path d="M188 1493H678L1018 694L1360 1493H1849V0H1485V1092L1141 287H897L553 1092V0H188Z" transform="translate(1489.5659 0)"/><path d="M1094 272H492L397 0H10L563 1493H1022L1575 0H1188ZM588 549H997L793 1143Z" transform="translate(3542.1317 0)"/><path d="M735 831Q856 831 908.5 876.0Q961 921 961 1024Q961 1126 908.5 1170.0Q856 1214 735 1214H573V831ZM573 565V0H188V1493H776Q1071 1493 1208.5 1394.0Q1346 1295 1346 1081Q1346 933 1274.5 838.0Q1203 743 1059 698Q1138 680 1200.5 616.5Q1263 553 1327 424L1536 0H1126L944 371Q889 483 832.5 524.0Q776 565 682 565Z" transform="translate(5141.6976 0)"/><path d="M10 1493H1386V1202H891V0H506V1202H10Z" transform="translate(6733.2634 0)"/></g><rect x="1935.046" y="385.650" width="108.650" height="28.700" rx="14.350" fill="#22B8F0"/><g fill="#F5B942" transform="translate(2072.3956 502.5000) scale(0.1373074 -0.1373074)"><path d="M1530 111Q1386 41 1231.0 6.0Q1076 -29 911 -29Q538 -29 320.0 179.5Q102 388 102 745Q102 1106 324.0 1313.0Q546 1520 932 1520Q1081 1520 1217.5 1492.0Q1354 1464 1475 1409V1100Q1350 1171 1226.5 1206.0Q1103 1241 979 1241Q749 1241 624.5 1112.5Q500 984 500 745Q500 508 620.0 379.0Q740 250 961 250Q1021 250 1072.5 257.5Q1124 265 1165 281V571H930V829H1530Z" transform="translate(0.0000 0)"/></g>
+</svg>
