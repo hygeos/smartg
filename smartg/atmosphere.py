@@ -30,6 +30,18 @@ Atm1D
     profile can be used). Aerosols, clouds, and ocean surface can be
     added to build a complete atmospheric model.
 
+Atm3D
+    3D atmospheric profile model (for Smartg(opt3D=True) simulations).
+    Combines a 1D background atmosphere (Atm1D), a 3D grid
+    (smartg.grid3d.Grid3D) and 3D components (Cloud3D) into the 3D
+    profile consumed by smartg.run().
+
+Cloud3D
+    3D cloud component of Atm3D. The 3D distribution of the cloud
+    extinction and droplet effective radius is provided as a dense
+    xarray dataset (or NetCDF file), as raw arrays, or converted from
+    the legacy I3RC/IPRT ASCII cloud files with read_i3rc_cloud.
+
 AerOPAC
     Aerosol Optical Properties from OPAC (Optical Properties of Aerosols
     and Clouds) database. Computes aerosol optical depth, single

@@ -40,6 +40,17 @@ will be completed and corrected before the final `v2.0.0` release.
     now expect an `xr.Dataset` instead of an MLUT (MLUT still accepted with a
     deprecation warning)
   - The `new_atm` parameter of `AtmAFGL` has been removed
+  - The 3D atmosphere construction API has been reworked (see New features):
+    - The `Atm3D` and `Cloud3D` classes of `smartg.libATM3D` and their
+      getter-based construction have been removed; `smartg.libATM3D` now only
+      contains the sensor creation and visualization helpers
+    - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
+      `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
+      new `smartg.grid3d` module
+    - `read_cld_nth_cte` has been moved from `smartg.libATM3D` to `smartg.phase`
+    - The `cells` parameter and the `"ATM3D"` sentinel filename of `Atm1D`
+      have been removed: a 3D atmosphere is now built with
+      `smartg.atmosphere.Atm3D`
   - The `change_altitude_grid` external function has been removed (use `str2grid_arr`)
   - The deprecated `lib3D` module and legacy geometric modules have been removed
   - Several obsolete utility functions removed: `average`, `isiterable`, `isnumeric`,
@@ -47,6 +58,21 @@ will be completed and corrected before the final `v2.0.0` release.
     `convertAnglestoV`, `Analyse_create_entity`, `trapzinterp`
 
 * New features
+  - New 3D atmosphere user API in `smartg.atmosphere`: a 3D atmosphere is now
+    built directly as
+    `Atm3D(atm_1d=Atm1D(...), grid_3d=Grid3D(...), comp_3d=[Cloud3D(...)])`
+    and its `calc()` method returns the profile dataset consumed by
+    `Smartg.run`, replacing the manual assembly of the `libATM3D.Atm3D`
+    getter outputs into `Atm1D("ATM3D", ...)`
+    - New `Comp3D` base class of the 3D components (a future `Aer3D` will
+      implement it too)
+    - The new `Cloud3D` accepts the 3D cloud field as a dense `xr.Dataset` (or
+      NetCDF file) with the `ext(z, y, x)` and `reff(z, y, x)` variables and
+      the cell-boundary coordinates, as raw arrays (IPRT 1-based indices), or
+      converted from the legacy I3RC/IPRT ASCII files with the new
+      `read_i3rc_cloud` function
+    - New `ssa_cst` parameter of `Cloud3D` to force the cloud single
+      scattering albedo
   - New `AerUser` class in `smartg.atmosphere` to define custom aerosol / cloud
     optical properties (extinction, SSA, phase matrix) from user-supplied data
   - New `get_prof_phases` utility function to easily extract phase matrices from
