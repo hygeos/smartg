@@ -15,18 +15,19 @@ import pandas as pd
 import pytest
 
 from smartg import conftest
-from smartg.atmosphere import AerOPAC, Atm1D
-from smartg.config import DIR_AUXDATA
-from smartg.diff import diff1
-from smartg.iprt.iprt import compute_deltam, groupIQUV
-from smartg.libATM3D import (
+from smartg.atmosphere import (
+    AerOPAC,
+    Atm1D,
     Atm3D,
     Cloud3D,
-    Grid3D,
-    create_sensors,
-    read_cld_nth_cte,
-    satellite_view,
+    read_i3rc_cloud,
 )
+from smartg.config import DIR_AUXDATA
+from smartg.diff import diff1
+from smartg.grid3d import Grid3D
+from smartg.iprt.iprt import compute_deltam, groupIQUV
+from smartg.libATM3D import create_sensors, satellite_view
+from smartg.phase import read_cld_nth_cte
 from smartg.smartg import AlbedoCst, LambSurface, Smartg
 from smartg.truncation import GT_trunc
 
@@ -125,8 +126,8 @@ NSENSORS = 50
 # left unchanged, so that the difference between the two tests below is
 # the truncation bias alone and not a difference of MC noise.
 #
-# The truncation is applied to one phase matrix at a time by Atm1D.calc
-# (smartg/atmosphere.py:1716) and, with aerosols, the C3 field holds one
+# The truncation is applied to one phase matrix at a time by Atm3D.calc
+# and, with aerosols, the C3 field holds one
 # mixed matrix per cloudy cell, so pytrunc.gt_phase_approx is called
 # 20489 times. Its cost per call, measured with pytrunc 1.1.0 at this
 # NTH on a Ryzen 9 5950X, the loop being single threaded:
@@ -332,13 +333,15 @@ def _build_cloud_c3():
     cloud3 = Cloud3D(
         "wc",
         w_ref=W_REF,
-        ext_reff_filename=dir_phase_b / "grids" / "cumulus.dat",
+        ds=read_i3rc_cloud(
+            dir_phase_b / "grids" / "cumulus.dat", loc_xgrid=0, loc_ygrid=0
+        ),
         phase=cld_phase,
         reff_acc=1,
         reff_min=5,
     )
 
-    xgrid, ygrid, zgrid = cloud3.get_xyz_grid(loc_xgrid=0, loc_ygrid=0)
+    xgrid, ygrid, zgrid = cloud3.get_xyz_grid()
     grid3 = Grid3D(xgrid * SCALE, ygrid * SCALE, zgrid * SCALE, periodic=True)
 
     return cloud3, grid3
@@ -351,7 +354,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
     The 3D cumulus field comes from cloud_c3, the Rayleigh scattering,
     the molecular absorption and, if with_aer, the aerosol extinction
     come from the 1D IPRT profile. truncation is the scattering phase
-    truncation, applied to the phase matrices by Atm1D.calc.
+    truncation, applied to the phase matrices by Atm3D.calc.
 
     Returns
     -------
@@ -378,6 +381,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
     mol_abs = _k_from_cumulated_od(od[:, 0], zgrid_desc)
     mol_sca = _k_from_cumulated_od(od[:, 1], zgrid_desc)
 
+    comp = []
     atm3_kwargs = {}
     if with_aer:
         ext_aer = _k_from_cumulated_od(od[:, 2], zgrid_desc)
@@ -392,50 +396,28 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
             w_ref=550.0,
             phase=phase_waso.sub()[0, 0, :, :],
         )
+        comp = [aer]
         atm3_kwargs = {
-            "comp": [aer],
             "aer_ext_1d": ext_aer,
             "aer_ssa_1d": np.full_like(ext_aer, SSA_AER_1D),
-            "nth_aer_1d": NTH,
         }
 
+    # ========= profiles computations
+    wls = np.array([W_REF])
     atm3 = Atm3D(
-        "afglt",
-        grid3,
-        wls=np.array([W_REF]),
-        wl_ref=W_REF,
-        cloud_3d=cloud3,
+        atm_1d=Atm1D("afglt", comp=comp),
+        grid_3d=grid3,
+        comp_3d=[cloud3],
+        pfwav=[W_REF],
         mol_sca_1d=mol_sca,
         mol_abs_1d=mol_abs,
         **atm3_kwargs,
     )
-
-    grid = atm3.get_grid()
-    prof_ray = atm3.get_glob_molecular_sca() * (1 / SCALE)
-    prof_abs = atm3.get_glob_molecular_abs() * (1 / SCALE)
-
-    prof_phases, ext_aer_3d, ssa_aer_3d = atm3.get_glob_aer_phase_ext_ssa(
-        wl_phase=[W_REF], n_theta=NTH
-    )
-    prof_aer = (ext_aer_3d * (1 / SCALE), ssa_aer_3d)
-
-    cells = atm3.get_cells_info()
-
-    # ========= profiles computations
-    atm3d = Atm1D(
-        "ATM3D",
-        grid=grid,
-        prof_ray=prof_ray,
-        prof_abs=prof_abs,
-        prof_aer=prof_aer,
-        prof_phases=prof_phases,
-        cells=cells,
-    )
-    pro = atm3d.calc(atm3.wls, n_theta=NTH, truncation=truncation)
+    pro = atm3.calc(wls, n_theta=NTH, truncation=truncation)
 
     surf = LambSurface(ALB=AlbedoCst(0.2))
 
-    return pro, grid3, surf, atm3.wls
+    return pro, grid3, surf, wls
 
 
 @pytest.fixture(scope="module")

@@ -12,18 +12,13 @@ import pandas as pd
 import pytest
 
 from smartg import conftest
-from smartg.atmosphere import Atm1D
+from smartg.atmosphere import Atm1D, Atm3D, Cloud3D
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
+from smartg.grid3d import Grid3D
 from smartg.iprt.iprt import compute_deltam, groupIQUV
-from smartg.libATM3D import (
-    Atm3D,
-    Cloud3D,
-    Grid3D,
-    create_sensors,
-    read_cld_nth_cte,
-    satellite_view,
-)
+from smartg.libATM3D import create_sensors, satellite_view
+from smartg.phase import read_cld_nth_cte
 from smartg.smartg import AlbedoCst, LambSurface, Smartg
 from smartg.truncation import GT_trunc
 
@@ -483,15 +478,15 @@ logger.addHandler(file_handler)
 # **********************************************************************
 
 
-def _build_atm_c2(truncation=None, tau_ray=None, **atm3_kwargs):
+def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
     """
     Build the IPRT C2 cubic cloud atmosphere.
 
-    Only the molecular arguments of Atm3D differ between the with and
-    without atmosphere sections, hence the **atm3_kwargs. tau_ray, if
+    Only the molecular arguments of Atm1D differ between the with and
+    without atmosphere sections, hence the **atm1d_kwargs. tau_ray, if
     given, adds a homogeneous Rayleigh layer of that total optical
     depth. truncation is the scattering phase truncation, applied to
-    the 3D phase matrices by Atm1D.calc.
+    the 3D phase matrices by Atm3D.calc.
 
     Returns
     -------
@@ -513,23 +508,25 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm3_kwargs):
     # First column x, second y and third z. We follow the IPRT
     # convention for indices (start at 1 instead of 0): the cubic cloud
     # is between 3 and 4 km in x and y, and between 2 and 3 km in z.
+    # Its single scattering albedo is forced to 1 (non absorbing).
     cloud_indices = np.zeros((1, 3), dtype=np.int32)
     cloud_indices[0, :] = np.array([2, 2, 2])
     cld_ext_coeff = np.zeros(1, dtype=np.float64)
-    cld_ext_coeff[0] = 10.0
+    cld_ext_coeff[0] = 10.0 * (1 / SCALE)
     reff = np.zeros_like(cld_ext_coeff, dtype=np.float64)
     reff[0] = 10.0
     cloud3 = Cloud3D(
         "wc",
         w_ref=800.0,
         ext_ref=cld_ext_coeff,
-        xyz_grids=[grid3.xGRID, grid3.yGRID, grid3.zGRID],
         cell_indices=cloud_indices,
         reff=reff,
         phase=cld_phase,
+        ssa_cst=1.0,
     )
 
     # ========= homogeneous Rayleigh layer
+    atm3_kwargs = {}
     if tau_ray is not None:
         dz = diff1(grid3.zGRID)
         tau_ray_cs = np.cumsum((dz / grid3.zGRID[-1]) * tau_ray).reshape(
@@ -540,43 +537,20 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm3_kwargs):
         atm3_kwargs["mol_sca_1d"] = sca_ray
         atm3_kwargs["mol_abs_1d"] = np.zeros_like(sca_ray)
 
+    # ========= profiles computations
+    wls = np.array([800.0])
     atm3 = Atm3D(
-        "afglt",
-        grid3,
-        wls=np.array([800.0]),
-        wl_ref=800.0,
-        cloud_3d=cloud3,
+        atm_1d=Atm1D("afglt", **atm1d_kwargs),
+        grid_3d=grid3,
+        comp_3d=[cloud3],
+        pfwav=[800.0],
         **atm3_kwargs,
     )
-
-    grid = atm3.get_grid()
-    prof_ray = atm3.get_glob_molecular_sca()  # Rayleigh
-    prof_abs = atm3.get_glob_molecular_abs()
-
-    ext_aer = atm3.get_glob_aer_ext() * (1 / SCALE)
-    # ssa forced to 1, must have the same form as ext_cld3D
-    ssa_aer = np.ones_like(ext_aer)
-    prof_aer = (ext_aer, ssa_aer)
-
-    prof_phases = atm3.get_glob_aer_phase(wl_phase=[800.0], n_theta=NTH)
-
-    cells = atm3.get_cells_info()
-
-    # ========= profiles computations
-    atm3d = Atm1D(
-        "ATM3D",
-        grid=grid,
-        prof_ray=prof_ray,
-        prof_abs=prof_abs,
-        prof_aer=prof_aer,
-        prof_phases=prof_phases,
-        cells=cells,
-    )
-    pro = atm3d.calc(atm3.wls, n_theta=NTH, truncation=truncation)
+    pro = atm3.calc(wls, n_theta=NTH, truncation=truncation)
 
     surf = LambSurface(ALB=AlbedoCst(0.2))
 
-    return pro, grid3, surf, atm3.wls
+    return pro, grid3, surf, wls
 
 
 @pytest.fixture(scope="module")
@@ -604,7 +578,7 @@ def atm_c2_noatm():
     """
     IPRT C2 atmosphere without the molecular contribution
     """
-    return _build_atm_c2(tauR=0.0, NO2=False, O3=0.0, H2O=0.0)
+    return _build_atm_c2(tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0)
 
 
 @pytest.fixture(scope="module")
@@ -613,7 +587,7 @@ def atm_c2_noatm_gt():
     Same as atm_c2_noatm, with the GT truncated phase matrices
     """
     return _build_atm_c2(
-        truncation=GT_TRUNC, tauR=0.0, NO2=False, O3=0.0, H2O=0.0
+        truncation=GT_TRUNC, tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0
     )
 
 
