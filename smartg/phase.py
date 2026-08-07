@@ -56,49 +56,6 @@ import xarray as xr
 from luts.luts import LUT
 
 
-def fournier_forand(
-    ang: NDArray[np.floating[Any]],
-    n: float,
-    mu: float,
-) -> NDArray[np.floating[Any]]:
-    """Fournier-Forand phase function normalized to 4*pi.
-
-    Parameters
-    ----------
-    ang : ndarray
-        Scattering angle in radians.
-    n : float
-        Particle refractive index.
-    mu : float
-        Slope parameter of the hyperbolic distribution.
-    """
-    v = (3 - mu) / 2
-    delta = 4 / (3 * (n - 1) * (n - 1)) * np.sin(ang / 2) * np.sin(ang / 2)
-    delta_180 = (
-        4 / (3 * (n - 1) * (n - 1)) * np.sin(np.pi / 2) * np.sin(np.pi / 2)
-    )
-
-    res = (
-        1
-        / (4 * np.pi * (1 - delta) * (1 - delta) * (delta**v))
-        * (
-            v * (1 - delta)
-            - (1 - (delta**v))
-            + (
-                delta * (1 - (delta**v)) - v * (1 - delta)
-            )
-            * 1
-            / (np.sin(ang / 2) * np.sin(ang / 2))
-        )
-        + (1 - (delta_180**v))
-        / (16 * np.pi * (delta_180 - 1) * (delta_180**v))
-        * (3 * np.cos(ang) * np.cos(ang) - 1)
-    )
-    res *= 4 * np.pi
-
-    return res
-
-
 def integ_phase(
     ang: NDArray[np.floating[Any]],
     pha: NDArray[np.floating[Any]],

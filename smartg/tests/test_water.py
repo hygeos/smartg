@@ -11,8 +11,9 @@ from pathlib import Path
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
-from smartg.phase import read_phase
+from smartg.phase import integ_phase, read_phase
 from smartg.smartg import RoughSurface, Smartg
+from smartg.truncation import DM_trunc, GT_trunc
 from smartg.water import Hydrosol, Water1D, WaterRw
 
 # -------------------------------------------------
@@ -562,3 +563,63 @@ def test_waterrw_simulation_matches_water1d(_rw_vs_w1d_run, stokes):
             f"  tol     : {tol}"
         ),
     )
+
+
+def test_hydrosol_calc_phase_truncation():
+    """GPU-free checks of the pytrunc truncation of the derived phase.
+
+    The phase matrices derived from the backscattering ratio must be
+    normalized to 2, non-negative, with only F11 and F22 = F11
+    non-null, and the truncation factor must be 1 - f (1 without
+    truncation). Configurations yielding a negative truncated phase
+    must be rejected.
+    """
+    wav = np.array([440.0, 550.0])
+    z = np.array([0.0, -10.0])
+    bbp = np.full((2, 2), 0.01)
+
+    def calc(**kwargs):
+        h = Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=721, **kwargs)
+        pha, coef = h.calc_phase(wav, z, bbp)
+        ang = np.deg2rad(pha["theta_oc"].values)
+        p = pha.values
+        assert not np.isnan(p).any()
+        assert (p >= 0.0).all()
+        np.testing.assert_allclose(
+            integ_phase(ang, p[:, :, 0, :]), 2.0, rtol=2e-3
+        )
+        np.testing.assert_array_equal(p[:, :, 4, :], p[:, :, 0, :])
+        assert (p[:, :, [1, 2, 3, 5], :] == 0.0).all()
+        return coef.values
+
+    # default GT truncation: coef_trunc = 1 - trunc_frac
+    np.testing.assert_allclose(calc(), 0.7)
+
+    # no truncation
+    np.testing.assert_array_equal(calc(truncation=None), 1.0)
+
+    # GT truncation with a searched truncation angle
+    coef = calc(
+        truncation=GT_trunc(
+            trunc_frac=0.5, theta_tol=30.0, lobatto_optimization=True
+        )
+    )
+    np.testing.assert_allclose(coef, 0.5)
+
+    # a truncation fraction larger than the energy of the truncated
+    # peak gives a negative truncated phase, as does the Legendre
+    # ringing of Delta-M on the Fournier-Forand mixtures
+    with pytest.raises(ValueError, match="negative"):
+        Hydrosol(
+            bp=0.1,
+            bbp_ratio=0.03,
+            n_theta=721,
+            truncation=GT_trunc(trunc_frac=0.5, theta_tr=5.0),
+        ).calc_phase(wav, z, np.full((2, 2), 0.03))
+    with pytest.raises(ValueError, match="negative"):
+        Hydrosol(
+            bp=0.1,
+            bbp_ratio=0.01,
+            n_theta=721,
+            truncation=DM_trunc(nb_streams=8),
+        ).calc_phase(wav, z, bbp)
