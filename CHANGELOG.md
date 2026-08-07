@@ -45,6 +45,13 @@ will be completed and corrected before the final `v2.0.0` release.
   - Several obsolete utility functions removed: `average`, `isiterable`, `isnumeric`,
     `vapor_pressure`, `lut_to_xr`, `compare_spectrum`, `convertVtoAngles`,
     `convertAnglestoV`, `Analyse_create_entity`, `trapzinterp`
+  - The `fournier_forand` function has been removed from `smartg.phase`
+    -> use `pytrunc.phase.fournier_forand` (pytrunc >= 2)
+  - The `theta_trunc` parameter of `Hydrosol`, `HydrosolPR` and `HydrosolZhai`
+    has been replaced by `truncation` (`DM_trunc | GT_trunc | None`, default
+    `GT_trunc(trunc_frac=0.3, theta_tr=5.0)`): the water phase functions are
+    now truncated with pytrunc like the atmospheric ones, and the scattering
+    coefficient is scaled by `1 - f`. `None` disables the truncation.
 
 * New features
   - New `AerUser` class in `smartg.atmosphere` to define custom aerosol / cloud

@@ -117,7 +117,8 @@ class GT_trunc(object):
         (in degrees).
     theta_tr : None or float, optional
         Directly provide the truncated angle (in degrees). If provided,
-        trunc_frac and theta_tol are ignored.
+        theta_tol is ignored; trunc_frac is still used as the truncation
+        fraction, only the search of the truncation angle is skipped.
     lobatto_optimization : bool, optional
         If True, use the optimized Lobatto quadrature for the integral.
         Reduces significantly the computational time in case theta_tr

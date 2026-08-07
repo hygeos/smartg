@@ -63,7 +63,9 @@ from smartg.phase import (
     calc_iphase,
     expand_phase_4_to_6,
 )
+from smartg.truncation import DM_trunc, GT_trunc
 from pytrunc.phase import fournier_forand
+from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
@@ -72,6 +74,77 @@ from pathlib import Path
 from typing import TypedDict, cast
 from numpy.typing import NDArray
 from luts.luts import LUT
+
+
+#: Default truncation of the derived water phase functions: the forward
+#: peak below 5 deg is replaced following Iwabuchi & Suzuki (2009), with
+#: a truncation fraction of 0.3 (larger fractions make the truncated
+#: phase function negative for the most forward-peaked Fournier-Forand
+#: mixtures).
+DEFAULT_WATER_TRUNC = GT_trunc(trunc_frac=0.3, theta_tr=5.0)
+
+
+def _truncate_f11(
+    f11: NDArray,
+    theta_deg: NDArray,
+    truncation: DM_trunc | GT_trunc,
+) -> tuple[NDArray, float]:
+    """
+    Truncate a single scalar phase function with pytrunc.
+
+    The `pha_scale_method` attribute of the truncation has no effect
+    here: only the F11 (and F22 = F11) terms of the water phase matrices
+    are non-null, so the rescaling of the other terms is the identity.
+
+    Parameters
+    ----------
+    f11 : ndarray
+        1-D phase function, normalized to 2 over `theta_deg`.
+    theta_deg : ndarray
+        Scattering angles in degrees.
+    truncation : DM_trunc or GT_trunc
+        Truncation configuration.
+
+    Returns
+    -------
+    f11_tr : ndarray
+        Truncated phase function, normalized to 2 over `theta_deg`.
+    f : float
+        Truncation fraction, i.e. the fraction of the scattered energy
+        removed with the forward peak.
+
+    Raises
+    ------
+    ValueError
+        If the truncation configuration is not recognized.
+    """
+    if isinstance(truncation, DM_trunc):
+        ds_pha = cast(
+            xr.Dataset,
+            delta_m_phase_approx(
+                f11,
+                theta_deg,
+                truncation.m_max,
+                method=truncation.integral_method,
+            ),
+        )
+    elif isinstance(truncation, GT_trunc):
+        ds_pha = cast(
+            xr.Dataset,
+            gt_phase_approx(
+                f11,
+                theta_deg,
+                truncation.trunc_frac,
+                method=truncation.integral_method,
+                th_tol=truncation.theta_tol,
+                th_f=truncation.theta_tr,
+                lobatto_optimization=truncation.lobatto_optimization,
+            ),
+        )
+    else:
+        raise ValueError("truncation method not recognized")
+
+    return ds_pha["phase_tr"].values, float(ds_pha["f"].values)
 
 
 class IOPDict(TypedDict):
@@ -175,8 +248,12 @@ class Hydrosol(object):
         Only used if `phase` is not provided.
     n_theta : int, optional
         Number of angles of the derived phase matrices.
-    theta_trunc : float, optional
-        Truncation angle in degrees of the derived phase matrices.
+    truncation : DM_trunc or GT_trunc or None, optional
+        Truncation of the forward peak of the derived phase matrices,
+        performed with pytrunc (see `smartg.truncation`, and the
+        truncation of the atmospheric phase matrices in `Atm1D.calc`).
+        None disables the truncation. Defaults to
+        `DEFAULT_WATER_TRUNC`.
     pfwav : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -191,8 +268,9 @@ class Hydrosol(object):
     When `phase` is not provided, the phase matrices are derived from
     the backscattering ratio `bbp_ratio` following Park & Ruddick
     (2005), as a mixture of two Fournier-Forand phase functions. Their
-    forward peak is truncated at `theta_trunc`, and the scattering
-    coefficient `bp` is scaled accordingly.
+    forward peak is truncated as configured by `truncation`, and the
+    scattering coefficient `bp` is scaled by `1 - f`, with `f` the
+    truncated fraction of the scattered energy.
 
     The pure water absorption and scattering coefficients are not
     defined here but in the Water1D profile, since pure water is always
@@ -213,7 +291,7 @@ class Hydrosol(object):
         acdom: NumericArrayLike | None = None,
         bbp_ratio: NumericArrayLike | None = None,
         n_theta: int = 721,
-        theta_trunc: float = 5.0,
+        truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
         pfwav: NumericArrayLike | None = None,
     ) -> None:
         self.bp = bp
@@ -222,7 +300,7 @@ class Hydrosol(object):
         self.bbp_ratio = bbp_ratio
         self._phase = expand_phase_4_to_6(phase)
         self.n_theta = n_theta
-        self.theta_trunc = theta_trunc
+        self.truncation = truncation
         self.pfwav = None if pfwav is None else np.array(pfwav)
 
         self._pha: xr.DataArray | None = None
@@ -326,10 +404,11 @@ class Hydrosol(object):
         factor, as a mixture of two Fournier-Forand phase functions
         weighted by the backscattering ratio.
 
-        The forward peak is truncated at `theta_trunc`, and the phase
-        matrices are normalized to 2 over the angular grid. Only the F11
-        (and F22 = F11) terms are non-null: the mixture is treated as a
-        scalar phase function.
+        The forward peak is truncated with pytrunc as configured by
+        `truncation` (nothing is truncated when it is None), and the
+        phase matrices are normalized to 2 over the angular grid. Only
+        the F11 (and F22 = F11) terms are non-null: the mixture is
+        treated as a scalar phase function.
 
         Parameters
         ----------
@@ -348,9 +427,20 @@ class Hydrosol(object):
             Phase matrices with dimensions [wav_phase, z_phase, stk,
             theta_oc].
         coef_trunc : DataArray
-            Truncation factor with dimensions [wav_phase, z_phase], by
-            which the scattering coefficient must be scaled to
-            compensate for the truncated peak.
+            Truncation factor `1 - f` with dimensions [wav_phase,
+            z_phase], by which the scattering coefficient must be
+            scaled to compensate for the truncated peak (`f` is the
+            truncated fraction of the scattered energy). All ones when
+            `truncation` is None.
+
+        Raises
+        ------
+        ValueError
+            If the truncated phase function is negative, which happens
+            when the imposed truncation fraction exceeds the energy of
+            the truncated peak (e.g. a GT truncation with both
+            `trunc_frac` and `theta_tr` imposed and a too large
+            `trunc_frac`).
 
         References
         ----------
@@ -369,33 +459,50 @@ class Hydrosol(object):
         )  # angle in radians
         # pytrunc's raw Fournier-Forand integrates to 1/(4*pi) over the
         # sphere: scale by 4*pi to normalize to 4*pi as before
-        ff1 = (
-            4.0 * np.pi * fournier_forand(ang, 1.117, 3.695, theta_unit="rad")
-        )[None, None, :]
-        ff2 = (
-            4.0 * np.pi * fournier_forand(ang, 1.05, 3.259, theta_unit="rad")
-        )[None, None, :]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ff1 = 4.0 * np.pi * fournier_forand(
+                ang, 1.117, 3.695, theta_unit="rad"
+            )
+            ff2 = 4.0 * np.pi * fournier_forand(
+                ang, 1.05, 3.259, theta_unit="rad"
+            )
+        # the Fournier-Forand functions diverge at 0: extend the second
+        # angular bin into the first
+        ff1[0] = ff1[1]
+        ff2[0] = ff2[1]
 
-        itronc = int(self.n_theta * self.theta_trunc / 180.0)
-        pha = np.zeros((nwav, nz, 6, self.n_theta), dtype="float64")
-        r1 = ((bbp_ratio - 0.002) / 0.028)[:, :, None]
+        # the mixture only depends on the backscattering ratio:
+        # normalize and truncate each unique value once
+        r1 = (bbp_ratio - 0.002) / 0.028
+        r1_uniq, inv = np.unique(r1.ravel(), return_inverse=True)
+        inv = inv.reshape(nwav, nz)
 
-        pha[:, :, 0, :] = r1 * ff1 + (1 - r1) * ff2
-
-        # truncate
-        pha[:, :, 0, :itronc] = pha[:, :, 0, itronc][:, :, None]
-
-        pha[:, :, 1, :] = 0.0
-        pha[:, :, 2, :] = 0.0
-        pha[:, :, 3, :] = 0.0
-        pha[:, :, 4, :] = pha[:, :, 0, :].copy()  # P22 = P11
-        pha[:, :, 5, :] = pha[:, :, 2, :].copy()  # P44 = P33
-
-        pha[:, :, :, 0] = 0.0
+        f11 = r1_uniq[:, None] * ff1 + (1 - r1_uniq[:, None]) * ff2
 
         # normalize
-        integ_ff = integ_phase(ang, pha[:, :, 0, :])
-        pha *= 2.0 / integ_ff[:, :, None, None]
+        f11 *= 2.0 / integ_phase(ang, f11)[:, None]
+
+        coef = np.ones(len(r1_uniq), dtype="float64")
+        if self.truncation is not None:
+            theta_deg = np.rad2deg(ang)
+            for i in range(len(r1_uniq)):
+                f11[i], f = _truncate_f11(
+                    f11[i], theta_deg, self.truncation
+                )
+                coef[i] = 1.0 - f
+            if (f11 < 0.0).any():
+                raise ValueError(
+                    "The truncated water phase function is negative: "
+                    "the truncation is inconsistent with the "
+                    "Fournier-Forand mixture (e.g. a truncation "
+                    "fraction larger than the energy of the truncated "
+                    "peak). Lower trunc_frac, or let GT_trunc search "
+                    "the truncation angle (theta_tr=None)."
+                )
+
+        pha = np.zeros((nwav, nz, 6, self.n_theta), dtype="float64")
+        pha[:, :, 0, :] = f11[inv]
+        pha[:, :, 4, :] = pha[:, :, 0, :]  # P22 = P11
 
         pha_da = xr.DataArray(
             pha,
@@ -407,7 +514,7 @@ class Hydrosol(object):
             },
         )
         coef_trunc = xr.DataArray(
-            integ_ff * 0.5,
+            coef[inv],
             dims=["wav_phase", "z_phase"],
             coords={"wav_phase": wav, "z_phase": z},
         )
@@ -657,8 +764,10 @@ class HydrosolPR(Hydrosol):
         Chlorophyll concentration in mg/m3.
     n_theta : int, optional
         Number of angles of the derived phase matrices.
-    theta_trunc : float, optional
-        Truncation angle in degrees of the derived phase matrices.
+    truncation : DM_trunc or GT_trunc or None, optional
+        Truncation of the forward peak of the derived phase matrices
+        (see `Hydrosol`). None disables the truncation. Defaults to
+        `DEFAULT_WATER_TRUNC`.
     pfwav : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -692,11 +801,11 @@ class HydrosolPR(Hydrosol):
         self,
         chl: float,
         n_theta: int = 72001,
-        theta_trunc: float = 5.0,
+        truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
         pfwav: NumericArrayLike | None = None,
         fqyc: float = 0.0,
     ) -> None:
-        super().__init__(n_theta=n_theta, theta_trunc=theta_trunc, pfwav=pfwav)
+        super().__init__(n_theta=n_theta, truncation=truncation, pfwav=pfwav)
         self.chl = chl
         self.fqyc = fqyc
 
@@ -820,8 +929,10 @@ class HydrosolZhai(Hydrosol):
         HydrosolPR.
     n_theta : int, optional
         Number of angles of the derived phase matrices.
-    theta_trunc : float, optional
-        Truncation angle in degrees of the derived phase matrices.
+    truncation : DM_trunc or GT_trunc or None, optional
+        Truncation of the forward peak of the derived phase matrices
+        (see `Hydrosol`). None disables the truncation. Defaults to
+        `DEFAULT_WATER_TRUNC`.
     pfwav : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -866,13 +977,13 @@ class HydrosolZhai(Hydrosol):
         self,
         chl_surf: float,
         n_theta: int = 7201,
-        theta_trunc: float = 5.0,
+        truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
         pfwav: NumericArrayLike | None = None,
         euphotic_depth: float | None = None,
         mixed: bool = False,
         fqyc: float = 0.0,
     ) -> None:
-        super().__init__(n_theta=n_theta, theta_trunc=theta_trunc, pfwav=pfwav)
+        super().__init__(n_theta=n_theta, truncation=truncation, pfwav=pfwav)
         self.chl_surf = chl_surf
         self.fqyc = fqyc
 
