@@ -26,6 +26,6 @@ dependencies:
   - luts
   - pytrunc>=1.1.0
   - pip
-  - gatiab>=1.1.1
+  - gatiab>=1.1.2
   - pip:
     - pycuda

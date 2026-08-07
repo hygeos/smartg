@@ -46,10 +46,10 @@ dependencies = [
     "ipympl",
     "pyhdf",
     "pycuda",
-    "geoclide>=3",
+    "geoclide>=4.0.0",
     "luts",
-    "pytrunc>=1.1.0",
-    "gatiab>=1.1.1",
+    "pytrunc>=2.0.0",
+    "gatiab>=1.1.2",
 ]
 
 [project.optional-dependencies]
