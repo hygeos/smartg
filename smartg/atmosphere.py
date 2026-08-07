@@ -1858,37 +1858,21 @@ class Atm1D(Atmosphere):
         distributions), a single phase matrix may
         introduce an important bias.
     prof_abs : None or 2-D ndarray, optional
-        - In 1D atm mode -> force the gaseous absorption optical
-          thickness vertical profile (nwavelength,nz),
-        it shortcuts any further gaseous absorption computation.
-        - In 3D atm mode -> the gaseous absorption optical properties
-          (1,nopt), where nopt is the number of unique optical
-          properties (gathering both the 1D values and the values of the
-          provided 3D grid). It must be completed by the cells grid.
+        Force the gaseous absorption optical thickness vertical profile
+        (nwavelength,nz), it shortcuts any further gaseous absorption
+        computation.
     prof_ray : None or 2-D ndarray, optional
-        - In 1D atm mode -> force the Rayleigh scattering optical
-          thickness vertical profile (nwavelength,nz),
-        it shortcuts any further Rayleigh scattering computation.
-        - In 3D atm mode -> the Rayleigh scattering optical properties
-          (1,nopt), where nopt is the number of unique optical
-          properties (gathering both the 1D values and the values of the
-          provided 3D grid). It must be completed by the cells grid.
+        Force the Rayleigh scattering optical thickness vertical
+        profile (nwavelength,nz), it shortcuts any further Rayleigh
+        scattering computation.
     prof_aer : None or tuple, optional
-        - In 1D atm mode - > A tuple (ext,ssa) with the aerosol
-          extinction optical thickness profile (ext) and
-        single scattering albedo arrays (ssa), it shortcuts any further
-        particles scattering computation.
-        - In 3D atm mode -> the aerosol optical properties (1,nopt),
-          where nopt is the number of unique optical properties
-          (gathering both the 1D values and the values of the provided
-          3D grid). It must be completed by the cells grid.
+        A tuple (ext,ssa) with the aerosol extinction optical thickness
+        profile (ext) and single scattering albedo arrays (ssa), it
+        shortcuts any further particles scattering computation.
     prof_phases : tuple or None, optional
         A tuple (iphase, phases ) where iphase is the phase matrix
-        indices profile (nwavelength,nz) in 1D atm mode, or (1,nopt) in
-        3D atm mode (with nopt the number of unique optical properties
-        gathering both the 1D values and the values of the provided 3D
-        grid), and phases is a list of phase matrices LUT (as outputs of
-        the `read_phase` utility).
+        indices profile (nwavelength,nz), and phases is a list of phase
+        matrices LUT (as outputs of the `read_phase` utility).
     rh_cst : float or None, optional
         Force relative humidity to be constant at this value. If None,
         relative humidity is recalculated from the temperature and water
@@ -1913,18 +1897,6 @@ class Atm1D(Atmosphere):
         auxdata:
             - 'NO2_acs_BogumilV1.0_coeffs.nc'
             - 'NO2_acs_Bingen_coeffs.nc'
-    cells : tuple or None, optional
-        If cells is given, then we are in 3D mode. Definitions:
-           - 'iopt' gives the number of the optical property
-             corresponding to the cells. iopt(Ncell)
-           - 'iabs' gives the number of the absorption property
-             corresponding to the cells. iabs(Ncell)
-           - Bounding Boxes(1 Point Bottom Left pmin, 1 Point Top Right
-             pmax) of the cells. pmin(3,Ncell). pmax(3,Ncell)
-           and 6 neighbours index (positive X, negative X, positive Y,
-           negative Y, positive Z, negative Z). neighbour(6,Ncell)
-           it returns coefficients in (km-1) instead of optical
-           thicknesses
     """
 
     def __init__(
@@ -1948,14 +1920,6 @@ class Atm1D(Atmosphere):
         ) = None,
         prof_phases: tuple[NDArray[np.integer], list[Any]] | None = None,
         rh_cst: float | None = None,
-        cells: tuple[
-            NDArray[np.integer],
-            NDArray[np.integer],
-            NDArray[np.floating],
-            NDArray[np.floating],
-            NDArray[np.integer],
-        ]
-        | None = None,
         o3_acs: PathType = "O3_acs_BogumilV3.0_coeffs",
         no2_acs: PathType = "NO2_acs_BogumilV1.0_coeffs",
     ) -> None:
@@ -1973,8 +1937,10 @@ class Atm1D(Atmosphere):
         self.prof_phases = prof_phases
         # store attribute using lowercase name for consistency
         self.rh_cst = rh_cst
-        self.opt3d = cells is not None
-        self.cells = cells
+        # 3D mode: only enabled by the private _Atm3DBackend used by
+        # Atm3D
+        self.opt3d = False
+        self.cells = None
 
         self.tau_r = np.asarray(tau_r) if tau_r is not None else None
         if isinstance(grid, str):
@@ -1985,52 +1951,28 @@ class Atm1D(Atmosphere):
         #
         # init directories and read atm file
         #
-        if fname.name == "ATM3D":
-            assert grid is not None, "For 3D atmosphere, grid must be provided"
-            Nopt = grid.size
-            prof = ProfileBase(None)
-            prof.z = np.arange(Nopt, dtype=np.float32)[::-1]
-            attr_names = [
-                "p",
-                "t",
-                "dens_air",
-                "dens_h2o",
-                "dens_o3",
-                "dens_n2o",
-                "dens_co",
-                "dens_ch4",
-                "dens_co2",
-                "dens_o2",
-                "dens_n2",
-                "dens_no2",
-                "dens_so2",
-            ]
-            for attr_name in attr_names:
-                setattr(prof, attr_name, np.zeros(Nopt, dtype=np.float32))
-            prof.rh_cst = rh_cst
-        else:
-            if fname.parent == Path("."):
-                fname = DIR_AUXDATA / "atmospheres" / fname.name
-            # By default if no suffix is given consider it as a netcdf
-            # file
-            if not fname.exists() and fname.suffix == "":
-                fname = fname.with_name(fname.name + ".nc")
+        if fname.parent == Path("."):
+            fname = DIR_AUXDATA / "atmospheres" / fname.name
+        # By default if no suffix is given consider it as a netcdf
+        # file
+        if not fname.exists() and fname.suffix == "":
+            fname = fname.with_name(fname.name + ".nc")
 
-            if fname.suffix == ".nc" or fname.suffix == ".dat":
-                prof = ProfileBase(
-                    fname,
-                    tco3=tco3,
-                    tcwp=tcwp,
-                    tcno2=no2,
-                    p0=p0,
-                    rh_cst=rh_cst,
-                    o3_h2o_alt=o3_h2o_alt,
-                )
-            else:
-                raise NameError(
-                    "This file format is not supported. Only '.nc' and"
-                    + " '.dat' are supported."
-                )
+        if fname.suffix == ".nc" or fname.suffix == ".dat":
+            prof = ProfileBase(
+                fname,
+                tco3=tco3,
+                tcwp=tcwp,
+                tcno2=no2,
+                p0=p0,
+                rh_cst=rh_cst,
+                o3_h2o_alt=o3_h2o_alt,
+            )
+        else:
+            raise NameError(
+                "This file format is not supported. Only '.nc' and"
+                + " '.dat' are supported."
+            )
 
         #
         # read gaseous acs
@@ -3281,6 +3223,99 @@ class Atm1D(Atmosphere):
         return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
 
 
+class _Atm3DBackend(Atm1D):
+    """Private Atm1D specialization computing the 3D profile dataset.
+
+    It holds the merged (1D levels + 3D component cells) optical
+    properties assembled by :class:`Atm3D` over the optical-property
+    index axis `grid`, with a dummy zeroed physical profile, and
+    enables the 3D branches of :meth:`Atm1D.calc`: the optical
+    properties are returned as coefficients in km-1 instead of
+    cumulated optical thicknesses, and the cells datasets are attached
+    to the profile.
+    """
+
+    def __init__(
+        self,
+        grid: NDArray[np.integer],
+        prof_ray: NDArray[np.floating],
+        prof_abs: NDArray[np.floating],
+        prof_aer: tuple[NDArray[np.floating], NDArray[np.floating]],
+        prof_phases: tuple[NDArray[np.integer], list[Any]] | None,
+        cells: tuple[
+            NDArray[np.integer],
+            NDArray[np.integer],
+            NDArray[np.floating],
+            NDArray[np.floating],
+            NDArray[np.integer],
+        ],
+        o3_acs: PathType = "O3_acs_BogumilV3.0_coeffs",
+        no2_acs: PathType = "NO2_acs_BogumilV1.0_coeffs",
+    ) -> None:
+
+        self.lat = 45.0
+        self.comp = []
+        self.pfwav = None
+        self.pfgrid = np.array([100.0, 0.0])
+        self.prof_abs = prof_abs
+        self.prof_ray = prof_ray
+        self.prof_aer = prof_aer
+        self.prof_phases = prof_phases
+        self.rh_cst = None
+        self.opt3d = True
+        self.cells = cells
+        self.tau_r = None
+
+        #
+        # dummy zeroed profile over the optical-property index axis
+        #
+        grid = np.asarray(grid)
+        Nopt = grid.size
+        prof = ProfileBase(None)
+        prof.z = np.arange(Nopt, dtype=np.float32)[::-1]
+        attr_names = [
+            "p",
+            "t",
+            "dens_air",
+            "dens_h2o",
+            "dens_o3",
+            "dens_n2o",
+            "dens_co",
+            "dens_ch4",
+            "dens_co2",
+            "dens_o2",
+            "dens_n2",
+            "dens_no2",
+            "dens_so2",
+        ]
+        for attr_name in attr_names:
+            setattr(prof, attr_name, np.zeros(Nopt, dtype=np.float32))
+        prof.rh_cst = None
+
+        #
+        # read gaseous acs
+        #
+        O3_acs_path = Path(o3_acs)
+        if O3_acs_path.parent == Path("."):
+            O3_acs_path = DIR_AUXDATA / "acs" / O3_acs_path.name
+        if not O3_acs_path.exists() and O3_acs_path.suffix != ".nc":
+            O3_acs_path = O3_acs_path.with_name(O3_acs_path.name + ".nc")
+        self.acs_o3 = xr.open_dataset(O3_acs_path)
+        self.acs_o3 = self.acs_o3.rename({"wav": "wavelength"})
+
+        NO2_acs_path = Path(no2_acs)
+        if NO2_acs_path.parent == Path("."):
+            NO2_acs_path = DIR_AUXDATA / "acs" / NO2_acs_path.name
+        if not NO2_acs_path.exists() and NO2_acs_path.suffix != ".nc":
+            NO2_acs_path = NO2_acs_path.with_name(NO2_acs_path.name + ".nc")
+        self.acs_no2 = xr.open_dataset(NO2_acs_path)
+        self.acs_no2 = self.acs_no2.rename({"wav": "wavelength"})
+
+        self._prof_src = prof
+        self.prof = prof.regrid(grid)
+        self.prof_red = prof.regrid(self.pfgrid)
+
+
 class Atm3D(Atmosphere):
     """3D atmospheric profile definition.
 
@@ -3513,8 +3548,7 @@ class Atm3D(Atmosphere):
         #
         # assemble the profile dataset
         #
-        backend = Atm1D(
-            "ATM3D",
+        backend = _Atm3DBackend(
             grid=self._grid(),
             prof_ray=mol_sca_glob,
             prof_abs=mol_abs_glob,
