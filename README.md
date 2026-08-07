@@ -1,9 +1,9 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)"
-            srcset="images/smartg-horizontal-c-transparent-on-dark.svg">
+            srcset="https://raw.githubusercontent.com/hygeos/smartg/master/images/smartg-horizontal-c-transparent-on-dark.svg">
     <img alt="SMART-G" width="360"
-         src="images/smartg-horizontal-c-transparent-on-light.svg">
+         src="https://raw.githubusercontent.com/hygeos/smartg/master/images/smartg-horizontal-c-transparent-on-light.svg">
   </picture>
 </p>
 
