@@ -18,6 +18,10 @@ read_phase_nc
 read_phase_cdf
     Read and process phase function data from libRadtran NetCDF
     aerosol/cloud files (``.cdf`` suffix).
+read_cld_nth_cte
+    Read a libRadtran or monochromatic IPRT NetCDF cloud file and
+    resample its phase matrix onto a constant number of scattering
+    angles.
 
 Phase Matrix Processing
 ------------------------
@@ -1115,3 +1119,58 @@ def get_prof_phases(
     prof_phases = (ipha_atm, lpha_da)
 
     return prof_phases
+
+
+def read_cld_nth_cte(filename: PathType, nb_theta: int = 721) -> LUT:
+    """Read a libRadtran water cloud file (e.g. wc.sol.mie.cdf) or a
+    monochromatic IPRT NetCDF cloud file, and convert it to a LUT
+    object with a constant theta discretisation i.e. nb_theta = cte.
+
+    Parameters
+    ----------
+    filename : PathType
+        File name with path location of the NetCDF cloud file.
+    nb_theta : int, optional
+        Number of theta discretization between 0 and 180 degrees.
+
+    Returns
+    -------
+    LUT
+        LUT object with the cloud phase matrix but with a constant
+        theta number = nb_theta, and with the dimensions
+        ``('wav_phase', 'reff', 'stk', 'theta_atm')``.
+    """
+    ds = xr.open_dataset(filename)
+
+    # Phase matrix (wl=670nm, reff, stk, ntheta)
+    phase = ds["phase"][:, :, :, :].data
+
+    NBSTK   = ds.nphamat.size
+    NBTHETA = nb_theta
+    NBREFF  = ds["reff"].size
+    NWAV    = ds["wavelen"].size
+    theta = np.linspace(0., 180., num=NBTHETA)
+    reff = ds["reff"].data
+    wavelength = ds["wavelen"].data*1e3
+
+    P = LUT( np.full((NWAV, NBREFF, 6, NBTHETA), np.nan, dtype=np.float32),
+             axes=[wavelength, reff, None, theta],
+             names=['wav_phase', 'reff', 'stk', 'theta_atm'],
+             desc="phase_atm" )
+
+    for iwav in range (0, NWAV):
+        for ireff in range(NBREFF):
+            for istk in range (0, NBSTK):
+                # ntheta (wl, reff, stk)
+                nth = ds["ntheta"][iwav, ireff, istk].data
+
+                # theta (wl, reff, stk, ntheta)
+                th = ds["theta"][iwav, ireff, istk, :].data
+
+                P.data[iwav, ireff, istk, :] = np.interp(theta, th[:nth], phase[iwav,ireff,istk,:nth],  period=np.inf)
+
+    if (NBSTK == 4): # spherical particles
+        P.data[:,:,4,:] = P.data[:,:,0,:].copy()
+        P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+
+    return P

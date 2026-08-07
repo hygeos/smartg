@@ -52,7 +52,9 @@ AerUser
 
 from __future__ import annotations
 
+import copy
 import numpy as np
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable, Sequence, TYPE_CHECKING
 from smartg.phase import calc_iphase
@@ -72,7 +74,8 @@ from smartg.typing import NumericArrayLike, PathType, RealNumber
 from smartg.diff import diff1
 from numpy.typing import NDArray
 from typing import Any, cast
-from luts.luts import LUT
+from luts.luts import LUT, Idx, from_xarray, read_mlut
+from smartg.grid3d import Grid3D, create_1d_grid
 
 if TYPE_CHECKING:
     # Imported only for type checking to avoid a circular import
@@ -1302,6 +1305,452 @@ class AerUser(AerOPAC):
         )
 
 
+class Comp3D(ABC):
+    """Base class for 3D atmospheric components (e.g. Cloud3D).
+
+    A 3D component describes particles occupying a set of cells of a
+    :class:`smartg.grid3d.Grid3D`, with per-cell optical properties.
+    Implementations must provide the per-cell extinction, single
+    scattering albedo and phase matrices used by :class:`Atm3D` to
+    merge the component into the 3D atmospheric profile.
+    """
+
+    @abstractmethod
+    def get_cell_indices(self) -> NDArray[np.int32]:
+        """Return the (N, 3) 0-based (ix, iy, iz) indices of the cells
+        occupied by the component, on the inner 3D grid (without
+        boundary cells).
+        """
+
+    @abstractmethod
+    def get_ext(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
+        """Return the (nwav, N) extinction coefficients in km-1 of the
+        component cells at the given wavelengths in nm.
+        """
+
+    @abstractmethod
+    def get_ssa(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
+        """Return the (nwav, N) single scattering albedos of the
+        component cells at the given wavelengths in nm.
+        """
+
+    @abstractmethod
+    def get_phase_set(
+        self,
+        wav_phase: NDArray[np.floating],
+        n_theta: int = 721,
+        conv_Iparper: bool = True,
+    ) -> tuple[list[LUT], NDArray[np.int32], int]:
+        """Return the component phase matrices.
+
+        Returns
+        -------
+        luts : list of LUT
+            The unique phase matrices ``('stk', 'theta_atm')``, as
+            ``nwav_phase`` consecutive blocks of ``n_unique`` matrices.
+        cell_phase_index : ndarray
+            (N,) index of each cell's phase matrix within one block.
+        n_unique : int
+            The number of unique phase matrices per wavelength block.
+        """
+
+
+class Cloud3D(Comp3D):
+    """3D cloud component.
+
+    The cloud bulk optical properties (spectral extinction, single
+    scattering albedo and phase matrices as a function of the droplet
+    effective radius) are read from a SMART-G cloud NetCDF file. The 3D
+    distribution of the cloud (per-cell extinction at the reference
+    wavelength `w_ref` and effective radius) is provided either as a
+    dense ``xr.Dataset`` (or NetCDF file path) following the SMART-G 3D
+    cloud schema, or as raw arrays.
+
+    The dense dataset schema is:
+        - ``ext(z, y, x)`` : extinction coefficient in km-1 at `w_ref`,
+          0 in cloud-free cells,
+        - ``reff(z, y, x)`` : droplet effective radius in um,
+        - coordinates ``x_bounds(x_b)``, ``y_bounds(y_b)``,
+          ``z_bounds(z_b)`` : the cell boundaries in km,
+        - optionally the attribute ``w_ref`` (in nm).
+    Legacy I3RC/IPRT ASCII cloud files can be converted to this schema
+    with :func:`read_i3rc_cloud`.
+
+    Parameters
+    ----------
+    fname : PathType
+        Cloud smartg filename with the bulk optical properties, choice
+        between: 'wc', 'ic_baum_asc', 'ic_baum_ghm' and 'ic_baum_sc'
+        (or the path to a file with the same structure).
+    w_ref : float or None, optional
+        Reference wavelength (nm) at which the cloud extinction is
+        given. If None, taken from the ``w_ref`` attribute of `ds`.
+    ds : xr.Dataset or PathType or None, optional
+        The 3D cloud field following the dense schema described above,
+        or the path of a NetCDF file containing it.
+    reff : array_like or None, optional
+        Numpy 1D array with the cloud effective radii (um) of each
+        cloudy cell. Ignored if `ds` is given.
+    ext_ref : array_like or None, optional
+        Numpy 1D array with the cloud extinction coefficients (km-1) at
+        `w_ref` of each cloudy cell. Ignored if `ds` is given.
+    cell_indices : ndarray or None, optional
+        (N, 3) array with the (ix, iy, iz) indices of the cloudy cells
+        on the inner 3D grid, following the 1-based IPRT convention.
+        Ignored if `ds` is given.
+    reff_acc : int or None, optional
+        Decimal accuracy of reff; the reff values are rounded to this
+        number of decimals. By default None, i.e. keep the values as
+        provided.
+    reff_min, reff_max : float or None, optional
+        The reff values less than reff_min are replaced by reff_min.
+        The same for values greater than reff_max.
+    phase : LUT or None, optional
+        LUT object with the cloud phase matrix depending on wav_phase,
+        reff, stk and theta_atm (e.g. from
+        :func:`smartg.phase.read_cld_nth_cte`). If None, the phase
+        matrices are computed from the bulk optical properties file.
+    ssa_cst : float or None, optional
+        Force the cloud single scattering albedo to this constant
+        value. If None, the single scattering albedo is interpolated
+        from the bulk optical properties file.
+    """
+
+    def __init__(
+        self,
+        fname: PathType,
+        w_ref: float | None = None,
+        ds: xr.Dataset | PathType | None = None,
+        reff: NumericArrayLike | None = None,
+        ext_ref: NumericArrayLike | None = None,
+        cell_indices: NDArray[np.integer] | None = None,
+        reff_acc: int | None = None,
+        reff_min: float | None = None,
+        reff_max: float | None = None,
+        phase: LUT | None = None,
+        ssa_cst: float | None = None,
+    ) -> None:
+
+        fname = Path(fname)
+        if fname.parent == Path("."):
+            fname = Path(DIR_AUXDATA) / "clouds" / fname
+
+        if "_sol" not in fname.name and fname.suffix != ".nc":
+            fname = fname.with_name(fname.stem + "_sol.nc")
+        elif fname.suffix != ".nc":
+            fname = fname.with_name(fname.name + ".nc")
+
+        if not fname.exists():
+            raise FileNotFoundError(f"{fname} does not exist")
+
+        self.fname = fname
+        self.cld_mlut = read_mlut(self.fname)
+        self.ssa_cst = ssa_cst
+
+        if ds is not None:
+            if not isinstance(ds, xr.Dataset):
+                ds = xr.open_dataset(ds)
+            missing = [
+                v
+                for v in ("ext", "reff")
+                if v not in ds.data_vars
+            ] + [
+                c
+                for c in ("x_bounds", "y_bounds", "z_bounds")
+                if c not in ds.coords
+            ]
+            if missing:
+                raise ValueError(
+                    "The 3D cloud dataset must define the 'ext' and "
+                    "'reff' variables over ('z', 'y', 'x') and the "
+                    "'x_bounds', 'y_bounds' and 'z_bounds' "
+                    f"coordinates; missing: {missing}"
+                )
+            self.ds = ds
+            # extract the cloudy cells in C order with x slowest, which
+            # follows the row order of the I3RC/IPRT ASCII cloud files
+            ext_xyz = ds["ext"].transpose("x", "y", "z").to_numpy()
+            reff_xyz = ds["reff"].transpose("x", "y", "z").to_numpy()
+            indices = np.argwhere(ext_xyz > 0.0)
+            self._cell_indices = indices.astype(np.int32)
+            self._ext_ref = ext_xyz[
+                indices[:, 0], indices[:, 1], indices[:, 2]
+            ]
+            reff = reff_xyz[indices[:, 0], indices[:, 1], indices[:, 2]]
+            if w_ref is None:
+                w_ref = ds.attrs.get("w_ref")
+        else:
+            if reff is None or ext_ref is None or cell_indices is None:
+                raise ValueError(
+                    "If ds is not given, then reff, ext_ref and "
+                    "cell_indices must all be given!"
+                )
+            self.ds = None
+            # the IPRT convention cell indices start at 1 instead of 0
+            self._cell_indices = (
+                np.asarray(cell_indices, dtype=np.int32) - 1
+            )
+            self._ext_ref = np.atleast_1d(
+                np.asarray(ext_ref, dtype=np.float64)
+            )
+            reff = np.atleast_1d(np.asarray(reff, dtype=np.float64))
+
+        if w_ref is None:
+            raise ValueError(
+                "w_ref must be given (or set as an attribute of ds)!"
+            )
+        self.w_ref = float(w_ref)
+
+        reff = np.asarray(reff, dtype=np.float64)
+        if reff_acc is not None:
+            reff = np.around(reff, decimals=reff_acc)
+        if reff_min is not None:
+            reff[reff < reff_min] = reff_min
+        if reff_max is not None:
+            reff[reff > reff_max] = reff_max
+        self.reff = reff
+
+        if phase is None:
+            self.phase = phase
+        # Check if phase is a LUT object with the correct axes
+        elif not isinstance(phase, LUT):
+            raise NameError("phase must be a LUT object!")
+        elif not all(
+            item in phase.names
+            for item in ["wav_phase", "reff", "stk", "theta_atm"]
+        ):
+            raise NameError(
+                "Phase matrix must have 4 dimensions: wav_phase, reff, "
+                "stk and theta_atm"
+            )
+        else:
+            self.phase = phase
+
+    def get_xyz_grid(
+        self,
+    ) -> tuple[
+        NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]
+    ]:
+        """Return the x, y and z cell-boundary arrays of the cloud
+        field, from which the :class:`smartg.grid3d.Grid3D` can be
+        built. Only available with the dataset input route.
+        """
+        if self.ds is None:
+            raise ValueError(
+                "The cloud grid is only known when the cloud is "
+                "provided as a dataset (ds parameter)"
+            )
+        return (
+            self.ds["x_bounds"].to_numpy(),
+            self.ds["y_bounds"].to_numpy(),
+            self.ds["z_bounds"].to_numpy(),
+        )
+
+    def get_cell_indices(self) -> NDArray[np.int32]:
+        return self._cell_indices
+
+    def get_ext_ref(self) -> NDArray[np.float64]:
+        """Return the (N,) cloud extinction coefficients in km-1 at the
+        reference wavelength `w_ref`.
+        """
+        return self._ext_ref
+
+    def get_ext(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
+        nwav = len(wav)
+        ext = np.zeros((nwav, self._ext_ref.size), dtype=np.float64)
+        ext_ref0 = self.cld_mlut["ext"][Idx(self.reff), Idx(self.w_ref)]
+        for iw in range(0, nwav):
+            ext_factor = (
+                self.cld_mlut["ext"][Idx(self.reff), Idx(wav[iw])] / ext_ref0
+            )
+            ext[iw, :] = self._ext_ref * ext_factor
+        return ext
+
+    def get_ssa(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
+        nwav = len(wav)
+        ssa = np.ones((nwav, self._ext_ref.size), dtype=np.float64)
+        if self.ssa_cst is not None:
+            ssa[:, :] = self.ssa_cst
+        else:
+            for iw in range(0, nwav):
+                ssa[iw, :] = self.cld_mlut["ssa"][
+                    Idx(self.reff), Idx(wav[iw])
+                ]
+        return ssa
+
+    def get_phase(self, n_theta: int = 721, conv_Iparper: bool = True) -> LUT:
+        """Return the cloud phase matrix LUT with the dimensions
+        ``('wav_phase', 'reff', 'stk', 'theta_atm')``.
+        """
+        # First check if we have already phase
+        if self.phase is not None:
+            if len(self.phase.axes[3]) == n_theta:
+                return self.phase
+            else:
+                theta = np.linspace(0.0, 180.0, n_theta)
+                return self.phase.sub()[:, :, :, Idx(theta)]
+
+        theta = np.linspace(0.0, 180.0, n_theta)
+        pha = self.cld_mlut["phase"].swapaxes("reff", "wav")[
+            :, :, :, Idx(theta)
+        ]
+        nwav = pha.shape[0]
+        nreff = pha.shape[1]
+        nstklut = pha.shape[2]
+
+        pha_ = np.zeros((nwav, nreff, 6, n_theta), dtype=np.float64)
+        pha_[:, :, :nstklut, :] = pha
+
+        P = LUT(
+            pha_,
+            axes=[
+                self.cld_mlut.axes["wav"],
+                self.cld_mlut.axes["reff"],
+                np.arange(6),
+                theta,
+            ],
+            names=["wav_phase", "reff", "stk", "theta_atm"],
+        )
+
+        if conv_Iparper:
+            if nstklut == 4:  # spherical particles
+                P.data[:, :, 4, :] = P.data[:, :, 0, :].copy()
+                P.data[:, :, 5, :] = P.data[:, :, 2, :].copy()
+                P0 = P.data[:, :, 0, :].copy()
+                P1 = P.data[:, :, 1, :].copy()
+                P4 = P.data[:, :, 4, :].copy()
+                P.data[:, :, 0, :] = 0.5*(P0+2*P1+P4)  # P11
+                P.data[:, :, 1, :] = 0.5*(P0-P4)       # P12=P21
+                P.data[:, :, 4, :] = 0.5*(P0-2*P1+P4)  # P22
+            elif nstklut == 6:  # non spherical particles
+                # note: the sign of P43/P34 affects only the sign of V,
+                # since V=0 for rayleigh scattering it does not matter
+                P0 = P.data[:, :, 0, :].copy()
+                P1 = P.data[:, :, 1, :].copy()
+                P4 = P.data[:, :, 4, :].copy()
+                P.data[:, :, 0, :] = 0.5*(P0+2*P1+P4)  # P11
+                P.data[:, :, 1, :] = 0.5*(P0-P4)       # P12=P21
+                P.data[:, :, 4, :] = 0.5*(P0-2*P1+P4)  # P22
+
+        return P
+
+    def get_phase_set(
+        self,
+        wav_phase: NDArray[np.floating],
+        n_theta: int = 721,
+        conv_Iparper: bool = True,
+    ) -> tuple[list[LUT], NDArray[np.int32], int]:
+        reff_unique = np.unique(self.reff)
+        n_unique = reff_unique.size
+
+        phase = self.get_phase(n_theta=n_theta, conv_Iparper=conv_Iparper)
+
+        luts = []
+        for iwav in range(0, len(wav_phase)):
+            # Loop only on the unique reff
+            for ireff in range(0, n_unique):
+                luts.append(
+                    phase.sub()[
+                        Idx(wav_phase[iwav]), Idx(reff_unique[ireff]), :, :
+                    ]
+                )
+
+        # Obtain the correct indices from the unique radii phase matrix
+        cell_phase_index = np.full(self.reff.size, np.nan, dtype=np.int32)
+        for ireff in range(0, n_unique):
+            cell_phase_index[
+                np.squeeze(np.argwhere(self.reff == reff_unique[ireff]))
+            ] = ireff
+
+        return luts, cell_phase_index, n_unique
+
+
+def read_i3rc_cloud(
+    filename: PathType,
+    loc_xgrid: str | RealNumber = "centered",
+    loc_ygrid: str | RealNumber = "centered",
+) -> xr.Dataset:
+    """Read an I3RC/IPRT ASCII 3D cloud file (e.g. cumulus.dat) and
+    convert it to the dense SMART-G 3D cloud dataset expected by
+    :class:`Cloud3D`.
+
+    The ASCII format is: one comment row, a row with the number of
+    cells ``Nx Ny Nz`` and a flag, a row with the cell sizes ``Dx Dy``
+    followed by the ``Nz + 1`` z boundaries in km, then one row per
+    cloudy cell with the 1-based ``ix iy iz`` indices, the extinction
+    coefficient in km-1 and the effective radius in um.
+
+    Parameters
+    ----------
+    filename : PathType
+        File name with path location of the ASCII cloud file.
+    loc_xgrid, loc_ygrid : str or scalar, optional
+        Location of the x and y grids. By default a str: "centered"
+        i.e. the grid center is at coordinate 0. Or give a scalar with
+        the starting position of the grid.
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset with the ``ext(z, y, x)`` and ``reff(z, y, x)``
+        variables and the ``x_bounds``, ``y_bounds`` and ``z_bounds``
+        cell-boundary coordinates.
+    """
+    # Read only the needed information, the two first rows.
+    # Be careful ! The second row have a greater dimension than the
+    # first one. Then -> two steps of reading.
+    contentA = pd.read_csv(
+        filename, skiprows=1, nrows=1, header=None, sep=r"\s+", dtype=float
+    ).values
+    contentB = pd.read_csv(
+        filename, skiprows=2, nrows=1, header=None, sep=r"\s+", dtype=float
+    ).values
+
+    # If there are empty dimensions remove them
+    contentA = np.squeeze(contentA)
+    contentB = np.squeeze(contentB)
+
+    # Number of cells in x and y axes
+    Nx = int(contentA[0])
+    Ny = int(contentA[1])
+
+    # Cell sizes in x and y axes
+    Dx = contentB[0]
+    Dy = contentB[1]
+
+    # Create x and y grid
+    xgrid = create_1d_grid(Nx, Dx, loc=loc_xgrid)
+    ygrid = create_1d_grid(Ny, Dy, loc=loc_ygrid)
+
+    # Grid in the z axis can be directly read from the file
+    zgrid = contentB[2:]
+    Nz = zgrid.size - 1
+
+    content = pd.read_csv(
+        filename, skiprows=3, header=None, sep=r"\s+", dtype=float
+    ).values
+    cell_indices = content[:, :3].astype(np.int32) - 1  # 1-based indices
+    ix, iy, iz = cell_indices[:, 0], cell_indices[:, 1], cell_indices[:, 2]
+
+    ext = np.zeros((Nz, Ny, Nx), dtype=np.float64)
+    reff = np.zeros_like(ext)
+    ext[iz, iy, ix] = content[:, 3]
+    reff[iz, iy, ix] = content[:, 4]
+
+    return xr.Dataset(
+        {
+            "ext": (("z", "y", "x"), ext),
+            "reff": (("z", "y", "x"), reff),
+        },
+        coords={
+            "x_bounds": ("x_b", xgrid),
+            "y_bounds": ("y_b", ygrid),
+            "z_bounds": ("z_b", zgrid),
+        },
+        attrs={"source": str(filename)},
+    )
+
+
 class Atmosphere(object):
     """Base class for atmosphere."""
 
@@ -1605,6 +2054,9 @@ class Atm1D(Atmosphere):
         #
         # regrid profile if required
         #
+        # keep the source profile so that Atm3D can regrid it onto the
+        # 3D vertical grid
+        self._prof_src = prof
         if grid is None:
             self.prof = prof
         else:
@@ -2827,6 +3279,475 @@ class Atm1D(Atmosphere):
         ]
 
         return pro_abs, pro_ray, (pro_aer, ssa_aer), (pro_iphase, pro_phases)
+
+
+class Atm3D(Atmosphere):
+    """3D atmospheric profile definition.
+
+    The 3D atmosphere combines a 1D background atmosphere (molecular
+    scattering and absorption, plus optional 1D aerosols), a 3D grid
+    and a list of 3D components (e.g. :class:`Cloud3D`). The 1D
+    background is evaluated on the vertical discretization of the 3D
+    grid and shared by all the cells at the same altitude; the cells
+    occupied by a 3D component get their own optical properties, mixing
+    the component with the co-located 1D background particles.
+
+    Example
+    -------
+    >>> atm3d = Atm3D(
+    ...     atm_1d=Atm1D("afglt"),
+    ...     grid_3d=Grid3D(xgrid, ygrid, zgrid, periodic=True),
+    ...     comp_3d=[Cloud3D("wc", w_ref=800., ds=cloud_field)],
+    ... )
+    >>> pro = atm3d.calc(wav)
+
+    Parameters
+    ----------
+    atm_1d : Atm1D
+        The 1D background atmosphere. It must be built without the
+        `grid` parameter: in 3D mode the vertical discretization is set
+        by `grid_3d`.
+    grid_3d : Grid3D
+        The 3D grid of the atmosphere.
+    comp_3d : list of Comp3D or None, optional
+        The 3D components to consider, i.e. a list of :class:`Cloud3D`
+        objects. Only a single component is supported for the moment.
+        If None or empty, the 3D atmosphere is horizontally uniform.
+    pfwav : array_like or None, optional
+        The wavelengths over which the phase matrices are calculated.
+        Then use the nearest wavelength during cuda simulation. Useful
+        to reduce the memory. If None, compute the phase matrices at
+        all wavelengths.
+    mol_sca_1d : 2-D ndarray or None, optional
+        Force the 1D molecular scattering (Rayleigh) coefficients in
+        km-1, with the shape (nwavelength, NZ + 1) where NZ is the
+        number of vertical cells of `grid_3d` including the boundary.
+        If None, computed from `atm_1d`.
+    mol_abs_1d : 2-D ndarray or None, optional
+        Force the 1D molecular absorption coefficients in km-1, same
+        shape as `mol_sca_1d`. If None, computed from `atm_1d`.
+    aer_ext_1d : 2-D ndarray or None, optional
+        Force the 1D aerosol extinction coefficients in km-1, same
+        shape as `mol_sca_1d`. If None, computed from `atm_1d`.
+    aer_ssa_1d : 2-D ndarray or None, optional
+        Force the 1D aerosol single scattering albedos, same shape as
+        `mol_sca_1d`. If None, computed from `atm_1d`.
+    aer_phase_1d : tuple or None, optional
+        Force the 1D aerosol phase matrices, as a tuple
+        (iphase, phases) where iphase is the (nwavelength, NZ + 1)
+        phase matrix indices profile and phases a LUT of phase
+        matrices. If None, computed from `atm_1d`.
+    """
+
+    def __init__(
+        self,
+        atm_1d: Atm1D,
+        grid_3d: Grid3D,
+        comp_3d: Sequence[Comp3D] | None = None,
+        pfwav: NumericArrayLike | None = None,
+        mol_sca_1d: NDArray[np.floating] | None = None,
+        mol_abs_1d: NDArray[np.floating] | None = None,
+        aer_ext_1d: NDArray[np.floating] | None = None,
+        aer_ssa_1d: NDArray[np.floating] | None = None,
+        aer_phase_1d: tuple[NDArray[np.integer], Any] | None = None,
+    ) -> None:
+
+        if not isinstance(atm_1d, Atm1D):
+            raise TypeError("atm_1d must be an Atm1D object!")
+        if not isinstance(grid_3d, Grid3D):
+            raise TypeError("grid_3d must be a Grid3D object!")
+        if atm_1d.prof is not atm_1d._prof_src:
+            raise ValueError(
+                "atm_1d must be built without the grid parameter: in 3D "
+                "mode the vertical discretization is set by grid_3d"
+            )
+
+        comp_3d = [] if comp_3d is None else list(comp_3d)
+        for comp in comp_3d:
+            if not isinstance(comp, Comp3D):
+                raise TypeError(
+                    "comp_3d must be a list of Comp3D objects (e.g. "
+                    "Cloud3D)!"
+                )
+        if len(comp_3d) > 1:
+            raise NotImplementedError(
+                "Only a single 3D component per simulation is supported "
+                "for the moment"
+            )
+
+        self.atm_1d = atm_1d
+        self.grid_3d = grid_3d
+        self.comp_3d = comp_3d
+        self.pfwav = None if pfwav is None else np.asarray(pfwav)
+        self.mol_sca_1d = mol_sca_1d
+        self.mol_abs_1d = mol_abs_1d
+        self.aer_ext_1d = aer_ext_1d
+        self.aer_ssa_1d = aer_ssa_1d
+        self.aer_phase_1d = aer_phase_1d
+
+        if comp_3d:
+            # cell indices on the boundary-extended grid
+            cell_indices = comp_3d[0].get_cell_indices().copy()
+            # shift the x and y indices if the grid has horizontal
+            # boundary cells
+            if grid_3d.Nx < grid_3d.NX:
+                cell_indices[:, :2] += 1
+            self._cell_indices = cell_indices
+            # flat indices of the component cells in the 3D grid
+            self._cell_flat_indices = np.ravel_multi_index(
+                (
+                    cell_indices[:, 0],
+                    cell_indices[:, 1],
+                    cell_indices[:, 2],
+                ),
+                dims=(grid_3d.NX, grid_3d.NY, grid_3d.NZ),
+            )
+        else:
+            self._cell_indices = None
+            self._cell_flat_indices = None
+
+    def calc(
+        self,
+        wav: NumericArrayLike | BandSet,
+        phase: bool = True,
+        n_theta: int = 721,
+        use_old_calc_iphase: bool = False,
+        truncation: DM_trunc | GT_trunc | None = None,
+    ) -> xr.Dataset:
+        """Compute the 3D atmospheric profile at given wavelengths.
+
+        Parameters
+        ----------
+        wav : array_like or BandSet
+            Wavelengths in nm.
+        phase : bool, optional
+            If True (default), compute the phase matrices.
+        n_theta : int, optional
+            Number of scattering angles of the phase matrices.
+        use_old_calc_iphase : bool, optional
+            Use the old (slower) implementation of calc_iphase.
+        truncation : DM_trunc, GT_trunc or None, optional
+            Phase matrix truncation method. See :meth:`Atm1D.calc`.
+
+        Returns
+        -------
+        xr.Dataset
+            The atmospheric profile, with the optical properties given
+            as coefficients in km-1 over the `iopt` axis of unique
+            optical properties, and the 3D cell datasets (`iopt_atm`,
+            `iabs_atm`, `pmin_atm`, `pmax_atm`, `neighbour_atm`)
+            consumed by :meth:`smartg.smartg.Smartg.run`.
+        """
+        if isinstance(wav, BandSet):
+            wls = np.asarray(wav.wav)
+        else:
+            wls = np.atleast_1d(np.asarray(wav))
+        wav_pha = self.pfwav if self.pfwav is not None else wls
+
+        #
+        # 1D background optical properties on the 3D vertical grid
+        #
+        pha_1d = len(self.atm_1d.comp) > 0
+        ipha_aer_1d = None
+        pha_aer_1d = None
+        mol_sca_1d = self.mol_sca_1d
+        mol_abs_1d = self.mol_abs_1d
+        ext_aer_1d = self.aer_ext_1d
+        ssa_aer_1d = self.aer_ssa_1d
+        if (
+            mol_sca_1d is None
+            or mol_abs_1d is None
+            or ext_aer_1d is None
+            or ssa_aer_1d is None
+            or self.aer_phase_1d is None
+        ):
+            atm_1d = copy.copy(self.atm_1d)
+            atm_1d.prof = self.atm_1d._prof_src.regrid(
+                np.asarray(self.grid_3d.zGRID[::-1])
+            )
+            ds_1d = atm_1d.calc(wav, phase=pha_1d, n_theta=n_theta)
+            if mol_sca_1d is None:
+                mol_sca_1d = od2k(ds_1d, "OD_r")
+            if mol_abs_1d is None:
+                mol_abs_1d = od2k(ds_1d, "OD_g")
+            if ext_aer_1d is None:
+                ext_aer_1d = od2k(ds_1d, "OD_p")
+            if ssa_aer_1d is None:
+                ssa_aer_1d = ds_1d["ssa_p_atm"]
+            if pha_1d:
+                ipha_aer_1d = ds_1d["iphase_atm"]
+                pha_aer_1d = ds_1d["phase_atm"]
+        assert mol_sca_1d is not None and mol_abs_1d is not None
+        assert ext_aer_1d is not None and ssa_aer_1d is not None
+
+        if self.aer_phase_1d is not None:
+            ipha_aer_1d = self.aer_phase_1d[0]
+            pha_aer_1d = self.aer_phase_1d[1]
+
+        # Atm1D.calc returns xarray objects, while the 3D optical
+        # properties are numpy arrays and LUT. The 1d aerosol ones are
+        # converted once here, so that the merge can mix the 1d and the
+        # 3d ones.
+        if isinstance(pha_aer_1d, xr.DataArray):
+            pha_aer_1d = from_xarray(pha_aer_1d)
+        if isinstance(ipha_aer_1d, xr.DataArray):
+            ipha_aer_1d = ipha_aer_1d.values
+        if isinstance(ssa_aer_1d, xr.DataArray):
+            ssa_aer_1d = ssa_aer_1d.values
+
+        #
+        # merge the 1D background and the 3D components
+        #
+        mol_sca_glob = self._glob_molecular(mol_sca_1d)
+        mol_abs_glob = self._glob_molecular(mol_abs_1d)
+        ext_glob, ssa_glob, prof_phases = self._glob_particles(
+            wls,
+            wav_pha,
+            n_theta,
+            ext_aer_1d,
+            ssa_aer_1d,
+            ipha_aer_1d,
+            pha_aer_1d,
+        )
+
+        #
+        # assemble the profile dataset
+        #
+        backend = Atm1D(
+            "ATM3D",
+            grid=self._grid(),
+            prof_ray=mol_sca_glob,
+            prof_abs=mol_abs_glob,
+            prof_aer=(ext_glob, ssa_glob),
+            prof_phases=prof_phases,
+            cells=self._cells_info(),
+        )
+        return backend.calc(
+            wav,
+            phase=phase,
+            n_theta=n_theta,
+            use_old_calc_iphase=use_old_calc_iphase,
+            truncation=truncation,
+        )
+
+    def _grid(self) -> NDArray[np.integer]:
+        """The optical-property index axis of the merged profile: the
+        1D levels first, then one entry per 3D component cell.
+        """
+        Nopt = self.grid_3d.NZ + 1
+        if self._cell_indices is not None:
+            Nopt += self._cell_indices.shape[0]
+        return np.arange(Nopt)
+
+    def _glob_molecular(
+        self, mol_1d: NDArray[np.floating]
+    ) -> NDArray[np.floating]:
+        """Merge the (nwav, NZ + 1) 1D molecular coefficients into the
+        global (nwav, Nopt) array: the component cells replicate the 1D
+        value at the same altitude.
+        """
+        if self._cell_flat_indices is None:
+            return mol_1d
+        return np.concatenate(
+            [
+                mol_1d,
+                mol_1d[
+                    :,
+                    self.grid_3d.NZ
+                    - self.grid_3d.idz[self._cell_flat_indices],
+                ],
+            ],
+            axis=1,
+        )
+
+    def _glob_particles(
+        self,
+        wls: NDArray[np.floating],
+        wav_pha: NDArray[np.floating],
+        n_theta: int,
+        ext_aer_1d: NDArray[np.floating],
+        ssa_aer_1d: NDArray[np.floating],
+        ipha_aer_1d: NDArray[np.integer] | None,
+        pha_aer_1d: Any,
+    ) -> tuple[
+        NDArray[np.floating],
+        NDArray[np.floating],
+        tuple[NDArray[np.int32], list[Any]] | None,
+    ]:
+        """Merge the 1D aerosols and the 3D component into the global
+        (nwav, Nopt) particle extinction and single scattering albedo
+        arrays and the global phase matrix set.
+        """
+        NZ = self.grid_3d.NZ
+        nbz = NZ + 1
+
+        if not self.comp_3d:
+            if pha_aer_1d is None:
+                return ext_aer_1d, ssa_aer_1d, None
+            luts = []
+            for iwav in range(0, len(wav_pha)):
+                for iz in range(0, nbz):
+                    luts.append(
+                        pha_aer_1d.sub()[ipha_aer_1d[iwav, iz], :, :]
+                    )
+            ipha3d = np.zeros((len(wav_pha), nbz), dtype=np.int32)
+            for iwav in range(0, len(wav_pha)):
+                ipha3d[iwav, :] = np.arange(nbz, dtype=np.int32) + (
+                    iwav * nbz
+                )
+            return ext_aer_1d, ssa_aer_1d, (ipha3d, luts)
+
+        comp = self.comp_3d[0]
+        assert self._cell_indices is not None
+        n_cell = self._cell_indices.shape[0]
+        ext_3d = comp.get_ext(wls)
+        ssa_3d = comp.get_ssa(wls)
+        cld_luts, cell_pha_idx, n_unique = comp.get_phase_set(
+            wav_pha, n_theta=n_theta
+        )
+
+        ext_mix_3d = np.zeros((len(wls), n_cell), dtype=np.float64)
+        ssa_mix_3d = np.ones((len(wls), n_cell), dtype=np.float64)
+
+        if pha_aer_1d is None:  # case no 1d aer given
+            ext_mix_3d[:, :] = ext_3d
+            ssa_mix_3d[:, :] = ssa_3d
+
+            luts = cld_luts
+            # Concatenate plan parallel + 3d optical prop (first
+            # without considering wl)
+            phase_glob_indices_w0 = np.concatenate(
+                [np.zeros(nbz, dtype=np.int32), cell_pha_idx[:]]
+            )
+        else:  # case list of 1d aer is given
+            # Dim of pha_aer: iphase, stk, theta.
+            # 3d phase : cld_luts[0].axes[1] -> theta dim
+            # 1d phase : pha_aer_1d.axes[2] -> theta dim
+            if len(pha_aer_1d.axes[2]) == n_theta:
+                phase_aer_1d = pha_aer_1d
+            else:
+                phase_aer_1d = pha_aer_1d.sub()[
+                    :, :, Idx(cld_luts[0].axes[1])
+                ]
+
+            # the altitude level of the 1D aerosols co-located with
+            # each component cell (kept as-is from the historical
+            # implementation; note the inconsistency with the
+            # NZ - idz mapping used for the molecular properties)
+            idz_atm = []
+            for icell in range(0, n_cell):
+                idz = self._cell_indices[icell, 2]
+                idz_atm.append(NZ + 1 - idz)
+
+            # First plan parallel phase
+            luts = []
+            for iwav in range(0, len(wav_pha)):
+                for iz in range(0, nbz):
+                    luts.append(
+                        phase_aer_1d.sub()[ipha_aer_1d[iwav, iz], :, :]
+                    )
+
+            # Second 3d mix phase, weighted by the extinctions at the
+            # phase wavelengths
+            ext_3d_pha = comp.get_ext(wav_pha)
+            ssa_3d_pha = comp.get_ssa(wav_pha)
+            for iwav in range(0, len(wav_pha)):
+                ssa_aer_tmp = ssa_aer_1d[iwav, idz_atm]
+                ext_aer_tmp = ext_aer_1d[iwav, idz_atm]
+                ext_mix_tmp = ext_aer_tmp + ext_3d_pha[iwav, :]
+
+                for icell in range(0, n_cell):
+                    pha_cld_tmp = cld_luts[
+                        iwav * n_unique + cell_pha_idx[icell]
+                    ]
+                    pha_aer_tmp = phase_aer_1d.sub()[
+                        ipha_aer_1d[iwav, idz_atm[icell]], :, :
+                    ]
+                    pha_tot = (
+                        (
+                            pha_aer_tmp
+                            * ext_aer_tmp[icell]
+                            * ssa_aer_tmp[icell]
+                        )
+                        + (
+                            pha_cld_tmp
+                            * ext_3d_pha[iwav, icell]
+                            * ssa_3d_pha[iwav, icell]
+                        )
+                    ) / ext_mix_tmp[icell]
+                    luts.append(pha_tot)
+
+            # the mixed extinctions and ssa of the profile, at the
+            # profile wavelengths
+            for iwav in range(0, len(wls)):
+                ssa_aer_tmp = ssa_aer_1d[iwav, idz_atm]
+                ext_aer_tmp = ext_aer_1d[iwav, idz_atm]
+                ext_mix_tmp = ext_aer_tmp + ext_3d[iwav, :]
+                ext_mix_3d[iwav, :] = ext_mix_tmp
+                ssa_mix_3d[iwav, :] = (
+                    ext_aer_tmp * ssa_aer_tmp
+                    + ext_3d[iwav, :] * ssa_3d[iwav, :]
+                ) / ext_mix_tmp
+
+            # Concatenate plan parallel + 3d optical prop (first
+            # without considering wl)
+            phase_glob_indices_w0 = np.arange(
+                nbz + n_cell, dtype=np.int32
+            )
+
+        # Create a table with only the component properties but in
+        # global shape i.e. for each cells not sharing the same opt
+        # prop, and other commun cells in z, following the plan
+        # parallel 1D atm philosophy
+        ext_glob = np.concatenate([ext_aer_1d, ext_mix_3d], axis=1)
+        ssa_glob = np.concatenate([ssa_aer_1d[:, :], ssa_mix_3d], axis=1)
+
+        # Now consider the wl dimension
+        ipha3d = np.zeros(
+            (len(wav_pha), phase_glob_indices_w0.size), dtype=np.int32
+        )
+        for iwav in range(0, len(wav_pha)):
+            ipha3d[iwav, :] = phase_glob_indices_w0[:] + (
+                iwav * n_unique
+            )
+
+        return ext_glob, ssa_glob, (ipha3d, luts)
+
+    def _cells_info(
+        self,
+    ) -> tuple[
+        NDArray[np.int32],
+        NDArray[np.int32],
+        NDArray[np.float32],
+        NDArray[np.float32],
+        NDArray[np.int32],
+    ]:
+        """The per-cell optical and absorption property indices, cell
+        bounding boxes and neighbours, as expected by the `cells`
+        parameter of the profile backend.
+        """
+        NZ = self.grid_3d.NZ
+        Nopt = self._grid().size
+
+        iopt = np.zeros(self.grid_3d.NCELL, dtype=np.int32)
+        iabs = np.zeros_like(iopt)
+        # Scattering depending on Z for clear atmosphere (Rayleigh)
+        iopt[:] = np.arange(Nopt)[NZ - self.grid_3d.idz]
+        # Absorption depending on Z only
+        iabs[:] = np.arange(Nopt)[NZ - self.grid_3d.idz]
+
+        if self._cell_flat_indices is not None:
+            iopt[self._cell_flat_indices] = NZ + 1 + np.arange(
+                self._cell_flat_indices.size
+            )
+
+        return (
+            iopt,
+            iabs,
+            self.grid_3d.pmin,
+            self.grid_3d.pmax,
+            self.grid_3d.neigh,
+        )
 
 
 class ProfileBase(object):
