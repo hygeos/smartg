@@ -61,9 +61,9 @@ from smartg.albedo import AlbedoCst, AlbedoLike
 from smartg.phase import (
     integ_phase,
     calc_iphase,
-    fournier_forand,
     expand_phase_4_to_6,
 )
+from pytrunc.phase import fournier_forand
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA as dir_aux
 from smartg.interp import interp_1d_coord
@@ -367,8 +367,14 @@ class Hydrosol(object):
         ang = np.linspace(
             0, np.pi, self.n_theta, dtype="float64"
         )  # angle in radians
-        ff1 = fournier_forand(ang, 1.117, 3.695)[None, None, :]
-        ff2 = fournier_forand(ang, 1.05, 3.259)[None, None, :]
+        # pytrunc's raw Fournier-Forand integrates to 1/(4*pi) over the
+        # sphere: scale by 4*pi to normalize to 4*pi as before
+        ff1 = (
+            4.0 * np.pi * fournier_forand(ang, 1.117, 3.695, theta_unit="rad")
+        )[None, None, :]
+        ff2 = (
+            4.0 * np.pi * fournier_forand(ang, 1.05, 3.259, theta_unit="rad")
+        )[None, None, :]
 
         itronc = int(self.n_theta * self.theta_trunc / 180.0)
         pha = np.zeros((nwav, nz, 6, self.n_theta), dtype="float64")
