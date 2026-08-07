@@ -3968,9 +3968,9 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
 
             # Normal of the plane object after applying rotation transform.
             normal_base = gc.Vector(0, 0, 1)
-            tp_rx0 = gc.get_rotateX_tf(lobj[i].transformation.rotation[0])
-            tp_ry0 = gc.get_rotateY_tf(lobj[i].transformation.rotation[1])
-            tp_rz0 = gc.get_rotateZ_tf(lobj[i].transformation.rotation[2])
+            tp_rx0 = gc.get_rotate_x_tf(lobj[i].transformation.rotation[0])
+            tp_ry0 = gc.get_rotate_y_tf(lobj[i].transformation.rotation[1])
+            tp_rz0 = gc.get_rotate_z_tf(lobj[i].transformation.rotation[2])
             if lobj[i].transformation.rot_order == "XYZ":
                 tp_t0 = tp_rx0 * tp_ry0 * tp_rz0
             elif lobj[i].transformation.rot_order == "XZY":

@@ -598,9 +598,9 @@ class Entity(object):
                 self.transformation.transz,
             )
         )
-        rot_x = gc.get_rotateX_tf(self.transformation.rotx)
-        rot_y = gc.get_rotateY_tf(self.transformation.roty)
-        rot_z = gc.get_rotateZ_tf(self.transformation.rotz)
+        rot_x = gc.get_rotate_x_tf(self.transformation.rotx)
+        rot_y = gc.get_rotate_y_tf(self.transformation.roty)
+        rot_z = gc.get_rotate_z_tf(self.transformation.rotz)
 
         # total tt of all transform together
         tt = None
@@ -965,8 +965,8 @@ def find_rots(
 
         rot_y_deg = np.degrees(rot_y)
         rot_z_deg = np.degrees(rot_z)
-        tt_z = gc.get_rotateZ_tf(rot_z_deg)
-        tt_y = gc.get_rotateY_tf(rot_y_deg)
+        tt_z = gc.get_rotate_z_tf(rot_z_deg)
+        tt_y = gc.get_rotate_y_tf(rot_y_deg)
         combined_tf = tt_z * tt_y
         initial_normal = gc.normalize(combined_tf(gc.Vector(0.0, 0.0, 1.0)))
 
@@ -1292,10 +1292,10 @@ def generate_le_h(
     # its inverse
     mm2_inv = np.transpose(mm2)
     world_to_obj = gc.Transform(
-        m=mm2, mInv=mm2_inv
+        m=mm2, m_inv=mm2_inv
     )  # move from world/initial to object∕new basis
     obj_to_world = gc.Transform(
-        m=mm2_inv, mInv=mm2
+        m=mm2_inv, m_inv=mm2
     )  # move from object∕new to world/initial basis
 
     # The normal of the heliostat heliostat_normal = z axis of the new
@@ -1484,7 +1484,7 @@ def generate_box(
 
     # With the global Z rotation, 4 translations are needed in the
     # direction after the rotation, for Face 0 to 3
-    tt = gc.get_rotateZ_tf(rot_z)
+    tt = gc.get_rotate_z_tf(rot_z)
     offset_x = gc.Vector(1.0, 0.0, 0.0)
     offset_x = tt(offset_x)
     offset_x = gc.normalize(offset_x) * half_dim_x
@@ -1958,7 +1958,7 @@ def generate_h_a(
             radial_dist = first_dist
             for _j in range(0, n_heliostats):
                 tmp_pos = gc.Point(radial_dist, 0.0, 0.0)
-                rot_z_tf = gc.get_rotateZ_tf(current_ang_deg)
+                rot_z_tf = gc.get_rotate_z_tf(current_ang_deg)
                 tmp_pos = rot_z_tf(tmp_pos)
                 heliostat_positions.append(
                     gc.Point(tmp_pos.x, tmp_pos.y, tmp_pos.z + pillar_height)
@@ -1967,7 +1967,7 @@ def generate_h_a(
             current_ang_deg += gap_ang_deg
     else:
         radial_dist = first_dist
-        rot_z_tf = gc.get_rotateZ_tf(current_ang_deg)
+        rot_z_tf = gc.get_rotate_z_tf(current_ang_deg)
         for _j in range(0, n_heliostats):
             tmp_pos = gc.Point(radial_dist, 0.0, 0.0)
             tmp_pos = rot_z_tf(tmp_pos)
@@ -2161,9 +2161,9 @@ def rotate_vector(
                      a Vector class)
     """
     tt = gc.Transform()
-    tr_x = gc.get_rotateX_tf(rot_x)
-    tr_y = gc.get_rotateY_tf(rot_y)
-    tr_z = gc.get_rotateZ_tf(rot_z)
+    tr_x = gc.get_rotate_x_tf(rot_x)
+    tr_y = gc.get_rotate_y_tf(rot_y)
+    tr_z = gc.get_rotate_z_tf(rot_z)
     if rotation_order == "XYZ":
         tt = tr_x * tr_y * tr_z
     elif rotation_order == "XZY":
