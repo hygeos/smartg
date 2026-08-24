@@ -13,6 +13,7 @@ import numpy as np
 from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
+from smartg.sensor import LOC_CODE, Sensor, get_sensor
 from smartg.phase import convert_phase_to_iparper
 from smartg.water import Water
 from warnings import warn
@@ -54,7 +55,6 @@ NONE     =  5
 OCEAN    =  6
 SEAFLOOR =  7
 OBJSURF  =  8
-LOC_CODE = ['','ATMOS','SURF0P','SURF0M','','','OCEAN','SEAFLOOR', 'OBJSURF']
 
 # constants definition
 # (should match #defines in src/communs.h)
@@ -499,75 +499,6 @@ class Environment(object):
 
     def __str__(self):
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
-
-class Sensor(object):
-    """
-    Definition of the sensor
-
-    Parameters
-    ----------
-    POSX : float, optional
-       The sensor position along the x axis. Default 0.
-    POSY : float, optional
-        The sensor position along the y axis. Default 0.
-    POSZ : float, optional
-        The sensor position along the z axis. Default 0.
-    THDEG : float, optional
-        The source/viewing zenith angle in forward/backward mode. Zenith > 90 for downward looking, 
-        < 90 for upward. Default Zenith.
-    PHDEG : float, optional
-        The source/viewing azimuth angle in forward/backward mode. Zenith > 90 for downward looking,
-        <90 for upward. Default Zenith.
-    LOC : str, optional
-        Localization of the sensor. Possibilities are:
-
-        * 'SURF0P' -> Start from the surface looking upward, at TOA (air side). Default value.
-        * 'SURF0M' -> Start from the surface looking downward, at ocean surface (water side).
-        * 'ATMOS' -> Start from the atmosphere.
-        * 'OCEAN' -> Start from the ocean.
-        * 'SEAFLOOM' -> Start from the ocean surface.
-        * 'OBJSURF' -> Start from a 3d object surface.
-    FOV : float, optional
-        The field of view in degrees. Default 0.
-    TYPE : int, optional
-        The radiative quantity type. Three possibilities:
-
-        * 0 -> Radiance (default).
-        * 1 -> Planar flux.
-        * 2 -> Spherical flux.
-    ICELL : int, optional
-        The box index where the sensor is located. Only for simulations with a 3D atmosphere.
-    """
-    def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
-                 LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None, CELL_SIZE = -1.):
-
-        if (isinstance(V, gc.Vector)):
-            THDEG, PHDEG = gc.vec2ang(V)
-        elif (V != None):
-            raise NameError('V argument must be a Vector')
-        
-        if FOV > 0. and TYPE == 0:
-            import warnings
-            warnings.warn('FOV > 0 is not yet allowed for radiance sensor (TYPE=0). It will be forced to 0.')
-            FOV = 0. # also already forced to 0 in the CUDA code 
-
-        self.dict = {
-            'POSX':  POSX,
-            'POSY':  POSY,
-            'POSZ':  POSZ,
-            'THDEG': THDEG,
-            'PHDEG': PHDEG,
-            'LOC'  : LOC_CODE.index(LOC),
-            'FOV':   FOV,
-            'TYPE':  TYPE,
-            'ICELL': ICELL,
-            'ILAM_0': ILAM_0,
-            'ILAM_1': ILAM_1
-        }
-        self.cell_size = CELL_SIZE
-
-    def __str__(self):
-        return 'SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'.format(**self.dict)
 
 class StdevLim(object):
     """
@@ -4322,68 +4253,3 @@ def _find_extinction(ip, fp, prof_atm, w_ind=0):
     n_ext = np.exp(-abs(tau_hit))
 
     return n_ext
-
-    
-def get_sensor(vza_level, level=0., vaa=0., earth_radius=6371., height_toa=120., fov=0., 
-               type=0, pp=True, verbose=False):
-    """Build a sensor located on the atmospheric boundary from view angles.
-
-    This helper is used in backward simulations. The viewing zenith angle
-    (`vza_level`) is defined at altitude `level` and transformed into a sensor
-    position on the top-of-atmosphere boundary.
-
-    Parameters
-    ----------
-    vza_level : float
-        Viewing zenith angle (degrees) defined at altitude `level`.
-    level : float, optional
-        Altitude (km) at which `vza_level` is defined. Default is 0.0 (ground).
-    vaa : float, optional
-        Viewing azimuth angle (degrees). Default is 0.0.
-    earth_radius : float, optional
-        Earth radius (km), used in spherical-shell geometry. Default is 6371.0.
-    height_toa : float, optional
-        Altitude (km) of the top of atmosphere. Default is 120.0.
-    fov : float, optional
-        Sensor field of view (degrees). Default is 0.0.
-    type : int, optional
-        Sensor measurement type:
-
-        - 0: radiance (default)
-        - 1: planar irradiance
-        - 2: spherical irradiance
-    pp : bool, optional
-        If `True`, use plane-parallel geometry; if `False`, use spherical-shell
-        geometry. Default is `True`.
-    verbose : bool, optional
-        If `True`, print the computed sensor position. Default is `False`.
-
-    Returns
-    -------
-    Sensor
-        Sensor instance positioned on the atmospheric boundary with orientation
-        derived from the input angles.
-    """
-    radius = (height_toa + earth_radius)
-    large_dist = float("inf") # large distance(km)
-    origin = gc.Point(0., 0., level) if pp else gc.Point(0., 0., earth_radius+level)
-    # Boundaries
-    if pp: Boundary = gc.BBox(gc.Point(-large_dist, -large_dist, 0.), gc.Point(large_dist, large_dist, height_toa)) # Rectangle for atmosphere for PP
-    else : Boundary = gc.Sphere(radius) # Create the Earth + atmosphere sphere for SS
-    # Compute the direction vector object from Zenith and Azimuth angles
-    dir = gc.ang2vec(vza_level, vaa)
-    # Make a ray from origin in direction dir
-    ray = gc.Ray(o=origin, d=dir)
-    # Compute the intersection with the Boundary
-    if pp: _, t1, hit = Boundary.intersect(ray, ds_output=False)
-    else : t1, hit = Boundary.is_intersection_t(ray) 
-    if not hit: raise NameError("The intersection test failed!! Check input paramaters.")
-    # Computations of sensor position
-    pos = origin + dir*t1
-    if verbose : print("VZA =", vza_level, "--> pos =", pos)
-
-    th, ph = gc.vec2ang(dir, vec_view='nadir')
-    if (th == 0. or th ==180.): ph=vaa-180. # no impact on I value, but possible impact o Q, U and V
-    return Sensor(POSX=pos.x, POSY=pos.y, POSZ=pos.z, THDEG=th, PHDEG=ph, LOC='ATMOS', FOV=fov, TYPE=type)
-
-

@@ -17,7 +17,7 @@ from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.grid3d import Grid3D
 from smartg.iprt.iprt import compute_deltam, groupIQUV
-from smartg.sensor import create_sensors
+from smartg.sensor import get_sensors_grid
 from smartg.smartg_view import satellite_view
 from smartg.phase import read_cld_nth_cte
 from smartg.smartg import AlbedoCst, LambSurface, Smartg
@@ -684,15 +684,16 @@ def _run_case_backward(
     posz = _resolve_posz(sensor_grid, posz_key)
 
     # !!!! grid3 is different than the sensors grid !!!
-    _x0, _y0, sensors, _icells = create_sensors(
-        sensor_grid,
+    sensors = get_sensors_grid(
+        sensor_grid.xgrid,
+        sensor_grid.ygrid,
         pos_z=posz,
         th_deg=theta,
         ph_deg=phi,
         fov=0.0,
         loc="ATMOS",
         cell_size=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
-        grid_3d_atm=grid3,
+        grid_3d=grid3,
     )
 
     # count_level = 0 -> only COUNT TOA
@@ -748,15 +749,16 @@ def _run_group_forward(
 
     # In forward the sensors are the source: they are aimed at the sun
     # position instead of at the viewing direction
-    _x0, _y0, sensors, _icells = create_sensors(
-        sensor_grid,
+    sensors = get_sensors_grid(
+        sensor_grid.xgrid,
+        sensor_grid.ygrid,
         pos_z=posz,
         th_deg=180.0 - theta_0,
         ph_deg=180.0 - PHI_0,
         fov=0.0,
         loc="ATMOS",
         cell_size=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
-        grid_3d_atm=grid3,
+        grid_3d=grid3,
     )
 
     theta = np.array([CASES[case][1] for case in cases])

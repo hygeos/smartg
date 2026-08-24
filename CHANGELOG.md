@@ -44,11 +44,13 @@ will be completed and corrected before the final `v2.0.0` release.
     - The `Atm3D` and `Cloud3D` classes of `smartg.libATM3D` and their
       getter-based construction have been removed
     - The `smartg.libATM3D` module has been removed entirely:
-      - `create_sensors` has been moved to the new `smartg.sensor` module,
-        with PEP 8 parameter names (`POSZ` → `pos_z`, `THDEG` → `th_deg`,
-        `PHDEG` → `ph_deg`, `FOV` → `fov`, `TYPE` → `sensor_type`,
-        `LOC` → `loc`, `CELL_SIZE` → `cell_size`,
-        `grid3D_atm` → `grid_3d_atm`)
+      - `create_sensors` has been reworked into
+        `smartg.sensor.get_sensors_grid(xgrid, ygrid, pos_z, th_deg,
+        ph_deg, fov, sensor_type, loc, cell_size, grid_3d)`: the
+        sensor raster is now given by the two boundary arrays, the
+        atmosphere `Grid3D` is only needed in 3D (`ICELL` is ignored
+        by the kernel in 1D) and the function returns the sensor
+        list only
       - `satellite_view` has been moved to `smartg.smartg_view`, with PEP 8
         parameter names (`interp_name` → `interpolation`,
         `color_bar` → `cmap`, `color_reverse` → `cmap_reverse`,
@@ -60,6 +62,11 @@ will be completed and corrected before the final `v2.0.0` release.
       - The helpers `OOMFormatter`, `find_order`, `find_order_or_none`,
         `get_tv`, `find_id` and `get_sensors_pos_icells_from_3Dgrid` are now
         private
+  - The `Sensor` class, the `get_sensor` function and the `LOC_CODE`
+    constant have been moved from `smartg.smartg` to the new
+    `smartg.sensor` module; they are still re-exported by
+    `smartg.smartg`, so existing imports keep working. The `type`
+    parameter of `get_sensor` has been renamed to `sensor_type`
     - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
       `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
       new `smartg.grid3d` module
