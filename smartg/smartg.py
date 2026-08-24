@@ -539,7 +539,7 @@ class Sensor(object):
         The box index where the sensor is located. Only for simulations with a 3D atmosphere.
     """
     def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0., PHDEG=180.,
-                 LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None, CELL_SIZE = -1):
+                 LOC='SURF0P', FOV=0., TYPE=0, ICELL=0, ILAM_0=-1, ILAM_1=-1, V = None, CELL_SIZE = -1.):
 
         if (isinstance(V, gc.Vector)):
             THDEG, PHDEG = gc.vec2ang(V)

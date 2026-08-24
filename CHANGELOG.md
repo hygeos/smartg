@@ -42,8 +42,24 @@ will be completed and corrected before the final `v2.0.0` release.
   - The `new_atm` parameter of `AtmAFGL` has been removed
   - The 3D atmosphere construction API has been reworked (see New features):
     - The `Atm3D` and `Cloud3D` classes of `smartg.libATM3D` and their
-      getter-based construction have been removed; `smartg.libATM3D` now only
-      contains the sensor creation and visualization helpers
+      getter-based construction have been removed
+    - The `smartg.libATM3D` module has been removed entirely:
+      - `create_sensors` has been moved to the new `smartg.sensor` module,
+        with PEP 8 parameter names (`POSZ` → `pos_z`, `THDEG` → `th_deg`,
+        `PHDEG` → `ph_deg`, `FOV` → `fov`, `TYPE` → `sensor_type`,
+        `LOC` → `loc`, `CELL_SIZE` → `cell_size`,
+        `grid3D_atm` → `grid_3d_atm`)
+      - `satellite_view` has been moved to `smartg.smartg_view`, with PEP 8
+        parameter names (`interp_name` → `interpolation`,
+        `color_bar` → `cmap`, `color_reverse` → `cmap_reverse`,
+        `fig_size` → `figsize`, `font_size` → `fontsize`,
+        `save_file` → `save_path`, `stk` → `stokes`,
+        `mat_force` → `matrices`, `cb_shrink` → `cbar_shrink`,
+        `cb_sform` → `cbar_sci_format`, `fig_title` → `title`); it now
+        returns the created `Figure`
+      - The helpers `OOMFormatter`, `find_order`, `find_order_or_none`,
+        `get_tv`, `find_id` and `get_sensors_pos_icells_from_3Dgrid` are now
+        private
     - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
       `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
       new `smartg.grid3d` module

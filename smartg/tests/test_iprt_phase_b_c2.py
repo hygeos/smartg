@@ -17,7 +17,8 @@ from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.grid3d import Grid3D
 from smartg.iprt.iprt import compute_deltam, groupIQUV
-from smartg.libATM3D import create_sensors, satellite_view
+from smartg.sensor import create_sensors
+from smartg.smartg_view import satellite_view
 from smartg.phase import read_cld_nth_cte
 from smartg.smartg import AlbedoCst, LambSurface, Smartg
 from smartg.truncation import GT_trunc
@@ -685,13 +686,13 @@ def _run_case_backward(
     # !!!! grid3 is different than the sensors grid !!!
     _x0, _y0, sensors, _icells = create_sensors(
         sensor_grid,
-        POSZ=posz,
-        THDEG=theta,
-        PHDEG=phi,
-        FOV=0.0,
-        LOC="ATMOS",
-        CELL_SIZE=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
-        grid3D_atm=grid3,
+        pos_z=posz,
+        th_deg=theta,
+        ph_deg=phi,
+        fov=0.0,
+        loc="ATMOS",
+        cell_size=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
+        grid_3d_atm=grid3,
     )
 
     # count_level = 0 -> only COUNT TOA
@@ -749,13 +750,13 @@ def _run_group_forward(
     # position instead of at the viewing direction
     _x0, _y0, sensors, _icells = create_sensors(
         sensor_grid,
-        POSZ=posz,
-        THDEG=180.0 - theta_0,
-        PHDEG=180.0 - PHI_0,
-        FOV=0.0,
-        LOC="ATMOS",
-        CELL_SIZE=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
-        grid3D_atm=grid3,
+        pos_z=posz,
+        th_deg=180.0 - theta_0,
+        ph_deg=180.0 - PHI_0,
+        fov=0.0,
+        loc="ATMOS",
+        cell_size=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
+        grid_3d_atm=grid3,
     )
 
     theta = np.array([CASES[case][1] for case in cases])
@@ -880,18 +881,16 @@ def _plot_case(
         wl,
         "none",
         ["jet", "coolwarm", "coolwarm", "coolwarm"],
-        fig_size=(10.5, 7),
-        font_size=int(16),
+        figsize=(10.5, 7),
+        fontsize=16,
         vmin=[i_vmin, -max_q, -max_u, -max_v],
         vmax=[max_i, max_q, max_u, max_v],
         scale=False,
-        save_file=None,
-        stk=stk,
-        factor=None,
-        mat_force=[i_sg, q_sg, u_sg, v_sg],
-        cb_shrink=1,
-        cb_sform=True,
-        fig_title=f"C2 - case {case} - SMART-G - {title_suffix}",
+        stokes=stk,
+        matrices=[i_sg, q_sg, u_sg, v_sg],
+        cbar_shrink=1,
+        cbar_sci_format=True,
+        title=f"C2 - case {case} - SMART-G - {title_suffix}",
     )
     conftest.savefig(request, bbox_inches="tight")
 
@@ -908,18 +907,16 @@ def _plot_case(
         wl,
         "none",
         ["coolwarm", "coolwarm", "coolwarm", "coolwarm"],
-        fig_size=(10.5, 7),
-        font_size=int(16),
+        figsize=(10.5, 7),
+        fontsize=16,
         vmin=[-val for val in lim],
         vmax=lim,
         scale=False,
-        save_file=None,
-        stk=stk,
-        factor=None,
-        mat_force=[i_sg - i_my, q_sg - q_my, u_sg - u_my, v_sg - v_my],
-        cb_shrink=1,
-        cb_sform=True,
-        fig_title=(
+        stokes=stk,
+        matrices=[i_sg - i_my, q_sg - q_my, u_sg - u_my, v_sg - v_my],
+        cbar_shrink=1,
+        cbar_sci_format=True,
+        title=(
             f"C2 - case {case} - dif(SMART-G - MYSTIC) - {title_suffix}"
         ),
     )

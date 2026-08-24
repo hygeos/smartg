@@ -5,6 +5,7 @@ spectra, phase functions, profiles, and receiver/category diagnostics
 stored in SMART-G xarray datasets.
 """
 
+import math
 import warnings
 from pylab import (
     figure,
@@ -30,13 +31,16 @@ from matplotlib import colors as mcolors
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import ScalarFormatter
+from matplotlib.cm import ScalarMappable
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d import art3d
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from typing import Any, Literal, Sequence, cast
 import geoclide as gc
-from luts.luts import Idx_base, MLUT, LUT
+from luts.luts import Idx, Idx_base, MLUT, LUT
 from smartg.diff import diff1, diff1_end
+from smartg.grid3d import is_same_cell_size
 from smartg.objects3d import (
     Entity,
     GroupE,
@@ -2978,6 +2982,456 @@ def receiver_view(
     plt.title("Receiver surface")
     if save_path is not None:
         plt.savefig(save_path + ".pdf")
+
+
+_STOKES_LABELS = {
+    "I": "I_up (TOA)",
+    "Q": "Q_up (TOA)",
+    "U": "U_up (TOA)",
+    "V": "V_up (TOA)",
+}
+
+
+class _FixedOrderFormatter(ScalarFormatter):
+    """
+    Scalar formatter with a fixed order of magnitude and format.
+
+    Parameters
+    ----------
+    order : int, optional
+        The fixed order of magnitude. Default: 0.
+    fformat : str, optional
+        The fixed tick format. Default: "%2.2f".
+    offset : bool, optional
+        Whether to use offset notation. Default: True.
+    math_text : bool, optional
+        Whether to use fancy math formatting. Default: True.
+    """
+
+    def __init__(
+        self,
+        order: int = 0,
+        fformat: str = "%2.2f",
+        offset: bool = True,
+        math_text: bool = True,
+    ):
+        self._fixed_order = order
+        self._fixed_format = fformat
+        super().__init__(useOffset=offset, useMathText=math_text)
+
+    def _set_order_of_magnitude(self) -> None:
+        self.orderOfMagnitude = self._fixed_order
+
+    def _set_format(self) -> None:
+        self.format = self._fixed_format
+        if self.get_useMathText():
+            self.format = r"$\mathdefault{%s}$" % self.format
+
+
+def _order_of_magnitude(values: np.ndarray) -> int:
+    """
+    Return the order of magnitude of the largest absolute value.
+    """
+    return math.floor(math.log(np.max(np.abs(values)), 10))
+
+
+def _colorbar_formatter(
+    values: np.ndarray, sci_format: bool
+) -> ScalarFormatter | None:
+    """
+    Return the colorbar tick formatter, or None for the default one.
+    """
+    if sci_format:
+        return _FixedOrderFormatter(_order_of_magnitude(values))
+    return None
+
+
+def _colorbar_ticks(
+    vmin: float | None, vmax: float | None, values: np.ndarray
+) -> np.ndarray:
+    """
+    Return 9 evenly spaced colorbar tick values.
+
+    The bounds default to the extrema of ``values`` when ``vmin`` or
+    ``vmax`` is None.
+    """
+    lo = np.min(values) if vmin is None else vmin
+    hi = np.max(values) if vmax is None else vmax
+    return np.linspace(lo, hi, 9, endpoint=True)
+
+
+def _as_list(value: Any, size: int) -> list:
+    """
+    Broadcast a scalar or a 1-element list to a list of given size.
+    """
+    if not isinstance(value, list):
+        value = [value]
+    if len(value) == 1:
+        value = value * size
+    return list(value)
+
+
+def _get_cmaps(
+    cmap: str | mcolors.Colormap | list,
+    cmap_reverse: bool | list[bool],
+    size: int,
+) -> list[mcolors.Colormap]:
+    """
+    Build one colormap per panel, with NaN values shown in white.
+    """
+    cmaps = []
+    for cm, reverse in zip(_as_list(cmap, size),
+                           _as_list(cmap_reverse, size)):
+        if isinstance(cm, str):
+            cm = plt.get_cmap(cm)
+        if reverse:
+            cm = cm.reversed()
+        cm.set_bad("white", 1.0)
+        cmaps.append(cm)
+    return cmaps
+
+
+def _extract_matrices(
+    mlut: MLUT,
+    stokes_labels: list[str],
+    wl: float | None,
+    factor: float,
+    n_x: int,
+    n_y: int,
+) -> list[np.ndarray]:
+    """
+    Extract the (n_y, n_x) Stokes matrices from a SMART-G MLUT.
+    """
+    names = mlut[stokes_labels[0]].names
+    if not all(d in names for d in ("Azimuth angles", "Zenith angles")):
+        raise ValueError(
+            "The Azimuth angles and/or Zenith angles dimension(s) "
+            "are/is missing"
+        )
+
+    # The two last indices, for the axes Azimuth angles and Zenith
+    # angles, are forced to 0 (we consider only one sun position)
+    # TODO Consider also the case with several sun positions
+    ind: list[Any] = [slice(None)] * len(names)
+    ind[-1] = 0
+    ind[-2] = 0
+    if (mlut.axes["Azimuth angles"].size > 1
+            or mlut.axes["Zenith angles"].size > 1):
+        raise ValueError(
+            "Dimension size > 1 is not authorized for both Azimuth "
+            "and Zenith angles"
+        )
+
+    if "wavelength" in names:
+        # TODO Enable a default value, for example for the
+        # monochromatic case
+        ind[-3] = Idx(wl)
+
+    if "sensor index" in names:
+        n_sensor = mlut.axes["sensor index"].size
+    else:
+        n_sensor = 1
+    if n_x * n_y != n_sensor:
+        raise ValueError(
+            "The product of Nx and Ny must be equal to the number "
+            "of sensors!"
+        )
+
+    # The order of n_y and n_x below is very important! The matrices
+    # are in the following form:
+    # - x0 ... xn
+    # y0
+    #  :
+    # yn
+    return [
+        np.asarray(mlut[label][tuple(ind)]).reshape(n_y, n_x) * factor
+        for label in stokes_labels
+    ]
+
+
+def _draw_map(
+    ax: Axes,
+    mat: np.ndarray,
+    xgrid: np.ndarray,
+    ygrid: np.ndarray,
+    vmin: float | None,
+    vmax: float | None,
+    cmap: mcolors.Colormap,
+    interpolation: str,
+) -> ScalarMappable:
+    """
+    Draw one 2D map on an axes.
+
+    Use :func:`matplotlib.pyplot.imshow` when both grids are regular,
+    :func:`matplotlib.pyplot.pcolormesh` otherwise.
+    """
+    if is_same_cell_size(xgrid) and is_same_cell_size(ygrid):
+        # By default in the imshow function the origin
+        # (origin='upper'), i.e. mat[0, 0], is at the upper left, and
+        # we want the origin at the bottom left (origin='lower')
+        return ax.imshow(
+            mat, vmin=vmin, vmax=vmax, origin="lower", cmap=cmap,
+            interpolation=interpolation,
+            extent=(float(xgrid.min()), float(xgrid.max()),
+                    float(ygrid.min()), float(ygrid.max())),
+        )
+    if interpolation != "none":
+        warnings.warn(
+            "the interpolation variable cannot be used (and then "
+            "ignored) when using pcolormesh! i.e. when we have a "
+            "cell size varying along the x or y axis."
+        )
+    img = ax.pcolormesh(xgrid, ygrid, mat, vmin=vmin, vmax=vmax,
+                        cmap=cmap)
+    ax.axis("scaled")  # x and y axes with the same scaling
+    return img
+
+
+def _add_colorbar(
+    ax: Axes,
+    img: ScalarMappable,
+    mat: np.ndarray,
+    label: str,
+    vmin: float | None,
+    vmax: float | None,
+    cbar_shrink: float,
+    cbar_sci_format: bool,
+    fontsize: int,
+) -> None:
+    """
+    Add a vertical colorbar next to one panel.
+
+    The tick values and format are computed on the non-NaN values of
+    the matrix.
+    """
+    fig = cast(Figure, ax.figure)
+    values = mat[~np.isnan(mat)]
+    cbar = fig.colorbar(
+        img, ax=ax, shrink=cbar_shrink, orientation="vertical",
+        format=_colorbar_formatter(values, cbar_sci_format),
+        ticks=_colorbar_ticks(vmin, vmax, values),
+    )
+    cbar.set_label(label, fontsize=fontsize)
+
+
+def satellite_view(
+    mlut: MLUT | None,
+    xgrid: np.ndarray,
+    ygrid: np.ndarray,
+    wl: float | None = None,
+    interpolation: str = "none",
+    cmap: str | mcolors.Colormap | list = "Blues_r",
+    cmap_reverse: bool | list[bool] = False,
+    figsize: tuple[float, float] | None = (8, 8),
+    fontsize: int = 18,
+    vmin: float | list | None = None,
+    vmax: float | list | None = None,
+    scale: bool = False,
+    save_path: str | None = None,
+    stokes: str | list[str] = "I",
+    factor: float = 1.0,
+    matrices: np.ndarray | list[np.ndarray] | None = None,
+    cbar_shrink: float = 0.9,
+    cbar_sci_format: bool = True,
+    title: str | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+) -> Figure:
+    """
+    Give a 'satellite' 2D image of SMART-G 3D atmosphere results.
+
+    The image shows one panel per requested Stokes parameter (up to
+    4), each with its own colorbar.
+
+    Parameters
+    ----------
+    mlut : MLUT or None
+        SMART-G return MLUT object. Can be None when ``matrices`` is
+        given.
+    xgrid : np.ndarray
+        Numpy array with the grid profile in the x axis.
+    ygrid : np.ndarray
+        Numpy array with the grid profile in the y axis.
+    wl : float, optional
+        The wavelength (nm). Required when the MLUT has a wavelength
+        axis.
+    interpolation : str, optional
+        Interpolation for :func:`matplotlib.pyplot.imshow`, e.g.
+        'nearest', 'bilinear', 'bicubic', ... Default: 'none'.
+    cmap : str or Colormap or list, optional
+        The colormap(s) of the panels, e.g. 'Blues_r', 'jet', ...
+        Default: 'Blues_r'.
+    cmap_reverse : bool or list of bool, optional
+        Whether to reverse the colormap(s). Default: False.
+    figsize : tuple of float, optional
+        The width and height of the figure in inches. If None, a
+        default depending on the panel number is used.
+    fontsize : int, optional
+        The font size of the figure. Default: 18.
+    vmin : float or list, optional
+        The lower bound(s) of the colorbar interval(s).
+    vmax : float or list, optional
+        The upper bound(s) of the colorbar interval(s).
+    scale : bool, optional
+        If True, scale each matrix between 0 and 1 (or between
+        ``vmin`` and ``vmax`` if given). Default: False.
+    save_path : str, optional
+        If given, save the figure at this path. The '.pdf' extension
+        is appended when neither '.pdf' nor '.png' is specified.
+    stokes : str or list of str, optional
+        The Stokes parameter(s) to show, among 'I', 'Q', 'U' and 'V'
+        (max 4). Default: 'I'.
+    factor : float, optional
+        Multiplication factor applied to the matrices extracted from
+        the MLUT. Default: 1.
+    matrices : np.ndarray or list of np.ndarray, optional
+        Force the shown matrix(ces) instead of extracting them from
+        the MLUT (max 4).
+    cbar_shrink : float, optional
+        The colorbar shrink value. Default: 0.9.
+    cbar_sci_format : bool, optional
+        Use the scientific form for the colorbar values.
+        Default: True.
+    title : str, optional
+        The figure title.
+    xlim : tuple of float, optional
+        The x limits of the panels.
+    ylim : tuple of float, optional
+        The y limits of the panels.
+
+    Returns
+    -------
+    Figure
+        The created matplotlib figure.
+    """
+    if not isinstance(stokes, list):
+        stokes = [stokes]
+    stokes_labels = []
+    for stk in stokes:
+        if stk not in _STOKES_LABELS:
+            raise ValueError(f"Unknown stokes '{stk}'!")
+        stokes_labels.append(_STOKES_LABELS[stk])
+
+    # Number of sensors in the x and y axes
+    n_x = xgrid.size - 1
+    n_y = ygrid.size - 1
+
+    if matrices is None:
+        if mlut is None:
+            raise ValueError(
+                "The mlut argument is required when matrices is not "
+                "given!"
+            )
+        matrix = _extract_matrices(
+            mlut, stokes_labels, wl, factor, n_x, n_y)
+    else:
+        matrix = _as_list(matrices, 1)
+        if n_x * n_y != matrix[0].shape[0] * matrix[0].shape[1]:
+            raise ValueError(
+                "The product of Nx and Ny must be equal to the "
+                "number of sensors!"
+            )
+    n_panel = len(matrix)
+    if n_panel > 4:
+        raise ValueError("Give more than 4 stokes is not authorized!")
+
+    vmin = _as_list(vmin, n_panel)
+    vmax = _as_list(vmax, n_panel)
+
+    # Deal with all the possibilities where vmin, vmax and scale are
+    # used
+    if scale:
+        for idm, mat in enumerate(matrix):
+            vmin_scale = vmin[idm] if vmin[idm] is not None else 0.0
+            vmax_scale = vmax[idm] if vmax[idm] is not None else 1.0
+            matrix[idm] = np.interp(mat, (mat.min(), mat.max()),
+                                    (vmin_scale, vmax_scale))
+
+    plt.rcParams.update({"font.size": fontsize})
+    cmaps = _get_cmaps(cmap, cmap_reverse, n_panel)
+
+    def draw(ax: Axes, idm: int) -> None:
+        img = _draw_map(ax, matrix[idm], xgrid, ygrid, vmin[idm],
+                        vmax[idm], cmaps[idm], interpolation)
+        _add_colorbar(ax, img, matrix[idm], stokes_labels[idm],
+                      vmin[idm], vmax[idm], cbar_shrink,
+                      cbar_sci_format, fontsize)
+
+    if n_panel == 1:
+        if figsize is None:
+            figsize = (6, 4)
+        fig = plt.figure(figsize=figsize, constrained_layout=True)
+        if title is not None:
+            plt.title(title)
+        draw(plt.gca(), 0)
+        if xlim is not None:
+            plt.xlim(xlim[0], xlim[1])
+        if ylim is not None:
+            plt.ylim(ylim[0], ylim[1])
+        plt.xlabel(r"X (km)")
+        plt.ylabel(r"Y (km)")
+
+    elif n_panel == 2:
+        if figsize is None:
+            figsize = (12, 4)
+        fig, axs = plt.subplots(1, 2, figsize=figsize,
+                                constrained_layout=True,
+                                sharex=True, sharey=True)
+        if title is not None:
+            fig.suptitle(title)
+        for idm in range(2):
+            draw(axs[idm], idm)
+        axs[0].set_xlim(xgrid[0], xgrid[-1])
+        axs[1].set_ylim(ygrid[0], ygrid[-1])
+        axs[0].set_ylabel(r"Y (km)")
+        fig.supxlabel(r"X (km)")
+
+    elif n_panel == 3:
+        if figsize is None:
+            figsize = (12, 8)
+        fig = plt.figure(figsize=figsize)
+        gs = gridspec.GridSpec(4, 4, figure=fig)
+        if title is not None:
+            fig.suptitle(title)
+        ax1 = plt.subplot(gs[:2, :2])
+        ax2 = plt.subplot(gs[:2, 2:], sharey=ax1)
+        plt.setp(ax2.get_yticklabels(), visible=False)
+        ax3 = plt.subplot(gs[2:4, 1:3])
+        for idm, ax in enumerate((ax1, ax2, ax3)):
+            draw(ax, idm)
+            ax.set_xlim(xgrid[0], xgrid[-1])
+        ax1.set_ylabel(r"Y (km)")
+        ax3.set_ylabel(r"Y (km)")
+        ax3.set_xlabel(r"X (km)")
+        gs.tight_layout(fig)
+
+    else:
+        if figsize is None:
+            figsize = (12, 8)
+        fig, axs = plt.subplots(2, 2, figsize=figsize,
+                                constrained_layout=True,
+                                sharex=True, sharey=True)
+        if title is not None:
+            fig.suptitle(title)
+        plt.rcParams.update({"font.size": fontsize})
+        for idm in range(4):
+            ax = axs[idm // 2, idm % 2]
+            draw(ax, idm)
+            if xlim is not None:
+                ax.set_xlim(xlim[0], xlim[1])
+            if ylim is not None:
+                ax.set_ylim(ylim[0], ylim[1])
+        fig.supxlabel(r"X (km)")
+        fig.supylabel(r"Y (km)")
+
+    if save_path is not None:
+        # Deal with the case where the extension is not specified
+        if (not save_path.endswith(".pdf")
+                and not save_path.endswith(".png")):
+            save_path += ".pdf"
+        plt.savefig(save_path)
+
+    return fig
 
 
 def cat_view(
