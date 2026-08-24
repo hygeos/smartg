@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 """Sensor definition and creation helpers.
 
 Key Classes
@@ -89,7 +86,7 @@ class Sensor(object):
         if FOV > 0. and TYPE == 0:
             warnings.warn(
                 'FOV > 0 is not yet allowed for radiance sensor '
-                '(TYPE=0). It will be forced to 0.')
+                '(TYPE=0). It will be forced to 0.', stacklevel=2)
             FOV = 0.  # also already forced to 0 in the CUDA code
 
         self.dict = {
@@ -352,7 +349,7 @@ def get_sensors_grid(
     xx, yy = np.meshgrid(x_centers, y_centers)
 
     sensors = []
-    for pos_x, pos_y in zip(xx.ravel(), yy.ravel()):
+    for pos_x, pos_y in zip(xx.ravel(), yy.ravel(), strict=True):
         sensors.append(
             Sensor(POSX=float(pos_x), POSY=float(pos_y),
                    POSZ=pos_z, FOV=fov, TYPE=sensor_type,
