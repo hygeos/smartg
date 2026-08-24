@@ -4,7 +4,8 @@
 # Tested with the following GPUs: 3090
 import pytest
 
-from smartg.smartg import Smartg, Sensor, LambSurface, AlbedoCst
+from smartg.smartg import Smartg, LambSurface, AlbedoCst
+from smartg.sensor import Sensor
 from smartg.atmosphere import Atm1D
 from smartg.phase import read_phase
 import pandas as pd
