@@ -1507,12 +1507,12 @@ class _Comp3DFile(Comp3D):
             self.phase = phase
         # Check if phase is a LUT object with the correct axes
         elif not isinstance(phase, LUT):
-            raise NameError("phase must be a LUT object!")
+            raise ValueError("phase must be a LUT object!")
         elif not all(
             item in phase.names
             for item in ["wav_phase", self._lut_axis, "stk", "theta_atm"]
         ):
-            raise NameError(
+            raise ValueError(
                 "Phase matrix must have 4 dimensions: wav_phase, "
                 f"{self._lut_axis}, stk and theta_atm"
             )
