@@ -95,8 +95,8 @@ extra = { features = ["test", "extra"], solve-group = "extra" }
 [tool.pixi.tasks]
 # pixi run test-basic
 test-basic = """
-pytest smartg/tests/test_cuda.py smartg/tests/test_profile.py
-smartg/tests/test_smartg.py -s -v"""
+pytest smartg/tests/test_cuda.py smartg/tests/test_profile.py \
+smartg/tests/test_atm3d.py smartg/tests/test_smartg.py -s -v"""
 test-all = "pytest smartg/tests/ -s -v"
 
 [tool.pixi.feature.extra.dependencies]
