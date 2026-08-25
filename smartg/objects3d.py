@@ -2304,7 +2304,7 @@ class CusForward(object):
     """
     Definition of CusForward 
 
-    - Custum rectangular forward mode of surface X*Y
+    - Custom rectangular forward mode of surface X*Y
 
     Parameters
     ----------
@@ -2316,19 +2316,22 @@ class CusForward(object):
         The translation to apply in x axis (only for FF LMODE)
     CFTY : float, optional
         The translation to apply in y axis (only for FF LMODE)
+    CFTZ : float, optional
+        The translation to apply in z axis (only for FF LMODE)
     FOV : float, optional
         The field of view or half-angle of the sun (only for FF LMODE)
     TYPE : str, optional
-        The sampling type (only for FF LMODE). 2 choices:
-         
+        The sampling type (only for FF LMODE). Choices:
+
             * 'lambertian'
             * 'isotropic'
+            * 'disk' (in development)
     LMODE : str, optional
         The launching mode. Two choices:
 
             * 'RF' -> Restricted Forward. Launch the photons such that the direct beams
                       fill only reflector objects
-            * 'FF' -> Full Forward. Launch the photons in a rectangle from TOA whrere the 
+            * 'FF' -> Full Forward. Launch the photons in a rectangle from TOA where the
                       beams at the center targets the origin point (0,0,0).
     """
     def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., CFTZ= 0., FOV = 0., TYPE = "isotropic",
@@ -2337,7 +2340,7 @@ class CusForward(object):
         if (TYPE == "lambertian"): TYPE = 1
         elif (TYPE == "isotropic"): TYPE = 2
         elif (TYPE == "disk"): TYPE = 3 # in development
-        else: raise NameError('You must choose lambertian or isotropic sampling')
+        else: raise ValueError('You must choose lambertian or isotropic sampling')
 
         self.dict = {
             'CFX':   CFX,
@@ -2366,7 +2369,8 @@ class CusBackward(object):
     Parameters
     ----------
     POS : Point, optional
-        The position (X,Y,Z) in cartesian coordinates.
+        The position (X,Y,Z) in cartesian coordinates. The default
+        is Point(0., 0., 0.).
     THDEG : float, optional
         The zenith angle in degrees.
     PHDEG : float, optional
@@ -2386,7 +2390,7 @@ class CusBackward(object):
     LMODE : str, optional
         The launching mode. 2 choices:
 
-            * 'B' -> Basic backward (depracated, see notes). Launch the photons from a given point in a 
+            * 'B' -> Basic backward (deprecated, see notes). Launch the photons from a given point in a
                      given direction with a field of view ALDEG.
             * 'BR' -> Backward with receiver. Launch the photons from a given receiver (plane object)
                       in a given direction with a field of view ALDEG. Default value.
@@ -2397,24 +2401,27 @@ class CusBackward(object):
 
     Notes
     -----
-    The 'B' mode is depracated and may leads to wrong results. Use instead the Sensor class.
+    The 'B' mode is deprecated and may lead to wrong results. Use instead the Sensor class.
     """
-    def __init__(self, POS = gc.Point(0., 0., 0.), THDEG = 0., PHDEG = 0., V = None,
+    def __init__(self, POS = None, THDEG = 0., PHDEG = 0., V = None,
                  ALDEG = 0., REC = None, TYPE = "lambertian", LMODE = "BR", LPH = None, LPR = None):
-        
-        if (isinstance(V, gc.Vector)): THDEG, PHDEG = gc.vec2ang(V)
-        elif (V != None): raise NameError('V argument must be a Vector')
+
+        if POS is None: POS = gc.Point(0., 0., 0.)
+        if isinstance(V, gc.Vector):
+            THDEG, PHDEG = gc.vec2ang(V)
+        elif V is not None:
+            raise ValueError('V argument must be a Vector')
         if LMODE == "BR" and not isinstance(REC, Entity):
-            raise NameError('In BR LMODE you have to specify a receiver!')
+            raise ValueError('In BR LMODE you have to specify a receiver!')
         if (TYPE == "lambertian"): TYPE = 1
         elif (TYPE == "isotropic"): TYPE = 2
-        else: raise NameError('You must choose lambertian or isotropic sampling')
+        else: raise ValueError('You must choose lambertian or isotropic sampling')
 
         if LMODE == "B":
             warn_message = "\nThe LMODE `B` is deprecated as of SMART-G 1.1.0 " + \
                            "and will be removed in one of the next release.\n" + \
                            "Please use LMODE `BR` or the class Sensor instead."
-            warn(warn_message, DeprecationWarning)
+            warn(warn_message, DeprecationWarning, stacklevel=2)
 
         self.dict = {
             'POS':    POS,

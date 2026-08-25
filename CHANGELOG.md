@@ -253,6 +253,9 @@ final `v2.0.0` release.
   - Printing a `LambSurface`, `RTLSSurface` or `RPVSurface` no longer raises a
     `KeyError` (`__str__` referenced a non-existent `SURFALB` key), and
     `RPVSurface` no longer labels itself `RTLS`
+  - The remaining `NameError` exceptions raised by `CusForward`, `CusBackward`
+    and the `cusL` guard of `Smartg.run` are now `ValueError`, and the `V`
+    validity check of `CusBackward` no longer compares a `Vector` with `!=`
   - Fix a bug in `read_cld_nth_cte`
   - Fix the numpy 2.5 shape-setter deprecation in the interp module, and the
     strictly-increasing coordinate requirement of `make_interp_spline`

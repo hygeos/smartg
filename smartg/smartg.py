@@ -741,8 +741,8 @@ class Smartg(object):
             min and max values [[xmin, ymin, zmin], [xmax, ymax, zmax]].
         IsAtm : int, optional
             If IsAtm=0 provide more robust test with 3d objects in case the atmosphere we remove the atmosphere.
-        cusL : None | CusForward | CusForward, optional
-            Use the RF, FF (CusFroward) or B (CusBackward) launching modes. The compilation option `obj3d` must be set to True.
+        cusL : None | CusForward | CusBackward, optional
+            Use the RF, FF (CusForward) or B, BR (CusBackward) launching modes. The compilation option `obj3d` must be set to True.
         SMIN : int, optional
             The minimum number of interactions (scattering/reflection). Default 0.
         SMAX : int, optional
@@ -819,7 +819,7 @@ class Smartg(object):
             if myObjects is None:
                 raise NameError('The parameter cusL can be used only if parameter myObjects is provided.')
             if (cusL.dict['LMODE'] == "B" and self.back == False):
-                raise NameError('CusBackward can be use only with the compilation option back=True')
+                raise ValueError('CusBackward can be used only with the compilation option back=True')
             elif (sensor != None):
                 raise NameError('The use of sensor(s) and a custum launching mode' + \
                                 ' (cusForward or cusBackward) is prohibited!')
