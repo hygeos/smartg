@@ -1367,7 +1367,315 @@ class Comp3D(ABC):
         """
 
 
-class Cloud3D(Comp3D):
+class _Comp3DFile(Comp3D):
+    """Shared implementation of the file-based 3D components.
+
+    The bulk optical properties (spectral extinction, single
+    scattering albedo and phase matrices as a function of a per-cell
+    parameter) are read from a SMART-G NetCDF file, and the 3D
+    distribution (per-cell extinction at the reference wavelength
+    `w_ref` and per-cell parameter) is provided as a dense
+    ``xr.Dataset``, as raw arrays or converted from the legacy
+    I3RC/IPRT ASCII files. See :class:`Cloud3D` (parameter: the
+    droplet effective radius) and :class:`Aer3D` (parameter: the
+    relative humidity).
+    """
+
+    # per-cell parameter name in the public API and the dense
+    # dataset: "reff" | "rh"
+    _param_name: str
+    # parameter axis name of the bulk optical properties file and of
+    # the `phase` override LUT: "reff" | "hum"
+    _lut_axis: str
+    # subdirectory of DIR_AUXDATA holding the bulk files
+    _auxdata_subdir: tuple[str, ...]
+    # out-of-range policy of the parameter lookups: None raises,
+    # "extrema" clamps to the axis bounds
+    _idx_fill_value: str | None
+    # component label used in the messages: "cloud" | "aerosol"
+    _label: str
+
+    def __init__(
+        self,
+        fname: PathType,
+        w_ref: float | None = None,
+        ds: xr.Dataset | PathType | None = None,
+        param: NumericArrayLike | None = None,
+        ext_ref: NumericArrayLike | None = None,
+        cell_indices: NDArray[np.integer] | None = None,
+        param_acc: int | None = None,
+        param_min: float | None = None,
+        param_max: float | None = None,
+        phase: LUT | None = None,
+        ssa_cst: float | None = None,
+    ) -> None:
+
+        fname = Path(fname)
+        if fname.parent == Path("."):
+            fname = Path(DIR_AUXDATA).joinpath(
+                *self._auxdata_subdir
+            ) / fname
+
+        if "_sol" not in fname.name and fname.suffix != ".nc":
+            fname = fname.with_name(fname.stem + "_sol.nc")
+        elif fname.suffix != ".nc":
+            fname = fname.with_name(fname.name + ".nc")
+
+        if not fname.exists():
+            raise FileNotFoundError(f"{fname} does not exist")
+
+        self.fname = fname
+        self._mlut = read_mlut(self.fname)
+        self.ssa_cst = ssa_cst
+
+        if ds is not None:
+            if not isinstance(ds, xr.Dataset):
+                ds = xr.open_dataset(ds)
+            missing = [
+                v
+                for v in ("ext", self._param_name)
+                if v not in ds.data_vars
+            ] + [
+                c
+                for c in ("x_bounds", "y_bounds", "z_bounds")
+                if c not in ds.coords
+            ]
+            if missing:
+                raise ValueError(
+                    f"The 3D {self._label} dataset must define the "
+                    f"'ext' and '{self._param_name}' variables over "
+                    "('z', 'y', 'x') and the 'x_bounds', 'y_bounds' "
+                    f"and 'z_bounds' coordinates; missing: {missing}"
+                )
+            self.ds = ds
+            # extract the occupied cells in C order with x slowest,
+            # which follows the row order of the I3RC/IPRT ASCII files
+            ext_xyz = ds["ext"].transpose("x", "y", "z").to_numpy()
+            param_xyz = ds[self._param_name].transpose(
+                "x", "y", "z"
+            ).to_numpy()
+            indices = np.argwhere(ext_xyz > 0.0)
+            self._cell_indices = indices.astype(np.int32)
+            self._ext_ref = ext_xyz[
+                indices[:, 0], indices[:, 1], indices[:, 2]
+            ]
+            param = param_xyz[
+                indices[:, 0], indices[:, 1], indices[:, 2]
+            ]
+            if w_ref is None:
+                w_ref = ds.attrs.get("w_ref")
+        else:
+            if param is None or ext_ref is None or cell_indices is None:
+                raise ValueError(
+                    f"If ds is not given, then {self._param_name}, "
+                    "ext_ref and cell_indices must all be given!"
+                )
+            self.ds = None
+            # the IPRT convention cell indices start at 1 instead of 0
+            self._cell_indices = (
+                np.asarray(cell_indices, dtype=np.int32) - 1
+            )
+            self._ext_ref = np.atleast_1d(
+                np.asarray(ext_ref, dtype=np.float64)
+            )
+            param = np.atleast_1d(np.asarray(param, dtype=np.float64))
+
+        if w_ref is None:
+            raise ValueError(
+                "w_ref must be given (or set as an attribute of ds)!"
+            )
+        self.w_ref = float(w_ref)
+
+        param = np.asarray(param, dtype=np.float64)
+        if param_acc is not None:
+            param = np.around(param, decimals=param_acc)
+        if param_min is not None:
+            param[param < param_min] = param_min
+        if param_max is not None:
+            param[param > param_max] = param_max
+        self._param = self._normalize_param(param)
+
+        if phase is None:
+            self.phase = phase
+        # Check if phase is a LUT object with the correct axes
+        elif not isinstance(phase, LUT):
+            raise NameError("phase must be a LUT object!")
+        elif not all(
+            item in phase.names
+            for item in ["wav_phase", self._lut_axis, "stk", "theta_atm"]
+        ):
+            raise NameError(
+                "Phase matrix must have 4 dimensions: wav_phase, "
+                f"{self._lut_axis}, stk and theta_atm"
+            )
+        else:
+            self.phase = phase
+
+    def _normalize_param(
+        self, param: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        """Hook adjusting the per-cell parameter values at init, after
+        the accuracy/clipping options. The base implementation returns
+        them unchanged.
+        """
+        return param
+
+    def _idx_param(
+        self, values: NDArray[np.floating] | float | None = None
+    ) -> Any:
+        """The parameter index of the bulk LUT lookups, with the
+        subclass out-of-range policy.
+        """
+        v = self._param if values is None else values
+        return Idx(v, fill_value=self._idx_fill_value)
+
+    def get_xyz_grid(
+        self,
+    ) -> tuple[
+        NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]
+    ]:
+        """Return the x, y and z cell-boundary arrays of the component
+        field, from which the :class:`smartg.grid3d.Grid3D` can be
+        built. Only available with the dataset input route.
+        """
+        if self.ds is None:
+            raise ValueError(
+                f"The {self._label} grid is only known when the "
+                f"{self._label} is provided as a dataset (ds parameter)"
+            )
+        return (
+            self.ds["x_bounds"].to_numpy(),
+            self.ds["y_bounds"].to_numpy(),
+            self.ds["z_bounds"].to_numpy(),
+        )
+
+    def get_cell_indices(self) -> NDArray[np.int32]:
+        return self._cell_indices
+
+    def get_ext_ref(self) -> NDArray[np.float64]:
+        """Return the (N,) component extinction coefficients in km-1
+        at the reference wavelength `w_ref`.
+        """
+        return self._ext_ref
+
+    def get_ext(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
+        nwav = len(wav)
+        ext = np.zeros((nwav, self._ext_ref.size), dtype=np.float64)
+        ext_ref0 = self._mlut["ext"][self._idx_param(), Idx(self.w_ref)]
+        for iw in range(0, nwav):
+            ext_factor = (
+                self._mlut["ext"][self._idx_param(), Idx(wav[iw])]
+                / ext_ref0
+            )
+            ext[iw, :] = self._ext_ref * ext_factor
+        return ext
+
+    def get_ssa(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
+        nwav = len(wav)
+        ssa = np.ones((nwav, self._ext_ref.size), dtype=np.float64)
+        if self.ssa_cst is not None:
+            ssa[:, :] = self.ssa_cst
+        else:
+            for iw in range(0, nwav):
+                ssa[iw, :] = self._mlut["ssa"][
+                    self._idx_param(), Idx(wav[iw])
+                ]
+        return ssa
+
+    def get_phase(self, n_theta: int = 721, conv_Iparper: bool = True) -> LUT:
+        """Return the component phase matrix LUT with the dimensions
+        ``('wav_phase', <parameter>, 'stk', 'theta_atm')``, the
+        parameter axis being ``'reff'`` or ``'hum'``.
+        """
+        # First check if we have already phase
+        if self.phase is not None:
+            if len(self.phase.axes[3]) == n_theta:
+                return self.phase
+            else:
+                theta = np.linspace(0.0, 180.0, n_theta)
+                return self.phase.sub()[:, :, :, Idx(theta)]
+
+        theta = np.linspace(0.0, 180.0, n_theta)
+        pha = self._mlut["phase"].swapaxes(self._lut_axis, "wav")[
+            :, :, :, Idx(theta)
+        ]
+        nwav = pha.shape[0]
+        n_param = pha.shape[1]
+        nstklut = pha.shape[2]
+
+        pha_ = np.zeros((nwav, n_param, 6, n_theta), dtype=np.float64)
+        pha_[:, :, :nstklut, :] = pha
+
+        P = LUT(
+            pha_,
+            axes=[
+                self._mlut.axes["wav"],
+                self._mlut.axes[self._lut_axis],
+                np.arange(6),
+                theta,
+            ],
+            names=["wav_phase", self._lut_axis, "stk", "theta_atm"],
+        )
+
+        if conv_Iparper:
+            if nstklut == 4:  # spherical particles
+                P.data[:, :, 4, :] = P.data[:, :, 0, :].copy()
+                P.data[:, :, 5, :] = P.data[:, :, 2, :].copy()
+                P0 = P.data[:, :, 0, :].copy()
+                P1 = P.data[:, :, 1, :].copy()
+                P4 = P.data[:, :, 4, :].copy()
+                P.data[:, :, 0, :] = 0.5*(P0+2*P1+P4)  # P11
+                P.data[:, :, 1, :] = 0.5*(P0-P4)       # P12=P21
+                P.data[:, :, 4, :] = 0.5*(P0-2*P1+P4)  # P22
+            elif nstklut == 6:  # non spherical particles
+                # note: the sign of P43/P34 affects only the sign of V,
+                # since V=0 for rayleigh scattering it does not matter
+                P0 = P.data[:, :, 0, :].copy()
+                P1 = P.data[:, :, 1, :].copy()
+                P4 = P.data[:, :, 4, :].copy()
+                P.data[:, :, 0, :] = 0.5*(P0+2*P1+P4)  # P11
+                P.data[:, :, 1, :] = 0.5*(P0-P4)       # P12=P21
+                P.data[:, :, 4, :] = 0.5*(P0-2*P1+P4)  # P22
+
+        return P
+
+    def get_phase_set(
+        self,
+        wav_phase: NDArray[np.floating],
+        n_theta: int = 721,
+        conv_Iparper: bool = True,
+    ) -> tuple[list[LUT], NDArray[np.int32], int]:
+        param_unique = np.unique(self._param)
+        n_unique = param_unique.size
+
+        phase = self.get_phase(n_theta=n_theta, conv_Iparper=conv_Iparper)
+
+        luts = []
+        for iwav in range(0, len(wav_phase)):
+            # Loop only on the unique parameter values
+            for iparam in range(0, n_unique):
+                luts.append(
+                    phase.sub()[
+                        Idx(wav_phase[iwav]),
+                        self._idx_param(param_unique[iparam]),
+                        :,
+                        :,
+                    ]
+                )
+
+        # Obtain the correct indices from the unique-value phase bank
+        cell_phase_index = np.full(
+            self._param.size, np.nan, dtype=np.int32
+        )
+        for iparam in range(0, n_unique):
+            cell_phase_index[
+                np.squeeze(np.argwhere(self._param == param_unique[iparam]))
+            ] = iparam
+
+        return luts, cell_phase_index, n_unique
+
+
+class Cloud3D(_Comp3DFile):
     """3D cloud component.
 
     The cloud bulk optical properties (spectral extinction, single
@@ -1428,6 +1736,12 @@ class Cloud3D(Comp3D):
         from the bulk optical properties file.
     """
 
+    _param_name = "reff"
+    _lut_axis = "reff"
+    _auxdata_subdir = ("clouds",)
+    _idx_fill_value = None
+    _label = "cloud"
+
     def __init__(
         self,
         fname: PathType,
@@ -1442,239 +1756,37 @@ class Cloud3D(Comp3D):
         phase: LUT | None = None,
         ssa_cst: float | None = None,
     ) -> None:
-
-        fname = Path(fname)
-        if fname.parent == Path("."):
-            fname = Path(DIR_AUXDATA) / "clouds" / fname
-
-        if "_sol" not in fname.name and fname.suffix != ".nc":
-            fname = fname.with_name(fname.stem + "_sol.nc")
-        elif fname.suffix != ".nc":
-            fname = fname.with_name(fname.name + ".nc")
-
-        if not fname.exists():
-            raise FileNotFoundError(f"{fname} does not exist")
-
-        self.fname = fname
-        self.cld_mlut = read_mlut(self.fname)
-        self.ssa_cst = ssa_cst
-
-        if ds is not None:
-            if not isinstance(ds, xr.Dataset):
-                ds = xr.open_dataset(ds)
-            missing = [
-                v
-                for v in ("ext", "reff")
-                if v not in ds.data_vars
-            ] + [
-                c
-                for c in ("x_bounds", "y_bounds", "z_bounds")
-                if c not in ds.coords
-            ]
-            if missing:
-                raise ValueError(
-                    "The 3D cloud dataset must define the 'ext' and "
-                    "'reff' variables over ('z', 'y', 'x') and the "
-                    "'x_bounds', 'y_bounds' and 'z_bounds' "
-                    f"coordinates; missing: {missing}"
-                )
-            self.ds = ds
-            # extract the cloudy cells in C order with x slowest, which
-            # follows the row order of the I3RC/IPRT ASCII cloud files
-            ext_xyz = ds["ext"].transpose("x", "y", "z").to_numpy()
-            reff_xyz = ds["reff"].transpose("x", "y", "z").to_numpy()
-            indices = np.argwhere(ext_xyz > 0.0)
-            self._cell_indices = indices.astype(np.int32)
-            self._ext_ref = ext_xyz[
-                indices[:, 0], indices[:, 1], indices[:, 2]
-            ]
-            reff = reff_xyz[indices[:, 0], indices[:, 1], indices[:, 2]]
-            if w_ref is None:
-                w_ref = ds.attrs.get("w_ref")
-        else:
-            if reff is None or ext_ref is None or cell_indices is None:
-                raise ValueError(
-                    "If ds is not given, then reff, ext_ref and "
-                    "cell_indices must all be given!"
-                )
-            self.ds = None
-            # the IPRT convention cell indices start at 1 instead of 0
-            self._cell_indices = (
-                np.asarray(cell_indices, dtype=np.int32) - 1
-            )
-            self._ext_ref = np.atleast_1d(
-                np.asarray(ext_ref, dtype=np.float64)
-            )
-            reff = np.atleast_1d(np.asarray(reff, dtype=np.float64))
-
-        if w_ref is None:
-            raise ValueError(
-                "w_ref must be given (or set as an attribute of ds)!"
-            )
-        self.w_ref = float(w_ref)
-
-        reff = np.asarray(reff, dtype=np.float64)
-        if reff_acc is not None:
-            reff = np.around(reff, decimals=reff_acc)
-        if reff_min is not None:
-            reff[reff < reff_min] = reff_min
-        if reff_max is not None:
-            reff[reff > reff_max] = reff_max
-        self.reff = reff
-
-        if phase is None:
-            self.phase = phase
-        # Check if phase is a LUT object with the correct axes
-        elif not isinstance(phase, LUT):
-            raise NameError("phase must be a LUT object!")
-        elif not all(
-            item in phase.names
-            for item in ["wav_phase", "reff", "stk", "theta_atm"]
-        ):
-            raise NameError(
-                "Phase matrix must have 4 dimensions: wav_phase, reff, "
-                "stk and theta_atm"
-            )
-        else:
-            self.phase = phase
-
-    def get_xyz_grid(
-        self,
-    ) -> tuple[
-        NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]
-    ]:
-        """Return the x, y and z cell-boundary arrays of the cloud
-        field, from which the :class:`smartg.grid3d.Grid3D` can be
-        built. Only available with the dataset input route.
-        """
-        if self.ds is None:
-            raise ValueError(
-                "The cloud grid is only known when the cloud is "
-                "provided as a dataset (ds parameter)"
-            )
-        return (
-            self.ds["x_bounds"].to_numpy(),
-            self.ds["y_bounds"].to_numpy(),
-            self.ds["z_bounds"].to_numpy(),
+        super().__init__(
+            fname,
+            w_ref=w_ref,
+            ds=ds,
+            param=reff,
+            ext_ref=ext_ref,
+            cell_indices=cell_indices,
+            param_acc=reff_acc,
+            param_min=reff_min,
+            param_max=reff_max,
+            phase=phase,
+            ssa_cst=ssa_cst,
         )
 
-    def get_cell_indices(self) -> NDArray[np.int32]:
-        return self._cell_indices
+    @property
+    def reff(self) -> NDArray[np.float64]:
+        """The (N,) per-cell droplet effective radii in um."""
+        return self._param
 
-    def get_ext_ref(self) -> NDArray[np.float64]:
-        """Return the (N,) cloud extinction coefficients in km-1 at the
-        reference wavelength `w_ref`.
-        """
-        return self._ext_ref
+    @reff.setter
+    def reff(self, value: NDArray[np.float64]) -> None:
+        self._param = value
 
-    def get_ext(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
-        nwav = len(wav)
-        ext = np.zeros((nwav, self._ext_ref.size), dtype=np.float64)
-        ext_ref0 = self.cld_mlut["ext"][Idx(self.reff), Idx(self.w_ref)]
-        for iw in range(0, nwav):
-            ext_factor = (
-                self.cld_mlut["ext"][Idx(self.reff), Idx(wav[iw])] / ext_ref0
-            )
-            ext[iw, :] = self._ext_ref * ext_factor
-        return ext
+    @property
+    def cld_mlut(self) -> Any:
+        """The cloud bulk optical properties MLUT."""
+        return self._mlut
 
-    def get_ssa(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
-        nwav = len(wav)
-        ssa = np.ones((nwav, self._ext_ref.size), dtype=np.float64)
-        if self.ssa_cst is not None:
-            ssa[:, :] = self.ssa_cst
-        else:
-            for iw in range(0, nwav):
-                ssa[iw, :] = self.cld_mlut["ssa"][
-                    Idx(self.reff), Idx(wav[iw])
-                ]
-        return ssa
-
-    def get_phase(self, n_theta: int = 721, conv_Iparper: bool = True) -> LUT:
-        """Return the cloud phase matrix LUT with the dimensions
-        ``('wav_phase', 'reff', 'stk', 'theta_atm')``.
-        """
-        # First check if we have already phase
-        if self.phase is not None:
-            if len(self.phase.axes[3]) == n_theta:
-                return self.phase
-            else:
-                theta = np.linspace(0.0, 180.0, n_theta)
-                return self.phase.sub()[:, :, :, Idx(theta)]
-
-        theta = np.linspace(0.0, 180.0, n_theta)
-        pha = self.cld_mlut["phase"].swapaxes("reff", "wav")[
-            :, :, :, Idx(theta)
-        ]
-        nwav = pha.shape[0]
-        nreff = pha.shape[1]
-        nstklut = pha.shape[2]
-
-        pha_ = np.zeros((nwav, nreff, 6, n_theta), dtype=np.float64)
-        pha_[:, :, :nstklut, :] = pha
-
-        P = LUT(
-            pha_,
-            axes=[
-                self.cld_mlut.axes["wav"],
-                self.cld_mlut.axes["reff"],
-                np.arange(6),
-                theta,
-            ],
-            names=["wav_phase", "reff", "stk", "theta_atm"],
-        )
-
-        if conv_Iparper:
-            if nstklut == 4:  # spherical particles
-                P.data[:, :, 4, :] = P.data[:, :, 0, :].copy()
-                P.data[:, :, 5, :] = P.data[:, :, 2, :].copy()
-                P0 = P.data[:, :, 0, :].copy()
-                P1 = P.data[:, :, 1, :].copy()
-                P4 = P.data[:, :, 4, :].copy()
-                P.data[:, :, 0, :] = 0.5*(P0+2*P1+P4)  # P11
-                P.data[:, :, 1, :] = 0.5*(P0-P4)       # P12=P21
-                P.data[:, :, 4, :] = 0.5*(P0-2*P1+P4)  # P22
-            elif nstklut == 6:  # non spherical particles
-                # note: the sign of P43/P34 affects only the sign of V,
-                # since V=0 for rayleigh scattering it does not matter
-                P0 = P.data[:, :, 0, :].copy()
-                P1 = P.data[:, :, 1, :].copy()
-                P4 = P.data[:, :, 4, :].copy()
-                P.data[:, :, 0, :] = 0.5*(P0+2*P1+P4)  # P11
-                P.data[:, :, 1, :] = 0.5*(P0-P4)       # P12=P21
-                P.data[:, :, 4, :] = 0.5*(P0-2*P1+P4)  # P22
-
-        return P
-
-    def get_phase_set(
-        self,
-        wav_phase: NDArray[np.floating],
-        n_theta: int = 721,
-        conv_Iparper: bool = True,
-    ) -> tuple[list[LUT], NDArray[np.int32], int]:
-        reff_unique = np.unique(self.reff)
-        n_unique = reff_unique.size
-
-        phase = self.get_phase(n_theta=n_theta, conv_Iparper=conv_Iparper)
-
-        luts = []
-        for iwav in range(0, len(wav_phase)):
-            # Loop only on the unique reff
-            for ireff in range(0, n_unique):
-                luts.append(
-                    phase.sub()[
-                        Idx(wav_phase[iwav]), Idx(reff_unique[ireff]), :, :
-                    ]
-                )
-
-        # Obtain the correct indices from the unique radii phase matrix
-        cell_phase_index = np.full(self.reff.size, np.nan, dtype=np.int32)
-        for ireff in range(0, n_unique):
-            cell_phase_index[
-                np.squeeze(np.argwhere(self.reff == reff_unique[ireff]))
-            ] = ireff
-
-        return luts, cell_phase_index, n_unique
+    @cld_mlut.setter
+    def cld_mlut(self, value: Any) -> None:
+        self._mlut = value
 
 
 def read_i3rc_cloud(
@@ -1707,6 +1819,20 @@ def read_i3rc_cloud(
         Dataset with the ``ext(z, y, x)`` and ``reff(z, y, x)``
         variables and the ``x_bounds``, ``y_bounds`` and ``z_bounds``
         cell-boundary coordinates.
+    """
+    return _read_i3rc_field(filename, "reff", loc_xgrid, loc_ygrid)
+
+
+def _read_i3rc_field(
+    filename: PathType,
+    param_name: str,
+    loc_xgrid: str | RealNumber = "centered",
+    loc_ygrid: str | RealNumber = "centered",
+) -> xr.Dataset:
+    """Read an I3RC/IPRT-style ASCII 3D field (rows of 1-based
+    ``ix iy iz`` indices, extinction coefficient and per-cell
+    parameter) into the dense SMART-G 3D dataset, with the fifth
+    column stored as the `param_name` variable.
     """
     # Read only the needed information, the two first rows.
     # Be careful ! The second row have a greater dimension than the
@@ -1745,14 +1871,14 @@ def read_i3rc_cloud(
     ix, iy, iz = cell_indices[:, 0], cell_indices[:, 1], cell_indices[:, 2]
 
     ext = np.zeros((Nz, Ny, Nx), dtype=np.float64)
-    reff = np.zeros_like(ext)
+    param = np.zeros_like(ext)
     ext[iz, iy, ix] = content[:, 3]
-    reff[iz, iy, ix] = content[:, 4]
+    param[iz, iy, ix] = content[:, 4]
 
     return xr.Dataset(
         {
             "ext": (("z", "y", "x"), ext),
-            "reff": (("z", "y", "x"), reff),
+            param_name: (("z", "y", "x"), param),
         },
         coords={
             "x_bounds": ("x_b", xgrid),
