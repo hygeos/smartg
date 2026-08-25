@@ -156,7 +156,7 @@ Once the auxiliary data are in place, a first simulation takes three lines:
 ```python
 from smartg.smartg import Smartg
 from smartg.atmosphere import Atm1D
-from smartg.smartg_view import smartg_view
+from smartg.view import smartg_view
 
 # 1e8 photons at 500 nm, tropical atmosphere, sun at a 30° zenith angle
 res = Smartg().run(wl=500., THVDEG=30., NBPHOTONS=1e8, atm=Atm1D('afglt'))

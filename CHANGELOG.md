@@ -36,6 +36,8 @@ will be completed and corrected before the final `v2.0.0` release.
     - `plot_polar_xr`    → `plot_polar`
     - `transect2D_xr`    → `transect2D`
     - `ds_out` parameter → `ds_sg` in `smartg_view`
+  - The `smartg.tools.smartg_view` module (then `smartg.smartg_view`) has
+    been renamed to `smartg.view`
   - `smartg_view`, `transect_view`, `spectrum_view`, `profile_view` and `phase_view`
     now expect an `xr.Dataset` instead of an MLUT (MLUT still accepted with a
     deprecation warning)
@@ -51,7 +53,7 @@ will be completed and corrected before the final `v2.0.0` release.
         atmosphere `Grid3D` is only needed in 3D (`ICELL` is ignored
         by the kernel in 1D) and the function returns the sensor
         list only
-      - `satellite_view` has been moved to `smartg.smartg_view`, with PEP 8
+      - `satellite_view` has been moved to `smartg.view`, with PEP 8
         parameter names (`interp_name` → `interpolation`,
         `color_bar` → `cmap`, `color_reverse` → `cmap_reverse`,
         `fig_size` → `figsize`, `font_size` → `fontsize`,

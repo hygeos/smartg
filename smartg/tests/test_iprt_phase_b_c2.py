@@ -18,7 +18,7 @@ from smartg.diff import diff1
 from smartg.grid3d import Grid3D
 from smartg.iprt.iprt import compute_deltam, groupIQUV
 from smartg.sensor import get_sensors_grid
-from smartg.smartg_view import satellite_view
+from smartg.view import satellite_view
 from smartg.phase import read_cld_nth_cte
 from smartg.smartg import AlbedoCst, LambSurface, Smartg
 from smartg.truncation import GT_trunc
