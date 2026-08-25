@@ -296,6 +296,6 @@ class AlbedoMap(object):
 #: the common ``get(wl)`` interface. Use it to annotate the parameters
 #: that accept a spectral albedo, such as the ``alb`` of
 #: ``smartg.water.Water1D`` or the ``ALB`` of the surfaces of
-#: ``smartg.smartg``. ``typing.get_args(AlbedoLike)`` gives the
+#: ``smartg.surface``. ``typing.get_args(AlbedoLike)`` gives the
 #: corresponding tuple of classes, suitable for an ``isinstance`` check.
 AlbedoLike: TypeAlias = AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap

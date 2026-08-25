@@ -735,10 +735,10 @@ class Smartg(object):
         atm : None | Atm1D | MLUT, optional
             The atmosphere profile. If None, there is no atmosphere.
         surf : None | RoughSurface | FlatSurface | LambSurface, optional
-            The surface profile. If None, there is no surface.
+            The surface profile, see `smartg.surface`. If None, there is no surface.
         water : None | Water1D | MLUT, optional
             The water profile. If None, there is no water.
-        env : None | Environemnt, optional
+        env : None | Environment, optional
             The environment (adjacency effect) profile. If None, there is no environment.
         alis_options : None | dict, optional
             The alis options (the compilation option alis must be set to True).
@@ -2321,7 +2321,7 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
     Parameters
     ----------
     surf : FlatSurface | RoughSurface | LambSurface | RTLSSurface | RPVSurface | None
-        Surface configuration object exposing a ``dict`` attribute with keys
+        Surface configuration object from ``smartg.surface`` exposing a ``dict`` attribute with keys
         required by SMART-G (for example ``SUR``, ``BRDF``, ``DIOPTRE``,
         ``WINDSPEED``, ``NH2O``, ``WAVE_SHADOW``, ``SINGLE``).
     env : Environment | None

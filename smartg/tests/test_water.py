@@ -12,7 +12,8 @@ from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
 from smartg.phase import integ_phase, read_phase
-from smartg.smartg import RoughSurface, Smartg
+from smartg.smartg import Smartg
+from smartg.surface import RoughSurface
 from smartg.truncation import DM_trunc, GT_trunc
 from smartg.water import Hydrosol, Water1D, WaterRw
 

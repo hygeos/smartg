@@ -7,7 +7,9 @@ SMART-G test suite using pytest
 
 import pytest
 import numpy as np
-from smartg.smartg import Smartg, RoughSurface, LambSurface, AlbedoCst
+from smartg.smartg import Smartg
+from smartg.surface import RoughSurface, LambSurface
+from smartg.albedo import AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 from smartg.water import HydrosolPR, Water1D
 from smartg.reptran import Reptran, reduce_reptran

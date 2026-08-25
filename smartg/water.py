@@ -1238,7 +1238,8 @@ class Water1D(Water):
         is the reflectance of the sea bottom seen from within the water,
         and it is not related to the albedo of the air-water interface:
         the latter is set by the `surf` parameter of `smartg.run()`
-        (e.g. `LambSurface(ALB=...)` or `RoughSurface(...)`). It fills
+        (e.g. `smartg.surface.LambSurface(ALB=...)` or
+        `RoughSurface(...)`). It fills
         the `albedo_seafloor` variable of the profile returned by
         `calc()`. If None, a black (non-reflecting) sea floor is used,
         i.e. `AlbedoCst(0.)`.

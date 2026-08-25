@@ -137,6 +137,12 @@ final `v2.0.0` release.
     new `smartg.sensor` module; they are still re-exported by
     `smartg.smartg`, so existing imports keep working. The `type`
     parameter of `get_sensor` has been renamed to `sensor_type`
+  - The surface classes `FlatSurface`, `RoughSurface`, `LambSurface`,
+    `RTLSSurface`, `RPVSurface` and `Environment` have been moved from
+    `smartg.smartg` to the new `smartg.surface` module; they are NOT
+    re-exported by `smartg.smartg`, so imports must be updated. The albedo
+    classes (`AlbedoCst`, ...) are no longer re-exported by `smartg.smartg`
+    either: import them from `smartg.albedo`
     - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
       `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
       new `smartg.grid3d` module

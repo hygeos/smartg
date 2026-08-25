@@ -5,7 +5,8 @@ import numpy as np
 
 import os 
 
-from smartg.smartg import Smartg, LambSurface, RoughSurface
+from smartg.smartg import Smartg
+from smartg.surface import LambSurface, RoughSurface
 from smartg.sensor import Sensor
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 from smartg.albedo import AlbedoCst
