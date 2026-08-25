@@ -69,7 +69,7 @@ def test_cloud(sg, wav):
 @pytest.mark.parametrize("wav", wav_list)
 @pytest.mark.parametrize("thv", [0.0, 40.0])
 @pytest.mark.parametrize(
-    "surf", [RoughSurface(WIND=2.0), LambSurface(ALB=AlbedoCst(0.2))]
+    "surf", [RoughSurface(wind=2.0), LambSurface(alb=AlbedoCst(0.2))]
 )
 def test_atm_surf(sg, wav, surf, thv):
     atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
@@ -78,7 +78,7 @@ def test_atm_surf(sg, wav, surf, thv):
 
 
 def test_surf_iop1_1():
-    surf = RoughSurface(WIND=10.0)
+    surf = RoughSurface(wind=10.0)
     water = Water1D(comp=[HydrosolPR(chl=1.0)])
     Smartg().run([400.0, 500.0], surf=surf, water=water, NBPHOTONS=NBPHOTONS)
 
@@ -90,7 +90,7 @@ def test_atm_surf_iop1():
         pfwav=[500.0, 600.0],
         pfgrid=[100.0, 5.0, 0.0],
     )
-    surf = RoughSurface(WIND=10.0)
+    surf = RoughSurface(wind=10.0)
     water = Water1D(
         comp=[HydrosolPR(chl=1.0, pfwav=np.array([450, 550, 650, 750]))]
     )
@@ -100,7 +100,7 @@ def test_atm_surf_iop1():
 
 def test_reptran(sg):
     atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
-    surf = RoughSurface(WIND=2.0)
+    surf = RoughSurface(wind=2.0)
 
     ibands = Reptran("reptran_solar_msg").to_smartg("msg1")
 
@@ -141,7 +141,7 @@ def test_adjacency():
 def test_no_aer_output():
     atm1 = Atm1D("afglt")
     water = Water1D(grid=[0, -5.0], comp=[HydrosolPR(chl=0.5)])
-    surf = RoughSurface(WIND=5.0, NH2O=1.34)
+    surf = RoughSurface(wind=5.0, nh2o=1.34)
     sg = Smartg()
     le = {
         "th_deg": np.array([0.0, 45.0, 89.9]),

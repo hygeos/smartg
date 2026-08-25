@@ -551,7 +551,7 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
     )
     pro = atm3.calc(wls, n_theta=NTH, truncation=truncation)
 
-    surf = LambSurface(ALB=AlbedoCst(0.2))
+    surf = LambSurface(alb=AlbedoCst(0.2))
 
     return pro, grid3, surf, wls
 

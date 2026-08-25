@@ -418,7 +418,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
     )
     pro = atm3.calc(wls, n_theta=NTH, truncation=truncation)
 
-    surf = LambSurface(ALB=AlbedoCst(0.2))
+    surf = LambSurface(alb=AlbedoCst(0.2))
 
     return pro, grid3, surf, wls
 

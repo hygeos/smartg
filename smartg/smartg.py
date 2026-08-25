@@ -919,7 +919,7 @@ class Smartg(object):
         >>> from smartg.water import Water1D, HydrosolPR
         >>> atm = Atm1D('afglt', comp=[AerOPAC('maritime_clean', 0.5, 550.)])
         >>> water = Water1D(grid=[0, -5.], comp=[HydrosolPR(chl=0.5)])
-        >>> surf = RoughSurface(WIND=5., NH2O=1.34)
+        >>> surf = RoughSurface(wind=5., nh2o=1.34)
         >>> m = Smartg().run(wl=550., atm=atm, water=water, surf=surf)
         >>> # Look at the top of atmosphere radiance/reflectance (key: 'I_up (TOA)')
         >>> m['I_up (TOA)'].describe()
@@ -1251,11 +1251,11 @@ class Smartg(object):
                spectrum['k3p_surface'] = surf.kp[3].get(wl[:])
             albenv = env.alb.get(wl[:])
             if albenv.ndim==2:
-                env.NENV = albenv.shape[1]
-                spectrum['alb_envs'][:,:env.NENV] = albenv
+                env.nenv = albenv.shape[1]
+                spectrum['alb_envs'][:,:env.nenv] = albenv
                 shp = env.alb.map.data.shape
-                env.NXENVMAP = shp[0]
-                env.NYENVMAP = shp[1]
+                env.nxenvmap = shp[0]
+                env.nyenvmap = shp[1]
                 size = shp[0]*shp[1]
                 envmap = np.zeros(shp, dtype=type_EnvMap)
                 X, Y = np.meshgrid(env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij')
@@ -2326,7 +2326,7 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
         ``WINDSPEED``, ``NH2O``, ``WAVE_SHADOW``, ``SINGLE``).
     env : Environment | None
         Environment configuration object exposing a ``dict`` attribute and
-        geometry metadata (for example ``NENV``, ``NXENVMAP``, ``NYENVMAP``).
+        geometry metadata (for example ``nenv``, ``nxenvmap``, ``nyenvmap``).
         If ``None``, environment-related constants are not updated.
     n_atm, n_atm_abs, n_oce, n_oce_abs : int
         Numbers of atmospheric/oceanic layers and absorbing layers.
@@ -2454,9 +2454,9 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
         copy_to_device('ENV_SIZEd', env.dict['ENV_SIZE'], np.float32)
         copy_to_device('X0d', env.dict['X0'], np.float32)
         copy_to_device('Y0d', env.dict['Y0'], np.float32)
-        copy_to_device('NENVd', env.NENV, np.int32)
-        copy_to_device('NXENVMAPd', env.NXENVMAP, np.int32)
-        copy_to_device('NYENVMAPd', env.NYENVMAP, np.int32)
+        copy_to_device('NENVd', env.nenv, np.int32)
+        copy_to_device('NXENVMAPd', env.nxenvmap, np.int32)
+        copy_to_device('NYENVMAPd', env.nyenvmap, np.int32)
     copy_to_device('STHVd', s_th_v, np.float32)
     copy_to_device('CTHVd', c_th_v, np.float32)
     copy_to_device('RTER', earth_radius, np.float32)

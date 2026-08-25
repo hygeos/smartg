@@ -234,7 +234,7 @@ def _atm():
 
 @pytest.fixture(scope="module")
 def _surf():
-    return RoughSurface(WIND=5.0, NH2O=1.34)
+    return RoughSurface(wind=5.0, nh2o=1.34)
 
 
 @pytest.fixture(scope="module")

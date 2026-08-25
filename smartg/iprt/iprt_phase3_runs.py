@@ -717,7 +717,7 @@ def case_D2(nphotons=1e8, overwrite=True, output_dir='./'):
         wl = 550.
 
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl)
-        surf  = LambSurface(ALB=AlbedoCst(0.3))
+        surf  = LambSurface(alb=AlbedoCst(0.3))
         nvza = len(vza)
         nvaa = len(vaa)
         phi = -vaa
@@ -1057,7 +1057,7 @@ def case_D6(nphotons=1e8, overwrite=True, output_dir='./'):
         
         # atmosphere profil
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl)
-        surf = RoughSurface(WIND=2., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+        surf = RoughSurface(wind=2., brdf=True, wave_shadow=True, nh2o=1.33)
 
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1107,9 +1107,9 @@ def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./'):
         
         # atmosphere profil
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(wl)
-        # surf = RoughSurface(WIND=2., BRDF=False, WAVE_SHADOW=True, NH2O=1.33,
-        #                     SUR=1, SINGLE=True)
-        surf = RoughSurface(WIND=2., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+        # surf = RoughSurface(wind=2., brdf=False, wave_shadow=True, nh2o=1.33,
+        #                     sur=1, single=True)
+        surf = RoughSurface(wind=2., brdf=True, wave_shadow=True, nh2o=1.33)
 
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1463,7 +1463,7 @@ def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
         sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
         abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
         pro = Atm1D('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wl)
-        surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+        surf = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
         
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1515,7 +1515,7 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
     sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
     abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
     pro = Atm1D('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wl)
-    surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+    surf = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
     
     nvza = len(vza)
     dep = 0.03
@@ -1615,7 +1615,7 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
     sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
     abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
     pro = Atm1D('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wl)
-    surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+    surf = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
     
     nvza = len(vza)
     dep = 0.03
@@ -1713,7 +1713,7 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
     abs = np.concatenate((np.array([[0.]]), abs), axis=1)
     
     pro = Atm1D('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wl)
-    surf = RoughSurface(WIND=5., BRDF=True, WAVE_SHADOW=True, NH2O=1.33)
+    surf = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
     
     nvza = len(vza)
     dep = 0.03

@@ -639,7 +639,7 @@ def test_a2(request, s1df):
     atm = Atm1D("afglt", grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(
         550.0
     )
-    surf = LambSurface(ALB=AlbedoCst(0.3))
+    surf = LambSurface(alb=AlbedoCst(0.3))
 
     # === Illumination conditions
     vza_min = 100.0

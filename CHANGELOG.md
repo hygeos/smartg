@@ -142,7 +142,11 @@ final `v2.0.0` release.
     `smartg.smartg` to the new `smartg.surface` module; they are NOT
     re-exported by `smartg.smartg`, so imports must be updated. The albedo
     classes (`AlbedoCst`, ...) are no longer re-exported by `smartg.smartg`
-    either: import them from `smartg.albedo`
+    either: import them from `smartg.albedo`. The constructor parameters of
+    the surface classes and `Environment` have been renamed to snake case
+    (`WIND` → `wind`, `ALB` → `alb`, `ENV_SIZE` → `env_size`, ...), and the
+    `Environment` attributes `NENV`/`NXENVMAP`/`NYENVMAP` are now
+    `nenv`/`nxenvmap`/`nyenvmap`
     - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
       `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
       new `smartg.grid3d` module

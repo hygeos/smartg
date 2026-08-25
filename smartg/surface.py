@@ -37,19 +37,19 @@ class FlatSurface(object):
 
     Parameters
     ----------
-    SUR : int, optional
+    sur : int, optional
         The processes at the surface dioptre. 2 choices:
             - 1 -> Force reflection
             - 3 -> Reflection and transmission
-    NH2O : float, optional
+    nh2o : float, optional
         The relative refarctive index air/water
     """
-    def __init__(self, SUR=3, NH2O=1.33):
+    def __init__(self, sur=3, nh2o=1.33):
         self.dict = {
-                'SUR': SUR,
+                'SUR': sur,
                 'DIOPTRE': 0,
                 'WINDSPEED': -999.,
-                'NH2O': NH2O,
+                'NH2O': nh2o,
                 'WAVE_SHADOW': 0,
                 'BRDF' : 0,
                 'SINGLE' : 1,
@@ -66,31 +66,31 @@ class RoughSurface(object):
 
     Parameters
     ----------
-    WIND : float, optional
+    wind : float, optional
         The wind speed (m/s)
-    SUR : int, optional
+    sur : int, optional
         The processes at the surface dioptre. 2 choices:
             - 1 -> Force reflection
             - 3 -> Reflection and transmission
-    NH2O : float, optional
+    nh2o : float, optional
         The relative refarctive index air/water
-    WAVE_SHADOW : bool, optional
+    wave_shadow : bool, optional
         Include wave shadowing effect. Default False.
-    BRDF : bool, optional
+    brdf : bool, optional
         Replace slope sampling by Cox & Munk BRDF, no ocean, just reflection
-    SINGLE : bool, optional
+    single : bool, optional
         Deactivate multiple reflections/refractions at the interface. Default False.
     """
-    def __init__(self, WIND=5., SUR=3, NH2O=1.33, WAVE_SHADOW=False, BRDF=False, SINGLE=False):
+    def __init__(self, wind=5., sur=3, nh2o=1.33, wave_shadow=False, brdf=False, single=False):
 
         self.dict = {
-                'SUR': SUR if not BRDF else 1,
+                'SUR': sur if not brdf else 1,
                 'DIOPTRE': 1,
-                'WINDSPEED': WIND,
-                'NH2O': NH2O,
-                'WAVE_SHADOW': 1 if WAVE_SHADOW else 0,
-                'BRDF': 1 if BRDF else 0,
-                'SINGLE': 1 if SINGLE else 0,
+                'WINDSPEED': wind,
+                'NH2O': nh2o,
+                'WAVE_SHADOW': 1 if wave_shadow else 0,
+                'BRDF': 1 if brdf else 0,
+                'SINGLE': 1 if single else 0,
                 }
         self.alb=None
         self.kp=None
@@ -104,13 +104,13 @@ class LambSurface(object):
 
     Parameters
     ----------
-    ALB : AlbedoCst, | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
+    alb : AlbedoCst, | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
         The albedo spectral model.
     """
-    def __init__(self, ALB=AlbedoCst(0.5)):
+    def __init__(self, alb=AlbedoCst(0.5)):
 
-        if (not isinstance(ALB, (AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap))):
-            raise ValueError('The parameter ALB must be one of the following objects: AlbedoCst, ' +
+        if (not isinstance(alb, (AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap))):
+            raise ValueError('The parameter alb must be one of the following objects: AlbedoCst, ' +
                              'AlbedoSpeclib, AlbedoSpectrum or AlbedoMap.')
         self.dict = {
                 'SUR': 1,
@@ -121,7 +121,7 @@ class LambSurface(object):
                 'BRDF': 1,
                 'SINGLE': 1,
                 }
-        self.alb = ALB
+        self.alb = alb
     def __str__(self):
         return 'LAMBSUR-ALB={}'.format(_albedo_str(self.alb))
 
@@ -259,58 +259,58 @@ class Environment(object):
 
     Parameters
     ----------
-    ENV : int, optional
+    env : int, optional
         The type of environment to consider. Possibilities are:
 
-        * -1 -> Activate the disk mode, i.e., an horizontal disk centered at X0,Y0 of radius `ENV_SIZE`.
-                The surface profile used inside the disk is a LambSurface(ALB) object using the Environment
-                parameter `ALB`. The surface profile used outside the disk is the parameter surf of the
+        * -1 -> Activate the disk mode, i.e., an horizontal disk centered at x0,y0 of radius `env_size`.
+                The surface profile used inside the disk is a LambSurface(alb) object using the Environment
+                parameter `alb`. The surface profile used outside the disk is the parameter surf of the
                 Smartg method run.
         *  0 -> Deactivated. The default value.
         *  1 -> Same as -1 but the opposite.
-        *  2 -> Activate the gaussian mode. A LambSurface(ALB) object using the Environment parameter `ALB`
-                is used and corrected by a gaussian centred on X0,Y0 with a maximum of ALB_SURF and an
-                asymptotic value of ALB of the environement. The square of the sigma is ENV_SIZE.
+        *  2 -> Activate the gaussian mode. A LambSurface(alb) object using the Environment parameter `alb`
+                is used and corrected by a gaussian centred on x0,y0 with a maximum of ALB_SURF and an
+                asymptotic value of alb of the environement. The square of the sigma is env_size.
                 The form of the gaussian:
 
-                    - :math:`exp(- ((x-X0)**2 + (y-Y0)**2))/ENV_SIZE)`
-        *  3 -> ALB map2D modulated by checkerboard spatial function
-        *  4 -> Same as 1 but for a band defined as Abs(X) <= ENV_SIZE, -4 for Abs(X)>= ENV_SIZE
-        *  5 -> 2D horizontal map of albedos for the whole surface, need ALB to be ALbedo_map object
+                    - :math:`exp(- ((x-x0)**2 + (y-y0)**2))/env_size)`
+        *  3 -> alb map2D modulated by checkerboard spatial function
+        *  4 -> Same as 1 but for a band defined as Abs(X) <= env_size, -4 for Abs(X)>= env_size
+        *  5 -> 2D horizontal map of albedos for the whole surface, need alb to be an AlbedoMap object
                 in that case the surface keyword of Smartg run method is not unused
 
-    ENV_SIZE : float, optional
+    env_size : float, optional
         Definitions:
 
-            - The radius (in km) of the disk for ENV = -1 or 1.
-            - The square (in km) of the sigma of the gaussian for ENV = 2
-            - The size of the spatial pattern (in km) for ENV = 3
-    X0 : float, optional
+            - The radius (in km) of the disk for env = -1 or 1.
+            - The square (in km) of the sigma of the gaussian for env = 2
+            - The size of the spatial pattern (in km) for env = 3
+    x0 : float, optional
         The X origin position
-    Y0 : float, optional
+    y0 : float, optional
         The Y origin position
-    ALB : AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
+    alb : AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap, optional
         The albedo spectral model
-    NENV : int, optional
+    nenv : int, optional
         In progress...
-    NXENVMAP : int, optional
+    nxenvmap : int, optional
         In progress...
-    NYENVMAP : int, optional
+    nyenvmap : int, optional
         In progress...
 
     """
-    def __init__(self, ENV=0, ENV_SIZE=1.e6, X0=0., Y0=0., ALB=AlbedoCst(0.0), NENV=1,
-                NXENVMAP=0, NYENVMAP=0):
+    def __init__(self, env=0, env_size=1.e6, x0=0., y0=0., alb=AlbedoCst(0.0), nenv=1,
+                nxenvmap=0, nyenvmap=0):
         self.dict = {
-                'ENV': ENV,
-                'ENV_SIZE': ENV_SIZE,
-                'X0': X0,
-                'Y0': Y0,
+                'ENV': env,
+                'ENV_SIZE': env_size,
+                'X0': x0,
+                'Y0': y0,
                 }
-        self.alb = ALB
-        self.NENV= NENV
-        self.NXENVMAP= NXENVMAP
-        self.NYENVMAP= NYENVMAP
+        self.alb = alb
+        self.nenv = nenv
+        self.nxenvmap = nxenvmap
+        self.nyenvmap = nyenvmap
 
     def __str__(self):
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(**self.dict)
