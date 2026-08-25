@@ -2300,26 +2300,28 @@ def extract_points(filename: str | Path) -> list[gc.Point]:
     return points
 
 
-class CusForward(object):
+class CusForward:
     """
-    Definition of CusForward 
-
-    - Custom rectangular forward mode of surface X*Y
+    Custom rectangular forward launching mode of surface X*Y.
 
     Parameters
     ----------
     cfx : float, optional
-        The size along the x axis (only for the FF lmode)
+        The size along the x axis (only for the FF lmode).
     cfy : float, optional
-        The size along the y axis (only for the FF lmode)
+        The size along the y axis (only for the FF lmode).
     cftx : float, optional
-        The translation to apply in x axis (only for the FF lmode)
+        The translation to apply in x axis (only for the FF
+        lmode).
     cfty : float, optional
-        The translation to apply in y axis (only for the FF lmode)
+        The translation to apply in y axis (only for the FF
+        lmode).
     cftz : float, optional
-        The translation to apply in z axis (only for the FF lmode)
+        The translation to apply in z axis (only for the FF
+        lmode).
     fov : float, optional
-        The field of view or half-angle of the sun (only for the FF lmode)
+        The field of view or half-angle of the sun (only for the
+        FF lmode).
     sampling : str, optional
         The sampling type (only for the FF lmode). Choices:
 
@@ -2329,18 +2331,38 @@ class CusForward(object):
     lmode : str, optional
         The launching mode. Two choices:
 
-            * 'RF' -> Restricted Forward. Launch the photons such that the direct beams
-                      fill only reflector objects
-            * 'FF' -> Full Forward. Launch the photons in a rectangle from TOA where the
-                      beams at the center targets the origin point (0,0,0).
+            * 'RF' -> Restricted Forward. Launch the photons such
+              that the direct beams fill only reflector objects.
+            * 'FF' -> Full Forward. Launch the photons in a
+              rectangle from TOA where the beams at the center
+              target the origin point (0, 0, 0).
+    lph : object, optional
+        In progress...
+    lpr : object, optional
+        In progress...
     """
-    def __init__(self, cfx=0., cfy=0., cftx=0., cfty=0., cftz=0., fov=0., sampling="isotropic",
-                 lmode="RF", lph=None, lpr=None):
-
-        if (sampling == "lambertian"): sampling = 1
-        elif (sampling == "isotropic"): sampling = 2
-        elif (sampling == "disk"): sampling = 3 # in development
-        else: raise ValueError('You must choose lambertian or isotropic sampling')
+    def __init__(
+        self,
+        cfx: float = 0.,
+        cfy: float = 0.,
+        cftx: float = 0.,
+        cfty: float = 0.,
+        cftz: float = 0.,
+        fov: float = 0.,
+        sampling: str = "isotropic",
+        lmode: str = "RF",
+        lph: object | None = None,
+        lpr: object | None = None,
+    ) -> None:
+        if sampling == "lambertian":
+            sampling_code = 1
+        elif sampling == "isotropic":
+            sampling_code = 2
+        elif sampling == "disk":  # in development
+            sampling_code = 3
+        else:
+            raise ValueError(
+                'You must choose lambertian or isotropic sampling')
 
         self.dict = {
             'CFX':   cfx,
@@ -2349,39 +2371,44 @@ class CusForward(object):
             'CFTY':  cfty,
             'CFTZ':  cftz,
             'FOV':   fov,
-            'TYPE':  sampling,
+            'TYPE':  sampling_code,
             'LMODE': lmode,
-            # under developement->
-            'LPH':     lph,
-            'LPR':     lpr
+            # under development ->
+            'LPH':   lph,
+            'LPR':   lpr,
         }
-        
-    def __str__(self):
-        return 'CusForward=-CFX{CFX}-CFY{CFY}-CFTX{CFTX}-CFTY{CFTY}-CFTZ{CFTZ}'.format(**self.dict) + \
-            '-FOV{FOV}-TYPE{TYPE}-LMODE{LMODE}'.format(**self.dict)
 
-class CusBackward(object):
+    def __str__(self) -> str:
+        return (
+            'CusForward=-CFX{CFX}-CFY{CFY}-CFTX{CFTX}-CFTY{CFTY}'
+            '-CFTZ{CFTZ}-FOV{FOV}-TYPE{TYPE}'
+            '-LMODE{LMODE}'.format(**self.dict)
+        )
+
+
+class CusBackward:
     """
-    Definition of CusBackward
-
-    - Use a point/plane receiver sensor in backward.
+    Backward launching mode from a point or a plane receiver.
 
     Parameters
     ----------
     pos : Point, optional
-        The position (X,Y,Z) in cartesian coordinates. The default
-        is Point(0., 0., 0.).
+        The position (X, Y, Z) in cartesian coordinates. The
+        default is Point(0., 0., 0.).
     thdeg : float, optional
         The zenith angle in degrees.
     phdeg : float, optional
         The azimuth angle in degrees.
     v : Vector, optional
-        The normal vector of the receiver. If provided, circumvent thdeg and phdeg.
+        The normal vector of the receiver. If provided,
+        circumvent thdeg and phdeg.
     aldeg : float, optional
-        Launch in a solid angle where alpha is the half-angle of the cone.
+        Launch in a solid angle where alpha is the half-angle of
+        the cone.
     rec : Entity, optional
-        The receiver object to be used in 'BR' mode. It must be a plane Entity object of
-        type 'receiver'. The photon position is sampled at the receiver surface.
+        The receiver object to be used in 'BR' mode. It must be a
+        plane Entity object of type 'receiver'. The photon
+        position is sampled at the receiver surface.
     sampling : str, optional
         The sampling type (only for the BR lmode). 2 choices:
 
@@ -2390,52 +2417,80 @@ class CusBackward(object):
     lmode : str, optional
         The launching mode. 2 choices:
 
-            * 'B' -> Basic backward (deprecated, see notes). Launch the photons from a given point in a
-                     given direction with a field of view aldeg.
-            * 'BR' -> Backward with receiver. Launch the photons from a given receiver (plane object)
-                      in a given direction with a field of view aldeg. Default value.
-    lph : None, optional
+            * 'B' -> Basic backward (deprecated, see notes).
+              Launch the photons from a given point in a given
+              direction with a field of view aldeg.
+            * 'BR' -> Backward with receiver. Launch the photons
+              from a given receiver (plane object) in a given
+              direction with a field of view aldeg. Default
+              value.
+    lph : object, optional
         In progress...
-    lpr : None, optional
+    lpr : object, optional
         In progress...
 
     Notes
     -----
-    The 'B' mode is deprecated and may lead to wrong results. Use instead the Sensor class.
+    The 'B' mode is deprecated and may lead to wrong results. Use
+    instead the Sensor class.
     """
-    def __init__(self, pos=None, thdeg=0., phdeg=0., v=None,
-                 aldeg=0., rec=None, sampling="lambertian", lmode="BR", lph=None, lpr=None):
-
-        if pos is None: pos = gc.Point(0., 0., 0.)
+    def __init__(
+        self,
+        pos: gc.Point | None = None,
+        thdeg: float = 0.,
+        phdeg: float = 0.,
+        v: gc.Vector | None = None,
+        aldeg: float = 0.,
+        rec: Entity | None = None,
+        sampling: str = "lambertian",
+        lmode: str = "BR",
+        lph: object | None = None,
+        lpr: object | None = None,
+    ) -> None:
+        if pos is None:
+            pos = gc.Point(0., 0., 0.)
         if isinstance(v, gc.Vector):
-            thdeg, phdeg = gc.vec2ang(v)
+            th, ph = gc.vec2ang(v)
+            thdeg, phdeg = float(th), float(ph)
         elif v is not None:
             raise ValueError('The v argument must be a Vector')
         if lmode == "BR" and not isinstance(rec, Entity):
-            raise ValueError('In the BR lmode you have to specify a receiver!')
-        if (sampling == "lambertian"): sampling = 1
-        elif (sampling == "isotropic"): sampling = 2
-        else: raise ValueError('You must choose lambertian or isotropic sampling')
+            raise ValueError(
+                'In the BR lmode you have to specify a receiver!')
+        if sampling == "lambertian":
+            sampling_code = 1
+        elif sampling == "isotropic":
+            sampling_code = 2
+        else:
+            raise ValueError(
+                'You must choose lambertian or isotropic sampling')
 
         if lmode == "B":
-            warn_message = "\nThe LMODE `B` is deprecated as of SMART-G 1.1.0 " + \
-                           "and will be removed in one of the next release.\n" + \
-                           "Please use LMODE `BR` or the class Sensor instead."
-            warn(warn_message, DeprecationWarning, stacklevel=2)
+            warn(
+                "\nThe lmode `B` is deprecated as of SMART-G 1.1.0 "
+                "and will be removed in one of the next release.\n"
+                "Please use the lmode `BR` or the class Sensor "
+                "instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         self.dict = {
-            'POS':    pos,
-            'THDEG':  thdeg,
-            'PHDEG':  phdeg,
-            'ALDEG':  aldeg,
-            'REC':    rec,
-            'TYPE':   sampling,
-            'LMODE':  lmode,
-            # under developement->
-            'LPH':     lph,
-            'LPR':     lpr
+            'POS':   pos,
+            'THDEG': thdeg,
+            'PHDEG': phdeg,
+            'ALDEG': aldeg,
+            'REC':   rec,
+            'TYPE':  sampling_code,
+            'LMODE': lmode,
+            # under development ->
+            'LPH':   lph,
+            'LPR':   lpr,
         }
 
-    def __str__(self):
-        return 'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'.format(**self.dict) + \
-            '-ALDEG={ALDEG}-TYPE{TYPE}-LMODE={LMODE}'.format(**self.dict)
+    def __str__(self) -> str:
+        return (
+            'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'
+            '-ALDEG={ALDEG}-TYPE={TYPE}'
+            '-LMODE={LMODE}'.format(**self.dict)
+        )
