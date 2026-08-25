@@ -96,8 +96,8 @@ will be completed and corrected before the final `v2.0.0` release.
     and its `calc()` method returns the profile dataset consumed by
     `Smartg.run`, replacing the manual assembly of the `libATM3D.Atm3D`
     getter outputs into `Atm1D("ATM3D", ...)`
-    - New `Comp3D` base class of the 3D components (a future `Aer3D` will
-      implement it too)
+    - New `Comp3D` base class of the 3D components (`Cloud3D` and the new
+      `Aer3D` implement it)
     - The new `Cloud3D` accepts the 3D cloud field as a dense `xr.Dataset` (or
       NetCDF file) with the `ext(z, y, x)` and `reff(z, y, x)` variables and
       the cell-boundary coordinates, as raw arrays (IPRT 1-based indices), or
@@ -109,6 +109,14 @@ will be completed and corrected before the final `v2.0.0` release.
       shared by several components (and by the 1D aerosols), the extinctions
       are summed, the single scattering albedos are extinction-weighted and
       the phase matrices are weighted by the scattering coefficients
+    - New `Aer3D` 3D aerosol component: bulk optical properties from the
+      OPAC aerosol mixtures or species ('desert', 'continental_clean',
+      'waso', ...) as a function of the relative humidity; the 3D
+      distribution (extinction at `w_ref` and per-cell rh, clamped to the
+      file's humidity range as in the 1D `AerOPAC`) follows the same three
+      routes as `Cloud3D` (dense dataset with `rh(z, y, x)`, raw arrays,
+      ASCII files via the new `read_i3rc_aerosol` function), with the
+      `rh_acc`/`rh_min`/`rh_max`, `phase` and `ssa_cst` options
   - New `AerUser` class in `smartg.atmosphere` to define custom aerosol / cloud
     optical properties (extinction, SSA, phase matrix) from user-supplied data
   - New `get_prof_phases` utility function to easily extract phase matrices from

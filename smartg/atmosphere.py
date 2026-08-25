@@ -33,14 +33,22 @@ Atm1D
 Atm3D
     3D atmospheric profile model (for Smartg(opt3D=True) simulations).
     Combines a 1D background atmosphere (Atm1D), a 3D grid
-    (smartg.grid3d.Grid3D) and 3D components (Cloud3D) into the 3D
-    profile consumed by smartg.run().
+    (smartg.grid3d.Grid3D) and 3D components (Cloud3D, Aer3D) into the
+    3D profile consumed by smartg.run().
 
 Cloud3D
     3D cloud component of Atm3D. The 3D distribution of the cloud
     extinction and droplet effective radius is provided as a dense
     xarray dataset (or NetCDF file), as raw arrays, or converted from
     the legacy I3RC/IPRT ASCII cloud files with read_i3rc_cloud.
+
+Aer3D
+    3D aerosol component of Atm3D. Bulk optical properties from the
+    OPAC aerosol mixtures or species as a function of the relative
+    humidity; the 3D distribution of the aerosol extinction and
+    relative humidity is provided as a dense xarray dataset (or NetCDF
+    file), as raw arrays, or converted from I3RC/IPRT-style ASCII
+    files with read_i3rc_aerosol.
 
 AerOPAC
     Aerosol Optical Properties from OPAC (Optical Properties of Aerosols
@@ -1318,7 +1326,7 @@ class AerUser(AerOPAC):
 
 
 class Comp3D(ABC):
-    """Base class for 3D atmospheric components (e.g. Cloud3D).
+    """Base class for 3D atmospheric components (e.g. Cloud3D, Aer3D).
 
     A 3D component describes particles occupying a set of cells of a
     :class:`smartg.grid3d.Grid3D`, with per-cell optical properties.
@@ -1789,6 +1797,144 @@ class Cloud3D(_Comp3DFile):
         self._mlut = value
 
 
+class Aer3D(_Comp3DFile):
+    """3D aerosol component.
+
+    The aerosol bulk optical properties (spectral extinction, single
+    scattering albedo and phase matrices as a function of the relative
+    humidity) are read from a SMART-G OPAC aerosol NetCDF file. The 3D
+    distribution of the aerosol (per-cell extinction at the reference
+    wavelength `w_ref` and relative humidity) is provided either as a
+    dense ``xr.Dataset`` (or NetCDF file path) following the SMART-G
+    3D aerosol schema, or as raw arrays.
+
+    The relative humidities are clamped to the humidity axis of the
+    bulk file (0-99 % for the OPAC species), matching the 1D
+    :class:`AerOPAC` behavior; hydrophobic species with a single
+    humidity node (e.g. 'inso', 'soot') ignore `rh` entirely. The
+    vertical-structure attributes of the OPAC files (``H_mix_min``,
+    ..., ``Z_stra``) are ignored: the 3D field prescribes the per-cell
+    extinction directly.
+
+    The dense dataset schema is:
+        - ``ext(z, y, x)`` : extinction coefficient in km-1 at `w_ref`,
+          0 in aerosol-free cells,
+        - ``rh(z, y, x)`` : relative humidity in percent,
+        - coordinates ``x_bounds(x_b)``, ``y_bounds(y_b)``,
+          ``z_bounds(z_b)`` : the cell boundaries in km,
+        - optionally the attribute ``w_ref`` (in nm).
+    Legacy I3RC/IPRT-style ASCII files can be converted to this schema
+    with :func:`read_i3rc_aerosol`.
+
+    Parameters
+    ----------
+    fname : PathType
+        Aerosol smartg filename with the bulk optical properties: an
+        OPAC mixture name as in :class:`AerOPAC` ('continental_clean',
+        'continental_average', 'continental_polluted', 'urban',
+        'desert', 'maritime_clean', 'maritime_polluted',
+        'maritime_tropical', 'antarctic', 'arctic', ...), an OPAC
+        single species ('waso', 'inso', 'soot', 'suso', ...), or the
+        path to a file with the same structure.
+    w_ref : float or None, optional
+        Reference wavelength (nm) at which the aerosol extinction is
+        given. If None, taken from the ``w_ref`` attribute of `ds`.
+    ds : xr.Dataset or PathType or None, optional
+        The 3D aerosol field following the dense schema described
+        above, or the path of a NetCDF file containing it.
+    rh : array_like or None, optional
+        Numpy 1D array with the relative humidities (percent) of each
+        aerosol cell. Ignored if `ds` is given.
+    ext_ref : array_like or None, optional
+        Numpy 1D array with the aerosol extinction coefficients (km-1)
+        at `w_ref` of each aerosol cell. Ignored if `ds` is given.
+    cell_indices : ndarray or None, optional
+        (N, 3) array with the (ix, iy, iz) indices of the aerosol
+        cells on the inner 3D grid, following the 1-based IPRT
+        convention. Ignored if `ds` is given.
+    rh_acc : int or None, optional
+        Decimal accuracy of rh; the rh values are rounded to this
+        number of decimals. By default None, i.e. keep the values as
+        provided. Recommended for continuous rh fields, to keep the
+        set of unique phase matrices small.
+    rh_min, rh_max : float or None, optional
+        The rh values less than rh_min are replaced by rh_min. The
+        same for values greater than rh_max.
+    phase : LUT or None, optional
+        LUT object with the aerosol phase matrix depending on
+        wav_phase, hum, stk and theta_atm (the humidity axis is named
+        ``hum`` as in the OPAC files). If None, the phase matrices are
+        computed from the bulk optical properties file.
+    ssa_cst : float or None, optional
+        Force the aerosol single scattering albedo to this constant
+        value. If None, the single scattering albedo is interpolated
+        from the bulk optical properties file.
+    """
+
+    _param_name = "rh"
+    _lut_axis = "hum"
+    _auxdata_subdir = ("aerosols", "OPAC", "mixtures")
+    _idx_fill_value = "extrema"
+    _label = "aerosol"
+
+    def __init__(
+        self,
+        fname: PathType,
+        w_ref: float | None = None,
+        ds: xr.Dataset | PathType | None = None,
+        rh: NumericArrayLike | None = None,
+        ext_ref: NumericArrayLike | None = None,
+        cell_indices: NDArray[np.integer] | None = None,
+        rh_acc: int | None = None,
+        rh_min: float | None = None,
+        rh_max: float | None = None,
+        phase: LUT | None = None,
+        ssa_cst: float | None = None,
+    ) -> None:
+        super().__init__(
+            fname,
+            w_ref=w_ref,
+            ds=ds,
+            param=rh,
+            ext_ref=ext_ref,
+            cell_indices=cell_indices,
+            param_acc=rh_acc,
+            param_min=rh_min,
+            param_max=rh_max,
+            phase=phase,
+            ssa_cst=ssa_cst,
+        )
+
+    def _normalize_param(
+        self, param: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        # hydrophobic species (e.g. 'inso', 'soot') have a single
+        # humidity node, and the LUT lookups on a size-1 axis reject
+        # any other value even with the extrema fill: clamp rh to it
+        hum = np.asarray(self._mlut.axes["hum"], dtype=np.float64)
+        if hum.size == 1:
+            param = np.full_like(param, hum[0])
+        return param
+
+    @property
+    def rh(self) -> NDArray[np.float64]:
+        """The (N,) per-cell relative humidities in percent."""
+        return self._param
+
+    @rh.setter
+    def rh(self, value: NDArray[np.float64]) -> None:
+        self._param = value
+
+    @property
+    def aer_mlut(self) -> Any:
+        """The aerosol bulk optical properties MLUT."""
+        return self._mlut
+
+    @aer_mlut.setter
+    def aer_mlut(self, value: Any) -> None:
+        self._mlut = value
+
+
 def read_i3rc_cloud(
     filename: PathType,
     loc_xgrid: str | RealNumber = "centered",
@@ -1821,6 +1967,41 @@ def read_i3rc_cloud(
         cell-boundary coordinates.
     """
     return _read_i3rc_field(filename, "reff", loc_xgrid, loc_ygrid)
+
+
+def read_i3rc_aerosol(
+    filename: PathType,
+    loc_xgrid: str | RealNumber = "centered",
+    loc_ygrid: str | RealNumber = "centered",
+) -> xr.Dataset:
+    """Read an I3RC/IPRT-style ASCII 3D aerosol file and convert it to
+    the dense SMART-G 3D aerosol dataset expected by :class:`Aer3D`.
+
+    The ASCII format is the one of :func:`read_i3rc_cloud`, with the
+    fifth column holding the relative humidity in percent instead of
+    the effective radius: one comment row, a row with the number of
+    cells ``Nx Ny Nz`` and a flag, a row with the cell sizes ``Dx Dy``
+    followed by the ``Nz + 1`` z boundaries in km, then one row per
+    aerosol cell with the 1-based ``ix iy iz`` indices, the extinction
+    coefficient in km-1 and the relative humidity in percent.
+
+    Parameters
+    ----------
+    filename : PathType
+        File name with path location of the ASCII aerosol file.
+    loc_xgrid, loc_ygrid : str or scalar, optional
+        Location of the x and y grids. By default a str: "centered"
+        i.e. the grid center is at coordinate 0. Or give a scalar with
+        the starting position of the grid.
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset with the ``ext(z, y, x)`` and ``rh(z, y, x)``
+        variables and the ``x_bounds``, ``y_bounds`` and ``z_bounds``
+        cell-boundary coordinates.
+    """
+    return _read_i3rc_field(filename, "rh", loc_xgrid, loc_ygrid)
 
 
 def _read_i3rc_field(
@@ -3459,7 +3640,8 @@ class Atm3D(Atmosphere):
 
     The 3D atmosphere combines a 1D background atmosphere (molecular
     scattering and absorption, plus optional 1D aerosols), a 3D grid
-    and a list of 3D components (e.g. :class:`Cloud3D`). The 1D
+    and a list of 3D components (e.g. :class:`Cloud3D`,
+    :class:`Aer3D`). The 1D
     background is evaluated on the vertical discretization of the 3D
     grid and shared by all the cells at the same altitude; the cells
     occupied by a 3D component get their own optical properties, mixing
@@ -3484,11 +3666,12 @@ class Atm3D(Atmosphere):
         The 3D grid of the atmosphere.
     comp_3d : list of Comp3D or None, optional
         The 3D components to consider, i.e. a list of :class:`Cloud3D`
-        objects. The cell indices must be unique within each
-        component. In the cells shared by several components (and by
-        the 1D aerosols), the extinction coefficients are summed, the
-        single scattering albedos are extinction-weighted and the
-        phase matrices are weighted by the scattering coefficients.
+        / :class:`Aer3D` objects. The cell indices must be unique
+        within each component. In the cells shared by several
+        components (and by the 1D aerosols), the extinction
+        coefficients are summed, the single scattering albedos are
+        extinction-weighted and the phase matrices are weighted by
+        the scattering coefficients.
         If None or empty, the 3D atmosphere is horizontally uniform.
     pfwav : array_like or None, optional
         The wavelengths over which the phase matrices are calculated.
@@ -3544,7 +3727,7 @@ class Atm3D(Atmosphere):
             if not isinstance(comp, Comp3D):
                 raise TypeError(
                     "comp_3d must be a list of Comp3D objects (e.g. "
-                    "Cloud3D)!"
+                    "Cloud3D, Aer3D)!"
                 )
         self.atm_1d = atm_1d
         self.grid_3d = grid_3d
