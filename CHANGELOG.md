@@ -240,6 +240,9 @@ final `v2.0.0` release.
   - Fix the phase truncation with a 3D atmosphere
   - `FlatSurface` now sets `alb` and `kp` to None like the other surfaces,
     fixing an `AttributeError` in `Smartg.run` with `surf=FlatSurface()`
+  - Passing the individual coefficients `k0`/`k1p`/`k2p` to `RTLSSurface` or
+    `r0`/`k`/`bt`/`rc` to `RPVSurface` no longer raises a `TypeError`
+    (the overrides were assigned into a tuple)
   - Fix a bug in `read_cld_nth_cte`
   - Fix the numpy 2.5 shape-setter deprecation in the interp module, and the
     strictly-increasing coordinate requirement of `make_interp_spline`

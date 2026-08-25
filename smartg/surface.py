@@ -148,13 +148,13 @@ class RTLSSurface(object):
     """
     def __init__(self, kp=None, k0=None, k1p=None, k2p=None):
 
-        kp_bis = (AlbedoCst(0.5), AlbedoCst(0.0), AlbedoCst(0.0))
+        kp_bis = [AlbedoCst(0.5), AlbedoCst(0.0), AlbedoCst(0.0)]
         if kp is not None:
             warn_message = "\nThe use of parameter `kp` is deprecated as of SMART-G 1.1.0 " + \
                            "and will be removed in one of the next release.\n" + \
                            "Please use k0, k1p and k2p instead."
             warn(warn_message, DeprecationWarning)
-            kp_bis = deepcopy(kp)
+            kp_bis = list(deepcopy(kp))
 
         if k0 is not None: kp_bis[0] = k0
         if k1p is not None: kp_bis[1] = k1p
@@ -169,7 +169,7 @@ class RTLSSurface(object):
                 'BRDF': 1,
                 'SINGLE': 1,
                 }
-        self.kp = kp_bis+(AlbedoCst(0.0),)
+        self.kp = tuple(kp_bis) + (AlbedoCst(0.0),)
         self.alb= None
     def __str__(self):
         return 'RTLS-ALB={SURFALB}'.format(**self.dict)
@@ -216,13 +216,13 @@ class RPVSurface(object):
     """
     def __init__(self, kp=None, r0=None, k=None, bt=None, rc=None):
 
-        kp_bis = (AlbedoCst(0.5), AlbedoCst(0.0), AlbedoCst(0.0), AlbedoCst(0.0))
+        kp_bis = [AlbedoCst(0.5), AlbedoCst(0.0), AlbedoCst(0.0), AlbedoCst(0.0)]
         if kp is not None:
             warn_message = "\nThe use of parameter `kp` is deprecated as of SMART-G 1.1.0 " + \
                            "and will be removed in one of the next release.\n" + \
                            "Please use r0, k, bt and rc instead."
             warn(warn_message, DeprecationWarning)
-            kp_bis = deepcopy(kp)
+            kp_bis = list(deepcopy(kp))
 
         if r0 is not None: kp_bis[0] = r0
         if k is not None: kp_bis[1] = k
@@ -238,7 +238,7 @@ class RPVSurface(object):
                 'BRDF': 1,
                 'SINGLE': 1,
                 }
-        self.kp = kp_bis
+        self.kp = tuple(kp_bis)
         self.alb= None
     def __str__(self):
         return 'RTLS-ALB={SURFALB}'.format(**self.dict)
