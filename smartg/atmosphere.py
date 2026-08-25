@@ -471,7 +471,7 @@ class AerOPAC(object):
         elif isinstance(self, Cloud):
             hum_or_reff_val = self.reff
         else:
-            raise NameError(
+            raise ValueError(
                 "ext and ssa must varies as function of hum or reff."
             )
 
@@ -848,7 +848,7 @@ class AerOPAC(object):
                 else:
                     hum_or_reff_val = rh
             else:
-                raise NameError(
+                raise ValueError(
                     "Phase matrix must varies as function of hum or reff."
                 )
 
@@ -2288,7 +2288,7 @@ class Atm1D(Atmosphere):
                 o3_h2o_alt=o3_h2o_alt,
             )
         else:
-            raise NameError(
+            raise ValueError(
                 "This file format is not supported. Only '.nc' and"
                 + " '.dat' are supported."
             )
@@ -4480,7 +4480,7 @@ class ProfileBase(object):
                 self.dens_n2 = np.zeros(nz, dtype=np.float32)
                 self.dens_so2 = np.zeros(nz, dtype=np.float32)
             else:
-                raise NameError("Invalid atmospheric file format")
+                raise ValueError("Invalid atmospheric file format")
         elif fname.suffix == ".nc":
             with xr.open_dataset(fname) as data:
                 self.z = data.coords["z_atm"].values  # Altitude in km
@@ -5856,13 +5856,13 @@ def artdeco_to_smartg_cld(
             if len(keys) == 1:
                 h5_group = keys[0]
             elif len(keys) > 1:
-                raise NameError(
+                raise ValueError(
                     "The h5 file has more than one group. Please choose one "
                     + "group between: "
                     + ", ".join(keys)
                 )
             else:
-                raise NameError(
+                raise ValueError(
                     "Could not identify an ARTDECO group containing axis and "
                     + "data nodes."
                 )
@@ -5897,7 +5897,7 @@ def artdeco_to_smartg_cld(
     if is_veff and veff is None:
         veff_min = str(float(art_cld.coords["veff"].min()))
         veff_max = str(float(art_cld.coords["veff"].max()))
-        raise NameError(
+        raise ValueError(
             "The cloud file is dependant of veff. Please give a veff value "
             + f"between: {veff_min} and {veff_max}"
         )
