@@ -105,6 +105,10 @@ will be completed and corrected before the final `v2.0.0` release.
       `read_i3rc_cloud` function
     - New `ssa_cst` parameter of `Cloud3D` to force the cloud single
       scattering albedo
+    - `Atm3D` supports several 3D components in `comp_3d`: in the cells
+      shared by several components (and by the 1D aerosols), the extinctions
+      are summed, the single scattering albedos are extinction-weighted and
+      the phase matrices are weighted by the scattering coefficients
   - New `AerUser` class in `smartg.atmosphere` to define custom aerosol / cloud
     optical properties (extinction, SSA, phase matrix) from user-supplied data
   - New `get_prof_phases` utility function to easily extract phase matrices from

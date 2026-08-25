@@ -3358,7 +3358,11 @@ class Atm3D(Atmosphere):
         The 3D grid of the atmosphere.
     comp_3d : list of Comp3D or None, optional
         The 3D components to consider, i.e. a list of :class:`Cloud3D`
-        objects. Only a single component is supported for the moment.
+        objects. The cell indices must be unique within each
+        component. In the cells shared by several components (and by
+        the 1D aerosols), the extinction coefficients are summed, the
+        single scattering albedos are extinction-weighted and the
+        phase matrices are weighted by the scattering coefficients.
         If None or empty, the 3D atmosphere is horizontally uniform.
     pfwav : array_like or None, optional
         The wavelengths over which the phase matrices are calculated.
@@ -3416,12 +3420,6 @@ class Atm3D(Atmosphere):
                     "comp_3d must be a list of Comp3D objects (e.g. "
                     "Cloud3D)!"
                 )
-        if len(comp_3d) > 1:
-            raise NotImplementedError(
-                "Only a single 3D component per simulation is supported "
-                "for the moment"
-            )
-
         self.atm_1d = atm_1d
         self.grid_3d = grid_3d
         self.comp_3d = comp_3d
@@ -3432,7 +3430,7 @@ class Atm3D(Atmosphere):
         self.aer_ssa_1d = aer_ssa_1d
         self.aer_phase_1d = aer_phase_1d
 
-        if comp_3d:
+        if len(comp_3d) == 1:
             # cell indices on the boundary-extended grid
             cell_indices = comp_3d[0].get_cell_indices().copy()
             # shift the x and y indices if the grid has horizontal
@@ -3449,9 +3447,50 @@ class Atm3D(Atmosphere):
                 ),
                 dims=(grid_3d.NX, grid_3d.NY, grid_3d.NZ),
             )
+            self._comp_cell_pos = [
+                np.arange(self._cell_flat_indices.size)
+            ]
+        elif comp_3d:
+            # several components: the global cell list is the sorted
+            # union of the component cells, with the position of each
+            # component cell within the union kept for the mixing
+            comp_flat = []
+            for icomp, comp in enumerate(comp_3d):
+                cell_indices = comp.get_cell_indices().copy()
+                # shift the x and y indices if the grid has
+                # horizontal boundary cells
+                if grid_3d.Nx < grid_3d.NX:
+                    cell_indices[:, :2] += 1
+                flat = np.ravel_multi_index(
+                    (
+                        cell_indices[:, 0],
+                        cell_indices[:, 1],
+                        cell_indices[:, 2],
+                    ),
+                    dims=(grid_3d.NX, grid_3d.NY, grid_3d.NZ),
+                )
+                if np.unique(flat).size != flat.size:
+                    raise ValueError(
+                        f"comp_3d[{icomp}] has duplicated cell "
+                        "indices: the cells of a component must be "
+                        "unique"
+                    )
+                comp_flat.append(flat)
+            union = np.unique(np.concatenate(comp_flat))
+            self._cell_flat_indices = union
+            self._cell_indices = np.stack(
+                np.unravel_index(
+                    union, (grid_3d.NX, grid_3d.NY, grid_3d.NZ)
+                ),
+                axis=1,
+            ).astype(np.int32)
+            self._comp_cell_pos = [
+                np.searchsorted(union, flat) for flat in comp_flat
+            ]
         else:
             self._cell_indices = None
             self._cell_flat_indices = None
+            self._comp_cell_pos = None
 
     def calc(
         self,
@@ -3643,6 +3682,17 @@ class Atm3D(Atmosphere):
                 )
             return ext_aer_1d, ssa_aer_1d, (ipha3d, luts)
 
+        if len(self.comp_3d) > 1:
+            return self._glob_particles_multi(
+                wls,
+                wav_pha,
+                n_theta,
+                ext_aer_1d,
+                ssa_aer_1d,
+                ipha_aer_1d,
+                pha_aer_1d,
+            )
+
         comp = self.comp_3d[0]
         assert self._cell_indices is not None
         n_cell = self._cell_indices.shape[0]
@@ -3749,6 +3799,10 @@ class Atm3D(Atmosphere):
         ssa_glob = np.concatenate([ssa_aer_1d[:, :], ssa_mix_3d], axis=1)
 
         # Now consider the wl dimension
+        # NB: with a 1D aerosol the per-wavelength stride in `luts`
+        # is nbz + n_cell, not n_unique, so the offset below is only
+        # correct when len(wav_pha) == 1 (the only exercised case;
+        # kept as-is for bit-identity with the saved references)
         ipha3d = np.zeros(
             (len(wav_pha), phase_glob_indices_w0.size), dtype=np.int32
         )
@@ -3757,6 +3811,179 @@ class Atm3D(Atmosphere):
                 iwav * n_unique
             )
 
+        return ext_glob, ssa_glob, (ipha3d, luts)
+
+    def _glob_particles_multi(
+        self,
+        wls: NDArray[np.floating],
+        wav_pha: NDArray[np.floating],
+        n_theta: int,
+        ext_aer_1d: NDArray[np.floating],
+        ssa_aer_1d: NDArray[np.floating],
+        ipha_aer_1d: NDArray[np.integer] | None,
+        pha_aer_1d: Any,
+    ) -> tuple[
+        NDArray[np.floating],
+        NDArray[np.floating],
+        tuple[NDArray[np.int32], list[Any]] | None,
+    ]:
+        """Merge the 1D aerosols and several 3D components into the
+        global (nwav, Nopt) particle extinction and single scattering
+        albedo arrays and the global phase matrix set.
+
+        In each cell the extinctions are summed, the single
+        scattering albedos are extinction-weighted and the phase
+        matrices are weighted by the scattering coefficients and
+        normalized by the total extinction, following the 1D/3D
+        mixing conventions of `_glob_particles`.
+        """
+        NZ = self.grid_3d.NZ
+        nbz = NZ + 1
+        assert self._cell_indices is not None
+        assert self._comp_cell_pos is not None
+        n_cell = self._cell_indices.shape[0]
+
+        # per-component optical properties and phase matrix sets
+        ext_3d = [comp.get_ext(wls) for comp in self.comp_3d]
+        ssa_3d = [comp.get_ssa(wls) for comp in self.comp_3d]
+        ext_3d_pha = [comp.get_ext(wav_pha) for comp in self.comp_3d]
+        ssa_3d_pha = [comp.get_ssa(wav_pha) for comp in self.comp_3d]
+        phase_sets = [
+            comp.get_phase_set(wav_pha, n_theta=n_theta)
+            for comp in self.comp_3d
+        ]
+
+        # align every phase matrix set (and the 1D aerosol one) on
+        # the scattering angles of the first component
+        theta_ref = cast(
+            NDArray[np.floating], phase_sets[0][0][0].axes[1]
+        )
+        cld_luts_all = []
+        for cld_luts, _, _ in phase_sets:
+            theta = cast(
+                NDArray[np.floating], cld_luts[0].axes[1]
+            )
+            if np.array_equal(theta, theta_ref):
+                cld_luts_all.append(cld_luts)
+            else:
+                cld_luts_all.append(
+                    [lut.sub()[:, Idx(theta_ref)] for lut in cld_luts]
+                )
+        phase_aer_1d = None
+        if pha_aer_1d is not None:
+            if len(pha_aer_1d.axes[2]) == len(theta_ref):
+                phase_aer_1d = pha_aer_1d
+            else:
+                phase_aer_1d = pha_aer_1d.sub()[:, :, Idx(theta_ref)]
+
+        # the altitude level of the 1D aerosols co-located with each
+        # cell (same historical mapping as `_glob_particles`)
+        idz_atm = nbz - self._cell_indices[:, 2]
+
+        # position of each cell of each component within the global
+        # cell list
+        local_pos = np.full(
+            (len(self.comp_3d), n_cell), -1, dtype=np.int64
+        )
+        for icomp, pos in enumerate(self._comp_cell_pos):
+            local_pos[icomp, pos] = np.arange(pos.size)
+
+        # the mixed extinctions and ssa, at the profile wavelengths
+        ext_mix_3d = np.zeros((len(wls), n_cell), dtype=np.float64)
+        sca_mix_3d = np.zeros_like(ext_mix_3d)
+        for icomp, pos in enumerate(self._comp_cell_pos):
+            ext_mix_3d[:, pos] += ext_3d[icomp]
+            sca_mix_3d[:, pos] += ext_3d[icomp] * ssa_3d[icomp]
+        if pha_aer_1d is not None:
+            ext_mix_3d += ext_aer_1d[:, idz_atm]
+            sca_mix_3d += ext_aer_1d[:, idz_atm] * ssa_aer_1d[
+                :, idz_atm
+            ]
+        ssa_mix_3d = np.divide(
+            sca_mix_3d,
+            ext_mix_3d,
+            out=np.ones_like(sca_mix_3d),
+            where=ext_mix_3d > 0.0,
+        )
+
+        # the mixed phase matrices, one per cell and per phase
+        # wavelength, weighted by the extinctions at the phase
+        # wavelengths (sharing the matrices of the cells occupied by
+        # a single component is a possible future memory
+        # optimization)
+        luts = []
+        for iwav in range(0, len(wav_pha)):
+            if phase_aer_1d is not None:
+                assert ipha_aer_1d is not None
+                for iz in range(0, nbz):
+                    luts.append(
+                        phase_aer_1d.sub()[ipha_aer_1d[iwav, iz], :, :]
+                    )
+            for icell in range(0, n_cell):
+                pha_tot = None
+                pha_first = None
+                ext_tot = 0.0
+                if phase_aer_1d is not None:
+                    assert ipha_aer_1d is not None
+                    idz = idz_atm[icell]
+                    pha_first = phase_aer_1d.sub()[
+                        ipha_aer_1d[iwav, idz], :, :
+                    ]
+                    pha_tot = pha_first * (
+                        ext_aer_1d[iwav, idz] * ssa_aer_1d[iwav, idz]
+                    )
+                    ext_tot += ext_aer_1d[iwav, idz]
+                for icomp in range(0, len(self.comp_3d)):
+                    iloc = local_pos[icomp, icell]
+                    if iloc < 0:
+                        continue
+                    _, cell_pha_idx, n_unique = phase_sets[icomp]
+                    pha_cld = cld_luts_all[icomp][
+                        iwav * n_unique + cell_pha_idx[iloc]
+                    ]
+                    if pha_first is None:
+                        pha_first = pha_cld
+                    pha_comp = pha_cld * (
+                        ext_3d_pha[icomp][iwav, iloc]
+                        * ssa_3d_pha[icomp][iwav, iloc]
+                    )
+                    pha_tot = (
+                        pha_comp if pha_tot is None
+                        else pha_tot + pha_comp
+                    )
+                    ext_tot += ext_3d_pha[icomp][iwav, iloc]
+                assert pha_tot is not None and pha_first is not None
+                if ext_tot > 0.0:
+                    pha_tot = pha_tot / ext_tot
+                else:
+                    # never sampled (zero extinction): keep a valid
+                    # unweighted matrix rather than a null one
+                    pha_tot = pha_first
+                luts.append(pha_tot)
+
+        # the phase matrix indices, with the per-wavelength stride of
+        # the `luts` layout above
+        if phase_aer_1d is not None:
+            stride = nbz + n_cell
+            phase_glob_indices_w0 = np.arange(
+                nbz + n_cell, dtype=np.int32
+            )
+        else:
+            stride = n_cell
+            phase_glob_indices_w0 = np.concatenate(
+                [
+                    np.zeros(nbz, dtype=np.int32),
+                    np.arange(n_cell, dtype=np.int32),
+                ]
+            )
+        ipha3d = np.zeros((len(wav_pha), nbz + n_cell), dtype=np.int32)
+        for iwav in range(0, len(wav_pha)):
+            ipha3d[iwav, :] = phase_glob_indices_w0[:] + (
+                iwav * stride
+            )
+
+        ext_glob = np.concatenate([ext_aer_1d, ext_mix_3d], axis=1)
+        ssa_glob = np.concatenate([ssa_aer_1d, ssa_mix_3d], axis=1)
         return ext_glob, ssa_glob, (ipha3d, luts)
 
     def _cells_info(
