@@ -47,6 +47,8 @@ class FlatSurface(object):
                 'BRDF' : 0,
                 'SINGLE' : 1,
                 }
+        self.alb=None
+        self.kp=None
     def __str__(self):
         return 'FLATSURF-SUR={SUR}'.format(**self.dict)
 

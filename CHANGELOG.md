@@ -238,6 +238,8 @@ final `v2.0.0` release.
     or wavelength is exactly at the upper axis boundary
   - Fix the 1D aerosol phase mixing with a 3D cloud
   - Fix the phase truncation with a 3D atmosphere
+  - `FlatSurface` now sets `alb` and `kp` to None like the other surfaces,
+    fixing an `AttributeError` in `Smartg.run` with `surf=FlatSurface()`
   - Fix a bug in `read_cld_nth_cte`
   - Fix the numpy 2.5 shape-setter deprecation in the interp module, and the
     strictly-increasing coordinate requirement of `make_interp_spline`
