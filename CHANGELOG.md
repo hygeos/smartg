@@ -156,7 +156,10 @@ final `v2.0.0` release.
       `smartg.atmosphere.Atm3D`
   - The `CusForward` and `CusBackward` launching-mode classes have been
     moved from `smartg.smartg` to `smartg.objects3d`; they are NOT
-    re-exported by `smartg.smartg`, so imports must be updated
+    re-exported by `smartg.smartg`, so imports must be updated. Their
+    constructor parameters have been renamed to snake case (`CFX` → `cfx`,
+    `LMODE` → `lmode`, `POS` → `pos`, `REC` → `rec`, ...), with
+    `TYPE` → `sampling` (`type` would shadow the builtin)
   - The `change_altitude_grid` external function has been removed (use `str2grid_arr`)
   - The deprecated `lib3D` module and legacy geometric modules have been removed
   - Several obsolete utility functions removed: `average`, `isiterable`, `isnumeric`,

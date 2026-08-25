@@ -2308,25 +2308,25 @@ class CusForward(object):
 
     Parameters
     ----------
-    CFX : float, optional
-        The size along the x axis (only for FF LMODE)
-    CFY : float, optional
-        The size along the y axis (only for FF LMODE)
-    CFTX : float, optional
-        The translation to apply in x axis (only for FF LMODE)
-    CFTY : float, optional
-        The translation to apply in y axis (only for FF LMODE)
-    CFTZ : float, optional
-        The translation to apply in z axis (only for FF LMODE)
-    FOV : float, optional
-        The field of view or half-angle of the sun (only for FF LMODE)
-    TYPE : str, optional
-        The sampling type (only for FF LMODE). Choices:
+    cfx : float, optional
+        The size along the x axis (only for the FF lmode)
+    cfy : float, optional
+        The size along the y axis (only for the FF lmode)
+    cftx : float, optional
+        The translation to apply in x axis (only for the FF lmode)
+    cfty : float, optional
+        The translation to apply in y axis (only for the FF lmode)
+    cftz : float, optional
+        The translation to apply in z axis (only for the FF lmode)
+    fov : float, optional
+        The field of view or half-angle of the sun (only for the FF lmode)
+    sampling : str, optional
+        The sampling type (only for the FF lmode). Choices:
 
             * 'lambertian'
             * 'isotropic'
             * 'disk' (in development)
-    LMODE : str, optional
+    lmode : str, optional
         The launching mode. Two choices:
 
             * 'RF' -> Restricted Forward. Launch the photons such that the direct beams
@@ -2334,26 +2334,26 @@ class CusForward(object):
             * 'FF' -> Full Forward. Launch the photons in a rectangle from TOA where the
                       beams at the center targets the origin point (0,0,0).
     """
-    def __init__(self, CFX=0., CFY=0., CFTX = 0., CFTY = 0., CFTZ= 0., FOV = 0., TYPE = "isotropic",
-                 LMODE = "RF", LPH=None, LPR=None):
+    def __init__(self, cfx=0., cfy=0., cftx=0., cfty=0., cftz=0., fov=0., sampling="isotropic",
+                 lmode="RF", lph=None, lpr=None):
 
-        if (TYPE == "lambertian"): TYPE = 1
-        elif (TYPE == "isotropic"): TYPE = 2
-        elif (TYPE == "disk"): TYPE = 3 # in development
+        if (sampling == "lambertian"): sampling = 1
+        elif (sampling == "isotropic"): sampling = 2
+        elif (sampling == "disk"): sampling = 3 # in development
         else: raise ValueError('You must choose lambertian or isotropic sampling')
 
         self.dict = {
-            'CFX':   CFX,
-            'CFY':   CFY,
-            'CFTX':  CFTX,
-            'CFTY':  CFTY,
-            'CFTZ':  CFTZ,
-            'FOV':   FOV,
-            'TYPE':  TYPE,
-            'LMODE': LMODE,
+            'CFX':   cfx,
+            'CFY':   cfy,
+            'CFTX':  cftx,
+            'CFTY':  cfty,
+            'CFTZ':  cftz,
+            'FOV':   fov,
+            'TYPE':  sampling,
+            'LMODE': lmode,
             # under developement->
-            'LPH':     LPH,
-            'LPR':     LPR
+            'LPH':     lph,
+            'LPR':     lpr
         }
         
     def __str__(self):
@@ -2368,72 +2368,72 @@ class CusBackward(object):
 
     Parameters
     ----------
-    POS : Point, optional
+    pos : Point, optional
         The position (X,Y,Z) in cartesian coordinates. The default
         is Point(0., 0., 0.).
-    THDEG : float, optional
+    thdeg : float, optional
         The zenith angle in degrees.
-    PHDEG : float, optional
+    phdeg : float, optional
         The azimuth angle in degrees.
-    V : Vector, optional
-        The normal vector of the receiver. If provided, circumvent THDEG and PHDEG.
-    ALDEG : float, optional
+    v : Vector, optional
+        The normal vector of the receiver. If provided, circumvent thdeg and phdeg.
+    aldeg : float, optional
         Launch in a solid angle where alpha is the half-angle of the cone.
-    REC : Entity, optional
-        The receiver object to be used in 'BR' mode. It must be a plane Entity object of 
+    rec : Entity, optional
+        The receiver object to be used in 'BR' mode. It must be a plane Entity object of
         type 'receiver'. The photon position is sampled at the receiver surface.
-    TYPE : str, optional
-        The sampling type (only for BR LMODE). 2 choices:
-         
+    sampling : str, optional
+        The sampling type (only for the BR lmode). 2 choices:
+
             * 'lambertian'
             * 'isotropic'
-    LMODE : str, optional
+    lmode : str, optional
         The launching mode. 2 choices:
 
             * 'B' -> Basic backward (deprecated, see notes). Launch the photons from a given point in a
-                     given direction with a field of view ALDEG.
+                     given direction with a field of view aldeg.
             * 'BR' -> Backward with receiver. Launch the photons from a given receiver (plane object)
-                      in a given direction with a field of view ALDEG. Default value.
-    LPH : None, optional
+                      in a given direction with a field of view aldeg. Default value.
+    lph : None, optional
         In progress...
-    LPR : None, optional
+    lpr : None, optional
         In progress...
 
     Notes
     -----
     The 'B' mode is deprecated and may lead to wrong results. Use instead the Sensor class.
     """
-    def __init__(self, POS = None, THDEG = 0., PHDEG = 0., V = None,
-                 ALDEG = 0., REC = None, TYPE = "lambertian", LMODE = "BR", LPH = None, LPR = None):
+    def __init__(self, pos=None, thdeg=0., phdeg=0., v=None,
+                 aldeg=0., rec=None, sampling="lambertian", lmode="BR", lph=None, lpr=None):
 
-        if POS is None: POS = gc.Point(0., 0., 0.)
-        if isinstance(V, gc.Vector):
-            THDEG, PHDEG = gc.vec2ang(V)
-        elif V is not None:
-            raise ValueError('V argument must be a Vector')
-        if LMODE == "BR" and not isinstance(REC, Entity):
-            raise ValueError('In BR LMODE you have to specify a receiver!')
-        if (TYPE == "lambertian"): TYPE = 1
-        elif (TYPE == "isotropic"): TYPE = 2
+        if pos is None: pos = gc.Point(0., 0., 0.)
+        if isinstance(v, gc.Vector):
+            thdeg, phdeg = gc.vec2ang(v)
+        elif v is not None:
+            raise ValueError('The v argument must be a Vector')
+        if lmode == "BR" and not isinstance(rec, Entity):
+            raise ValueError('In the BR lmode you have to specify a receiver!')
+        if (sampling == "lambertian"): sampling = 1
+        elif (sampling == "isotropic"): sampling = 2
         else: raise ValueError('You must choose lambertian or isotropic sampling')
 
-        if LMODE == "B":
+        if lmode == "B":
             warn_message = "\nThe LMODE `B` is deprecated as of SMART-G 1.1.0 " + \
                            "and will be removed in one of the next release.\n" + \
                            "Please use LMODE `BR` or the class Sensor instead."
             warn(warn_message, DeprecationWarning, stacklevel=2)
 
         self.dict = {
-            'POS':    POS,
-            'THDEG':  THDEG,
-            'PHDEG':  PHDEG,
-            'ALDEG':  ALDEG,
-            'REC':    REC,
-            'TYPE':   TYPE,
-            'LMODE':  LMODE,
+            'POS':    pos,
+            'THDEG':  thdeg,
+            'PHDEG':  phdeg,
+            'ALDEG':  aldeg,
+            'REC':    rec,
+            'TYPE':   sampling,
+            'LMODE':  lmode,
             # under developement->
-            'LPH':     LPH,
-            'LPR':     LPR
+            'LPH':     lph,
+            'LPR':     lpr
         }
 
     def __str__(self):
