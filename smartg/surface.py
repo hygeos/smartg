@@ -24,6 +24,13 @@ from warnings import warn
 from smartg.albedo import AlbedoCst, AlbedoSpeclib, AlbedoSpectrum, AlbedoMap
 
 
+def _albedo_str(alb):
+    """Compact display of a spectral albedo model."""
+    if isinstance(alb, AlbedoCst):
+        return str(alb.alb)
+    return type(alb).__name__
+
+
 class FlatSurface(object):
     """
     Definition of a flat sea surface
@@ -116,7 +123,7 @@ class LambSurface(object):
                 }
         self.alb = ALB
     def __str__(self):
-        return 'LAMBSUR-ALB={SURFALB}'.format(**self.dict)
+        return 'LAMBSUR-ALB={}'.format(_albedo_str(self.alb))
 
 
 class RTLSSurface(object):
@@ -172,7 +179,8 @@ class RTLSSurface(object):
         self.kp = tuple(kp_bis) + (AlbedoCst(0.0),)
         self.alb= None
     def __str__(self):
-        return 'RTLS-ALB={SURFALB}'.format(**self.dict)
+        return 'RTLS-K={}'.format(
+            '/'.join(_albedo_str(a) for a in self.kp[:3]))
 
 
 class RPVSurface(object):
@@ -241,7 +249,8 @@ class RPVSurface(object):
         self.kp = tuple(kp_bis)
         self.alb= None
     def __str__(self):
-        return 'RTLS-ALB={SURFALB}'.format(**self.dict)
+        return 'RPV-KP={}'.format(
+            '/'.join(_albedo_str(a) for a in self.kp))
 
 
 class Environment(object):

@@ -243,6 +243,9 @@ final `v2.0.0` release.
   - Passing the individual coefficients `k0`/`k1p`/`k2p` to `RTLSSurface` or
     `r0`/`k`/`bt`/`rc` to `RPVSurface` no longer raises a `TypeError`
     (the overrides were assigned into a tuple)
+  - Printing a `LambSurface`, `RTLSSurface` or `RPVSurface` no longer raises a
+    `KeyError` (`__str__` referenced a non-existent `SURFALB` key), and
+    `RPVSurface` no longer labels itself `RTLS`
   - Fix a bug in `read_cld_nth_cte`
   - Fix the numpy 2.5 shape-setter deprecation in the interp module, and the
     strictly-increasing coordinate requirement of `make_interp_spline`
