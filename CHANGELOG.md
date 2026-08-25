@@ -4,10 +4,78 @@
 ## v2.0.0
 Release date: xxx
 
-Note: this changelog entry has been started during the `v2.0.0dev1` stage and
-will be completed and corrected before the final `v2.0.0` release.
+Note: this changelog entry has been started during the `v2.0.0dev1` stage,
+updated for `v2.0.0dev2`, and will be completed and corrected before the
+final `v2.0.0` release.
 
 * Several breaking changes
+  - The `AtmAFGL` class has been renamed to `Atm1D`, with PEP 8 constructor
+    parameters:
+    - `atm_filename` → `fname`
+    - `P0`           → `p0`
+    - `O3`           → `tco3`
+    - `H2O`          → `tcwp`
+    - `NO2`          → `no2`
+    - `O3_H2O_alt`   → `o3_h2o_alt`
+    - `tauR`         → `tau_r`
+    - `RH_cst`       → `rh_cst`
+    - `O3_acs` / `NO2_acs` → `o3_acs` / `no2_acs`
+    - the unused `US` parameter has been removed
+    - the `NBTHETA` parameter of the profile/phase methods is now `n_theta`
+  - The `smartg/tools/` folder has been dissolved: the `interp`, `progress`
+    and `cdf` modules have been moved to `smartg/`, `modified_environ` has
+    been moved and renamed to `smartg.environ`, and the remaining legacy
+    content now lives in `smartg/obselete_files/`
+    - New `smartg.postprocess` module regrouping the irradiance
+      post-processing, with PEP 8 names: `Irr` → `plane_irr`,
+      `SpherIrr` → `spherical_irr`, `reduce_Irr` → `irradiance_ds` (which
+      now returns an `xr.Dataset`)
+    - `diff1` and `diff1_end` have been moved into the new `smartg.diff`
+      module, `expand_phase_4_to_6` into `smartg.phase` and the
+      `AlbedoLike` alias into `smartg.albedo`
+  - The `visualizegeo` module has been renamed to `smartg.objects3d`, with
+    PEP 8 function names (`findRots` → `find_rots`,
+    `generateMTF` → `generate_mtf`, `generateLEfH` → `generate_le_h`,
+    `generateBox` → `generate_box`, `generateHfP` → `generate_h_p`,
+    `generateHfA` → `generate_h_a`, `Ref_Fresnel` → `ref_fresnel`,
+    `convertLGtoLE` → `convert_lg_to_le`, ...); `visualize_entity` has been
+    moved to the view module
+  - PEP 8 renames of the spectral and utility modules:
+    - kdis: `KDIS` → `Kdis`, `KDIS_BAND` → `KdisBand`,
+      `KDIS_IBAND` → `KdisIband`, `KDIS_IBAND_LIST` → `KdisIbandList`,
+      `Kdis_Emission` / `Kdis_Avg_Emission` → `kdis_emission` /
+      `kdis_avg_emission`; `reduce_kdis` completely rewritten
+    - reptran: `REPTRAN` → `Reptran`, `REPTRAN_BAND` → `ReptranBand`,
+      `REPTRAN_IBAND` → `ReptranIband`,
+      `REPTRAN_IBAND_LIST` → `ReptranIbandList`, `Reptran_Emission` /
+      `Reptran_Avg_Emission` → `reptran_emission` / `reptran_avg_emission`,
+      `filename` → `fname`; the `output_type` parameter of `get_weights`
+      has been removed and `reduce_reptran` / `reptran_emission` now return
+      xarray objects
+    - rrs: `Fk_N2` / `Fk_O2` → `fk_n2` / `fk_o2`, `Epsilon_N2` /
+      `Epsilon_O2` / `Epsilon_air` → `epsilon_n2` / `epsilon_o2` /
+      `epsilon_air`, `f0_N2` / `f0_O2` → `f0_n2` / `f0_o2`, `K` → `k_ratio`
+    - cdf: `ICDF` → `icdf`, `ICDF2D` → `icdf_2d`
+    - progress: `Progress` → `progress`, `Progress_notebook` →
+      `ProgressNotebook`, `Progress_invisible` → `ProgressInvisible`, ...
+    - albedo: `Albedo_cst` → `AlbedoCst`, `Albedo_speclib` →
+      `AlbedoSpeclib`, `Albedo_spectrum` → `AlbedoSpectrum`,
+      `Albedo_map` → `AlbedoMap`
+    - bandset: the `Raman` parameter is now `raman`
+  - The water module has been restructured for consistency with the
+    atmosphere module: the `IOP*` classes (`IOP_base`, `IOP`, `IOP_1`,
+    `IOP_Rw`, `IOP_profile`) have been replaced by the new `Water` /
+    `Water1D` / `WaterRw` and `Hydrosol` / `HydrosolPR` / `HydrosolZhai`
+    class hierarchy, with PEP 8 parameter names; the legacy water folder
+    has been moved to `smartg/obselete_files/`
+  - `saturation_pressure` now returns Pa instead of hPa
+  - The internal data structures have been migrated from the legacy
+    LUT/MLUT objects to xarray across the package (atmosphere, smartg,
+    water, reptran, postprocess, views); the new `smartg.xarray` module
+    provides `dataarray_to_lut` / `dataset_to_mlut` converters for
+    backward compatibility
+  - The functions of `smartg.atmosphere` now raise `ValueError` instead of
+    `NameError` on invalid inputs
   - The `phase` module has been moved from `smartg/tools/` to `smartg/`
     -> import from `smartg.phase` instead of `smartg.tools.phase`
   - The `read_phase`, `read_phase_dat`, `read_phase_nc`, `read_phase_cdf` and
@@ -20,7 +88,7 @@ will be completed and corrected before the final `v2.0.0` release.
     and `read_phase_cdf` has been renamed to `fname` (positional usage is
     unaffected, keyword usage must be updated).
   - The `conv_Iparper` parameter has been removed from `AerOPAC.phase()`,
-    `Cloud.phase()` and `AtmAFGL.calc()`. The IQ → Ipar/Iper conversion is now
+    `Cloud.phase()` and `Atm1D.calc()`. The IQ → Ipar/Iper conversion is now
     performed automatically inside the `run()` method (only for atmospheric phases).
   - Several functions in `smartg.atmosphere` have been renamed for consistency:
     - `pha2Iparperconv`  → `convert_phase_to_iparper`
@@ -34,14 +102,14 @@ will be completed and corrected before the final `v2.0.0` release.
     - `RH` method        → `relative_humidity`
   - Several functions in `smartg.tools.smartg_view` have been renamed:
     - `plot_polar_xr`    → `plot_polar`
-    - `transect2D_xr`    → `transect2D`
+    - `transect2D_xr`    → `transect_2d` (via `transect2D`)
     - `ds_out` parameter → `ds_sg` in `smartg_view`
   - The `smartg.tools.smartg_view` module (then `smartg.smartg_view`) has
     been renamed to `smartg.view`
   - `smartg_view`, `transect_view`, `spectrum_view`, `profile_view` and `phase_view`
     now expect an `xr.Dataset` instead of an MLUT (MLUT still accepted with a
     deprecation warning)
-  - The `new_atm` parameter of `AtmAFGL` has been removed
+  - The `new_atm` parameter of `Atm1D` (formerly `AtmAFGL`) has been removed
   - The 3D atmosphere construction API has been reworked (see New features):
     - The `Atm3D` and `Cloud3D` classes of `smartg.libATM3D` and their
       getter-based construction have been removed
@@ -64,9 +132,9 @@ will be completed and corrected before the final `v2.0.0` release.
       - The helpers `OOMFormatter`, `find_order`, `find_order_or_none`,
         `get_tv`, `find_id` and `get_sensors_pos_icells_from_3Dgrid` are now
         private
-  - The `Sensor` class, the `get_sensor` function and the `LOC_CODE`
-    constant have been moved from `smartg.smartg` to the new
-    `smartg.sensor` module; they are still re-exported by
+  - The `Sensor` class, the `get_sensor` function (formerly `Get_Sensor`)
+    and the `LOC_CODE` constant have been moved from `smartg.smartg` to the
+    new `smartg.sensor` module; they are still re-exported by
     `smartg.smartg`, so existing imports keep working. The `type`
     parameter of `get_sensor` has been renamed to `sensor_type`
     - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
@@ -121,7 +189,7 @@ will be completed and corrected before the final `v2.0.0` release.
     optical properties (extinction, SSA, phase matrix) from user-supplied data
   - New `get_prof_phases` utility function to easily extract phase matrices from
     an existing simulation profile
-  - `prof_phases` parameter of `AtmAFGL` now also accepts `xr.DataArray` objects
+  - `prof_phases` parameter of `Atm1D` now also accepts `xr.DataArray` objects
     in addition to LUT objects
   - New `read_phase` dispatcher function accepting `.dat`, `.nc` and `.cdf` files
   - New `read_phase_nc` function to read phase matrices from NetCDF files
@@ -134,6 +202,21 @@ will be completed and corrected before the final `v2.0.0` release.
     - `cdist_wabs=True`: includes absorption weight in `cdist` accumulation
     - `nscl` / `scatter_classes` / `norders`: scatter-class decomposition for
       AMF (by last-scattering layer, scattering order, or both combined)
+    - `njac_abs`: Jacobians for absorption only
+  - Photon histories mode consolidated: jax post-processing for the AMF
+    computation from the photon histories, `last_scatter_layer` index added
+    to the per-photon history record, warning when the history buffer
+    saturates, and buffer size capped to fit 16 GB GPUs
+  - New pytest validation suites:
+    - IPRT phase B C2 and C3 3D test cases, with a fast and a slow tier and
+      pinned GPU references
+    - Hydrolight validation of the water module (`test_water.py`)
+    - kdis and reptran tests
+    - GPU-free tests of the 3D profile construction (`test_atm3d.py`:
+      Atm3D multi-component mixing, Cloud3D, Aer3D)
+  - README overhauled, with the new SMART-G logo
+  - Updated dependency requirements: geoclide >= 4 (the 3D object code has
+    been adapted to the geoclide 4 API), pytrunc >= 2, gatiab >= 1.1.2
   - `MAX_NREF` increased from 10 to 100
   - Aeronet read functions (`read_Aeronet_PFN`, etc.) now return `xr.DataArray`
     instead of LUT objects
@@ -147,6 +230,11 @@ will be completed and corrected before the final `v2.0.0` release.
       `z_phase`) for consistency with the atmospheric phase pipeline
   - Fix out-of-bounds index error in `AerOPAC.dtau_ssa` when relative humidity
     or wavelength is exactly at the upper axis boundary
+  - Fix the 1D aerosol phase mixing with a 3D cloud
+  - Fix the phase truncation with a 3D atmosphere
+  - Fix a bug in `read_cld_nth_cte`
+  - Fix the numpy 2.5 shape-setter deprecation in the interp module, and the
+    strictly-increasing coordinate requirement of `make_interp_spline`
   - The `ipha` parameter of `phase_view` in `smartg_view` is now flexible:
     accepts an `int`, an `xr.DataArray` scalar, or a 1-D ndarray of indices;
     validation against the correct wavelength slice of `iphase_atm/oc` is performed
