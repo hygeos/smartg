@@ -154,6 +154,9 @@ final `v2.0.0` release.
     - The `cells` parameter and the `"ATM3D"` sentinel filename of `Atm1D`
       have been removed: a 3D atmosphere is now built with
       `smartg.atmosphere.Atm3D`
+  - The `CusForward` and `CusBackward` launching-mode classes have been
+    moved from `smartg.smartg` to `smartg.objects3d`; they are NOT
+    re-exported by `smartg.smartg`, so imports must be updated
   - The `change_altitude_grid` external function has been removed (use `str2grid_arr`)
   - The deprecated `lib3D` module and legacy geometric modules have been removed
   - Several obsolete utility functions removed: `average`, `isiterable`, `isnumeric`,
