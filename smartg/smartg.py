@@ -40,9 +40,8 @@ import tempfile
 
 # set up directories
 from smartg.config import DIR_ROOT
-dir_src = DIR_ROOT / 'smartg' / 'src'
-src_device = dir_src / 'device.cu'
-src_kernel2 = dir_src / 'kernel2.cu'
+DIR_SRC = DIR_ROOT / 'smartg' / 'src'
+SRC_DEVICE = DIR_SRC / 'device.cu'
 # constants definition
 # (should match #defines in src/communs.h)
 SPACE    =  0
@@ -70,7 +69,7 @@ MAX_NREF = 100
 #
 # type definitions (should match cuda struct definitions)
 #
-type_Phase = [
+TYPE_PHASE = [
     ('p_ang', 'float32'),  # \
     ('p_P11', 'float32'),  #  |
     ('p_P12', 'float32'),  #  | equally spaced in
@@ -87,7 +86,7 @@ type_Phase = [
     ('a_P44', 'float32'),  # /
     ]
 
-type_Spectrum = np.dtype([
+TYPE_SPECTRUM = np.dtype([
     ('lambda'      , 'float32'),
     ('alb_surface' , 'float32'),
     ('alb_seafloor', 'float32'),
@@ -98,13 +97,13 @@ type_Spectrum = np.dtype([
     ('alb_envs' , 'float32', MAX_NREF),
     ])
 
-type_EnvMap = np.dtype([
+TYPE_ENV_MAP = np.dtype([
     ('x',      'float32'),    # // x coordinate on the ground
     ('y',      'float32'),    # // y coordinate on the ground
     ('env_index',   'int32'),   # // environment index map
 ])
 
-type_Profile = [
+TYPE_PROFILE = [
     ('z',      'float32'),    # // altitude
     ('n',      'float32'),    # // refractive index
     ('T',      'float32'),    # // temperature
@@ -118,7 +117,7 @@ type_Profile = [
     ('iphase', 'int32'),      # // phase function index
     ]
 
-type_Cell = [
+TYPE_CELL = [
     ('iopt',     'int32'),    # // Optical scattering properties index
     ('iabs',     'int32'),    # // Optical absorbing properties index
     ('pminx',  'float32'),    # // Box point pmin.x
@@ -135,7 +134,7 @@ type_Cell = [
     ('neighbour6', 'int32'),   # // neighbour box index -Z
     ]
 
-type_Sensor = [
+TYPE_SENSOR = [
     ('POSX',   'float32'),    # // X position of the sensor
     ('POSY',   'float32'),    # // Y position of the sensor
     ('POSZ',   'float32'),    # // Z position of the sensor (fromp Earth's center in spherical, from the ground in PP)
@@ -149,12 +148,12 @@ type_Sensor = [
     ('ILAM_1', 'int32'),      # // Wavelength stop  index that the sensor 'sees' (default -1 : all) 
     ]
 
-type_Spectrum_obj = [
+TYPE_SPECTRUM_OBJ = [
     ('reflectAV', 'float32'),
     ('reflectAR', 'float32'),
 ]
 
-type_IObjets = [
+TYPE_IOBJECTS = [
     ('geo', 'int32'),         # 1 = sphere, 2 = plane, ...
     ('materialAV', 'int32'),  # 1 = LambMirror, 2 = Matte,
     ('materialAR', 'int32'),  # 3 = Mirror, ... (AV = avant, AR = Arriere)
@@ -205,7 +204,7 @@ type_IObjets = [
     ('nBz', 'float32'),       # /
     ]
 
-type_GObj = [
+TYPE_GOBJ = [
     ('nObj', 'int32'),        # Number of objects in this group
     ('index', 'int32'),       # Index at the table of IObjects where
                               # we start to fill the objects of the group
@@ -519,7 +518,7 @@ class Smartg(object):
 
         # load device.cu
         src_device_content = open(
-            src_device, encoding='ascii', errors='ignore'
+            SRC_DEVICE, encoding='ascii', errors='ignore'
             ).read()
 
         # kernel compilation
@@ -528,8 +527,8 @@ class Smartg(object):
                            options=options,
                            no_extern_c=True,
                            cache_dir=str(cache_dir),
-                           include_dirs=[str(dir_src),
-                                         str(dir_src / 'incRNGs' / 'Random123')])
+                           include_dirs=[str(DIR_SRC),
+                                         str(DIR_SRC / 'incRNGs' / 'Random123')])
 
         # load the kernel
         self.kernel = self.mod.get_function('launchKernel')
@@ -975,7 +974,7 @@ class Smartg(object):
             ZTOA = 120.
   
         if prof_atm is not None:
-            faer = _calcul_phase_gpu(prof_atm, n_theta=NF, depo=DEPO, kind='atm', pol_off=pol_off)
+            faer = _calc_phase_gpu(prof_atm, n_theta=NF, depo=DEPO, kind='atm', pol_off=pol_off)
             prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.coords['z_atm']) - 1
             if self.opt3D :
@@ -984,8 +983,8 @@ class Smartg(object):
                 NATM_ABS = NATM
         else:
             faer = gpuzeros(1, dtype='float32')
-            prof_atm_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
-            cell_atm_gpu = to_gpu(np.zeros(1, dtype=type_Cell))
+            prof_atm_gpu = to_gpu(np.zeros(1, dtype=TYPE_PROFILE))
+            cell_atm_gpu = to_gpu(np.zeros(1, dtype=TYPE_CELL))
             NATM = 0
             NATM_ABS = 0
 
@@ -1017,7 +1016,7 @@ class Smartg(object):
 
         NSENSOR=len(sensor2)
 
-        tab_sensor = np.zeros(NSENSOR, dtype=type_Sensor, order='C')
+        tab_sensor = np.zeros(NSENSOR, dtype=TYPE_SENSOR, order='C')
         for (i,s) in enumerate(sensor2) :
             for k in s.dict.keys():
                   tab_sensor[i][k] = s.dict[k]
@@ -1072,7 +1071,7 @@ class Smartg(object):
             prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
-            foce = _calcul_phase_gpu(prof_oc, n_theta=NF, depo=DEPO_WATER, kind='oc', pol_off=pol_off)
+            foce = _calc_phase_gpu(prof_oc, n_theta=NF, depo=DEPO_WATER, kind='oc', pol_off=pol_off)
             prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.coords['z_oc']) - 1
             if self.opt3D :
@@ -1081,16 +1080,16 @@ class Smartg(object):
                 NOCE_ABS = NOCE
         else:
             foce = gpuzeros(1, dtype='float32')
-            prof_oc_gpu = to_gpu(np.zeros(1, dtype=type_Profile))
-            cell_oc_gpu = to_gpu(np.zeros(1, dtype=type_Cell))
+            prof_oc_gpu = to_gpu(np.zeros(1, dtype=TYPE_PROFILE))
+            cell_oc_gpu = to_gpu(np.zeros(1, dtype=TYPE_CELL))
             NOCE = 0
             NOCE_ABS = 0
 
         #
         # albedo and adjacency effect
         #
-        spectrum = np.zeros(NLAM, dtype=type_Spectrum)
-        envmap = np.zeros(1, dtype=type_EnvMap)
+        spectrum = np.zeros(NLAM, dtype=TYPE_SPECTRUM)
+        envmap = np.zeros(1, dtype=TYPE_ENV_MAP)
         spectrum['lambda'] = wl[:]
         if env is None:
             # default values (no environment effect)
@@ -1123,7 +1122,7 @@ class Smartg(object):
                 shp = env.alb.map.data.shape
                 env.nxenvmap = shp[0]
                 env.nyenvmap = shp[1]
-                envmap = np.zeros(shp, dtype=type_EnvMap)
+                envmap = np.zeros(shp, dtype=TYPE_ENV_MAP)
                 X, Y = np.meshgrid(env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij')
                 envmap['x'] = X
                 envmap['y'] = Y
@@ -1248,7 +1247,7 @@ class Smartg(object):
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, tabTransDir, errorcount, 
          NPhotonsOutTot, NPhotonsOutTotNoAer, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
-        ) = loop_kernel(NBPHOTONS, faer, foce,
+        ) = _loop_kernel(NBPHOTONS, faer, foce,
                         NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, envmap, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
@@ -1289,7 +1288,7 @@ class Smartg(object):
             dicSTP = None; matLoss = None #; weightR=0
                 
         # finalization
-        output = finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount,
+        output = _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount,
                           NPhotonsOutTot, NPhotonsOutTotNoAer, OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM,
                           attrs, prof_atm, prof_oc, sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
                           SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
@@ -1325,7 +1324,7 @@ class Smartg(object):
         return output
 
 
-def calc_solid_angles(n_theta, n_phi, sza_max=90., sun_disc=0):
+def _calc_solid_angles(n_theta, n_phi, sza_max=90., sun_disc=0):
     """
     Compute zenith angles, azimuth angles, and solid angles for the sensor grid.
 
@@ -1375,7 +1374,7 @@ def calc_solid_angles(n_theta, n_phi, sza_max=90., sun_disc=0):
     return tab_th, tab_phi, tab_omega
 
 
-def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
+def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
              NPhotonsOutTotNoAer, OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM, attrs, prof_atm, prof_oc,
              sigma, THVDEG, HORIZ, le=None, flux=None,
              back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
@@ -1403,12 +1402,12 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
             else : zip = le['zip']
             norm_geo =  1. 
         else : 
-            tabTh, tabPhi, tabOmega = calc_solid_angles(NBTHETA, NBPHI, sza_max=SZA_MAX, sun_disc=SUN_DISC)
+            tabTh, tabPhi, tabOmega = _calc_solid_angles(NBTHETA, NBPHI, sza_max=SZA_MAX, sun_disc=SUN_DISC)
             if HORIZ==1 : norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1))
             else :  norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) 
     else:
         norm_geo = 1.
-        tabTh, tabPhi, _ = calc_solid_angles(NBTHETA, NBPHI, sza_max=SZA_MAX, sun_disc=SUN_DISC)
+        tabTh, tabPhi, _ = _calc_solid_angles(NBTHETA, NBPHI, sza_max=SZA_MAX, sun_disc=SUN_DISC)
 
     # normalization
     tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
@@ -1820,7 +1819,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
     return m
 
 
-def isotropic(n_theta):
+def _isotropic(n_theta):
     """
     Build the isotropic phase-function lookup table.
 
@@ -1838,7 +1837,7 @@ def isotropic(n_theta):
     Returns
     -------
     numpy.ndarray
-        Array of shape ``(n_theta,)`` and dtype ``type_Phase``.
+        Array of shape ``(n_theta,)`` and dtype ``TYPE_PHASE``.
         Contains the isotropic phase-function lookup table ready to be indexed
         by phase lookup routines.
 
@@ -1846,7 +1845,7 @@ def isotropic(n_theta):
     --------
     This function has not been validated yet.
     """
-    phase_H = np.zeros(n_theta, dtype=type_Phase, order='C')
+    phase_H = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
     angles = np.linspace(0., pi, int(n_theta), endpoint=True, dtype=np.float64)
     scum = [0]
     norm = 0.5
@@ -1891,7 +1890,7 @@ def isotropic(n_theta):
     return phase_H
 
 
-def rayleigh(n_theta, depo, pol_off=False):
+def _rayleigh(n_theta, depo, pol_off=False):
     """
     Build the Rayleigh phase-function lookup table.
 
@@ -1916,11 +1915,11 @@ def rayleigh(n_theta, depo, pol_off=False):
     Returns
     -------
     numpy.ndarray
-        Array of shape ``(n_theta,)`` and dtype ``type_Phase``.
+        Array of shape ``(n_theta,)`` and dtype ``TYPE_PHASE``.
         Contains the Rayleigh phase-function lookup table ready to be indexed by
         phase lookup routines.
     """
-    pha = np.zeros(n_theta, dtype=type_Phase, order='C')
+    pha = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
 
     gama = depo / (2 - depo)
     delta = np.float32((1.0 - gama) / (1.0 + 2.0 * gama))
@@ -1985,12 +1984,12 @@ def rayleigh(n_theta, depo, pol_off=False):
     return pha
 
 
-def _calcul_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
+def _calc_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
     """
     Build the phase-function lookup table uploaded to the GPU.
 
     This routine converts the phase information stored in an atmospheric or
-    oceanic profile into the structured ``type_Phase`` table expected by the
+    oceanic profile into the structured ``TYPE_PHASE`` table expected by the
     CUDA kernels. The returned table always reserves:
 
     - index 0 for the molecular phase function (Rayleigh, or isotropic when
@@ -2036,7 +2035,7 @@ def _calcul_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
     Returns
     -------
     pycuda.gpuarray.GPUArray
-            GPU array of shape ``(n_phase_entries, n_theta)`` and dtype ``type_Phase``.
+            GPU array of shape ``(n_phase_entries, n_theta)`` and dtype ``TYPE_PHASE``.
             Each row contains one phase-function lookup table ready to be indexed by
             ``iphase_<kind>`` in the profile uploaded by ``_init_profile``.
 
@@ -2065,19 +2064,19 @@ def _calcul_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
         shp = (nphases, n_theta)
     else:
         shp = (1, n_theta)
-    phase_H = np.zeros(shp, dtype=type_Phase, order='C')
+    phase_H = np.zeros(shp, dtype=TYPE_PHASE, order='C')
 
     # Set Rayleigh phase function or isotropic if depo <0
-    if depo >=0 : phase_H[0,:] = rayleigh(n_theta, depo, pol_off=pol_off)
+    if depo >=0 : phase_H[0,:] = _rayleigh(n_theta, depo, pol_off=pol_off)
     # no pol_off in isotropic because the function needs first to be corrected
-    else : phase_H[0,:]        = isotropic(n_theta) 
+    else : phase_H[0,:]        = _isotropic(n_theta) 
     if 'theta_'+kind in profile.coords:
         angles = profile.coords['theta_'+kind].to_numpy() * pi/180.
         assert angles[-1] < 3.15   # assert that angles are in radians
         dtheta = np.diff(angles)
 
     # Set VRS phase function
-    phase_H[1,:] = rayleigh(n_theta, 0.17)
+    phase_H[1,:] = _rayleigh(n_theta, 0.17)
 
     idx = 2
     #idx = 1
@@ -2418,25 +2417,25 @@ def _init_profile(wl, prof, kind):
     else:
         NLAY = len(prof.coords['z_'+kind])
     shp = (len(wl), NLAY)
-    prof_gpu = np.zeros(shp, dtype=type_Profile, order='C')
+    prof_gpu = np.zeros(shp, dtype=TYPE_PROFILE, order='C')
 
     if kind == "oc":
         if 'iopt_oc' not in prof.data_vars:
             prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()
             #prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()  * 1e-3 # to Km
             prof_gpu['T'][0,:] = prof['T_'+kind].to_numpy()
-            cell_gpu = np.zeros(1, dtype=type_Cell)
+            cell_gpu = np.zeros(1, dtype=TYPE_CELL)
         else: 
-            cell_gpu = np.zeros(len(prof['iopt_oc'].to_numpy()), dtype=type_Cell)
+            cell_gpu = np.zeros(len(prof['iopt_oc'].to_numpy()), dtype=TYPE_CELL)
         prof_gpu['n'][0,:] = 1.34
     else:
         if 'iopt_atm' not in prof.data_vars:
             prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()
             prof_gpu['T'][0,:] = prof['T_'+kind].to_numpy()
             prof_gpu['n'][:,:] = prof['n_'+kind].to_numpy()
-            cell_gpu = np.zeros(1, dtype=type_Cell)
+            cell_gpu = np.zeros(1, dtype=TYPE_CELL)
         else:
-            cell_gpu = np.zeros(len(prof['iopt_atm'].to_numpy()), dtype=type_Cell)
+            cell_gpu = np.zeros(len(prof['iopt_atm'].to_numpy()), dtype=TYPE_CELL)
     prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
 
     prof_gpu['OD'][:,:] = prof['OD_'+kind].to_numpy()
@@ -2620,7 +2619,7 @@ def reduce_diff(ds_sg, varnames, delta=None):
     return res
 
 
-def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_abs, 
+def _loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_abs, 
                 max_hist, n_low, n_pstk, xblock, xgrid, nb_theta, nb_phi, n_lam, n_sensor,
                 double, kernel, kernel2, progress, x0, le, tab_sensor, envmap, spectrum,
                 prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf,
@@ -3372,7 +3371,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
     lobj = []
     n_gobj = len(lgobj)
     ind_robj = []
-    lgobj_gpu = np.zeros(n_gobj, dtype=type_GObj, order='C')
+    lgobj_gpu = np.zeros(n_gobj, dtype=TYPE_GOBJ, order='C')
 
     # Build a flat list of entities and a GPU table of object-group parameters.
     for i in range(0, n_gobj):
@@ -3398,7 +3397,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
     n_obj = len(lobj)
 
     if cus_l is not None and cus_l.dict['LMODE'] == "BR":
-        lobj_gpu = np.zeros(n_obj + 1, dtype=type_IObjets, order='C')
+        lobj_gpu = np.zeros(n_obj + 1, dtype=TYPE_IOBJECTS, order='C')
         tc = cus_l.dict['REC'].tc
         size_x_min = min(cus_l.dict['REC'].geo.p1.x, cus_l.dict['REC'].geo.p2.x,
                          cus_l.dict['REC'].geo.p3.x, cus_l.dict['REC'].geo.p4.x)
@@ -3435,7 +3434,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
 
         ind_robj.append(n_obj)  # For creating a receiver-only GPU table.
     else:
-        lobj_gpu = np.zeros(n_obj, dtype=type_IObjets, order='C')
+        lobj_gpu = np.zeros(n_obj, dtype=TYPE_IOBJECTS, order='C')
         tc = None
         nb_cx = int(0)
         nb_cy = int(0)
@@ -3445,7 +3444,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
     if not isinstance(wl, BandSet):
         wl = BandSet(wl)
     nlam = wl.size
-    lobj_spect = np.zeros((n_obj_total * nlam), dtype=type_Spectrum_obj, order='C')
+    lobj_spect = np.zeros((n_obj_total * nlam), dtype=TYPE_SPECTRUM_OBJ, order='C')
 
     # Initialization before object loop.
     pp1 = 0.
@@ -3635,11 +3634,11 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
     # Create receiver-only GPU table.
     n_robj = len(ind_robj)
     if n_robj > 0:
-        lrobj_gpu = np.zeros(n_robj, dtype=type_IObjets, order='C')
+        lrobj_gpu = np.zeros(n_robj, dtype=TYPE_IOBJECTS, order='C')
         for i in range(0, n_robj):
             lrobj_gpu[:][i] = lobj_gpu[:][ind_robj[i]]
     else:
-        lrobj_gpu = np.zeros(1, dtype=type_IObjets, order='C')
+        lrobj_gpu = np.zeros(1, dtype=TYPE_IOBJECTS, order='C')
 
     lobj_gpu = to_gpu(lobj_gpu)
     lrobj_gpu = to_gpu(lrobj_gpu)

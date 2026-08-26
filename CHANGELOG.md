@@ -160,6 +160,13 @@ final `v2.0.0` release.
     constructor parameters have been renamed to snake case (`CFX` → `cfx`,
     `LMODE` → `lmode`, `POS` → `pos`, `REC` → `rec`, ...), with
     `TYPE` → `sampling` (`type` would shadow the builtin)
+  - The internal helpers of the smartg module are now private
+    (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
+    `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,
+    `loop_kernel` → `_loop_kernel`), and its module-level constants follow
+    PEP 8 (`type_Phase` → `TYPE_PHASE`, `type_IObjets` → `TYPE_IOBJECTS`,
+    `dir_src` → `DIR_SRC`, ...); the unused `LOC_CODE`, `get_sensor` and
+    `LUT` re-exports and the unused `src_kernel2` path have been removed
   - The `change_altitude_grid` external function has been removed (use `str2grid_arr`)
   - The deprecated `lib3D` module and legacy geometric modules have been removed
   - Several obsolete utility functions removed: `average`, `isiterable`, `isnumeric`,
