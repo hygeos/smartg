@@ -9,6 +9,27 @@ GPU.
 This module hosts the Smartg class, whose constructor compiles the CUDA
 kernel with the requested options and whose run method performs the
 radiative transfer simulations.
+
+Key Classes
+-----------
+Smartg
+    Main simulation class. The constructor compiles the CUDA kernel
+    with the requested options (plane-parallel or spherical, forward
+    or backward, ALIS, 3D objects, ...); the run method launches the
+    Monte Carlo radiative transfer simulation and returns the results
+    as an MLUT.
+StdevLim
+    Adaptive stopping criterion for Smartg.run based on the standard
+    deviation of the results.
+
+Key Functions
+-------------
+multi_profiles
+    Reorganize a list of atmosphere or ocean profiles into a single
+    multi-profile table, so several profile configurations can be
+    simulated in a single run.
+reduce_diff
+    Post-process ALIS finite-difference runs into sensitivities.
 """
 
 import os
