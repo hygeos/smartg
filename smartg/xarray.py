@@ -1,8 +1,8 @@
-"""Convert xarray objects into legacy luts objects.
+"""Xarray helpers and conversions into legacy luts objects.
 
 This module provides conversion functions from xarray ``DataArray`` and
 ``Dataset`` objects to the corresponding legacy ``LUT`` and ``MLUT``
-objects.
+objects, together with small xarray manipulation helpers.
 
 Key Functions
 -------------
@@ -10,6 +10,8 @@ dataarray_to_lut
     Convert a DataArray into a LUT.
 dataset_to_mlut
     Convert a Dataset into an MLUT.
+drop_axes
+    Remove size-1 dimensions and their coordinates from a Dataset.
 """
 
 from collections import OrderedDict
@@ -74,3 +76,41 @@ def dataset_to_mlut(dataset: xr.Dataset) -> MLUT:
     mlut.attrs = OrderedDict(dataset.attrs)
 
     return mlut
+
+
+def drop_axes(dataset: xr.Dataset, *names: str) -> xr.Dataset:
+    """Remove size-1 dimensions and their coordinates from a Dataset.
+
+    Equivalent of the legacy MLUT.dropaxis method: each named
+    dimension is squeezed away from every data variable, and the
+    matching coordinate is removed. A name used by no data variable
+    only loses its coordinate; an absent name is ignored.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Dataset to squeeze.
+    *names : str
+        Names of the dimensions to remove. A dimension used by a
+        data variable must have size 1.
+
+    Returns
+    -------
+    Dataset
+        New Dataset without the named dimensions and coordinates.
+    """
+    for name in names:
+        used = any(
+            name in variable.dims
+            for variable in dataset.data_vars.values()
+        )
+        if used:
+            if dataset.sizes[name] != 1:
+                raise ValueError(
+                    f'cannot drop dimension {name!r} of size '
+                    f'{dataset.sizes[name]}'
+                )
+            dataset = dataset.isel({name: 0}, drop=True)
+        elif name in dataset.coords:
+            dataset = dataset.drop_vars(name)
+    return dataset
