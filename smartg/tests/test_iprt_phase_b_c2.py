@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Non-regression test of the 3D atmosphere mode (opt3D=True) using the
+# Non-regression test of the 3D atmosphere mode (opt3d=True) using the
 # IPRT phase B cubic cloud case (C2).
 # Tested with the following GPUs: 5070 Ti
 import logging
@@ -26,7 +26,7 @@ from smartg.smartg import Smartg
 from smartg.truncation import GT_trunc
 
 # *********************** Global variable(s) ***************************
-# Fixed seed: SEED=-1 would derive it from the clock, giving a new
+# Fixed seed: seed=-1 would derive it from the clock, giving a new
 # noise realisation at every run. The reference delta_m values below
 # were measured with this seed.
 SEED = 1234
@@ -562,7 +562,7 @@ def s3db():
     Backward compilation in 3D
     """
     return Smartg(
-        opt3D=True, alt_pp=True, alis=False, back=True, double=True, bias=True
+        opt3d=True, alt_pp=True, alis=False, back=True, double=True, bias=True
     )
 
 
@@ -572,7 +572,7 @@ def s3df():
     Forward compilation in 3D
     """
     return Smartg(
-        opt3D=True, alt_pp=True, alis=False, back=False, double=True, bias=True
+        opt3d=True, alt_pp=True, alis=False, back=False, double=True, bias=True
     )
 
 
@@ -649,10 +649,10 @@ def _find_optimal_xb_xg(sg, **run_kwargs):
         for xb in XB:
             m_test = sg.run(
                 **run_kwargs,
-                NBPHOTONS=CHECK_NBPHOTONS,
-                NBLOOP=CHECK_NBLOOP,
-                XBLOCK=xb,
-                XGRID=xg,
+                nb_photons=CHECK_NBPHOTONS,
+                nb_loop=CHECK_NBLOOP,
+                xblock=xb,
+                xgrid=xg,
                 progress=False,
             )
             time_s = float(m_test.attrs["kernel time (s)"])
@@ -711,20 +711,20 @@ def _run_case_backward(
         sensor=sensors,
         le=le,
         surf=surf,
-        NF=NTH,
+        n_f=NTH,
         stdev=True,
     )
     if depo is not None:
-        kw["DEPO"] = depo
+        kw["depo"] = depo
     xb, xg = _find_optimal_xb_xg(s3db, **kw)
 
     m = s3db.run(
         **kw,
-        NBPHOTONS=nbphotons,
-        NBLOOP=NBLOOP,
-        XBLOCK=xb,
-        XGRID=xg,
-        SEED=SEED,
+        nb_photons=nbphotons,
+        nb_loop=NBLOOP,
+        xblock=xb,
+        xgrid=xg,
+        seed=SEED,
     )
 
     return m, np.cos(np.radians(theta_0)) / np.pi
@@ -773,26 +773,26 @@ def _run_group_forward(
     }
 
     kw = dict(
-        THVDEG=theta_0,
+        th_v_deg=theta_0,
         wl=wls,
         atm=pro,
         sensor=sensors,
         le=le,
         surf=surf,
-        NF=NTH,
-        OUTPUT_LAYERS=group["output_layers"],
+        n_f=NTH,
+        output_layers=group["output_layers"],
     )
     if depo is not None:
-        kw["DEPO"] = depo
+        kw["depo"] = depo
     xb, xg = _find_optimal_xb_xg(s3df, **kw)
 
     m = s3df.run(
         **kw,
-        NBPHOTONS=nbphotons,
-        NBLOOP=NBLOOP,
-        XBLOCK=xb,
-        XGRID=xg,
-        SEED=SEED,
+        nb_photons=nbphotons,
+        nb_loop=NBLOOP,
+        xblock=xb,
+        xgrid=xg,
+        seed=SEED,
     )
 
     return m, np.cos(np.radians(theta_0)) / np.pi

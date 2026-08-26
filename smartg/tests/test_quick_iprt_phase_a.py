@@ -143,17 +143,17 @@ def test_a1(request, s1df, s1db):
 
     m_a1_b = s1db.run(
         wl=550.0,
-        NBPHOTONS=1e7 * nb_dir,
-        NBLOOP=1e7,
+        nb_photons=1e7 * nb_dir,
+        nb_loop=1e7,
         atm=atm,
         sensor=lsensors,
-        OUTPUT_LAYERS=0,
+        output_layers=0,
         le=le,
         surf=surf,
-        XBLOCK=64,
-        XGRID=1024,
-        BEER=1,
-        DEPO=0.0,
+        xblock=64,
+        xgrid=1024,
+        beer=1,
+        depo=0.0,
         stdev=True,
         progress=True,
     )
@@ -198,17 +198,17 @@ def test_a1(request, s1df, s1db):
 
     m_a1_b = s1db.run(
         wl=550.0,
-        NBPHOTONS=1e7 * nb_dir,
-        NBLOOP=1e7,
+        nb_photons=1e7 * nb_dir,
+        nb_loop=1e7,
         atm=atm,
         sensor=lsensors,
-        OUTPUT_LAYERS=0,
+        output_layers=0,
         le=le,
         surf=surf,
-        XBLOCK=64,
-        XGRID=1024,
-        BEER=1,
-        DEPO=0.0,
+        xblock=64,
+        xgrid=1024,
+        beer=1,
+        depo=0.0,
         stdev=True,
         progress=True,
     )
@@ -248,19 +248,19 @@ def test_a1(request, s1df, s1db):
         180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
     m_a1_f_dep003 = s1df.run(
-        THVDEG=sza,
-        PHVDEG=phi_0,
+        th_v_deg=sza,
+        ph_v_deg=phi_0,
         wl=550.0,
-        NBPHOTONS=1e7,
-        NBLOOP=1e5,
+        nb_photons=1e7,
+        nb_loop=1e5,
         atm=atm,
-        OUTPUT_LAYERS=int(7),
+        output_layers=int(7),
         le=le,
         surf=surf,
-        XBLOCK=64,
-        XGRID=1024,
-        BEER=1,
-        DEPO=0.03,
+        xblock=64,
+        xgrid=1024,
+        beer=1,
+        depo=0.03,
         stdev=True,
     )
 
@@ -272,19 +272,19 @@ def test_a1(request, s1df, s1db):
         180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
     m_a1_f_dep01 = s1df.run(
-        THVDEG=sza,
-        PHVDEG=phi_0,
+        th_v_deg=sza,
+        ph_v_deg=phi_0,
         wl=550.0,
-        NBPHOTONS=1e7,
-        NBLOOP=1e5,
+        nb_photons=1e7,
+        nb_loop=1e5,
         atm=atm,
-        OUTPUT_LAYERS=int(7),
+        output_layers=int(7),
         le=le,
         surf=surf,
-        XBLOCK=64,
-        XGRID=1024,
-        BEER=1,
-        DEPO=0.1,
+        xblock=64,
+        xgrid=1024,
+        beer=1,
+        depo=0.1,
         stdev=True,
     )
     # *****************************************************************
@@ -667,21 +667,21 @@ def test_a2(request, s1df):
 
     # === Simulation
     m_a2_f = s1df.run(
-        THVDEG=sza,
-        PHVDEG=phi_0,
+        th_v_deg=sza,
+        ph_v_deg=phi_0,
         wl=550.0,
-        NBPHOTONS=1e7,
-        NBLOOP=1e6,
+        nb_photons=1e7,
+        nb_loop=1e6,
         atm=atm,
-        OUTPUT_LAYERS=int(7),
+        output_layers=int(7),
         le=le,
         surf=surf,
-        XBLOCK=64,
-        XGRID=1024,
-        BEER=1,
-        DEPO=0.03,
+        xblock=64,
+        xgrid=1024,
+        beer=1,
+        depo=0.03,
         stdev=True,
-        SEED=SEED,
+        seed=SEED,
     )
 
     with TemporaryDirectory() as tmpdir:
@@ -1032,22 +1032,22 @@ def test_a5_pp(request, s1df):
 
     # === Simulation
     m_a5_f_pp = s1df.run(
-        THVDEG=sza,
-        PHVDEG=phi_0,
+        th_v_deg=sza,
+        ph_v_deg=phi_0,
         wl=800.0,
-        NBPHOTONS=1e7,
-        NBLOOP=1e6,
-        NF=nth,
+        nb_photons=1e7,
+        nb_loop=1e6,
+        n_f=nth,
         atm=pro,
-        OUTPUT_LAYERS=int(7),
+        output_layers=int(7),
         le=le,
         surf=surf,
-        XBLOCK=64,
-        XGRID=1024,
-        BEER=1,
-        DEPO=0.03,
+        xblock=64,
+        xgrid=1024,
+        beer=1,
+        depo=0.03,
         stdev=True,
-        SEED=SEED,
+        seed=SEED,
     )
 
     with TemporaryDirectory() as tmpdir:
@@ -1340,22 +1340,22 @@ def test_a5_al(request, s1df):
 
     # === Simulation
     m_a5_f_al = s1df.run(
-        THVDEG=sza,
-        PHVDEG=phi_0,
+        th_v_deg=sza,
+        ph_v_deg=phi_0,
         wl=800.0,
-        NBPHOTONS=1e7,
-        NBLOOP=1e6,
-        NF=nth,
+        nb_photons=1e7,
+        nb_loop=1e6,
+        n_f=nth,
         atm=pro,
-        OUTPUT_LAYERS=int(7),
+        output_layers=int(7),
         le=le,
         surf=surf,
-        XBLOCK=64,
-        XGRID=1024,
-        BEER=1,
-        DEPO=0.03,
+        xblock=64,
+        xgrid=1024,
+        beer=1,
+        depo=0.03,
         stdev=True,
-        SEED=SEED,
+        seed=SEED,
     )
 
     with TemporaryDirectory() as tmpdir:

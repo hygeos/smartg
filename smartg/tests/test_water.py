@@ -257,16 +257,16 @@ def _smartg_run(_water_iop, _atm, _surf):
     # --- Irradiance run (planar flux, 5x photons) ---
     m_flux = sg.run(
         wl=WAVELENGTHS,
-        THVDEG=SZA_DEG,
+        th_v_deg=SZA_DEG,
         atm=_atm,
         surf=_surf,
         water=_water_iop,
-        NBPHOTONS=5e7,
-        NBLOOP=1e6,
-        XBLOCK=64,
-        XGRID=1024,
+        nb_photons=5e7,
+        nb_loop=1e6,
+        xblock=64,
+        xgrid=1024,
         alis_options={"nlow": -1, "njac": 0},
-        OUTPUT_LAYERS=3,
+        output_layers=3,
         flux="planar",
     )
     m_flux = m_flux.to_xarray()
@@ -283,17 +283,17 @@ def _smartg_run(_water_iop, _atm, _surf):
     }
     m_le = sg.run(
         wl=WAVELENGTHS,
-        THVDEG=SZA_DEG,
+        th_v_deg=SZA_DEG,
         atm=_atm,
         surf=_surf,
         water=_water_iop,
-        NBPHOTONS=1e7,
-        NBLOOP=1e6,
-        XBLOCK=64,
-        XGRID=1024,
+        nb_photons=1e7,
+        nb_loop=1e6,
+        xblock=64,
+        xgrid=1024,
         alis_options={"nlow": -1, "njac": 0},
-        OUTPUT_LAYERS=4,
-        NF=1e3,
+        output_layers=4,
+        n_f=1e3,
         le=local_est,
         stdev=True,
     )
@@ -502,12 +502,12 @@ def _rw_vs_w1d_run(_atm_rayleigh, _surf):
     ):
         m = sg.run(
             wl=WAVELENGTHS,
-            THVDEG=SZA_DEG,
+            th_v_deg=SZA_DEG,
             atm=_atm_rayleigh,
             surf=_surf,
             water=water,
-            NBPHOTONS=2e7,
-            NBLOOP=1e6,
+            nb_photons=2e7,
+            nb_loop=1e6,
             le=local_est,
             stdev=True,
         ).to_xarray()

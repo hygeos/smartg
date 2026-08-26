@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Non-regression test of the 3D atmosphere mode (opt3D=True) using the
+# Non-regression test of the 3D atmosphere mode (opt3d=True) using the
 # IPRT phase B cumulus cloud case (C3), with aerosols. Unlike the C2
 # cubic cloud, this case mixes a realistic 100x100x53 cloud field with
 # a 1D Rayleigh + aerosol profile, which is the configuration used for
@@ -35,7 +35,7 @@ from smartg.smartg import Smartg
 from smartg.truncation import GT_trunc
 
 # *********************** Global variable(s) ***************************
-# Fixed seed: SEED=-1 would derive it from the clock, giving a new
+# Fixed seed: seed=-1 would derive it from the clock, giving a new
 # noise realisation at every run. The reference delta_m values below
 # were measured with this seed.
 SEED = 1234
@@ -429,7 +429,7 @@ def s3db():
     Backward compilation in 3D
     """
     return Smartg(
-        opt3D=True, alt_pp=True, alis=False, back=True, double=True, bias=True
+        opt3d=True, alt_pp=True, alis=False, back=True, double=True, bias=True
     )
 
 
@@ -503,10 +503,10 @@ def _find_optimal_xb_xg(sg, **run_kwargs):
         for xb in XB:
             m_test = sg.run(
                 **run_kwargs,
-                NBPHOTONS=CHECK_NBPHOTONS,
-                NBLOOP=CHECK_NBLOOP,
-                XBLOCK=xb,
-                XGRID=xg,
+                nb_photons=CHECK_NBPHOTONS,
+                nb_loop=CHECK_NBLOOP,
+                xblock=xb,
+                xgrid=xg,
                 progress=False,
             )
             time_s = float(m_test.attrs["kernel time (s)"])
@@ -558,18 +558,18 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
         sensor=sensors,
         le=le,
         surf=surf,
-        NF=NTH,
+        n_f=NTH,
         stdev=True,
     )
     xb, xg = _find_optimal_xb_xg(s3db, **kw)
 
     m = s3db.run(
         **kw,
-        NBPHOTONS=nbphotons,
-        NBLOOP=NBLOOP,
-        XBLOCK=xb,
-        XGRID=xg,
-        SEED=SEED,
+        nb_photons=nbphotons,
+        nb_loop=NBLOOP,
+        xblock=xb,
+        xgrid=xg,
+        seed=SEED,
     )
 
     return m, np.cos(np.radians(theta_0)) / np.pi

@@ -104,37 +104,37 @@ def test_smartg_jax2(
         sg = Smartg(alis=True, alt_pp=True)
         m = (
             sg.run(
-                SEED=0,
-                THVDEG=45.0,
+                seed=0,
+                th_v_deg=45.0,
                 wl=wl_sca,
                 surf=LambSurface(alb_hist),
                 le=lez,
-                BEER=0,
+                beer=0,
                 atm=atm.calc(wl_sca),
                 alis_options={
                     "nlow": wl_sca.size,
                     "hist": True,
                     "max_hist": np.int64(max_hist),
                 },
-                NBPHOTONS=nb_photons,
-                NBLOOP=nb_photons,
-                NF=1e3,
+                nb_photons=nb_photons,
+                nb_loop=nb_photons,
+                n_f=1e3,
             )
             .dropaxis("Zenith angles")
             .dropaxis("Azimuth angles")
         )
         m0 = (
             sg.run(
-                SEED=0,
-                THVDEG=45.0,
+                seed=0,
+                th_v_deg=45.0,
                 wl=wl_abs,
                 surf=LambSurface(alb_snow),
                 le=lez,
-                BEER=0,
+                beer=0,
                 atm=atm.calc(wl_abs),
                 alis_options={"nlow": wl_sca.size, "hist": False},
-                NBPHOTONS=nb_photons,
-                NF=1e3,
+                nb_photons=nb_photons,
+                n_f=1e3,
             )
             .dropaxis("Zenith angles")
             .dropaxis("Azimuth angles")
@@ -287,40 +287,40 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
     sg = Smartg(alis=True, alt_pp=True)
     m1 = (
         sg.run(
-            SEED=0,
-            THVDEG=30.0,
+            seed=0,
+            th_v_deg=30.0,
             wl=w_valid,
             surf=None,
             le=le,
-            BEER=0,
+            beer=0,
             atm=atm_valid.calc(w_valid),
-            DEPO=0.0,
+            depo=0.0,
             alis_options={"nlow": nlow, "hist": False},
-            NBPHOTONS=nb_photons,
-            NBLOOP=nb_photons,
-            NF=1e3,
+            nb_photons=nb_photons,
+            nb_loop=nb_photons,
+            n_f=1e3,
         )
         .dropaxis("Zenith angles")
         .dropaxis("Azimuth angles")
     )
     m2 = (
         sg.run(
-            SEED=0,
-            THVDEG=30.0,
+            seed=0,
+            th_v_deg=30.0,
             wl=w_valid,
             surf=None,
             le=le,
-            BEER=0,
+            beer=0,
             atm=atm_valid.calc(w_valid),
-            DEPO=0.0,
+            depo=0.0,
             alis_options={
                 "nlow": nlow,
                 "hist": True,
                 "max_hist": np.int64(1e7),
             },
-            NBPHOTONS=nb_photons,
-            NBLOOP=nb_photons,
-            NF=1e3,
+            nb_photons=nb_photons,
+            nb_loop=nb_photons,
+            n_f=1e3,
         )
         .dropaxis("Zenith angles")
         .dropaxis("Azimuth angles")

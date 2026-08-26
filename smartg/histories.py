@@ -49,7 +49,7 @@ def get_histories(m, LEVEL=0, IDIR=0,verbose=False):
             f"\033[1;33m[ALIS hist WARNING] History buffer saturated: "
             f"{ngood:,}/{max_hist:,} slots used ({100.*ngood/max_hist:.0f}%). "
             "Photons beyond max_hist were NOT recorded — results will be biased. "
-            "→ Increase max_hist or reduce NBPHOTONS per loop.\033[0m"
+            "→ Increase max_hist or reduce nb_photons per loop.\033[0m"
         )
     N = m['Nphotons_in'].data[0,0]
     ###################

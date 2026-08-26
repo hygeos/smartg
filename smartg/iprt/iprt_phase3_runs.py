@@ -357,17 +357,17 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
     
     if pp :
         sg = S1DB_PP
-        RTER = 6371.
+        earth_radius = 6371.
     else:
         sg = S1DB
-        RTER=earth_r
+        earth_radius=earth_r
 
     # BOA
     if (overwrite or not fboa_exist) and not is_e6:
         sensors = get_d1_to_e5_boa_sensors(vza, phi, nvza, nvaa, earth_r)
-        m_boa = sg.run(wl=wl, NBPHOTONS=nvza*nvaa*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
-                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=RTER,
-                        stdev=True, progress=True, NF=ntheta)#, SEED=1e8)
+        m_boa = sg.run(wl=wl, nb_photons=nvza*nvaa*nphotons, nb_loop=nphotons, atm=pro, sensor=sensors, output_layers=1,
+                        le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
+                        stdev=True, progress=True, n_f=ntheta)#, seed=1e8)
 
         m_boa = m_boa.dropaxis('Azimuth angles')
         m_boa.add_axis('sza', sza)
@@ -397,9 +397,9 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
     if overwrite or not ftoa_exist:
         if not is_e6: sensors = get_d1_to_e5_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
         else : sensors = get_e6_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
-        m_toa = sg.run(wl=wl, NBPHOTONS=nvza*nvaa*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
-                        le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=RTER,
-                        stdev=True, progress=True, NF=ntheta)#, SEED=1e8)
+        m_toa = sg.run(wl=wl, nb_photons=nvza*nvaa*nphotons, nb_loop=nphotons, atm=pro, sensor=sensors, output_layers=1,
+                        le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
+                        stdev=True, progress=True, n_f=ntheta)#, seed=1e8)
 
         m_toa = m_toa.dropaxis('Azimuth angles')
         m_toa.add_axis('sza', sza)
@@ -1575,9 +1575,9 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
     if (overwrite      or 
         not ftoa_exist  ):
         sg = S1DB
-        m_toa = sg.run(wl=wl, NBPHOTONS=nsens*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
-                    le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=earth_r,
-                    stdev=True, progress=True, NF=ntheta)
+        m_toa = sg.run(wl=wl, nb_photons=nsens*nphotons, nb_loop=nphotons, atm=pro, sensor=sensors, output_layers=1,
+                    le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
+                    stdev=True, progress=True, n_f=ntheta)
         m_toa.save(str(ftoa_path), overwrite=overwrite)
         
 
@@ -1667,10 +1667,10 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
         sensors.append(sen_tmp)
     if (overwrite      or 
         not ftoa_exist  ):
-        sg = Smartg(back=True, double=True, bias=True, pp=False, obj3D=True)
-        m_toa = sg.run(wl=wl, NBPHOTONS=nsens*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
-                    le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=earth_r,
-                    stdev=True, progress=True, NF=ntheta)
+        sg = Smartg(back=True, double=True, bias=True, pp=False, obj3d=True)
+        m_toa = sg.run(wl=wl, nb_photons=nsens*nphotons, nb_loop=nphotons, atm=pro, sensor=sensors, output_layers=1,
+                    le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
+                    stdev=True, progress=True, n_f=ntheta)
         m_toa.save(str(ftoa_path), overwrite=overwrite)
         
 
@@ -1765,9 +1765,9 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
     if (overwrite      or 
         not ftoa_exist  ):
         sg = S1DB
-        m_toa = sg.run(wl=wl, NBPHOTONS=nsens*nphotons, NBLOOP=nphotons, atm=pro, sensor=sensors, OUTPUT_LAYERS=1,
-                    le=le, surf=surf, XBLOCK = 64, XGRID = 1024, BEER=1, DEPO=dep, reflectance=False, RTER=earth_r,
-                    stdev=True, progress=True, NF=ntheta)
+        m_toa = sg.run(wl=wl, nb_photons=nsens*nphotons, nb_loop=nphotons, atm=pro, sensor=sensors, output_layers=1,
+                    le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
+                    stdev=True, progress=True, n_f=ntheta)
         m_toa.save(str(ftoa_path), overwrite=overwrite)
         
 

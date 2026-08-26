@@ -160,6 +160,22 @@ final `v2.0.0` release.
     constructor parameters have been renamed to snake case (`CFX` → `cfx`,
     `LMODE` → `lmode`, `POS` → `pos`, `REC` → `rec`, ...), with
     `TYPE` → `sampling` (`type` would shadow the builtin)
+  - The parameters of `Smartg` and `Smartg.run` follow PEP 8. Constructor:
+    `obj3D` → `obj3d` and `opt3D` → `opt3d`. `run`:
+    - `NBPHOTONS` → `nb_photons`, `NBLOOP` → `nb_loop`,
+      `NBTHETA` → `nb_theta`, `NBPHI` → `nb_phi`, `NF` → `n_f`
+    - `THVDEG` → `th_v_deg`, `PHVDEG` → `ph_v_deg`, `SEED` → `seed`,
+      `RTER` → `earth_radius`, `DEPO` → `depo`, `DEPO_WATER` → `depo_water`
+    - `OUTPUT_LAYERS` → `output_layers`, `XBLOCK` → `xblock`,
+      `XGRID` → `xgrid`, `BEER` → `beer`, `RR` → `r_r`,
+      `WEIGHTRR` → `weight_r_r`, `SZA_MAX` → `sza_max`,
+      `SUN_DISC` → `sun_disc`
+    - `SMIN`/`SMAX`/`RMIN`/`RMAX` → `s_min`/`s_max`/`r_min`/`r_max`,
+      `FFS` → `ffs`, `DIRECT` → `direct`,
+      `OCEAN_INTERACTION` → `ocean_interaction`, `myObjects` → `my_objects`,
+      `cusL` → `cus_l`, `IsAtm` → `is_atm`
+    The `le` and `alis_options` dictionary keys and the output variable
+    names are unchanged
   - The internal helpers of the smartg module are now private
     (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
     `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,

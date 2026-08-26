@@ -31,7 +31,7 @@ Atm1D
     added to build a complete atmospheric model.
 
 Atm3D
-    3D atmospheric profile model (for Smartg(opt3D=True) simulations).
+    3D atmospheric profile model (for Smartg(opt3d=True) simulations).
     Combines a 1D background atmosphere (Atm1D), a 3D grid
     (smartg.grid3d.Grid3D) and 3D components (Cloud3D, Aer3D) into the
     3D profile consumed by smartg.run().

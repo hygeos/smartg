@@ -308,9 +308,9 @@ class Smartg(object):
     alt_pp : bool, optional
         Use a plane parallel propagation scheme following the photon at each layer.
         Increase the computational time, but allow the use of the ALIS method
-    obj3D : bool, optional
+    obj3d : bool, optional
         Allow 3D objects
-    opt3D : bool, optional
+    opt3d : bool, optional
         Activate the 3D atmosphere mode
     device : int | str, optional
         The device number / GPU to use. The GPU numbers can be obtained with the command `nvidia-smi`.
@@ -389,8 +389,8 @@ class Smartg(object):
     """
     def __init__(self, pp=True, debug=False, autoinit=True,
                  verbose_photon=False,
-                 double=True, alis=False, back=False, bias=True, alt_pp=False, obj3D=False, 
-                 opt3D=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir=None,
+                 double=True, alis=False, back=False, bias=True, alt_pp=False, obj3d=False, 
+                 opt3d=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir=None,
                  keep_context=None, amf_variance=False, cdist_wabs=False, nscl=1, scatter_classes='last_scattering_layer',
                  norders=1):
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
@@ -455,8 +455,8 @@ class Smartg(object):
         self.rng = _init_rng(rng)
         self.back= back
         self.thermal=thermal
-        self.obj3D= obj3D
-        self.opt3D= opt3D
+        self.obj3d= obj3d
+        self.opt3d= opt3d
 
         #
         # compilation option
@@ -472,7 +472,7 @@ class Smartg(object):
         if alt_pp:
             # new Plane Parallel propagation scheme
             options.append('-DALT_PP')
-        if opt3D:
+        if opt3d:
             # 3D optical properties enabled
             # automatically with ALT_PP
             # for the moment inconsistent with OBJ3D
@@ -504,7 +504,7 @@ class Smartg(object):
         if bias:
             # bias sampling scheme for scattering and reflection/transmission
             options.append('-DBIAS')
-        if obj3D:
+        if obj3d:
             # 3D Object mode
             options.append('-DOBJ3D')
         options.append('-D'+rng)
@@ -580,17 +580,17 @@ class Smartg(object):
 
 
     def run(self, wl, atm=None, surf=None, water=None, env=None, alis_options=None,
-            NBPHOTONS=1e9, DEPO=0.0279, DEPO_WATER= 0.0906, THVDEG=0., PHVDEG=0., SEED=-1,
-            RTER=6371., wl_proba=None, sensor_proba=None, cell_proba=None,
-            NBTHETA=45, NBPHI=90, NF=1e6,
-            OUTPUT_LAYERS=0, XBLOCK=256, XGRID=256,
-            NBLOOP=None, progress=True, 
+            nb_photons=1e9, depo=0.0279, depo_water= 0.0906, th_v_deg=0., ph_v_deg=0., seed=-1,
+            earth_radius=6371., wl_proba=None, sensor_proba=None, cell_proba=None,
+            nb_theta=45, nb_phi=90, n_f=1e6,
+            output_layers=0, xblock=256, xgrid=256,
+            nb_loop=None, progress=True, 
             le=None, flux=None, stdev=False, stdev_lim=None,
-            BEER=1, RR=0, WEIGHTRR=0.1, SZA_MAX=90., SUN_DISC=0.,
+            beer=1, r_r=0, weight_r_r=0.1, sza_max=90., sun_disc=0.,
             sensor=None, refraction=False, reflectance=True,
-            myObjects=None, interval = None,
-            IsAtm = 1, cusL = None, SMIN=0, SMAX=1e6, RMIN=0, RMAX=1e6, FFS=False, DIRECT=False,
-            OCEAN_INTERACTION=None, pol_off=False, no_aer_output=False):
+            my_objects=None, interval = None,
+            is_atm = 1, cus_l = None, s_min=0, s_max=1e6, r_min=0, r_max=1e6, ffs=False, direct=False,
+            ocean_interaction=None, pol_off=False, no_aer_output=False):
         """
         Run a SMART-G simulation
 
@@ -627,21 +627,21 @@ class Smartg(object):
                    perturbed profile. Requires ``njac`` > 0. Default False.
 
             Note: Optional for the dictionary keys indicate that the key is not required to be present.
-        NBPHOTONS : int, optional
+        nb_photons : int, optional
             The total number of photons used for the simulation. Default 1e9.
-        DEPO : float, optional
+        depo : float, optional
             The Rayleigh depolarization factor (air). Default 0.0279.
-        DEPO_WATER : float, optional
+        depo_water : float, optional
             The Rayleigh depolarization factor (water). Default 0.0906.
-        THVDEG : float, optional
+        th_v_deg : float, optional
             The sun/viewing zenith angle in forward/backward mode, in degrees. This parameter is ignored 
             if the parameter `sensor` is used.
-        PHVDEG : float, optional
+        ph_v_deg : float, optional
             The sun/viewing azimuth angle in forward/backward mode, in degrees. This parameter is ignored 
             if the parameter `sensor` is used.
-        SEED : int, optional
+        seed : int, optional
             The seed used to initiate the series of random numbers. Default based on clock time.
-        RTER : float, optional 
+        earth_radius : float, optional 
             The earth radius in km
         wl_proba : None | 1-D ndarray, optional
             The inversed cumulative distribution function for wavelength selection. It is for example 
@@ -652,18 +652,18 @@ class Smartg(object):
         cell_proba : None | 2-D ndarray, optional
             The inversed cumulative distribution function for cell selection. It is for example 
             the result of function icdf_2d(proba, n).
-        NBTHETA : int, optional
+        nb_theta : int, optional
             The number of viewing/sun zenith angles in forward/backward for the cone sampling.
             This parameter is ignored if the parameter `le` is used.
-        NBPHI : int, optional
+        nb_phi : int, optional
             The number of viewing/sun azimuth angles in forward/backward for the cone sampling.
             This parameter is ignored if the parameter `le` is used.
-        NF : int, optional
+        n_f : int, optional
             The number of discretization of:
                 - the inversed aerosol phase functions
                 - the inversed ocean phase functions
                 - the inversed probability of each wavelength occurence
-        OUTPUT_LAYERS : int, optional
+        output_layers : int, optional
             Which layers to consider. Possibilities are the following:
                 - -1 -> consider no layer (for development purposes)
                 -  0 -> up (TOA)
@@ -676,11 +676,11 @@ class Smartg(object):
                 -  7 -> up (TOA) and down (0+)
 
             Note: Consider only the needed layers may reduce significantly the computational time.
-        XBLOCK : int, optional
+        xblock : int, optional
             The number of cuda blocks.
-        XGRID : int, optional
+        xgrid : int, optional
             The number of cuda grids.
-        NBLOOP : None | float, optional
+        nb_loop : None | float, optional
             The number of photons launched in one kernel run.
         progress : bool, optional
             Activate the progress bar. Default True.    
@@ -696,12 +696,12 @@ class Smartg(object):
             * 'phi_deg' : 1-D ndarray | list, optional
                 -> The azimuth angles in degrees. Only if 'phi' is not provided.
             * 'zip' : bool, optional
-               -> If True, then 'th' and 'phi' covary and the output is only one-dimensional NBTHETA, 
-               but user should verify that NBPHI==NBTHETA.
+               -> If True, then 'th' and 'phi' covary and the output is only one-dimensional nb_theta, 
+               but user should verify that nb_phi==nb_theta.
             * 'count_level' : 1-D ndarray | list, optional
                 -> The level to consider. Possibilities: -2(all), -1(none), 0(UPTOA), 1(DOWN0P), 2(DOWN0M),
                    3(UP0P), 4(UP0M) or 5(DOWNB). The level to consider may change only with th/th_deg. The 
-                   array must be of length NBTHETA. If the key is not present it will be the same as 
+                   array must be of length nb_theta. If the key is not present it will be the same as 
                    count_level = np.full_like(th/th_deg, -2, dtype=np.int32).
             
             Note: Optional for the dictionary keys indicate that the key is not required to be present. 
@@ -714,16 +714,16 @@ class Smartg(object):
             Activate the calculation of the standard deviation (between each kernel run).
         stdev_lim : None | StdevLim, optional
             To stop the computation if the standard deviation is above a certain limit. Only if stdev is True.
-        BEER : int, optional
-            If BEER=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo. 
-            BEER automatically set to 1 if ALIS is True.
-        RR: int, optional
+        beer : int, optional
+            If beer=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo. 
+            beer automatically set to 1 if ALIS is True.
+        r_r: int, optional
             Activate the Russian Roulette. ON = 1 and OFF = 0.
-        WEIGHTRR : float, optional
+        weight_r_r : float, optional
             The threshold weight to apply to the Russian Roulette.
-        SZA_MAX : float, optional
+        sza_max : float, optional
             The maximum SZA value for solar BOXES in case a Regulard grid and cone sampling.
-        SUN_DISC : float, optional
+        sun_disc : float, optional
             The angular size of the Sun disc in degrees, 0 (default means no angular size)
         sensor : None | Sensor | list, optional
             The light source / sensor (Sensor object or list of Sensor objects) in forward / backward mode.
@@ -732,30 +732,30 @@ class Smartg(object):
         reflectance : bool, optional
            Convert output to reflectance units, otherwise in radiance units with Solar irradiance set to PI. 
            Only of flux is None and for plane parallel atmosphere.
-        myObjects : None | list, optional
+        my_objects : None | list, optional
             A list of 3d objects (Entity objects) that will be used in the simulation. Currently sphere and plane objects 
             are considered. The compilation option `obj3d` must be set to True.
         interval : None | list, optional
             A principal bounding box in case 3d objects are incorporated. It must be a list composed of 2 lists with the bbox 
             min and max values [[xmin, ymin, zmin], [xmax, ymax, zmax]].
-        IsAtm : int, optional
-            If IsAtm=0 provide more robust test with 3d objects in case the atmosphere we remove the atmosphere.
-        cusL : None | CusForward | CusBackward, optional
+        is_atm : int, optional
+            If is_atm=0 provide more robust test with 3d objects in case the atmosphere we remove the atmosphere.
+        cus_l : None | CusForward | CusBackward, optional
             Use the RF, FF (CusForward) or B, BR (CusBackward) launching modes. The compilation option `obj3d` must be set to True.
-        SMIN : int, optional
+        s_min : int, optional
             The minimum number of interactions (scattering/reflection). Default 0.
-        SMAX : int, optional
+        s_max : int, optional
             The maximum number of iteractions (scattering/reflection). Default 1e6.
-        RMIN : int, optional
+        r_min : int, optional
             The minimum number of reflections (by surface only, not environement). Default 0.
-        RMAX : int, optional
+        r_max : int, optional
             The maximum number of reflections (by surface only, not environement). Default 1e6
-        FFS : bool, optional
+        ffs : bool, optional
             Forced First Scattering (for use in spherical limb geometry only). Default False.
-        DIRECT : bool, optional
+        direct : bool, optional
             Include directly transmitted photons. Default False.
-        OCEAN_INTERACTION : None | int, optional
-            If OCEAN_INTERACTION=1 select photons that interact with ocean. Default None, no selection.
+        ocean_interaction : None | int, optional
+            If ocean_interaction=1 select photons that interact with ocean. Default None, no selection.
         pol_off : bool, optional
             Deactivate (if True) the consideration of polarized light. Default False.
         no_aer_output : bool, optional
@@ -805,49 +805,49 @@ class Smartg(object):
 
         if (not self.pp and water is not None): raise ValueError("Ocean + spherical atm is not allowed! Still in progress...")
 
-        if OUTPUT_LAYERS not in (np.arange(9, dtype=np.int32)-1):
-            raise ValueError('The OUTPUT_LAYERS value must be an integer between -1 and 7.')
+        if output_layers not in (np.arange(9, dtype=np.int32)-1):
+            raise ValueError('The output_layers value must be an integer between -1 and 7.')
 
         # Compute the sun direction as vector 
-        vSun = gc.ang2vec(THVDEG, PHVDEG, vec_view='nadir') 
+        vSun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir') 
         vSun = gc.normalize(vSun)
 
         # First check if back option is activated in case of the use of cusBackward launching mode
         surfLPH = 0
-        if (cusL is not None):
-            if myObjects is None:
-                raise ValueError('The parameter cusL can be used only if parameter myObjects is provided.')
-            if (cusL.dict['LMODE'] == "B" and not self.back):
+        if (cus_l is not None):
+            if my_objects is None:
+                raise ValueError('The parameter cus_l can be used only if parameter my_objects is provided.')
+            if (cus_l.dict['LMODE'] == "B" and not self.back):
                 raise ValueError('CusBackward can be used only with the compilation option back=True')
             elif sensor is not None:
                 raise ValueError('The use of sensor(s) and a custum launching mode' + \
                                 ' (cusForward or cusBackward) is prohibited!')
-            elif (cusL.dict['LMODE'] == "B"):
-                sensor = Sensor(POSX=cusL.dict['POS'].x, POSY=cusL.dict['POS'].y, POSZ=cusL.dict['POS'].z,
-                                THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS',
+            elif (cus_l.dict['LMODE'] == "B"):
+                sensor = Sensor(POSX=cus_l.dict['POS'].x, POSY=cus_l.dict['POS'].y, POSZ=cus_l.dict['POS'].z,
+                                THDEG=cus_l.dict['THDEG'], PHDEG=cus_l.dict['PHDEG'], LOC='ATMOS',
                                 FOV=0.0, TYPE=0)
-                                #FOV=cusL.dict['ALDEG'], TYPE=cusL.dict['TYPE'])
-            elif (cusL.dict['LMODE'] == "BR"):
-                sensor = Sensor(POSX=cusL.dict['REC'].transformation.transx,
-                                POSY=cusL.dict['REC'].transformation.transy,
-                                POSZ=cusL.dict['REC'].transformation.transz,
-                                THDEG=cusL.dict['THDEG'], PHDEG=cusL.dict['PHDEG'], LOC='ATMOS',
+                                #FOV=cus_l.dict['ALDEG'], TYPE=cus_l.dict['TYPE'])
+            elif (cus_l.dict['LMODE'] == "BR"):
+                sensor = Sensor(POSX=cus_l.dict['REC'].transformation.transx,
+                                POSY=cus_l.dict['REC'].transformation.transy,
+                                POSZ=cus_l.dict['REC'].transformation.transz,
+                                THDEG=cus_l.dict['THDEG'], PHDEG=cus_l.dict['PHDEG'], LOC='ATMOS',
                                 FOV=0.0, TYPE=0)
-                                #FOV=cusL.dict['ALDEG'], TYPE=cusL.dict['TYPE'])
-            elif (cusL.dict['LMODE'] == "FF"):
+                                #FOV=cus_l.dict['ALDEG'], TYPE=cus_l.dict['TYPE'])
+            elif (cus_l.dict['LMODE'] == "FF"):
                 # The projected surface at TOA where the photons are launched
                 DotNN = gc.dot(vSun*-1, gc.Vector(0., 0., 1.))
-                if (cusL.dict['TYPE'] == 2 and cusL.dict['FOV'] > 1e-6): #isotropic
-                    surfLPH = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])
+                if (cus_l.dict['TYPE'] == 2 and cus_l.dict['FOV'] > 1e-6): #isotropic
+                    surfLPH = float(cus_l.dict['CFX'])*float(cus_l.dict['CFY'])
                 else:
-                    surfLPH = float(cusL.dict['CFX'])*float(cusL.dict['CFY'])*DotNN
+                    surfLPH = float(cus_l.dict['CFX'])*float(cus_l.dict['CFY'])*DotNN
 
         #
         # initialization
         #              
         
         # Begin initialization with OBJ ============================
-        if (myObjects is not None):
+        if (my_objects is not None):
             # Main bounding box initialization
             if interval is not None:
                 Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2]
@@ -858,7 +858,7 @@ class Smartg(object):
 
             # Initiliaze all the parameters linked with 3D objects
             (nGObj, nObj, nRObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             myObjects0, myGObj0, myRObj0, mySPECTObj0, n_cos) = _init_obj(lgobj=myObjects, v_sun=vSun, wl=wl, cus_l=cusL)
+             myObjects0, myGObj0, myRObj0, mySPECTObj0, n_cos) = _init_obj(lgobj=my_objects, v_sun=vSun, wl=wl, cus_l=cus_l)
 
             # If we are in RF mode don't forget to update the value of surfLPH
             if (surfLPH_RF is not None): surfLPH = surfLPH_RF
@@ -871,18 +871,18 @@ class Smartg(object):
             mySPECTObj0 = gpuzeros(1, dtype='int32') # normally 2 dims: obj dim + wl dim
             nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None
             Pmax_x = None; Pmax_y = None; Pmax_z = None
-            IsAtm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
+            is_atm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
         # END OBJ ===================================================
 
-        if NBPHI%2 == 1:
+        if nb_phi%2 == 1:
             warn('Odd number of azimuth', stacklevel=2)
 
-        if (NBLOOP is None) and (nObj <= 0):
-            NBLOOP = min(NBPHOTONS/30, 1e6)
-        elif (NBLOOP is None) and (nObj > 0):
-            NBLOOP = min(NBPHOTONS/10, 1e6)
+        if (nb_loop is None) and (nObj <= 0):
+            nb_loop = min(nb_photons/30, 1e6)
+        elif (nb_loop is None) and (nObj > 0):
+            nb_loop = min(nb_photons/10, 1e6)
 
-        NF = int(NF)
+        n_f = int(n_f)
 
         # number of output levels
         # warning! values defined in communs.h should be < LVL
@@ -900,11 +900,11 @@ class Smartg(object):
 
         attrs = OrderedDict()
         attrs.update({'processing started at': t0})
-        attrs.update({'VZA': THVDEG})
+        attrs.update({'VZA': th_v_deg})
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[self.pp]})
-        attrs.update({'XBLOCK': XBLOCK})
-        attrs.update({'XGRID': XGRID})
-        attrs.update({'NPHOTONS': '{:g}'.format(NBPHOTONS)})
+        attrs.update({'XBLOCK': xblock})
+        attrs.update({'XGRID': xgrid})
+        attrs.update({'NPHOTONS': '{:g}'.format(nb_photons)})
 
         if not isinstance(wl, BandSet):
             wl = BandSet(wl)
@@ -928,7 +928,7 @@ class Smartg(object):
                 NJAC_ABS=1
             if (alis_options['nlow'] ==-1) : NLOW=NLAM
             else: NLOW=alis_options['nlow']
-            BEER=1
+            beer=1
             assert (NLOW <= MAX_NLOW)
         
         if hist : HIST=1
@@ -974,10 +974,10 @@ class Smartg(object):
             ZTOA = 120.
   
         if prof_atm is not None:
-            faer = _calc_phase_gpu(prof_atm, n_theta=NF, depo=DEPO, kind='atm', pol_off=pol_off)
+            faer = _calc_phase_gpu(prof_atm, n_theta=n_f, depo=depo, kind='atm', pol_off=pol_off)
             prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
             NATM = len(prof_atm.coords['z_atm']) - 1
-            if self.opt3D :
+            if self.opt3d :
                 NATM_ABS = np.int32(prof_atm['iabs_atm'].to_numpy().max())
             else:
                 NATM_ABS = NATM
@@ -989,24 +989,24 @@ class Smartg(object):
             NATM_ABS = 0
 
         # computation of the impact point
-        #X0, _ = _impact_init(prof_atm, NLAM, THVDEG, RTER, self.pp)
-        X0, tabTransDir_analytic = _impact_init(prof_atm, NLAM, THVDEG, RTER, self.pp)
+        #X0, _ = _impact_init(prof_atm, NLAM, th_v_deg, earth_radius, self.pp)
+        X0, tabTransDir_analytic = _impact_init(prof_atm, NLAM, th_v_deg, earth_radius, self.pp)
 
         # sensor definition
         if sensor is None:
-            # by defaut sensor in forward mode, with ZA=180.-THVDEG, PHDEG=180., FOV=0.
+            # by defaut sensor in forward mode, with ZA=180.-th_v_deg, PHDEG=180., FOV=0.
             if (SIM == 3):
-                sensor2 = [Sensor(THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='OCEAN')] 
+                sensor2 = [Sensor(THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='OCEAN')] 
             elif ((SIM == -1) or (SIM == 0)):  
-                sensor2 = [Sensor(THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='SURF0P')] 
+                sensor2 = [Sensor(THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='SURF0P')] 
             else:
-                if (cusL is not None): # for FF mode
+                if (cus_l is not None): # for FF mode
                     sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2],
-                                      THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='ATMOS')]
+                                      THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='ATMOS')]
                                       #FOV=0.0, TYPE=0)]
-                                      #FOV=cusL.dict['FOV'], TYPE=cusL.dict['TYPE'])]
+                                      #FOV=cus_l.dict['FOV'], TYPE=cus_l.dict['TYPE'])]
                 else:
-                    sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-THVDEG, PHDEG=PHVDEG+180., LOC='ATMOS')]
+                    sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='ATMOS')]
         elif isinstance(sensor, Sensor):
             sensor2=[sensor]
         elif isinstance(sensor, list):
@@ -1022,12 +1022,12 @@ class Smartg(object):
                   tab_sensor[i][k] = s.dict[k]
         tab_sensor = to_gpu(tab_sensor)
 
-        # Auto-set SUN_DISC from sensor FOV if not explicitly set
+        # Auto-set sun_disc from sensor FOV if not explicitly set
         # This ensures sensor cone angle is available in kernel for direct beam tolerance
-        if SUN_DISC == 0:
+        if sun_disc == 0:
             for sens in sensor2:
                 if sens.dict['TYPE'] == 1 and sens.dict['FOV'] > 1e-6:
-                    SUN_DISC = sens.dict['FOV']
+                    sun_disc = sens.dict['FOV']
                     break  # Use first sensor with cone FOV
 
         # The min and max posx and posy of sensors. Useful for forward mode in 3d atm
@@ -1071,10 +1071,10 @@ class Smartg(object):
             prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
-            foce = _calc_phase_gpu(prof_oc, n_theta=NF, depo=DEPO_WATER, kind='oc', pol_off=pol_off)
+            foce = _calc_phase_gpu(prof_oc, n_theta=n_f, depo=depo_water, kind='oc', pol_off=pol_off)
             prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
             NOCE = len(prof_oc.coords['z_oc']) - 1
-            if self.opt3D :
+            if self.opt3d :
                 NOCE_ABS = np.int32(prof_oc['iabs_oc'].to_numpy().max())
             else:
                 NOCE_ABS = NOCE
@@ -1152,18 +1152,18 @@ class Smartg(object):
             else:
                 le['phi'] = np.array(le['phi'], dtype='float32').ravel()
 
-            NBTHETA =  le['th'].shape[0]
-            NBPHI   = le['phi'].shape[0]
+            nb_theta =  le['th'].shape[0]
+            nb_phi   = le['phi'].shape[0]
 
             if 'zip' in le:
                 if le['zip']:
-                    assert NBPHI==NBTHETA
+                    assert nb_phi==nb_theta
                     ZIP = 1
-                    NBPHI = 1 
+                    nb_phi = 1 
             
             if 'count_level' in le:
                 le['count_level'] = np.array(le['count_level'], dtype='int32').ravel()
-                assert len(le['count_level']) == NBTHETA
+                assert len(le['count_level']) == nb_theta
 
 
 
@@ -1225,30 +1225,30 @@ class Smartg(object):
 
         # initialization of the constants
         _init_const(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, self.mod,
-                  NBLOOP, THVDEG,
-                  XBLOCK, XGRID, NLAM, SIM, NF,
-                  NBTHETA, NBPHI, OUTPUT_LAYERS,
-                  RTER, LE, ZIP,
-                  FLUX, FFS, DIRECT, OCEAN_INTERACTION, NLVL, NPSTK,
-                  NWLPROBA, NSENSORPROBA, NCELLPROBA, BEER, SMIN, SMAX, RMIN, RMAX, RR, WEIGHTRR, NLOW, NJAC, 
-                  NSENSOR, REFRAC, HORIZ, SZA_MAX, SUN_DISC, cusL, nObj, nGObj, nRObj,
-                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, IsAtm,
+                  nb_loop, th_v_deg,
+                  xblock, xgrid, NLAM, SIM, n_f,
+                  nb_theta, nb_phi, output_layers,
+                  earth_radius, LE, ZIP,
+                  FLUX, ffs, direct, ocean_interaction, NLVL, NPSTK,
+                  NWLPROBA, NSENSORPROBA, NCELLPROBA, beer, s_min, s_max, r_min, r_max, r_r, weight_r_r, NLOW, NJAC, 
+                  NSENSOR, REFRAC, HORIZ, sza_max, sun_disc, cus_l, nObj, nGObj, nRObj,
+                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, is_atm,
                   TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
                   sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, 
                   n_scl=self.nscl, scl_mode=self._scl_mode, n_orders=self.norders,
                   n_jac_abs=NJAC_ABS)
 
         # Initialize the progress bar
-        p = make_progress(NBPHOTONS, progress)
+        p = make_progress(nb_photons, progress)
 
         # Initialize the RNG
-        SEED = self.rng.setup(SEED, XBLOCK, XGRID)
+        seed = self.rng.setup(seed, xblock, xgrid)
 
         # Loop and kernel call
         (NPhotonsInTot, tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, tabTransDir, errorcount, 
          NPhotonsOutTot, NPhotonsOutTotNoAer, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
-        ) = _loop_kernel(NBPHOTONS, faer, foce,
-                        NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, XBLOCK, XGRID, NBTHETA, NBPHI,
+        ) = _loop_kernel(nb_photons, faer, foce,
+                        NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, xblock, xgrid, nb_theta, nb_phi,
                         NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, envmap, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
                         wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis,
@@ -1257,29 +1257,29 @@ class Smartg(object):
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = Nkernel
-        attrs['seed'] = SEED
+        attrs['seed'] = seed
         attrs.update(self.common_attrs)
 
         # If there is a receiver -> normalization of the signal collected
         if (TC is not None):
             cMatVisuRecep, matCats, n_cte = _normalize_rec(c_mat_visu_recep=cMatVisuRecep, mat_cats=matCats,
-                nb_cx=nbCx, nb_cy=nbCy, nb_photons=float(np.sum(NPhotonsInTot)), surf_lph=surfLPH, cell_size=TC, cus_l=cusL,
-                sun_disc=SUN_DISC, le=LE)
+                nb_cx=nbCx, nb_cy=nbCy, nb_photons=float(np.sum(NPhotonsInTot)), surf_lph=surfLPH, cell_size=TC, cus_l=cus_l,
+                sun_disc=sun_disc, le=LE)
 
-        if (nb_H > 0 and TC is not None and cusL is not None):
+        if (nb_H > 0 and TC is not None and cus_l is not None):
             MZAlt_H = zAlt_H/nb_H; SREC=TC*TC*nbCx*nbCy #; weightR=matCats[2, 1]
             # dicSTP : tuple incorporating parameters for Solar Tower Power applications
-            if(self.back) : ALDEG = cusL.dict['ALDEG']
+            if(self.back) : ALDEG = cus_l.dict['ALDEG']
             else : ALDEG = 0.
             dicSTP = {"nb_H":nb_H, "n_cos": n_cos, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
-                      "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'], "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":ALDEG}
+                      "SREC":SREC, "TC":TC, "LPH":cus_l.dict['LPH'], "LPR":cus_l.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":ALDEG}
         # If there are no heliostats --> no analyses of optical losses
-        elif(TC is not None and cusL is not None):
+        elif(TC is not None and cus_l is not None):
             SREC=TC*TC*nbCx*nbCy; matLoss = None #;weightR=matCats[2, 1]
-            if(self.back) : ALDEG = cusL.dict['ALDEG']
+            if(self.back) : ALDEG = cus_l.dict['ALDEG']
             else : ALDEG = 0.
-            dicSTP = {"vSun":vSun, "wRec":matCats[2, 1], "SREC":SREC, "TC":TC, "LPH":cusL.dict['LPH'],
-                      "LPR":cusL.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":ALDEG}
+            dicSTP = {"vSun":vSun, "wRec":matCats[2, 1], "SREC":SREC, "TC":TC, "LPH":cus_l.dict['LPH'],
+                      "LPR":cus_l.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":ALDEG}
         elif(TC is not None):
             SREC=TC*TC*nbCx*nbCy; matLoss = None
             dicSTP = {"vSun":vSun, "SREC":SREC, "TC":TC, "n_cte":n_cte}
@@ -1289,9 +1289,9 @@ class Smartg(object):
                 
         # finalization
         output = _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount,
-                          NPhotonsOutTot, NPhotonsOutTotNoAer, OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM,
-                          attrs, prof_atm, prof_oc, sigma, THVDEG, HORIZ, le=le, flux=flux, back=self.back, 
-                          SZA_MAX=SZA_MAX, SUN_DISC=SUN_DISC, hist=hist, cMatVisuRecep=cMatVisuRecep,
+                          NPhotonsOutTot, NPhotonsOutTotNoAer, output_layers, tabTransDir, tabTransDir_analytic, SIM,
+                          attrs, prof_atm, prof_oc, sigma, th_v_deg, HORIZ, le=le, flux=flux, back=self.back, 
+                          SZA_MAX=sza_max, SUN_DISC=sun_disc, hist=hist, cMatVisuRecep=cMatVisuRecep,
                           dicSTP=dicSTP, matCats=matCats, matLoss=matLoss, wPhCats=wPhCats, wPhCats2=wPhCats2,
                           no_aer_output=no_aer_output)
         
@@ -1301,13 +1301,13 @@ class Smartg(object):
             p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
             np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
             np.sum(NPhotonsInTot)/float(NLAM),
-            np.sum(NPhotonsInTot)/float(NBPHOTONS)/float(NLAM),
+            np.sum(NPhotonsInTot)/float(nb_photons)/float(NLAM),
             ))
         else:
             p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
             np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
             np.sum(NPhotonsInTot),
-            np.sum(NPhotonsInTot)/float(NBPHOTONS),
+            np.sum(NPhotonsInTot)/float(nb_photons),
             ))
 
         if wl.scalar:

@@ -38,7 +38,7 @@ def test_compile(pp, back):
 def test_basic(request):
     """Most basic test"""
     m = Smartg(autoinit=True).run(
-        500.0, atm=Atm1D("afglms"), NBPHOTONS=NBPHOTONS
+        500.0, atm=Atm1D("afglms"), nb_photons=NBPHOTONS
     )
     smartg_view(m)
     conftest.savefig(request)
@@ -47,7 +47,7 @@ def test_basic(request):
 @pytest.mark.parametrize("wav", wav_list)
 def test_atm(sg, wav):
     atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
-    m = sg.run(wav, atm=atm, NBPHOTONS=NBPHOTONS)
+    m = sg.run(wav, atm=atm, nb_photons=NBPHOTONS)
     assert ("wavelength" in m.axes) == ("__getitem__" in dir(wav))
 
 
@@ -62,7 +62,7 @@ def test_cloud(sg, wav):
         grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
         pfgrid=[100.0, 10.0, 0.0],
     )
-    m = sg.run(wav, atm=atm, NBPHOTONS=NBPHOTONS)
+    m = sg.run(wav, atm=atm, nb_photons=NBPHOTONS)
     assert ("wavelength" in m.axes) == ("__getitem__" in dir(wav))
 
 
@@ -74,13 +74,13 @@ def test_cloud(sg, wav):
 def test_atm_surf(sg, wav, surf, thv):
     atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
 
-    sg.run(wav, atm=atm, surf=surf, THVDEG=thv, NBPHOTONS=NBPHOTONS)
+    sg.run(wav, atm=atm, surf=surf, th_v_deg=thv, nb_photons=NBPHOTONS)
 
 
 def test_surf_iop1_1():
     surf = RoughSurface(wind=10.0)
     water = Water1D(comp=[HydrosolPR(chl=1.0)])
-    Smartg().run([400.0, 500.0], surf=surf, water=water, NBPHOTONS=NBPHOTONS)
+    Smartg().run([400.0, 500.0], surf=surf, water=water, nb_photons=NBPHOTONS)
 
 
 def test_atm_surf_iop1():
@@ -95,7 +95,7 @@ def test_atm_surf_iop1():
         comp=[HydrosolPR(chl=1.0, pfwav=np.array([450, 550, 650, 750]))]
     )
     wav = np.linspace(400, 800, 12)
-    Smartg().run(wav, atm=atm, surf=surf, water=water, NBPHOTONS=NBPHOTONS)
+    Smartg().run(wav, atm=atm, surf=surf, water=water, nb_photons=NBPHOTONS)
 
 
 def test_reptran(sg):
@@ -104,7 +104,7 @@ def test_reptran(sg):
 
     ibands = Reptran("reptran_solar_msg").to_smartg("msg1")
 
-    res = sg.run(ibands.l, atm=atm, surf=surf, water=None, NBPHOTONS=NBPHOTONS)
+    res = sg.run(ibands.l, atm=atm, surf=surf, water=None, nb_photons=NBPHOTONS)
     reduce_reptran(res, ibands)
 
 
@@ -116,12 +116,12 @@ def test_locale_estimate(sg):
         wav,
         atm=atm,
         surf=surf,
-        THVDEG=10.0,
+        th_v_deg=10.0,
         le={
             "th_deg": np.array([40.0], dtype="float32"),
             "phi_deg": np.array([30.0], dtype="float32"),
         },
-        NBPHOTONS=NBPHOTONS,
+        nb_photons=NBPHOTONS,
     )
     assert res["I_up (TOA)"][:, :] > 0
 
@@ -131,7 +131,7 @@ def test_rng(rng):
     atm = Atm1D("afglt")
     surf = RoughSurface()
     wav = np.linspace(400, 800, 5)
-    Smartg(rng=rng).run(wav, atm=atm, surf=surf, NBPHOTONS=NBPHOTONS)
+    Smartg(rng=rng).run(wav, atm=atm, surf=surf, nb_photons=NBPHOTONS)
 
 
 def test_adjacency():
@@ -152,10 +152,10 @@ def test_no_aer_output():
         atm=atm1,
         surf=surf,
         water=water,
-        OUTPUT_LAYERS=3,
+        output_layers=3,
         le=le,
-        NBPHOTONS=1e6,
-        NBLOOP=1e6,
+        nb_photons=1e6,
+        nb_loop=1e6,
         no_aer_output=True,
     )
     m1 = m1.to_xarray()  # to prepare transition luts to xarray

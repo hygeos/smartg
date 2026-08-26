@@ -36,7 +36,7 @@ Mathieu Compiègne
 * Polarized (I, Q, U, V) Monte-Carlo radiative transfer, accelerated on NVIDIA GPUs
 * Coupled ocean-atmosphere system, or atmosphere only / ocean only
 * 1D atmospheric profiles (AFGL standard atmospheres or user-provided), aerosols (OPAC or user-defined) and clouds
-* 3D atmospheres (`opt3D=True`), validated against MYSTIC on the IPRT phase B benchmark
+* 3D atmospheres (`opt3d=True`), validated against MYSTIC on the IPRT phase B benchmark
 * 3D objects and concentrated solar flux geometries (heliostat fields, solar towers)
 * Flat, rough or Lambertian surfaces, and 1D ocean profiles
 * Spectral integration with the k-distribution and REPTRAN parameterizations
@@ -159,7 +159,7 @@ from smartg.atmosphere import Atm1D
 from smartg.view import smartg_view
 
 # 1e8 photons at 500 nm, tropical atmosphere, sun at a 30° zenith angle
-res = Smartg().run(wl=500., THVDEG=30., NBPHOTONS=1e8, atm=Atm1D('afglt'))
+res = Smartg().run(wl=500., th_v_deg=30., nb_photons=1e8, atm=Atm1D('afglt'))
 
 ds = res.to_xarray()  # 'I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)', 'V_up (TOA)', ...
 smartg_view(ds)       # polar view of the reflectance and of the polarization
@@ -207,7 +207,7 @@ The arguments `--html=test_report.html --self-contained-html` generate an html r
 
 ### 7.1 The IPRT phase B tests
 
-`test_iprt_phase_b_c2.py` (cubic cloud) and `test_iprt_phase_b_c3.py` (cumulus cloud with aerosols) check the 3D atmosphere mode (`opt3D=True`) against the MYSTIC reference of the IPRT phase B benchmark. Reproducing the benchmark photon counts takes hours, so each of their tests exists in two tiers: a fast one, run by default, and a slow one selected with `-m slow`.
+`test_iprt_phase_b_c2.py` (cubic cloud) and `test_iprt_phase_b_c3.py` (cumulus cloud with aerosols) check the 3D atmosphere mode (`opt3d=True`) against the MYSTIC reference of the IPRT phase B benchmark. Reproducing the benchmark photon counts takes hours, so each of their tests exists in two tiers: a fast one, run by default, and a slow one selected with `-m slow`.
 
 ```bash
 pytest smartg/tests/test_iprt_phase_b_c3.py           # fast, ~4 min
