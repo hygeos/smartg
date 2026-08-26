@@ -3,14 +3,13 @@
 
 
 """
-SMART-G: Speed-up Monte carlo Advanced Radiative Transfer code
-using GPU.
+SMART-G: Speed-up Monte carlo Advanced Radiative Transfer code using
+GPU.
 
-This module hosts the Smartg class, whose constructor compiles the
-CUDA kernel with the requested options and whose run method
-performs the radiative transfer simulations.
+This module hosts the Smartg class, whose constructor compiles the CUDA
+kernel with the requested options and whose run method performs the
+radiative transfer simulations.
 """
-
 
 import os
 import numpy as np
@@ -27,16 +26,17 @@ from smartg.cdf import icdf_2d
 from smartg.environ import modified_environ
 from luts.luts import MLUT
 from scipy.interpolate import interp1d
-#from scipy.integrate import simpson
+
+# from scipy.integrate import simpson
 import subprocess
 from collections import OrderedDict
 from pycuda.gpuarray import GPUArray, to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
 from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
+
 # bellow necessary for object incorporation
-from smartg.objects3d import Mirror, Plane, Spheric, \
-    LambMirror, Matte
+from smartg.objects3d import Mirror, Plane, Spheric, LambMirror, Matte
 import xarray as xr
 import geoclide as gc
 import tempfile
@@ -44,19 +44,20 @@ import tempfile
 
 # set up directories
 from smartg.config import DIR_ROOT
+
 DIR_SRC = DIR_ROOT / 'smartg' / 'src'
 SRC_DEVICE = DIR_SRC / 'device.cu'
 # constants definition
 # (should match #defines in src/communs.h)
-SPACE    =  0
-ATMOS    =  1
-SURF0P   =  2   # surface (air side)
-SURF0M   =  3   # surface (water side)
-ABSORBED =  4
-NONE     =  5
-OCEAN    =  6
-SEAFLOOR =  7
-OBJSURF  =  8
+SPACE = 0
+ATMOS = 1
+SURF0P = 2  # surface (air side)
+SURF0M = 3  # surface (water side)
+ABSORBED = 4
+NONE = 5
+OCEAN = 6
+SEAFLOOR = 7
+OBJSURF = 8
 
 # constants definition
 # (should match #defines in src/communs.h)
@@ -75,82 +76,99 @@ MAX_NREF = 100
 #
 TYPE_PHASE = [
     ('p_ang', 'float32'),  # \
-    ('p_P11', 'float32'),  #  |
-    ('p_P12', 'float32'),  #  | equally spaced in
-    ('p_P22', 'float32'),  #  | scattering probability
-    ('p_P33', 'float32'),  #  | [0, 1]
-    ('p_P43', 'float32'),  #  |
+    ('p_P11', 'float32'),  # |
+    ('p_P12', 'float32'),  # | equally spaced in
+    ('p_P22', 'float32'),  # | scattering probability
+    ('p_P33', 'float32'),  # | [0, 1]
+    ('p_P43', 'float32'),  # |
     ('p_P44', 'float32'),  # /
-
     ('a_P11', 'float32'),  # \
-    ('a_P12', 'float32'),  #  |
-    ('a_P22', 'float32'),  #  | equally spaced in scat.
-    ('a_P33', 'float32'),  #  | angle [0, 180]
-    ('a_P43', 'float32'),  #  |
+    ('a_P12', 'float32'),  # |
+    ('a_P22', 'float32'),  # | equally spaced in scat.
+    ('a_P33', 'float32'),  # | angle [0, 180]
+    ('a_P43', 'float32'),  # |
     ('a_P44', 'float32'),  # /
+]
+
+TYPE_SPECTRUM = np.dtype(
+    [
+        ('lambda', 'float32'),
+        ('alb_surface', 'float32'),
+        ('alb_seafloor', 'float32'),
+        ('alb_env', 'float32'),
+        ('k1p_surface', 'float32'),
+        ('k2p_surface', 'float32'),
+        ('k3p_surface', 'float32'),
+        ('alb_envs', 'float32', MAX_NREF),
     ]
+)
 
-TYPE_SPECTRUM = np.dtype([
-    ('lambda'      , 'float32'),
-    ('alb_surface' , 'float32'),
-    ('alb_seafloor', 'float32'),
-    ('alb_env',      'float32'),
-    ('k1p_surface' , 'float32'),
-    ('k2p_surface' , 'float32'),
-    ('k3p_surface' , 'float32'),
-    ('alb_envs' , 'float32', MAX_NREF),
-    ])
-
-TYPE_ENV_MAP = np.dtype([
-    ('x',      'float32'),    # // x coordinate on the ground
-    ('y',      'float32'),    # // y coordinate on the ground
-    ('env_index',   'int32'),   # // environment index map
-])
+TYPE_ENV_MAP = np.dtype(
+    [
+        ('x', 'float32'),  # // x coordinate on the ground
+        ('y', 'float32'),  # // y coordinate on the ground
+        ('env_index', 'int32'),  # // environment index map
+    ]
+)
 
 TYPE_PROFILE = [
-    ('z',      'float32'),    # // altitude
-    ('n',      'float32'),    # // refractive index
-    ('T',      'float32'),    # // temperature
-    ('OD',     'float32'),    # // cumulated extinction optical thickness (from top)
-    ('OD_sca', 'float32'),    # // cumulated scattering optical thickness (from top)
-    ('OD_abs', 'float32'),    # // cumulated absorption optical thickness (from top)
-    ('pmol',   'float32'),    # // probability of pure Rayleigh scattering event
-    ('ssa',    'float32'),    # // layer single scattering albedo
-    ('pine',   'float32'),    # // layer fraction of inelastic scattering
-    ('FQY1',   'float32'),    # // layer Fluorescence Quantum Yield of 1st specie
-    ('iphase', 'int32'),      # // phase function index
-    ]
+    ('z', 'float32'),  # // altitude
+    ('n', 'float32'),  # // refractive index
+    ('T', 'float32'),  # // temperature
+    ('OD', 'float32'),  # // cumulated extinction optical thickness (from top)
+    # // cumulated scattering optical thickness (from top)
+    ('OD_sca', 'float32'),
+    # // cumulated absorption optical thickness (from top)
+    ('OD_abs', 'float32'),
+    ('pmol', 'float32'),  # // probability of pure Rayleigh scattering event
+    ('ssa', 'float32'),  # // layer single scattering albedo
+    ('pine', 'float32'),  # // layer fraction of inelastic scattering
+    ('FQY1', 'float32'),  # // layer Fluorescence Quantum Yield of 1st specie
+    ('iphase', 'int32'),  # // phase function index
+]
 
 TYPE_CELL = [
-    ('iopt',     'int32'),    # // Optical scattering properties index
-    ('iabs',     'int32'),    # // Optical absorbing properties index
-    ('pminx',  'float32'),    # // Box point pmin.x
-    ('pminy',  'float32'),    # // Box point pmin.y
-    ('pminz',  'float32'),    # // Box point pmin.z
-    ('pmaxx',  'float32'),    # // Box point pmax.x
-    ('pmaxy',  'float32'),    # // Box point pmax.y
-    ('pmaxz',  'float32'),    # // Box point pmax.z
-    ('neighbour1', 'int32'),   # // neighbour box index +X
-    ('neighbour2', 'int32'),   # // neighbour box index -X
-    ('neighbour3', 'int32'),   # // neighbour box index +Y
-    ('neighbour4', 'int32'),   # // neighbour box index -Y
-    ('neighbour5', 'int32'),   # // neighbour box index +Z
-    ('neighbour6', 'int32'),   # // neighbour box index -Z
-    ]
+    ('iopt', 'int32'),  # // Optical scattering properties index
+    ('iabs', 'int32'),  # // Optical absorbing properties index
+    ('pminx', 'float32'),  # // Box point pmin.x
+    ('pminy', 'float32'),  # // Box point pmin.y
+    ('pminz', 'float32'),  # // Box point pmin.z
+    ('pmaxx', 'float32'),  # // Box point pmax.x
+    ('pmaxy', 'float32'),  # // Box point pmax.y
+    ('pmaxz', 'float32'),  # // Box point pmax.z
+    ('neighbour1', 'int32'),  # // neighbour box index +X
+    ('neighbour2', 'int32'),  # // neighbour box index -X
+    ('neighbour3', 'int32'),  # // neighbour box index +Y
+    ('neighbour4', 'int32'),  # // neighbour box index -Y
+    ('neighbour5', 'int32'),  # // neighbour box index +Z
+    ('neighbour6', 'int32'),  # // neighbour box index -Z
+]
 
 TYPE_SENSOR = [
-    ('POSX',   'float32'),    # // X position of the sensor
-    ('POSY',   'float32'),    # // Y position of the sensor
-    ('POSZ',   'float32'),    # // Z position of the sensor (from Earth's center in spherical, from the ground in PP)
-    ('THDEG',  'float32'),    # // zenith angle of viewing direction (Zenith> 90 for downward looking, <90 for upward, default Zenith)
-    ('PHDEG',  'float32'),    # // azimut angle of viewing direction
-    ('LOC',    'int32'),      # // localization (ATMOS=1, ...), see constant definitions in communs.h
-    ('FOV',    'float32'),    # // sensor FOV (degree) 
-    ('TYPE',   'int32'),      # // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2), default 0
-    ('ICELL',  'int32'),      # // Box in which the sensor is
-    ('ILAM_0', 'int32'),      # // Wavelength start index that the sensor 'sees' (default -1 : all) 
-    ('ILAM_1', 'int32'),      # // Wavelength stop  index that the sensor 'sees' (default -1 : all) 
-    ]
+    ('POSX', 'float32'),  # // X position of the sensor
+    ('POSY', 'float32'),  # // Y position of the sensor
+    # // Z position of the sensor (from Earth's center in spherical,
+    # from the ground in PP)
+    ('POSZ', 'float32'),
+    # // zenith angle of viewing direction (Zenith> 90 for downward
+    # looking, <90 for upward, default Zenith)
+    ('THDEG', 'float32'),
+    ('PHDEG', 'float32'),  # // azimut angle of viewing direction
+    # // localization (ATMOS=1, ...), see constant definitions in
+    # communs.h
+    ('LOC', 'int32'),
+    ('FOV', 'float32'),  # // sensor FOV (degree)
+    # // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2),
+    # default 0
+    ('TYPE', 'int32'),
+    ('ICELL', 'int32'),  # // Box in which the sensor is
+    # // Wavelength start index that the sensor 'sees' (default -1 :
+    # all)
+    ('ILAM_0', 'int32'),
+    # // Wavelength stop  index that the sensor 'sees' (default -1 :
+    # all)
+    ('ILAM_1', 'int32'),
+]
 
 TYPE_SPECTRUM_OBJ = [
     ('reflectAV', 'float32'),
@@ -158,67 +176,62 @@ TYPE_SPECTRUM_OBJ = [
 ]
 
 TYPE_IOBJECTS = [
-    ('geo', 'int32'),         # 1 = sphere, 2 = plane, ...
+    ('geo', 'int32'),  # 1 = sphere, 2 = plane, ...
     ('materialAV', 'int32'),  # 1 = LambMirror, 2 = Matte,
     ('materialAR', 'int32'),  # 3 = Mirror, ... (AV = avant, AR = Arriere)
-    ('type', 'int32'),        # 1 = reflector, 2 = receiver
+    ('type', 'int32'),  # 1 = reflector, 2 = receiver
     ('reflectAV', 'float32'),  # reflectivity of materialAV
     ('reflectAR', 'float32'),  # reflectivity of materialAR
-    ('roughAV', 'float32'),   # roughness of materialAV
-    ('roughAR', 'float32'),   # roughness of materialAR
-    ('shdAV', 'int32'),       # shadow option of materialAV, 0=false, 1=true
-    ('shdAR', 'int32'),       # shadow option of materialAR
-    ('nindAV', 'float32'),    # refractive index of materialAV
-    ('nindAR', 'float32'),    # refractive index of materialAR
-    ('distAV', 'int32'),      # distribution used for materialAV, 1=Beck, 2=GGX
-    ('distAR', 'int32'),      # distribution used for materialAR
-    
-    ('p0x', 'float32'),       # \            \
-    ('p0y', 'float32'),       #  | point p0   \
-    ('p0z', 'float32'),       # /              \ 
-                              #                 |
-    ('p1x', 'float32'),       # \               | 
-    ('p1y', 'float32'),       #  | point p1     | 
-    ('p1z', 'float32'),       # /               |
-                              #                 | Plane Object  
-    ('p2x', 'float32'),       # \               | 
-    ('p2y', 'float32'),       #  | point p2     |
-    ('p2z', 'float32'),       # /               | 
-                              #                 |
-    ('p3x', 'float32'),       # \              /
-    ('p3y', 'float32'),       #  | point p3   /
-    ('p3z', 'float32'),       # /            /
-
-    ('myRad', 'float32'),     # \
-    ('z0', 'float32'),        #  | Sperical Object
-    ('z1', 'float32'),        #  |
-    ('phi', 'float32'),       # /
-    
-    ('mvRx', 'float32'),      # \
-    ('mvRy', 'float32'),      #  | Transformation type rotation
-    ('mvRz', 'float32'),      # /
-    ('rotOrder', 'int32'),    # rotation order: 1=XYZ; 2=XZY;...
-
-    ('mvTx', 'float32'),      # \
-    ('mvTy', 'float32'),      #  | tranformation type translation 
-    ('mvTz', 'float32'),      # /
-
-    ('nBx', 'float32'),       # \
-    ('nBy', 'float32'),       #  | normalBase de l'obj apres trans 
-    ('nBz', 'float32'),       # /
-    ]
+    ('roughAV', 'float32'),  # roughness of materialAV
+    ('roughAR', 'float32'),  # roughness of materialAR
+    ('shdAV', 'int32'),  # shadow option of materialAV, 0=false, 1=true
+    ('shdAR', 'int32'),  # shadow option of materialAR
+    ('nindAV', 'float32'),  # refractive index of materialAV
+    ('nindAR', 'float32'),  # refractive index of materialAR
+    ('distAV', 'int32'),  # distribution used for materialAV, 1=Beck, 2=GGX
+    ('distAR', 'int32'),  # distribution used for materialAR
+    ('p0x', 'float32'),  # \            \
+    ('p0y', 'float32'),  # | point p0   \
+    ('p0z', 'float32'),  # /              \
+    #                 |
+    ('p1x', 'float32'),  # \               |
+    ('p1y', 'float32'),  # | point p1     |
+    ('p1z', 'float32'),  # /               |
+    #                 | Plane Object
+    ('p2x', 'float32'),  # \               |
+    ('p2y', 'float32'),  # | point p2     |
+    ('p2z', 'float32'),  # /               |
+    #                 |
+    ('p3x', 'float32'),  # \              /
+    ('p3y', 'float32'),  # | point p3   /
+    ('p3z', 'float32'),  # /            /
+    ('myRad', 'float32'),  # \
+    ('z0', 'float32'),  # | Sperical Object
+    ('z1', 'float32'),  # |
+    ('phi', 'float32'),  # /
+    ('mvRx', 'float32'),  # \
+    ('mvRy', 'float32'),  # | Transformation type rotation
+    ('mvRz', 'float32'),  # /
+    ('rotOrder', 'int32'),  # rotation order: 1=XYZ; 2=XZY;...
+    ('mvTx', 'float32'),  # \
+    ('mvTy', 'float32'),  # | tranformation type translation
+    ('mvTz', 'float32'),  # /
+    ('nBx', 'float32'),  # \
+    ('nBy', 'float32'),  # | normalBase de l'obj apres trans
+    ('nBz', 'float32'),  # /
+]
 
 TYPE_GOBJ = [
-    ('nObj', 'int32'),        # Number of objects in this group
-    ('index', 'int32'),       # Index at the table of IObjects where
-                              # we start to fill the objects of the group
-
-    ('bPminx', 'float32'),    #\
-    ('bPminy', 'float32'),    # |
-    ('bPminz', 'float32'),    # | Bounding box of the group        
-    ('bPmaxx', 'float32'),    # |
-    ('bPmaxy', 'float32'),    # |
-    ('bPmaxz', 'float32'),    #/
+    ('nObj', 'int32'),  # Number of objects in this group
+    ('index', 'int32'),  # Index at the table of IObjects where
+    # we start to fill the objects of the
+    # group
+    ('bPminx', 'float32'),  # \
+    ('bPminy', 'float32'),  # |
+    ('bPminz', 'float32'),  # | Bounding box of the group
+    ('bPmaxx', 'float32'),  # |
+    ('bPmaxy', 'float32'),  # |
+    ('bPmaxz', 'float32'),  # /
 ]
 
 
@@ -230,11 +243,13 @@ class StdevLim(object):
     Parameters
     ----------
     err_abs_min : float, optional
-        The minimum absolute error. Stop the simulation if max abs error <= err_abs_min.
+        The minimum absolute error. Stop the simulation if max abs error
+        <= err_abs_min.
     err_rel_min : float, optional
         The minimum relative error in percentage.
     nb_loop_min : int, optional
-        The minimum kernel loop number before allowing to stop the simulation.
+        The minimum kernel loop number before allowing to stop the
+        simulation.
     stk : int, optional
         The Stokes component to consider. Choices are:
 
@@ -243,7 +258,8 @@ class StdevLim(object):
             * 2 -> U Stokes component
             * 3 -> V Stokes component
     level : int, optional
-        The level to use to analyse the standard deviations. Six choices:
+        The level to use to analyse the standard deviations. Six
+        choices:
 
             * 0 -> UPTOA (Default)
             * 1 -> DOWN0P
@@ -252,7 +268,8 @@ class StdevLim(object):
             * 4 -> UP0M
             * 5 -> DOWNB
     verbose : bool, optional
-        Activate verbose mode to print the max absolute and relative errors at each kernel loop.
+        Activate verbose mode to print the max absolute and relative
+        errors at each kernel loop.
     fmt : str, optional
         The verbose print format for abs and rel max values.
 
@@ -263,39 +280,39 @@ class StdevLim(object):
 
     def __init__(
         self,
-        err_abs_min: float = 0.,
-        err_rel_min: float = 0.,
+        err_abs_min: float = 0.0,
+        err_rel_min: float = 0.0,
         nb_loop_min: int = 10,
         stk: int = 0,
         level: int = 0,
         verbose: bool = False,
         fmt: str = ".5e",
     ) -> None:
-      
+
         self.dict = {
-            'err_abs_min':  err_abs_min,
-            'err_rel_min':  err_rel_min,
-            'nb_loop_min':  nb_loop_min,
-            'stk'        :  stk,
-            'level'      :  level,
-            'verbose'    :  verbose,
-            'format'     :  fmt
+            'err_abs_min': err_abs_min,
+            'err_rel_min': err_rel_min,
+            'nb_loop_min': nb_loop_min,
+            'stk': stk,
+            'level': level,
+            'verbose': verbose,
+            'format': fmt,
         }
 
     def __str__(self) -> str:
         return self.dict.__str__()
-    
+
     def __repr__(self) -> str:
-        return 'Stdevlim dict: %s' %  self.dict.__repr__()
-        
+        return 'Stdevlim dict: %s' % self.dict.__repr__()
+
 
 class Smartg(object):
     """
     Initialization of the Smartg object
 
-    Performs the compilation and loading of the kernel.
-    This class is designed so split compilation and kernel loading from the
-    code execution: in case of successive smartg executions, the kernel
+    Performs the compilation and loading of the kernel. This class is
+    designed so split compilation and kernel loading from the code
+    execution: in case of successive smartg executions, the kernel
     loading time is not repeated.
 
     Parameters
@@ -311,21 +328,24 @@ class Smartg(object):
     double : bool, optional
         Accumulate photons table in double precision (default double).
     alis : bool, optional
-        Use the ALIS method (Emde et al. 2010) for treating gaseous absorption and perturbed profile.
-        The parameter alt_pp must be set to True.
+        Use the ALIS method (Emde et al. 2010) for treating gaseous
+        absorption and perturbed profile. The parameter alt_pp must be
+        set to True.
     back : bool, optional
         Activate backward mode (else forward)
     bias : bool, optional
         Use the bias sampling scheme
     alt_pp : bool, optional
-        Use a plane parallel propagation scheme following the photon at each layer.
-        Increase the computational time, but allow the use of the ALIS method
+        Use a plane parallel propagation scheme following the photon at
+        each layer. Increase the computational time, but allow the use
+        of the ALIS method
     obj3d : bool, optional
         Allow 3D objects
     opt3d : bool, optional
         Activate the 3D atmosphere mode
     device : int | str, optional
-        The device number / GPU to use. The GPU numbers can be obtained with the command `nvidia-smi`.
+        The device number / GPU to use. The GPU numbers can be obtained
+        with the command `nvidia-smi`.
     sif : bool, optional
         Include the Sun Induced Fluorescence
     thermal : bool, optional
@@ -337,17 +357,20 @@ class Smartg(object):
     cache_dir : str | Path, optional
         Path to the directory where the cache files are stored.
     keep_context : None | bool, optional
-        Only in case autoinit is set to False. This parameter allows to keep or not the context 
-        after the use of the run method. By default (for the case autoinit=False) kill the context after the use of the run method.
+        Only in case autoinit is set to False. This parameter allows to
+        keep or not the context after the use of the run method. By
+        default (for the case autoinit=False) kill the context after the
+        use of the run method.
     amf_variance : bool, optional, default=False
-        Enable storage of the second moment of photon path lengths (⟨D²⟩)
-        in tabDist, for Jensen bias correction of the mean-path AMF
-        approximation. Requires ``alis=True`` since tabDist and per-photon
-        cumulative distances (ph->cdist) are only available under the ALIS
-        method. When enabled, the output ``cdist`` datasets have an
-        ``iAMF`` axis of size 3 instead of 2:
+        Enable storage of the second moment of photon path lengths
+        (⟨D²⟩) in tabDist, for Jensen bias correction of the mean-path
+        AMF approximation. Requires ``alis=True`` since tabDist and per-
+        photon cumulative distances (ph->cdist) are only available under
+        the ALIS method. When enabled, the output ``cdist`` datasets
+        have an ``iAMF`` axis of size 3 instead of 2:
 
-        * iAMF=0: Σ(w · I)  — intensity-weighted count  (I = Stokes I = Ix+Iy)
+        * iAMF=0: Σ(w · I)  — intensity-weighted count  (I = Stokes I =
+          Ix+Iy)
         * iAMF=1: Σ(d · w · I) — intensity-weighted path length
         * iAMF=2: Σ(d² · w · I) — intensity-weighted squared path length
 
@@ -360,31 +383,31 @@ class Smartg(object):
 
     nscl : int, optional, default=1
         Number of scatter classes for AMF decomposition (Approach 2).
-        When ``nscl=1`` (default), no classification is performed and the
-        output is identical to the standard AMF. When ``nscl>1``, photons
-        are classified according to the ``scatter_classes`` mode, and the
-        ``cdist`` output datasets gain an extra ``iSCL`` dimension of size
-        ``nscl``. Typically set to ``NATM_ABS`` (one class per absorption
-        layer) for ``'last_scattering_layer'`` mode, or to the maximum
-        expected scattering order for ``'scattering_order'`` mode, or to
-        ``NATM_ABS * norders`` for ``'scattering_order_per_layer'`` mode.
-        Requires ``alis=True``.
+        When ``nscl=1`` (default), no classification is performed and
+        the output is identical to the standard AMF. When ``nscl>1``,
+        photons are classified according to the ``scatter_classes``
+        mode, and the ``cdist`` output datasets gain an extra ``iSCL``
+        dimension of size ``nscl``. Typically set to ``NATM_ABS`` (one
+        class per absorption layer) for ``'last_scattering_layer'``
+        mode, or to the maximum expected scattering order for
+        ``'scattering_order'`` mode, or to ``NATM_ABS * norders`` for
+        ``'scattering_order_per_layer'`` mode. Requires ``alis=True``.
 
     scatter_classes : str, optional, default='last_scattering_layer'
         Mode for defining scatter classes when ``nscl>1``:
 
         * ``'none'`` — no classification (forces ``nscl=1``).
         * ``'last_scattering_layer'`` — photons are classified by the
-          atmospheric layer in which their last scattering event occurred
-          (original Approach 2 behaviour).
+          atmospheric layer in which their last scattering event
+          occurred (original Approach 2 behaviour).
         * ``'scattering_order'`` — photons are classified by their total
           number of scattering events (``ph->nint``). Class index is
-          ``min(nint, nscl) - 1``, so the last class collects all photons
-          with ``nint >= nscl``.
+          ``min(nint, nscl) - 1``, so the last class collects all
+          photons with ``nint >= nscl``.
         * ``'scattering_order_per_layer'`` — combined classification by
           both the last scattering layer and the scattering order. Class
-          index is ``layer * norders + order``. Requires ``norders >= 1``.
-          Set ``nscl = NATM_ABS * norders``.
+          index is ``layer * norders + order``. Requires ``norders >=
+          1``. Set ``nscl = NATM_ABS * norders``.
 
     norders : int, optional, default=1
         Number of scattering order bins per layer for the
@@ -394,11 +417,12 @@ class Smartg(object):
     Raises
     ------
     ValueError
-        If amf_variance=True is used without alis=True.
-        If nscl>1 is used without alis=True.
-        If scatter_classes is not one of the accepted values.
-        If scatter_classes='scattering_order_per_layer' and norders < 1.
+        If amf_variance=True is used without alis=True. If nscl>1 is
+        used without alis=True. If scatter_classes is not one of the
+        accepted values. If scatter_classes='scattering_order_per_layer'
+        and norders < 1.
     """
+
     def __init__(
         self,
         pp: bool = True,
@@ -424,7 +448,9 @@ class Smartg(object):
         scatter_classes: str | list = 'last_scattering_layer',
         norders: int = 1,
     ) -> None:
-        assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
+        assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), (
+            "Can not use the 'device' option while the CUDA_DEVICE is set"
+        )
 
         if device is not None:
             env_modif = {'CUDA_DEVICE': str(device)}
@@ -432,72 +458,104 @@ class Smartg(object):
             env_modif = {}
 
         if not autoinit:
-            self.keep_context = keep_context if keep_context is not None else False
+            self.keep_context = (
+                keep_context if keep_context is not None else False
+            )
         else:
             if keep_context is not None:
-                raise ValueError("The parameter keep_context can be defined only if 'autoinit' is False.")
+                raise ValueError(
+                    "The parameter keep_context can be defined only "
+                    "if 'autoinit' is False."
+                )
             self.keep_context = True
-        
-        if cache_dir is None: cache_dir = tempfile.gettempdir()
-            
-        if (autoinit):
+
+        if cache_dir is None:
+            cache_dir = tempfile.gettempdir()
+
+        if autoinit:
             with modified_environ(**env_modif):
                 try:
                     import pycuda.autoinit
+
                     self.ctx = pycuda.autoinit.context
                 except Exception:
                     # In case cuda context has been manually popped
                     from importlib import reload, import_module
+
                     pycuda.autoinit = import_module('pycuda.autoinit')
                     reload(pycuda.autoinit)
                     self.ctx = pycuda.autoinit.context
         else:
             import pycuda
             import pycuda.driver as cuda
+
             cuda.init()
             from pycuda.tools import make_default_context
+
             self.ctx = make_default_context()
-        
+
         self.autoinit = autoinit
         self.pp = pp
         self.double = double
         self.alis = alis
         if amf_variance and not alis:
-            raise ValueError('amf_variance=True requires alis=True (tabDist and ph->cdist need ALIS)')
+            raise ValueError(
+                'amf_variance=True requires alis=True '
+                '(tabDist and ph->cdist need ALIS)'
+            )
         self.amf_variance = amf_variance
         if cdist_wabs and not alis:
-            raise ValueError('cdist_wabs=True requires alis=True (tabDist and ph->cdist need ALIS)')
+            raise ValueError(
+                'cdist_wabs=True requires alis=True '
+                '(tabDist and ph->cdist need ALIS)'
+            )
         self.cdist_wabs = cdist_wabs
-        _valid_scatter_classes = ('none', 'last_scattering_layer', 'scattering_order', 'scattering_order_per_layer')
+        _valid_scatter_classes = (
+            'none',
+            'last_scattering_layer',
+            'scattering_order',
+            'scattering_order_per_layer',
+        )
         if scatter_classes not in _valid_scatter_classes:
-            raise ValueError(f'scatter_classes must be one of {_valid_scatter_classes}, got {scatter_classes!r}')
+            raise ValueError(
+                f'scatter_classes must be one of {_valid_scatter_classes}, '
+                f'got {scatter_classes!r}'
+            )
         if scatter_classes == 'none':
             nscl = 1
         if scatter_classes == 'scattering_order_per_layer':
             if norders < 1:
-                raise ValueError(f'norders must be >= 1 for scattering_order_per_layer mode, got {norders}')
+                raise ValueError(
+                    f'norders must be >= 1 for scattering_order_per_layer '
+                    f'mode, got {norders}'
+                )
         if nscl > 1 and not alis:
-            raise ValueError('nscl>1 requires alis=True (scatter-class decomposition needs ALIS cdist)')
+            raise ValueError(
+                'nscl>1 requires alis=True '
+                '(scatter-class decomposition needs ALIS cdist)'
+            )
         self.nscl = int(nscl)
         self.scatter_classes = scatter_classes
         self.norders = int(norders)
-        # SCL_MODE: 0=none, 1=last_scattering_layer, 2=scattering_order, 3=scattering_order_per_layer
+        # SCL_MODE: 0=none, 1=last_scattering_layer, 2=scattering_order,
+        # 3=scattering_order_per_layer
         self._scl_mode = _valid_scatter_classes.index(scatter_classes)
         self.rng = _init_rng(rng)
-        self.back= back
-        self.thermal=thermal
-        self.obj3d= obj3d
-        self.opt3d= opt3d
+        self.back = back
+        self.thermal = thermal
+        self.obj3d = obj3d
+        self.opt3d = opt3d
 
         #
         # compilation option
         #
         options = []
-        #options = ['-G']
-        #options = ['-g', '-G']
+        # options = ['-G']
+        # options = ['-g', '-G']
         if not pp:
             # spherical shell calculation
-            # automatically with ALT_PP (for eventually ocean propagation)
+            # automatically with ALT_PP (for eventually ocean
+            # propagation)
             options.append('-DSPHERIQUE')
             options.append('-DALT_PP')
         if alt_pp:
@@ -521,9 +579,13 @@ class Smartg(object):
         if alis:
             options.append('-DALIS')
         if amf_variance:
-            options.append('-DAMF_VARIANCE')  # Store cdist² for Jensen bias correction
+            options.append(
+                '-DAMF_VARIANCE'
+            )  # Store cdist² for Jensen bias correction
         if cdist_wabs:
-            options.append('-DCDIST_WABS')  # Include absorption weight in cdist accumulation
+            options.append(
+                '-DCDIST_WABS'
+            )  # Include absorption weight in cdist accumulation
         if sif:
             options.append('-DSIF')
         if thermal:
@@ -533,14 +595,14 @@ class Smartg(object):
             # backward mode
             options.append('-DBACK')
         if bias:
-            # bias sampling scheme for scattering and reflection/transmission
+            # bias sampling scheme for scattering and
+            # reflection/transmission
             options.append('-DBIAS')
         if obj3d:
             # 3D Object mode
             options.append('-DOBJ3D')
-        options.append('-D'+rng)
-        #options.append('-lineinfo')
-
+        options.append('-D' + rng)
+        # options.append('-lineinfo')
 
         #
         # compile the kernel or load binary
@@ -550,44 +612,60 @@ class Smartg(object):
         # load device.cu
         src_device_content = open(
             SRC_DEVICE, encoding='ascii', errors='ignore'
-            ).read()
+        ).read()
 
         # kernel compilation
-        self.mod = SourceModule(src_device_content,
-                           nvcc='nvcc',
-                           options=options,
-                           no_extern_c=True,
-                           cache_dir=str(cache_dir),
-                           include_dirs=[str(DIR_SRC),
-                                         str(DIR_SRC / 'incRNGs' / 'Random123')])
+        self.mod = SourceModule(
+            src_device_content,
+            nvcc='nvcc',
+            options=options,
+            no_extern_c=True,
+            cache_dir=str(cache_dir),
+            include_dirs=[
+                str(DIR_SRC),
+                str(DIR_SRC / 'incRNGs' / 'Random123'),
+            ],
+        )
 
         # load the kernel
         self.kernel = self.mod.get_function('launchKernel')
-        #self.kernel2 = self.mod.get_function('launchKernel2')
+        # self.kernel2 = self.mod.get_function('launchKernel2')
         self.kernel2 = self.mod.get_function('reduce_absorption_gpu')
 
         #
         # common attributes
         #
         self.common_attrs = OrderedDict()
-        self.common_attrs['compilation_time'] = (datetime.now()
-                        - time_before_compilation).total_seconds()
-        if (autoinit):
+        self.common_attrs['compilation_time'] = (
+            datetime.now() - time_before_compilation
+        ).total_seconds()
+        if autoinit:
             self.common_attrs['device'] = pycuda.autoinit.device.name()
             try:
-                self.common_attrs['device_number'] = pycuda.autoinit.device.get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
+                attr = pycuda._driver.device_attribute
+                self.common_attrs['device_number'] = (
+                    pycuda.autoinit.device.get_attributes()[
+                        attr.MULTI_GPU_BOARD_GROUP_ID
+                    ]
+                )
             except AttributeError:
                 self.common_attrs['device_number'] = 'undefined'
         else:
-            self.common_attrs['device'] =self.ctx.get_device().name()
+            self.common_attrs['device'] = self.ctx.get_device().name()
             try:
-                self.common_attrs['device_number'] = self.ctx.get_device().get_attributes()[pycuda._driver.device_attribute.MULTI_GPU_BOARD_GROUP_ID]
+                attr = pycuda._driver.device_attribute
+                self.common_attrs['device_number'] = (
+                    self.ctx.get_device().get_attributes()[
+                        attr.MULTI_GPU_BOARD_GROUP_ID
+                    ]
+                )
             except Exception:
                 self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
-        self.common_attrs['cuda_version'] = '.'.join([str(x) for x in pycuda.driver.get_version()])
+        self.common_attrs['cuda_version'] = '.'.join(
+            [str(x) for x in pycuda.driver.get_version()]
+        )
         self.common_attrs.update(_get_git_attrs())
-
 
     def clear_context(self) -> None:
         """
@@ -595,22 +673,23 @@ class Smartg(object):
 
         Notes
         -----
-        Once this method has been called, the run method can no
-        longer be used: the Smartg object must be reinitialized.
+        Once this method has been called, the run method can no longer
+        be used: the Smartg object must be reinitialized.
         """
         try:
             self.ctx.pop()
             self.ctx.detach()
             self.ctx = None
             from pycuda.tools import clear_context_caches
+
             clear_context_caches()
             if self.autoinit:
                 # In case of autoinit delete pycuda.autoinit
                 import pycuda.autoinit
+
                 del pycuda.autoinit
         except Exception:
             print("There is no current context to clear.")
-
 
     def run(
         self,
@@ -623,10 +702,10 @@ class Smartg(object):
         nb_photons: float = 1e9,
         depo: float = 0.0279,
         depo_water: float = 0.0906,
-        th_v_deg: float = 0.,
-        ph_v_deg: float = 0.,
+        th_v_deg: float = 0.0,
+        ph_v_deg: float = 0.0,
         seed: int = -1,
-        earth_radius: float = 6371.,
+        earth_radius: float = 6371.0,
         wl_proba: np.ndarray | None = None,
         sensor_proba: np.ndarray | None = None,
         cell_proba=None,
@@ -645,8 +724,8 @@ class Smartg(object):
         beer: int = 1,
         r_r: int = 0,
         weight_r_r: float = 0.1,
-        sza_max: float = 90.,
-        sun_disc: float = 0.,
+        sza_max: float = 90.0,
+        sun_disc: float = 0.0,
         sensor=None,
         refraction: bool = False,
         reflectance: bool = True,
@@ -670,67 +749,87 @@ class Smartg(object):
         Parameters
         ----------
         wl : float | list | 1-D ndarray
-            Wavelength(s) in nm. It can be a list of ReptranIband or KdisIband objects.
+            Wavelength(s) in nm. It can be a list of ReptranIband or
+            KdisIband objects.
         atm : None | Atm1D | MLUT, optional
             The atmosphere profile. If None, there is no atmosphere.
         surf : None | RoughSurface | FlatSurface | LambSurface, optional
-            The surface profile, see `smartg.surface`. If None, there is no surface.
+            The surface profile, see `smartg.surface`. If None, there is
+            no surface.
         water : None | Water1D | MLUT, optional
             The water profile. If None, there is no water.
         env : None | Environment, optional
-            The environment (adjacency effect) profile. If None, there is no environment.
+            The environment (adjacency effect) profile. If None, there
+            is no environment.
         alis_options : None | dict, optional
-            The alis options (the compilation option alis must be set to True).
-            The dictionary keys:
+            The alis options (the compilation option alis must be set to
+            True). The dictionary keys:
 
             * 'nlow' : int
-                -> The number of low spectral resolution computation. If nlow = -1 select all wavelengths.
+                -> The number of low spectral resolution computation. If
+                nlow = -1 select all wavelengths.
             * 'hist' : bool, optional
-                -> Activate history. If the key does not exist the history mode is not activated.
+                -> Activate history. If the key does not exist the
+                history mode is not activated.
             * 'max_hist' : int, optional
-                -> The max number of history (only if hist is True). Default 8e6.
+                -> The max number of history (only if hist is True).
+                Default 8e6.
             * 'njac' : int, optional
-                -> The number of perturbed profiles. Default no Jacobian.
+                -> The number of perturbed profiles. Default no
+                Jacobian.
             * 'njac_abs' : bool, optional
-                -> If True, Jacobians are for absorption only. ``weight_sca`` is computed
-                   only for the reference wavelength group (allowing a small ``nlow``),
-                   and is then reused (interpolated) for all perturbed groups. The
-                   scattering correction for perturbed wavelengths is taken from the
-                   reference group, while their absorption is recomputed from the
-                   perturbed profile. Requires ``njac`` > 0. Default False.
+                -> If True, Jacobians are for absorption only.
+                ``weight_sca`` is computed
+                   only for the reference wavelength group (allowing a
+                   small ``nlow``), and is then reused (interpolated)
+                   for all perturbed groups. The scattering correction
+                   for perturbed wavelengths is taken from the reference
+                   group, while their absorption is recomputed from the
+                   perturbed profile. Requires ``njac`` > 0. Default
+                   False.
 
-            Note: Optional for the dictionary keys indicate that the key is not required to be present.
+            Note: Optional for the dictionary keys indicate that the key
+            is not required to be present.
         nb_photons : int, optional
-            The total number of photons used for the simulation. Default 1e9.
+            The total number of photons used for the simulation. Default
+            1e9.
         depo : float, optional
             The Rayleigh depolarization factor (air). Default 0.0279.
         depo_water : float, optional
             The Rayleigh depolarization factor (water). Default 0.0906.
         th_v_deg : float, optional
-            The sun/viewing zenith angle in forward/backward mode, in degrees. This parameter is ignored 
-            if the parameter `sensor` is used.
+            The sun/viewing zenith angle in forward/backward mode, in
+            degrees. This parameter is ignored if the parameter `sensor`
+            is used.
         ph_v_deg : float, optional
-            The sun/viewing azimuth angle in forward/backward mode, in degrees. This parameter is ignored 
-            if the parameter `sensor` is used.
+            The sun/viewing azimuth angle in forward/backward mode, in
+            degrees. This parameter is ignored if the parameter `sensor`
+            is used.
         seed : int, optional
-            The seed used to initiate the series of random numbers. Default based on clock time.
-        earth_radius : float, optional 
+            The seed used to initiate the series of random numbers.
+            Default based on clock time.
+        earth_radius : float, optional
             The earth radius in km
         wl_proba : None | 1-D ndarray, optional
-            The inversed cumulative distribution function for wavelength selection. It is for example 
-            the result of function icdf(proba, n).
+            The inversed cumulative distribution function for wavelength
+            selection. It is for example the result of function
+            icdf(proba, n).
         sensor_proba : None | 1-D ndarray, optional
-           The inversed cumulative distribution function for sensor selection. It is for example 
-           the result of function icdf(proba, n).
+           The inversed cumulative distribution function for sensor
+           selection. It is for example the result of function
+           icdf(proba, n).
         cell_proba : None | 2-D ndarray, optional
-            The inversed cumulative distribution function for cell selection. It is for example 
-            the result of function icdf_2d(proba, n).
+            The inversed cumulative distribution function for cell
+            selection. It is for example the result of function
+            icdf_2d(proba, n).
         nb_theta : int, optional
-            The number of viewing/sun zenith angles in forward/backward for the cone sampling.
-            This parameter is ignored if the parameter `le` is used.
+            The number of viewing/sun zenith angles in forward/backward
+            for the cone sampling. This parameter is ignored if the
+            parameter `le` is used.
         nb_phi : int, optional
-            The number of viewing/sun azimuth angles in forward/backward for the cone sampling.
-            This parameter is ignored if the parameter `le` is used.
+            The number of viewing/sun azimuth angles in forward/backward
+            for the cone sampling. This parameter is ignored if the
+            parameter `le` is used.
         n_f : int, optional
             The number of discretization of:
                 - the inversed aerosol phase functions
@@ -748,7 +847,8 @@ class Smartg(object):
                 -  6 -> down (0-) and up (0+)
                 -  7 -> up (TOA) and down (0+)
 
-            Note: Consider only the needed layers may reduce significantly the computational time.
+            Note: Consider only the needed layers may reduce
+            significantly the computational time.
         xblock : int, optional
             The number of cuda blocks.
         xgrid : int, optional
@@ -756,8 +856,8 @@ class Smartg(object):
         nb_loop : None | float, optional
             The number of photons launched in one kernel run.
         progress : bool, optional
-            Activate the progress bar. Default True.    
-        le : None | dict, optional 
+            Activate the progress bar. Default True.
+        le : None | dict, optional
             Activate the Local Estimate method. The le dictionary keys:
 
             * 'th' : 1-D ndarray | list, optional
@@ -765,81 +865,113 @@ class Smartg(object):
             * 'phi' : 1-D ndarray | list, optional
                 -> The azimuth angles in radians.
             * 'th_deg' : 1-D ndarray | list, optional
-                -> The zenith angles in degrees. Only if 'th' is not provided.
+                -> The zenith angles in degrees. Only if 'th' is not
+                provided.
             * 'phi_deg' : 1-D ndarray | list, optional
-                -> The azimuth angles in degrees. Only if 'phi' is not provided.
+                -> The azimuth angles in degrees. Only if 'phi' is not
+                provided.
             * 'zip' : bool, optional
-               -> If True, then 'th' and 'phi' covary and the output is only one-dimensional nb_theta, 
-               but user should verify that nb_phi==nb_theta.
+               -> If True, then 'th' and 'phi' covary and the output is
+               only one-dimensional nb_theta, but user should verify
+               that nb_phi==nb_theta.
             * 'count_level' : 1-D ndarray | list, optional
-                -> The level to consider. Possibilities: -2(all), -1(none), 0(UPTOA), 1(DOWN0P), 2(DOWN0M),
-                   3(UP0P), 4(UP0M) or 5(DOWNB). The level to consider may change only with th/th_deg. The 
-                   array must be of length nb_theta. If the key is not present it will be the same as 
-                   count_level = np.full_like(th/th_deg, -2, dtype=np.int32).
-            
-            Note: Optional for the dictionary keys indicate that the key is not required to be present. 
-            If th/phi are not provided, th_deg/phi_deg must be given.     
+                -> The level to consider. Possibilities: -2(all),
+                -1(none), 0(UPTOA), 1(DOWN0P), 2(DOWN0M),
+                   3(UP0P), 4(UP0M) or 5(DOWNB). The level to consider
+                   may change only with th/th_deg. The array must be of
+                   length nb_theta. If the key is not present it will be
+                   the same as count_level = np.full_like(th/th_deg, -2,
+                   dtype=np.int32).
+
+            Note: Optional for the dictionary keys indicate that the key
+            is not required to be present. If th/phi are not provided,
+            th_deg/phi_deg must be given.
         flux : None | str, optional
-            Activate the flux mode (instead of radiance). Only 2 choices:
+            Activate the flux mode (instead of radiance). Only 2
+            choices:
                 - 'planar'
                 - 'spherical'
         stdev : bool, optional
-            Activate the calculation of the standard deviation (between each kernel run).
+            Activate the calculation of the standard deviation (between
+            each kernel run).
         stdev_lim : None | StdevLim, optional
-            To stop the computation if the standard deviation is above a certain limit. Only if stdev is True.
+            To stop the computation if the standard deviation is above a
+            certain limit. Only if stdev is True.
         beer : int, optional
-            If beer=1 compute absorption using Beer-Lambert law, otherwise compute it with the Single scattering albedo. 
-            beer automatically set to 1 if ALIS is True.
+            If beer=1 compute absorption using Beer-Lambert law,
+            otherwise compute it with the Single scattering albedo. beer
+            automatically set to 1 if ALIS is True.
         r_r: int, optional
             Activate the Russian Roulette. ON = 1 and OFF = 0.
         weight_r_r : float, optional
             The threshold weight to apply to the Russian Roulette.
         sza_max : float, optional
-            The maximum SZA value for solar BOXES in case a Regulard grid and cone sampling.
+            The maximum SZA value for solar BOXES in case a Regulard
+            grid and cone sampling.
         sun_disc : float, optional
-            The angular size of the Sun disc in degrees, 0 (default means no angular size)
+            The angular size of the Sun disc in degrees, 0 (default
+            means no angular size)
         sensor : None | Sensor | list, optional
-            The light source / sensor (Sensor object or list of Sensor objects) in forward / backward mode.
+            The light source / sensor (Sensor object or list of Sensor
+            objects) in forward / backward mode.
         refraction : bool, optional
             If True include atmospheric refraction.
         reflectance : bool, optional
-           Convert output to reflectance units, otherwise in radiance units with Solar irradiance set to PI. 
-           Only of flux is None and for plane parallel atmosphere.
+           Convert output to reflectance units, otherwise in radiance
+           units with Solar irradiance set to PI. Only of flux is None
+           and for plane parallel atmosphere.
         my_objects : None | list, optional
-            A list of 3d objects (Entity objects) that will be used in the simulation. Currently sphere and plane objects 
-            are considered. The compilation option `obj3d` must be set to True.
+            A list of 3d objects (Entity objects) that will be used in
+            the simulation. Currently sphere and plane objects are
+            considered. The compilation option `obj3d` must be set to
+            True.
         interval : None | list, optional
-            A principal bounding box in case 3d objects are incorporated. It must be a list composed of 2 lists with the bbox 
-            min and max values [[xmin, ymin, zmin], [xmax, ymax, zmax]].
+            A principal bounding box in case 3d objects are
+            incorporated. It must be a list composed of 2 lists with the
+            bbox min and max values [[xmin, ymin, zmin], [xmax, ymax,
+            zmax]].
         is_atm : int, optional
-            If is_atm=0 provide more robust test with 3d objects in case the atmosphere we remove the atmosphere.
+            If is_atm=0 provide more robust test with 3d objects in case
+            the atmosphere we remove the atmosphere.
         cus_l : None | CusForward | CusBackward, optional
-            Use the RF, FF (CusForward) or B, BR (CusBackward) launching modes. The compilation option `obj3d` must be set to True.
+            Use the RF, FF (CusForward) or B, BR (CusBackward) launching
+            modes. The compilation option `obj3d` must be set to True.
         s_min : int, optional
-            The minimum number of interactions (scattering/reflection). Default 0.
+            The minimum number of interactions (scattering/reflection).
+            Default 0.
         s_max : int, optional
-            The maximum number of interactions (scattering/reflection). Default 1e6.
+            The maximum number of interactions (scattering/reflection).
+            Default 1e6.
         r_min : int, optional
-            The minimum number of reflections (by surface only, not environment). Default 0.
+            The minimum number of reflections (by surface only, not
+            environment). Default 0.
         r_max : int, optional
-            The maximum number of reflections (by surface only, not environment). Default 1e6
+            The maximum number of reflections (by surface only, not
+            environment). Default 1e6
         ffs : bool, optional
-            Forced First Scattering (for use in spherical limb geometry only). Default False.
+            Forced First Scattering (for use in spherical limb geometry
+            only). Default False.
         direct : bool, optional
             Include directly transmitted photons. Default False.
         ocean_interaction : None | int, optional
-            If ocean_interaction=1 select photons that interact with ocean. Default None, no selection.
+            If ocean_interaction=1 select photons that interact with
+            ocean. Default None, no selection.
         pol_off : bool, optional
-            Deactivate (if True) the consideration of polarized light. Default False.
+            Deactivate (if True) the consideration of polarized light.
+            Default False.
         no_aer_output : bool, optional
-            Add output where only photons not scattered by aerosols are considered. Default False.
-            For example, in output MLUT we have m['I_up (TOA)'], so now we will get also m['I_up (TOA), no_aer'].
+            Add output where only photons not scattered by aerosols are
+            considered. Default False. For example, in output MLUT we
+            have m['I_up (TOA)'], so now we will get also m['I_up (TOA),
+            no_aer'].
 
         Returns
         -------
         out : MLUT
-            A look-up table containing the simulation results and more, e.g.:
-            - the polarized dimensionless reflectance (I,Q,U,V) at the different layers
+            A look-up table containing the simulation results and more,
+            e.g.:
+            - the polarized dimensionless reflectance (I,Q,U,V) at the
+              different layers
             - the number of photons (N) received at each layer
             - the profiles and phase functions
             - attributes
@@ -848,112 +980,192 @@ class Smartg(object):
         Notes
         -----
 
-        In cone sampling, the sun/sensor is targeting the origin (0,0,0) in forward/backward.
-            
+        In cone sampling, the sun/sensor is targeting the origin (0,0,0)
+        in forward/backward.
+
         Examples
         --------
         >>> from smartg.smartg import Smartg
         >>> from smartg.surface import RoughSurface
         >>> from smartg.atmosphere import Atm1D, AerOPAC
         >>> from smartg.water import Water1D, HydrosolPR
-        >>> atm = Atm1D('afglt', comp=[AerOPAC('maritime_clean', 0.5, 550.)])
+        >>> aer = AerOPAC('maritime_clean', 0.5, 550.)
+        >>> atm = Atm1D('afglt', comp=[aer])
         >>> water = Water1D(grid=[0, -5.], comp=[HydrosolPR(chl=0.5)])
         >>> surf = RoughSurface(wind=5., nh2o=1.34)
         >>> m = Smartg().run(wl=550., atm=atm, water=water, surf=surf)
-        >>> # Look at the top of atmosphere radiance/reflectance (key: 'I_up (TOA)')
+        >>> # Look at the TOA radiance/reflectance ('I_up (TOA)')
         >>> m['I_up (TOA)'].describe()
         LUT "I_up (TOA)" (float64 between 0.0704 and 0.161):
-          Dim 0 (Azimuth angles): 90 values in [0.0, 356.0]
-          Dim 1 (Zenith angles): 45 values in [1.0, 89.0]
+          Dim 0 (Azimuth angles): 90 values in [0.0, 356.0] Dim 1
+          (Zenith angles): 45 values in [1.0, 89.0]
         >>> m['I_up (TOA)'].data
-        array([[0.15751, 0.14705, 0.14806, ..., 0.12496, 0.11015, 0.07649],
-               [0.15424, 0.14913, 0.1453 , ..., 0.12659, 0.11015, 0.07356],
-               [0.14755, 0.14612, 0.14571, ..., 0.12354, 0.11139, 0.07547],
+        array([[0.15751, 0.14705, 0.14806, ..., 0.12496, 0.11015,
+        0.07649],
+               [0.15424, 0.14913, 0.1453 , ..., 0.12659, 0.11015,
+               0.07356], [0.14755, 0.14612, 0.14571, ..., 0.12354,
+               0.11139, 0.07547],
                ...,
-               [0.15698, 0.14824, 0.14262, ..., 0.12455, 0.10815, 0.07464],
-               [0.15662, 0.15111, 0.14541, ..., 0.12609, 0.11155, 0.07262],
-               [0.15648, 0.14717, 0.14103, ..., 0.12593, 0.10935, 0.07744]], shape=(90, 45))
+               [0.15698, 0.14824, 0.14262, ..., 0.12455, 0.10815,
+               0.07464], [0.15662, 0.15111, 0.14541, ..., 0.12609,
+               0.11155, 0.07262], [0.15648, 0.14717, 0.14103, ...,
+               0.12593, 0.10935, 0.07744]], shape=(90, 45))
 
         """
 
-        if (not self.pp and water is not None): raise ValueError("Ocean + spherical atm is not allowed! Still in progress...")
+        if not self.pp and water is not None:
+            raise ValueError(
+                "Ocean + spherical atm is not allowed! Still in progress..."
+            )
 
-        if output_layers not in (np.arange(9, dtype=np.int32)-1):
-            raise ValueError('The output_layers value must be an integer between -1 and 7.')
+        if output_layers not in (np.arange(9, dtype=np.int32) - 1):
+            raise ValueError(
+                'The output_layers value must be an integer between -1 and 7.'
+            )
 
-        # Compute the sun direction as vector 
-        v_sun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir') 
+        # Compute the sun direction as vector
+        v_sun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir')
         v_sun = gc.normalize(v_sun)
 
-        # First check if back option is activated in case of the use of cusBackward launching mode
+        # First check if back option is activated in case of the use of
+        # cusBackward launching mode
         surf_lph = 0
-        if (cus_l is not None):
+        if cus_l is not None:
             if my_objects is None:
-                raise ValueError('The parameter cus_l can be used only if parameter my_objects is provided.')
-            if (cus_l.dict['LMODE'] == "B" and not self.back):
-                raise ValueError('CusBackward can be used only with the compilation option back=True')
+                raise ValueError(
+                    'The parameter cus_l can be used only if parameter '
+                    'my_objects is provided.'
+                )
+            if cus_l.dict['LMODE'] == "B" and not self.back:
+                raise ValueError(
+                    'CusBackward can be used only with the compilation '
+                    'option back=True'
+                )
             elif sensor is not None:
-                raise ValueError('The use of sensor(s) and a custom launching mode' + \
-                                ' (cusForward or cusBackward) is prohibited!')
-            elif (cus_l.dict['LMODE'] == "B"):
-                sensor = Sensor(POSX=cus_l.dict['POS'].x, POSY=cus_l.dict['POS'].y, POSZ=cus_l.dict['POS'].z,
-                                THDEG=cus_l.dict['THDEG'], PHDEG=cus_l.dict['PHDEG'], LOC='ATMOS',
-                                FOV=0.0, TYPE=0)
-                                #FOV=cus_l.dict['ALDEG'], TYPE=cus_l.dict['TYPE'])
-            elif (cus_l.dict['LMODE'] == "BR"):
-                sensor = Sensor(POSX=cus_l.dict['REC'].transformation.transx,
-                                POSY=cus_l.dict['REC'].transformation.transy,
-                                POSZ=cus_l.dict['REC'].transformation.transz,
-                                THDEG=cus_l.dict['THDEG'], PHDEG=cus_l.dict['PHDEG'], LOC='ATMOS',
-                                FOV=0.0, TYPE=0)
-                                #FOV=cus_l.dict['ALDEG'], TYPE=cus_l.dict['TYPE'])
-            elif (cus_l.dict['LMODE'] == "FF"):
-                # The projected surface at TOA where the photons are launched
-                dot_nn = gc.dot(v_sun*-1, gc.Vector(0., 0., 1.))
-                if (cus_l.dict['TYPE'] == 2 and cus_l.dict['FOV'] > 1e-6): #isotropic
-                    surf_lph = float(cus_l.dict['CFX'])*float(cus_l.dict['CFY'])
+                raise ValueError(
+                    'The use of sensor(s) and a custom launching mode'
+                    + ' (cusForward or cusBackward) is prohibited!'
+                )
+            elif cus_l.dict['LMODE'] == "B":
+                sensor = Sensor(
+                    POSX=cus_l.dict['POS'].x,
+                    POSY=cus_l.dict['POS'].y,
+                    POSZ=cus_l.dict['POS'].z,
+                    THDEG=cus_l.dict['THDEG'],
+                    PHDEG=cus_l.dict['PHDEG'],
+                    LOC='ATMOS',
+                    FOV=0.0,
+                    TYPE=0,
+                )
+                # FOV=cus_l.dict['ALDEG'],
+                # TYPE=cus_l.dict['TYPE'])
+            elif cus_l.dict['LMODE'] == "BR":
+                sensor = Sensor(
+                    POSX=cus_l.dict['REC'].transformation.transx,
+                    POSY=cus_l.dict['REC'].transformation.transy,
+                    POSZ=cus_l.dict['REC'].transformation.transz,
+                    THDEG=cus_l.dict['THDEG'],
+                    PHDEG=cus_l.dict['PHDEG'],
+                    LOC='ATMOS',
+                    FOV=0.0,
+                    TYPE=0,
+                )
+                # FOV=cus_l.dict['ALDEG'],
+                # TYPE=cus_l.dict['TYPE'])
+            elif cus_l.dict['LMODE'] == "FF":
+                # The projected surface at TOA where the photons are
+                # launched
+                dot_nn = gc.dot(v_sun * -1, gc.Vector(0.0, 0.0, 1.0))
+                if (
+                    cus_l.dict['TYPE'] == 2 and cus_l.dict['FOV'] > 1e-6
+                ):  # isotropic
+                    surf_lph = float(cus_l.dict['CFX']) * float(
+                        cus_l.dict['CFY']
+                    )
                 else:
-                    surf_lph = float(cus_l.dict['CFX'])*float(cus_l.dict['CFY'])*dot_nn
+                    surf_lph = (
+                        float(cus_l.dict['CFX'])
+                        * float(cus_l.dict['CFY'])
+                        * dot_nn
+                    )
 
         #
         # initialization
-        #              
-        
+        #
+
         # Begin initialization with OBJ ============================
-        if (my_objects is not None):
+        if my_objects is not None:
             # Main bounding box initialization
             if interval is not None:
-                p_min_x = interval[0][0];p_min_y = interval[0][1];p_min_z = interval[0][2]
-                p_max_x = interval[1][0];p_max_y = interval[1][1];p_max_z = interval[1][2]
+                p_min_x = interval[0][0]
+                p_min_y = interval[0][1]
+                p_min_z = interval[0][2]
+                p_max_x = interval[1][0]
+                p_max_y = interval[1][1]
+                p_max_z = interval[1][2]
             else:
-                p_min_x = -100000; p_min_y = -100000; p_min_z = 0
-                p_max_x = 100000;  p_max_y = 100000; p_max_z = 120
+                p_min_x = -100000
+                p_min_y = -100000
+                p_min_z = 0
+                p_max_x = 100000
+                p_max_y = 100000
+                p_max_z = 120
 
             # Initialize all the parameters linked with 3D objects
-            (n_gobj, n_obj, n_robj, surf_lph_rf, nb_h, z_alt_h, tot_s_h, tc, nb_cx, nb_cy,
-             my_objects0, my_gobj0, my_robj0, my_spect_obj0, n_cos) = _init_obj(lgobj=my_objects, v_sun=v_sun, wl=wl, cus_l=cus_l)
+            (
+                n_gobj,
+                n_obj,
+                n_robj,
+                surf_lph_rf,
+                nb_h,
+                z_alt_h,
+                tot_s_h,
+                tc,
+                nb_cx,
+                nb_cy,
+                my_objects0,
+                my_gobj0,
+                my_robj0,
+                my_spect_obj0,
+                n_cos,
+            ) = _init_obj(lgobj=my_objects, v_sun=v_sun, wl=wl, cus_l=cus_l)
 
-            # If we are in RF mode don't forget to update the value of surf_lph
-            if (surf_lph_rf is not None): surf_lph = surf_lph_rf
+            # If we are in RF mode don't forget to update the value of
+            # surf_lph
+            if surf_lph_rf is not None:
+                surf_lph = surf_lph_rf
 
         else:
             my_objects0 = gpuzeros(1, dtype=np.uint32)
-            #my_objects0 = gpuzeros(1, dtype='int32')
+            # my_objects0 = gpuzeros(1, dtype='int32')
             my_gobj0 = gpuzeros(1, dtype='int32')
             my_robj0 = gpuzeros(1, dtype='int32')
-            my_spect_obj0 = gpuzeros(1, dtype='int32') # normally 2 dims: obj dim + wl dim
-            n_obj = 0; n_gobj=0; n_robj=0; p_min_x = None; p_min_y = None; p_min_z = None
-            p_max_x = None; p_max_y = None; p_max_z = None
-            is_atm = None; tc = None; nb_cx = 10; nb_cy = 10; nb_h = 0
+            my_spect_obj0 = gpuzeros(
+                1, dtype='int32'
+            )  # normally 2 dims: obj dim + wl dim
+            n_obj = 0
+            n_gobj = 0
+            n_robj = 0
+            p_min_x = None
+            p_min_y = None
+            p_min_z = None
+            p_max_x = None
+            p_max_y = None
+            p_max_z = None
+            is_atm = None
+            tc = None
+            nb_cx = 10
+            nb_cy = 10
+            nb_h = 0
         # END OBJ ===================================================
 
-        if nb_phi%2 == 1:
+        if nb_phi % 2 == 1:
             warn('Odd number of azimuth', stacklevel=2)
 
         if (nb_loop is None) and (n_obj <= 0):
-            nb_loop = min(nb_photons/30, 1e6)
+            nb_loop = min(nb_photons / 30, 1e6)
         elif (nb_loop is None) and (n_obj > 0):
-            nb_loop = min(nb_photons/10, 1e6)
+            nb_loop = min(nb_photons / 10, 1e6)
 
         n_f = int(n_f)
 
@@ -961,8 +1173,9 @@ class Smartg(object):
         # warning! values defined in communs.h should be < LVL
         n_lvl = 6
 
-        # warning! values defined in communs.h 
-        # Maximum number of photons histories (alis=True and alis_options['hist'] = True), otherwise 0 (no histories)
+        # warning! values defined in communs.h
+        # Maximum number of photons histories (alis=True and
+        # alis_options['hist'] = True), otherwise 0 (no histories)
         max_hist = np.int64(1)
         max_nlow = 801
 
@@ -983,32 +1196,36 @@ class Smartg(object):
             wl = BandSet(wl)
         n_lam = wl.size
 
-        n_low=0
-        hist=False
-        hist_code=0
-        n_jac=0
-        n_jac_abs=0
-        if alis_options is not None :
+        n_low = 0
+        hist = False
+        hist_code = 0
+        n_jac = 0
+        n_jac_abs = 0
+        if alis_options is not None:
             if 'hist' in alis_options.keys():
-                if alis_options['hist']: 
-                    hist=True
+                if alis_options['hist']:
+                    hist = True
                     if 'max_hist' in alis_options.keys():
-                        max_hist=np.int64(alis_options['max_hist'])
-                    else : max_hist=np.int64(8000000)
+                        max_hist = np.int64(alis_options['max_hist'])
+                    else:
+                        max_hist = np.int64(8000000)
             if 'njac' in alis_options.keys():
-                n_jac=alis_options['njac']
+                n_jac = alis_options['njac']
             if alis_options.get('njac_abs', False):
-                n_jac_abs=1
-            if (alis_options['nlow'] ==-1) : n_low=n_lam
-            else: n_low=alis_options['nlow']
-            beer=1
-            assert (n_low <= max_nlow)
-        
-        if hist : hist_code=1
+                n_jac_abs = 1
+            if alis_options['nlow'] == -1:
+                n_low = n_lam
+            else:
+                n_low = alis_options['nlow']
+            beer = 1
+            assert n_low <= max_nlow
+
+        if hist:
+            hist_code = 1
 
         if surf is not None:
-            if surf.dict['BRDF'] !=0 :
-                water = None # special case BRDF, water is shortcut
+            if surf.dict['BRDF'] != 0:
+                water = None  # special case BRDF, water is shortcut
 
         # determine sim
         if (atm is not None) and (surf is None) and (water is None):
@@ -1028,7 +1245,7 @@ class Smartg(object):
 
         #
         # atmosphere
-        #          
+        #
         if isinstance(atm, Atmosphere):
             prof_atm = atm.calc(wl)
         elif isinstance(atm, xr.Dataset) or (atm is None):
@@ -1036,7 +1253,10 @@ class Smartg(object):
         elif hasattr(atm, 'to_xarray'):
             prof_atm = atm.to_xarray()
         else:
-            raise ValueError('atm must be an Atmosphere class, an xr.Dataset, an MLUT-like object or equal to None!')
+            raise ValueError(
+                'atm must be an Atmosphere class, an xr.Dataset, an '
+                'MLUT-like object or equal to None!'
+            )
 
         if hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
@@ -1044,13 +1264,15 @@ class Smartg(object):
         if prof_atm is not None:
             z_toa = prof_atm.coords['z_atm'].to_numpy()[0]
         else:
-            z_toa = 120.
-  
+            z_toa = 120.0
+
         if prof_atm is not None:
-            faer = _calc_phase_gpu(prof_atm, n_theta=n_f, depo=depo, kind='atm', pol_off=pol_off)
+            faer = _calc_phase_gpu(
+                prof_atm, n_theta=n_f, depo=depo, kind='atm', pol_off=pol_off
+            )
             prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
             n_atm = len(prof_atm.coords['z_atm']) - 1
-            if self.opt3d :
+            if self.opt3d:
                 n_atm_abs = np.int32(prof_atm['iabs_atm'].to_numpy().max())
             else:
                 n_atm_abs = n_atm
@@ -1062,71 +1284,109 @@ class Smartg(object):
             n_atm_abs = 0
 
         # computation of the impact point
-        #x0, _ = _impact_init(prof_atm, n_lam, th_v_deg, earth_radius, self.pp)
-        x0, tab_trans_dir_analytic = _impact_init(prof_atm, n_lam, th_v_deg, earth_radius, self.pp)
+        # x0, _ = _impact_init(prof_atm, n_lam, th_v_deg, earth_radius,
+        # self.pp)
+        x0, tab_trans_dir_analytic = _impact_init(
+            prof_atm, n_lam, th_v_deg, earth_radius, self.pp
+        )
 
         # sensor definition
         if sensor is None:
-            # by defaut sensor in forward mode, with ZA=180.-th_v_deg, PHDEG=180., FOV=0.
-            if (sim == 3):
-                sensor2 = [Sensor(THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='OCEAN')] 
-            elif ((sim == -1) or (sim == 0)):  
-                sensor2 = [Sensor(THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='SURF0P')] 
+            # by defaut sensor in forward mode, with ZA=180.-th_v_deg,
+            # PHDEG=180., FOV=0.
+            if sim == 3:
+                sensor2 = [
+                    Sensor(
+                        THDEG=180.0 - th_v_deg,
+                        PHDEG=ph_v_deg + 180.0,
+                        LOC='OCEAN',
+                    )
+                ]
+            elif (sim == -1) or (sim == 0):
+                sensor2 = [
+                    Sensor(
+                        THDEG=180.0 - th_v_deg,
+                        PHDEG=ph_v_deg + 180.0,
+                        LOC='SURF0P',
+                    )
+                ]
             else:
-                if (cus_l is not None): # for FF mode
-                    sensor2 = [Sensor(POSX=x0.get()[0], POSY=x0.get()[1], POSZ=x0.get()[2],
-                                      THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='ATMOS')]
-                                      #FOV=0.0, TYPE=0)]
-                                      #FOV=cus_l.dict['FOV'], TYPE=cus_l.dict['TYPE'])]
+                if cus_l is not None:  # for FF mode
+                    sensor2 = [
+                        Sensor(
+                            POSX=x0.get()[0],
+                            POSY=x0.get()[1],
+                            POSZ=x0.get()[2],
+                            THDEG=180.0 - th_v_deg,
+                            PHDEG=ph_v_deg + 180.0,
+                            LOC='ATMOS',
+                        )
+                    ]
+                    # FOV=0.0, TYPE=0)]
+                    # FOV=cus_l.dict['FOV'],
+                    # TYPE=cus_l.dict['TYPE'])]
                 else:
-                    sensor2 = [Sensor(POSX=x0.get()[0], POSY=x0.get()[1], POSZ=x0.get()[2], THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='ATMOS')]
+                    sensor2 = [
+                        Sensor(
+                            POSX=x0.get()[0],
+                            POSY=x0.get()[1],
+                            POSZ=x0.get()[2],
+                            THDEG=180.0 - th_v_deg,
+                            PHDEG=ph_v_deg + 180.0,
+                            LOC='ATMOS',
+                        )
+                    ]
         elif isinstance(sensor, Sensor):
-            sensor2=[sensor]
+            sensor2 = [sensor]
         elif isinstance(sensor, list):
-            sensor2=sensor
+            sensor2 = sensor
         else:
-            raise ValueError('sensor must be a Sensor class, a list or Sensor classes or equal to None!')
+            raise ValueError(
+                'sensor must be a Sensor class, a list or Sensor '
+                'classes or equal to None!'
+            )
 
-        n_sensor=len(sensor2)
+        n_sensor = len(sensor2)
 
         tab_sensor = np.zeros(n_sensor, dtype=TYPE_SENSOR, order='C')
-        for (i,s) in enumerate(sensor2) :
+        for i, s in enumerate(sensor2):
             for k in s.dict.keys():
-                  tab_sensor[i][k] = s.dict[k]
+                tab_sensor[i][k] = s.dict[k]
         tab_sensor = to_gpu(tab_sensor)
 
         # Auto-set sun_disc from sensor FOV if not explicitly set
-        # This ensures sensor cone angle is available in kernel for direct beam tolerance
+        # This ensures sensor cone angle is available in kernel for
+        # direct beam tolerance
         if sun_disc == 0:
             for sens in sensor2:
                 if sens.dict['TYPE'] == 1 and sens.dict['FOV'] > 1e-6:
                     sun_disc = sens.dict['FOV']
                     break  # Use first sensor with cone FOV
 
-        # The min and max posx and posy of sensors. Useful for forward mode in 3d atm
+        # The min and max posx and posy of sensors. Useful for forward
+        # mode in 3d atm
         sxmin = np.inf
         sxmax = -np.inf
         symin = np.inf
         symax = -np.inf
         for sens in sensor2:
-            if (sens.cell_size > 0):
-                half_csize = 0.5*sens.cell_size
-                sxmin = min(sxmin, sens.dict['POSX']-half_csize)
-                sxmax = max(sxmax, sens.dict['POSX']+half_csize)
-                symin = min(symin, sens.dict['POSY']-half_csize)
-                symax = max(symax, sens.dict['POSY']+half_csize)
+            if sens.cell_size > 0:
+                half_csize = 0.5 * sens.cell_size
+                sxmin = min(sxmin, sens.dict['POSX'] - half_csize)
+                sxmax = max(sxmax, sens.dict['POSX'] + half_csize)
+                symin = min(symin, sens.dict['POSY'] - half_csize)
+                symax = max(symax, sens.dict['POSY'] + half_csize)
             else:
                 sxmin = min(sxmin, sens.dict['POSX'])
                 sxmax = max(sxmax, sens.dict['POSX'])
                 symin = min(symin, sens.dict['POSY'])
                 symax = max(symax, sens.dict['POSY'])
         if sensor2[0].cell_size > 0:
-            nbsx = round((sxmax - sxmin)/sensor2[0].cell_size)
-            nbsy = round((symax - symin)/sensor2[0].cell_size)
+            nbsx = round((sxmax - sxmin) / sensor2[0].cell_size)
+            nbsy = round((symax - symin) / sensor2[0].cell_size)
         else:
             nbsx = 0
             nbsy = 0
-
 
         #
         # ocean
@@ -1138,16 +1398,25 @@ class Smartg(object):
         elif hasattr(water, 'to_xarray'):
             prof_oc = water.to_xarray()
         else:
-            raise ValueError('water must be a Water class, an xr.Dataset, an MLUT-like object or equal to None!')
+            raise ValueError(
+                'water must be a Water class, an xr.Dataset, an '
+                'MLUT-like object or equal to None!'
+            )
 
         if hasattr(prof_oc, 'to_xarray'):
             prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
-            foce = _calc_phase_gpu(prof_oc, n_theta=n_f, depo=depo_water, kind='oc', pol_off=pol_off)
+            foce = _calc_phase_gpu(
+                prof_oc,
+                n_theta=n_f,
+                depo=depo_water,
+                kind='oc',
+                pol_off=pol_off,
+            )
             prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
             n_oce = len(prof_oc.coords['z_oc']) - 1
-            if self.opt3d :
+            if self.opt3d:
                 n_oce_abs = np.int32(prof_oc['iabs_oc'].to_numpy().max())
             else:
                 n_oce_abs = n_oce
@@ -1167,7 +1436,7 @@ class Smartg(object):
         if env is None:
             # default values (no environment effect)
             env = Environment()
-            if surf is not None :
+            if surf is not None:
                 if surf.alb is not None:
                     spectrum['alb_surface'] = surf.alb.get(wl[:])
                 elif surf.kp is not None:
@@ -1176,35 +1445,37 @@ class Smartg(object):
                     spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
                     spectrum['k3p_surface'] = surf.kp[3].get(wl[:])
                 else:
-                    spectrum['alb_surface'] = -999.
+                    spectrum['alb_surface'] = -999.0
             else:
-                spectrum['alb_surface'] = -999.
+                spectrum['alb_surface'] = -999.0
         else:
             assert surf is not None
             if surf.alb is not None:
-               spectrum['alb_surface'] = surf.alb.get(wl[:])
-            elif surf.kp is not None :
-               spectrum['alb_surface'] = surf.kp[0].get(wl[:])
-               spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
-               spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
-               spectrum['k3p_surface'] = surf.kp[3].get(wl[:])
+                spectrum['alb_surface'] = surf.alb.get(wl[:])
+            elif surf.kp is not None:
+                spectrum['alb_surface'] = surf.kp[0].get(wl[:])
+                spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
+                spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
+                spectrum['k3p_surface'] = surf.kp[3].get(wl[:])
             albenv = env.alb.get(wl[:])
-            if albenv.ndim==2:
+            if albenv.ndim == 2:
                 env.nenv = albenv.shape[1]
-                spectrum['alb_envs'][:,:env.nenv] = albenv
+                spectrum['alb_envs'][:, : env.nenv] = albenv
                 shp = env.alb.map.data.shape
                 env.nxenvmap = shp[0]
                 env.nyenvmap = shp[1]
                 envmap = np.zeros(shp, dtype=TYPE_ENV_MAP)
-                x_map, y_map = np.meshgrid(env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij')
+                x_map, y_map = np.meshgrid(
+                    env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij'
+                )
                 envmap['x'] = x_map
                 envmap['y'] = y_map
-                envmap['env_index']=env.alb.get_map(x_map, y_map)         
+                envmap['env_index'] = env.alb.get_map(x_map, y_map)
             else:
                 spectrum['alb_env'] = albenv
 
         if water is None:
-            spectrum['alb_seafloor'] = -999.
+            spectrum['alb_seafloor'] = -999.0
         else:
             spectrum['alb_seafloor'] = prof_oc['albedo_seafloor'].data[...]
 
@@ -1213,43 +1484,50 @@ class Smartg(object):
 
         # Local Estimate option
         le_code = 0
-        zip_code= 0
+        zip_code = 0
         if le is not None:
             le_code = 1
             if 'th' not in le:
-                le['th'] = np.array(le['th_deg'], dtype='float32').ravel() * np.pi/180.
+                le['th'] = (
+                    np.array(le['th_deg'], dtype='float32').ravel()
+                    * np.pi
+                    / 180.0
+                )
             else:
                 le['th'] = np.array(le['th'], dtype='float32').ravel()
             if 'phi' not in le:
-                le['phi'] = np.array(le['phi_deg'], dtype='float32').ravel() * np.pi/180.
+                le['phi'] = (
+                    np.array(le['phi_deg'], dtype='float32').ravel()
+                    * np.pi
+                    / 180.0
+                )
             else:
                 le['phi'] = np.array(le['phi'], dtype='float32').ravel()
 
-            nb_theta =  le['th'].shape[0]
-            nb_phi   = le['phi'].shape[0]
+            nb_theta = le['th'].shape[0]
+            nb_phi = le['phi'].shape[0]
 
             if 'zip' in le:
                 if le['zip']:
-                    assert nb_phi==nb_theta
+                    assert nb_phi == nb_theta
                     zip_code = 1
-                    nb_phi = 1 
-            
+                    nb_phi = 1
+
             if 'count_level' in le:
-                le['count_level'] = np.array(le['count_level'], dtype='int32').ravel()
+                le['count_level'] = np.array(
+                    le['count_level'], dtype='int32'
+                ).ravel()
                 assert len(le['count_level']) == nb_theta
-
-
 
         flux_code = 0
         if flux is not None:
-            le_code=0
-            if flux== 'planar' : 
+            le_code = 0
+            if flux == 'planar':
                 flux_code = 1
-            if flux== 'spherical' : 
+            if flux == 'spherical':
                 flux_code = 2
-            if flux== 'tilted planar' : 
+            if flux == 'tilted planar':
                 flux_code = 3
-
 
         if wl_proba is not None:
             assert wl_proba.dtype == 'int64'
@@ -1271,14 +1549,16 @@ class Smartg(object):
             if (cell_proba == 'auto') and not self.back and self.thermal:
                 kabs = od2k(prof_atm, 'OD_abs_atm')
                 z = -prof_atm.coords['z_atm'].to_numpy()
-                B = blackbody_radiance(wl[:][:, None], prof_atm['T_atm'].to_numpy()[None, :])
+                B = blackbody_radiance(
+                    wl[:][:, None], prof_atm['T_atm'].to_numpy()[None, :]
+                )
                 emission = xr.DataArray(
                     kabs * B,
                     dims=['wavelength', 'z_atm'],
                     coords={'wavelength': wl[:], 'z_atm': z},
                 )
-                norm_emission = (4*np.pi) * emission.sum(dim='z_atm')
-                p_emission = emission * (4*np.pi) / norm_emission
+                norm_emission = (4 * np.pi) * emission.sum(dim='z_atm')
+                p_emission = emission * (4 * np.pi) / norm_emission
                 cell_proba_icdf = to_gpu(icdf_2d(p_emission.to_numpy()).T)
                 n_cell_proba = cell_proba_icdf.shape[0]
             else:
@@ -1290,26 +1570,88 @@ class Smartg(object):
             n_cell_proba = 0
 
         refrac = 0
-        if refraction: 
-            refrac=1
+        if refraction:
+            refrac = 1
 
         horiz = 1
-        if (not self.pp and not reflectance): horiz = 0
+        if not self.pp and not reflectance:
+            horiz = 0
 
         # initialization of the constants
-        _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, self.mod,
-                  nb_loop, th_v_deg,
-                  xblock, xgrid, n_lam, sim, n_f,
-                  nb_theta, nb_phi, output_layers,
-                  earth_radius, le_code, zip_code,
-                  flux_code, ffs, direct, ocean_interaction, n_lvl, n_pstk,
-                  n_wl_proba, n_sensor_proba, n_cell_proba, beer, s_min, s_max, r_min, r_max, r_r, weight_r_r, n_low, n_jac, 
-                  n_sensor, refrac, horiz, sza_max, sun_disc, cus_l, n_obj, n_gobj, n_robj,
-                  p_min_x, p_min_y, p_min_z, p_max_x, p_max_y, p_max_z, is_atm,
-                  tc, nb_cx, nb_cy, v_sun, hist_code, z_toa, sensor2[0].cell_size,
-                  sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, 
-                  n_scl=self.nscl, scl_mode=self._scl_mode, n_orders=self.norders,
-                  n_jac_abs=n_jac_abs)
+        _init_const(
+            surf,
+            env,
+            n_atm,
+            n_atm_abs,
+            n_oce,
+            n_oce_abs,
+            self.mod,
+            nb_loop,
+            th_v_deg,
+            xblock,
+            xgrid,
+            n_lam,
+            sim,
+            n_f,
+            nb_theta,
+            nb_phi,
+            output_layers,
+            earth_radius,
+            le_code,
+            zip_code,
+            flux_code,
+            ffs,
+            direct,
+            ocean_interaction,
+            n_lvl,
+            n_pstk,
+            n_wl_proba,
+            n_sensor_proba,
+            n_cell_proba,
+            beer,
+            s_min,
+            s_max,
+            r_min,
+            r_max,
+            r_r,
+            weight_r_r,
+            n_low,
+            n_jac,
+            n_sensor,
+            refrac,
+            horiz,
+            sza_max,
+            sun_disc,
+            cus_l,
+            n_obj,
+            n_gobj,
+            n_robj,
+            p_min_x,
+            p_min_y,
+            p_min_z,
+            p_max_x,
+            p_max_y,
+            p_max_z,
+            is_atm,
+            tc,
+            nb_cx,
+            nb_cy,
+            v_sun,
+            hist_code,
+            z_toa,
+            sensor2[0].cell_size,
+            sxmin,
+            sxmax,
+            symin,
+            symax,
+            nbsx,
+            nbsy,
+            no_aer_output,
+            n_scl=self.nscl,
+            scl_mode=self._scl_mode,
+            n_orders=self.norders,
+            n_jac_abs=n_jac_abs,
+        )
 
         # Initialize the progress bar
         p = make_progress(nb_photons, progress)
@@ -1318,80 +1660,217 @@ class Smartg(object):
         seed = self.rng.setup(seed, xblock, xgrid)
 
         # Loop and kernel call
-        (n_photons_in_tot, tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_tot, tab_trans_dir, errorcount, 
-         n_photons_out_tot, n_photons_out_tot_no_aer, sigma, n_kernel, secs_cuda_clock, c_mat_visu_recep, mat_cats, mat_loss, w_ph_cats, w_ph_cats2
-        ) = _loop_kernel(nb_photons, faer, foce,
-                        n_lvl, n_atm, n_atm_abs, n_oce, n_oce_abs, max_hist, n_low, n_pstk, xblock, xgrid, nb_theta, nb_phi,
-                        n_lam, n_sensor, self.double, self.kernel, p, x0, le, tab_sensor, envmap, spectrum,
-                        prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
-                        wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis,
-                        my_objects0, tc, nb_cx, nb_cy, my_gobj0, my_robj0, my_spect_obj0, hist=hist,
-                        amf_variance=self.amf_variance, nscl=self.nscl)
+        (
+            n_photons_in_tot,
+            tab_photons_tot,
+            tab_photons_tot_no_aer,
+            tab_dist_tot,
+            tab_hist_tot,
+            tab_trans_dir,
+            errorcount,
+            n_photons_out_tot,
+            n_photons_out_tot_no_aer,
+            sigma,
+            n_kernel,
+            secs_cuda_clock,
+            c_mat_visu_recep,
+            mat_cats,
+            mat_loss,
+            w_ph_cats,
+            w_ph_cats2,
+        ) = _loop_kernel(
+            nb_photons,
+            faer,
+            foce,
+            n_lvl,
+            n_atm,
+            n_atm_abs,
+            n_oce,
+            n_oce_abs,
+            max_hist,
+            n_low,
+            n_pstk,
+            xblock,
+            xgrid,
+            nb_theta,
+            nb_phi,
+            n_lam,
+            n_sensor,
+            self.double,
+            self.kernel,
+            p,
+            x0,
+            le,
+            tab_sensor,
+            envmap,
+            spectrum,
+            prof_atm_gpu,
+            prof_oc_gpu,
+            cell_atm_gpu,
+            cell_oc_gpu,
+            wl_proba_icdf,
+            sensor_proba_icdf,
+            cell_proba_icdf,
+            stdev,
+            stdev_lim,
+            self.rng,
+            self.alis,
+            my_objects0,
+            tc,
+            nb_cx,
+            nb_cy,
+            my_gobj0,
+            my_robj0,
+            my_spect_obj0,
+            hist=hist,
+            amf_variance=self.amf_variance,
+            nscl=self.nscl,
+        )
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = n_kernel
         attrs['seed'] = seed
         attrs.update(self.common_attrs)
 
-        # If there is a receiver -> normalization of the signal collected
-        if (tc is not None):
-            c_mat_visu_recep, mat_cats, n_cte = _normalize_rec(c_mat_visu_recep=c_mat_visu_recep, mat_cats=mat_cats,
-                nb_cx=nb_cx, nb_cy=nb_cy, nb_photons=float(np.sum(n_photons_in_tot)), surf_lph=surf_lph, cell_size=tc, cus_l=cus_l,
-                sun_disc=sun_disc, le=le_code)
+        # If there is a receiver -> normalization of the signal
+        # collected
+        if tc is not None:
+            c_mat_visu_recep, mat_cats, n_cte = _normalize_rec(
+                c_mat_visu_recep=c_mat_visu_recep,
+                mat_cats=mat_cats,
+                nb_cx=nb_cx,
+                nb_cy=nb_cy,
+                nb_photons=float(np.sum(n_photons_in_tot)),
+                surf_lph=surf_lph,
+                cell_size=tc,
+                cus_l=cus_l,
+                sun_disc=sun_disc,
+                le=le_code,
+            )
 
-        if (nb_h > 0 and tc is not None and cus_l is not None):
-            mz_alt_h = z_alt_h/nb_h; s_rec=tc*tc*nb_cx*nb_cy #; weight_r=mat_cats[2, 1]
-            # dic_stp : tuple incorporating parameters for Solar Tower Power applications
-            if(self.back) : aldeg = cus_l.dict['ALDEG']
-            else : aldeg = 0.
-            dic_stp = {"nb_H":nb_h, "n_cos": n_cos, "totS_H":tot_s_h, "surfTOA":surf_lph, "MZAlt_H":mz_alt_h, "vSun":v_sun, "wRec":mat_cats[2, 1],
-                      "SREC":s_rec, "TC":tc, "LPH":cus_l.dict['LPH'], "LPR":cus_l.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":aldeg}
+        if nb_h > 0 and tc is not None and cus_l is not None:
+            mz_alt_h = z_alt_h / nb_h
+            s_rec = tc * tc * nb_cx * nb_cy  # ; weight_r=mat_cats[2, 1]
+            # dic_stp : tuple incorporating parameters for Solar Tower
+            # Power applications
+            if self.back:
+                aldeg = cus_l.dict['ALDEG']
+            else:
+                aldeg = 0.0
+            dic_stp = {
+                "nb_H": nb_h,
+                "n_cos": n_cos,
+                "totS_H": tot_s_h,
+                "surfTOA": surf_lph,
+                "MZAlt_H": mz_alt_h,
+                "vSun": v_sun,
+                "wRec": mat_cats[2, 1],
+                "SREC": s_rec,
+                "TC": tc,
+                "LPH": cus_l.dict['LPH'],
+                "LPR": cus_l.dict['LPR'],
+                "prog": progress,
+                "n_cte": n_cte,
+                "ALDEG": aldeg,
+            }
         # If there are no heliostats --> no analyses of optical losses
-        elif(tc is not None and cus_l is not None):
-            s_rec=tc*tc*nb_cx*nb_cy; mat_loss = None #;weight_r=mat_cats[2, 1]
-            if(self.back) : aldeg = cus_l.dict['ALDEG']
-            else : aldeg = 0.
-            dic_stp = {"vSun":v_sun, "wRec":mat_cats[2, 1], "SREC":s_rec, "TC":tc, "LPH":cus_l.dict['LPH'],
-                      "LPR":cus_l.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":aldeg}
-        elif(tc is not None):
-            s_rec=tc*tc*nb_cx*nb_cy; mat_loss = None
-            dic_stp = {"vSun":v_sun, "SREC":s_rec, "TC":tc, "n_cte":n_cte}
+        elif tc is not None and cus_l is not None:
+            s_rec = tc * tc * nb_cx * nb_cy
+            mat_loss = None  # ;weight_r=mat_cats[2, 1]
+            if self.back:
+                aldeg = cus_l.dict['ALDEG']
+            else:
+                aldeg = 0.0
+            dic_stp = {
+                "vSun": v_sun,
+                "wRec": mat_cats[2, 1],
+                "SREC": s_rec,
+                "TC": tc,
+                "LPH": cus_l.dict['LPH'],
+                "LPR": cus_l.dict['LPR'],
+                "prog": progress,
+                "n_cte": n_cte,
+                "ALDEG": aldeg,
+            }
+        elif tc is not None:
+            s_rec = tc * tc * nb_cx * nb_cy
+            mat_loss = None
+            dic_stp = {"vSun": v_sun, "SREC": s_rec, "TC": tc, "n_cte": n_cte}
         # If there are no heliostats and receiver --> there is no STP
-        else: 
-            dic_stp = None; mat_loss = None #; weight_r=0
-                
+        else:
+            dic_stp = None
+            mat_loss = None  # ; weight_r=0
+
         # finalization
-        output = _finalize(tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_tot, wl[:], n_photons_in_tot, errorcount,
-                          n_photons_out_tot, n_photons_out_tot_no_aer, output_layers, tab_trans_dir, tab_trans_dir_analytic,
-                          attrs, prof_atm, prof_oc, sigma, th_v_deg, horiz, le=le, flux=flux, back=self.back, 
-                          sza_max=sza_max, sun_disc=sun_disc, hist=hist, c_mat_visu_recep=c_mat_visu_recep,
-                          dic_stp=dic_stp, mat_cats=mat_cats, mat_loss=mat_loss, w_ph_cats=w_ph_cats, w_ph_cats2=w_ph_cats2,
-                          no_aer_output=no_aer_output)
-        
-        output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
+        output = _finalize(
+            tab_photons_tot,
+            tab_photons_tot_no_aer,
+            tab_dist_tot,
+            tab_hist_tot,
+            wl[:],
+            n_photons_in_tot,
+            errorcount,
+            n_photons_out_tot,
+            n_photons_out_tot_no_aer,
+            output_layers,
+            tab_trans_dir,
+            tab_trans_dir_analytic,
+            attrs,
+            prof_atm,
+            prof_oc,
+            sigma,
+            th_v_deg,
+            horiz,
+            le=le,
+            flux=flux,
+            back=self.back,
+            sza_max=sza_max,
+            sun_disc=sun_disc,
+            hist=hist,
+            c_mat_visu_recep=c_mat_visu_recep,
+            dic_stp=dic_stp,
+            mat_cats=mat_cats,
+            mat_loss=mat_loss,
+            w_ph_cats=w_ph_cats,
+            w_ph_cats2=w_ph_cats2,
+            no_aer_output=no_aer_output,
+        )
+
+        output.set_attr(
+            'processing time (s)', (datetime.now() - t0).total_seconds()
+        )
 
         if self.alis:
-            p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
-            np.sum(n_photons_out_tot[0,...])/float(np.sum(n_photons_in_tot)),
-            np.sum(n_photons_in_tot)/float(n_lam),
-            np.sum(n_photons_in_tot)/float(nb_photons)/float(n_lam),
-            ))
+            p.finish(
+                'Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
+                    np.sum(n_photons_out_tot[0, ...])
+                    / float(np.sum(n_photons_in_tot)),
+                    np.sum(n_photons_in_tot) / float(n_lam),
+                    np.sum(n_photons_in_tot)
+                    / float(nb_photons)
+                    / float(n_lam),
+                )
+            )
         else:
-            p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
-            np.sum(n_photons_out_tot[0,...])/float(np.sum(n_photons_in_tot)),
-            np.sum(n_photons_in_tot),
-            np.sum(n_photons_in_tot)/float(nb_photons),
-            ))
+            p.finish(
+                'Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
+                    np.sum(n_photons_out_tot[0, ...])
+                    / float(np.sum(n_photons_in_tot)),
+                    np.sum(n_photons_in_tot),
+                    np.sum(n_photons_in_tot) / float(nb_photons),
+                )
+            )
 
         if wl.scalar:
             output = output.dropaxis('wavelength')
             output.attrs['wavelength'] = wl[:]
-        
+
         if not self.autoinit and not self.keep_context:
             self.ctx.pop()
             self.ctx.detach()
             self.ctx = None
             from pycuda.tools import clear_context_caches
+
             clear_context_caches()
 
         return output
@@ -1400,11 +1879,12 @@ class Smartg(object):
 def _calc_solid_angles(
     n_theta: int,
     n_phi: int,
-    sza_max: float = 90.,
+    sza_max: float = 90.0,
     sun_disc: float = 0,
 ) -> tuple:
     """
-    Compute zenith angles, azimuth angles, and solid angles for the sensor grid.
+    Compute zenith angles, azimuth angles, and solid angles for the
+    sensor grid.
 
     Parameters
     ----------
@@ -1415,31 +1895,33 @@ def _calc_solid_angles(
     sza_max : float, optional
         Maximum zenith angle in degrees. Default is ``90.``.
     sun_disc : float, optional
-        Half-angle of the solar disc in degrees. When non-zero, all solid
-        angles are set to the solid angle subtended by the solar disc.
-        Default is ``0``.
+        Half-angle of the solar disc in degrees. When non-zero, all
+        solid angles are set to the solid angle subtended by the solar
+        disc. Default is ``0``.
 
     Returns
     -------
     tab_th : numpy.ndarray
-        Array of shape ``(n_theta,)`` containing the zenith angles in radians,
-        centred within each bin.
+        Array of shape ``(n_theta,)`` containing the zenith angles in
+        radians, centred within each bin.
     tab_phi : numpy.ndarray
-        Array of shape ``(n_phi,)`` containing the azimuth angles in radians,
-        starting at ``0`` and spaced by ``2π / n_phi``.
+        Array of shape ``(n_phi,)`` containing the azimuth angles in
+        radians, starting at ``0`` and spaced by ``2π / n_phi``.
     tab_omega : numpy.ndarray
-        Array of shape ``(n_theta,)`` containing the normalized solid angles.
-        When ``sun_disc != 0``, all elements are set to the solid angle of the
-        solar disc ``2π(1 - cos(sun_disc))``.
+        Array of shape ``(n_theta,)`` containing the normalized solid
+        angles. When ``sun_disc != 0``, all elements are set to the
+        solid angle of the solar disc ``2π(1 - cos(sun_disc))``.
     """
 
     # zenith angles
-    dth = (sza_max / 180. * np.pi) / n_theta
-    tab_th = np.linspace(dth/2, sza_max/180.*np.pi - dth/2, n_theta, dtype='float64')
+    dth = (sza_max / 180.0 * np.pi) / n_theta
+    tab_th = np.linspace(
+        dth / 2, sza_max / 180.0 * np.pi - dth / 2, n_theta, dtype='float64'
+    )
 
     # azimuth angles
     dphi = 2 * np.pi / n_phi
-    tab_phi = np.linspace(0., 2*np.pi - dphi, n_phi, dtype='float64')
+    tab_phi = np.linspace(0.0, 2 * np.pi - dphi, n_phi, dtype='float64')
 
     # solid angles
     tab_ds = np.sin(tab_th) * dth * dphi
@@ -1447,7 +1929,7 @@ def _calc_solid_angles(
     # normalize to 1
     tab_omega = tab_ds / (sum(tab_ds) * n_phi)
     if sun_disc != 0:
-        tab_omega[:] = 2 * np.pi * (1. - np.cos(sun_disc * np.pi / 180))
+        tab_omega[:] = 2 * np.pi * (1.0 - np.cos(sun_disc * np.pi / 180))
 
     return tab_th, tab_phi, tab_omega
 
@@ -1474,7 +1956,7 @@ def _finalize(
     le: dict | None = None,
     flux: str | None = None,
     back: bool = False,
-    sza_max: float = 90.,
+    sza_max: float = 90.0,
     sun_disc: float = 0,
     hist: bool = False,
     c_mat_visu_recep: np.ndarray | None = None,
@@ -1491,8 +1973,8 @@ def _finalize(
     Parameters
     ----------
     tab_photons_tot : np.ndarray
-        Accumulated photon weights of shape
-        (level, stk, sensor, lam, theta, phi).
+        Accumulated photon weights of shape (level, stk, sensor, lam,
+        theta, phi).
     tab_photons_tot_no_aer : np.ndarray
         Same as tab_photons_tot but without the aerosol scattering
         contributions (see the no_aer_output option of run).
@@ -1544,8 +2026,7 @@ def _finalize(
     dic_stp : dict | None, optional
         Solar Tower Power parameters (3D-object mode).
     mat_cats, mat_loss : np.ndarray | None, optional
-        Receiver category and optical-loss matrices (3D-object
-        mode).
+        Receiver category and optical-loss matrices (3D-object mode).
     w_ph_cats, w_ph_cats2 : np.ndarray | None, optional
         Receiver photon weights (and their squares) per category.
     no_aer_output : bool, optional
@@ -1561,45 +2042,60 @@ def _finalize(
     if hasattr(prof_oc, 'to_xarray'):
         prof_oc = prof_oc.to_xarray()
 
-    (_,_,n_sensor,n_lam,nb_theta,nb_phi) = tab_photons_tot.shape
+    (_, _, n_sensor, n_lam, nb_theta, nb_phi) = tab_photons_tot.shape
 
     # normalization in case of radiance
-    # (broadcast everything to dimensions (LVL,n_pstk,SENSOR,LAM,THETA,PHI))
-    norm_npho = n_photons_in_tot.reshape((1,1,n_sensor,n_lam,1,1))
-    zip_flag=False
+    # (broadcast everything to dimensions
+    # (LVL,n_pstk,SENSOR,LAM,THETA,PHI))
+    norm_npho = n_photons_in_tot.reshape((1, 1, n_sensor, n_lam, 1, 1))
+    zip_flag = False
     if flux is None:
         if le is not None:
             tab_th = le['th']
             tab_phi = le['phi']
             if 'zip' not in le.keys():
                 zip_flag = False
-            else : zip_flag = le['zip']
-            norm_geo =  1. 
-        else : 
-            tab_th, tab_phi, tab_omega = _calc_solid_angles(nb_theta, nb_phi, sza_max=sza_max, sun_disc=sun_disc)
-            if horiz==1 : norm_geo = 2.0 * tab_omega.reshape((1,1,-1,1)) * np.cos(tab_th).reshape((1,1,-1,1))
-            else :  norm_geo = 2.0 * tab_omega.reshape((1,1,-1,1)) 
+            else:
+                zip_flag = le['zip']
+            norm_geo = 1.0
+        else:
+            tab_th, tab_phi, tab_omega = _calc_solid_angles(
+                nb_theta, nb_phi, sza_max=sza_max, sun_disc=sun_disc
+            )
+            if horiz == 1:
+                norm_geo = (
+                    2.0
+                    * tab_omega.reshape((1, 1, -1, 1))
+                    * np.cos(tab_th).reshape((1, 1, -1, 1))
+                )
+            else:
+                norm_geo = 2.0 * tab_omega.reshape((1, 1, -1, 1))
     else:
-        norm_geo = 1.
-        tab_th, tab_phi, _ = _calc_solid_angles(nb_theta, nb_phi, sza_max=sza_max, sun_disc=sun_disc)
+        norm_geo = 1.0
+        tab_th, tab_phi, _ = _calc_solid_angles(
+            nb_theta, nb_phi, sza_max=sza_max, sun_disc=sun_disc
+        )
 
     # normalization
-    tab_final = tab_photons_tot.astype('float64')/(norm_geo*norm_npho)
-    tab_final_no_aer = tab_photons_tot_no_aer.astype('float64')/(norm_geo*norm_npho)
+    tab_final = tab_photons_tot.astype('float64') / (norm_geo * norm_npho)
+    tab_final_no_aer = tab_photons_tot_no_aer.astype('float64') / (
+        norm_geo * norm_npho
+    )
     tab_dist_final = tab_dist_tot.astype('float64')
-    #if hist : tab_hist_final = tab_hist_tot
+    # if hist : tab_hist_final = tab_hist_tot
 
     # swapaxes : (th, phi) -> (phi, theta)
-    tab_final = tab_final.swapaxes(4,5)
-    tab_final_no_aer = tab_final_no_aer.swapaxes(4,5)
-    if len(tab_dist_final) >1 : tab_dist_final = tab_dist_final.swapaxes(3,4)
-    if hist : tab_hist_tot = tab_hist_tot.swapaxes(3,4)
-    n_photons_out_tot = n_photons_out_tot.swapaxes(3,4)
-    n_photons_out_tot_no_aer = n_photons_out_tot_no_aer.swapaxes(3,4)
+    tab_final = tab_final.swapaxes(4, 5)
+    tab_final_no_aer = tab_final_no_aer.swapaxes(4, 5)
+    if len(tab_dist_final) > 1:
+        tab_dist_final = tab_dist_final.swapaxes(3, 4)
+    if hist:
+        tab_hist_tot = tab_hist_tot.swapaxes(3, 4)
+    n_photons_out_tot = n_photons_out_tot.swapaxes(3, 4)
+    n_photons_out_tot_no_aer = n_photons_out_tot_no_aer.swapaxes(3, 4)
     if sigma is not None:
         sigma /= norm_geo
-        sigma = sigma.swapaxes(4,5)
-
+        sigma = sigma.swapaxes(4, 5)
 
     #
     # create the MLUT object
@@ -1607,36 +2103,39 @@ def _finalize(
     m = MLUT()
 
     # add the axes
-    axnames  = ['Zenith angles']
+    axnames = ['Zenith angles']
     axnames2 = ['None', 'Zenith angles']
-    if hist : m.add_dataset('Nphotons_in',  n_photons_in_tot)
+    if hist:
+        m.add_dataset('Nphotons_in', n_photons_in_tot)
 
-    iphi     = slice(None)
+    iphi = slice(None)
     m.set_attr('zip', 'False')
     m.set_attr('NPhotonIn_sum', np.sum(n_photons_in_tot))
 
-    if le is not None: m.set_attr('LE', int(1))
-    else: m.set_attr('LE', int(0))
+    if le is not None:
+        m.set_attr('LE', int(1))
+    else:
+        m.set_attr('LE', int(0))
 
     if le is not None:
         if 'zip' in le:
-            if le['zip'] : 
+            if le['zip']:
                 m.set_attr('zip', 'True')
                 iphi = 0
             else:
                 axnames.insert(0, 'Azimuth angles')
-                axnames2.insert(1,'Azimuth angles')
+                axnames2.insert(1, 'Azimuth angles')
         else:
             axnames.insert(0, 'Azimuth angles')
-            axnames2.insert(1,'Azimuth angles')
+            axnames2.insert(1, 'Azimuth angles')
     else:
         axnames.insert(0, 'Azimuth angles')
-        axnames2.insert(1,'Azimuth angles')
+        axnames2.insert(1, 'Azimuth angles')
 
-    m.add_axis('Zenith angles', tab_th*180./np.pi)
-    m.add_axis('Azimuth angles', tab_phi*180./np.pi)
-    
-    axnames4=[]
+    m.add_axis('Zenith angles', tab_th * 180.0 / np.pi)
+    m.add_axis('Azimuth angles', tab_phi * 180.0 / np.pi)
+
+    axnames4 = []
     if n_lam > 1:
         m.add_axis('wavelength', wl)
         ilam = slice(None)
@@ -1653,7 +2152,7 @@ def _finalize(
         axnames2.insert(1, 'sensor index')
         axnames4.insert(0, 'sensor index')
     else:
-        isen=0
+        isen = 0
 
     write_uptoa = output_layers in (0, 1, 2, 3, 7)
     write_down0p = output_layers in (1, 3, 4, 7)
@@ -1663,7 +2162,8 @@ def _finalize(
     write_downb = output_layers in (2, 3, 5)
 
     # Build axis names for cdist datasets (ALIS mode)
-    # Shape after swapaxes: (n_lvl, N_LAYERS, n_sensor, nb_phi, nb_theta, [NSCL,] n_iamf)
+    # Shape after swapaxes: (n_lvl, N_LAYERS, n_sensor, nb_phi,
+    # nb_theta, [NSCL,] n_iamf)
     # When NSCL=1, squeeze it away for backward compatibility
     if len(tab_dist_final) > 1 and tab_dist_final.shape[-2] == 1:
         tab_dist_final = tab_dist_final[..., 0, :]  # remove trivial NSCL dim
@@ -1678,7 +2178,9 @@ def _finalize(
         cdist_axnames_full = ['None']
         if n_sensor > 1:
             cdist_axnames_full.append('sensor index')
-        cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iSCL', 'iAMF'])
+        cdist_axnames_full.extend(
+            ['Azimuth angles', 'Zenith angles', 'iSCL', 'iAMF']
+        )
     else:
         cdist_axnames_zip = ['None', 'Zenith angles', 'iAMF']
         cdist_axnames_full = ['None']
@@ -1687,149 +2189,497 @@ def _finalize(
         cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iAMF'])
 
     if write_uptoa:
-        m.add_dataset('I_up (TOA)', tab_final[UPTOA,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (TOA)', tab_final[UPTOA,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (TOA)', tab_final[UPTOA,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (TOA)', tab_final[UPTOA,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset(
+            'I_up (TOA)', tab_final[UPTOA, 0, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'Q_up (TOA)', tab_final[UPTOA, 1, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'U_up (TOA)', tab_final[UPTOA, 2, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'V_up (TOA)', tab_final[UPTOA, 3, isen, ilam, iphi, :], axnames
+        )
         if sigma is not None:
-            m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (TOA)', n_photons_out_tot[UPTOA,isen,ilam,iphi,:], axnames)
+            m.add_dataset(
+                'I_stdev_up (TOA)',
+                sigma[UPTOA, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_stdev_up (TOA)',
+                sigma[UPTOA, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_stdev_up (TOA)',
+                sigma[UPTOA, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_stdev_up (TOA)',
+                sigma[UPTOA, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+        m.add_dataset(
+            'N_up (TOA)',
+            n_photons_out_tot[UPTOA, isen, ilam, iphi, :],
+            axnames,
+        )
         if no_aer_output:
-            m.add_dataset('I_up (TOA), no_aer', tab_final_no_aer[UPTOA,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_up (TOA), no_aer', tab_final_no_aer[UPTOA,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_up (TOA), no_aer', tab_final_no_aer[UPTOA,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_up (TOA), no_aer', tab_final_no_aer[UPTOA,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_up (TOA), no_aer', n_photons_out_tot_no_aer[UPTOA,isen,ilam,iphi,:], axnames)
-        if len(tab_dist_final) > 1: 
-            if zip_flag : m.add_dataset('cdist_up (TOA)', np.squeeze(tab_dist_final[UPTOA,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (TOA)', tab_dist_final[UPTOA,:,isen],cdist_axnames_full)
-    
-    if hist : m.add_dataset('histories', tab_hist_tot)
-    
+            m.add_dataset(
+                'I_up (TOA), no_aer',
+                tab_final_no_aer[UPTOA, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_up (TOA), no_aer',
+                tab_final_no_aer[UPTOA, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_up (TOA), no_aer',
+                tab_final_no_aer[UPTOA, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_up (TOA), no_aer',
+                tab_final_no_aer[UPTOA, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'N_up (TOA), no_aer',
+                n_photons_out_tot_no_aer[UPTOA, isen, ilam, iphi, :],
+                axnames,
+            )
+        if len(tab_dist_final) > 1:
+            if zip_flag:
+                m.add_dataset(
+                    'cdist_up (TOA)',
+                    np.squeeze(tab_dist_final[UPTOA, :, isen]),
+                    cdist_axnames_zip,
+                )
+            else:
+                m.add_dataset(
+                    'cdist_up (TOA)',
+                    tab_dist_final[UPTOA, :, isen],
+                    cdist_axnames_full,
+                )
+
+    if hist:
+        m.add_dataset('histories', tab_hist_tot)
+
     if write_down0p:
-        m.add_dataset('I_down (0+)', tab_final[DOWN0P,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (0+)', tab_final[DOWN0P,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (0+)', tab_final[DOWN0P,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (0+)', tab_final[DOWN0P,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset(
+            'I_down (0+)', tab_final[DOWN0P, 0, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'Q_down (0+)', tab_final[DOWN0P, 1, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'U_down (0+)', tab_final[DOWN0P, 2, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'V_down (0+)', tab_final[DOWN0P, 3, isen, ilam, iphi, :], axnames
+        )
         if sigma is not None:
-            m.add_dataset('I_stdev_down (0+)', sigma[DOWN0P,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_stdev_down (0+)', sigma[DOWN0P,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (0+)', n_photons_out_tot[DOWN0P,isen,ilam,iphi,:], axnames)
+            m.add_dataset(
+                'I_stdev_down (0+)',
+                sigma[DOWN0P, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_stdev_down (0+)',
+                sigma[DOWN0P, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_stdev_down (0+)',
+                sigma[DOWN0P, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_stdev_down (0+)',
+                sigma[DOWN0P, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+        m.add_dataset(
+            'N_down (0+)',
+            n_photons_out_tot[DOWN0P, isen, ilam, iphi, :],
+            axnames,
+        )
         if no_aer_output:
-            m.add_dataset('I_down (0+), no_aer', tab_final_no_aer[DOWN0P,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_down (0+), no_aer', tab_final_no_aer[DOWN0P,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_down (0+), no_aer', tab_final_no_aer[DOWN0P,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_down (0+), no_aer', tab_final_no_aer[DOWN0P,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_down (0+), no_aer', n_photons_out_tot_no_aer[DOWN0P,isen,ilam,iphi,:], axnames)
-        if len(tab_dist_final) > 1: 
-            if zip_flag : m.add_dataset('cdist_down (0+)', np.squeeze(tab_dist_final[DOWN0P,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (0+)', tab_dist_final[DOWN0P,:,isen],cdist_axnames_full)
+            m.add_dataset(
+                'I_down (0+), no_aer',
+                tab_final_no_aer[DOWN0P, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_down (0+), no_aer',
+                tab_final_no_aer[DOWN0P, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_down (0+), no_aer',
+                tab_final_no_aer[DOWN0P, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_down (0+), no_aer',
+                tab_final_no_aer[DOWN0P, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'N_down (0+), no_aer',
+                n_photons_out_tot_no_aer[DOWN0P, isen, ilam, iphi, :],
+                axnames,
+            )
+        if len(tab_dist_final) > 1:
+            if zip_flag:
+                m.add_dataset(
+                    'cdist_down (0+)',
+                    np.squeeze(tab_dist_final[DOWN0P, :, isen]),
+                    cdist_axnames_zip,
+                )
+            else:
+                m.add_dataset(
+                    'cdist_down (0+)',
+                    tab_dist_final[DOWN0P, :, isen],
+                    cdist_axnames_full,
+                )
     if write_up0m:
-        m.add_dataset('I_up (0-)', tab_final[UP0M,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (0-)', tab_final[UP0M,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (0-)', tab_final[UP0M,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (0-)', tab_final[UP0M,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset(
+            'I_up (0-)', tab_final[UP0M, 0, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'Q_up (0-)', tab_final[UP0M, 1, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'U_up (0-)', tab_final[UP0M, 2, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'V_up (0-)', tab_final[UP0M, 3, isen, ilam, iphi, :], axnames
+        )
         if sigma is not None:
-            m.add_dataset('I_stdev_up (0-)', sigma[UP0M,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_stdev_up (0-)', sigma[UP0M,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (0-)', n_photons_out_tot[UP0M,isen,ilam,iphi,:], axnames)
+            m.add_dataset(
+                'I_stdev_up (0-)', sigma[UP0M, 0, isen, ilam, iphi, :], axnames
+            )
+            m.add_dataset(
+                'Q_stdev_up (0-)', sigma[UP0M, 1, isen, ilam, iphi, :], axnames
+            )
+            m.add_dataset(
+                'U_stdev_up (0-)', sigma[UP0M, 2, isen, ilam, iphi, :], axnames
+            )
+            m.add_dataset(
+                'V_stdev_up (0-)', sigma[UP0M, 3, isen, ilam, iphi, :], axnames
+            )
+        m.add_dataset(
+            'N_up (0-)', n_photons_out_tot[UP0M, isen, ilam, iphi, :], axnames
+        )
         if no_aer_output:
-            m.add_dataset('I_up (0-), no_aer', tab_final_no_aer[UP0M,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_up (0-), no_aer', tab_final_no_aer[UP0M,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_up (0-), no_aer', tab_final_no_aer[UP0M,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_up (0-), no_aer', tab_final_no_aer[UP0M,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_up (0-), no_aer', n_photons_out_tot_no_aer[UP0M,isen,ilam,iphi,:], axnames)
-        if len(tab_dist_final) > 1: 
-            if zip_flag : m.add_dataset('cdist_up (0-)', np.squeeze(tab_dist_final[UP0M,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (0-)', tab_dist_final[UP0M,:,isen],cdist_axnames_full)
+            m.add_dataset(
+                'I_up (0-), no_aer',
+                tab_final_no_aer[UP0M, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_up (0-), no_aer',
+                tab_final_no_aer[UP0M, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_up (0-), no_aer',
+                tab_final_no_aer[UP0M, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_up (0-), no_aer',
+                tab_final_no_aer[UP0M, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'N_up (0-), no_aer',
+                n_photons_out_tot_no_aer[UP0M, isen, ilam, iphi, :],
+                axnames,
+            )
+        if len(tab_dist_final) > 1:
+            if zip_flag:
+                m.add_dataset(
+                    'cdist_up (0-)',
+                    np.squeeze(tab_dist_final[UP0M, :, isen]),
+                    cdist_axnames_zip,
+                )
+            else:
+                m.add_dataset(
+                    'cdist_up (0-)',
+                    tab_dist_final[UP0M, :, isen],
+                    cdist_axnames_full,
+                )
 
     if write_down0m:
-        m.add_dataset('I_down (0-)', tab_final[DOWN0M,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (0-)', tab_final[DOWN0M,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (0-)', tab_final[DOWN0M,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (0-)', tab_final[DOWN0M,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset(
+            'I_down (0-)', tab_final[DOWN0M, 0, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'Q_down (0-)', tab_final[DOWN0M, 1, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'U_down (0-)', tab_final[DOWN0M, 2, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'V_down (0-)', tab_final[DOWN0M, 3, isen, ilam, iphi, :], axnames
+        )
         if sigma is not None:
-            m.add_dataset('I_stdev_down (0-)', sigma[DOWN0M,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_stdev_down (0-)', sigma[DOWN0M,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (0-)', n_photons_out_tot[DOWN0M,isen,ilam,iphi,:], axnames)
+            m.add_dataset(
+                'I_stdev_down (0-)',
+                sigma[DOWN0M, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_stdev_down (0-)',
+                sigma[DOWN0M, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_stdev_down (0-)',
+                sigma[DOWN0M, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_stdev_down (0-)',
+                sigma[DOWN0M, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+        m.add_dataset(
+            'N_down (0-)',
+            n_photons_out_tot[DOWN0M, isen, ilam, iphi, :],
+            axnames,
+        )
         if no_aer_output:
-            m.add_dataset('I_down (0-), no_aer', tab_final_no_aer[DOWN0M,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_down (0-), no_aer', tab_final_no_aer[DOWN0M,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_down (0-), no_aer', tab_final_no_aer[DOWN0M,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_down (0-), no_aer', tab_final_no_aer[DOWN0M,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_down (0-), no_aer', n_photons_out_tot_no_aer[DOWN0M,isen,ilam,iphi,:], axnames)
-        if len(tab_dist_final) > 1: 
-            if zip_flag : m.add_dataset('cdist_down (0-)', np.squeeze(tab_dist_final[DOWN0M,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (0-)', tab_dist_final[DOWN0M,:,isen],cdist_axnames_full)
+            m.add_dataset(
+                'I_down (0-), no_aer',
+                tab_final_no_aer[DOWN0M, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_down (0-), no_aer',
+                tab_final_no_aer[DOWN0M, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_down (0-), no_aer',
+                tab_final_no_aer[DOWN0M, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_down (0-), no_aer',
+                tab_final_no_aer[DOWN0M, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'N_down (0-), no_aer',
+                n_photons_out_tot_no_aer[DOWN0M, isen, ilam, iphi, :],
+                axnames,
+            )
+        if len(tab_dist_final) > 1:
+            if zip_flag:
+                m.add_dataset(
+                    'cdist_down (0-)',
+                    np.squeeze(tab_dist_final[DOWN0M, :, isen]),
+                    cdist_axnames_zip,
+                )
+            else:
+                m.add_dataset(
+                    'cdist_down (0-)',
+                    tab_dist_final[DOWN0M, :, isen],
+                    cdist_axnames_full,
+                )
     if write_up0p:
-        m.add_dataset('I_up (0+)', tab_final[UP0P,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (0+)', tab_final[UP0P,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (0+)', tab_final[UP0P,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (0+)', tab_final[UP0P,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset(
+            'I_up (0+)', tab_final[UP0P, 0, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'Q_up (0+)', tab_final[UP0P, 1, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'U_up (0+)', tab_final[UP0P, 2, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'V_up (0+)', tab_final[UP0P, 3, isen, ilam, iphi, :], axnames
+        )
         if sigma is not None:
-            m.add_dataset('I_stdev_up (0+)', sigma[UP0P,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_stdev_up (0+)', sigma[UP0P,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (0+)', n_photons_out_tot[UP0P,isen,ilam,iphi,:], axnames)
+            m.add_dataset(
+                'I_stdev_up (0+)', sigma[UP0P, 0, isen, ilam, iphi, :], axnames
+            )
+            m.add_dataset(
+                'Q_stdev_up (0+)', sigma[UP0P, 1, isen, ilam, iphi, :], axnames
+            )
+            m.add_dataset(
+                'U_stdev_up (0+)', sigma[UP0P, 2, isen, ilam, iphi, :], axnames
+            )
+            m.add_dataset(
+                'V_stdev_up (0+)', sigma[UP0P, 3, isen, ilam, iphi, :], axnames
+            )
+        m.add_dataset(
+            'N_up (0+)', n_photons_out_tot[UP0P, isen, ilam, iphi, :], axnames
+        )
         if no_aer_output:
-            m.add_dataset('I_up (0+), no_aer', tab_final_no_aer[UP0P,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_up (0+), no_aer', tab_final_no_aer[UP0P,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_up (0+), no_aer', tab_final_no_aer[UP0P,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_up (0+), no_aer', tab_final_no_aer[UP0P,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_up (0+), no_aer', n_photons_out_tot_no_aer[UP0P,isen,ilam,iphi,:], axnames)
-        if len(tab_dist_final) > 1: 
-            if zip_flag : m.add_dataset('cdist_up (0+)', np.squeeze(tab_dist_final[UP0P,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (0+)', tab_dist_final[UP0P,:,isen],cdist_axnames_full)
+            m.add_dataset(
+                'I_up (0+), no_aer',
+                tab_final_no_aer[UP0P, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_up (0+), no_aer',
+                tab_final_no_aer[UP0P, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_up (0+), no_aer',
+                tab_final_no_aer[UP0P, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_up (0+), no_aer',
+                tab_final_no_aer[UP0P, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'N_up (0+), no_aer',
+                n_photons_out_tot_no_aer[UP0P, isen, ilam, iphi, :],
+                axnames,
+            )
+        if len(tab_dist_final) > 1:
+            if zip_flag:
+                m.add_dataset(
+                    'cdist_up (0+)',
+                    np.squeeze(tab_dist_final[UP0P, :, isen]),
+                    cdist_axnames_zip,
+                )
+            else:
+                m.add_dataset(
+                    'cdist_up (0+)',
+                    tab_dist_final[UP0P, :, isen],
+                    cdist_axnames_full,
+                )
     if write_downb:
-        m.add_dataset('I_down (B)', tab_final[DOWNB,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (B)', tab_final[DOWNB,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (B)', tab_final[DOWNB,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (B)', tab_final[DOWNB,3,isen,ilam,iphi,:], axnames)
+        m.add_dataset(
+            'I_down (B)', tab_final[DOWNB, 0, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'Q_down (B)', tab_final[DOWNB, 1, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'U_down (B)', tab_final[DOWNB, 2, isen, ilam, iphi, :], axnames
+        )
+        m.add_dataset(
+            'V_down (B)', tab_final[DOWNB, 3, isen, ilam, iphi, :], axnames
+        )
         if sigma is not None:
-            m.add_dataset('I_stdev_down (B)', sigma[DOWNB,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_stdev_down (B)', sigma[DOWNB,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (B)', n_photons_out_tot[DOWNB,isen,ilam,iphi,:], axnames)
+            m.add_dataset(
+                'I_stdev_down (B)',
+                sigma[DOWNB, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_stdev_down (B)',
+                sigma[DOWNB, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_stdev_down (B)',
+                sigma[DOWNB, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_stdev_down (B)',
+                sigma[DOWNB, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+        m.add_dataset(
+            'N_down (B)',
+            n_photons_out_tot[DOWNB, isen, ilam, iphi, :],
+            axnames,
+        )
         if no_aer_output:
-            m.add_dataset('I_down (B), no_aer', tab_final_no_aer[DOWNB,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_down (B), no_aer', tab_final_no_aer[DOWNB,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_down (B), no_aer', tab_final_no_aer[DOWNB,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_down (B), no_aer', tab_final_no_aer[DOWNB,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_down (B), no_aer', n_photons_out_tot_no_aer[DOWNB,isen,ilam,iphi,:], axnames)
-        if len(tab_dist_final) > 1: 
-            if zip_flag : m.add_dataset('cdist_down (B)', np.squeeze(tab_dist_final[DOWNB,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (B)', tab_dist_final[DOWNB,:,isen],cdist_axnames_full)
-
+            m.add_dataset(
+                'I_down (B), no_aer',
+                tab_final_no_aer[DOWNB, 0, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'Q_down (B), no_aer',
+                tab_final_no_aer[DOWNB, 1, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'U_down (B), no_aer',
+                tab_final_no_aer[DOWNB, 2, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'V_down (B), no_aer',
+                tab_final_no_aer[DOWNB, 3, isen, ilam, iphi, :],
+                axnames,
+            )
+            m.add_dataset(
+                'N_down (B), no_aer',
+                n_photons_out_tot_no_aer[DOWNB, isen, ilam, iphi, :],
+                axnames,
+            )
+        if len(tab_dist_final) > 1:
+            if zip_flag:
+                m.add_dataset(
+                    'cdist_down (B)',
+                    np.squeeze(tab_dist_final[DOWNB, :, isen]),
+                    cdist_axnames_zip,
+                )
+            else:
+                m.add_dataset(
+                    'cdist_down (B)',
+                    tab_dist_final[DOWNB, :, isen],
+                    cdist_axnames_full,
+                )
 
     # write atmospheric profiles
     if prof_atm is not None:
         # direct transmission
-        m.add_dataset('direct transmission', tab_trans_dir_analytic,
-                   axnames=['wavelength'])
-        m.add_dataset('direct transmission (dev)', np.exp(-tab_trans_dir[isen,ilam]), axnames4)
+        m.add_dataset(
+            'direct transmission',
+            tab_trans_dir_analytic,
+            axnames=['wavelength'],
+        )
+        m.add_dataset(
+            'direct transmission (dev)',
+            np.exp(-tab_trans_dir[isen, ilam]),
+            axnames4,
+        )
 
         for axis_name in prof_atm.coords:
             if axis_name not in m.axes:
                 m.add_axis(axis_name, prof_atm.coords[axis_name].to_numpy())
 
-        for name in ['n_atm', 'T_atm', 'OD_r', 'OD_p', 'OD_g', 'OD_atm', 'OD_sca_atm', 'OD_abs_atm', 'pmol_atm', 'ssa_atm', 'ssa_p_atm']:
+        for name in [
+            'n_atm',
+            'T_atm',
+            'OD_r',
+            'OD_p',
+            'OD_g',
+            'OD_atm',
+            'OD_sca_atm',
+            'OD_abs_atm',
+            'pmol_atm',
+            'ssa_atm',
+            'ssa_p_atm',
+        ]:
             da = prof_atm[name]
             m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
         if 'phase_atm' in prof_atm.data_vars:
             for name in ['phase_atm', 'iphase_atm']:
                 da = prof_atm[name]
-                # Use None for 'iphase' and 'stk' to avoid sharing axes across atm/oc
+                # Use None for 'iphase' and 'stk' to avoid sharing axes
+                # across atm/oc
                 dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
                 m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
         if 'pine_atm' in prof_atm.data_vars:
@@ -1839,9 +2689,17 @@ def _finalize(
                 m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
 
         if 'neighbour_atm' in prof_atm.data_vars:
-            for name in ['iopt_atm', 'iabs_atm', 'pmin_atm', 'pmax_atm', 'neighbour_atm']:
+            for name in [
+                'iopt_atm',
+                'iabs_atm',
+                'pmin_atm',
+                'pmax_atm',
+                'neighbour_atm',
+            ]:
                 da = prof_atm[name]
-                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+                m.add_dataset(
+                    name, da.to_numpy(), list(da.dims), attrs=da.attrs
+                )
 
     # write ocean profiles
     if prof_oc is not None:
@@ -1849,19 +2707,35 @@ def _finalize(
             if axis_name not in m.axes:
                 m.add_axis(axis_name, prof_oc.coords[axis_name].to_numpy())
 
-        for name in ['T_oc', 'OD_w', 'OD_p_oc', 'OD_y', 'OD_oc', 'OD_sca_oc', 'OD_abs_oc', 'pmol_oc', 'ssa_oc', 'albedo_seafloor']:
+        for name in [
+            'T_oc',
+            'OD_w',
+            'OD_p_oc',
+            'OD_y',
+            'OD_oc',
+            'OD_sca_oc',
+            'OD_abs_oc',
+            'pmol_oc',
+            'ssa_oc',
+            'albedo_seafloor',
+        ]:
             da = prof_oc[name]
             m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
         if 'ssa_w' in prof_oc.data_vars:
             da = prof_oc['ssa_w']
-            m.add_dataset('ssa_w', da.to_numpy(), list(da.dims), attrs=da.attrs)
+            m.add_dataset(
+                'ssa_w', da.to_numpy(), list(da.dims), attrs=da.attrs
+            )
         if 'ssa_p_oc' in prof_oc.data_vars:
             da = prof_oc['ssa_p_oc']
-            m.add_dataset('ssa_p_oc', da.to_numpy(), list(da.dims), attrs=da.attrs)
+            m.add_dataset(
+                'ssa_p_oc', da.to_numpy(), list(da.dims), attrs=da.attrs
+            )
         if 'phase_oc' in prof_oc.data_vars:
             for name in ['phase_oc', 'iphase_oc']:
                 da = prof_oc[name]
-                # Use None for 'iphase' and 'stk' to avoid sharing axes across atm/oc
+                # Use None for 'iphase' and 'stk' to avoid sharing axes
+                # across atm/oc
                 dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
                 m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
         if 'pine_oc' in prof_oc.data_vars:
@@ -1871,18 +2745,28 @@ def _finalize(
                 m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
 
         if 'neighbour_oc' in prof_oc.data_vars:
-            for name in ['iopt_oc', 'iabs_oc', 'pmin_oc', 'pmax_oc', 'neighbour_oc']:
+            for name in [
+                'iopt_oc',
+                'iabs_oc',
+                'pmin_oc',
+                'pmax_oc',
+                'neighbour_oc',
+            ]:
                 da = prof_oc[name]
-                m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+                m.add_dataset(
+                    name, da.to_numpy(), list(da.dims), attrs=da.attrs
+                )
 
     # write the error count
     err = errorcount.get()
-    for i, d in enumerate([
+    for i, d in enumerate(
+        [
             'ERROR_THETA',
             'ERROR_CASE',
             'ERROR_VXY',
             'ERROR_MAX_LOOP',
-            ]):
+        ]
+    ):
         m.set_attr(d, err[i])
 
     # write attributes
@@ -1893,100 +2777,146 @@ def _finalize(
     if flux is not None:
         m.set_attr('flux', flux)
         for d in m.datasets():
-            if (('_stdev_' in d)
-                    or (d.startswith('Q_'))
-                    or (d.startswith('U_'))
-                    or (d.startswith('V_'))
-                    ):
+            if (
+                ('_stdev_' in d)
+                or (d.startswith('Q_'))
+                or (d.startswith('U_'))
+                or (d.startswith('V_'))
+            ):
                 m.rm_lut(d)
             elif d.startswith('I_') or d.startswith('N_'):
-                flux_lut = m[d].reduce(np.sum, 'Azimuth angles').reduce(np.sum, 'Zenith angles', as_lut=True)
+                flux_lut = (
+                    m[d]
+                    .reduce(np.sum, 'Azimuth angles')
+                    .reduce(np.sum, 'Zenith angles', as_lut=True)
+                )
                 m.rm_lut(d)
                 m.add_lut(flux_lut, desc=d.replace('I_', 'flux_'))
 
-    if (c_mat_visu_recep is not None):
-        # Indice 0 = Sum of all Cats, then cat1 to cat8, def of cats -> see Moulana et al, 2019
-        m.add_axis('Categories', np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32))
+    if c_mat_visu_recep is not None:
+        # Indice 0 = Sum of all Cats, then cat1 to cat8, def of cats ->
+        # see Moulana et al, 2019
+        m.add_axis(
+            'Categories', np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32)
+        )
         var_x, var_y = np.shape(c_mat_visu_recep[0][:][:])
-        x_indices = np.arange(var_x); y_indices = np.arange(var_y)
-        m.add_axis('X_Cell_Index', x_indices); m.add_axis('Y_Cell_Index', y_indices)
-        m.add_dataset('C_Receiver', c_mat_visu_recep[:][:][:], ['Categories', 'X_Cell_Index', 'Y_Cell_Index'])
-        m.set_attr('S_Receiver', str(dic_stp["SREC"])) # Receiver surface in km²
-        m.set_attr('S_Cell', str(dic_stp["TC"]))       # Cell surface in km²
+        x_indices = np.arange(var_x)
+        y_indices = np.arange(var_y)
+        m.add_axis('X_Cell_Index', x_indices)
+        m.add_axis('Y_Cell_Index', y_indices)
+        m.add_dataset(
+            'C_Receiver',
+            c_mat_visu_recep[:][:][:],
+            ['Categories', 'X_Cell_Index', 'Y_Cell_Index'],
+        )
+        m.set_attr(
+            'S_Receiver', str(dic_stp["SREC"])
+        )  # Receiver surface in km²
+        m.set_attr('S_Cell', str(dic_stp["TC"]))  # Cell surface in km²
         # half-angle of the receiver solid angle
-        if back: m.set_attr('ALDEG', str(dic_stp["ALDEG"]))
-        else : m.set_attr('ALDEG', str(90))
+        if back:
+            m.set_attr('ALDEG', str(dic_stp["ALDEG"]))
+        else:
+            m.set_attr('ALDEG', str(90))
 
-    if (mat_cats is not None):
-        m.add_dataset('cat_PhNb', mat_cats[:,0], ['Categories'])
-        m.add_dataset('cat_w', mat_cats[:,1], ['Categories'])
-        m.add_dataset('cat_w2', mat_cats[:,2], ['Categories'])
-        m.add_dataset('cat_irr', mat_cats[:,3], ['Categories'])
-        m.add_dataset('cat_errAbs', mat_cats[:,4], ['Categories'])
-        m.add_dataset('cat_err%', mat_cats[:,5], ['Categories'])
-        
+    if mat_cats is not None:
+        m.add_dataset('cat_PhNb', mat_cats[:, 0], ['Categories'])
+        m.add_dataset('cat_w', mat_cats[:, 1], ['Categories'])
+        m.add_dataset('cat_w2', mat_cats[:, 2], ['Categories'])
+        m.add_dataset('cat_irr', mat_cats[:, 3], ['Categories'])
+        m.add_dataset('cat_errAbs', mat_cats[:, 4], ['Categories'])
+        m.add_dataset('cat_err%', mat_cats[:, 5], ['Categories'])
+
         arr_wc = np.zeros((9, n_lam), dtype=np.float64)
         arr_wc2 = np.zeros((9, n_lam), dtype=np.float64)
-            
+
         arr_wc[0, ilam] = np.sum(w_ph_cats[:, ilam], axis=0)
         arr_wc[1:, ilam] = w_ph_cats[:, ilam]
-        
+
         arr_wc2[0, ilam] = np.sum(w_ph_cats2[:, ilam], axis=0)
         arr_wc2[1:, ilam] = w_ph_cats2[:, ilam]
-        
+
         axe_w_ph = ['Categories']
-        if (n_lam > 1): axe_w_ph.append('wavelength')
-            
-        m.add_dataset('wPhCats', arr_wc[:,ilam], axe_w_ph)
-        m.add_dataset('wPhCats2', arr_wc2[:,ilam], axe_w_ph)
-        m.add_dataset('norm_npho', norm_npho[0,0,0,:,0,0], ['wavelength'])
-        
+        if n_lam > 1:
+            axe_w_ph.append('wavelength')
+
+        m.add_dataset('wPhCats', arr_wc[:, ilam], axe_w_ph)
+        m.add_dataset('wPhCats2', arr_wc2[:, ilam], axe_w_ph)
+        m.add_dataset('norm_npho', norm_npho[0, 0, 0, :, 0, 0], ['wavelength'])
+
         m.set_attr('n_cte', str(dic_stp["n_cte"]))
 
-    if (mat_loss is not None):
-        m.add_dataset('wLoss', np.array(mat_loss[:,0], dtype=np.float64), ['index'])
-        m.add_dataset('wLoss2', np.array(mat_loss[:,1], dtype=np.float64), ['index'])
+    if mat_loss is not None:
+        m.add_dataset(
+            'wLoss', np.array(mat_loss[:, 0], dtype=np.float64), ['index']
+        )
+        m.add_dataset(
+            'wLoss2', np.array(mat_loss[:, 1], dtype=np.float64), ['index']
+        )
         m.set_attr('n_cos', str(dic_stp["n_cos"]))
-        
+
         # To consider also the multispectral case
-        if (n_lam > 1) : lwl = len(wl)
-        else : lwl = 1
+        if n_lam > 1:
+            lwl = len(wl)
+        else:
+            lwl = 1
 
         # ======== Find the extinction between TOA and heliostats
         tau_ext = np.zeros(lwl, dtype=np.float64)
         tr_tau = np.zeros(lwl, dtype=np.float64)
         p_pyt = np.zeros(lwl, dtype=np.float64)
 
-        # find the atm layer where the mean heliostats z altitude is located
+        # find the atm layer where the mean heliostats z altitude is
+        # located
         ci = 0
         zatm = prof_atm.coords['z_atm'].to_numpy()
         od_atm = prof_atm['OD_atm'].to_numpy()
-        while(zatm[ci] > dic_stp["MZAlt_H"]):
+        while zatm[ci] > dic_stp["MZAlt_H"]:
             ci += 1
 
-        for i in range (0, lwl):
-            tau_ext[i] = (od_atm[i,ci] - od_atm[i,ci-1]) * (dic_stp["MZAlt_H"]/zatm[ci-1])
-            tau_ext[i] = od_atm[i,ci] - tau_ext[i]
+        for i in range(0, lwl):
+            tau_ext[i] = (od_atm[i, ci] - od_atm[i, ci - 1]) * (
+                dic_stp["MZAlt_H"] / zatm[ci - 1]
+            )
+            tau_ext[i] = od_atm[i, ci] - tau_ext[i]
             # Beer-Lamber law to find the transmisttance
-            tr_tau[i] = np.exp(-abs(tau_ext[i]/-dic_stp["vSun"].z))
-            # theoric computation of the total power collected by all the heliostats
-            p_pyt[i] = tr_tau[i]*dic_stp["totS_H"]*1e6 # mult by 1e6 to convert km² to m²
+            tr_tau[i] = np.exp(-abs(tau_ext[i] / -dic_stp["vSun"].z))
+            # theoric computation of the total power collected by all
+            # the heliostats
+            p_pyt[i] = (
+                tr_tau[i] * dic_stp["totS_H"] * 1e6
+            )  # mult by 1e6 to convert km² to m²
         # Save results
         m.add_dataset('n_tr', tr_tau, ['wavelength'])
         m.add_dataset('powc_H', p_pyt, ['wavelength'])
         # ========
 
-        # === Here allows the calculation of the analytical approx of n_atm in backward ->
-        if (back and (dic_stp["LPH"] is not None) and (dic_stp["LPR"] is not None)):
+        # === Here allows the calculation of the analytical approx of
+        # n_atm in backward ->
+        if (
+            back
+            and (dic_stp["LPH"] is not None)
+            and (dic_stp["LPR"] is not None)
+        ):
             naatm = np.zeros(lwl, dtype=np.float64)
-            p = make_progress(lwl-1, dic_stp["prog"])
-            for j in range (0, lwl):
-                sum_naatm=0
-                p.update(j+1, 'n_aatm computed : {:.3g} / {:.3g}'.format(j+1, lwl))
-                for i in range (len(dic_stp["LPH"])):
-                    sum_naatm += _find_extinction(dic_stp["LPH"][i], dic_stp["LPR"][0], prof_atm, j)
-                naatm[j] = sum_naatm/len(dic_stp["LPH"])
-            p.finish('Done! | Analytic approx of n_atm computed for {:.3g} wavelengths'.format(lwl))
+            p = make_progress(lwl - 1, dic_stp["prog"])
+            for j in range(0, lwl):
+                sum_naatm = 0
+                p.update(
+                    j + 1,
+                    'n_aatm computed : {:.3g} / {:.3g}'.format(j + 1, lwl),
+                )
+                for i in range(len(dic_stp["LPH"])):
+                    sum_naatm += _find_extinction(
+                        dic_stp["LPH"][i], dic_stp["LPR"][0], prof_atm, j
+                    )
+                naatm[j] = sum_naatm / len(dic_stp["LPH"])
+            p.finish(
+                'Done! | Analytic approx of n_atm computed for '
+                '{:.3g} wavelengths'.format(
+                    lwl
+                )
+            )
             m.add_dataset('n_aatm', naatm, ['wavelength'])
         # ===
 
@@ -1997,61 +2927,70 @@ def _isotropic(n_theta: int) -> np.ndarray:
     """
     Build the isotropic phase-function lookup table.
 
-    Computes a uniform phase matrix with cumulative distribution function
-    sampling over scattering angles.
+    Computes a uniform phase matrix with cumulative distribution
+    function sampling over scattering angles.
 
     Parameters
     ----------
     n_theta : int
         Theta discretization used to build the sampling lookup tables.
-        In CUDA, phase values are sampled over this angular discretization.
-        A finer angular discretization improves sampling precision but increases
-        GPU memory usage.
+        In CUDA, phase values are sampled over this angular
+        discretization. A finer angular discretization improves sampling
+        precision but increases GPU memory usage.
 
     Returns
     -------
     numpy.ndarray
-        Array of shape ``(n_theta,)`` and dtype ``TYPE_PHASE``.
-        Contains the isotropic phase-function lookup table ready to be indexed
-        by phase lookup routines.
+        Array of shape ``(n_theta,)`` and dtype ``TYPE_PHASE``. Contains
+        the isotropic phase-function lookup table ready to be indexed by
+        phase lookup routines.
 
     Warnings
     --------
     This function has not been validated yet.
     """
     phase_H = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
-    angles = np.linspace(0., pi, int(n_theta), endpoint=True, dtype=np.float64)
+    angles = np.linspace(
+        0.0, pi, int(n_theta), endpoint=True, dtype=np.float64
+    )
     scum = [0]
     norm = 0.5
-    phase= np.zeros((4,n_theta), dtype='float64') 
-    phase[0,:] = 0.5/norm
-    phase[1,:] = 0.5/norm
-    phase[2,:] = 0.5/norm
-    phase[3,:] = 0.5/norm
+    phase = np.zeros((4, n_theta), dtype='float64')
+    phase[0, :] = 0.5 / norm
+    phase[1, :] = 0.5 / norm
+    phase[2, :] = 0.5 / norm
+    phase[3, :] = 0.5 / norm
     pm = phase[1, :] + phase[0, :]
     sin = np.sin(angles)
     dtheta = np.diff(angles)
-    tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.
-                    + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6.) * np.pi * 2.
-    scum = np.append(scum,tmp)
+    tmp = (
+        dtheta
+        * (
+            (sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.0
+            + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1]) / 6.0
+        )
+        * np.pi
+        * 2.0
+    )
+    scum = np.append(scum, tmp)
     scum = np.cumsum(scum)
     scum /= scum[-1]
 
     # probability between 0 and 1
-    z = (np.arange(n_theta, dtype='float64')+1)/n_theta
-    angN = (np.arange(n_theta, dtype='float64'))/(n_theta-1)*np.pi
-    f1 = interp1d(angles, phase[0,:])
-    f2 = interp1d(angles, phase[1,:])
-    f3 = interp1d(angles, phase[2,:])
-    f4 = interp1d(angles, phase[3,:])
+    z = (np.arange(n_theta, dtype='float64') + 1) / n_theta
+    angN = (np.arange(n_theta, dtype='float64')) / (n_theta - 1) * np.pi
+    f1 = interp1d(angles, phase[0, :])
+    f2 = interp1d(angles, phase[1, :])
+    f3 = interp1d(angles, phase[2, :])
+    f4 = interp1d(angles, phase[3, :])
 
     # parameters equally spaced in scattering probability
-    phase_H['p_P11'][:] = interp1d(scum, phase[0,:])(z)  # I par P11
-    phase_H['p_P22'][:] = interp1d(scum, phase[1,:])(z)  # I per P22
-    phase_H['p_P33'][:] = interp1d(scum, phase[2,:])(z)  # U P33
-    phase_H['p_P43'][:] = interp1d(scum, phase[3,:])(z)  # V P43
-    phase_H['p_P44'][:] = interp1d(scum, phase[2,:])(z)  # V P44= P33
-    phase_H['p_ang'][:] = interp1d(scum, angles)(z) # angle
+    phase_H['p_P11'][:] = interp1d(scum, phase[0, :])(z)  # I par P11
+    phase_H['p_P22'][:] = interp1d(scum, phase[1, :])(z)  # I per P22
+    phase_H['p_P33'][:] = interp1d(scum, phase[2, :])(z)  # U P33
+    phase_H['p_P43'][:] = interp1d(scum, phase[3, :])(z)  # V P43
+    phase_H['p_P44'][:] = interp1d(scum, phase[2, :])(z)  # V P44= P33
+    phase_H['p_ang'][:] = interp1d(scum, angles)(z)  # angle
 
     # parameters equally spaced in scattering angle [0, 180]
     phase_H['a_P11'][:] = f1(angN)  # I par P11
@@ -2060,7 +2999,6 @@ def _isotropic(n_theta: int) -> np.ndarray:
     phase_H['a_P43'][:] = f4(angN)  # V P43
     phase_H['a_P44'][:] = f3(angN)  # V P44=P33
 
-
     return phase_H
 
 
@@ -2068,29 +3006,31 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     """
     Build the Rayleigh phase-function lookup table.
 
-    Computes the Rayleigh phase matrix (polarized or scalar) with cumulative
-    distribution function sampling over scattering angles.
+    Computes the Rayleigh phase matrix (polarized or scalar) with
+    cumulative distribution function sampling over scattering angles.
 
     Parameters
     ----------
     n_theta : int
         Theta discretization used to build the sampling lookup tables.
-        In CUDA, phase values are sampled over this angular discretization.
-        A finer angular discretization improves sampling precision but increases
-        GPU memory usage.
+        In CUDA, phase values are sampled over this angular
+        discretization. A finer angular discretization improves sampling
+        precision but increases GPU memory usage.
     depo : float
-        Molecular depolarization factor. Generates the Rayleigh phase entry.
-        If negative, an isotropic phase function is used instead of Rayleigh.
+        Molecular depolarization factor. Generates the Rayleigh phase
+        entry. If negative, an isotropic phase function is used instead
+        of Rayleigh.
     pol_off : bool, optional
-        If ``True``, build scalar-equivalent phase tables with polarization
-        disabled. If ``False``, keep the polarized phase-matrix terms required
-        by the vector radiative transfer kernels. Default is ``False``.
+        If ``True``, build scalar-equivalent phase tables with
+        polarization disabled. If ``False``, keep the polarized phase-
+        matrix terms required by the vector radiative transfer kernels.
+        Default is ``False``.
 
     Returns
     -------
     numpy.ndarray
-        Array of shape ``(n_theta,)`` and dtype ``TYPE_PHASE``.
-        Contains the Rayleigh phase-function lookup table ready to be indexed by
+        Array of shape ``(n_theta,)`` and dtype ``TYPE_PHASE``. Contains
+        the Rayleigh phase-function lookup table ready to be indexed by
         phase lookup routines.
     """
     pha = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
@@ -2098,14 +3038,16 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     gama = depo / (2 - depo)
     delta = np.float32((1.0 - gama) / (1.0 + 2.0 * gama))
     delta_prim = np.float32(gama / (1.0 + 2.0 * gama))
-    beta = np.float32(3./2. * delta_prim)
-    alpha = np.float32(1./8. * delta)
-    a_coeff = np.float32(1. + beta / (3.0 * alpha))
+    beta = np.float32(3.0 / 2.0 * delta_prim)
+    alpha = np.float32(1.0 / 8.0 * delta)
+    a_coeff = np.float32(1.0 + beta / (3.0 * alpha))
 
     i = np.arange(int(n_theta), dtype=np.float32)
-    theta_le = np.linspace(0., pi, int(n_theta), endpoint=True, dtype=np.float64)
+    theta_le = np.linspace(
+        0.0, pi, int(n_theta), endpoint=True, dtype=np.float64
+    )
     b = ((i / (n_theta - 1)) - 4.0 * alpha - beta) / (2.0 * alpha)
-    u = (-b + (a_coeff**3.0 + b**2.0)**(1.0 / 2.0))**(1.0 / 3.0)
+    u = (-b + (a_coeff**3.0 + b**2.0) ** (1.0 / 2.0)) ** (1.0 / 3.0)
     c_th = u - (a_coeff / u)
     c_th = np.clip(c_th, -1, 1)
     c_th2 = c_th * c_th
@@ -2114,7 +3056,7 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     c_th2_le = c_th_le * c_th_le
 
     delta_seco = np.float32((1.0 - 3.0 * gama) / (1.0 - gama))
-    t_half = (3.0 / 2.0)
+    t_half = 3.0 / 2.0
     p22 = t_half * (delta + delta_prim)
     p12 = t_half * delta_prim
     p33bis = t_half * delta
@@ -2123,7 +3065,8 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     if pol_off:
         # P(theta) -> phase matrix in Iperpar convention
         # F(theta) -> phase matrix in IQUV convention
-        # from IQUV to IperIpar (in the case only IQUV F11 != 0 i.e. no polarisation)
+        # from IQUV to IperIpar (in the case only IQUV F11 != 0 i.e. no
+        # polarisation)
         # p11 = ((3./8.)*delta*(c_th2[:]-1)) + 0.5
         # a_p11 = ((3./8.)*delta*(c_th2_le[:]-1)) + 0.5
         p11 = t_half * (delta * c_th2[:] + delta_prim)
@@ -2168,28 +3111,32 @@ def _calc_phase_gpu(
     """
     Build the phase-function lookup table uploaded to the GPU.
 
-    This routine converts the phase information stored in an atmospheric or
-    oceanic profile into the structured ``TYPE_PHASE`` table expected by the
-    CUDA kernels. The returned table always reserves:
+    This routine converts the phase information stored in an atmospheric
+    or oceanic profile into the structured ``TYPE_PHASE`` table expected
+    by the CUDA kernels. The returned table always reserves:
 
-    - index 0 for the molecular phase function (Rayleigh, or isotropic when
+    - index 0 for the molecular phase function (Rayleigh, or isotropic
+      when
         ``depo < 0``),
     - index 1 for the VRS phase function,
-    - subsequent indices for the tabulated particle phase functions found in
+    - subsequent indices for the tabulated particle phase functions
+      found in
         ``phase_<kind>``.
 
     For each phase entry, two discretizations are precomputed:
 
-    - ``p_*`` fields sampled on an equal-probability grid used for Monte Carlo
+    - ``p_*`` fields sampled on an equal-probability grid used for Monte
+      Carlo
         scattering sampling,
-    - ``a_*`` fields sampled on an equal-angle grid over the range [0, pi] used by
+    - ``a_*`` fields sampled on an equal-angle grid over the range [0,
+      pi] used by
         the GPU phase interpolation code.
 
     The profile phase matrices are first normalized to the internal
     I-parallel/I-perpendicular representation with
-    ``convert_phase_to_iparper``. When ``pol_off`` is enabled, tabulated phase
-    matrices are reduced to their scalar intensity equivalent before the lookup
-    tables are built.
+    ``convert_phase_to_iparper``. When ``pol_off`` is enabled, tabulated
+    phase matrices are reduced to their scalar intensity equivalent
+    before the lookup tables are built.
 
     Parameters
     ----------
@@ -2201,31 +3148,31 @@ def _calc_phase_gpu(
         discretization. A finer angular discretization improves sampling
         precision but increases GPU memory usage.
     depo : float
-        Molecular depolarization factor used to generate the Rayleigh phase
-        entry. If negative, an isotropic phase function is used instead of
-        Rayleigh.
+        Molecular depolarization factor used to generate the Rayleigh
+        phase entry. If negative, an isotropic phase function is used
+        instead of Rayleigh.
     kind : str
-        Profile family identifier. Must be either ``'atm'`` (atmosphere) or
-        ``'oc'`` (ocean).
+        Profile family identifier. Must be either ``'atm'`` (atmosphere)
+        or ``'oc'`` (ocean).
     pol_off : bool, optional
-        If ``True``, build scalar-equivalent phase tables with polarization
-        disabled. If ``False``, keep the polarized phase-matrix terms required
-        by the vector radiative transfer kernels.
+        If ``True``, build scalar-equivalent phase tables with
+        polarization disabled. If ``False``, keep the polarized phase-
+        matrix terms required by the vector radiative transfer kernels.
 
     Returns
     -------
     pycuda.gpuarray.GPUArray
         GPU array of shape ``(n_phase_entries, n_theta)`` and dtype
-        ``TYPE_PHASE``. Each row contains one phase-function lookup table
-        ready to be indexed by ``iphase_<kind>`` in the profile uploaded by
-        ``_init_profile``.
+        ``TYPE_PHASE``. Each row contains one phase-function lookup
+        table ready to be indexed by ``iphase_<kind>`` in the profile
+        uploaded by ``_init_profile``.
 
     Notes
     -----
-    The scattering-angle coordinate from ``theta_<kind>`` is converted from
-    degrees to radians internally, and the cumulative scattering probability is
-    obtained by integrating the phase terms over solid angle before
-    interpolation.
+    The scattering-angle coordinate from ``theta_<kind>`` is converted
+    from degrees to radians internally, and the cumulative scattering
+    probability is obtained by integrating the phase terms over solid
+    angle before interpolation.
     """
 
     if hasattr(profile, 'to_xarray'):
@@ -2237,8 +3184,8 @@ def _calc_phase_gpu(
     else:
         nphases = 0
 
-    nphases += 2    # include Rayleigh and VRS phase function
-    #nphases += 1   # include Rayleigh phase function
+    nphases += 2  # include Rayleigh and VRS phase function
+    # nphases += 1   # include Rayleigh phase function
 
     # Initialize the cumulative distribution function
     if nphases > 0:
@@ -2248,67 +3195,88 @@ def _calc_phase_gpu(
     phase_H = np.zeros(shp, dtype=TYPE_PHASE, order='C')
 
     # Set Rayleigh phase function or isotropic if depo <0
-    if depo >=0 : phase_H[0,:] = _rayleigh(n_theta, depo, pol_off=pol_off)
-    # no pol_off in isotropic because the function needs first to be corrected
-    else : phase_H[0,:]        = _isotropic(n_theta) 
-    if 'theta_'+kind in profile.coords:
-        angles = profile.coords['theta_'+kind].to_numpy() * pi/180.
-        assert angles[-1] < 3.15   # assert that angles are in radians
+    if depo >= 0:
+        phase_H[0, :] = _rayleigh(n_theta, depo, pol_off=pol_off)
+    # no pol_off in isotropic because the function needs first to be
+    # corrected
+    else:
+        phase_H[0, :] = _isotropic(n_theta)
+    if 'theta_' + kind in profile.coords:
+        angles = profile.coords['theta_' + kind].to_numpy() * pi / 180.0
+        assert angles[-1] < 3.15  # assert that angles are in radians
         dtheta = np.diff(angles)
 
     # Set VRS phase function
-    phase_H[1,:] = _rayleigh(n_theta, 0.17)
+    phase_H[1, :] = _rayleigh(n_theta, 0.17)
 
     idx = 2
-    #idx = 1
-    for ipha in range(nphases-2):
-    #for ipha in range(nphases-1):
+    # idx = 1
+    for ipha in range(nphases - 2):
+        # for ipha in range(nphases-1):
 
         phase = profile[name_phase][ipha, :, :].to_numpy()  # ipha, stk, theta
-        
+
         phase = convert_phase_to_iparper(phase)
 
         if pol_off:
-            if (len(phase[:,0]) == 4):
-                raise ValueError("old profiles with only 4 stk available are not supported without polarization")
+            if len(phase[:, 0]) == 4:
+                raise ValueError(
+                    "old profiles with only 4 stk available are not "
+                    "supported without polarization"
+                )
             # back to IQUV convention to obtain F11
-            F11 = 0.5 * (phase[0,:] + 2*phase[1,:] + phase[4,:])
+            F11 = 0.5 * (phase[0, :] + 2 * phase[1, :] + phase[4, :])
             # reset all values to 0
-            phase[:,:] = 0.
+            phase[:, :] = 0.0
             # reconvert to Iperpar but without considering polarization
-            phase[0,:] = 0.5 * F11
-            phase[1,:] = 0.5 * F11
-            phase[4,:] = 0.5 * F11
+            phase[0, :] = 0.5 * F11
+            phase[1, :] = 0.5 * F11
+            phase[4, :] = 0.5 * F11
 
         scum = [0]
         pm = phase[1, :] + phase[0, :]
         sin = np.sin(angles)
-        tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.
-                        + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6.) * np.pi * 2.
-        scum = np.append(scum,tmp)
+        tmp = (
+            dtheta
+            * (
+                (sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.0
+                + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1]) / 6.0
+            )
+            * np.pi
+            * 2.0
+        )
+        scum = np.append(scum, tmp)
         scum = np.cumsum(scum)
         scum /= scum[-1]
 
         # probability between 0 and 1
-        z = (np.arange(n_theta, dtype='float64')+1)/n_theta
-        angN = (np.arange(n_theta, dtype='float64'))/(n_theta-1)*np.pi
+        z = (np.arange(n_theta, dtype='float64') + 1) / n_theta
+        angN = (np.arange(n_theta, dtype='float64')) / (n_theta - 1) * np.pi
         # f1 = interp1d(angles, phase[1,:])
         # f2 = interp1d(angles, phase[0,:])
-        f1 = interp1d(angles, phase[0,:])
-        f2 = interp1d(angles, phase[1,:])
-        f3 = interp1d(angles, phase[2,:])
-        f4 = interp1d(angles, phase[3,:])
+        f1 = interp1d(angles, phase[0, :])
+        f2 = interp1d(angles, phase[1, :])
+        f3 = interp1d(angles, phase[2, :])
+        f4 = interp1d(angles, phase[3, :])
 
-        if (len(phase[:,0]) == 4): # spherical particle
+        if len(phase[:, 0]) == 4:  # spherical particle
             # parameters equally spaced in scattering probability
-            # phase_H['p_P11'][idx, :] = interp1d(scum, phase[1,:])(z)  # I par P11
-            # phase_H['p_P22'][idx, :] = interp1d(scum, phase[0,:])(z)  # I per P22
-            phase_H['p_P11'][idx, :] = interp1d(scum, phase[0,:])(z)  # I par P11
-            phase_H['p_P22'][idx, :] = interp1d(scum, phase[1,:])(z)  # I per P22
-            phase_H['p_P33'][idx, :] = interp1d(scum, phase[2,:])(z)  # U P33
-            phase_H['p_P43'][idx, :] = interp1d(scum, phase[3,:])(z)  # V P43
-            phase_H['p_P44'][idx, :] = interp1d(scum, phase[2,:])(z)  # V P44= P33
-            phase_H['p_ang'][idx, :] = interp1d(scum, angles)(z) # angle
+            # phase_H['p_P11'][idx, :] = interp1d(scum, phase[1,:])(z)
+            # # I par P11
+            # phase_H['p_P22'][idx, :] = interp1d(scum, phase[0,:])(z)
+            # # I per P22
+            phase_H['p_P11'][idx, :] = interp1d(scum, phase[0, :])(
+                z
+            )  # I par P11
+            phase_H['p_P22'][idx, :] = interp1d(scum, phase[1, :])(
+                z
+            )  # I per P22
+            phase_H['p_P33'][idx, :] = interp1d(scum, phase[2, :])(z)  # U P33
+            phase_H['p_P43'][idx, :] = interp1d(scum, phase[3, :])(z)  # V P43
+            phase_H['p_P44'][idx, :] = interp1d(scum, phase[2, :])(
+                z
+            )  # V P44= P33
+            phase_H['p_ang'][idx, :] = interp1d(scum, angles)(z)  # angle
 
             # parameters equally spaced in scattering angle [0, 180]
             phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
@@ -2316,26 +3284,37 @@ def _calc_phase_gpu(
             phase_H['a_P33'][idx, :] = f3(angN)  # U P33
             phase_H['a_P43'][idx, :] = f4(angN)  # V P43
             phase_H['a_P44'][idx, :] = f3(angN)  # V P44=P33
-        else: # non spherical particle
-            f5 = interp1d(angles, phase[4,:])
-            f6 = interp1d(angles, phase[5,:])
+        else:  # non spherical particle
+            f5 = interp1d(angles, phase[4, :])
+            f6 = interp1d(angles, phase[5, :])
 
             scum = [0]
-            pm = 0.5*(phase[0, :] + 2*phase[1, :] + phase[4, :])
+            pm = 0.5 * (phase[0, :] + 2 * phase[1, :] + phase[4, :])
             sin = np.sin(angles)
-            tmp = dtheta * ((sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.
-                            + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1])/6.) * np.pi * 2.
-            scum = np.append(scum,tmp)
+            tmp = (
+                dtheta
+                * (
+                    (sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.0
+                    + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1]) / 6.0
+                )
+                * np.pi
+                * 2.0
+            )
+            scum = np.append(scum, tmp)
             scum = np.cumsum(scum)
             scum /= scum[-1]
 
-            phase_H['p_P11'][idx, :] = interp1d(scum, phase[0,:])(z)  # I P11
-            phase_H['p_P22'][idx, :] = interp1d(scum, phase[4,:])(z)  # I P22
-            phase_H['p_P12'][idx, :] = interp1d(scum, phase[1,:])(z)  # P12=P21
-            phase_H['p_P33'][idx, :] = interp1d(scum, phase[2,:])(z)  # U P33
-            phase_H['p_P43'][idx, :] = interp1d(scum, phase[3,:])(z)  # V P43
-            phase_H['p_P44'][idx, :] = interp1d(scum, phase[5,:])(z)  # V P44= P33
-            phase_H['p_ang'][idx, :] = interp1d(scum, angles)(z) # angle
+            phase_H['p_P11'][idx, :] = interp1d(scum, phase[0, :])(z)  # I P11
+            phase_H['p_P22'][idx, :] = interp1d(scum, phase[4, :])(z)  # I P22
+            phase_H['p_P12'][idx, :] = interp1d(scum, phase[1, :])(
+                z
+            )  # P12=P21
+            phase_H['p_P33'][idx, :] = interp1d(scum, phase[2, :])(z)  # U P33
+            phase_H['p_P43'][idx, :] = interp1d(scum, phase[3, :])(z)  # V P43
+            phase_H['p_P44'][idx, :] = interp1d(scum, phase[5, :])(
+                z
+            )  # V P44= P33
+            phase_H['p_ang'][idx, :] = interp1d(scum, angles)(z)  # angle
 
             phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
             phase_H['a_P22'][idx, :] = f5(angN)  # I per P22
@@ -2343,7 +3322,7 @@ def _calc_phase_gpu(
             phase_H['a_P33'][idx, :] = f3(angN)  # U P33
             phase_H['a_P43'][idx, :] = f4(angN)  # V P43
             phase_H['a_P44'][idx, :] = f6(angN)  # V P44=P33
-            #phase_H['a_P33'][idx, :] = f6(angN)  # V P44=P33
+            # phase_H['a_P33'][idx, :] = f6(angN)  # V P44=P33
 
         idx += 1
 
@@ -2424,36 +3403,46 @@ def _init_const(
     n_orders: int = 1,
     n_jac_abs: int = 0,
 ) -> None:
-    """Initialize and upload simulation constants to CUDA device globals.
+    """Upload the simulation constants to the CUDA device globals.
 
-    This routine computes a few derived geometric quantities and copies all
-    scalar simulation settings to the global constants defined in the CUDA
-    module.
+    This routine computes a few derived geometric quantities and copies
+    all scalar simulation settings to the global constants defined in
+    the CUDA module.
 
     Parameters
     ----------
-    surf : FlatSurface | RoughSurface | LambSurface | RTLSSurface | RPVSurface | None
-        Surface configuration object from ``smartg.surface`` exposing a ``dict`` attribute with keys
-        required by SMART-G (for example ``SUR``, ``BRDF``, ``DIOPTRE``,
-        ``WINDSPEED``, ``NH2O``, ``WAVE_SHADOW``, ``SINGLE``).
+    surf : object | None
+        Surface configuration object from ``smartg.surface``
+        (FlatSurface, RoughSurface, LambSurface, RTLSSurface or
+        RPVSurface) exposing a ``dict`` attribute with keys required
+        by SMART-G (for example
+        ``SUR``, ``BRDF``, ``DIOPTRE``, ``WINDSPEED``, ``NH2O``,
+        ``WAVE_SHADOW``, ``SINGLE``).
     env : Environment | None
-        Environment configuration object exposing a ``dict`` attribute and
-        geometry metadata (for example ``nenv``, ``nxenvmap``, ``nyenvmap``).
-        If ``None``, environment-related constants are not updated.
+        Environment configuration object exposing a ``dict`` attribute
+        and geometry metadata (for example ``nenv``, ``nxenvmap``,
+        ``nyenvmap``). If ``None``, environment-related constants are
+        not updated.
     n_atm, n_atm_abs, n_oce, n_oce_abs : int
         Numbers of atmospheric/oceanic layers and absorbing layers.
     mod : pycuda.compiler.SourceModule
         Compiled CUDA module containing global symbols to update.
-    nb_loop, xblock, xgrid, n_lam, sim, n_f, nb_theta, nb_phi, output_layers : int
-        Main Monte Carlo and output-grid control parameters.
-    th_v_deg, earth_radius, sza_max, sun_disc, z_toa, cell_size, sx_min, sx_max, sy_min, sy_max : float
-        Angular, physical, and spatial scalar settings.
+    nb_loop, xblock, xgrid, n_lam, sim, n_f : int
+        Main Monte Carlo control parameters.
+    nb_theta, nb_phi, output_layers : int
+        Output-grid control parameters.
+    th_v_deg, earth_radius, sza_max, sun_disc, z_toa : float
+        Angular and physical scalar settings.
+    cell_size, sx_min, sx_max, sy_min, sy_max : float
+        Spatial scalar settings.
     le, zip_mode, flux, direct, beer : int
         Integer flags controlling radiative-transfer modes.
     n_lvl, n_pstk, nb_theta, nb_phi, n_lam : int
         Angular/spectral and Stokes discretization controls.
-    n_wl_proba, n_sensor_proba, n_cell_proba, s_min, s_max, r_min, r_max, r_r, n_low : int
-        Sampling and Russian-roulette configuration parameters.
+    n_wl_proba, n_sensor_proba, n_cell_proba : int
+        Sampling configuration parameters.
+    s_min, s_max, r_min, r_max, r_r, n_low : int
+        Path-length limits and Russian-roulette configuration.
     n_jac, hist, n_sensor, refrac, horiz : int
         Jacobian/history, sensor, and geometry/refraction control flags.
     n_obj, n_gobj, n_robj, nb_cx, nb_cy, n_scl, scl_mode, n_orders : int
@@ -2461,12 +3450,13 @@ def _init_const(
     ffs : bool
         If ``True``, enable forward-flux mode constant.
     ocean_interaction : bool or None
-        Ocean-interaction flag. If ``None``, the dedicated device constant is
-        set to ``-1``.
+        Ocean-interaction flag. If ``None``, the dedicated device
+        constant is set to ``-1``.
     weight_r_r : float
         Weight associated with Russian roulette.
     cus_l : CusForward | CusBackward | None
-        Optional custom launch/view configuration object exposing ``dict``.
+        Optional custom launch/view configuration object exposing
+        ``dict``.
     p_min_x, p_min_y, p_min_z, p_max_x, p_max_y, p_max_z : float
         Bounding-box limits for object handling.
     is_atm : int
@@ -2478,8 +3468,8 @@ def _init_const(
     nb_sx, nb_sy : int
         Number of horizontal bins for aerosol-related outputs.
     no_aer_output : bool
-        Add output where only photons not scattered by aerosols are considered.
-        Default False.
+        Add output where only photons not scattered by aerosols are
+        considered. Default False.
 
     Returns
     -------
@@ -2487,20 +3477,22 @@ def _init_const(
     """
 
     # compute some needed constants
-    th_v = th_v_deg * np.pi/180.
+    th_v = th_v_deg * np.pi / 180.0
     s_th_v = np.sin(th_v)
     c_th_v = np.cos(th_v)
 
-    if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "FF")  ):
-        pz_d = z_toa+cus_l.dict['CFTZ']
+    if (cus_l is not None) and (cus_l.dict['LMODE'] == "FF"):
+        pz_d = z_toa + cus_l.dict['CFTZ']
     else:
         pz_d = z_toa
-    t_temp = pz_d/-v_sun.z
+    t_temp = pz_d / -v_sun.z
     px_d = -v_sun.x * t_temp
     py_d = -v_sun.y * t_temp
 
     def copy_to_device(name: str, scalar, dtype) -> None:
-        cuda.memcpy_htod(mod.get_global(name)[0], np.array([scalar], dtype=dtype))
+        cuda.memcpy_htod(
+            mod.get_global(name)[0], np.array([scalar], dtype=dtype)
+        )
 
     # copy constants to device
     copy_to_device('NBLOOPd', nb_loop, np.uint32)
@@ -2534,8 +3526,10 @@ def _init_const(
     if ocean_interaction is None:
         copy_to_device('OCEAN_INTERACTIONd', -1, np.int32)
     else:
-        copy_to_device('OCEAN_INTERACTIONd', 1 if ocean_interaction else 0, np.int32)
-    #copy_to_device('MId', MI, np.int32)
+        copy_to_device(
+            'OCEAN_INTERACTIONd', 1 if ocean_interaction else 0, np.int32
+        )
+    # copy_to_device('MId', MI, np.int32)
     copy_to_device('NLVLd', n_lvl, np.int32)
     copy_to_device('NPSTKd', n_pstk, np.int32)
     copy_to_device('BEERd', beer, np.int32)
@@ -2602,9 +3596,9 @@ def _init_const(
             copy_to_device('TCd', tc, np.float32)
             copy_to_device('nbCx', nb_cx, np.int32)
             copy_to_device('nbCy', nb_cy, np.int32)
-        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "RF")  ):
+        if (cus_l is not None) and (cus_l.dict['LMODE'] == "RF"):
             copy_to_device('LMODEd', 1, np.int32)
-        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "FF")  ):
+        if (cus_l is not None) and (cus_l.dict['LMODE'] == "FF"):
             copy_to_device('CFXd', cus_l.dict['CFX'], np.float32)
             copy_to_device('CFYd', cus_l.dict['CFY'], np.float32)
             copy_to_device('CFTXd', cus_l.dict['CFTX'], np.float32)
@@ -2612,16 +3606,18 @@ def _init_const(
             copy_to_device('ALDEGd', cus_l.dict['FOV'], np.float32)
             copy_to_device('TYPEd', cus_l.dict['TYPE'], np.int32)
             copy_to_device('LMODEd', 2, np.int32)
-        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "B" or cus_l.dict['LMODE'] == "BR")  ):
+        if (cus_l is not None) and (
+            cus_l.dict['LMODE'] == "B" or cus_l.dict['LMODE'] == "BR"
+        ):
             copy_to_device('THDEGd', cus_l.dict['THDEG'], np.float32)
             copy_to_device('PHDEGd', cus_l.dict['PHDEG'], np.float32)
             copy_to_device('ALDEGd', cus_l.dict['ALDEG'], np.float32)
             copy_to_device('TYPEd', cus_l.dict['TYPE'], np.int32)
-        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "B")  ):    
+        if (cus_l is not None) and (cus_l.dict['LMODE'] == "B"):
             copy_to_device('LMODEd', 3, np.int32)
-        if (  (cus_l is not None) and (cus_l.dict['LMODE'] == "BR")  ):
+        if (cus_l is not None) and (cus_l.dict['LMODE'] == "BR"):
             copy_to_device('LMODEd', 4, np.int32)
-        if (cus_l is None):
+        if cus_l is None:
             copy_to_device('LMODEd', 0, np.int32)
 
 
@@ -2634,13 +3630,13 @@ def _init_profile(wl, prof, kind: str) -> tuple:
     Parameters
     ----------
     wl : 1-D ndarray
-        Wavelength grid used for the simulation. Its length defines the first
-        dimension of the generated profile array.
+        Wavelength grid used for the simulation. Its length defines the
+        first dimension of the generated profile array.
     prof : xr.Dataset
         Atmospheric or oceanic profile.
     kind : str
-        Profile family identifier. Must be either ``'atm'`` (atmosphere) or
-        ``'oc'`` (ocean).
+        Profile family identifier. Must be either ``'atm'`` (atmosphere)
+        or ``'oc'`` (ocean).
 
     Returns
     -------
@@ -2657,81 +3653,87 @@ def _init_profile(wl, prof, kind: str) -> tuple:
     if hasattr(prof, 'to_xarray'):
         prof = prof.to_xarray()
 
-    #NREF = len(prof.axis('z_'+kind))
+    # NREF = len(prof.axis('z_'+kind))
     # reformat to smartg format
-    if 'iopt_'+kind in prof.data_vars:
-        NLAY = len(prof['OD_'+kind].to_numpy()[0,:])
+    if 'iopt_' + kind in prof.data_vars:
+        NLAY = len(prof['OD_' + kind].to_numpy()[0, :])
     else:
-        NLAY = len(prof.coords['z_'+kind])
+        NLAY = len(prof.coords['z_' + kind])
     shp = (len(wl), NLAY)
     prof_gpu = np.zeros(shp, dtype=TYPE_PROFILE, order='C')
 
     if kind == "oc":
         if 'iopt_oc' not in prof.data_vars:
-            prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()
-            #prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()  * 1e-3 # to Km
-            prof_gpu['T'][0,:] = prof['T_'+kind].to_numpy()
-            cell_gpu = np.zeros(1, dtype=TYPE_CELL)
-        else: 
-            cell_gpu = np.zeros(len(prof['iopt_oc'].to_numpy()), dtype=TYPE_CELL)
-        prof_gpu['n'][0,:] = 1.34
-    else:
-        if 'iopt_atm' not in prof.data_vars:
-            prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()
-            prof_gpu['T'][0,:] = prof['T_'+kind].to_numpy()
-            prof_gpu['n'][:,:] = prof['n_'+kind].to_numpy()
+            prof_gpu['z'][0, :] = prof.coords['z_' + kind].to_numpy()
+            # prof_gpu['z'][0,:] = prof.coords['z_'+kind].to_numpy()  *
+            # 1e-3 # to Km
+            prof_gpu['T'][0, :] = prof['T_' + kind].to_numpy()
             cell_gpu = np.zeros(1, dtype=TYPE_CELL)
         else:
-            cell_gpu = np.zeros(len(prof['iopt_atm'].to_numpy()), dtype=TYPE_CELL)
-    prof_gpu['z'][1:,:] = -999.      # other wavelengths are NaN
+            cell_gpu = np.zeros(
+                len(prof['iopt_oc'].to_numpy()), dtype=TYPE_CELL
+            )
+        prof_gpu['n'][0, :] = 1.34
+    else:
+        if 'iopt_atm' not in prof.data_vars:
+            prof_gpu['z'][0, :] = prof.coords['z_' + kind].to_numpy()
+            prof_gpu['T'][0, :] = prof['T_' + kind].to_numpy()
+            prof_gpu['n'][:, :] = prof['n_' + kind].to_numpy()
+            cell_gpu = np.zeros(1, dtype=TYPE_CELL)
+        else:
+            cell_gpu = np.zeros(
+                len(prof['iopt_atm'].to_numpy()), dtype=TYPE_CELL
+            )
+    prof_gpu['z'][1:, :] = -999.0  # other wavelengths are NaN
 
-    prof_gpu['OD'][:,:] = prof['OD_'+kind].to_numpy()
-    prof_gpu['OD_sca'][:] = prof['OD_sca_'+kind].to_numpy()
-    prof_gpu['OD_abs'][:] = prof['OD_abs_'+kind].to_numpy()
-    prof_gpu['pmol'][:] = prof['pmol_'+kind].to_numpy()
-    prof_gpu['ssa'][:] = prof['ssa_'+kind].to_numpy()
-    prof_gpu['pine'][:] = prof['pine_'+kind].to_numpy()
-    prof_gpu['FQY1'][:] = prof['FQY1_'+kind].to_numpy()
-    if 'iphase_'+kind in prof.data_vars:
-        prof_gpu['iphase'][:] = prof['iphase_'+kind].to_numpy()
+    prof_gpu['OD'][:, :] = prof['OD_' + kind].to_numpy()
+    prof_gpu['OD_sca'][:] = prof['OD_sca_' + kind].to_numpy()
+    prof_gpu['OD_abs'][:] = prof['OD_abs_' + kind].to_numpy()
+    prof_gpu['pmol'][:] = prof['pmol_' + kind].to_numpy()
+    prof_gpu['ssa'][:] = prof['ssa_' + kind].to_numpy()
+    prof_gpu['pine'][:] = prof['pine_' + kind].to_numpy()
+    prof_gpu['FQY1'][:] = prof['FQY1_' + kind].to_numpy()
+    if 'iphase_' + kind in prof.data_vars:
+        prof_gpu['iphase'][:] = prof['iphase_' + kind].to_numpy()
 
-    if len(cell_gpu)>1:
-        cell_gpu['iopt'][:]  = prof['iopt_'+kind].to_numpy()
-        cell_gpu['iabs'][:]  = prof['iabs_'+kind].to_numpy()
-        pmin = prof['pmin_'+kind].to_numpy()
-        pmax = prof['pmax_'+kind].to_numpy()
-        neighbour = prof['neighbour_'+kind].to_numpy()
-        cell_gpu['pminx'][:] = pmin[0,:]
-        cell_gpu['pminy'][:] = pmin[1,:]
-        cell_gpu['pminz'][:] = pmin[2,:]
-        cell_gpu['pmaxx'][:] = pmax[0,:]
-        cell_gpu['pmaxy'][:] = pmax[1,:]
-        cell_gpu['pmaxz'][:] = pmax[2,:]
-        cell_gpu['neighbour1'][:] = neighbour[0,:]
-        cell_gpu['neighbour2'][:] = neighbour[1,:]
-        cell_gpu['neighbour3'][:] = neighbour[2,:]
-        cell_gpu['neighbour4'][:] = neighbour[3,:]
-        cell_gpu['neighbour5'][:] = neighbour[4,:]
-        cell_gpu['neighbour6'][:] = neighbour[5,:]
-        
+    if len(cell_gpu) > 1:
+        cell_gpu['iopt'][:] = prof['iopt_' + kind].to_numpy()
+        cell_gpu['iabs'][:] = prof['iabs_' + kind].to_numpy()
+        pmin = prof['pmin_' + kind].to_numpy()
+        pmax = prof['pmax_' + kind].to_numpy()
+        neighbour = prof['neighbour_' + kind].to_numpy()
+        cell_gpu['pminx'][:] = pmin[0, :]
+        cell_gpu['pminy'][:] = pmin[1, :]
+        cell_gpu['pminz'][:] = pmin[2, :]
+        cell_gpu['pmaxx'][:] = pmax[0, :]
+        cell_gpu['pmaxy'][:] = pmax[1, :]
+        cell_gpu['pmaxz'][:] = pmax[2, :]
+        cell_gpu['neighbour1'][:] = neighbour[0, :]
+        cell_gpu['neighbour2'][:] = neighbour[1, :]
+        cell_gpu['neighbour3'][:] = neighbour[2, :]
+        cell_gpu['neighbour4'][:] = neighbour[3, :]
+        cell_gpu['neighbour5'][:] = neighbour[4, :]
+        cell_gpu['neighbour6'][:] = neighbour[5, :]
+
     return to_gpu(prof_gpu), to_gpu(cell_gpu)
 
 
 def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
     """Reorganize a list of profiles into a single multi-profile table.
 
-    This helper concatenates compatible profile fields so several atmosphere
-    or ocean profile configurations can be simulated in a single SMART-G run.
-    It can also be used in workflows such as finite-difference sensitivity or
-    Jacobian computations, but it is not limited to those use cases.
+    This helper concatenates compatible profile fields so several
+    atmosphere or ocean profile configurations can be simulated in a
+    single SMART-G run. It can also be used in workflows such as finite-
+    difference sensitivity or Jacobian computations, but it is not
+    limited to those use cases.
 
     Parameters
     ----------
     profs : list of xr.Dataset
-        Profiles returned by atmospheric or oceanic profile builders (for
-        example ``atm.calc()`` or ``water.calc()``). MLUT-like objects are
-        converted with ``to_xarray()`` when available. DataArray inputs are
-        converted to single-variable datasets.
+        Profiles returned by atmospheric or oceanic profile builders
+        (for example ``atm.calc()`` or ``water.calc()``). MLUT-like
+        objects are converted with ``to_xarray()`` when available.
+        DataArray inputs are converted to single-variable datasets.
     kind : str, default='atm'
         Profile family to process. Allowed values are:
 
@@ -2741,9 +3743,9 @@ def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
     Returns
     -------
     xr.Dataset
-        Reorganized profile dataset where compatible variables from all input
-        profiles are concatenated, with phase-function indexing adjusted to
-        remain unique across concatenated blocks.
+        Reorganized profile dataset where compatible variables from all
+        input profiles are concatenated, with phase-function indexing
+        adjusted to remain unique across concatenated blocks.
     """
 
     xprofs = []
@@ -2777,24 +3779,26 @@ def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
 
 
 def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
-    """Post-process ALIS finite-difference runs into sensitivities/Jacobians.
+    """Post-process ALIS finite-difference runs into sensitivities.
 
-    The input lookup tables are expected to be packed along the wavelength
-    axis as one reference block followed by one perturbed block per variable:
-    ``[ref, var1, var2, ...]``. For each radiometric quantity, this function
-    keeps the reference LUT and appends one finite-difference LUT per variable.
+    The input lookup tables are expected to be packed along the
+    wavelength axis as one reference block followed by one perturbed
+    block per variable: ``[ref, var1, var2, ...]``. For each radiometric
+    quantity, this function keeps the reference LUT and appends one
+    finite-difference LUT per variable.
 
     Parameters
     ----------
     ds_sg : xr.DataArray
         SMART-G output produced in ALIS finite-difference mode.
     varnames : sequence of str
-        Names of perturbed variables, in the same order as their wavelength
-        blocks in ``ds_sg``.
+        Names of perturbed variables, in the same order as their
+        wavelength blocks in ``ds_sg``.
     delta : sequence of float, optional
         Perturbation amplitude for each variable. If provided, finite
-        differences are divided by ``delta[k]`` and the outputs are Jacobians.
-        If omitted, raw finite-difference sensitivities are returned.
+        differences are divided by ``delta[k]`` and the outputs are
+        Jacobians. If omitted, raw finite-difference sensitivities are
+        returned.
 
     Returns
     -------
@@ -2809,9 +3813,8 @@ def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
 
     Notes
     -----
-    Only variables whose names contain one of
-    ``'I_'``, ``'Q_'``, ``'U_'``, ``'V_'``, ``'transmission'``, or ``'flux'``
-    are processed.
+    Only variables whose names contain one of ``'I_'``, ``'Q_'``,
+    ``'U_'``, ``'V_'``, ``'transmission'``, or ``'flux'`` are processed.
     """
 
     if hasattr(ds_sg, 'to_xarray'):
@@ -2822,7 +3825,9 @@ def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
         ds_sg = ds_sg.to_dataset(name=data_name)
 
     if not isinstance(ds_sg, xr.Dataset):
-        raise TypeError('reduce_diff expects MLUT/LUT or xarray Dataset/DataArray input.')
+        raise TypeError(
+            'reduce_diff expects MLUT/LUT or xarray Dataset/DataArray input.'
+        )
 
     if 'wavelength' not in ds_sg.dims:
         raise ValueError("Input must define a 'wavelength' dimension.")
@@ -2831,7 +3836,10 @@ def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
     n_wl_total = ds_sg.sizes['wavelength']
     block_size = int(n_wl_total / (n_diff + 1))
     if block_size * (n_diff + 1) != n_wl_total:
-        raise ValueError('wavelength size is not compatible with the number of perturbation blocks.')
+        raise ValueError(
+            'wavelength size is not compatible with the number of '
+            'perturbation blocks.'
+        )
 
     if delta is not None:
         if np.isscalar(delta):
@@ -2851,11 +3859,15 @@ def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
         if not any(pref in var_name for pref in prefixes):
             continue
 
-        ref_da = da.isel(wavelength=slice(0, block_size)).assign_coords(wavelength=wl_ref)
+        ref_da = da.isel(wavelength=slice(0, block_size)).assign_coords(
+            wavelength=wl_ref
+        )
         out_vars[var_name] = ref_da
 
         for k, pert_name in enumerate(varnames):
-            pert_da = da.isel(wavelength=slice((k + 1) * block_size, (k + 2) * block_size)).assign_coords(wavelength=wl_ref)
+            pert_da = da.isel(
+                wavelength=slice((k + 1) * block_size, (k + 2) * block_size)
+            ).assign_coords(wavelength=wl_ref)
             diff_da = pert_da - ref_da
             if delta is not None:
                 diff_da = diff_da / delta[k]
@@ -2917,12 +3929,12 @@ def _loop_kernel(
     amf_variance: bool = False,
     nscl: int = 1,
 ) -> tuple:
-    """Run the Monte Carlo transport kernel until the requested photon budget.
+    """Run the transport kernel until the requested photon budget.
 
-    This function repeatedly launches the GPU kernel, accumulates radiometric
-    outputs, optional ALIS path-length diagnostics, optional history buffers,
-    and optional receiver-object diagnostics until the stopping criterion is
-    reached.
+    This function repeatedly launches the GPU kernel, accumulates
+    radiometric outputs, optional ALIS path-length diagnostics, optional
+    history buffers, and optional receiver-object diagnostics until the
+    stopping criterion is reached.
 
     Parameters
     ----------
@@ -2934,7 +3946,8 @@ def _loop_kernel(
     n_level : int
         Number of output levels.
     n_atm, n_atm_abs : int
-        Number of atmospheric layers and number of atmospheric absorbing layers.
+        Number of atmospheric layers and number of atmospheric absorbing
+        layers.
     n_oce, n_oce_abs : int
         Number of ocean layers and number of ocean absorbing layers.
     max_hist : int
@@ -2967,18 +3980,20 @@ def _loop_kernel(
         Atmospheric and ocean profile tables.
     cell_atm, cell_oc : pycuda.gpuarray.GPUArray
         Atmospheric and ocean cell lookup tables.
-    wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf : pycuda.gpuarray.GPUArray
+    wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf : GPUArray
         Inverse-CDF tables for wavelength, sensor, and cell sampling.
     stdev : bool
         If True, estimate standard deviation of normalized outputs.
     stdev_lim : object or None
-        Optional adaptive stopping criterion based on absolute/relative error.
+        Optional adaptive stopping criterion based on absolute/relative
+        error.
     rng : object
         Random-number generator backend with a ``state`` GPU buffer.
     alis : bool
         Whether ALIS mode is active.
-    lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect : pycuda.gpuarray.GPUArray
-        Object, object-group, receiver-object, and object-spectrum GPU tables.
+    lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect : GPUArray
+        Object, object-group, receiver-object, and object-spectrum GPU
+        tables.
     receiver_cell_size : float or None
         Receiver cell size. If None, receiver diagnostics are disabled.
     nb_cx, nb_cy : int
@@ -3022,20 +4037,29 @@ def _loop_kernel(
     else:
         fdtype = np.float32
 
-    # If a receiver object is used then: initialize matrix and vectors for gains and losses
+    # If a receiver object is used then: initialize matrix and vectors
+    # for gains and losses
     if receiver_cell_size is not None:
-        nb_ph_cat = gpuzeros(8, dtype=np.uint64)  # number of photons in each category
-        w_ph_cat = gpuzeros((8, n_lam), dtype=fdtype)  # photon weight for each category
+        nb_ph_cat = gpuzeros(
+            8, dtype=np.uint64
+        )  # number of photons in each category
+        w_ph_cat = gpuzeros(
+            (8, n_lam), dtype=fdtype
+        )  # photon weight for each category
         w_ph_cat_tot = gpuzeros((8, n_lam), dtype=fdtype)
-        w_ph_cat2 = gpuzeros((8, n_lam), dtype=fdtype)  # squared photon weights per category
+        w_ph_cat2 = gpuzeros(
+            (8, n_lam), dtype=fdtype
+        )  # squared photon weights per category
         w_ph_cat2_tot = gpuzeros((8, n_lam), dtype=fdtype)
         tab_obj_info = gpuzeros((9, nb_cx, nb_cy), dtype=fdtype)
         w_ph_loss = gpuzeros(7, dtype=fdtype)
         w_ph_loss2 = gpuzeros(7, dtype=fdtype)
         tab_mat_recep = np.zeros((9, nb_cx, nb_cy), dtype=np.float64)
 
-        # Matrix where lines: l0 = sumCats, l1=cat1, l2=cat2, ... l8=cat8
-        # and columns: c0=nbPhotons, c1=weight, c2=weight2, c3=flux (W), c4=errAbs, c5=err%
+        # Matrix where lines: l0 = sumCats, l1=cat1, l2=cat2, ...
+        # l8=cat8
+        # and columns: c0=nbPhotons, c1=weight, c2=weight2, c3=flux (W),
+        # c4=errAbs, c5=err%
         mat_cats = np.zeros((9, 6), dtype=np.float64)
 
         # Matrix where: M[0,0]=W_I, M[1,0]=W_rhoM, ..., M[6,0]=W_SP
@@ -3063,56 +4087,119 @@ def _loop_kernel(
     if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
         n_iamf = 3 if amf_variance else 2
         n_scl = nscl
-        tab_dist_tot = gpuzeros((n_level, n_atm_abs + n_oce_abs, n_sensor, nb_theta, nb_phi, n_scl, n_iamf), dtype=np.float64)
+        tab_dist_tot = gpuzeros(
+            (
+                n_level,
+                n_atm_abs + n_oce_abs,
+                n_sensor,
+                nb_theta,
+                nb_phi,
+                n_scl,
+                n_iamf,
+            ),
+            dtype=np.float64,
+        )
     else:
         n_scl = 1
         tab_dist_tot = gpuzeros((1), dtype=np.float64)
 
     # Initialize accumulators
-    tab_photons_tot = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64)
-    tab_photons_tot_no_aer = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64)
+    tab_photons_tot = gpuzeros(
+        (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64
+    )
+    tab_photons_tot_no_aer = gpuzeros(
+        (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64
+    )
     n_simu = 0
     if stdev:
-        # Accumulate normalized quantities and their squares to estimate sigma.
-        sum_x = 0.
-        sum_x2 = 0.
+        # Accumulate normalized quantities and their squares to estimate
+        # sigma.
+        sum_x = 0.0
+        sum_x2 = 0.0
 
     # Arrays for counting launched photons (per wavelength)
     n_photons_in = gpuzeros((n_sensor, n_lam), dtype=np.uint64)
     n_photons_in_tot = gpuzeros((n_sensor, n_lam), dtype=np.uint64)
 
     # Arrays for counting output photons
-    n_photons_out = gpuzeros((n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64)
-    n_photons_out_no_aer = gpuzeros((n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64)
-    n_photons_out_tot = gpuzeros((n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64)
-    n_photons_out_tot_no_aer = gpuzeros((n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64)
+    n_photons_out = gpuzeros(
+        (n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64
+    )
+    n_photons_out_no_aer = gpuzeros(
+        (n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64
+    )
+    n_photons_out_tot = gpuzeros(
+        (n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64
+    )
+    n_photons_out_tot_no_aer = gpuzeros(
+        (n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64
+    )
 
     if double:
-        tab_photons = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64)
-        tab_photons_no_aer = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64)
+        tab_photons = gpuzeros(
+            (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi),
+            dtype=np.float64,
+        )
+        tab_photons_no_aer = gpuzeros(
+            (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi),
+            dtype=np.float64,
+        )
         if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
-            tab_dist = gpuzeros((n_level, n_atm_abs + n_oce_abs, n_sensor, nb_theta, nb_phi, n_scl, n_iamf), dtype=np.float64)
+            tab_dist = gpuzeros(
+                (
+                    n_level,
+                    n_atm_abs + n_oce_abs,
+                    n_sensor,
+                    nb_theta,
+                    nb_phi,
+                    n_scl,
+                    n_iamf,
+                ),
+                dtype=np.float64,
+            )
         else:
             tab_dist = gpuzeros((1), dtype=np.float64)
     else:
-        tab_photons = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float32)
-        tab_photons_no_aer = gpuzeros((n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float32)
+        tab_photons = gpuzeros(
+            (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi),
+            dtype=np.float32,
+        )
+        tab_photons_no_aer = gpuzeros(
+            (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi),
+            dtype=np.float32,
+        )
         if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
-            tab_dist = gpuzeros((n_level, n_atm_abs + n_oce_abs, n_sensor, nb_theta, nb_phi, n_scl, n_iamf), dtype=np.float32)
+            tab_dist = gpuzeros(
+                (
+                    n_level,
+                    n_atm_abs + n_oce_abs,
+                    n_sensor,
+                    nb_theta,
+                    nb_phi,
+                    n_scl,
+                    n_iamf,
+                ),
+                dtype=np.float32,
+            )
         else:
             tab_dist = gpuzeros((1), dtype=np.float32)
 
     if hist:
         _n_cols_hist = n_atm_abs + n_oce_abs + n_pstk + n_low + 7
-        tab_hist_tot = gpuzeros((2, max_hist, _n_cols_hist, n_sensor, nb_theta, nb_phi), dtype=np.float32)
+        tab_hist_tot = gpuzeros(
+            (2, max_hist, _n_cols_hist, n_sensor, nb_theta, nb_phi),
+            dtype=np.float32,
+        )
         _hist_bytes = int(tab_hist_tot.nbytes)
         print(
             f"[ALIS hist] tabHist allocated — "
-            f"shape: (2, {max_hist:,}, {_n_cols_hist}, {n_sensor}, {nb_theta}, {nb_phi})  "
+            f"shape: (2, {max_hist:,}, {_n_cols_hist}, {n_sensor}, "
+            f"{nb_theta}, {nb_phi})  "
             f"| record: {_n_cols_hist} float32 "
-            f"({n_atm_abs+n_oce_abs} path-lengths + {n_pstk} Stokes + {n_low} ALIS weights + 7 scalars)  "
-            f"| GPU: {_hist_bytes/1024**2:.1f} MB  "
-            f"| CPU (on transfer): {_hist_bytes/1024**2:.1f} MB"
+            f"({n_atm_abs + n_oce_abs} path-lengths + {n_pstk} Stokes "
+            f"+ {n_low} ALIS weights + 7 scalars)  "
+            f"| GPU: {_hist_bytes / 1024**2:.1f} MB  "
+            f"| CPU (on transfer): {_hist_bytes / 1024**2:.1f} MB"
         )
     else:
         tab_hist_tot = gpuzeros((1), dtype=np.float32)
@@ -3130,12 +4217,12 @@ def _loop_kernel(
         tab_phi = gpuzeros(1, dtype='float32')
         tab_level = to_gpu(np.array([-2]).astype('int32'))
 
-    secs_cuda_clock = 0.
+    secs_cuda_clock = 0.0
     alis_norm = n_lam if n_low != 0 else 1
     nb_photons_target = nb_photons
     while (np.sum(n_photons_in_tot.get()) / alis_norm) < nb_photons_target:
-        tab_photons.fill(0.)
-        tab_photons_no_aer.fill(0.)
+        tab_photons.fill(0.0)
+        tab_photons_no_aer.fill(0.0)
         n_photons_out.fill(0)
         n_photons_out_no_aer.fill(0)
         n_photons_in.fill(0)
@@ -3152,13 +4239,49 @@ def _loop_kernel(
         start_cuda_clock.record()
 
         # Kernel launch
-        kernel(envmap, spectrum, x0, faer, foce,
-               errorcount, n_threads_active, tab_photons, tab_dist, tab_hist_tot, max_hist, tab_photons_no_aer, tab_trans_dir,
-               counter, n_photons_in, n_photons_out, n_photons_out_no_aer, tab_thv, tab_phi, tab_level, tab_sensor,
-               prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf,
-               rng.state, tab_obj_info,
-               lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect, nb_ph_cat, w_ph_cat, w_ph_cat2,
-               w_ph_loss, w_ph_loss2, block=(xblock, 1, 1), grid=(xgrid, 1, 1))
+        kernel(
+            envmap,
+            spectrum,
+            x0,
+            faer,
+            foce,
+            errorcount,
+            n_threads_active,
+            tab_photons,
+            tab_dist,
+            tab_hist_tot,
+            max_hist,
+            tab_photons_no_aer,
+            tab_trans_dir,
+            counter,
+            n_photons_in,
+            n_photons_out,
+            n_photons_out_no_aer,
+            tab_thv,
+            tab_phi,
+            tab_level,
+            tab_sensor,
+            prof_atm,
+            prof_oc,
+            cell_atm,
+            cell_oc,
+            wl_proba_icdf,
+            sensor_proba_icdf,
+            cell_proba_icdf,
+            rng.state,
+            tab_obj_info,
+            lobj_gpu,
+            lgobj_gpu,
+            lrobj_gpu,
+            lobj_spect,
+            nb_ph_cat,
+            w_ph_cat,
+            w_ph_cat2,
+            w_ph_loss,
+            w_ph_loss2,
+            block=(xblock, 1, 1),
+            grid=(xgrid, 1, 1),
+        )
 
         end_cuda_clock.record()
         end_cuda_clock.synchronize()
@@ -3168,9 +4291,11 @@ def _loop_kernel(
         np.set_printoptions(precision=5, linewidth=150)
 
         if receiver_cell_size is not None:
-            # Matrix with the photon weight distribution on the receiver surface.
+            # Matrix with the photon weight distribution on the receiver
+            # surface.
             tab_mat_recep += tab_obj_info[:, :, :].get()
-            # Fill loss matrix with photon weights used for loss estimates.
+            # Fill loss matrix with photon weights used for loss
+            # estimates.
             mat_loss[:, 0] += w_ph_loss[:].get()
             mat_loss[:, 1] += w_ph_loss2[:].get()
             # Fill category matrix.
@@ -3202,13 +4327,15 @@ def _loop_kernel(
         sphot = np.sum(n_photons_in_tot.get()) / alis_norm
         if stdev:
             n_sensor_cur, n_lam_cur = n_photons_in.shape
-            launched_last = launched_last.reshape((1, 1, n_sensor_cur, n_lam_cur, 1, 1))
+            launched_last = launched_last.reshape(
+                (1, 1, n_sensor_cur, n_lam_cur, 1, 1)
+            )
             s_over_l = sum_weights.get() / launched_last.get()
             sum_x += s_over_l
             sum_x2 += s_over_l**2
 
             if stdev_lim is not None:
-                sigma_bis = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu)**2)
+                sigma_bis = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu) ** 2)
                 sigma_bis /= np.sqrt(n_simu)
                 sigma_bis[np.isnan(sigma_bis)] = 0
 
@@ -3223,13 +4350,25 @@ def _loop_kernel(
                 err_rel = (sigma_bis / avg) * 100
                 err_rel[np.isnan(err_rel)] = 0
                 max_rerr = np.max(err_rel[level_stdev, stk_stdev, :, :, :, :])
-                max_aerr = np.max(sigma_bis[level_stdev, stk_stdev, :, :, :, :])
+                max_aerr = np.max(
+                    sigma_bis[level_stdev, stk_stdev, :, :, :, :]
+                )
 
                 if stdev_lim.dict['verbose']:
-                    print(f"max rel_err = {max_rerr:{format_std}}; max abs_err = {max_aerr:{format_std}}")
+                    print(
+                        f"max rel_err = {max_rerr:{format_std}}; "
+                        f"max abs_err = {max_aerr:{format_std}}"
+                    )
 
-                if (n_simu >= min_loop and max_aerr <= abs_min) or (n_simu >= min_loop and max_rerr <= rel_min):
-                    progress.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
+                if (n_simu >= min_loop and max_aerr <= abs_min) or (
+                    n_simu >= min_loop and max_rerr <= rel_min
+                ):
+                    progress.update(
+                        sphot,
+                        f"Launched {sphot:.3g} photons; "
+                f"err[abs] = {max_aerr:{format_std}}; "
+                f"err[rel] = {max_rerr:{format_std}};",
+                    )
                     break
 
         if receiver_cell_size is not None and stdev_lim is not None:
@@ -3238,9 +4377,9 @@ def _loop_kernel(
             sum_2z = (mat_cats[0, 1] * mat_cats[0, 1]) / nb_photons_tmp
             sum_z2 = mat_cats[0, 2]
             if le is None:
-                num = (n_bis * (sum_z2 - sum_2z))**0.5
+                num = (n_bis * (sum_z2 - sum_2z)) ** 0.5
             else:
-                num = (n_bis * abs(sum_z2 - sum_2z))**0.5
+                num = (n_bis * abs(sum_z2 - sum_2z)) ** 0.5
             den = mat_cats[0, 1]
             err_p_tmp = (num / den) * 100
             min_loop = stdev_lim.dict['nb_loop_min']
@@ -3250,13 +4389,22 @@ def _loop_kernel(
             if stdev_lim.dict['verbose']:
                 print(f"relative_err = {err_p_tmp:{format_std}}")
 
-            progress.update(sphot, f"Launched {sphot:.3g} photons; err[rel] = {err_p_tmp:{format_std}};")
+            progress.update(
+                sphot,
+                f"Launched {sphot:.3g} photons; "
+                f"err[rel] = {err_p_tmp:{format_std}};",
+            )
 
             if n_simu >= min_loop and err_p_tmp <= rel_min:
                 nb_photons_target = nb_photons_tmp
                 break
         elif stdev and stdev_lim is not None:
-            progress.update(sphot, f"Launched {sphot:.3g} photons; err[abs] = {max_aerr:{format_std}}; err[rel] = {max_rerr:{format_std}};")
+            progress.update(
+                sphot,
+                f"Launched {sphot:.3g} photons; "
+                f"err[abs] = {max_aerr:{format_std}}; "
+                f"err[rel] = {max_rerr:{format_std}};",
+            )
         else:
             progress.update(sphot, 'Launched {:.3g} photons'.format(sphot))
 
@@ -3265,20 +4413,22 @@ def _loop_kernel(
 
     if receiver_cell_size is not None:
         n_bis = nb_photons_target / (nb_photons_target - 1)
-        # Count the total number of received photons and for each category.
+        # Count the total number of received photons and for each
+        # category.
         mat_cats[0, 0] = np.sum(nb_ph_cat[:].get())
         for i in range(0, 8):
             mat_cats[i + 1, 0] = nb_ph_cat[i].get()
 
-        # Relative and absolute error for sum of categories and per-category values.
+        # Relative and absolute error for sum of categories and per-
+        # category values.
         for i in range(0, 9):
             if mat_cats[i, 0] != 0 and mat_cats[i, 1] != 0:
                 sum_2z = (mat_cats[i, 1] * mat_cats[i, 1]) / nb_photons_target
                 sum_z2 = mat_cats[i, 2]
                 if le is None:
-                    mat_cats[i, 4] = (n_bis * (sum_z2 - sum_2z))**0.5
+                    mat_cats[i, 4] = (n_bis * (sum_z2 - sum_2z)) ** 0.5
                 else:
-                    mat_cats[i, 4] = (n_bis * abs(sum_z2 - sum_2z))**0.5
+                    mat_cats[i, 4] = (n_bis * abs(sum_z2 - sum_2z)) ** 0.5
                 mat_cats[i, 5] = (mat_cats[i, 4] / mat_cats[i, 1]) * 100
     else:
         tab_mat_recep = None
@@ -3286,21 +4436,38 @@ def _loop_kernel(
         mat_loss = None
 
     if stdev:
-        sigma = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu)**2)
+        sigma = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu) ** 2)
         sigma /= np.sqrt(n_simu)
     else:
         sigma = None
 
-    return n_photons_in_tot.get(), tab_photons_tot.get(), tab_photons_tot_no_aer.get(), tab_dist_tot.get(), tab_hist_tot.get(), tab_trans_dir.get(), errorcount, \
-        n_photons_out_tot.get(), n_photons_out_tot_no_aer.get(), sigma, n_simu, secs_cuda_clock, tab_mat_recep, mat_cats, mat_loss, w_ph_cat_tot.get(), w_ph_cat2_tot.get()
+    return (
+        n_photons_in_tot.get(),
+        tab_photons_tot.get(),
+        tab_photons_tot_no_aer.get(),
+        tab_dist_tot.get(),
+        tab_hist_tot.get(),
+        tab_trans_dir.get(),
+        errorcount,
+        n_photons_out_tot.get(),
+        n_photons_out_tot_no_aer.get(),
+        sigma,
+        n_simu,
+        secs_cuda_clock,
+        tab_mat_recep,
+        mat_cats,
+        mat_loss,
+        w_ph_cat_tot.get(),
+        w_ph_cat2_tot.get(),
+    )
 
 
 def _get_git_attrs() -> dict:
     """Retrieve git repository metadata as output attributes.
 
-    Queries the current git repository for the HEAD commit hash and working
-    tree status. Returns an empty dict silently if git is unavailable or the
-    current directory is not inside a git repository.
+    Queries the current git repository for the HEAD commit hash and
+    working tree status. Returns an empty dict silently if git is
+    unavailable or the current directory is not inside a git repository.
 
     Returns
     -------
@@ -3317,6 +4484,7 @@ def _get_git_attrs() -> dict:
 
     # Try to find git executable
     import shutil
+
     git_cmd = shutil.which('git')
     if git_cmd is None:
         # Git not found in PATH, try common locations
@@ -3330,9 +4498,11 @@ def _get_git_attrs() -> dict:
         return {}
 
     # check current commit
-    p = subprocess.Popen([git_cmd, 'rev-parse', 'HEAD'],
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        [git_cmd, 'rev-parse', 'HEAD'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     if p.wait():
         return {}
     else:
@@ -3340,10 +4510,11 @@ def _get_git_attrs() -> dict:
         attrs.update({'git_commit_ref': shasum})
 
     # check if repo is dirty
-    p = subprocess.Popen([git_cmd, 'status', '--porcelain',
-                          '--untracked-files=no'],
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        [git_cmd, 'status', '--porcelain', '--untracked-files=no'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     if p.wait():
         return {}
     else:
@@ -3359,17 +4530,18 @@ def _impact_init(
     earth_radius: float,
     pp: bool,
 ) -> tuple:
-    """Compute atmospheric entry point coordinates and direct transmittance.
+    """Compute the TOA entry point and the direct transmittance.
 
-    Calculates the cartesian coordinates of the photon entry point at the top
-    of atmosphere and the direct (Beer-Lambert) transmittance through the
-    atmosphere for each wavelength.
+    Calculates the cartesian coordinates of the photon entry point at
+    the top of atmosphere and the direct (Beer-Lambert) transmittance
+    through the atmosphere for each wavelength.
 
     Parameters
     ----------
-    prof_atm : xarray.Dataset or object with ``to_xarray`` method, or None
+    prof_atm : xr.Dataset | MLUT | None
         Atmospheric profile containing ``z_atm`` coordinates (km) and
-        ``OD_atm`` optical depth array. If None, no atmosphere is assumed.
+        ``OD_atm`` optical depth array. If None, no atmosphere is
+        assumed.
     nlam : int
         Number of wavelengths.
     thv_deg : float
@@ -3377,7 +4549,8 @@ def _impact_init(
     earth_radius : float
         Earth radius in km.
     pp : bool
-        If True, use plane-parallel geometry; if False, use spherical geometry.
+        If True, use plane-parallel geometry; if False, use spherical
+        geometry.
 
     Returns
     -------
@@ -3389,20 +4562,20 @@ def _impact_init(
         ``exp(-tau_total)`` for each wavelength.
     """
     if prof_atm is None:
-        h_atm = 0.
+        h_atm = 0.0
         natm = 0
     else:
         if hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
         z_atm = prof_atm.coords['z_atm'].to_numpy()
         h_atm = z_atm[0]
-        natm = len(z_atm)-1
+        natm = len(z_atm) - 1
 
     if prof_atm is not None:
         od_atm = prof_atm['OD_atm'].to_numpy()
 
     vx = -np.sin(thv_deg * np.pi / 180)
-    vy = 0.
+    vy = 0.0
     vz = -np.cos(thv_deg * np.pi / 180)
     earth_radius = np.double(earth_radius)
 
@@ -3410,55 +4583,75 @@ def _impact_init(
 
     if pp:
         z0 = h_atm
-        x0 = h_atm*np.tan(thv_deg*np.pi/180.)
-        y0 = 0.
+        x0 = h_atm * np.tan(thv_deg * np.pi / 180.0)
+        y0 = 0.0
 
         if natm != 0:
             for ilam in range(nlam):
                 if prof_atm['OD_atm'].ndim == 2:
                     # lam, z
-                    #tautot[ilam] = prof_atm['OD_atm'][ilam, natm]/np.cos(thv_deg*pi/180.)
-                    tautot[ilam] = od_atm[ilam, -1]/np.cos(thv_deg*np.pi/180.)
+                    # tautot[ilam] = prof_atm['OD_atm'][ilam,
+                    # natm]/np.cos(thv_deg*pi/180.)
+                    tautot[ilam] = od_atm[ilam, -1] / np.cos(
+                        thv_deg * np.pi / 180.0
+                    )
                 elif prof_atm['OD_atm'].ndim == 1:
                     # z
-                    #tautot[ilam] = prof_atm['OD_atm'][natm]/np.cos(thv_deg*pi/180.)
-                    tautot[ilam] = od_atm[-1]/np.cos(thv_deg*np.pi/180.)
+                    # tautot[ilam] =
+                    # prof_atm['OD_atm'][natm]/np.cos(thv_deg*pi/180.)
+                    tautot[ilam] = od_atm[-1] / np.cos(thv_deg * np.pi / 180.0)
                 else:
-                    raise ValueError('invalid number of dimensions in prof_atm')
+                    raise ValueError(
+                        'invalid number of dimensions in prof_atm'
+                    )
     else:
-        tanthv = np.tan(thv_deg*np.pi/180.)
+        tanthv = np.tan(thv_deg * np.pi / 180.0)
 
         # Pythagorean theorem in right triangle OMZ, where:
         # * O is the center of the earth
-        # * M is the entry point in the atmosphere, has cartesian coordinates (x0, y0, earth_radius+z0)
+        # * M is the entry point in the atmosphere, has cartesian
+        # coordinates (x0, y0, earth_radius+z0)
         #     (origin is at the surface)
         # * Z is the projection of M on z axis
         # tan(thv) = x0/z0
-        # earth_radius is the radius of the earth and h_atm the thickness of the atmosphere
-        # solve the equation x0^2 + (earth_radius+z0)^2 = (earth_radius+h_atm)^2 for z0
-        delta = 4*earth_radius**2 + 4*(tanthv**2 + 1) * (h_atm**2 + 2*h_atm*earth_radius)
-        z0 = (-2.*earth_radius + np.sqrt(delta))/(2 *(tanthv**2 + 1.))
-        x0 = z0*tanthv
-        y0 = 0.
+        # earth_radius is the radius of the earth and h_atm the
+        # thickness of the atmosphere
+        # solve the equation x0^2 + (earth_radius+z0)^2 =
+        # (earth_radius+h_atm)^2 for z0
+        delta = 4 * earth_radius**2 + 4 * (tanthv**2 + 1) * (
+            h_atm**2 + 2 * h_atm * earth_radius
+        )
+        z0 = (-2.0 * earth_radius + np.sqrt(delta)) / (2 * (tanthv**2 + 1.0))
+        x0 = z0 * tanthv
+        y0 = 0.0
         z0 += earth_radius
 
-        # loop over the NATM atmosphere layers to find the total optical thickness
+        # loop over the NATM atmosphere layers to find the total optical
+        # thickness
         xph = x0
         yph = y0
         zph = z0
-        for i in range(1, natm+1):
-            # V is the direction vector, X is the position vector, d is the
-            # distance to the next layer and R is the position vector at the
+        for i in range(1, natm + 1):
+            # V is the direction vector, X is the position vector, d is
+            # the
+            # distance to the next layer and R is the position vector at
+            # the
             # next layer
             # we have: R = X + V.d
             # R² = X² + (V.d)² + 2XVD
             # where R is earth_radius+ALT[i]
             # solve for d:
-            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (earth_radius + z_atm[i])**2)
+            delta = 4.0 * (vx * xph + vy * yph + vz * zph) ** 2 - 4 * (
+                (xph**2 + yph**2 + zph**2) - (earth_radius + z_atm[i]) ** 2
+            )
 
             # the 2 solutions are:
-            d1 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) + np.sqrt(delta))
-            d2 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) - np.sqrt(delta))
+            d1 = 0.5 * (
+                -2.0 * (vx * xph + vy * yph + vz * zph) + np.sqrt(delta)
+            )
+            d2 = 0.5 * (
+                -2.0 * (vx * xph + vy * yph + vz * zph) - np.sqrt(delta)
+            )
 
             # the solution is the smallest positive one
             if d1 > 0:
@@ -3482,10 +4675,10 @@ def _impact_init(
                 hlay0 = abs(od_atm[ilam, i] - od_atm[ilam, i - 1])
 
                 # thickness of the layer
-                d0 = abs(z_atm[i-1] - z_atm[i])
+                d0 = abs(z_atm[i - 1] - z_atm[i])
 
                 # optical thickness of the layer at current wavelength
-                hlay = hlay0*d/d0
+                hlay = hlay0 * d / d0
 
                 # cumulative optical thickness
                 tautot[ilam] += hlay
@@ -3500,8 +4693,7 @@ def _init_rng(rng: str) -> '_RngPhilox | _RngCurandPhilox':
     Parameters
     ----------
     rng : str
-        The random-number generator name: 'PHILOX' or
-        'CURAND_PHILOX'.
+        The random-number generator name: 'PHILOX' or 'CURAND_PHILOX'.
 
     Returns
     -------
@@ -3522,6 +4714,7 @@ class _RngPhilox(object):
     This helper manages the RNG seed and state buffer for Philox-based
     random number generation on the GPU.
     """
+
     def __init__(self) -> None:
         pass
 
@@ -3531,8 +4724,8 @@ class _RngPhilox(object):
         Parameters
         ----------
         seed : int
-            Seed value for the random-number generator. If -1, seed is derived
-            from current UTC time (rounded to nearest second).
+            Seed value for the random-number generator. If -1, seed is
+            derived from current UTC time (rounded to nearest second).
         xblock : int
             Number of threads per block in the GPU kernel launch.
         xgrid : int
@@ -3541,22 +4734,30 @@ class _RngPhilox(object):
         Returns
         -------
         int
-            The seed value used to initialize the RNG state. If input was -1,
-            returns the generated timestamp-based seed; otherwise returns the
-            input seed.
+            The seed value used to initialize the RNG state. If input
+            was -1, returns the generated timestamp-based seed;
+            otherwise returns the input seed.
 
         Notes
         -----
-        This method allocates GPU memory for the RNG state buffer and transfers
-        it to device. The state buffer has size ``xblock*xgrid+1`` elements.
+        This method allocates GPU memory for the RNG state buffer and
+        transfers it to device. The state buffer has size
+        ``xblock*xgrid+1`` elements.
         """
         if seed == -1:
             # seed is based on clock
-            # A multiply by 1000 has been removed to avoid OverflowError due to uint32 limit
-            seed = int(np.uint32((datetime.now(tz=timezone.utc)
-                - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds()))
+            # A multiply by 1000 has been removed to avoid OverflowError
+            # due to uint32 limit
+            seed = int(
+                np.uint32(
+                    (
+                        datetime.now(tz=timezone.utc)
+                        - datetime(1970, 1, 1, tzinfo=timezone.utc)
+                    ).total_seconds()
+                )
+            )
 
-        state = np.zeros(xblock*xgrid+1, dtype='uint32')
+        state = np.zeros(xblock * xgrid + 1, dtype='uint32')
         state[0] = seed
         self.state = to_gpu(state)
 
@@ -3567,9 +4768,10 @@ class _RngCurandPhilox(object):
     """CURAND Philox random-number generator backend.
 
     This helper wraps a tiny CUDA module that initializes
-    ``curandStatePhilox4_32_10_t`` states on device memory for all active
-    threads.
+    ``curandStatePhilox4_32_10_t`` states on device memory for all
+    active threads.
     """
+
     def __init__(self) -> None:
         # build module containing the initialization functions
         source = r'''
@@ -3589,7 +4791,9 @@ class _RngCurandPhilox(object):
         }
 
         __global__ void setup(curandStatePhilox4_32_10_t *state) {
-            int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
+            int idx = (blockIdx.x * YGRIDd + blockIdx.y)
+                      * XBLOCKd * YBLOCKd
+                      + (threadIdx.x * YBLOCKd + threadIdx.y);
             curand_init(SEEDd, idx, 0, &state[idx]);
         }
         }
@@ -3598,7 +4802,9 @@ class _RngCurandPhilox(object):
 
         # get state size
         s = gpuzeros(1, dtype=np.uint32)
-        self.mod.get_function('get_state_size')(s, block=(1, 1, 1), grid=(1, 1, 1))
+        self.mod.get_function('get_state_size')(
+            s, block=(1, 1, 1), grid=(1, 1, 1)
+        )
         self.STATE_SIZE = int(np.squeeze(s.get()))  # size in bytes
 
     def setup(self, seed: int, xblock: int, xgrid: int) -> int:
@@ -3607,8 +4813,8 @@ class _RngCurandPhilox(object):
         Parameters
         ----------
         seed : int
-            Seed value for the random-number generator. If -1, seed is derived
-            from current UTC time (rounded to nearest second).
+            Seed value for the random-number generator. If -1, seed is
+            derived from current UTC time (rounded to nearest second).
         xblock : int
             Number of threads per block in the GPU kernel launch.
         xgrid : int
@@ -3617,30 +4823,43 @@ class _RngCurandPhilox(object):
         Returns
         -------
         int
-            The seed value used to initialize the RNG state. If input was -1,
-            returns the generated timestamp-based seed; otherwise returns the
-            input seed.
+            The seed value used to initialize the RNG state. If input
+            was -1, returns the generated timestamp-based seed;
+            otherwise returns the input seed.
 
         Notes
         -----
-        This method initializes ``curandStatePhilox4_32_10_t`` states on device
-        memory for all threads in the GPU grid. It configures GPU global variables
-        (XBLOCKd, XGRIDd, SEEDd) and launches the setup kernel to initialize the
-        RNG state buffer.
+        This method initializes ``curandStatePhilox4_32_10_t`` states on
+        device memory for all threads in the GPU grid. It configures GPU
+        global variables (XBLOCKd, XGRIDd, SEEDd) and launches the setup
+        kernel to initialize the RNG state buffer.
         """
         if seed == -1:
             # seed is based on clock
-            seed = int(np.uint32((datetime.now(tz=timezone.utc)
-                - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds()))
+            seed = int(
+                np.uint32(
+                    (
+                        datetime.now(tz=timezone.utc)
+                        - datetime(1970, 1, 1, tzinfo=timezone.utc)
+                    ).total_seconds()
+                )
+            )
 
-        cuda.memcpy_htod(self.mod.get_global('XBLOCKd')[0], np.array([xblock], dtype=np.int32))
-        cuda.memcpy_htod(self.mod.get_global('XGRIDd')[0], np.array([xgrid], dtype=np.int32))
-        cuda.memcpy_htod(self.mod.get_global('SEEDd')[0], np.array([seed], dtype=np.int32))
+        cuda.memcpy_htod(
+            self.mod.get_global('XBLOCKd')[0],
+            np.array([xblock], dtype=np.int32),
+        )
+        cuda.memcpy_htod(
+            self.mod.get_global('XGRIDd')[0], np.array([xgrid], dtype=np.int32)
+        )
+        cuda.memcpy_htod(
+            self.mod.get_global('SEEDd')[0], np.array([seed], dtype=np.int32)
+        )
 
         # setup RNG
-        self.state = gpuzeros(self.STATE_SIZE*xblock*xgrid, dtype='uint8')
+        self.state = gpuzeros(self.STATE_SIZE * xblock * xgrid, dtype='uint8')
         setup = self.mod.get_function('setup')
-        setup(self.state, block=(xblock,1,1), grid=(xgrid, 1, 1))
+        setup(self.state, block=(xblock, 1, 1), grid=(xgrid, 1, 1))
 
         return seed
 
@@ -3655,8 +4874,9 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
     v_sun : gc.Vector
         Sun direction vector, used in restricted-forward (``RF``) mode.
     wl : float or array-like or BandSet
-        Wavelength definition in nm. It can also be a list of REPTRAN/KDIS
-        bands and will be converted to ``BandSet`` when needed.
+        Wavelength definition in nm. It can also be a list of
+        REPTRAN/KDIS bands and will be converted to ``BandSet`` when
+        needed.
     cus_l : object, optional
         Custom launching mode object (for example ``CusForward`` or
         ``CusBackward``). Default is ``None``.
@@ -3665,7 +4885,8 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
     -------
     tuple
         ``(n_gobj, n_obj, n_robj, surf_lph, nb_h, z_alt_h, tot_s_h, tc,
-        nb_cx, nb_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect, n_cos)``.
+        nb_cx, nb_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect,
+        n_cos)``.
     """
 
     index_offset = 0
@@ -3674,7 +4895,8 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
     ind_robj = []
     lgobj_gpu = np.zeros(n_gobj, dtype=TYPE_GOBJ, order='C')
 
-    # Build a flat list of entities and a GPU table of object-group parameters.
+    # Build a flat list of entities and a GPU table of object-group
+    # parameters.
     for i in range(0, n_gobj):
         lgobj_gpu['index'][i] = index_offset
         lgobj_gpu['bPminx'][i] = lgobj[i].bbox_pmin.x
@@ -3692,7 +4914,10 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
             index_offset += 1
             lobj.append(lgobj[i])
         else:
-            raise ValueError('In the my_objects list, only Entity and GroupE classes are authorized!')
+            raise ValueError(
+                'In the my_objects list, only Entity and GroupE '
+                'classes are authorized!'
+            )
 
     lgobj_gpu = to_gpu(lgobj_gpu)
     n_obj = len(lobj)
@@ -3700,15 +4925,31 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
     if cus_l is not None and cus_l.dict['LMODE'] == "BR":
         lobj_gpu = np.zeros(n_obj + 1, dtype=TYPE_IOBJECTS, order='C')
         tc = cus_l.dict['REC'].tc
-        size_x_min = min(cus_l.dict['REC'].geo.p1.x, cus_l.dict['REC'].geo.p2.x,
-                         cus_l.dict['REC'].geo.p3.x, cus_l.dict['REC'].geo.p4.x)
-        size_x_max = max(cus_l.dict['REC'].geo.p1.x, cus_l.dict['REC'].geo.p2.x,
-                         cus_l.dict['REC'].geo.p3.x, cus_l.dict['REC'].geo.p4.x)
+        size_x_min = min(
+            cus_l.dict['REC'].geo.p1.x,
+            cus_l.dict['REC'].geo.p2.x,
+            cus_l.dict['REC'].geo.p3.x,
+            cus_l.dict['REC'].geo.p4.x,
+        )
+        size_x_max = max(
+            cus_l.dict['REC'].geo.p1.x,
+            cus_l.dict['REC'].geo.p2.x,
+            cus_l.dict['REC'].geo.p3.x,
+            cus_l.dict['REC'].geo.p4.x,
+        )
         size_x = size_x_max - size_x_min
-        size_y_min = min(cus_l.dict['REC'].geo.p1.y, cus_l.dict['REC'].geo.p2.y,
-                         cus_l.dict['REC'].geo.p3.y, cus_l.dict['REC'].geo.p4.y)
-        size_y_max = max(cus_l.dict['REC'].geo.p1.y, cus_l.dict['REC'].geo.p2.y,
-                         cus_l.dict['REC'].geo.p3.y, cus_l.dict['REC'].geo.p4.y)
+        size_y_min = min(
+            cus_l.dict['REC'].geo.p1.y,
+            cus_l.dict['REC'].geo.p2.y,
+            cus_l.dict['REC'].geo.p3.y,
+            cus_l.dict['REC'].geo.p4.y,
+        )
+        size_y_max = max(
+            cus_l.dict['REC'].geo.p1.y,
+            cus_l.dict['REC'].geo.p2.y,
+            cus_l.dict['REC'].geo.p3.y,
+            cus_l.dict['REC'].geo.p4.y,
+        )
         size_y = size_y_max - size_y_min
         nb_cx = int(size_x / tc)
         nb_cy = int(size_y / tc)
@@ -3745,17 +4986,19 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
     if not isinstance(wl, BandSet):
         wl = BandSet(wl)
     nlam = wl.size
-    lobj_spect = np.zeros((n_obj_total * nlam), dtype=TYPE_SPECTRUM_OBJ, order='C')
+    lobj_spect = np.zeros(
+        (n_obj_total * nlam), dtype=TYPE_SPECTRUM_OBJ, order='C'
+    )
 
     # Initialization before object loop.
-    pp1 = 0.
-    pp2 = 0.
-    pp3 = 0.
-    pp4 = 0.
+    pp1 = 0.0
+    pp2 = 0.0
+    pp3 = 0.0
+    pp4 = 0.0
     nb_h = 0
-    z_alt_h = 0.
-    tot_s_h = 0.
-    ncos = 0.
+    z_alt_h = 0.0
+    tot_s_h = 0.0
+    ncos = 0.0
     if cus_l is not None and cus_l.dict['LMODE'] == "RF":
         surf_lph = 0
     else:
@@ -3763,7 +5006,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
 
     # Iterate over all objects.
     for i in range(0, n_obj):
-        normal_base = gc.Vector(0., 0., 1.)
+        normal_base = gc.Vector(0.0, 0.0, 1.0)
         if isinstance(lobj[i].geo, Spheric):
             lobj_gpu['geo'][i] = 1
             lobj_gpu['myRad'][i] = lobj[i].geo.radius
@@ -3785,7 +5028,8 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
             lobj_gpu['p3y'][i] = lobj[i].geo.p4.y
             lobj_gpu['p3z'][i] = lobj[i].geo.p4.z
 
-            # Normal of the plane object after applying rotation transform.
+            # Normal of the plane object after applying rotation
+            # transform.
             normal_base = gc.Vector(0, 0, 1)
             tp_rx0 = gc.get_rotate_x_tf(lobj[i].transformation.rotation[0])
             tp_ry0 = gc.get_rotate_y_tf(lobj[i].transformation.rotation[1])
@@ -3811,7 +5055,10 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
             lobj_gpu['nBy'][i] = normal_base.y
             lobj_gpu['nBz'][i] = normal_base.z
         else:
-            raise ValueError("Your geometry can be only spheric or plane, please choose between Spheric or Plane classes!")
+            raise ValueError(
+                "Your geometry can be only spheric or plane, please "
+                "choose between Spheric or Plane classes!"
+            )
 
         # Apply transformation parameters.
         lobj_gpu['mvRx'][i] = lobj[i].transformation.rotx
@@ -3842,15 +5089,22 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
         lobj_gpu['distAV'][i] = 0
         lobj_gpu['reflectAV'][i] = 0
         if np.array(lobj[i].material_front.reflectivity).size == 1:
-            lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].material_front.reflectivity)
+            lobj_spect['reflectAV'][(i * nlam) : ((i * nlam) + nlam)] = (
+                np.full((nlam), lobj[i].material_front.reflectivity)
+            )
         elif lobj[i].material_front.reflectivity.size != nlam:
-            raise ValueError('The number of reflectivities must be equal to the number of wavelengths!')
+            raise ValueError(
+                'The number of reflectivities must be equal to the '
+                'number of wavelengths!'
+            )
         else:
-            lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = lobj[i].material_front.reflectivity[:]
+            lobj_spect['reflectAV'][(i * nlam) : ((i * nlam) + nlam)] = lobj[
+                i
+            ].material_front.reflectivity[:]
 
         if isinstance(lobj[i].material_front, LambMirror):
             lobj_gpu['materialAV'][i] = 1
-            lobj_gpu['roughAV'][i] = 0.
+            lobj_gpu['roughAV'][i] = 0.0
         elif isinstance(lobj[i].material_front, Matte):
             lobj_gpu['materialAV'][i] = 2
             lobj_gpu['roughAV'][i] = lobj[i].material_front.roughness
@@ -3870,15 +5124,22 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
         lobj_gpu['distAR'][i] = 0
         lobj_gpu['reflectAR'][i] = 0
         if np.array(lobj[i].material_back.reflectivity).size == 1:
-            lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].material_back.reflectivity)
+            lobj_spect['reflectAR'][(i * nlam) : ((i * nlam) + nlam)] = (
+                np.full((nlam), lobj[i].material_back.reflectivity)
+            )
         elif lobj[i].material_back.reflectivity.size != nlam:
-            raise ValueError('The number of reflectivities must be equal to the number of wavelengths!')
+            raise ValueError(
+                'The number of reflectivities must be equal to the '
+                'number of wavelengths!'
+            )
         else:
-            lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = lobj[i].material_back.reflectivity[:]
+            lobj_spect['reflectAR'][(i * nlam) : ((i * nlam) + nlam)] = lobj[
+                i
+            ].material_back.reflectivity[:]
 
         if isinstance(lobj[i].material_back, LambMirror):
             lobj_gpu['materialAR'][i] = 1
-            lobj_gpu['roughAR'][i] = 0.
+            lobj_gpu['roughAR'][i] = 0.0
         elif isinstance(lobj[i].material_back, Matte):
             lobj_gpu['materialAR'][i] = 2
             lobj_gpu['roughAR'][i] = lobj[i].material_back.roughness
@@ -3895,12 +5156,16 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
         if lobj[i].name == "reflector":
             lobj_gpu['type'][i] = 1
 
-            if (isinstance(lobj[i].geo, Plane)
-                    and (isinstance(lobj[i].material_back, Mirror) or isinstance(lobj[i].material_front, Mirror))):
+            if isinstance(lobj[i].geo, Plane) and (
+                isinstance(lobj[i].material_back, Mirror)
+                or isinstance(lobj[i].material_front, Mirror)
+            ):
                 nb_h += 1
                 z_alt_h += lobj[i].transformation.transz
                 tot_s_h += abs(lobj[i].geo.p1.x) * abs(lobj[i].geo.p1.y) * 4
-                ncos += gc.dot(normal_base, gc.Vector(-v_sun.x, -v_sun.y, -v_sun.z))
+                ncos += gc.dot(
+                    normal_base, gc.Vector(-v_sun.x, -v_sun.y, -v_sun.z)
+                )
 
             if cus_l is not None and cus_l.dict['LMODE'] == "RF":
                 pp1 = lobj[i].geo.p1
@@ -3908,21 +5173,39 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
                 pp3 = lobj[i].geo.p3
                 pp4 = lobj[i].geo.p4
                 dot_p = gc.dot(v_sun * -1, normal_base)
-                two_aa_bis = abs((pp1.x - pp4.x) * (pp2.y - pp3.y)) + abs((pp2.x - pp3.x) * (pp1.y - pp4.y))
-                surf_lph_bis = (two_aa_bis / 2.) * dot_p
+                two_aa_bis = abs((pp1.x - pp4.x) * (pp2.y - pp3.y)) + abs(
+                    (pp2.x - pp3.x) * (pp1.y - pp4.y)
+                )
+                surf_lph_bis = (two_aa_bis / 2.0) * dot_p
                 surf_lph += surf_lph_bis
         elif lobj[i].name == "receiver":
             lobj_gpu['type'][i] = 2
             tc = lobj[i].tc
-            size_x_min = min(lobj[i].geo.p1.x, lobj[i].geo.p2.x,
-                             lobj[i].geo.p3.x, lobj[i].geo.p4.x)
-            size_x_max = max(lobj[i].geo.p1.x, lobj[i].geo.p2.x,
-                             lobj[i].geo.p3.x, lobj[i].geo.p4.x)
+            size_x_min = min(
+                lobj[i].geo.p1.x,
+                lobj[i].geo.p2.x,
+                lobj[i].geo.p3.x,
+                lobj[i].geo.p4.x,
+            )
+            size_x_max = max(
+                lobj[i].geo.p1.x,
+                lobj[i].geo.p2.x,
+                lobj[i].geo.p3.x,
+                lobj[i].geo.p4.x,
+            )
             size_x = size_x_max - size_x_min
-            size_y_min = min(lobj[i].geo.p1.y, lobj[i].geo.p2.y,
-                             lobj[i].geo.p3.y, lobj[i].geo.p4.y)
-            size_y_max = max(lobj[i].geo.p1.y, lobj[i].geo.p2.y,
-                             lobj[i].geo.p3.y, lobj[i].geo.p4.y)
+            size_y_min = min(
+                lobj[i].geo.p1.y,
+                lobj[i].geo.p2.y,
+                lobj[i].geo.p3.y,
+                lobj[i].geo.p4.y,
+            )
+            size_y_max = max(
+                lobj[i].geo.p1.y,
+                lobj[i].geo.p2.y,
+                lobj[i].geo.p3.y,
+                lobj[i].geo.p4.y,
+            )
             size_y = size_y_max - size_y_min
             nb_cx = int(size_x / tc)
             nb_cy = int(size_y / tc)
@@ -3930,7 +5213,10 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
         elif lobj[i].name == "environment":
             lobj_gpu['type'][i] = 3
         else:
-            raise ValueError('You have to specify if your object is a reflector or a receiver!')
+            raise ValueError(
+                'You have to specify if your object is a reflector '
+                'or a receiver!'
+            )
 
     # Create receiver-only GPU table.
     n_robj = len(ind_robj)
@@ -3949,8 +5235,23 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
     else:
         n_cos = 1
 
-    return (n_gobj, n_obj, n_robj, surf_lph, nb_h, z_alt_h, tot_s_h, tc,
-            nb_cx, nb_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect, n_cos)
+    return (
+        n_gobj,
+        n_obj,
+        n_robj,
+        surf_lph,
+        nb_h,
+        z_alt_h,
+        tot_s_h,
+        tc,
+        nb_cx,
+        nb_cy,
+        lobj_gpu,
+        lgobj_gpu,
+        lrobj_gpu,
+        lobj_spect,
+        n_cos,
+    )
 
 
 def _normalize_rec(
@@ -3968,17 +5269,19 @@ def _normalize_rec(
     """
     Normalize receiver signal.
 
-    This function normalizes the signal collected by a 3d object receiver. Multiplication 
-    by the solar irradiance at the top of atmosphere is still needed.
+    This function normalizes the signal collected by a 3d object
+    receiver. Multiplication by the solar irradiance at the top of
+    atmosphere is still needed.
 
     Parameters
     ----------
     c_mat_visu_recep : ndarray
-        3D array containing the signal weight collected by each cell of the
-        receiver.
+        3D array containing the signal weight collected by each cell of
+        the receiver.
     mat_cats : ndarray
-        2D array containing total signal and per-category breakdowns. Rows
-        correspond to categories, columns to the per-category weight sums.
+        2D array containing total signal and per-category breakdowns.
+        Rows correspond to categories, columns to the per-category
+        weight sums.
     nb_cx : int
         Number of receiver cells in the x direction.
     nb_cy : int
@@ -3990,8 +5293,9 @@ def _normalize_rec(
     cell_size : float
         Side length (km) of a square receiver cell (taille cellule).
     cus_l : object or None
-        Custom launching mode object with attributes like ``dict['LMODE']``
-        and ``dict['FOV']``. If `None`, no normalization is applied.
+        Custom launching mode object with attributes like
+        ``dict['LMODE']`` and ``dict['FOV']``. If `None`, no
+        normalization is applied.
     sun_disc : float
         Half-angle (degrees) of the solar disk solid angle.
     le : bool
@@ -4001,53 +5305,74 @@ def _normalize_rec(
     -------
     tuple of (ndarray, ndarray, float)
         - **c_mat_visu_recep** : normalized receiver signal matrix
-        - **mat_cats** : normalized category matrix  
+        - **mat_cats** : normalized category matrix
         - **norm_c** : normalization constant (dimensionless)
     """
     s_rec = cell_size * cell_size * nb_cx * nb_cy  # receiver surface in km²
-    s_rec_m = s_rec * 1e6   # receiver surface in m²
+    s_rec_m = s_rec * 1e6  # receiver surface in m²
 
-    # Normalize intensities such that only a mult by E_TOA is still needed to obtain power unit
-    if (cus_l is None):
-        norm_c = 1.
+    # Normalize intensities such that only a mult by E_TOA is still
+    # needed to obtain power unit
+    if cus_l is None:
+        norm_c = 1.0
         # norm_c = 1./nb_photons
-        # # Weights -> propor to w/m², mult by s_rec_m is needed to get something propor to watt unit
+        # # Weights -> propor to w/m², mult by s_rec_m is needed to get
+        # something propor to watt unit
         # norm_c *= s_rec_m
         # c_mat_visu_recep[:][:][:] = c_mat_visu_recep[:][:][:]*norm_c
         # for i in range (0, 9):
         #     mat_cats[i,3] = mat_cats[i,1]*norm_c # intensity
         #     mat_cats[i,4] *= norm_c # Absolute err
-    elif (cus_l.dict['LMODE'] == "FF" or cus_l.dict['LMODE'] == "RF"):
+    elif cus_l.dict['LMODE'] == "FF" or cus_l.dict['LMODE'] == "RF":
         # Here results are already propor to watt unit
-        norm_c = (surf_lph*1e6)/nb_photons  # Here multiply by 1e6 to convert km² to m²
-        norm_ff = 1.
-        #lambertian sampling normalization
-        if (cus_l.dict['LMODE'] == "FF" and cus_l.dict['TYPE'] == 1 and cus_l.dict['FOV'] > 1e-6):
-            norm_ff = ( 1-np.cos(np.radians(2*cus_l.dict['FOV'])) ) / (4*( 1-np.cos(np.radians(cus_l.dict['FOV'])) ))
-        #isotropic sampling normalization
-        elif (cus_l.dict['LMODE'] == "FF" and cus_l.dict['TYPE'] == 2 and cus_l.dict['FOV'] > 1e-6):
-            norm_ff = 1.
+        norm_c = (
+            surf_lph * 1e6
+        ) / nb_photons  # Here multiply by 1e6 to convert km² to m²
+        norm_ff = 1.0
+        # lambertian sampling normalization
+        if (
+            cus_l.dict['LMODE'] == "FF"
+            and cus_l.dict['TYPE'] == 1
+            and cus_l.dict['FOV'] > 1e-6
+        ):
+            norm_ff = (1 - np.cos(np.radians(2 * cus_l.dict['FOV']))) / (
+                4 * (1 - np.cos(np.radians(cus_l.dict['FOV'])))
+            )
+        # isotropic sampling normalization
+        elif (
+            cus_l.dict['LMODE'] == "FF"
+            and cus_l.dict['TYPE'] == 2
+            and cus_l.dict['FOV'] > 1e-6
+        ):
+            norm_ff = 1.0
         norm_c *= norm_ff
-        for i in range (0, 9):
-            c_mat_visu_recep[i][:][:] = c_mat_visu_recep[i][:][:]*norm_c
-            mat_cats[i,3] = mat_cats[i,1]*norm_c
-            mat_cats[i,4] *= norm_c
-    elif (cus_l.dict['LMODE'] == "B" or cus_l.dict['LMODE'] == "BR"):
+        for i in range(0, 9):
+            c_mat_visu_recep[i][:][:] = c_mat_visu_recep[i][:][:] * norm_c
+            mat_cats[i, 3] = mat_cats[i, 1] * norm_c
+            mat_cats[i, 4] *= norm_c
+    elif cus_l.dict['LMODE'] == "B" or cus_l.dict['LMODE'] == "BR":
         norm_br = 2
-        #lambertian sampling normalization
-        if (cus_l.dict['TYPE'] == 1): norm_br = (1-np.cos(np.radians(2*cus_l.dict['ALDEG'])))/2.
-        #isotropic sampling normalization
-        elif (cus_l.dict['TYPE'] == 2): norm_br = 2*(1-np.cos(np.radians(cus_l.dict['ALDEG'])))
+        # lambertian sampling normalization
+        if cus_l.dict['TYPE'] == 1:
+            norm_br = (1 - np.cos(np.radians(2 * cus_l.dict['ALDEG']))) / 2.0
+        # isotropic sampling normalization
+        elif cus_l.dict['TYPE'] == 2:
+            norm_br = 2 * (1 - np.cos(np.radians(cus_l.dict['ALDEG'])))
 
-        if not le: norm_c = norm_br/(nb_photons*2*(1-np.cos(np.radians(sun_disc))))
-        else: norm_c = norm_br/nb_photons
+        if not le:
+            norm_c = norm_br / (
+                nb_photons * 2 * (1 - np.cos(np.radians(sun_disc)))
+            )
+        else:
+            norm_c = norm_br / nb_photons
 
-        # Weights -> propor to w/m², mult by s_rec_m is needed to get something propor to watt unit
+        # Weights -> propor to w/m², mult by s_rec_m is needed to get
+        # something propor to watt unit
         norm_c *= s_rec_m
-        c_mat_visu_recep[:][:][:] = c_mat_visu_recep[:][:][:]*norm_c
-        for i in range (0, 9):
-            mat_cats[i,3] = mat_cats[i,1]*norm_c
-            mat_cats[i,4] *= norm_c
+        c_mat_visu_recep[:][:][:] = c_mat_visu_recep[:][:][:] * norm_c
+        for i in range(0, 9):
+            mat_cats[i, 3] = mat_cats[i, 1] * norm_c
+            mat_cats[i, 4] *= norm_c
     else:
         raise ValueError('Unknown launching mode!')
 
@@ -4056,11 +5381,12 @@ def _normalize_rec(
 
 def _find_extinction(ip, fp, prof_atm, w_ind: int = 0):
     """
-    Compute the atmospheric extinction along a segment between two points.
+    Compute the atmospheric extinction along a segment between two
+    points.
 
     The extinction is computed as :math:`e^{-|\\Delta\\tau|}`, where
-    :math:`\\Delta\\tau` is the cumulated optical depth along the path from
-    `ip` to `fp`.
+    :math:`\\Delta\\tau` is the cumulated optical depth along the path
+    from `ip` to `fp`.
 
     .. note::
         Only valid for 1-D plane-parallel atmospheres.
@@ -4072,22 +5398,25 @@ def _find_extinction(ip, fp, prof_atm, w_ind: int = 0):
     fp : gc.Point
         Final position.
     prof_atm : xarray.Dataset or object with ``to_xarray``
-        Atmospheric profile containing coordinates ``z_atm`` and variable
-        ``OD_atm`` (cumulated extinction optical depth from the top).
+        Atmospheric profile containing coordinates ``z_atm`` and
+        variable ``OD_atm`` (cumulated extinction optical depth from the
+        top).
     w_ind : int, optional
         Wavelength index into ``OD_atm``. Default is 0.
 
     Returns
     -------
     float
-        Extinction factor between `ip` and `fp` (dimensionless, in [0, 1]).
+        Extinction factor between `ip` and `fp` (dimensionless, in [0,
+        1]).
     """
     # Be sure ip and fp are Point classes
     if not all(isinstance(i, gc.Point) for i in [ip, fp]):
         raise ValueError('Both ip and fp must be Point classes!')
 
-    # If there is no atm then there are no scattering and abs -> n_ext = 1
-    if (prof_atm is None):
+    # If there is no atm then there are no scattering and abs -> n_ext =
+    # 1
+    if prof_atm is None:
         n_ext = 1
         return n_ext
 
@@ -4102,51 +5431,58 @@ def _find_extinction(ip, fp, prof_atm, w_ind: int = 0):
 
     # Find the atm layer of the initial location
     lay = int(0)
-    while(zatm[lay] > ip.z):
+    while zatm[lay] > ip.z:
         lay += int(1)
-        
+
     # Initialization
-    tau_hit = 0. # Optical depth distance (from ip to fp)
+    tau_hit = 0.0  # Optical depth distance (from ip to fp)
     ilayer2 = lay
 
     # Case with only 1 layer: n = 1
-    if (fp.z >= zatm[ilayer2] and fp.z < zatm[ilayer2-1]):
+    if fp.z >= zatm[ilayer2] and fp.z < zatm[ilayer2 - 1]:
         # delta_i is: Delta(tau)1 = |tau(i-1) - tau(i)|
-        delta_i = abs(od_atm[w_ind, ilayer2-1] - od_atm[w_ind, ilayer2])
+        delta_i = abs(od_atm[w_ind, ilayer2 - 1] - od_atm[w_ind, ilayer2])
         # tau_hit = (Delta(D1)/Delta(Z1))*delta_i
-        tau_hit += ((ip - fp).Length()/abs(zatm[ilayer2-1]-zatm[ilayer2]))*delta_i
-    else: # Case with several layers: n >= 2
+        tau_hit += (
+            (ip - fp).Length() / abs(zatm[ilayer2 - 1] - zatm[ilayer2])
+        ) * delta_i
+    else:  # Case with several layers: n >= 2
         # Find the layer where there is intersection
         ilayer2 = int(1)
-        while(zatm[ilayer2] > fp.z and zatm[ilayer2] > 0.):
-            ilayer2+=int(1)
+        while zatm[ilayer2] > fp.z and zatm[ilayer2] > 0.0:
+            ilayer2 += int(1)
 
         higher = False
         ilayer = lay
         old_p = ip
-        
-        # Check if the photon come from higher or lower layer
-        if(ilayer < ilayer2): # true if the photon come from higher layer
-            higher =  True
 
-        while(ilayer != ilayer2):
-            if(higher):
-                time_t = abs(zatm[ilayer] - old_p.z)/abs(vec.z)
+        # Check if the photon come from higher or lower layer
+        if ilayer < ilayer2:  # true if the photon come from higher layer
+            higher = True
+
+        while ilayer != ilayer2:
+            if higher:
+                time_t = abs(zatm[ilayer] - old_p.z) / abs(vec.z)
             else:
-                time_t = abs(zatm[ilayer-1] - old_p.z)/abs(vec.z)
-            new_p = old_p + (vec*time_t)
-            delta_i = abs(od_atm[w_ind, ilayer]-od_atm[w_ind, ilayer-1])
-            tau_hit += ((new_p - old_p).Length()/abs(zatm[ilayer-1]-zatm[ilayer]))*delta_i
-        
-            if(higher): # the photon come from higher layer
-                ilayer+= int(1)
-            else: # the photon come from lower layer
-                ilayer-= int(1)
-            old_p = new_p # Update the position of the photon
-        
-        # Calculate and add the last tau distance when ilayer is equal to ilayer2
-        delta_i = abs(od_atm[w_ind, ilayer2]-od_atm[w_ind, ilayer2-1])
-        tau_hit += ((fp - old_p).Length()/abs(zatm[ilayer2-1]-zatm[ilayer2]))*delta_i
+                time_t = abs(zatm[ilayer - 1] - old_p.z) / abs(vec.z)
+            new_p = old_p + (vec * time_t)
+            delta_i = abs(od_atm[w_ind, ilayer] - od_atm[w_ind, ilayer - 1])
+            tau_hit += (
+                (new_p - old_p).Length() / abs(zatm[ilayer - 1] - zatm[ilayer])
+            ) * delta_i
+
+            if higher:  # the photon come from higher layer
+                ilayer += int(1)
+            else:  # the photon come from lower layer
+                ilayer -= int(1)
+            old_p = new_p  # Update the position of the photon
+
+        # Calculate and add the last tau distance when ilayer is equal
+        # to ilayer2
+        delta_i = abs(od_atm[w_ind, ilayer2] - od_atm[w_ind, ilayer2 - 1])
+        tau_hit += (
+            (fp - old_p).Length() / abs(zatm[ilayer2 - 1] - zatm[ilayer2])
+        ) * delta_i
 
     n_ext = np.exp(-abs(tau_hit))
 
