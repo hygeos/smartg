@@ -1,6 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""Helpers for the IPRT model intercomparison cases.
+
+This module provides tools to convert SMART-G outputs to the IPRT
+(International Polarized Radiative Transfer) ASCII format, to read
+the IPRT reference results, and to plot the comparisons.
+
+Key Functions
+-------------
+convert_SGout_to_IPRTout
+    Convert SMART-G output into the IPRT ASCII output format.
+select_and_plot_polar_iprt
+    Select I, Q, U and V results from an IPRT matrix and plot
+    them in polar coordinates.
+plot_iprt_radiances
+    Plot radiances and the differences between a reference model
+    and the model radiances.
+read_phase_nth_cte
+    Read a libRadtran or IPRT aerosol/cloud file and convert it
+    to a LUT object.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick

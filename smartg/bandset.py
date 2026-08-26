@@ -20,6 +20,18 @@ spectral_grids
     excitation grid, and a solar irradiance look-up table. Precomputed
     interpolation parameters map the high-resolution grid onto the
     low-resolution grid by 1-D linear interpolation.
+
+Key Classes
+-----------
+BandSet
+    Container for the spectral bands of a simulation; accepted as
+    the wl parameter of Smartg.run.
+
+Key Functions
+-------------
+spectral_grids
+    Build spectral grids for absorption and scattering
+    computations.
 """
 
 from __future__ import annotations

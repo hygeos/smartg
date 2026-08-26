@@ -32,6 +32,11 @@ True
 False
 >>> path is None
 True
+
+Key Functions
+-------------
+modified_environ
+    Context manager that temporarily updates os.environ in-place.
 """
 
 import contextlib

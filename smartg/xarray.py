@@ -3,6 +3,13 @@
 This module provides conversion functions from xarray ``DataArray`` and
 ``Dataset`` objects to the corresponding legacy ``LUT`` and ``MLUT``
 objects.
+
+Key Functions
+-------------
+dataarray_to_lut
+    Convert a DataArray into a LUT.
+dataset_to_mlut
+    Convert a Dataset into an MLUT.
 """
 
 from collections import OrderedDict

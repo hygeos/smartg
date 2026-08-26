@@ -1,3 +1,23 @@
+"""Photon histories post-processing for ALIS simulations.
+
+This module analyses the photon histories recorded by Smartg.run
+when the ALIS option is used with alis_options['hist'] = True: it
+rebuilds high-resolution Stokes vectors from the recorded events
+(with JAX) and derives air mass factor (AMF) statistics.
+
+Key Functions
+-------------
+get_histories
+    Return the main outputs of the recorded photon histories.
+compute_cdist_hist
+    Compute cdist (tabDist) moments from ALIS photon histories.
+amf_from_cdist
+    Derive AMF statistics from a raw cdist moments array.
+compute_amf
+    Compute AMF from a Smartg MLUT, for both hist=False and
+    hist=True runs.
+"""
+
 import numpy as np
 import jax.numpy as jnp
 from jax import value_and_grad, vmap, jit

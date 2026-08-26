@@ -35,6 +35,13 @@ Examples
 --------
 >>> from smartg.truncation import DM_trunc
 >>> trunc = DM_trunc(nb_streams=16, integral_method='lobatto')
+
+Key Classes
+-----------
+DM_trunc
+    Delta-M truncation.
+GT_trunc
+    GT truncation, as in Iwabuchi and Suzuki (2009).
 """
 
 import numpy as np

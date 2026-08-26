@@ -12,6 +12,14 @@ Two entry points are exposed:
 - :func:`icdf` for a 1-D PDF.
 - :func:`icdf_2d` for a 2-D PDF, processed row-wise over its first
   axis.
+
+Key Functions
+-------------
+icdf
+    Invert the CDF of a 1-D PDF and return sampling indices.
+icdf_2d
+    Invert the CDF of a 2-D PDF row-wise and return sampling
+    indices.
 """
 
 from __future__ import annotations

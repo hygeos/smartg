@@ -6,6 +6,42 @@ to describe reflectors and receivers (e.g. heliostat fields) for
 SMART-G. Also provides related helpers: heliostat-field generation and
 facet curvature, rotation/reflection computations, and reading heliostat
 position files.
+
+Key Classes
+-----------
+Entity
+    3D object representation with geometry and material
+    properties.
+Heliostat
+    Composite heliostat assembly consisting of multiple facets.
+GroupE
+    Container for grouping multiple Entity objects.
+Mirror, LambMirror, Matte
+    Material surface models (specular mirror, Lambertian mirror,
+    matte).
+Plane, Spheric
+    Primitive surface shapes.
+Transformation
+    Rotation and translation applied to objects.
+CusForward
+    Custom rectangular forward launching mode of surface X*Y.
+CusBackward
+    Backward launching mode from a point or a plane receiver.
+
+Key Functions
+-------------
+generate_h_p
+    Generate well-oriented Heliostats from their positions.
+generate_h_a
+    Generate well-oriented Heliostats arranged in an angular
+    sector around the receiver.
+generate_box
+    Create a 3D box/building composed of six planar faces.
+convert_lg_to_le
+    Convert a mixed list of Entity and GroupE objects to Entity
+    objects only.
+extract_points
+    Extract heliostat coordinates from a file.
 """
 
 from __future__ import annotations

@@ -16,6 +16,15 @@ are exposed:
 
 The internal helpers :func:`gaussian_peak` and :func:`raman_response`
 build the underlying Gaussian peaks and their normalized sum.
+
+Key Functions
+-------------
+raman_response
+    Normalized Raman spectral response of liquid water.
+raman_forward
+    Ocean vibrational Raman spectrum (forward).
+raman_inverse
+    Ocean vibrational Raman spectrum (inverse).
 """
 
 from __future__ import annotations

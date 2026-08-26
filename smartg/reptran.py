@@ -22,6 +22,29 @@ References
     *Journal of Quantitative Spectroscopy and Radiative Transfer*, vol.
     148, pp. 99-115, 2014.
     https://doi.org/10.1016/j.jqsrt.2014.06.024
+
+Key Classes
+-----------
+Reptran
+    Read and expose a REPTRAN correlated-k file.
+ReptranBand
+    Represent a REPTRAN sensor channel.
+ReptranIband
+    Represent one internal REPTRAN absorption band.
+ReptranIbandList
+    Store a selected list of internal REPTRAN bands.
+ReadCrs
+    Read a REPTRAN molecular cross-section lookup table.
+
+Key Functions
+-------------
+reduce_reptran
+    Reduce spectral results to REPTRAN channel values.
+reptran_emission
+    Calculate spectrally resolved thermal emission.
+reptran_avg_emission
+    Calculate thermal emission integrated over atmospheric
+    altitude.
 """
 
 from __future__ import annotations

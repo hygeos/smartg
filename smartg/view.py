@@ -3,6 +3,27 @@
 This module provides plotting helpers for polar maps, transects,
 spectra, phase functions, profiles, and receiver/category diagnostics
 stored in SMART-G xarray datasets.
+
+Key Functions
+-------------
+smartg_view
+    Visualization of SMART-G output in polar coordinates.
+transect_view
+    Transect visualization of SMART-G output.
+spectrum_view
+    Visualization of wavelength-dependent Stokes parameters.
+phase_view
+    Visualization of SMART-G phase functions.
+profile_view
+    Visualization of SMART-G vertical profiles.
+input_view
+    Visualization of SMART-G input profile and phase functions.
+receiver_view
+    Plot receiver irradiance from a SMART-G simulation output.
+satellite_view
+    'Satellite' 2D image of SMART-G 3D atmosphere results.
+visualize_entity
+    3D visualization of the created scene objects.
 """
 
 import math

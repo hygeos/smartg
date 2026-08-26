@@ -28,6 +28,21 @@ References
    (Ring effect) in satellite backscatter ultraviolet measurements.
    *Applied Optics*, 34(21), 4513.
    https://doi.org/10.1364/AO.34.004513
+
+Key Functions
+-------------
+l_air
+    Air rotational Raman spectrum at a single excitation
+    wavelength.
+l2d
+    Vectorised air rotational Raman spectrum over many
+    wavelengths.
+l2d_inv
+    Inverse air rotational Raman spectrum (vectorised).
+f0_air
+    Cabannes fraction of dry air.
+epsilon_air
+    Effective depolarization ratio of dry air.
 """
 
 from __future__ import annotations

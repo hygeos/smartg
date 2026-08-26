@@ -9,6 +9,27 @@ calculates gaseous absorption and thermal emission for SMART-G profiles.
 The public reduction and emission functions use xarray datasets and data
 arrays. Legacy LUT and MLUT inputs remain accepted at compatibility
 boundaries required by existing SMART-G workflows.
+
+Key Classes
+-----------
+Kdis
+    Read and expose a KDIS correlated-k definition.
+KdisBand
+    Represent a KDIS sensor channel.
+KdisIband
+    Represent one internal KDIS absorption band.
+KdisIbandList
+    Store a selected list of internal KDIS bands.
+
+Key Functions
+-------------
+reduce_kdis
+    Reduce spectral results to KDIS channel values.
+kdis_emission
+    Calculate spectrally resolved thermal emission.
+kdis_avg_emission
+    Calculate thermal emission integrated over atmospheric
+    altitude.
 """
 
 from __future__ import annotations

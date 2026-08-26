@@ -43,6 +43,20 @@ convert_phase_to_iparper
 get_prof_phases
     Build the ``prof_phases`` tuple expected by ``Atm1D`` from a phase
     function ``DataArray`` and the full wavelength/altitude grids.
+
+Key Functions
+-------------
+read_phase
+    Read phase function data from a file and dispatch to the
+    proper format reader.
+calc_iphase
+    Map phase functions onto the full wavelength/altitude grid.
+get_prof_phases
+    Generate the prof_phases parameter for Atm1D from phase
+    function data.
+convert_phase_to_iparper
+    Convert a phase matrix to the parallel/perpendicular
+    intensity convention.
 """
 
 from __future__ import annotations

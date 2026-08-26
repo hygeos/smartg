@@ -4,6 +4,16 @@ This module centralizes common numeric, path, and spectral-band typing
 used throughout SMART-G. Runtime imports are kept minimal to avoid
 circular dependencies between the typing definitions and atmospheric
 profile implementations.
+
+Key Classes
+-----------
+BandLike
+    Structural type for a KDIS or REPTRAN spectral band object.
+
+Key Aliases
+-----------
+RealNumber, NumericArrayLike, PathType
+    Common scalar, array-like, and filesystem-path type aliases.
 """
 
 from __future__ import annotations

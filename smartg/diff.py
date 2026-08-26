@@ -27,6 +27,15 @@ position::
     array([ 0., 10., 15., 20.])
     >>> diff1_end(a)
     array([10., 15., 20.,  0.])
+
+Key Functions
+-------------
+diff1
+    Calculate the first difference of an array along a specified
+    axis.
+diff1_end
+    Calculate the first difference of an array, padded at the
+    end.
 """
 
 from __future__ import annotations

@@ -12,6 +12,12 @@ bar adapted to the current execution environment:
 
 The active mode is selected automatically at import time. Callers can
 also request an invisible (no-op) progress bar via ``activate=False``.
+
+Key Functions
+-------------
+progress
+    Create a progress-bar adapter for the active runtime
+    environment.
 """
 
 from __future__ import annotations

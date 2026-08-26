@@ -4,6 +4,12 @@ This module defines remote sources for SMART-G auxiliary datasets and
 provides helpers for downloading ZIP and TAR archives. The public
 ``download`` function creates the destination directory, retrieves the
 requested dataset, and extracts its contents for use by SMART-G.
+
+Key Functions
+-------------
+download
+    Download and extract the SMART-G auxiliary data archives into
+    the auxdata directory.
 """
 
 from pathlib import Path

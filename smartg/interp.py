@@ -5,6 +5,17 @@ This module provides thin wrappers around
 query points) and ``numpy.interp`` (for 1-D coordinate arrays), with
 support for increasing or decreasing coordinate axes and optional
 boundary clipping.
+
+Key Functions
+-------------
+interp3
+    Sample a 3-D array at arbitrary query points via linear
+    interpolation.
+interp2
+    Sample a 2-D array at arbitrary query points via linear
+    interpolation.
+interp_1d_coord
+    Interpolate a 1-D coordinate with optional extrema clipping.
 """
 
 from __future__ import annotations, print_function, division

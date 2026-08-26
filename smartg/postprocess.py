@@ -3,6 +3,16 @@ Post-processing utilities for SMART-G output.
 
 This module provides helpers to integrate angular reflectance fields
 over the upper hemisphere and produce irradiance-like diagnostics.
+
+Key Functions
+-------------
+plane_irr
+    Compute plane irradiance from a reflectance DataArray.
+spherical_irr
+    Compute spherical irradiance from a reflectance DataArray.
+irradiance_ds
+    Create a normalized irradiance Dataset from reflectance
+    datasets.
 """
 
 from __future__ import annotations
