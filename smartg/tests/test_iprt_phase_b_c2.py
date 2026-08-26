@@ -726,6 +726,7 @@ def _run_case_backward(
         xgrid=xg,
         seed=SEED,
     )
+    m = m.to_xarray() if hasattr(m, "to_xarray") else m
 
     return m, np.cos(np.radians(theta_0)) / np.pi
 
@@ -794,6 +795,7 @@ def _run_group_forward(
         xgrid=xg,
         seed=SEED,
     )
+    m = m.to_xarray() if hasattr(m, "to_xarray") else m
 
     return m, np.cos(np.radians(theta_0)) / np.pi
 
@@ -808,13 +810,13 @@ def _smartg_iquv(
     example when a single forward run holds several cases.
     """
     if mI is None:
-        mI = m["I_up (TOA)"][:, 0, 0]
+        mI = m["I_up (TOA)"].values[:, 0, 0]
     if mQ is None:
-        mQ = m["Q_up (TOA)"][:, 0, 0]
+        mQ = m["Q_up (TOA)"].values[:, 0, 0]
     if mU is None:
-        mU = m["U_up (TOA)"][:, 0, 0]
+        mU = m["U_up (TOA)"].values[:, 0, 0]
     if mV is None:
-        mV = m["V_up (TOA)"][:, 0, 0]
+        mV = m["V_up (TOA)"].values[:, 0, 0]
 
     return (
         mI.reshape(70, 70) * norm,
@@ -870,7 +872,7 @@ def _plot_case(
     i_my, q_my, u_my, v_my = iquv_my
 
     stk = ["I", "Q", "U", "V"]
-    wl = m.axes["wavelength"]
+    wl = m.coords["wavelength"].values
     xgrid = sensor_grid.xgrid
     ygrid = sensor_grid.ygrid
     max_i = np.max(i_sg)
@@ -1142,10 +1144,10 @@ def _check_group_forward(
             norm,
             U_sign=-1,
             V_sign=1,
-            mI=m[f"I{layer}"][:, iza],
-            mQ=m[f"Q{layer}"][:, iza],
-            mU=m[f"U{layer}"][:, iza],
-            mV=m[f"V{layer}"][:, iza],
+            mI=m[f"I{layer}"].values[:, iza],
+            mQ=m[f"Q{layer}"].values[:, iza],
+            mU=m[f"U{layer}"].values[:, iza],
+            mV=m[f"V{layer}"].values[:, iza],
         )
         iquv_my = _mystic_iquv(case + mystic_offset)
 

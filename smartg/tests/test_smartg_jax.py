@@ -31,6 +31,7 @@ from smartg.view import mdesc
 from smartg import conftest
 from pathlib import Path
 from smartg.config import DIR_AUXDATA
+from smartg.xarray import drop_axes
 
 
 # ***************************** logging ********************************
@@ -120,9 +121,9 @@ def test_smartg_jax2(
                 nb_loop=nb_photons,
                 n_f=1e3,
             )
-            .dropaxis("Zenith angles")
-            .dropaxis("Azimuth angles")
         )
+        m = m.to_xarray() if hasattr(m, "to_xarray") else m
+        m = drop_axes(m, "Zenith angles", "Azimuth angles")
         m0 = (
             sg.run(
                 seed=0,
@@ -136,9 +137,9 @@ def test_smartg_jax2(
                 nb_photons=nb_photons,
                 n_f=1e3,
             )
-            .dropaxis("Zenith angles")
-            .dropaxis("Azimuth angles")
         )
+        m0 = m0.to_xarray() if hasattr(m0, "to_xarray") else m0
+        m0 = drop_axes(m0, "Zenith angles", "Azimuth angles")
         sg.clear_context()
 
         with jax.default_device(
@@ -300,9 +301,9 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             nb_loop=nb_photons,
             n_f=1e3,
         )
-        .dropaxis("Zenith angles")
-        .dropaxis("Azimuth angles")
     )
+    m1 = m1.to_xarray() if hasattr(m1, "to_xarray") else m1
+    m1 = drop_axes(m1, "Zenith angles", "Azimuth angles")
     m2 = (
         sg.run(
             seed=0,
@@ -322,9 +323,9 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             nb_loop=nb_photons,
             n_f=1e3,
         )
-        .dropaxis("Zenith angles")
-        .dropaxis("Azimuth angles")
     )
+    m2 = m2.to_xarray() if hasattr(m2, "to_xarray") else m2
+    m2 = drop_axes(m2, "Zenith angles", "Azimuth angles")
     sg.clear_context()
     print("GPU time no hist: %.4f" % float(m1.attrs["kernel time (s)"]), "s")
     print("GPU time hist: %.4f" % float(m2.attrs["kernel time (s)"]), "s")

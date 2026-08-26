@@ -571,6 +571,7 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
         xgrid=xg,
         seed=SEED,
     )
+    m = m.to_xarray() if hasattr(m, "to_xarray") else m
 
     return m, np.cos(np.radians(theta_0)) / np.pi
 
@@ -582,10 +583,10 @@ def _smartg_iquv(m, norm, U_sign=1, V_sign=-1):
     shape = (NSENSORS, NSENSORS)
 
     return (
-        m["I_up (TOA)"][:, 0, 0].reshape(shape) * norm,
-        m["Q_up (TOA)"][:, 0, 0].reshape(shape) * norm,
-        m["U_up (TOA)"][:, 0, 0].reshape(shape) * norm * U_sign,
-        m["V_up (TOA)"][:, 0, 0].reshape(shape) * norm * V_sign,
+        m["I_up (TOA)"].values[:, 0, 0].reshape(shape) * norm,
+        m["Q_up (TOA)"].values[:, 0, 0].reshape(shape) * norm,
+        m["U_up (TOA)"].values[:, 0, 0].reshape(shape) * norm * U_sign,
+        m["V_up (TOA)"].values[:, 0, 0].reshape(shape) * norm * V_sign,
     )
 
 
@@ -627,7 +628,7 @@ def _plot_case(request, m, iquv_sg, iquv_my, case, sensor_grid, title_suffix):
     i_my, q_my, u_my, v_my = iquv_my
 
     stk = ["I", "Q", "U", "V"]
-    wl = m.axes["wavelength"]
+    wl = m.coords["wavelength"].values
     xgrid = sensor_grid.xgrid
     ygrid = sensor_grid.ygrid
     max_i = np.max(i_sg)

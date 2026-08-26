@@ -12,6 +12,7 @@ from smartg.atmosphere import Atm1D
 from smartg.phase import read_phase
 import pandas as pd
 import numpy as np
+import xarray as xr
 
 from smartg.iprt.iprt import (
     convert_SGout_to_IPRTout,
@@ -24,6 +25,7 @@ from smartg.iprt.iprt import (
 from smartg.phase import calc_iphase
 from luts.luts import LUT
 from smartg.config import DIR_AUXDATA
+from smartg.xarray import drop_axes
 
 from smartg import conftest
 
@@ -158,25 +160,26 @@ def test_a1(request, s1df, s1db):
         progress=True,
     )
 
-    m_a1_b = m_a1_b.dropaxis("Azimuth angles", "Zenith angles")
-    m_a1_b.add_axis("Azimuth angles", -vaa + 180.0)
-    m_a1_b.add_axis("Zenith angles", vza)
+    m_a1_b = m_a1_b.to_xarray() if hasattr(m_a1_b, "to_xarray") else m_a1_b
+    m_a1_b = drop_axes(m_a1_b, "Azimuth angles", "Zenith angles")
 
-    for name in m_a1_b.datasets():
-        if "sensor index" in m_a1_b[name].names:
+    for name in list(m_a1_b.data_vars):
+        if "sensor index" in m_a1_b[name].dims:
             mat_tmp = np.swapaxes(
-                m_a1_b[name][:].reshape(len(vza), len(vaa)), 0, 1
+                m_a1_b[name].values.reshape(len(vza), len(vaa)), 0, 1
             )
             attrs_tmp = m_a1_b[name].attrs
-            m_a1_b.rm_lut(name)
-            m_a1_b.add_dataset(
-                name,
+            m_a1_b = m_a1_b.drop_vars([name])
+            m_a1_b[name] = xr.Variable(
+                ("Azimuth angles", "Zenith angles"),
                 mat_tmp,
-                ["Azimuth angles", "Zenith angles"],
                 attrs=attrs_tmp,
             )
+    m_a1_b = m_a1_b.assign_coords(
+        {"Azimuth angles": -vaa + 180.0, "Zenith angles": vza}
+    )
 
-    m_a1_b_boa_dep0 = m_a1_b.dropaxis("sensor index")
+    m_a1_b_boa_dep0 = drop_axes(m_a1_b, "sensor index")
 
     # TOA radiances
     # We use the previous vaa
@@ -213,25 +216,26 @@ def test_a1(request, s1df, s1db):
         progress=True,
     )
 
-    m_a1_b = m_a1_b.dropaxis("Azimuth angles", "Zenith angles")
-    m_a1_b.add_axis("Azimuth angles", -vaa + 180.0)
-    m_a1_b.add_axis("Zenith angles", vza)
+    m_a1_b = m_a1_b.to_xarray() if hasattr(m_a1_b, "to_xarray") else m_a1_b
+    m_a1_b = drop_axes(m_a1_b, "Azimuth angles", "Zenith angles")
 
-    for name in m_a1_b.datasets():
-        if "sensor index" in m_a1_b[name].names:
+    for name in list(m_a1_b.data_vars):
+        if "sensor index" in m_a1_b[name].dims:
             mat_tmp = np.swapaxes(
-                m_a1_b[name][:].reshape(len(vza), len(vaa)), 0, 1
+                m_a1_b[name].values.reshape(len(vza), len(vaa)), 0, 1
             )
             attrs_tmp = m_a1_b[name].attrs
-            m_a1_b.rm_lut(name)
-            m_a1_b.add_dataset(
-                name,
+            m_a1_b = m_a1_b.drop_vars([name])
+            m_a1_b[name] = xr.Variable(
+                ("Azimuth angles", "Zenith angles"),
                 mat_tmp,
-                ["Azimuth angles", "Zenith angles"],
                 attrs=attrs_tmp,
             )
+    m_a1_b = m_a1_b.assign_coords(
+        {"Azimuth angles": -vaa + 180.0, "Zenith angles": vza}
+    )
 
-    m_a1_b_toa_dep0 = m_a1_b.dropaxis("sensor index")
+    m_a1_b_toa_dep0 = drop_axes(m_a1_b, "sensor index")
     # *****************************************************************
 
     # ************************* DEPOL = 0.03 **************************
@@ -263,6 +267,9 @@ def test_a1(request, s1df, s1db):
         depo=0.03,
         stdev=True,
     )
+    m_a1_f_dep003 = (
+        m_a1_f_dep003.to_xarray() if hasattr(m_a1_f_dep003, "to_xarray") else m_a1_f_dep003
+    )
 
     # ************************* DEPOL = 0.1 **************************
     # We use the previous vaa, vza and le
@@ -287,6 +294,9 @@ def test_a1(request, s1df, s1db):
         depo=0.1,
         stdev=True,
     )
+    m_a1_f_dep01 = (
+        m_a1_f_dep01.to_xarray() if hasattr(m_a1_f_dep01, "to_xarray") else m_a1_f_dep01
+    )
     # *****************************************************************
 
     with TemporaryDirectory() as tmpdir:
@@ -294,15 +304,15 @@ def test_a1(request, s1df, s1db):
         # (Forward, U must be multiplied by -1)
         tmp_file_a1 = Path(tmpdir) / "a1.dat"
 
-        vza_boa_dep0 = m_a1_b_boa_dep0.axes["Zenith angles"]
-        vaa_boa_dep0 = 180.0 - m_a1_b_boa_dep0.axes["Azimuth angles"]
-        vza_toa_dep0 = m_a1_b_toa_dep0.axes["Zenith angles"]
-        vaa_toa_dep0 = 180.0 - m_a1_b_toa_dep0.axes["Azimuth angles"]
+        vza_boa_dep0 = m_a1_b_boa_dep0.coords["Zenith angles"].values
+        vaa_boa_dep0 = 180.0 - m_a1_b_boa_dep0.coords["Azimuth angles"].values
+        vza_toa_dep0 = m_a1_b_toa_dep0.coords["Zenith angles"].values
+        vaa_toa_dep0 = 180.0 - m_a1_b_toa_dep0.coords["Azimuth angles"].values
 
-        vza_dep003 = 180.0 - m_a1_f_dep003.axes["Zenith angles"]
-        vaa_dep003 = -m_a1_f_dep003.axes["Azimuth angles"]
-        vza_dep01 = 180.0 - m_a1_f_dep01.axes["Zenith angles"]
-        vaa_dep01 = -m_a1_f_dep01.axes["Azimuth angles"]
+        vza_dep003 = 180.0 - m_a1_f_dep003.coords["Zenith angles"].values
+        vaa_dep003 = -m_a1_f_dep003.coords["Azimuth angles"].values
+        vza_dep01 = 180.0 - m_a1_f_dep01.coords["Zenith angles"].values
+        vaa_dep01 = -m_a1_f_dep01.coords["Azimuth angles"].values
 
         # convert
         convert_SGout_to_IPRTout(

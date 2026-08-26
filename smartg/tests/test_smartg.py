@@ -48,7 +48,8 @@ def test_basic(request):
 def test_atm(sg, wav):
     atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     m = sg.run(wav, atm=atm, nb_photons=NBPHOTONS)
-    assert ("wavelength" in m.axes) == ("__getitem__" in dir(wav))
+    m = m.to_xarray() if hasattr(m, "to_xarray") else m
+    assert ("wavelength" in m.coords) == ("__getitem__" in dir(wav))
 
 
 @pytest.mark.parametrize("wav", wav_list)
@@ -63,7 +64,8 @@ def test_cloud(sg, wav):
         pfgrid=[100.0, 10.0, 0.0],
     )
     m = sg.run(wav, atm=atm, nb_photons=NBPHOTONS)
-    assert ("wavelength" in m.axes) == ("__getitem__" in dir(wav))
+    m = m.to_xarray() if hasattr(m, "to_xarray") else m
+    assert ("wavelength" in m.coords) == ("__getitem__" in dir(wav))
 
 
 @pytest.mark.parametrize("wav", wav_list)
@@ -123,7 +125,8 @@ def test_locale_estimate(sg):
         },
         nb_photons=NBPHOTONS,
     )
-    assert res["I_up (TOA)"][:, :] > 0
+    res = res.to_xarray() if hasattr(res, "to_xarray") else res
+    assert (res["I_up (TOA)"].values > 0).all()
 
 
 @pytest.mark.parametrize("rng", ["PHILOX", "CURAND_PHILOX"])
@@ -158,7 +161,7 @@ def test_no_aer_output():
         nb_loop=1e6,
         no_aer_output=True,
     )
-    m1 = m1.to_xarray()  # to prepare transition luts to xarray
+    m1 = m1.to_xarray() if hasattr(m1, "to_xarray") else m1
     assert np.allclose(
         m1["I_up (TOA)"].values,
         m1["I_up (TOA), no_aer"].values,

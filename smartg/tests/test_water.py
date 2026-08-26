@@ -269,7 +269,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         output_layers=3,
         flux="planar",
     )
-    m_flux = m_flux.to_xarray()
+    m_flux = m_flux.to_xarray() if hasattr(m_flux, "to_xarray") else m_flux
     r_smartg = (
         m_flux["flux_up (0-)"].values
         / m_flux["flux_down (0-)"].values
@@ -297,7 +297,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         le=local_est,
         stdev=True,
     )
-    m_le = m_le.to_xarray()
+    m_le = m_le.to_xarray() if hasattr(m_le, "to_xarray") else m_le
 
     i_le_up = m_le["I_up (0-)"].values
     i_le_up_sd = m_le["I_stdev_up (0-)"].values
@@ -510,7 +510,8 @@ def _rw_vs_w1d_run(_atm_rayleigh, _surf):
             nb_loop=1e6,
             le=local_est,
             stdev=True,
-        ).to_xarray()
+        )
+        m = m.to_xarray() if hasattr(m, "to_xarray") else m
         out.append(
             (
                 {s: m[f"{s}_up (TOA)"].values[:, 0, 0] for s in STOKES},
