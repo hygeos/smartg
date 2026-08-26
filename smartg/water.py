@@ -1201,7 +1201,13 @@ class HydrosolZhai(Hydrosol):
 class Water(object):
     """Base class for water."""
 
-    pass
+    def calc(self, wav, *args, **kwargs) -> xr.Dataset:
+        """
+        Compute the water column profile as an xr.Dataset.
+
+        Implemented by the subclasses.
+        """
+        raise NotImplementedError
 
 
 class Water1D(Water):

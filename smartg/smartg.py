@@ -41,7 +41,7 @@ from smartg.objects3d import Mirror, Plane, Spheric, LambMirror, Matte
 import xarray as xr
 import geoclide as gc
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import cast
 
 # pycuda ships no type stubs: gpuarray.zeros infers its dtype
@@ -1590,6 +1590,7 @@ class Smartg(object):
                 cell_proba_icdf = to_gpu(icdf_2d(p_emission.to_numpy()).T)
                 n_cell_proba = cell_proba_icdf.shape[0]
             else:
+                assert not isinstance(cell_proba, str)
                 assert cell_proba.shape[1] == n_lam
                 cell_proba_icdf = to_gpu(cell_proba)
                 n_cell_proba = cell_proba.shape[0]
@@ -3819,7 +3820,11 @@ def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
     return pro
 
 
-def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
+def reduce_diff(
+    ds_sg: xr.Dataset,
+    varnames,
+    delta: float | Sequence[float] | np.ndarray | None = None,
+) -> xr.Dataset:
     """Post-process ALIS finite-difference runs into sensitivities.
 
     The input lookup tables are expected to be packed along the
@@ -3884,7 +3889,8 @@ def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
 
     if delta is not None:
         if np.isscalar(delta):
-            delta = np.full(n_diff, float(delta), dtype=np.float64)
+            delta_val = float(cast('float', delta))
+            delta = np.full(n_diff, delta_val, dtype=np.float64)
         else:
             delta = np.asarray(delta)
         if delta.shape[0] != n_diff:
@@ -3897,7 +3903,7 @@ def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
     for var_name, da in ds_sg.data_vars.items():
         if 'wavelength' not in da.dims:
             continue
-        if not any(pref in var_name for pref in prefixes):
+        if not any(pref in str(var_name) for pref in prefixes):
             continue
 
         ref_da = da.isel(wavelength=slice(0, block_size)).assign_coords(
@@ -4237,7 +4243,7 @@ def _loop_kernel(
             (2, max_hist, _n_cols_hist, n_sensor, nb_theta, nb_phi),
             dtype=np.float32,
         )
-        _hist_bytes = int(tab_hist_tot.nbytes)
+        _hist_bytes = int(cast('int', tab_hist_tot.nbytes))
         print(
             f"[ALIS hist] tabHist allocated — "
             f"shape: (2, {max_hist:,}, {_n_cols_hist}, {n_sensor}, "

@@ -2073,7 +2073,13 @@ def _read_i3rc_field(
 class Atmosphere(object):
     """Base class for atmosphere."""
 
-    pass
+    def calc(self, wav, *args, **kwargs) -> xr.Dataset:
+        """
+        Compute the atmospheric profile as an xr.Dataset.
+
+        Implemented by the subclasses.
+        """
+        raise NotImplementedError
 
 
 class Atm1D(Atmosphere):
