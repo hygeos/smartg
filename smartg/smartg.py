@@ -2,10 +2,14 @@
 # encoding: utf-8
 
 
-'''
-SMART-G
-Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU
-'''
+"""
+SMART-G: Speed-up Monte carlo Advanced Radiative Transfer code
+using GPU.
+
+This module hosts the Smartg class, whose constructor compiles the
+CUDA kernel with the requested options and whose run method
+performs the radiative transfer simulations.
+"""
 
 
 import os
@@ -137,7 +141,7 @@ TYPE_CELL = [
 TYPE_SENSOR = [
     ('POSX',   'float32'),    # // X position of the sensor
     ('POSY',   'float32'),    # // Y position of the sensor
-    ('POSZ',   'float32'),    # // Z position of the sensor (fromp Earth's center in spherical, from the ground in PP)
+    ('POSZ',   'float32'),    # // Z position of the sensor (from Earth's center in spherical, from the ground in PP)
     ('THDEG',  'float32'),    # // zenith angle of viewing direction (Zenith> 90 for downward looking, <90 for upward, default Zenith)
     ('PHDEG',  'float32'),    # // azimut angle of viewing direction
     ('LOC',    'int32'),      # // localization (ATMOS=1, ...), see constant definitions in communs.h
@@ -220,26 +224,26 @@ TYPE_GOBJ = [
 
 class StdevLim(object):
     """
-    Definition of the class StdevLim
-
+    Adaptive stopping criterion for Smartg.run based on the standard
+    deviation of the results.
 
     Parameters
     ----------
     err_abs_min : float, optional
         The minimum absolute error. Stop the simulation if max abs error <= err_abs_min.
     err_rel_min : float, optional
-        Theminimum relative error in percentage.
+        The minimum relative error in percentage.
     nb_loop_min : int, optional
         The minimum kernel loop number before allowing to stop the simulation.
     stk : int, optional
-        The stoke component to consider. Choices are:
-        
-            * 0 -> I stoke component (Default)
-            * 1 -> Q stoke component
-            * 2 -> U stoke component
-            * 3 -> V stoke component
-    llevl : int, optional
-        The level to use to analyse the standart deviations. Six choices:
+        The Stokes component to consider. Choices are:
+
+            * 0 -> I Stokes component (Default)
+            * 1 -> Q Stokes component
+            * 2 -> U Stokes component
+            * 3 -> V Stokes component
+    level : int, optional
+        The level to use to analyse the standard deviations. Six choices:
 
             * 0 -> UPTOA (Default)
             * 1 -> DOWN0P
@@ -249,7 +253,7 @@ class StdevLim(object):
             * 5 -> DOWNB
     verbose : bool, optional
         Activate verbose mode to print the max absolute and relative errors at each kernel loop.
-    format : str, optional
+    fmt : str, optional
         The verbose print format for abs and rel max values.
 
     Notes
@@ -324,7 +328,7 @@ class Smartg(object):
         - CURAND_PHILOX
     cache_dir : str | Path, optional
         Path to the directory where the cache files are stored.
-    keep_context: None | bool, optional
+    keep_context : None | bool, optional
         Only in case autoinit is set to False. This parameter allows to keep or not the context 
         after the use of the run method. By default (for the case autoinit=False) kill the context after the use of the run method.
     amf_variance : bool, optional, default=False
@@ -560,10 +564,12 @@ class Smartg(object):
 
     def clear_context(self):
         """
-        Manually kill the cuda context
+        Manually kill the CUDA context.
 
-        - Once you call this, you can no longer use the method run(), 
-          for that the smartg object must be reinitialized.
+        Notes
+        -----
+        Once this method has been called, the run method can no
+        longer be used: the Smartg object must be reinitialized.
         """
         try:
             self.ctx.pop()
@@ -727,7 +733,7 @@ class Smartg(object):
             The angular size of the Sun disc in degrees, 0 (default means no angular size)
         sensor : None | Sensor | list, optional
             The light source / sensor (Sensor object or list of Sensor objects) in forward / backward mode.
-        refraction : bool, option
+        refraction : bool, optional
             If True include atmospheric refraction.
         reflectance : bool, optional
            Convert output to reflectance units, otherwise in radiance units with Solar irradiance set to PI. 
@@ -745,11 +751,11 @@ class Smartg(object):
         s_min : int, optional
             The minimum number of interactions (scattering/reflection). Default 0.
         s_max : int, optional
-            The maximum number of iteractions (scattering/reflection). Default 1e6.
+            The maximum number of interactions (scattering/reflection). Default 1e6.
         r_min : int, optional
-            The minimum number of reflections (by surface only, not environement). Default 0.
+            The minimum number of reflections (by surface only, not environment). Default 0.
         r_max : int, optional
-            The maximum number of reflections (by surface only, not environement). Default 1e6
+            The maximum number of reflections (by surface only, not environment). Default 1e6
         ffs : bool, optional
             Forced First Scattering (for use in spherical limb geometry only). Default False.
         direct : bool, optional
@@ -820,7 +826,7 @@ class Smartg(object):
             if (cus_l.dict['LMODE'] == "B" and not self.back):
                 raise ValueError('CusBackward can be used only with the compilation option back=True')
             elif sensor is not None:
-                raise ValueError('The use of sensor(s) and a custum launching mode' + \
+                raise ValueError('The use of sensor(s) and a custom launching mode' + \
                                 ' (cusForward or cusBackward) is prohibited!')
             elif (cus_l.dict['LMODE'] == "B"):
                 sensor = Sensor(POSX=cus_l.dict['POS'].x, POSY=cus_l.dict['POS'].y, POSZ=cus_l.dict['POS'].z,
@@ -856,7 +862,7 @@ class Smartg(object):
                 p_min_x = -100000; p_min_y = -100000; p_min_z = 0
                 p_max_x = 100000;  p_max_y = 100000; p_max_z = 120
 
-            # Initiliaze all the parameters linked with 3D objects
+            # Initialize all the parameters linked with 3D objects
             (n_gobj, n_obj, n_robj, surf_lph_rf, nb_h, z_alt_h, tot_s_h, tc, nb_cx, nb_cy,
              my_objects0, my_gobj0, my_robj0, my_spect_obj0, n_cos) = _init_obj(lgobj=my_objects, v_sun=v_sun, wl=wl, cus_l=cus_l)
 
@@ -1379,9 +1385,77 @@ def _finalize(tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_to
              sigma, th_v_deg, horiz, le=None, flux=None,
              back=False, sza_max=90., sun_disc=0, hist=False, c_mat_visu_recep = None,
              dic_stp = None, mat_cats=None, mat_loss=None, w_ph_cats=None, w_ph_cats2=None, no_aer_output=False):
-    '''
-    create and return the final output
-    '''
+    """
+    Create and return the final output of a simulation.
+
+    Parameters
+    ----------
+    tab_photons_tot : np.ndarray
+        Accumulated photon weights of shape
+        (level, stk, sensor, lam, theta, phi).
+    tab_photons_tot_no_aer : np.ndarray
+        Same as tab_photons_tot but without the aerosol scattering
+        contributions (see the no_aer_output option of run).
+    tab_dist_tot : np.ndarray
+        Accumulated ALIS path-length distances.
+    tab_hist_tot : np.ndarray | None
+        Accumulated photon histories (hist mode).
+    wl : np.ndarray
+        The wavelengths in nm.
+    n_photons_in_tot : pycuda.gpuarray.GPUArray
+        Number of launched photons per sensor and wavelength.
+    errorcount : np.ndarray
+        Kernel error counters.
+    n_photons_out_tot : np.ndarray
+        Number of photons counted in each output box.
+    n_photons_out_tot_no_aer : np.ndarray
+        Same as n_photons_out_tot without the aerosol scattering
+        contributions.
+    output_layers : int
+        The output layers flag of run.
+    tab_trans_dir : np.ndarray
+        Direct transmission accumulated by the kernel.
+    tab_trans_dir_analytic : np.ndarray | None
+        Analytic direct (Beer-Lambert) transmission.
+    attrs : dict
+        Attributes to attach to the output MLUT.
+    prof_atm, prof_oc : xr.Dataset | None
+        Atmospheric and oceanic profiles, stored in the output.
+    sigma : np.ndarray | None
+        Standard deviation estimate (stdev mode).
+    th_v_deg : float
+        The viewing zenith angle in degrees.
+    horiz : int
+        Horizontal irradiance normalization flag.
+    le : dict | None, optional
+        The local estimate dictionary of run.
+    flux : str | None, optional
+        The flux mode of run ('planar', 'spherical', ...).
+    back : bool, optional
+        Backward mode flag.
+    sza_max : float, optional
+        Maximum solar zenith angle in degrees (sun_disc mode).
+    sun_disc : int, optional
+        Sun discretization flag of run.
+    hist : bool, optional
+        If True, add the photon-history datasets.
+    c_mat_visu_recep : np.ndarray | None, optional
+        Receiver visualization matrix (3D-object mode).
+    dic_stp : dict | None, optional
+        Solar Tower Power parameters (3D-object mode).
+    mat_cats, mat_loss : np.ndarray | None, optional
+        Receiver category and optical-loss matrices (3D-object
+        mode).
+    w_ph_cats, w_ph_cats2 : np.ndarray | None, optional
+        Receiver photon weights (and their squares) per category.
+    no_aer_output : bool, optional
+        If True, add the no-aerosol variables to the output.
+
+    Returns
+    -------
+    MLUT
+        The simulation results.
+    """
     if hasattr(prof_atm, 'to_xarray'):
         prof_atm = prof_atm.to_xarray()
     if hasattr(prof_oc, 'to_xarray'):
@@ -2014,30 +2088,31 @@ def _calc_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
     Parameters
     ----------
     profile : xr.Dataset
-            Atmospheric or oceanic optical profile.
+        Atmospheric or oceanic optical profile.
     n_theta : int
-            Theta discretization used to build the sampling lookup tables.
-            In CUDA, phase values are sampled over this ``n_theta`` angular
-            discretization. A finer angular discretization improves sampling
-            precision but increases GPU memory usage.
+        Theta discretization used to build the sampling lookup tables.
+        In CUDA, phase values are sampled over this ``n_theta`` angular
+        discretization. A finer angular discretization improves sampling
+        precision but increases GPU memory usage.
     depo : float
-            Molecular depolarization factor used to generate the Rayleigh phase
-            entry. If negative, an isotropic phase function is used instead of
-            Rayleigh.
+        Molecular depolarization factor used to generate the Rayleigh phase
+        entry. If negative, an isotropic phase function is used instead of
+        Rayleigh.
     kind : str
         Profile family identifier. Must be either ``'atm'`` (atmosphere) or
         ``'oc'`` (ocean).
     pol_off : bool, optional
-                If ``True``, build scalar-equivalent phase tables with polarization
-                disabled. If ``False``, keep the polarized phase-matrix terms required
-                by the vector radiative transfer kernels.
+        If ``True``, build scalar-equivalent phase tables with polarization
+        disabled. If ``False``, keep the polarized phase-matrix terms required
+        by the vector radiative transfer kernels.
 
     Returns
     -------
     pycuda.gpuarray.GPUArray
-            GPU array of shape ``(n_phase_entries, n_theta)`` and dtype ``TYPE_PHASE``.
-            Each row contains one phase-function lookup table ready to be indexed by
-            ``iphase_<kind>`` in the profile uploaded by ``_init_profile``.
+        GPU array of shape ``(n_phase_entries, n_theta)`` and dtype
+        ``TYPE_PHASE``. Each row contains one phase-function lookup table
+        ready to be indexed by ``iphase_<kind>`` in the profile uploaded by
+        ``_init_profile``.
 
     Notes
     -----
@@ -2549,13 +2624,16 @@ def reduce_diff(ds_sg, varnames, delta=None):
         differences are divided by ``delta[k]`` and the outputs are Jacobians.
         If omitted, raw finite-difference sensitivities are returned.
 
-        Returns
-        -------
-        xr.Dataset
-                Dataset containing:
-                - original radiometric variables over the reference wavelength block,
-                - one derived variable per perturbation containing either sensitivity
-                    ``f(x+dx)-f(x)`` or Jacobian ``(f(x+dx)-f(x))/dx``.
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing:
+
+        - the original radiometric variables over the reference
+          wavelength block,
+        - one derived variable per perturbation containing either
+          the sensitivity ``f(x+dx)-f(x)`` or the Jacobian
+          ``(f(x+dx)-f(x))/dx``.
 
     Notes
     -----
@@ -2637,8 +2715,9 @@ def _loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce
     ----------
     nb_photons : int
         Target number of launched photons.
-    faer, foce : int
-        Flags controlling aerosol and ocean contributions in the kernel.
+    faer, foce : pycuda.gpuarray.GPUArray
+        Atmospheric and oceanic phase-function lookup tables (see
+        _calc_phase_gpu).
     n_level : int
         Number of output levels.
     n_atm, n_atm_abs : int
@@ -3196,6 +3275,20 @@ def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
 
 
 def _init_rng(rng):
+    """
+    Return the RNG backend instance for the given RNG name.
+
+    Parameters
+    ----------
+    rng : str
+        The random-number generator name: 'PHILOX' or
+        'CURAND_PHILOX'.
+
+    Returns
+    -------
+    _RngPhilox | _RngCurandPhilox
+        The RNG backend.
+    """
     if rng == 'PHILOX':
         return _RngPhilox()
     elif rng == 'CURAND_PHILOX':
@@ -3209,10 +3302,6 @@ class _RngPhilox(object):
 
     This helper manages the RNG seed and state buffer for Philox-based
     random number generation on the GPU.
-
-    Parameters
-    ----------
-    None
     """
     def __init__(self):
         pass
@@ -3261,13 +3350,9 @@ class _RngCurandPhilox(object):
     This helper wraps a tiny CUDA module that initializes
     ``curandStatePhilox4_32_10_t`` states on device memory for all active
     threads.
-
-    Parameters
-    ----------
-    None
     """
     def __init__(self):
-        # build module containing initilization functions
+        # build module containing the initialization functions
         source = r'''
         #include <curand.h>
         #include <curand_kernel.h>
@@ -3388,7 +3473,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             index_offset += 1
             lobj.append(lgobj[i])
         else:
-            raise ValueError('In myObjects list, only Entity and GroupE classes are autorised!')
+            raise ValueError('In the my_objects list, only Entity and GroupE classes are authorized!')
 
     lgobj_gpu = to_gpu(lgobj_gpu)
     n_obj = len(lobj)
@@ -3664,7 +3749,7 @@ def _normalize_rec(c_mat_visu_recep, mat_cats, nb_cx, nb_cy, nb_photons, surf_lp
         receiver.
     mat_cats : ndarray
         2D array containing total signal and per-category breakdowns. Rows
-        correspond to categories, columns to [unknown, total, unknown, intensity, error].
+        correspond to categories, columns to the per-category weight sums.
     nb_cx : int
         Number of receiver cells in the x direction.
     nb_cy : int
@@ -3681,7 +3766,7 @@ def _normalize_rec(c_mat_visu_recep, mat_cats, nb_cx, nb_cy, nb_photons, surf_lp
     sun_disc : float
         Half-angle (degrees) of the solar disk solid angle.
     le : bool
-        Flag indicating whether LE (light emission) mode is enabled.
+        Flag indicating whether the local estimate mode is enabled.
 
     Returns
     -------
