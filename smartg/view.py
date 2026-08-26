@@ -59,7 +59,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from typing import Any, Literal, Sequence, cast
 import geoclide as gc
-from luts.luts import Idx, Idx_base, MLUT, LUT
+from luts.luts import Idx_base, MLUT, LUT
 from smartg.diff import diff1, diff1_end
 from smartg.grid3d import is_same_cell_size
 from smartg.objects3d import (
@@ -3113,7 +3113,7 @@ def _get_cmaps(
 
 
 def _extract_matrices(
-    mlut: MLUT,
+    ds_sg: xr.Dataset,
     stokes_labels: list[str],
     wl: float | None,
     factor: float,
@@ -3121,35 +3121,24 @@ def _extract_matrices(
     n_y: int,
 ) -> list[np.ndarray]:
     """
-    Extract the (n_y, n_x) Stokes matrices from a SMART-G MLUT.
+    Extract the (n_y, n_x) Stokes matrices from a SMART-G Dataset.
     """
-    names = mlut[stokes_labels[0]].names
-    if not all(d in names for d in ("Azimuth angles", "Zenith angles")):
+    dims = ds_sg[stokes_labels[0]].dims
+    if not all(d in dims for d in ("Azimuth angles", "Zenith angles")):
         raise ValueError(
             "The Azimuth angles and/or Zenith angles dimension(s) "
             "are/is missing"
         )
 
-    # The two last indices, for the axes Azimuth angles and Zenith
-    # angles, are forced to 0 (we consider only one sun position)
-    # TODO Consider also the case with several sun positions
-    ind: list[Any] = [slice(None)] * len(names)
-    ind[-1] = 0
-    ind[-2] = 0
-    if (mlut.axes["Azimuth angles"].size > 1
-            or mlut.axes["Zenith angles"].size > 1):
+    if (ds_sg.sizes["Azimuth angles"] > 1
+            or ds_sg.sizes["Zenith angles"] > 1):
         raise ValueError(
             "Dimension size > 1 is not authorized for both Azimuth "
             "and Zenith angles"
         )
 
-    if "wavelength" in names:
-        # TODO Enable a default value, for example for the
-        # monochromatic case
-        ind[-3] = Idx(wl)
-
-    if "sensor index" in names:
-        n_sensor = mlut.axes["sensor index"].size
+    if "sensor index" in dims:
+        n_sensor = ds_sg.sizes["sensor index"]
     else:
         n_sensor = 1
     if n_x * n_y != n_sensor:
@@ -3164,10 +3153,20 @@ def _extract_matrices(
     # y0
     #  :
     # yn
-    return [
-        np.asarray(mlut[label][tuple(ind)]).reshape(n_y, n_x) * factor
-        for label in stokes_labels
-    ]
+    matrices = []
+    for label in stokes_labels:
+        # The Azimuth and Zenith angles are forced to their first
+        # value (we consider only one sun position)
+        # TODO Consider also the case with several sun positions
+        da = ds_sg[label].isel(
+            {"Azimuth angles": 0, "Zenith angles": 0}
+        )
+        if "wavelength" in da.dims:
+            # TODO Enable a default value, for example for the
+            # monochromatic case
+            da = da.interp(wavelength=wl)
+        matrices.append(np.asarray(da).reshape(n_y, n_x) * factor)
+    return matrices
 
 
 def _draw_map(
@@ -3236,7 +3235,7 @@ def _add_colorbar(
 
 
 def satellite_view(
-    mlut: MLUT | None,
+    ds_sg: xr.Dataset | MLUT | None,
     xgrid: np.ndarray,
     ygrid: np.ndarray,
     wl: float | None = None,
@@ -3266,16 +3265,16 @@ def satellite_view(
 
     Parameters
     ----------
-    mlut : MLUT or None
-        SMART-G return MLUT object. Can be None when ``matrices`` is
-        given.
+    ds_sg : xr.Dataset or MLUT or None
+        SMART-G output Dataset (MLUT input is deprecated). Can be
+        None when ``matrices`` is given.
     xgrid : np.ndarray
         Numpy array with the grid profile in the x axis.
     ygrid : np.ndarray
         Numpy array with the grid profile in the y axis.
     wl : float, optional
-        The wavelength (nm). Required when the MLUT has a wavelength
-        axis.
+        The wavelength (nm). Required when the Dataset has a
+        wavelength dimension.
     interpolation : str, optional
         Interpolation for :func:`matplotlib.pyplot.imshow`, e.g.
         'nearest', 'bilinear', 'bicubic', ... Default: 'none'.
@@ -3304,10 +3303,10 @@ def satellite_view(
         (max 4). Default: 'I'.
     factor : float, optional
         Multiplication factor applied to the matrices extracted from
-        the MLUT. Default: 1.
+        the Dataset. Default: 1.
     matrices : np.ndarray or list of np.ndarray, optional
         Force the shown matrix(ces) instead of extracting them from
-        the MLUT (max 4).
+        the Dataset (max 4).
     cbar_shrink : float, optional
         The colorbar shrink value. Default: 0.9.
     cbar_sci_format : bool, optional
@@ -3338,13 +3337,21 @@ def satellite_view(
     n_y = ygrid.size - 1
 
     if matrices is None:
-        if mlut is None:
+        if ds_sg is None:
             raise ValueError(
-                "The mlut argument is required when matrices is not "
+                "The ds_sg argument is required when matrices is not "
                 "given!"
             )
+        if isinstance(ds_sg, MLUT):
+            warn_message = (
+                "\nUsing an MLUT for ds_sg is deprecated, use an "
+                + "xarray.Dataset instead."
+            )
+            warnings.warn(warn_message, DeprecationWarning,
+                          stacklevel=2)
+            ds_sg = ds_sg.to_xarray()
         matrix = _extract_matrices(
-            mlut, stokes_labels, wl, factor, n_x, n_y)
+            ds_sg, stokes_labels, wl, factor, n_x, n_y)
     else:
         matrix = _as_list(matrices, 1)
         if n_x * n_y != matrix[0].shape[0] * matrix[0].shape[1]:

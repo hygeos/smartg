@@ -26,6 +26,7 @@ from smartg.phase import calc_iphase
 from smartg.iprt.iprt import read_phase_nth_cte
 
 from luts.luts import LUT, Idx
+from smartg.xarray import drop_axes
 
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -33,8 +34,40 @@ from pathlib import Path
 
 S1DB = Smartg(back=True, double=True, bias=True, pp=False)
 S1DB_PP = Smartg(back=True, double=True, bias=True, pp=True, alt_pp=True)
- 
+
 OPT_PROP_PATH_PHASE3 = DIR_AUXDATA / 'IPRT' / 'phase3' / 'opt_prop'
+
+
+def reshape_sza_vaa_vza(m, sza, vaa, vza):
+    """
+    Reorganize a d1-to-e5 run output on the (sza, vaa, vza) grid.
+
+    The run stacks the viewing directions in the sensor dimension and
+    the sun positions in the Zenith angles dimension; rebuild each
+    variable on the sza/vaa/vza dimensions instead.
+    """
+    if hasattr(m, 'to_xarray'): m = m.to_xarray()  # legacy MLUT
+    m = drop_axes(m, 'Azimuth angles')
+    for name in list(m.data_vars):
+        dims = m[name].dims
+        if 'Zenith angles' in dims and 'sensor index' in dims:
+            mat_tmp = np.swapaxes(m[name].data.reshape(len(vza), len(vaa), len(sza)), 0, 2)
+            attrs_tmp = m[name].attrs
+            m = m.drop_vars([name])
+            m[name] = xr.Variable(('sza', 'vaa', 'vza'), mat_tmp, attrs=attrs_tmp)
+        elif 'Zenith angles' in dims:
+            mat_tmp = m[name].data
+            attrs_tmp = m[name].attrs
+            m = m.drop_vars([name])
+            m[name] = xr.Variable(('sza',), mat_tmp, attrs=attrs_tmp)
+        elif 'sensor index' in dims:
+            mat_tmp = np.swapaxes(m[name].data.reshape(len(vza), len(vaa)), 0, 1)
+            attrs_tmp = m[name].attrs
+            m = m.drop_vars([name])
+            m[name] = xr.Variable(('vaa', 'vza'), mat_tmp, attrs=attrs_tmp)
+    m = drop_axes(m, 'Zenith angles', 'sensor index')
+    m = m.assign_coords(sza=sza, vaa=vaa, vza=vza)
+    return m
 
 def get_d1_to_e5_boa_sensors(vza, phi, nvza, nvaa, earth_r):
     sensors = []
@@ -369,29 +402,8 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                         le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
                         stdev=True, progress=True, n_f=ntheta)#, seed=1e8)
 
-        m_boa = m_boa.dropaxis('Azimuth angles')
-        m_boa.add_axis('sza', sza)
-        m_boa.add_axis('vaa', vaa)
-        m_boa.add_axis('vza', vza)
-        for name in m_boa.datasets():
-            if 'Zenith angles' in m_boa[name].names and 'sensor index' in m_boa[name].names:
-                mat_tmp = np.swapaxes(m_boa[name].data.reshape(len(vza), len(vaa), len(sza)), 0, 2)
-                attrs_tmp = m_boa[name].attrs
-                m_boa.rm_lut(name)
-                m_boa.add_dataset(name, mat_tmp, ['sza', 'vaa', 'vza'], attrs=attrs_tmp)
-            elif 'Zenith angles' in m_boa[name].names:
-                mat_tmp = m_boa[name].data
-                attrs_tmp = m_boa[name].attrs
-                m_boa.rm_lut(name)
-                m_boa.add_dataset(name, mat_tmp, ['sza'], attrs=attrs_tmp)
-            elif 'sensor index' in m_boa[name].names:
-                mat_tmp = np.swapaxes(m_boa[name].data.reshape(len(vza), len(vaa)), 0, 1)
-                attrs_tmp = m_boa[name].attrs
-                m_boa.rm_lut(name)
-                m_boa.add_dataset(name, mat_tmp, ['vaa', 'vza'], attrs=attrs_tmp)
-
-        m_boa = m_boa.dropaxis('Zenith angles', 'sensor index')
-        m_boa.save(str(fboa_path), overwrite=overwrite)
+        m_boa = reshape_sza_vaa_vza(m_boa, sza, vaa, vza)
+        m_boa.to_netcdf(str(fboa_path))
 
     # TOA
     if overwrite or not ftoa_exist:
@@ -401,29 +413,8 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                         le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
                         stdev=True, progress=True, n_f=ntheta)#, seed=1e8)
 
-        m_toa = m_toa.dropaxis('Azimuth angles')
-        m_toa.add_axis('sza', sza)
-        m_toa.add_axis('vaa', vaa)
-        m_toa.add_axis('vza', vza)
-        for name in m_toa.datasets():
-            if 'Zenith angles' in m_toa[name].names and 'sensor index' in m_toa[name].names:
-                mat_tmp = np.swapaxes(m_toa[name].data.reshape(len(vza), len(vaa), len(sza)), 0, 2)
-                attrs_tmp = m_toa[name].attrs
-                m_toa.rm_lut(name)
-                m_toa.add_dataset(name, mat_tmp, ['sza', 'vaa', 'vza'], attrs=attrs_tmp)
-            elif 'Zenith angles' in m_toa[name].names:
-                mat_tmp = m_toa[name].data
-                attrs_tmp = m_toa[name].attrs
-                m_toa.rm_lut(name)
-                m_toa.add_dataset(name, mat_tmp, ['sza'], attrs=attrs_tmp)
-            elif 'sensor index' in m_toa[name].names:
-                mat_tmp = np.swapaxes(m_toa[name].data.reshape(len(vza), len(vaa)), 0, 1)
-                attrs_tmp = m_toa[name].attrs
-                m_toa.rm_lut(name)
-                m_toa.add_dataset(name, mat_tmp, ['vaa', 'vza'], attrs=attrs_tmp)
-
-        m_toa = m_toa.dropaxis('Zenith angles', 'sensor index')
-        m_toa.save(str(ftoa_path), overwrite=overwrite)
+        m_toa = reshape_sza_vaa_vza(m_toa, sza, vaa, vza)
+        m_toa.to_netcdf(str(ftoa_path))
 
 
 def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
@@ -1578,7 +1569,8 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
         m_toa = sg.run(wl=wl, nb_photons=nsens*nphotons, nb_loop=nphotons, atm=pro, sensor=sensors, output_layers=1,
                     le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_f=ntheta)
-        m_toa.save(str(ftoa_path), overwrite=overwrite)
+        if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
+        m_toa.to_netcdf(str(ftoa_path))
         
 
     # open intermediate files and convert to iprt phase3 output format
@@ -1671,7 +1663,8 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
         m_toa = sg.run(wl=wl, nb_photons=nsens*nphotons, nb_loop=nphotons, atm=pro, sensor=sensors, output_layers=1,
                     le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_f=ntheta)
-        m_toa.save(str(ftoa_path), overwrite=overwrite)
+        if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
+        m_toa.to_netcdf(str(ftoa_path))
         
 
     # open intermediate files and convert to iprt phase3 output format
@@ -1768,7 +1761,8 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
         m_toa = sg.run(wl=wl, nb_photons=nsens*nphotons, nb_loop=nphotons, atm=pro, sensor=sensors, output_layers=1,
                     le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_f=ntheta)
-        m_toa.save(str(ftoa_path), overwrite=overwrite)
+        if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
+        m_toa.to_netcdf(str(ftoa_path))
         
 
     # open intermediate files and convert to iprt phase3 output format

@@ -26,7 +26,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 
-from luts.luts import Idx, LUT
+from luts.luts import LUT
 import xarray as xr
 
 
@@ -284,7 +284,7 @@ def convert_SGout_to_IPRTout(lm, lU_sign, case_name, ldepol, lalt, lSZA, lSAA, l
     Description: Convert SMART-G output into IPRT ascii output format
 
     === Parameters:
-    lm           : List of SMART-G output (MLUT object)
+    lm           : List of SMART-G output (xarray Dataset; MLUT input is deprecated)
     lU_sign      : List with multiplication to perform to U of each output
     case_name    : The IPRT case name
     ldepol       : List of Depol values
@@ -302,6 +302,7 @@ def convert_SGout_to_IPRTout(lm, lU_sign, case_name, ldepol, lalt, lSZA, lSAA, l
     output += "# depol altitude sza saa va phi I Q U V Istd Qstd Ustd Vstd\n"
 
     for im, m in enumerate(lm):
+        if hasattr(m, 'to_xarray'): m = m.to_xarray()  # legacy MLUT input
         fac = np.cos(np.radians(lSZA[im]))/np.pi
         VZA = lVZA[im]
         VAA = lVAA[im]
@@ -312,25 +313,26 @@ def convert_SGout_to_IPRTout(lm, lU_sign, case_name, ldepol, lalt, lSZA, lSAA, l
         for iza, za, in enumerate(VZA):
             for iaa, aa, in enumerate(VAA):
                 if not interp:
-                    I = m['I'+output_layeri][iaa,iza]*fac
-                    Q = m['Q'+output_layeri][iaa,iza]*fac
-                    U = m['U'+output_layeri][iaa,iza]*fac*lU_sign[im]
-                    V = m['V'+output_layeri][iaa,iza]*fac
+                    I = float(m['I'+output_layeri][iaa,iza])*fac
+                    Q = float(m['Q'+output_layeri][iaa,iza])*fac
+                    U = float(m['U'+output_layeri][iaa,iza])*fac*lU_sign[im]
+                    V = float(m['V'+output_layeri][iaa,iza])*fac
 
-                    I_std = m['I_stdev'+output_layeri][iaa,iza]*fac
-                    Q_std = m['Q_stdev'+output_layeri][iaa,iza]*fac
-                    U_std = m['U_stdev'+output_layeri][iaa,iza]*fac
-                    V_std = m['V_stdev'+output_layeri][iaa,iza]*fac
+                    I_std = float(m['I_stdev'+output_layeri][iaa,iza])*fac
+                    Q_std = float(m['Q_stdev'+output_layeri][iaa,iza])*fac
+                    U_std = float(m['U_stdev'+output_layeri][iaa,iza])*fac
+                    V_std = float(m['V_stdev'+output_layeri][iaa,iza])*fac
                 else:
-                    I = m['I'+output_layeri][Idx(aa),Idx(za)]*fac
-                    Q = m['Q'+output_layeri][Idx(aa),Idx(za)]*fac
-                    U = m['U'+output_layeri][Idx(aa),Idx(za)]*fac*lU_sign[im]
-                    V = m['V'+output_layeri][Idx(aa),Idx(za)]*fac
+                    pos = {'Azimuth angles': aa, 'Zenith angles': za}
+                    I = float(m['I'+output_layeri].interp(pos))*fac
+                    Q = float(m['Q'+output_layeri].interp(pos))*fac
+                    U = float(m['U'+output_layeri].interp(pos))*fac*lU_sign[im]
+                    V = float(m['V'+output_layeri].interp(pos))*fac
 
-                    I_std = m['I_stdev'+output_layeri][Idx(aa),Idx(za)]*fac
-                    Q_std = m['Q_stdev'+output_layeri][Idx(aa),Idx(za)]*fac
-                    U_std = m['U_stdev'+output_layeri][Idx(aa),Idx(za)]*fac
-                    V_std = m['V_stdev'+output_layeri][Idx(aa),Idx(za)]*fac
+                    I_std = float(m['I_stdev'+output_layeri].interp(pos))*fac
+                    Q_std = float(m['Q_stdev'+output_layeri].interp(pos))*fac
+                    U_std = float(m['U_stdev'+output_layeri].interp(pos))*fac
+                    V_std = float(m['V_stdev'+output_layeri].interp(pos))*fac
                 output+= f"{ldepol[im]:.2f} {lalt[im]:.1f} {lSZA[im]:.1f} {lSAA[im]:.1f} {za:.1f} {aa:.1f} {I:.5e} " + \
                          f"{Q:.5e} {U:.5e} {V:.5e} {I_std:.5e} {Q_std:.5e} {U_std:.5e} {V_std:.5e}\n"
 

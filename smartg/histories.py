@@ -335,24 +335,24 @@ def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
                 scatter_classes='last_scattering_layer',
                 norders=1, cdist_wabs=False, kabs_ref=None):
     """
-    Compute AMF from a Smartg MLUT — works transparently for hist=False and hist=True.
+    Compute AMF from a Smartg output — works transparently for hist=False and hist=True.
 
-    Dispatches on MLut content:
+    Dispatches on the output content:
       • 'cdist_up (TOA)' present  →  hist=False: reads GPU tabDist directly
       • 'histories'       present  →  hist=True:  calls compute_cdist_hist()
 
     Parameters
     ----------
-    m : MLUT – Smartg.run() output
+    m : xr.Dataset – Smartg.run() output (MLUT input is deprecated)
     wl_lr_r : (NLR,) array, optional
-        LR wavelength axis [nm].  Defaults to m.axis('wavelength').
+        LR wavelength axis [nm].  Defaults to m['wavelength'].
     wl_ref : float, optional
         Reference wavelength [nm].  Defaults to median of wl_lr_r.
     alb_ref : float
         Surface albedo at wl_ref (required for hist=True path).
     natm_abs : int, optional
         Number of atmospheric absorption layers.
-        Defaults to m.axis('z_atm').size - 1.
+        Defaults to m['z_atm'].size - 1.
     amf_variance : bool   – include 3rd moment Σ d²·w (for σ(AMF))
     nscl : int            – number of scatter classes
     scatter_classes : str – 'last_scattering_layer' | 'scattering_order'
@@ -370,17 +370,19 @@ def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
     thick : (NL,) ndarray – layer thicknesses [km]
     cdist : (NL, niamf) or (NL, nscl, niamf) ndarray – raw moments
     """
-    thick = np.abs(np.diff(m.axis('z_atm')))
+    if hasattr(m, 'to_xarray'):  # legacy MLUT input
+        m = m.to_xarray()
+    thick = np.abs(np.diff(m['z_atm'].values))
 
-    # Auto-fill optional parameters from the MLut
+    # Auto-fill optional parameters from the output
     if wl_lr_r is None:
-        wl_lr_r  = m.axis('wavelength')
+        wl_lr_r  = m['wavelength'].values
     if wl_ref is None:
         wl_ref   = float(np.median(wl_lr_r))
     if natm_abs is None:
-        natm_abs = int(m.axis('z_atm').size) - 1
+        natm_abs = int(m['z_atm'].size) - 1
 
-    # Dispatch on MLut content.
+    # Dispatch on the output content.
     # Check for 'histories' FIRST: a hist=True run also stores a basic
     # cdist_up (TOA) (nscl=1, niamf=2), so testing cdist first would
     # silently ignore the richer post-hoc computation.
@@ -409,16 +411,16 @@ def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
             kabs_ref        = kabs_ref,
         )
     else:
-        # hist=False path: read GPU tabDist directly from the MLut
+        # hist=False path: read GPU tabDist directly from the output
         try:
-            lut   = m['cdist_up (TOA)']
+            da    = m['cdist_up (TOA)']
         except Exception:
             raise ValueError(
                 "compute_amf: m contains neither 'histories' (hist=True) "
                 "nor 'cdist_up (TOA)' (hist=False)."
             )
-        names = list(lut.names)
-        arr   = lut.data
+        names = list(da.dims)
+        arr   = da.data
         idx   = [slice(None)] * arr.ndim
         for i, nm in enumerate(names):
             if nm in ('Azimuth angles', 'Zenith angles'):
