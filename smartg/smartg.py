@@ -17,7 +17,7 @@ Smartg
     with the requested options (plane-parallel or spherical, forward
     or backward, ALIS, 3D objects, ...); the run method launches the
     Monte Carlo radiative transfer simulation and returns the results
-    as an MLUT.
+    as an xarray Dataset.
 StdevLim
     Adaptive stopping criterion for Smartg.run based on the standard
     deviation of the results.
@@ -45,7 +45,7 @@ from smartg.surface import Environment
 from smartg.progress import progress as make_progress
 from smartg.cdf import icdf_2d
 from smartg.environ import modified_environ
-from luts.luts import MLUT
+from smartg.xarray import drop_axes
 from scipy.interpolate import interp1d
 
 # from scipy.integrate import simpson
@@ -786,7 +786,7 @@ class Smartg(object):
         ocean_interaction: bool | None = None,
         pol_off: bool = False,
         no_aer_output: bool = False,
-    ) -> MLUT:
+    ) -> xr.Dataset:
         """
         Run a SMART-G simulation
 
@@ -1005,14 +1005,14 @@ class Smartg(object):
             Default False.
         no_aer_output : bool, optional
             Add output where only photons not scattered by aerosols are
-            considered. Default False. For example, in output MLUT we
-            have m['I_up (TOA)'], so now we will get also m['I_up (TOA),
+            considered. Default False. For example, next to the output
+            variable m['I_up (TOA)'] we will also get m['I_up (TOA),
             no_aer'].
 
         Returns
         -------
-        out : MLUT
-            A look-up table containing the simulation results and more,
+        out : xr.Dataset
+            A Dataset containing the simulation results and more,
             e.g.:
             - the polarized dimensionless reflectance (I,Q,U,V) at the
               different layers
@@ -1039,21 +1039,12 @@ class Smartg(object):
         >>> surf = RoughSurface(wind=5., nh2o=1.34)
         >>> m = Smartg().run(wl=550., atm=atm, water=water, surf=surf)
         >>> # Look at the TOA radiance/reflectance ('I_up (TOA)')
-        >>> m['I_up (TOA)'].describe()
-        LUT "I_up (TOA)" (float64 between 0.0704 and 0.161):
-          Dim 0 (Azimuth angles): 90 values in [0.0, 356.0] Dim 1
-          (Zenith angles): 45 values in [1.0, 89.0]
-        >>> m['I_up (TOA)'].data
-        array([[0.15751, 0.14705, 0.14806, ..., 0.12496, 0.11015,
-        0.07649],
-               [0.15424, 0.14913, 0.1453 , ..., 0.12659, 0.11015,
-               0.07356], [0.14755, 0.14612, 0.14571, ..., 0.12354,
-               0.11139, 0.07547],
+        >>> m['I_up (TOA)'].dims
+        ('Azimuth angles', 'Zenith angles')
+        >>> m['I_up (TOA)'].values  # doctest: +SKIP
+        array([[0.15751, 0.14705, ..., 0.11015, 0.07649],
                ...,
-               [0.15698, 0.14824, 0.14262, ..., 0.12455, 0.10815,
-               0.07464], [0.15662, 0.15111, 0.14541, ..., 0.12609,
-               0.11155, 0.07262], [0.15648, 0.14717, 0.14103, ...,
-               0.12593, 0.10935, 0.07744]], shape=(90, 45))
+               [0.15648, 0.14717, ..., 0.10935, 0.07744]])
 
         """
 
@@ -1871,7 +1862,6 @@ class Smartg(object):
             prof_atm,
             prof_oc,
             sigma,
-            th_v_deg,
             horiz,
             le=le,
             flux=flux,
@@ -1888,9 +1878,9 @@ class Smartg(object):
             no_aer_output=no_aer_output,
         )
 
-        output.set_attr(
-            'processing time (s)', (datetime.now() - t0).total_seconds()
-        )
+        output.attrs['processing time (s)'] = (
+            datetime.now() - t0
+        ).total_seconds()
 
         if self.alis:
             p.finish(
@@ -1914,7 +1904,7 @@ class Smartg(object):
             )
 
         if wl.scalar:
-            output = output.dropaxis('wavelength')
+            output = drop_axes(output, 'wavelength')
             output.attrs['wavelength'] = wl[:]
 
         if not self.autoinit and not self.keep_context:
@@ -1987,6 +1977,95 @@ def _calc_solid_angles(
     return tab_th, tab_phi, tab_omega
 
 
+def _add_variable(ds, name, data, dims, attrs=None):
+    """
+    Attach an array to the Dataset under explicit dimension names.
+
+    Mirror of the legacy MLUT.add_dataset: the variable binds to the
+    dataset coordinates by dimension name only, so no index alignment
+    can ever occur, and a size mismatch raises immediately.
+    """
+    ds[name] = xr.Variable(dims, data, attrs=attrs)
+
+
+def _add_level_output(
+    ds,
+    direction,
+    lvl,
+    axnames,
+    tab_final,
+    tab_final_no_aer,
+    n_photons_out_tot,
+    n_photons_out_tot_no_aer,
+    sigma,
+    tab_dist_final,
+    zip_flag,
+    cdist_axnames_zip,
+    cdist_axnames_full,
+    isen,
+    ilam,
+    iphi,
+    no_aer_output,
+):
+    """
+    Add the radiometric variables of one output level to the Dataset.
+
+    The variables are named after the level direction, for instance
+    'I_up (TOA)' or 'N_down (0+)', following the historical MLUT
+    dataset names.
+    """
+    for i, stk in enumerate(('I', 'Q', 'U', 'V')):
+        _add_variable(
+            ds,
+            f'{stk}_{direction}',
+            tab_final[lvl, i, isen, ilam, iphi, :],
+            axnames,
+        )
+    if sigma is not None:
+        for i, stk in enumerate(('I', 'Q', 'U', 'V')):
+            _add_variable(
+                ds,
+                f'{stk}_stdev_{direction}',
+                sigma[lvl, i, isen, ilam, iphi, :],
+                axnames,
+            )
+    _add_variable(
+        ds,
+        f'N_{direction}',
+        n_photons_out_tot[lvl, isen, ilam, iphi, :],
+        axnames,
+    )
+    if no_aer_output:
+        for i, stk in enumerate(('I', 'Q', 'U', 'V')):
+            _add_variable(
+                ds,
+                f'{stk}_{direction}, no_aer',
+                tab_final_no_aer[lvl, i, isen, ilam, iphi, :],
+                axnames,
+            )
+        _add_variable(
+            ds,
+            f'N_{direction}, no_aer',
+            n_photons_out_tot_no_aer[lvl, isen, ilam, iphi, :],
+            axnames,
+        )
+    if len(tab_dist_final) > 1:
+        if zip_flag:
+            _add_variable(
+                ds,
+                f'cdist_{direction}',
+                np.squeeze(tab_dist_final[lvl, :, isen]),
+                cdist_axnames_zip,
+            )
+        else:
+            _add_variable(
+                ds,
+                f'cdist_{direction}',
+                tab_dist_final[lvl, :, isen],
+                cdist_axnames_full,
+            )
+
+
 def _finalize(
     tab_photons_tot: np.ndarray,
     tab_photons_tot_no_aer: np.ndarray,
@@ -2004,7 +2083,6 @@ def _finalize(
     prof_atm,
     prof_oc,
     sigma: np.ndarray | None,
-    th_v_deg: float,
     horiz: int,
     le: dict | None = None,
     flux: str | None = None,
@@ -2019,7 +2097,7 @@ def _finalize(
     w_ph_cats: np.ndarray | None = None,
     w_ph_cats2: np.ndarray | None = None,
     no_aer_output: bool = False,
-) -> MLUT:
+) -> xr.Dataset:
     """
     Create and return the final output of a simulation.
 
@@ -2053,13 +2131,11 @@ def _finalize(
     tab_trans_dir_analytic : np.ndarray | None
         Analytic direct (Beer-Lambert) transmission.
     attrs : dict
-        Attributes to attach to the output MLUT.
+        Attributes to attach to the output Dataset.
     prof_atm, prof_oc : xr.Dataset | None
         Atmospheric and oceanic profiles, stored in the output.
     sigma : np.ndarray | None
         Standard deviation estimate (stdev mode).
-    th_v_deg : float
-        The viewing zenith angle in degrees.
     horiz : int
         Horizontal irradiance normalization flag.
     le : dict | None, optional
@@ -2087,7 +2163,7 @@ def _finalize(
 
     Returns
     -------
-    MLUT
+    xr.Dataset
         The simulation results.
     """
     if hasattr(prof_atm, 'to_xarray'):
@@ -2151,58 +2227,56 @@ def _finalize(
         sigma = sigma.swapaxes(4, 5)
 
     #
-    # create the MLUT object
+    # create the output Dataset
     #
-    m = MLUT()
+    ds = xr.Dataset()
 
     # add the axes
     axnames = ['Zenith angles']
-    axnames2 = ['None', 'Zenith angles']
     if hist:
-        m.add_dataset('Nphotons_in', n_photons_in_tot)
+        _add_variable(
+            ds, 'Nphotons_in', n_photons_in_tot,
+            ('sensor_in', 'wavelength_in'),
+        )
 
     iphi = slice(None)
-    m.set_attr('zip', 'False')
-    m.set_attr('NPhotonIn_sum', np.sum(n_photons_in_tot))
+    ds.attrs['zip'] = 'False'
+    ds.attrs['NPhotonIn_sum'] = np.sum(n_photons_in_tot)
 
     if le is not None:
-        m.set_attr('LE', int(1))
+        ds.attrs['LE'] = int(1)
     else:
-        m.set_attr('LE', int(0))
+        ds.attrs['LE'] = int(0)
 
     if le is not None:
         if 'zip' in le:
             if le['zip']:
-                m.set_attr('zip', 'True')
+                ds.attrs['zip'] = 'True'
                 iphi = 0
             else:
                 axnames.insert(0, 'Azimuth angles')
-                axnames2.insert(1, 'Azimuth angles')
         else:
             axnames.insert(0, 'Azimuth angles')
-            axnames2.insert(1, 'Azimuth angles')
     else:
         axnames.insert(0, 'Azimuth angles')
-        axnames2.insert(1, 'Azimuth angles')
 
-    m.add_axis('Zenith angles', tab_th * 180.0 / np.pi)
-    m.add_axis('Azimuth angles', tab_phi * 180.0 / np.pi)
+    ds.coords['Zenith angles'] = tab_th * 180.0 / np.pi
+    ds.coords['Azimuth angles'] = tab_phi * 180.0 / np.pi
 
     axnames4 = []
     if n_lam > 1:
-        m.add_axis('wavelength', wl)
+        ds.coords['wavelength'] = wl
         ilam = slice(None)
         axnames.insert(0, 'wavelength')
         axnames4.insert(0, 'wavelength')
     else:
-        m.set_attr('wavelength', str(wl))
+        ds.attrs['wavelength'] = str(wl)
         ilam = 0
 
     if n_sensor > 1:
-        m.add_axis('sensor index', np.arange(n_sensor))
+        ds.coords['sensor index'] = np.arange(n_sensor)
         isen = slice(None)
         axnames.insert(0, 'sensor index')
-        axnames2.insert(1, 'sensor index')
         axnames4.insert(0, 'sensor index')
     else:
         isen = 0
@@ -2214,7 +2288,7 @@ def _finalize(
     write_up0m = output_layers in (1, 3, 4)
     write_downb = output_layers in (2, 3, 5)
 
-    # Build axis names for cdist datasets (ALIS mode)
+    # Build dimension names for cdist variables (ALIS mode)
     # Shape after swapaxes: (n_lvl, N_LAYERS, n_sensor, nb_phi,
     # nb_theta, [NSCL,] n_iamf)
     # When NSCL=1, squeeze it away for backward compatibility
@@ -2227,491 +2301,89 @@ def _finalize(
         _has_scl = False
 
     if _has_scl:
-        cdist_axnames_zip = ['None', 'Zenith angles', 'iSCL', 'iAMF']
-        cdist_axnames_full = ['None']
+        cdist_axnames_zip = ['cdist_layer', 'Zenith angles', 'iSCL', 'iAMF']
+        cdist_axnames_full = ['cdist_layer']
         if n_sensor > 1:
             cdist_axnames_full.append('sensor index')
         cdist_axnames_full.extend(
             ['Azimuth angles', 'Zenith angles', 'iSCL', 'iAMF']
         )
     else:
-        cdist_axnames_zip = ['None', 'Zenith angles', 'iAMF']
-        cdist_axnames_full = ['None']
+        cdist_axnames_zip = ['cdist_layer', 'Zenith angles', 'iAMF']
+        cdist_axnames_full = ['cdist_layer']
         if n_sensor > 1:
             cdist_axnames_full.append('sensor index')
-        cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iAMF'])
+        cdist_axnames_full.extend(
+            ['Azimuth angles', 'Zenith angles', 'iAMF']
+        )
+
+    level_kwargs = {
+        'axnames': axnames,
+        'tab_final': tab_final,
+        'tab_final_no_aer': tab_final_no_aer,
+        'n_photons_out_tot': n_photons_out_tot,
+        'n_photons_out_tot_no_aer': n_photons_out_tot_no_aer,
+        'sigma': sigma,
+        'tab_dist_final': tab_dist_final,
+        'zip_flag': zip_flag,
+        'cdist_axnames_zip': cdist_axnames_zip,
+        'cdist_axnames_full': cdist_axnames_full,
+        'isen': isen,
+        'ilam': ilam,
+        'iphi': iphi,
+        'no_aer_output': no_aer_output,
+    }
 
     if write_uptoa:
-        m.add_dataset(
-            'I_up (TOA)', tab_final[UPTOA, 0, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'Q_up (TOA)', tab_final[UPTOA, 1, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'U_up (TOA)', tab_final[UPTOA, 2, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'V_up (TOA)', tab_final[UPTOA, 3, isen, ilam, iphi, :], axnames
-        )
-        if sigma is not None:
-            m.add_dataset(
-                'I_stdev_up (TOA)',
-                sigma[UPTOA, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_stdev_up (TOA)',
-                sigma[UPTOA, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_stdev_up (TOA)',
-                sigma[UPTOA, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_stdev_up (TOA)',
-                sigma[UPTOA, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-        m.add_dataset(
-            'N_up (TOA)',
-            n_photons_out_tot[UPTOA, isen, ilam, iphi, :],
-            axnames,
-        )
-        if no_aer_output:
-            m.add_dataset(
-                'I_up (TOA), no_aer',
-                tab_final_no_aer[UPTOA, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_up (TOA), no_aer',
-                tab_final_no_aer[UPTOA, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_up (TOA), no_aer',
-                tab_final_no_aer[UPTOA, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_up (TOA), no_aer',
-                tab_final_no_aer[UPTOA, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'N_up (TOA), no_aer',
-                n_photons_out_tot_no_aer[UPTOA, isen, ilam, iphi, :],
-                axnames,
-            )
-        if len(tab_dist_final) > 1:
-            if zip_flag:
-                m.add_dataset(
-                    'cdist_up (TOA)',
-                    np.squeeze(tab_dist_final[UPTOA, :, isen]),
-                    cdist_axnames_zip,
-                )
-            else:
-                m.add_dataset(
-                    'cdist_up (TOA)',
-                    tab_dist_final[UPTOA, :, isen],
-                    cdist_axnames_full,
-                )
+        _add_level_output(ds, 'up (TOA)', UPTOA, **level_kwargs)
 
     if hist:
-        m.add_dataset('histories', tab_hist_tot)
+        _add_variable(
+            ds,
+            'histories',
+            tab_hist_tot,
+            (
+                'hist_level',
+                'hist_photon',
+                'hist_record',
+                'hist_theta',
+                'hist_sensor',
+                'hist_phi',
+            ),
+        )
 
     if write_down0p:
-        m.add_dataset(
-            'I_down (0+)', tab_final[DOWN0P, 0, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'Q_down (0+)', tab_final[DOWN0P, 1, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'U_down (0+)', tab_final[DOWN0P, 2, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'V_down (0+)', tab_final[DOWN0P, 3, isen, ilam, iphi, :], axnames
-        )
-        if sigma is not None:
-            m.add_dataset(
-                'I_stdev_down (0+)',
-                sigma[DOWN0P, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_stdev_down (0+)',
-                sigma[DOWN0P, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_stdev_down (0+)',
-                sigma[DOWN0P, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_stdev_down (0+)',
-                sigma[DOWN0P, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-        m.add_dataset(
-            'N_down (0+)',
-            n_photons_out_tot[DOWN0P, isen, ilam, iphi, :],
-            axnames,
-        )
-        if no_aer_output:
-            m.add_dataset(
-                'I_down (0+), no_aer',
-                tab_final_no_aer[DOWN0P, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_down (0+), no_aer',
-                tab_final_no_aer[DOWN0P, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_down (0+), no_aer',
-                tab_final_no_aer[DOWN0P, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_down (0+), no_aer',
-                tab_final_no_aer[DOWN0P, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'N_down (0+), no_aer',
-                n_photons_out_tot_no_aer[DOWN0P, isen, ilam, iphi, :],
-                axnames,
-            )
-        if len(tab_dist_final) > 1:
-            if zip_flag:
-                m.add_dataset(
-                    'cdist_down (0+)',
-                    np.squeeze(tab_dist_final[DOWN0P, :, isen]),
-                    cdist_axnames_zip,
-                )
-            else:
-                m.add_dataset(
-                    'cdist_down (0+)',
-                    tab_dist_final[DOWN0P, :, isen],
-                    cdist_axnames_full,
-                )
+        _add_level_output(ds, 'down (0+)', DOWN0P, **level_kwargs)
     if write_up0m:
-        m.add_dataset(
-            'I_up (0-)', tab_final[UP0M, 0, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'Q_up (0-)', tab_final[UP0M, 1, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'U_up (0-)', tab_final[UP0M, 2, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'V_up (0-)', tab_final[UP0M, 3, isen, ilam, iphi, :], axnames
-        )
-        if sigma is not None:
-            m.add_dataset(
-                'I_stdev_up (0-)', sigma[UP0M, 0, isen, ilam, iphi, :], axnames
-            )
-            m.add_dataset(
-                'Q_stdev_up (0-)', sigma[UP0M, 1, isen, ilam, iphi, :], axnames
-            )
-            m.add_dataset(
-                'U_stdev_up (0-)', sigma[UP0M, 2, isen, ilam, iphi, :], axnames
-            )
-            m.add_dataset(
-                'V_stdev_up (0-)', sigma[UP0M, 3, isen, ilam, iphi, :], axnames
-            )
-        m.add_dataset(
-            'N_up (0-)', n_photons_out_tot[UP0M, isen, ilam, iphi, :], axnames
-        )
-        if no_aer_output:
-            m.add_dataset(
-                'I_up (0-), no_aer',
-                tab_final_no_aer[UP0M, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_up (0-), no_aer',
-                tab_final_no_aer[UP0M, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_up (0-), no_aer',
-                tab_final_no_aer[UP0M, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_up (0-), no_aer',
-                tab_final_no_aer[UP0M, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'N_up (0-), no_aer',
-                n_photons_out_tot_no_aer[UP0M, isen, ilam, iphi, :],
-                axnames,
-            )
-        if len(tab_dist_final) > 1:
-            if zip_flag:
-                m.add_dataset(
-                    'cdist_up (0-)',
-                    np.squeeze(tab_dist_final[UP0M, :, isen]),
-                    cdist_axnames_zip,
-                )
-            else:
-                m.add_dataset(
-                    'cdist_up (0-)',
-                    tab_dist_final[UP0M, :, isen],
-                    cdist_axnames_full,
-                )
-
+        _add_level_output(ds, 'up (0-)', UP0M, **level_kwargs)
     if write_down0m:
-        m.add_dataset(
-            'I_down (0-)', tab_final[DOWN0M, 0, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'Q_down (0-)', tab_final[DOWN0M, 1, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'U_down (0-)', tab_final[DOWN0M, 2, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'V_down (0-)', tab_final[DOWN0M, 3, isen, ilam, iphi, :], axnames
-        )
-        if sigma is not None:
-            m.add_dataset(
-                'I_stdev_down (0-)',
-                sigma[DOWN0M, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_stdev_down (0-)',
-                sigma[DOWN0M, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_stdev_down (0-)',
-                sigma[DOWN0M, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_stdev_down (0-)',
-                sigma[DOWN0M, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-        m.add_dataset(
-            'N_down (0-)',
-            n_photons_out_tot[DOWN0M, isen, ilam, iphi, :],
-            axnames,
-        )
-        if no_aer_output:
-            m.add_dataset(
-                'I_down (0-), no_aer',
-                tab_final_no_aer[DOWN0M, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_down (0-), no_aer',
-                tab_final_no_aer[DOWN0M, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_down (0-), no_aer',
-                tab_final_no_aer[DOWN0M, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_down (0-), no_aer',
-                tab_final_no_aer[DOWN0M, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'N_down (0-), no_aer',
-                n_photons_out_tot_no_aer[DOWN0M, isen, ilam, iphi, :],
-                axnames,
-            )
-        if len(tab_dist_final) > 1:
-            if zip_flag:
-                m.add_dataset(
-                    'cdist_down (0-)',
-                    np.squeeze(tab_dist_final[DOWN0M, :, isen]),
-                    cdist_axnames_zip,
-                )
-            else:
-                m.add_dataset(
-                    'cdist_down (0-)',
-                    tab_dist_final[DOWN0M, :, isen],
-                    cdist_axnames_full,
-                )
+        _add_level_output(ds, 'down (0-)', DOWN0M, **level_kwargs)
     if write_up0p:
-        m.add_dataset(
-            'I_up (0+)', tab_final[UP0P, 0, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'Q_up (0+)', tab_final[UP0P, 1, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'U_up (0+)', tab_final[UP0P, 2, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'V_up (0+)', tab_final[UP0P, 3, isen, ilam, iphi, :], axnames
-        )
-        if sigma is not None:
-            m.add_dataset(
-                'I_stdev_up (0+)', sigma[UP0P, 0, isen, ilam, iphi, :], axnames
-            )
-            m.add_dataset(
-                'Q_stdev_up (0+)', sigma[UP0P, 1, isen, ilam, iphi, :], axnames
-            )
-            m.add_dataset(
-                'U_stdev_up (0+)', sigma[UP0P, 2, isen, ilam, iphi, :], axnames
-            )
-            m.add_dataset(
-                'V_stdev_up (0+)', sigma[UP0P, 3, isen, ilam, iphi, :], axnames
-            )
-        m.add_dataset(
-            'N_up (0+)', n_photons_out_tot[UP0P, isen, ilam, iphi, :], axnames
-        )
-        if no_aer_output:
-            m.add_dataset(
-                'I_up (0+), no_aer',
-                tab_final_no_aer[UP0P, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_up (0+), no_aer',
-                tab_final_no_aer[UP0P, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_up (0+), no_aer',
-                tab_final_no_aer[UP0P, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_up (0+), no_aer',
-                tab_final_no_aer[UP0P, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'N_up (0+), no_aer',
-                n_photons_out_tot_no_aer[UP0P, isen, ilam, iphi, :],
-                axnames,
-            )
-        if len(tab_dist_final) > 1:
-            if zip_flag:
-                m.add_dataset(
-                    'cdist_up (0+)',
-                    np.squeeze(tab_dist_final[UP0P, :, isen]),
-                    cdist_axnames_zip,
-                )
-            else:
-                m.add_dataset(
-                    'cdist_up (0+)',
-                    tab_dist_final[UP0P, :, isen],
-                    cdist_axnames_full,
-                )
+        _add_level_output(ds, 'up (0+)', UP0P, **level_kwargs)
     if write_downb:
-        m.add_dataset(
-            'I_down (B)', tab_final[DOWNB, 0, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'Q_down (B)', tab_final[DOWNB, 1, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'U_down (B)', tab_final[DOWNB, 2, isen, ilam, iphi, :], axnames
-        )
-        m.add_dataset(
-            'V_down (B)', tab_final[DOWNB, 3, isen, ilam, iphi, :], axnames
-        )
-        if sigma is not None:
-            m.add_dataset(
-                'I_stdev_down (B)',
-                sigma[DOWNB, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_stdev_down (B)',
-                sigma[DOWNB, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_stdev_down (B)',
-                sigma[DOWNB, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_stdev_down (B)',
-                sigma[DOWNB, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-        m.add_dataset(
-            'N_down (B)',
-            n_photons_out_tot[DOWNB, isen, ilam, iphi, :],
-            axnames,
-        )
-        if no_aer_output:
-            m.add_dataset(
-                'I_down (B), no_aer',
-                tab_final_no_aer[DOWNB, 0, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'Q_down (B), no_aer',
-                tab_final_no_aer[DOWNB, 1, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'U_down (B), no_aer',
-                tab_final_no_aer[DOWNB, 2, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'V_down (B), no_aer',
-                tab_final_no_aer[DOWNB, 3, isen, ilam, iphi, :],
-                axnames,
-            )
-            m.add_dataset(
-                'N_down (B), no_aer',
-                n_photons_out_tot_no_aer[DOWNB, isen, ilam, iphi, :],
-                axnames,
-            )
-        if len(tab_dist_final) > 1:
-            if zip_flag:
-                m.add_dataset(
-                    'cdist_down (B)',
-                    np.squeeze(tab_dist_final[DOWNB, :, isen]),
-                    cdist_axnames_zip,
-                )
-            else:
-                m.add_dataset(
-                    'cdist_down (B)',
-                    tab_dist_final[DOWNB, :, isen],
-                    cdist_axnames_full,
-                )
+        _add_level_output(ds, 'down (B)', DOWNB, **level_kwargs)
 
     # write atmospheric profiles
     if prof_atm is not None:
         # direct transmission
-        m.add_dataset(
-            'direct transmission',
-            tab_trans_dir_analytic,
-            axnames=['wavelength'],
-        )
-        m.add_dataset(
+        if tab_trans_dir_analytic is not None:
+            _add_variable(
+                ds,
+                'direct transmission',
+                tab_trans_dir_analytic,
+                ['wavelength'],
+            )
+        _add_variable(
+            ds,
             'direct transmission (dev)',
             np.exp(-tab_trans_dir[isen, ilam]),
             axnames4,
         )
 
         for axis_name in prof_atm.coords:
-            if axis_name not in m.axes:
-                m.add_axis(axis_name, prof_atm.coords[axis_name].to_numpy())
+            if axis_name not in ds.coords:
+                coord = prof_atm.coords[axis_name]
+                ds.coords[axis_name] = (coord.dims, coord.to_numpy())
 
         for name in [
             'n_atm',
@@ -2727,19 +2399,29 @@ def _finalize(
             'ssa_p_atm',
         ]:
             da = prof_atm[name]
-            m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+            _add_variable(ds, name, da.to_numpy(), da.dims, attrs=da.attrs)
         if 'phase_atm' in prof_atm.data_vars:
             for name in ['phase_atm', 'iphase_atm']:
                 da = prof_atm[name]
-                # Use None for 'iphase' and 'stk' to avoid sharing axes
-                # across atm/oc
-                dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
-                m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
+                # Rename 'iphase' and 'stk' per domain to avoid
+                # sharing dimensions across atm/oc
+                dims = [
+                    'phase_index_atm' if d == 'iphase'
+                    else 'stk_atm' if d == 'stk'
+                    else d
+                    for d in da.dims
+                ]
+                _add_variable(ds, name, da.to_numpy(), dims, attrs=da.attrs)
         if 'pine_atm' in prof_atm.data_vars:
             for name in ['pine_atm', 'FQY1_atm']:
                 da = prof_atm[name]
-                dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
-                m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
+                dims = [
+                    'phase_index_atm' if d == 'iphase'
+                    else 'stk_atm' if d == 'stk'
+                    else d
+                    for d in da.dims
+                ]
+                _add_variable(ds, name, da.to_numpy(), dims, attrs=da.attrs)
 
         if 'neighbour_atm' in prof_atm.data_vars:
             for name in [
@@ -2750,15 +2432,16 @@ def _finalize(
                 'neighbour_atm',
             ]:
                 da = prof_atm[name]
-                m.add_dataset(
-                    name, da.to_numpy(), list(da.dims), attrs=da.attrs
+                _add_variable(
+                    ds, name, da.to_numpy(), da.dims, attrs=da.attrs
                 )
 
     # write ocean profiles
     if prof_oc is not None:
         for axis_name in prof_oc.coords:
-            if axis_name not in m.axes:
-                m.add_axis(axis_name, prof_oc.coords[axis_name].to_numpy())
+            if axis_name not in ds.coords:
+                coord = prof_oc.coords[axis_name]
+                ds.coords[axis_name] = (coord.dims, coord.to_numpy())
 
         for name in [
             'T_oc',
@@ -2773,29 +2456,37 @@ def _finalize(
             'albedo_seafloor',
         ]:
             da = prof_oc[name]
-            m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
+            _add_variable(ds, name, da.to_numpy(), da.dims, attrs=da.attrs)
         if 'ssa_w' in prof_oc.data_vars:
             da = prof_oc['ssa_w']
-            m.add_dataset(
-                'ssa_w', da.to_numpy(), list(da.dims), attrs=da.attrs
-            )
+            _add_variable(ds, 'ssa_w', da.to_numpy(), da.dims, attrs=da.attrs)
         if 'ssa_p_oc' in prof_oc.data_vars:
             da = prof_oc['ssa_p_oc']
-            m.add_dataset(
-                'ssa_p_oc', da.to_numpy(), list(da.dims), attrs=da.attrs
+            _add_variable(
+                ds, 'ssa_p_oc', da.to_numpy(), da.dims, attrs=da.attrs
             )
         if 'phase_oc' in prof_oc.data_vars:
             for name in ['phase_oc', 'iphase_oc']:
                 da = prof_oc[name]
-                # Use None for 'iphase' and 'stk' to avoid sharing axes
-                # across atm/oc
-                dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
-                m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
+                # Rename 'iphase' and 'stk' per domain to avoid
+                # sharing dimensions across atm/oc
+                dims = [
+                    'phase_index_oc' if d == 'iphase'
+                    else 'stk_oc' if d == 'stk'
+                    else d
+                    for d in da.dims
+                ]
+                _add_variable(ds, name, da.to_numpy(), dims, attrs=da.attrs)
         if 'pine_oc' in prof_oc.data_vars:
             for name in ['pine_oc', 'FQY1_oc']:
                 da = prof_oc[name]
-                dims = [None if d in ('iphase', 'stk') else d for d in da.dims]
-                m.add_dataset(name, da.to_numpy(), dims, attrs=da.attrs)
+                dims = [
+                    'phase_index_oc' if d == 'iphase'
+                    else 'stk_oc' if d == 'stk'
+                    else d
+                    for d in da.dims
+                ]
+                _add_variable(ds, name, da.to_numpy(), dims, attrs=da.attrs)
 
         if 'neighbour_oc' in prof_oc.data_vars:
             for name in [
@@ -2806,8 +2497,8 @@ def _finalize(
                 'neighbour_oc',
             ]:
                 da = prof_oc[name]
-                m.add_dataset(
-                    name, da.to_numpy(), list(da.dims), attrs=da.attrs
+                _add_variable(
+                    ds, name, da.to_numpy(), da.dims, attrs=da.attrs
                 )
 
     # write the error count
@@ -2820,69 +2511,70 @@ def _finalize(
             'ERROR_MAX_LOOP',
         ]
     ):
-        m.set_attr(d, err[i])
+        ds.attrs[d] = err[i]
 
     # write attributes
     for k, v in list(attrs.items()):
-        m.set_attr(k, str(v))
+        ds.attrs[k] = str(v)
 
     # fluxes post-processing
     if flux is not None:
-        m.set_attr('flux', flux)
-        for d in m.datasets():
+        ds.attrs['flux'] = flux
+        for d in list(map(str, ds.data_vars)):
             if (
                 ('_stdev_' in d)
                 or (d.startswith('Q_'))
                 or (d.startswith('U_'))
                 or (d.startswith('V_'))
             ):
-                m.rm_lut(d)
+                ds = ds.drop_vars([d])
             elif d.startswith('I_') or d.startswith('N_'):
-                flux_lut = (
-                    m[d]
-                    .reduce(np.sum, 'Azimuth angles')
-                    .reduce(np.sum, 'Zenith angles', as_lut=True)
+                flux_var = (
+                    ds[d]
+                    .sum(dim='Azimuth angles', keep_attrs=True)
+                    .sum(dim='Zenith angles', keep_attrs=True)
                 )
-                m.rm_lut(d)
-                m.add_lut(flux_lut, desc=d.replace('I_', 'flux_'))
+                ds = ds.drop_vars([d])
+                ds[d.replace('I_', 'flux_')] = flux_var.variable
 
     if c_mat_visu_recep is not None:
         # a receiver implies the Solar Tower Power parameters
         assert dic_stp is not None
         # Indice 0 = Sum of all Cats, then cat1 to cat8, def of cats ->
         # see Moulana et al, 2019
-        m.add_axis(
-            'Categories', np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32)
+        ds.coords['Categories'] = np.array(
+            [0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32
         )
         var_x, var_y = np.shape(c_mat_visu_recep[0][:][:])
         x_indices = np.arange(var_x)
         y_indices = np.arange(var_y)
-        m.add_axis('X_Cell_Index', x_indices)
-        m.add_axis('Y_Cell_Index', y_indices)
-        m.add_dataset(
+        ds.coords['X_Cell_Index'] = x_indices
+        ds.coords['Y_Cell_Index'] = y_indices
+        _add_variable(
+            ds,
             'C_Receiver',
             c_mat_visu_recep[:][:][:],
             ['Categories', 'X_Cell_Index', 'Y_Cell_Index'],
         )
-        m.set_attr(
-            'S_Receiver', str(dic_stp["SREC"])
+        ds.attrs['S_Receiver'] = str(
+            dic_stp["SREC"]
         )  # Receiver surface in km²
-        m.set_attr('S_Cell', str(dic_stp["TC"]))  # Cell surface in km²
+        ds.attrs['S_Cell'] = str(dic_stp["TC"])  # Cell surface in km²
         # half-angle of the receiver solid angle
         if back:
-            m.set_attr('ALDEG', str(dic_stp["ALDEG"]))
+            ds.attrs['ALDEG'] = str(dic_stp["ALDEG"])
         else:
-            m.set_attr('ALDEG', str(90))
+            ds.attrs['ALDEG'] = str(90)
 
     if mat_cats is not None:
         assert dic_stp is not None
         assert w_ph_cats is not None and w_ph_cats2 is not None
-        m.add_dataset('cat_PhNb', mat_cats[:, 0], ['Categories'])
-        m.add_dataset('cat_w', mat_cats[:, 1], ['Categories'])
-        m.add_dataset('cat_w2', mat_cats[:, 2], ['Categories'])
-        m.add_dataset('cat_irr', mat_cats[:, 3], ['Categories'])
-        m.add_dataset('cat_errAbs', mat_cats[:, 4], ['Categories'])
-        m.add_dataset('cat_err%', mat_cats[:, 5], ['Categories'])
+        _add_variable(ds, 'cat_PhNb', mat_cats[:, 0], ['Categories'])
+        _add_variable(ds, 'cat_w', mat_cats[:, 1], ['Categories'])
+        _add_variable(ds, 'cat_w2', mat_cats[:, 2], ['Categories'])
+        _add_variable(ds, 'cat_irr', mat_cats[:, 3], ['Categories'])
+        _add_variable(ds, 'cat_errAbs', mat_cats[:, 4], ['Categories'])
+        _add_variable(ds, 'cat_err%', mat_cats[:, 5], ['Categories'])
 
         arr_wc = np.zeros((9, n_lam), dtype=np.float64)
         arr_wc2 = np.zeros((9, n_lam), dtype=np.float64)
@@ -2897,22 +2589,24 @@ def _finalize(
         if n_lam > 1:
             axe_w_ph.append('wavelength')
 
-        m.add_dataset('wPhCats', arr_wc[:, ilam], axe_w_ph)
-        m.add_dataset('wPhCats2', arr_wc2[:, ilam], axe_w_ph)
-        m.add_dataset('norm_npho', norm_npho[0, 0, 0, :, 0, 0], ['wavelength'])
+        _add_variable(ds, 'wPhCats', arr_wc[:, ilam], axe_w_ph)
+        _add_variable(ds, 'wPhCats2', arr_wc2[:, ilam], axe_w_ph)
+        _add_variable(
+            ds, 'norm_npho', norm_npho[0, 0, 0, :, 0, 0], ['wavelength']
+        )
 
-        m.set_attr('n_cte', str(dic_stp["n_cte"]))
+        ds.attrs['n_cte'] = str(dic_stp["n_cte"])
 
     if mat_loss is not None:
         assert dic_stp is not None
         assert prof_atm is not None
-        m.add_dataset(
-            'wLoss', np.array(mat_loss[:, 0], dtype=np.float64), ['index']
+        _add_variable(
+            ds, 'wLoss', np.array(mat_loss[:, 0], dtype=np.float64), ['index']
         )
-        m.add_dataset(
-            'wLoss2', np.array(mat_loss[:, 1], dtype=np.float64), ['index']
+        _add_variable(
+            ds, 'wLoss2', np.array(mat_loss[:, 1], dtype=np.float64), ['index']
         )
-        m.set_attr('n_cos', str(dic_stp["n_cos"]))
+        ds.attrs['n_cos'] = str(dic_stp["n_cos"])
 
         # To consider also the multispectral case
         if n_lam > 1:
@@ -2946,8 +2640,8 @@ def _finalize(
                 tr_tau[i] * dic_stp["totS_H"] * 1e6
             )  # mult by 1e6 to convert km² to m²
         # Save results
-        m.add_dataset('n_tr', tr_tau, ['wavelength'])
-        m.add_dataset('powc_H', p_pyt, ['wavelength'])
+        _add_variable(ds, 'n_tr', tr_tau, ['wavelength'])
+        _add_variable(ds, 'powc_H', p_pyt, ['wavelength'])
         # ========
 
         # === Here allows the calculation of the analytical approx of
@@ -2976,10 +2670,10 @@ def _finalize(
                     lwl
                 )
             )
-            m.add_dataset('n_aatm', naatm, ['wavelength'])
+            _add_variable(ds, 'n_aatm', naatm, ['wavelength'])
         # ===
 
-    return m
+    return ds
 
 
 def _isotropic(n_theta: int) -> np.ndarray:

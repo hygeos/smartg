@@ -386,7 +386,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
 
     plt.figure(figsize=(12, 4))
     plt.plot(w_valid, i_valid, "r", label="Doubling Adding: 32 streams")
-    m1["I_up (TOA)"].plot("c", label="SMART-G no hist.")
+    plt.plot(w_valid, m1["I_up (TOA)"], "c", label="SMART-G no hist.")
     plt.plot(w_valid, stk_i, "b", label="SMART-G, hist. with jax")
     plt.legend()
     plt.ylabel(mdesc("I_up (TOA)"))

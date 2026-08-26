@@ -7,6 +7,7 @@ SMART-G test suite using pytest
 
 import pytest
 import numpy as np
+import xarray as xr
 from smartg.smartg import Smartg
 from smartg.surface import RoughSurface, LambSurface
 from smartg.albedo import AlbedoCst
@@ -14,6 +15,7 @@ from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 from smartg.water import HydrosolPR, Water1D
 from smartg.reptran import Reptran, reduce_reptran
 from smartg.view import smartg_view
+from smartg.xarray import dataset_to_mlut
 from smartg import conftest
 
 NBPHOTONS = 1e4
@@ -127,6 +129,27 @@ def test_locale_estimate(sg):
     )
     res = res.to_xarray() if hasattr(res, "to_xarray") else res
     assert (res["I_up (TOA)"].values > 0).all()
+
+
+def test_dataset_to_mlut_roundtrip():
+    """The run output converts losslessly to the legacy MLUT"""
+    atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
+    res = Smartg(autoinit=True).run(
+        np.array([400.0, 600.0]),
+        atm=atm,
+        surf=LambSurface(alb=AlbedoCst(0.1)),
+        nb_photons=NBPHOTONS,
+    )
+    assert isinstance(res, xr.Dataset)
+
+    mlut = dataset_to_mlut(res)
+    assert mlut.datasets() == list(res.data_vars)
+    for name in res.data_vars:
+        lut = mlut[name]
+        assert lut.names == list(res[name].dims)
+        np.testing.assert_array_equal(lut.data, res[name].values)
+        assert dict(lut.attrs) == dict(res[name].attrs)
+    assert dict(mlut.attrs) == dict(res.attrs)
 
 
 @pytest.mark.parametrize("rng", ["PHILOX", "CURAND_PHILOX"])
