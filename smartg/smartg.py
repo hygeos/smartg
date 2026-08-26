@@ -1180,6 +1180,9 @@ class Smartg(object):
             nb_cx = 10
             nb_cy = 10
             nb_h = 0
+            z_alt_h = None
+            tot_s_h = None
+            n_cos = None
         # END OBJ ===================================================
 
         if nb_phi % 2 == 1:
@@ -1757,6 +1760,7 @@ class Smartg(object):
 
         # If there is a receiver -> normalization of the signal
         # collected
+        n_cte = None
         if tc is not None:
             c_mat_visu_recep, mat_cats, n_cte = _normalize_rec(
                 c_mat_visu_recep=c_mat_visu_recep,
@@ -1772,6 +1776,7 @@ class Smartg(object):
             )
 
         if nb_h > 0 and tc is not None and cus_l is not None:
+            assert z_alt_h is not None
             mz_alt_h = z_alt_h / nb_h
             s_rec = tc * tc * nb_cx * nb_cy  # ; weight_r=mat_cats[2, 1]
             # dic_stp : tuple incorporating parameters for Solar Tower
@@ -3229,6 +3234,9 @@ def _calc_phase_gpu(
         angles = profile.coords['theta_' + kind].to_numpy() * pi / 180.0
         assert angles[-1] < 3.15  # assert that angles are in radians
         dtheta = np.diff(angles)
+    else:
+        angles = None
+        dtheta = None
 
     # Set VRS phase function
     phase_H[1, :] = _rayleigh(n_theta, 0.17)
@@ -3237,6 +3245,7 @@ def _calc_phase_gpu(
     # idx = 1
     for ipha in range(nphases - 2):
         # for ipha in range(nphases-1):
+        assert angles is not None and dtheta is not None
 
         phase = profile[name_phase][ipha, :, :].to_numpy()  # ipha, stk, theta
 
@@ -4098,6 +4107,9 @@ def _loop_kernel(
         w_ph_loss = gpuzeros(1, dtype=fdtype)
         w_ph_loss2 = gpuzeros(1, dtype=fdtype)
         tab_obj_info = gpuzeros((1, 1, 1), dtype=fdtype)
+        tab_mat_recep = None
+        mat_cats = None
+        mat_loss = None
 
     # Initialize the array for error counting
     n_error = 32
@@ -4125,6 +4137,7 @@ def _loop_kernel(
         )
     else:
         n_scl = 1
+        n_iamf = None
         tab_dist_tot = gpuzeros((1), dtype=np.float64)
 
     # Initialize accumulators
@@ -4135,11 +4148,13 @@ def _loop_kernel(
         (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64
     )
     n_simu = 0
-    if stdev:
-        # Accumulate normalized quantities and their squares to estimate
-        # sigma.
-        sum_x = 0.0
-        sum_x2 = 0.0
+    # Accumulate normalized quantities and their squares to estimate
+    # sigma (only filled when stdev is enabled).
+    sum_x = 0.0
+    sum_x2 = 0.0
+    format_std = ''
+    max_aerr = None
+    max_rerr = None
 
     # Arrays for counting launched photons (per wavelength)
     n_photons_in = gpuzeros((n_sensor, n_lam), dtype=np.uint64)
@@ -4321,6 +4336,9 @@ def _loop_kernel(
         np.set_printoptions(precision=5, linewidth=150)
 
         if receiver_cell_size is not None:
+            assert tab_mat_recep is not None
+            assert mat_cats is not None
+            assert mat_loss is not None
             # Matrix with the photon weight distribution on the receiver
             # surface.
             tab_mat_recep += tab_obj_info[:, :, :].get()
@@ -4402,6 +4420,7 @@ def _loop_kernel(
                     break
 
         if receiver_cell_size is not None and stdev_lim is not None:
+            assert mat_cats is not None
             nb_photons_tmp = np.sum(n_photons_in_tot.get())
             n_bis = nb_photons_tmp / (nb_photons_tmp - 1)
             sum_2z = (mat_cats[0, 1] * mat_cats[0, 1]) / nb_photons_tmp
@@ -4442,6 +4461,7 @@ def _loop_kernel(
     secs_cuda_clock *= 1e-3
 
     if receiver_cell_size is not None:
+        assert mat_cats is not None
         n_bis = nb_photons_target / (nb_photons_target - 1)
         # Count the total number of received photons and for each
         # category.
@@ -4460,10 +4480,6 @@ def _loop_kernel(
                 else:
                     mat_cats[i, 4] = (n_bis * abs(sum_z2 - sum_2z)) ** 0.5
                 mat_cats[i, 5] = (mat_cats[i, 4] / mat_cats[i, 1]) * 100
-    else:
-        tab_mat_recep = None
-        mat_cats = None
-        mat_loss = None
 
     if stdev:
         sigma = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu) ** 2)
@@ -4594,14 +4610,14 @@ def _impact_init(
     if prof_atm is None:
         h_atm = 0.0
         natm = 0
+        z_atm = None
+        od_atm = None
     else:
         if hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
         z_atm = prof_atm.coords['z_atm'].to_numpy()
         h_atm = z_atm[0]
         natm = len(z_atm) - 1
-
-    if prof_atm is not None:
         od_atm = prof_atm['OD_atm'].to_numpy()
 
     vx = -np.sin(thv_deg * np.pi / 180)
@@ -4617,6 +4633,7 @@ def _impact_init(
         y0 = 0.0
 
         if natm != 0:
+            assert od_atm is not None
             for ilam in range(nlam):
                 if prof_atm['OD_atm'].ndim == 2:
                     # lam, z
@@ -4662,6 +4679,8 @@ def _impact_init(
         yph = y0
         zph = z0
         for i in range(1, natm + 1):
+            # natm > 0 implies that a profile was given
+            assert z_atm is not None and od_atm is not None
             # V is the direction vector, X is the position vector, d is
             # the
             # distance to the next layer and R is the position vector at
