@@ -30,7 +30,8 @@ from scipy.interpolate import interp1d
 # from scipy.integrate import simpson
 import subprocess
 from collections import OrderedDict
-from pycuda.gpuarray import GPUArray, to_gpu, zeros as gpuzeros
+from pycuda import gpuarray
+from pycuda.gpuarray import GPUArray, to_gpu
 import pycuda.driver as cuda
 from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
@@ -40,6 +41,14 @@ from smartg.objects3d import Mirror, Plane, Spheric, LambMirror, Matte
 import xarray as xr
 import geoclide as gc
 import tempfile
+from collections.abc import Callable
+from typing import cast
+
+# pycuda ships no type stubs: gpuarray.zeros infers its dtype
+# parameter as type[float64] from the default value, which flags
+# every non-float64 call. The cast keeps the true signature
+# usable without changing the runtime object.
+gpuzeros = cast('Callable[..., GPUArray]', gpuarray.zeros)
 
 
 # set up directories
@@ -472,6 +481,10 @@ class Smartg(object):
         if cache_dir is None:
             cache_dir = tempfile.gettempdir()
 
+        # Bind the name on every path: the imports inside the
+        # branches below only bind it conditionally.
+        import pycuda
+
         if autoinit:
             with modified_environ(**env_modif):
                 try:
@@ -486,10 +499,7 @@ class Smartg(object):
                     reload(pycuda.autoinit)
                     self.ctx = pycuda.autoinit.context
         else:
-            import pycuda
-            import pycuda.driver as cuda
-
-            cuda.init()
+            cuda.init()  # pyright: ignore[reportAttributeAccessIssue]
             from pycuda.tools import make_default_context
 
             self.ctx = make_default_context()
@@ -642,7 +652,11 @@ class Smartg(object):
         if autoinit:
             self.common_attrs['device'] = pycuda.autoinit.device.name()
             try:
-                attr = pycuda._driver.device_attribute
+                attr = (
+                    pycuda
+                    ._driver  # pyright: ignore[reportAttributeAccessIssue]
+                    .device_attribute
+                )
                 self.common_attrs['device_number'] = (
                     pycuda.autoinit.device.get_attributes()[
                         attr.MULTI_GPU_BOARD_GROUP_ID
@@ -651,9 +665,14 @@ class Smartg(object):
             except AttributeError:
                 self.common_attrs['device_number'] = 'undefined'
         else:
+            assert self.ctx is not None
             self.common_attrs['device'] = self.ctx.get_device().name()
             try:
-                attr = pycuda._driver.device_attribute
+                attr = (
+                    pycuda
+                    ._driver  # pyright: ignore[reportAttributeAccessIssue]
+                    .device_attribute
+                )
                 self.common_attrs['device_number'] = (
                     self.ctx.get_device().get_attributes()[
                         attr.MULTI_GPU_BOARD_GROUP_ID
@@ -662,8 +681,11 @@ class Smartg(object):
             except Exception:
                 self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
+        cuda_version = (
+            cuda.get_version()  # pyright: ignore[reportAttributeAccessIssue]
+        )
         self.common_attrs['cuda_version'] = '.'.join(
-            [str(x) for x in pycuda.driver.get_version()]
+            [str(x) for x in cuda_version]
         )
         self.common_attrs.update(_get_git_attrs())
 
@@ -677,6 +699,7 @@ class Smartg(object):
         be used: the Smartg object must be reinitialized.
         """
         try:
+            assert self.ctx is not None
             self.ctx.pop()
             self.ctx.detach()
             self.ctx = None
@@ -1866,6 +1889,7 @@ class Smartg(object):
             output.attrs['wavelength'] = wl[:]
 
         if not self.autoinit and not self.keep_context:
+            assert self.ctx is not None
             self.ctx.pop()
             self.ctx.detach()
             self.ctx = None
@@ -3490,7 +3514,7 @@ def _init_const(
     py_d = -v_sun.y * t_temp
 
     def copy_to_device(name: str, scalar, dtype) -> None:
-        cuda.memcpy_htod(
+        cuda.memcpy_htod(  # pyright: ignore[reportAttributeAccessIssue]
             mod.get_global(name)[0], np.array([scalar], dtype=dtype)
         )
 
@@ -4234,8 +4258,12 @@ def _loop_kernel(
         w_ph_loss2.fill(0)
         n_threads_active.fill(xblock * xgrid)
 
-        start_cuda_clock = cuda.Event()
-        end_cuda_clock = cuda.Event()
+        start_cuda_clock = (
+            cuda.Event()  # pyright: ignore[reportAttributeAccessIssue]
+        )
+        end_cuda_clock = (
+            cuda.Event()  # pyright: ignore[reportAttributeAccessIssue]
+        )
         start_cuda_clock.record()
 
         # Kernel launch
@@ -4287,7 +4315,9 @@ def _loop_kernel(
         end_cuda_clock.synchronize()
         secs_cuda_clock += start_cuda_clock.time_till(end_cuda_clock)
 
-        cuda.Context.synchronize()
+        (
+            cuda.Context  # pyright: ignore[reportAttributeAccessIssue]
+        ).synchronize()
         np.set_printoptions(precision=5, linewidth=150)
 
         if receiver_cell_size is not None:
@@ -4845,14 +4875,14 @@ class _RngCurandPhilox(object):
                 )
             )
 
-        cuda.memcpy_htod(
+        cuda.memcpy_htod(  # pyright: ignore[reportAttributeAccessIssue]
             self.mod.get_global('XBLOCKd')[0],
             np.array([xblock], dtype=np.int32),
         )
-        cuda.memcpy_htod(
+        cuda.memcpy_htod(  # pyright: ignore[reportAttributeAccessIssue]
             self.mod.get_global('XGRIDd')[0], np.array([xgrid], dtype=np.int32)
         )
-        cuda.memcpy_htod(
+        cuda.memcpy_htod(  # pyright: ignore[reportAttributeAccessIssue]
             self.mod.get_global('SEEDd')[0], np.array([seed], dtype=np.int32)
         )
 
