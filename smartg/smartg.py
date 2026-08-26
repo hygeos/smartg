@@ -258,7 +258,7 @@ class StdevLim(object):
     """
 
     def __init__(self, err_abs_min=float(0), err_rel_min=float(0), nb_loop_min=int(10),
-     stk=int(0), level=int(0), verbose=False, format=".5e"):
+     stk=int(0), level=int(0), verbose=False, fmt=".5e"):
       
         self.dict = {
             'err_abs_min':  err_abs_min,
@@ -267,7 +267,7 @@ class StdevLim(object):
             'stk'        :  stk,
             'level'      :  level,
             'verbose'    :  verbose,
-            'format'     :  format
+            'format'     :  fmt
         }
 
     def __str__(self):
@@ -809,11 +809,11 @@ class Smartg(object):
             raise ValueError('The output_layers value must be an integer between -1 and 7.')
 
         # Compute the sun direction as vector 
-        vSun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir') 
-        vSun = gc.normalize(vSun)
+        v_sun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir') 
+        v_sun = gc.normalize(v_sun)
 
         # First check if back option is activated in case of the use of cusBackward launching mode
-        surfLPH = 0
+        surf_lph = 0
         if (cus_l is not None):
             if my_objects is None:
                 raise ValueError('The parameter cus_l can be used only if parameter my_objects is provided.')
@@ -836,11 +836,11 @@ class Smartg(object):
                                 #FOV=cus_l.dict['ALDEG'], TYPE=cus_l.dict['TYPE'])
             elif (cus_l.dict['LMODE'] == "FF"):
                 # The projected surface at TOA where the photons are launched
-                DotNN = gc.dot(vSun*-1, gc.Vector(0., 0., 1.))
+                dot_nn = gc.dot(v_sun*-1, gc.Vector(0., 0., 1.))
                 if (cus_l.dict['TYPE'] == 2 and cus_l.dict['FOV'] > 1e-6): #isotropic
-                    surfLPH = float(cus_l.dict['CFX'])*float(cus_l.dict['CFY'])
+                    surf_lph = float(cus_l.dict['CFX'])*float(cus_l.dict['CFY'])
                 else:
-                    surfLPH = float(cus_l.dict['CFX'])*float(cus_l.dict['CFY'])*DotNN
+                    surf_lph = float(cus_l.dict['CFX'])*float(cus_l.dict['CFY'])*dot_nn
 
         #
         # initialization
@@ -850,51 +850,51 @@ class Smartg(object):
         if (my_objects is not None):
             # Main bounding box initialization
             if interval is not None:
-                Pmin_x = interval[0][0];Pmin_y = interval[0][1];Pmin_z = interval[0][2]
-                Pmax_x = interval[1][0];Pmax_y = interval[1][1];Pmax_z = interval[1][2]
+                p_min_x = interval[0][0];p_min_y = interval[0][1];p_min_z = interval[0][2]
+                p_max_x = interval[1][0];p_max_y = interval[1][1];p_max_z = interval[1][2]
             else:
-                Pmin_x = -100000; Pmin_y = -100000; Pmin_z = 0
-                Pmax_x = 100000;  Pmax_y = 100000; Pmax_z = 120
+                p_min_x = -100000; p_min_y = -100000; p_min_z = 0
+                p_max_x = 100000;  p_max_y = 100000; p_max_z = 120
 
             # Initiliaze all the parameters linked with 3D objects
-            (nGObj, nObj, nRObj, surfLPH_RF, nb_H, zAlt_H, totS_H, TC, nbCx, nbCy,
-             myObjects0, myGObj0, myRObj0, mySPECTObj0, n_cos) = _init_obj(lgobj=my_objects, v_sun=vSun, wl=wl, cus_l=cus_l)
+            (n_gobj, n_obj, n_robj, surf_lph_rf, nb_h, z_alt_h, tot_s_h, tc, nb_cx, nb_cy,
+             my_objects0, my_gobj0, my_robj0, my_spect_obj0, n_cos) = _init_obj(lgobj=my_objects, v_sun=v_sun, wl=wl, cus_l=cus_l)
 
-            # If we are in RF mode don't forget to update the value of surfLPH
-            if (surfLPH_RF is not None): surfLPH = surfLPH_RF
+            # If we are in RF mode don't forget to update the value of surf_lph
+            if (surf_lph_rf is not None): surf_lph = surf_lph_rf
 
         else:
-            myObjects0 = gpuzeros(1, dtype=np.uint32)
-            #myObjects0 = gpuzeros(1, dtype='int32')
-            myGObj0 = gpuzeros(1, dtype='int32')
-            myRObj0 = gpuzeros(1, dtype='int32')
-            mySPECTObj0 = gpuzeros(1, dtype='int32') # normally 2 dims: obj dim + wl dim
-            nObj = 0; nGObj=0; nRObj=0; Pmin_x = None; Pmin_y = None; Pmin_z = None
-            Pmax_x = None; Pmax_y = None; Pmax_z = None
-            is_atm = None; TC = None; nbCx = 10; nbCy = 10; nb_H = 0
+            my_objects0 = gpuzeros(1, dtype=np.uint32)
+            #my_objects0 = gpuzeros(1, dtype='int32')
+            my_gobj0 = gpuzeros(1, dtype='int32')
+            my_robj0 = gpuzeros(1, dtype='int32')
+            my_spect_obj0 = gpuzeros(1, dtype='int32') # normally 2 dims: obj dim + wl dim
+            n_obj = 0; n_gobj=0; n_robj=0; p_min_x = None; p_min_y = None; p_min_z = None
+            p_max_x = None; p_max_y = None; p_max_z = None
+            is_atm = None; tc = None; nb_cx = 10; nb_cy = 10; nb_h = 0
         # END OBJ ===================================================
 
         if nb_phi%2 == 1:
             warn('Odd number of azimuth', stacklevel=2)
 
-        if (nb_loop is None) and (nObj <= 0):
+        if (nb_loop is None) and (n_obj <= 0):
             nb_loop = min(nb_photons/30, 1e6)
-        elif (nb_loop is None) and (nObj > 0):
+        elif (nb_loop is None) and (n_obj > 0):
             nb_loop = min(nb_photons/10, 1e6)
 
         n_f = int(n_f)
 
         # number of output levels
         # warning! values defined in communs.h should be < LVL
-        NLVL = 6
+        n_lvl = 6
 
         # warning! values defined in communs.h 
         # Maximum number of photons histories (alis=True and alis_options['hist'] = True), otherwise 0 (no histories)
-        MAX_HIST = np.int64(1)
-        MAX_NLOW = 801
+        max_hist = np.int64(1)
+        max_nlow = 801
 
         # number of Stokes parameters of the radiation field
-        NPSTK = 4
+        n_pstk = 4
 
         t0 = datetime.now()
 
@@ -908,48 +908,48 @@ class Smartg(object):
 
         if not isinstance(wl, BandSet):
             wl = BandSet(wl)
-        NLAM = wl.size
+        n_lam = wl.size
 
-        NLOW=0
+        n_low=0
         hist=False
-        HIST=0
-        NJAC=0
-        NJAC_ABS=0
+        hist_code=0
+        n_jac=0
+        n_jac_abs=0
         if alis_options is not None :
             if 'hist' in alis_options.keys():
                 if alis_options['hist']: 
                     hist=True
                     if 'max_hist' in alis_options.keys():
-                        MAX_HIST=np.int64(alis_options['max_hist'])
-                    else : MAX_HIST=np.int64(8000000)
+                        max_hist=np.int64(alis_options['max_hist'])
+                    else : max_hist=np.int64(8000000)
             if 'njac' in alis_options.keys():
-                NJAC=alis_options['njac']
+                n_jac=alis_options['njac']
             if alis_options.get('njac_abs', False):
-                NJAC_ABS=1
-            if (alis_options['nlow'] ==-1) : NLOW=NLAM
-            else: NLOW=alis_options['nlow']
+                n_jac_abs=1
+            if (alis_options['nlow'] ==-1) : n_low=n_lam
+            else: n_low=alis_options['nlow']
             beer=1
-            assert (NLOW <= MAX_NLOW)
+            assert (n_low <= max_nlow)
         
-        if hist : HIST=1
+        if hist : hist_code=1
 
         if surf is not None:
             if surf.dict['BRDF'] !=0 :
                 water = None # special case BRDF, water is shortcut
 
-        # determine SIM
+        # determine sim
         if (atm is not None) and (surf is None) and (water is None):
-            SIM = -2  # atmosphere only
+            sim = -2  # atmosphere only
         elif (atm is None) and (surf is not None) and (water is None):
-            SIM = -1  # surface only
+            sim = -1  # surface only
         elif (atm is None) and (surf is not None) and (water is not None):
-            SIM = 0  # ocean + dioptre
+            sim = 0  # ocean + dioptre
         elif (atm is not None) and (surf is not None) and (water is None):
-            SIM = 1  # atmosphere + dioptre
+            sim = 1  # atmosphere + dioptre
         elif (atm is not None) and (surf is not None) and (water is not None):
-            SIM = 2  # atmosphere + dioptre + ocean
+            sim = 2  # atmosphere + dioptre + ocean
         elif (atm is None) and (surf is None) and (water is not None):
-            SIM = 3  # ocean only
+            sim = 3  # ocean only
         else:
             raise ValueError('Error in SIM')
 
@@ -969,44 +969,44 @@ class Smartg(object):
             prof_atm = prof_atm.to_xarray()
 
         if prof_atm is not None:
-            ZTOA = prof_atm.coords['z_atm'].to_numpy()[0]
+            z_toa = prof_atm.coords['z_atm'].to_numpy()[0]
         else:
-            ZTOA = 120.
+            z_toa = 120.
   
         if prof_atm is not None:
             faer = _calc_phase_gpu(prof_atm, n_theta=n_f, depo=depo, kind='atm', pol_off=pol_off)
             prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
-            NATM = len(prof_atm.coords['z_atm']) - 1
+            n_atm = len(prof_atm.coords['z_atm']) - 1
             if self.opt3d :
-                NATM_ABS = np.int32(prof_atm['iabs_atm'].to_numpy().max())
+                n_atm_abs = np.int32(prof_atm['iabs_atm'].to_numpy().max())
             else:
-                NATM_ABS = NATM
+                n_atm_abs = n_atm
         else:
             faer = gpuzeros(1, dtype='float32')
             prof_atm_gpu = to_gpu(np.zeros(1, dtype=TYPE_PROFILE))
             cell_atm_gpu = to_gpu(np.zeros(1, dtype=TYPE_CELL))
-            NATM = 0
-            NATM_ABS = 0
+            n_atm = 0
+            n_atm_abs = 0
 
         # computation of the impact point
-        #X0, _ = _impact_init(prof_atm, NLAM, th_v_deg, earth_radius, self.pp)
-        X0, tabTransDir_analytic = _impact_init(prof_atm, NLAM, th_v_deg, earth_radius, self.pp)
+        #x0, _ = _impact_init(prof_atm, n_lam, th_v_deg, earth_radius, self.pp)
+        x0, tab_trans_dir_analytic = _impact_init(prof_atm, n_lam, th_v_deg, earth_radius, self.pp)
 
         # sensor definition
         if sensor is None:
             # by defaut sensor in forward mode, with ZA=180.-th_v_deg, PHDEG=180., FOV=0.
-            if (SIM == 3):
+            if (sim == 3):
                 sensor2 = [Sensor(THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='OCEAN')] 
-            elif ((SIM == -1) or (SIM == 0)):  
+            elif ((sim == -1) or (sim == 0)):  
                 sensor2 = [Sensor(THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='SURF0P')] 
             else:
                 if (cus_l is not None): # for FF mode
-                    sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2],
+                    sensor2 = [Sensor(POSX=x0.get()[0], POSY=x0.get()[1], POSZ=x0.get()[2],
                                       THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='ATMOS')]
                                       #FOV=0.0, TYPE=0)]
                                       #FOV=cus_l.dict['FOV'], TYPE=cus_l.dict['TYPE'])]
                 else:
-                    sensor2 = [Sensor(POSX=X0.get()[0], POSY=X0.get()[1], POSZ=X0.get()[2], THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='ATMOS')]
+                    sensor2 = [Sensor(POSX=x0.get()[0], POSY=x0.get()[1], POSZ=x0.get()[2], THDEG=180.-th_v_deg, PHDEG=ph_v_deg+180., LOC='ATMOS')]
         elif isinstance(sensor, Sensor):
             sensor2=[sensor]
         elif isinstance(sensor, list):
@@ -1014,9 +1014,9 @@ class Smartg(object):
         else:
             raise ValueError('sensor must be a Sensor class, a list or Sensor classes or equal to None!')
 
-        NSENSOR=len(sensor2)
+        n_sensor=len(sensor2)
 
-        tab_sensor = np.zeros(NSENSOR, dtype=TYPE_SENSOR, order='C')
+        tab_sensor = np.zeros(n_sensor, dtype=TYPE_SENSOR, order='C')
         for (i,s) in enumerate(sensor2) :
             for k in s.dict.keys():
                   tab_sensor[i][k] = s.dict[k]
@@ -1073,22 +1073,22 @@ class Smartg(object):
         if prof_oc is not None:
             foce = _calc_phase_gpu(prof_oc, n_theta=n_f, depo=depo_water, kind='oc', pol_off=pol_off)
             prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
-            NOCE = len(prof_oc.coords['z_oc']) - 1
+            n_oce = len(prof_oc.coords['z_oc']) - 1
             if self.opt3d :
-                NOCE_ABS = np.int32(prof_oc['iabs_oc'].to_numpy().max())
+                n_oce_abs = np.int32(prof_oc['iabs_oc'].to_numpy().max())
             else:
-                NOCE_ABS = NOCE
+                n_oce_abs = n_oce
         else:
             foce = gpuzeros(1, dtype='float32')
             prof_oc_gpu = to_gpu(np.zeros(1, dtype=TYPE_PROFILE))
             cell_oc_gpu = to_gpu(np.zeros(1, dtype=TYPE_CELL))
-            NOCE = 0
-            NOCE_ABS = 0
+            n_oce = 0
+            n_oce_abs = 0
 
         #
         # albedo and adjacency effect
         #
-        spectrum = np.zeros(NLAM, dtype=TYPE_SPECTRUM)
+        spectrum = np.zeros(n_lam, dtype=TYPE_SPECTRUM)
         envmap = np.zeros(1, dtype=TYPE_ENV_MAP)
         spectrum['lambda'] = wl[:]
         if env is None:
@@ -1123,10 +1123,10 @@ class Smartg(object):
                 env.nxenvmap = shp[0]
                 env.nyenvmap = shp[1]
                 envmap = np.zeros(shp, dtype=TYPE_ENV_MAP)
-                X, Y = np.meshgrid(env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij')
-                envmap['x'] = X
-                envmap['y'] = Y
-                envmap['env_index']=env.alb.get_map(X,Y)         
+                x_map, y_map = np.meshgrid(env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij')
+                envmap['x'] = x_map
+                envmap['y'] = y_map
+                envmap['env_index']=env.alb.get_map(x_map, y_map)         
             else:
                 spectrum['alb_env'] = albenv
 
@@ -1139,10 +1139,10 @@ class Smartg(object):
         spectrum = to_gpu(spectrum)
 
         # Local Estimate option
-        LE = 0
-        ZIP= 0
+        le_code = 0
+        zip_code= 0
         if le is not None:
-            LE = 1
+            le_code = 1
             if 'th' not in le:
                 le['th'] = np.array(le['th_deg'], dtype='float32').ravel() * np.pi/180.
             else:
@@ -1158,7 +1158,7 @@ class Smartg(object):
             if 'zip' in le:
                 if le['zip']:
                     assert nb_phi==nb_theta
-                    ZIP = 1
+                    zip_code = 1
                     nb_phi = 1 
             
             if 'count_level' in le:
@@ -1167,32 +1167,32 @@ class Smartg(object):
 
 
 
-        FLUX = 0
+        flux_code = 0
         if flux is not None:
-            LE=0
+            le_code=0
             if flux== 'planar' : 
-                FLUX = 1
+                flux_code = 1
             if flux== 'spherical' : 
-                FLUX = 2
+                flux_code = 2
             if flux== 'tilted planar' : 
-                FLUX = 3
+                flux_code = 3
 
 
         if wl_proba is not None:
             assert wl_proba.dtype == 'int64'
             wl_proba_icdf = to_gpu(wl_proba)
-            NWLPROBA = len(wl_proba_icdf)
+            n_wl_proba = len(wl_proba_icdf)
         else:
             wl_proba_icdf = gpuzeros(1, dtype='int64')
-            NWLPROBA = 0
+            n_wl_proba = 0
 
         if sensor_proba is not None:
             assert sensor_proba.dtype == 'int64'
             sensor_proba_icdf = to_gpu(sensor_proba)
-            NSENSORPROBA = len(sensor_proba_icdf)
+            n_sensor_proba = len(sensor_proba_icdf)
         else:
             sensor_proba_icdf = gpuzeros(1, dtype='int64')
-            NSENSORPROBA = 0
+            n_sensor_proba = 0
 
         if cell_proba is not None:
             if (cell_proba == 'auto') and not self.back and self.thermal:
@@ -1207,36 +1207,36 @@ class Smartg(object):
                 norm_emission = (4*np.pi) * emission.sum(dim='z_atm')
                 p_emission = emission * (4*np.pi) / norm_emission
                 cell_proba_icdf = to_gpu(icdf_2d(p_emission.to_numpy()).T)
-                NCELLPROBA = cell_proba_icdf.shape[0]
+                n_cell_proba = cell_proba_icdf.shape[0]
             else:
-                assert cell_proba.shape[1] == NLAM
+                assert cell_proba.shape[1] == n_lam
                 cell_proba_icdf = to_gpu(cell_proba)
-                NCELLPROBA = cell_proba.shape[0]
+                n_cell_proba = cell_proba.shape[0]
         else:
             cell_proba_icdf = gpuzeros(1, dtype='int64')
-            NCELLPROBA = 0
+            n_cell_proba = 0
 
-        REFRAC = 0
+        refrac = 0
         if refraction: 
-            REFRAC=1
+            refrac=1
 
-        HORIZ = 1
-        if (not self.pp and not reflectance): HORIZ = 0
+        horiz = 1
+        if (not self.pp and not reflectance): horiz = 0
 
         # initialization of the constants
-        _init_const(surf, env, NATM, NATM_ABS, NOCE, NOCE_ABS, self.mod,
+        _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, self.mod,
                   nb_loop, th_v_deg,
-                  xblock, xgrid, NLAM, SIM, n_f,
+                  xblock, xgrid, n_lam, sim, n_f,
                   nb_theta, nb_phi, output_layers,
-                  earth_radius, LE, ZIP,
-                  FLUX, ffs, direct, ocean_interaction, NLVL, NPSTK,
-                  NWLPROBA, NSENSORPROBA, NCELLPROBA, beer, s_min, s_max, r_min, r_max, r_r, weight_r_r, NLOW, NJAC, 
-                  NSENSOR, REFRAC, HORIZ, sza_max, sun_disc, cus_l, nObj, nGObj, nRObj,
-                  Pmin_x, Pmin_y, Pmin_z, Pmax_x, Pmax_y, Pmax_z, is_atm,
-                  TC, nbCx, nbCy, vSun, HIST, ZTOA, sensor2[0].cell_size,
+                  earth_radius, le_code, zip_code,
+                  flux_code, ffs, direct, ocean_interaction, n_lvl, n_pstk,
+                  n_wl_proba, n_sensor_proba, n_cell_proba, beer, s_min, s_max, r_min, r_max, r_r, weight_r_r, n_low, n_jac, 
+                  n_sensor, refrac, horiz, sza_max, sun_disc, cus_l, n_obj, n_gobj, n_robj,
+                  p_min_x, p_min_y, p_min_z, p_max_x, p_max_y, p_max_z, is_atm,
+                  tc, nb_cx, nb_cy, v_sun, hist_code, z_toa, sensor2[0].cell_size,
                   sxmin, sxmax, symin, symax, nbsx, nbsy, no_aer_output, 
                   n_scl=self.nscl, scl_mode=self._scl_mode, n_orders=self.norders,
-                  n_jac_abs=NJAC_ABS)
+                  n_jac_abs=n_jac_abs)
 
         # Initialize the progress bar
         p = make_progress(nb_photons, progress)
@@ -1245,69 +1245,69 @@ class Smartg(object):
         seed = self.rng.setup(seed, xblock, xgrid)
 
         # Loop and kernel call
-        (NPhotonsInTot, tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, tabTransDir, errorcount, 
-         NPhotonsOutTot, NPhotonsOutTotNoAer, sigma, Nkernel, secs_cuda_clock, cMatVisuRecep, matCats, matLoss, wPhCats, wPhCats2
+        (n_photons_in_tot, tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_tot, tab_trans_dir, errorcount, 
+         n_photons_out_tot, n_photons_out_tot_no_aer, sigma, n_kernel, secs_cuda_clock, c_mat_visu_recep, mat_cats, mat_loss, w_ph_cats, w_ph_cats2
         ) = _loop_kernel(nb_photons, faer, foce,
-                        NLVL, NATM, NATM_ABS, NOCE, NOCE_ABS, MAX_HIST, NLOW, NPSTK, xblock, xgrid, nb_theta, nb_phi,
-                        NLAM, NSENSOR, self.double, self.kernel, self.kernel2, p, X0, le, tab_sensor, envmap, spectrum,
+                        n_lvl, n_atm, n_atm_abs, n_oce, n_oce_abs, max_hist, n_low, n_pstk, xblock, xgrid, nb_theta, nb_phi,
+                        n_lam, n_sensor, self.double, self.kernel, p, x0, le, tab_sensor, envmap, spectrum,
                         prof_atm_gpu, prof_oc_gpu, cell_atm_gpu, cell_oc_gpu,
                         wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf, stdev, stdev_lim, self.rng, self.alis,
-                        myObjects0, TC, nbCx, nbCy, myGObj0, myRObj0, mySPECTObj0, hist=hist,
+                        my_objects0, tc, nb_cx, nb_cy, my_gobj0, my_robj0, my_spect_obj0, hist=hist,
                         amf_variance=self.amf_variance, nscl=self.nscl)
 
         attrs['kernel time (s)'] = secs_cuda_clock
-        attrs['number of kernel iterations'] = Nkernel
+        attrs['number of kernel iterations'] = n_kernel
         attrs['seed'] = seed
         attrs.update(self.common_attrs)
 
         # If there is a receiver -> normalization of the signal collected
-        if (TC is not None):
-            cMatVisuRecep, matCats, n_cte = _normalize_rec(c_mat_visu_recep=cMatVisuRecep, mat_cats=matCats,
-                nb_cx=nbCx, nb_cy=nbCy, nb_photons=float(np.sum(NPhotonsInTot)), surf_lph=surfLPH, cell_size=TC, cus_l=cus_l,
-                sun_disc=sun_disc, le=LE)
+        if (tc is not None):
+            c_mat_visu_recep, mat_cats, n_cte = _normalize_rec(c_mat_visu_recep=c_mat_visu_recep, mat_cats=mat_cats,
+                nb_cx=nb_cx, nb_cy=nb_cy, nb_photons=float(np.sum(n_photons_in_tot)), surf_lph=surf_lph, cell_size=tc, cus_l=cus_l,
+                sun_disc=sun_disc, le=le_code)
 
-        if (nb_H > 0 and TC is not None and cus_l is not None):
-            MZAlt_H = zAlt_H/nb_H; SREC=TC*TC*nbCx*nbCy #; weightR=matCats[2, 1]
-            # dicSTP : tuple incorporating parameters for Solar Tower Power applications
-            if(self.back) : ALDEG = cus_l.dict['ALDEG']
-            else : ALDEG = 0.
-            dicSTP = {"nb_H":nb_H, "n_cos": n_cos, "totS_H":totS_H, "surfTOA":surfLPH, "MZAlt_H":MZAlt_H, "vSun":vSun, "wRec":matCats[2, 1],
-                      "SREC":SREC, "TC":TC, "LPH":cus_l.dict['LPH'], "LPR":cus_l.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":ALDEG}
+        if (nb_h > 0 and tc is not None and cus_l is not None):
+            mz_alt_h = z_alt_h/nb_h; s_rec=tc*tc*nb_cx*nb_cy #; weight_r=mat_cats[2, 1]
+            # dic_stp : tuple incorporating parameters for Solar Tower Power applications
+            if(self.back) : aldeg = cus_l.dict['ALDEG']
+            else : aldeg = 0.
+            dic_stp = {"nb_H":nb_h, "n_cos": n_cos, "totS_H":tot_s_h, "surfTOA":surf_lph, "MZAlt_H":mz_alt_h, "vSun":v_sun, "wRec":mat_cats[2, 1],
+                      "SREC":s_rec, "TC":tc, "LPH":cus_l.dict['LPH'], "LPR":cus_l.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":aldeg}
         # If there are no heliostats --> no analyses of optical losses
-        elif(TC is not None and cus_l is not None):
-            SREC=TC*TC*nbCx*nbCy; matLoss = None #;weightR=matCats[2, 1]
-            if(self.back) : ALDEG = cus_l.dict['ALDEG']
-            else : ALDEG = 0.
-            dicSTP = {"vSun":vSun, "wRec":matCats[2, 1], "SREC":SREC, "TC":TC, "LPH":cus_l.dict['LPH'],
-                      "LPR":cus_l.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":ALDEG}
-        elif(TC is not None):
-            SREC=TC*TC*nbCx*nbCy; matLoss = None
-            dicSTP = {"vSun":vSun, "SREC":SREC, "TC":TC, "n_cte":n_cte}
+        elif(tc is not None and cus_l is not None):
+            s_rec=tc*tc*nb_cx*nb_cy; mat_loss = None #;weight_r=mat_cats[2, 1]
+            if(self.back) : aldeg = cus_l.dict['ALDEG']
+            else : aldeg = 0.
+            dic_stp = {"vSun":v_sun, "wRec":mat_cats[2, 1], "SREC":s_rec, "TC":tc, "LPH":cus_l.dict['LPH'],
+                      "LPR":cus_l.dict['LPR'], "prog":progress, "n_cte":n_cte, "ALDEG":aldeg}
+        elif(tc is not None):
+            s_rec=tc*tc*nb_cx*nb_cy; mat_loss = None
+            dic_stp = {"vSun":v_sun, "SREC":s_rec, "TC":tc, "n_cte":n_cte}
         # If there are no heliostats and receiver --> there is no STP
         else: 
-            dicSTP = None; matLoss = None #; weightR=0
+            dic_stp = None; mat_loss = None #; weight_r=0
                 
         # finalization
-        output = _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl[:], NPhotonsInTot, errorcount,
-                          NPhotonsOutTot, NPhotonsOutTotNoAer, output_layers, tabTransDir, tabTransDir_analytic, SIM,
-                          attrs, prof_atm, prof_oc, sigma, th_v_deg, HORIZ, le=le, flux=flux, back=self.back, 
-                          SZA_MAX=sza_max, SUN_DISC=sun_disc, hist=hist, cMatVisuRecep=cMatVisuRecep,
-                          dicSTP=dicSTP, matCats=matCats, matLoss=matLoss, wPhCats=wPhCats, wPhCats2=wPhCats2,
+        output = _finalize(tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_tot, wl[:], n_photons_in_tot, errorcount,
+                          n_photons_out_tot, n_photons_out_tot_no_aer, output_layers, tab_trans_dir, tab_trans_dir_analytic,
+                          attrs, prof_atm, prof_oc, sigma, th_v_deg, horiz, le=le, flux=flux, back=self.back, 
+                          sza_max=sza_max, sun_disc=sun_disc, hist=hist, c_mat_visu_recep=c_mat_visu_recep,
+                          dic_stp=dic_stp, mat_cats=mat_cats, mat_loss=mat_loss, w_ph_cats=w_ph_cats, w_ph_cats2=w_ph_cats2,
                           no_aer_output=no_aer_output)
         
         output.set_attr('processing time (s)', (datetime.now() - t0).total_seconds())
 
         if self.alis:
             p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
-            np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
-            np.sum(NPhotonsInTot)/float(NLAM),
-            np.sum(NPhotonsInTot)/float(nb_photons)/float(NLAM),
+            np.sum(n_photons_out_tot[0,...])/float(np.sum(n_photons_in_tot)),
+            np.sum(n_photons_in_tot)/float(n_lam),
+            np.sum(n_photons_in_tot)/float(nb_photons)/float(n_lam),
             ))
         else:
             p.finish('Done! | Received {:.1%} of {:.3g} photons ({:.1%})'.format(
-            np.sum(NPhotonsOutTot[0,...])/float(np.sum(NPhotonsInTot)),
-            np.sum(NPhotonsInTot),
-            np.sum(NPhotonsInTot)/float(nb_photons),
+            np.sum(n_photons_out_tot[0,...])/float(np.sum(n_photons_in_tot)),
+            np.sum(n_photons_in_tot),
+            np.sum(n_photons_in_tot)/float(nb_photons),
             ))
 
         if wl.scalar:
@@ -1374,11 +1374,11 @@ def _calc_solid_angles(n_theta, n_phi, sza_max=90., sun_disc=0):
     return tab_th, tab_phi, tab_omega
 
 
-def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPhotonsInTot, errorcount, NPhotonsOutTot,
-             NPhotonsOutTotNoAer, OUTPUT_LAYERS, tabTransDir, tabTransDir_analytic, SIM, attrs, prof_atm, prof_oc,
-             sigma, THVDEG, HORIZ, le=None, flux=None,
-             back=False, SZA_MAX=90., SUN_DISC=0, hist=False, cMatVisuRecep = None,
-             dicSTP = None, matCats=None, matLoss=None, wPhCats=None, wPhCats2=None, no_aer_output=False):
+def _finalize(tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_tot, wl, n_photons_in_tot, errorcount, n_photons_out_tot,
+             n_photons_out_tot_no_aer, output_layers, tab_trans_dir, tab_trans_dir_analytic, attrs, prof_atm, prof_oc,
+             sigma, th_v_deg, horiz, le=None, flux=None,
+             back=False, sza_max=90., sun_disc=0, hist=False, c_mat_visu_recep = None,
+             dic_stp = None, mat_cats=None, mat_loss=None, w_ph_cats=None, w_ph_cats2=None, no_aer_output=False):
     '''
     create and return the final output
     '''
@@ -1387,41 +1387,41 @@ def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPh
     if hasattr(prof_oc, 'to_xarray'):
         prof_oc = prof_oc.to_xarray()
 
-    (_,_,NSENSOR,NLAM,NBTHETA,NBPHI) = tabPhotonsTot.shape
+    (_,_,n_sensor,n_lam,nb_theta,nb_phi) = tab_photons_tot.shape
 
     # normalization in case of radiance
-    # (broadcast everything to dimensions (LVL,NPSTK,SENSOR,LAM,THETA,PHI))
-    norm_npho = NPhotonsInTot.reshape((1,1,NSENSOR,NLAM,1,1))
-    zip=False
+    # (broadcast everything to dimensions (LVL,n_pstk,SENSOR,LAM,THETA,PHI))
+    norm_npho = n_photons_in_tot.reshape((1,1,n_sensor,n_lam,1,1))
+    zip_flag=False
     if flux is None:
         if le is not None:
-            tabTh = le['th']
-            tabPhi = le['phi']
+            tab_th = le['th']
+            tab_phi = le['phi']
             if 'zip' not in le.keys():
-                zip = False
-            else : zip = le['zip']
+                zip_flag = False
+            else : zip_flag = le['zip']
             norm_geo =  1. 
         else : 
-            tabTh, tabPhi, tabOmega = _calc_solid_angles(NBTHETA, NBPHI, sza_max=SZA_MAX, sun_disc=SUN_DISC)
-            if HORIZ==1 : norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) * np.cos(tabTh).reshape((1,1,-1,1))
-            else :  norm_geo = 2.0 * tabOmega.reshape((1,1,-1,1)) 
+            tab_th, tab_phi, tab_omega = _calc_solid_angles(nb_theta, nb_phi, sza_max=sza_max, sun_disc=sun_disc)
+            if horiz==1 : norm_geo = 2.0 * tab_omega.reshape((1,1,-1,1)) * np.cos(tab_th).reshape((1,1,-1,1))
+            else :  norm_geo = 2.0 * tab_omega.reshape((1,1,-1,1)) 
     else:
         norm_geo = 1.
-        tabTh, tabPhi, _ = _calc_solid_angles(NBTHETA, NBPHI, sza_max=SZA_MAX, sun_disc=SUN_DISC)
+        tab_th, tab_phi, _ = _calc_solid_angles(nb_theta, nb_phi, sza_max=sza_max, sun_disc=sun_disc)
 
     # normalization
-    tabFinal = tabPhotonsTot.astype('float64')/(norm_geo*norm_npho)
-    tabFinalNoAer = tabPhotonsTotNoAer.astype('float64')/(norm_geo*norm_npho)
-    tabDistFinal = tabDistTot.astype('float64')
-    #if hist : tabHistFinal = tabHistTot
+    tab_final = tab_photons_tot.astype('float64')/(norm_geo*norm_npho)
+    tab_final_no_aer = tab_photons_tot_no_aer.astype('float64')/(norm_geo*norm_npho)
+    tab_dist_final = tab_dist_tot.astype('float64')
+    #if hist : tab_hist_final = tab_hist_tot
 
     # swapaxes : (th, phi) -> (phi, theta)
-    tabFinal = tabFinal.swapaxes(4,5)
-    tabFinalNoAer = tabFinalNoAer.swapaxes(4,5)
-    if len(tabDistFinal) >1 : tabDistFinal = tabDistFinal.swapaxes(3,4)
-    if hist : tabHistTot = tabHistTot.swapaxes(3,4)
-    NPhotonsOutTot = NPhotonsOutTot.swapaxes(3,4)
-    NPhotonsOutTotNoAer = NPhotonsOutTotNoAer.swapaxes(3,4)
+    tab_final = tab_final.swapaxes(4,5)
+    tab_final_no_aer = tab_final_no_aer.swapaxes(4,5)
+    if len(tab_dist_final) >1 : tab_dist_final = tab_dist_final.swapaxes(3,4)
+    if hist : tab_hist_tot = tab_hist_tot.swapaxes(3,4)
+    n_photons_out_tot = n_photons_out_tot.swapaxes(3,4)
+    n_photons_out_tot_no_aer = n_photons_out_tot_no_aer.swapaxes(3,4)
     if sigma is not None:
         sigma /= norm_geo
         sigma = sigma.swapaxes(4,5)
@@ -1435,11 +1435,11 @@ def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPh
     # add the axes
     axnames  = ['Zenith angles']
     axnames2 = ['None', 'Zenith angles']
-    if hist : m.add_dataset('Nphotons_in',  NPhotonsInTot)
+    if hist : m.add_dataset('Nphotons_in',  n_photons_in_tot)
 
     iphi     = slice(None)
     m.set_attr('zip', 'False')
-    m.set_attr('NPhotonIn_sum', np.sum(NPhotonsInTot))
+    m.set_attr('NPhotonIn_sum', np.sum(n_photons_in_tot))
 
     if le is not None: m.set_attr('LE', int(1))
     else: m.set_attr('LE', int(0))
@@ -1459,11 +1459,11 @@ def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPh
         axnames.insert(0, 'Azimuth angles')
         axnames2.insert(1,'Azimuth angles')
 
-    m.add_axis('Zenith angles', tabTh*180./np.pi)
-    m.add_axis('Azimuth angles', tabPhi*180./np.pi)
+    m.add_axis('Zenith angles', tab_th*180./np.pi)
+    m.add_axis('Azimuth angles', tab_phi*180./np.pi)
     
     axnames4=[]
-    if NLAM > 1:
+    if n_lam > 1:
         m.add_axis('wavelength', wl)
         ilam = slice(None)
         axnames.insert(0, 'wavelength')
@@ -1472,8 +1472,8 @@ def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPh
         m.set_attr('wavelength', str(wl))
         ilam = 0
 
-    if NSENSOR > 1:
-        m.add_axis('sensor index', np.arange(NSENSOR))
+    if n_sensor > 1:
+        m.add_axis('sensor index', np.arange(n_sensor))
         isen = slice(None)
         axnames.insert(0, 'sensor index')
         axnames2.insert(1, 'sensor index')
@@ -1481,20 +1481,20 @@ def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPh
     else:
         isen=0
 
-    write_UPTOA = OUTPUT_LAYERS in (0, 1, 2, 3, 7)
-    write_DOWN0P = OUTPUT_LAYERS in (1, 3, 4, 7)
-    write_DOWN0M = OUTPUT_LAYERS in (2, 3, 5, 6)
-    write_UP0P = OUTPUT_LAYERS in (2, 3, 5, 6)
-    write_UP0M = OUTPUT_LAYERS in (1, 3, 4)
-    write_DOWNB = OUTPUT_LAYERS in (2, 3, 5)
+    write_uptoa = output_layers in (0, 1, 2, 3, 7)
+    write_down0p = output_layers in (1, 3, 4, 7)
+    write_down0m = output_layers in (2, 3, 5, 6)
+    write_up0p = output_layers in (2, 3, 5, 6)
+    write_up0m = output_layers in (1, 3, 4)
+    write_downb = output_layers in (2, 3, 5)
 
     # Build axis names for cdist datasets (ALIS mode)
-    # Shape after swapaxes: (NLVL, N_LAYERS, NSENSOR, NBPHI, NBTHETA, [NSCL,] NIAMF)
+    # Shape after swapaxes: (n_lvl, N_LAYERS, n_sensor, nb_phi, nb_theta, [NSCL,] n_iamf)
     # When NSCL=1, squeeze it away for backward compatibility
-    if len(tabDistFinal) > 1 and tabDistFinal.shape[-2] == 1:
-        tabDistFinal = tabDistFinal[..., 0, :]  # remove trivial NSCL dim
+    if len(tab_dist_final) > 1 and tab_dist_final.shape[-2] == 1:
+        tab_dist_final = tab_dist_final[..., 0, :]  # remove trivial NSCL dim
         _has_scl = False
-    elif len(tabDistFinal) > 1:
+    elif len(tab_dist_final) > 1:
         _has_scl = True
     else:
         _has_scl = False
@@ -1502,148 +1502,148 @@ def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPh
     if _has_scl:
         cdist_axnames_zip = ['None', 'Zenith angles', 'iSCL', 'iAMF']
         cdist_axnames_full = ['None']
-        if NSENSOR > 1:
+        if n_sensor > 1:
             cdist_axnames_full.append('sensor index')
         cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iSCL', 'iAMF'])
     else:
         cdist_axnames_zip = ['None', 'Zenith angles', 'iAMF']
         cdist_axnames_full = ['None']
-        if NSENSOR > 1:
+        if n_sensor > 1:
             cdist_axnames_full.append('sensor index')
         cdist_axnames_full.extend(['Azimuth angles', 'Zenith angles', 'iAMF'])
 
-    if write_UPTOA:
-        m.add_dataset('I_up (TOA)', tabFinal[UPTOA,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (TOA)', tabFinal[UPTOA,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (TOA)', tabFinal[UPTOA,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (TOA)', tabFinal[UPTOA,3,isen,ilam,iphi,:], axnames)
+    if write_uptoa:
+        m.add_dataset('I_up (TOA)', tab_final[UPTOA,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (TOA)', tab_final[UPTOA,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (TOA)', tab_final[UPTOA,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (TOA)', tab_final[UPTOA,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_up (TOA)', sigma[UPTOA,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_up (TOA)', sigma[UPTOA,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_up (TOA)', sigma[UPTOA,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (TOA)', sigma[UPTOA,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (TOA)', NPhotonsOutTot[UPTOA,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_up (TOA)', n_photons_out_tot[UPTOA,isen,ilam,iphi,:], axnames)
         if no_aer_output:
-            m.add_dataset('I_up (TOA), no_aer', tabFinalNoAer[UPTOA,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_up (TOA), no_aer', tabFinalNoAer[UPTOA,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_up (TOA), no_aer', tabFinalNoAer[UPTOA,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_up (TOA), no_aer', tabFinalNoAer[UPTOA,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_up (TOA), no_aer', NPhotonsOutTotNoAer[UPTOA,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (TOA)', np.squeeze(tabDistFinal[UPTOA,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (TOA)', tabDistFinal[UPTOA,:,isen],cdist_axnames_full)
+            m.add_dataset('I_up (TOA), no_aer', tab_final_no_aer[UPTOA,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_up (TOA), no_aer', tab_final_no_aer[UPTOA,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_up (TOA), no_aer', tab_final_no_aer[UPTOA,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_up (TOA), no_aer', tab_final_no_aer[UPTOA,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_up (TOA), no_aer', n_photons_out_tot_no_aer[UPTOA,isen,ilam,iphi,:], axnames)
+        if len(tab_dist_final) > 1: 
+            if zip_flag : m.add_dataset('cdist_up (TOA)', np.squeeze(tab_dist_final[UPTOA,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (TOA)', tab_dist_final[UPTOA,:,isen],cdist_axnames_full)
     
-    if hist : m.add_dataset('histories', tabHistTot)
+    if hist : m.add_dataset('histories', tab_hist_tot)
     
-    if write_DOWN0P:
-        m.add_dataset('I_down (0+)', tabFinal[DOWN0P,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (0+)', tabFinal[DOWN0P,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (0+)', tabFinal[DOWN0P,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (0+)', tabFinal[DOWN0P,3,isen,ilam,iphi,:], axnames)
+    if write_down0p:
+        m.add_dataset('I_down (0+)', tab_final[DOWN0P,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (0+)', tab_final[DOWN0P,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (0+)', tab_final[DOWN0P,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (0+)', tab_final[DOWN0P,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_down (0+)', sigma[DOWN0P,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (0+)', sigma[DOWN0P,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (0+)', sigma[DOWN0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0+)', sigma[DOWN0P,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (0+)', NPhotonsOutTot[DOWN0P,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_down (0+)', n_photons_out_tot[DOWN0P,isen,ilam,iphi,:], axnames)
         if no_aer_output:
-            m.add_dataset('I_down (0+), no_aer', tabFinalNoAer[DOWN0P,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_down (0+), no_aer', tabFinalNoAer[DOWN0P,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_down (0+), no_aer', tabFinalNoAer[DOWN0P,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_down (0+), no_aer', tabFinalNoAer[DOWN0P,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_down (0+), no_aer', NPhotonsOutTotNoAer[DOWN0P,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (0+)', np.squeeze(tabDistFinal[DOWN0P,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (0+)', tabDistFinal[DOWN0P,:,isen],cdist_axnames_full)
-    if write_UP0M:
-        m.add_dataset('I_up (0-)', tabFinal[UP0M,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (0-)', tabFinal[UP0M,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (0-)', tabFinal[UP0M,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (0-)', tabFinal[UP0M,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('I_down (0+), no_aer', tab_final_no_aer[DOWN0P,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_down (0+), no_aer', tab_final_no_aer[DOWN0P,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_down (0+), no_aer', tab_final_no_aer[DOWN0P,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_down (0+), no_aer', tab_final_no_aer[DOWN0P,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_down (0+), no_aer', n_photons_out_tot_no_aer[DOWN0P,isen,ilam,iphi,:], axnames)
+        if len(tab_dist_final) > 1: 
+            if zip_flag : m.add_dataset('cdist_down (0+)', np.squeeze(tab_dist_final[DOWN0P,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (0+)', tab_dist_final[DOWN0P,:,isen],cdist_axnames_full)
+    if write_up0m:
+        m.add_dataset('I_up (0-)', tab_final[UP0M,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (0-)', tab_final[UP0M,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (0-)', tab_final[UP0M,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (0-)', tab_final[UP0M,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_up (0-)', sigma[UP0M,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_up (0-)', sigma[UP0M,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_up (0-)', sigma[UP0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0-)', sigma[UP0M,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (0-)', NPhotonsOutTot[UP0M,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_up (0-)', n_photons_out_tot[UP0M,isen,ilam,iphi,:], axnames)
         if no_aer_output:
-            m.add_dataset('I_up (0-), no_aer', tabFinalNoAer[UP0M,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_up (0-), no_aer', tabFinalNoAer[UP0M,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_up (0-), no_aer', tabFinalNoAer[UP0M,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_up (0-), no_aer', tabFinalNoAer[UP0M,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_up (0-), no_aer', NPhotonsOutTotNoAer[UP0M,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (0-)', np.squeeze(tabDistFinal[UP0M,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (0-)', tabDistFinal[UP0M,:,isen],cdist_axnames_full)
+            m.add_dataset('I_up (0-), no_aer', tab_final_no_aer[UP0M,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_up (0-), no_aer', tab_final_no_aer[UP0M,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_up (0-), no_aer', tab_final_no_aer[UP0M,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_up (0-), no_aer', tab_final_no_aer[UP0M,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_up (0-), no_aer', n_photons_out_tot_no_aer[UP0M,isen,ilam,iphi,:], axnames)
+        if len(tab_dist_final) > 1: 
+            if zip_flag : m.add_dataset('cdist_up (0-)', np.squeeze(tab_dist_final[UP0M,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (0-)', tab_dist_final[UP0M,:,isen],cdist_axnames_full)
 
-    if write_DOWN0M:
-        m.add_dataset('I_down (0-)', tabFinal[DOWN0M,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (0-)', tabFinal[DOWN0M,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (0-)', tabFinal[DOWN0M,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (0-)', tabFinal[DOWN0M,3,isen,ilam,iphi,:], axnames)
+    if write_down0m:
+        m.add_dataset('I_down (0-)', tab_final[DOWN0M,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (0-)', tab_final[DOWN0M,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (0-)', tab_final[DOWN0M,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (0-)', tab_final[DOWN0M,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_down (0-)', sigma[DOWN0M,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (0-)', sigma[DOWN0M,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (0-)', sigma[DOWN0M,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (0-)', sigma[DOWN0M,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (0-)', NPhotonsOutTot[DOWN0M,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_down (0-)', n_photons_out_tot[DOWN0M,isen,ilam,iphi,:], axnames)
         if no_aer_output:
-            m.add_dataset('I_down (0-), no_aer', tabFinalNoAer[DOWN0M,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_down (0-), no_aer', tabFinalNoAer[DOWN0M,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_down (0-), no_aer', tabFinalNoAer[DOWN0M,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_down (0-), no_aer', tabFinalNoAer[DOWN0M,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_down (0-), no_aer', NPhotonsOutTotNoAer[DOWN0M,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (0-)', np.squeeze(tabDistFinal[DOWN0M,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (0-)', tabDistFinal[DOWN0M,:,isen],cdist_axnames_full)
-    if write_UP0P:
-        m.add_dataset('I_up (0+)', tabFinal[UP0P,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_up (0+)', tabFinal[UP0P,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_up (0+)', tabFinal[UP0P,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_up (0+)', tabFinal[UP0P,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('I_down (0-), no_aer', tab_final_no_aer[DOWN0M,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_down (0-), no_aer', tab_final_no_aer[DOWN0M,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_down (0-), no_aer', tab_final_no_aer[DOWN0M,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_down (0-), no_aer', tab_final_no_aer[DOWN0M,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_down (0-), no_aer', n_photons_out_tot_no_aer[DOWN0M,isen,ilam,iphi,:], axnames)
+        if len(tab_dist_final) > 1: 
+            if zip_flag : m.add_dataset('cdist_down (0-)', np.squeeze(tab_dist_final[DOWN0M,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (0-)', tab_dist_final[DOWN0M,:,isen],cdist_axnames_full)
+    if write_up0p:
+        m.add_dataset('I_up (0+)', tab_final[UP0P,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_up (0+)', tab_final[UP0P,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_up (0+)', tab_final[UP0P,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_up (0+)', tab_final[UP0P,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_up (0+)', sigma[UP0P,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_up (0+)', sigma[UP0P,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_up (0+)', sigma[UP0P,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_up (0+)', sigma[UP0P,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_up (0+)', NPhotonsOutTot[UP0P,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_up (0+)', n_photons_out_tot[UP0P,isen,ilam,iphi,:], axnames)
         if no_aer_output:
-            m.add_dataset('I_up (0+), no_aer', tabFinalNoAer[UP0P,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_up (0+), no_aer', tabFinalNoAer[UP0P,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_up (0+), no_aer', tabFinalNoAer[UP0P,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_up (0+), no_aer', tabFinalNoAer[UP0P,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_up (0+), no_aer', NPhotonsOutTotNoAer[UP0P,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_up (0+)', np.squeeze(tabDistFinal[UP0P,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_up (0+)', tabDistFinal[UP0P,:,isen],cdist_axnames_full)
-    if write_DOWNB:
-        m.add_dataset('I_down (B)', tabFinal[DOWNB,0,isen,ilam,iphi,:], axnames)
-        m.add_dataset('Q_down (B)', tabFinal[DOWNB,1,isen,ilam,iphi,:], axnames)
-        m.add_dataset('U_down (B)', tabFinal[DOWNB,2,isen,ilam,iphi,:], axnames)
-        m.add_dataset('V_down (B)', tabFinal[DOWNB,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('I_up (0+), no_aer', tab_final_no_aer[UP0P,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_up (0+), no_aer', tab_final_no_aer[UP0P,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_up (0+), no_aer', tab_final_no_aer[UP0P,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_up (0+), no_aer', tab_final_no_aer[UP0P,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_up (0+), no_aer', n_photons_out_tot_no_aer[UP0P,isen,ilam,iphi,:], axnames)
+        if len(tab_dist_final) > 1: 
+            if zip_flag : m.add_dataset('cdist_up (0+)', np.squeeze(tab_dist_final[UP0P,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_up (0+)', tab_dist_final[UP0P,:,isen],cdist_axnames_full)
+    if write_downb:
+        m.add_dataset('I_down (B)', tab_final[DOWNB,0,isen,ilam,iphi,:], axnames)
+        m.add_dataset('Q_down (B)', tab_final[DOWNB,1,isen,ilam,iphi,:], axnames)
+        m.add_dataset('U_down (B)', tab_final[DOWNB,2,isen,ilam,iphi,:], axnames)
+        m.add_dataset('V_down (B)', tab_final[DOWNB,3,isen,ilam,iphi,:], axnames)
         if sigma is not None:
             m.add_dataset('I_stdev_down (B)', sigma[DOWNB,0,isen,ilam,iphi,:], axnames)
             m.add_dataset('Q_stdev_down (B)', sigma[DOWNB,1,isen,ilam,iphi,:], axnames)
             m.add_dataset('U_stdev_down (B)', sigma[DOWNB,2,isen,ilam,iphi,:], axnames)
             m.add_dataset('V_stdev_down (B)', sigma[DOWNB,3,isen,ilam,iphi,:], axnames)
-        m.add_dataset('N_down (B)', NPhotonsOutTot[DOWNB,isen,ilam,iphi,:], axnames)
+        m.add_dataset('N_down (B)', n_photons_out_tot[DOWNB,isen,ilam,iphi,:], axnames)
         if no_aer_output:
-            m.add_dataset('I_down (B), no_aer', tabFinalNoAer[DOWNB,0,isen,ilam,iphi,:], axnames)
-            m.add_dataset('Q_down (B), no_aer', tabFinalNoAer[DOWNB,1,isen,ilam,iphi,:], axnames)
-            m.add_dataset('U_down (B), no_aer', tabFinalNoAer[DOWNB,2,isen,ilam,iphi,:], axnames)
-            m.add_dataset('V_down (B), no_aer', tabFinalNoAer[DOWNB,3,isen,ilam,iphi,:], axnames)
-            m.add_dataset('N_down (B), no_aer', NPhotonsOutTotNoAer[DOWNB,isen,ilam,iphi,:], axnames)
-        if len(tabDistFinal) > 1: 
-            if zip : m.add_dataset('cdist_down (B)', np.squeeze(tabDistFinal[DOWNB,:,isen]),  cdist_axnames_zip)
-            else   : m.add_dataset('cdist_down (B)', tabDistFinal[DOWNB,:,isen],cdist_axnames_full)
+            m.add_dataset('I_down (B), no_aer', tab_final_no_aer[DOWNB,0,isen,ilam,iphi,:], axnames)
+            m.add_dataset('Q_down (B), no_aer', tab_final_no_aer[DOWNB,1,isen,ilam,iphi,:], axnames)
+            m.add_dataset('U_down (B), no_aer', tab_final_no_aer[DOWNB,2,isen,ilam,iphi,:], axnames)
+            m.add_dataset('V_down (B), no_aer', tab_final_no_aer[DOWNB,3,isen,ilam,iphi,:], axnames)
+            m.add_dataset('N_down (B), no_aer', n_photons_out_tot_no_aer[DOWNB,isen,ilam,iphi,:], axnames)
+        if len(tab_dist_final) > 1: 
+            if zip_flag : m.add_dataset('cdist_down (B)', np.squeeze(tab_dist_final[DOWNB,:,isen]),  cdist_axnames_zip)
+            else   : m.add_dataset('cdist_down (B)', tab_dist_final[DOWNB,:,isen],cdist_axnames_full)
 
 
     # write atmospheric profiles
     if prof_atm is not None:
         # direct transmission
-        m.add_dataset('direct transmission', tabTransDir_analytic,
+        m.add_dataset('direct transmission', tab_trans_dir_analytic,
                    axnames=['wavelength'])
-        m.add_dataset('direct transmission (dev)', np.exp(-tabTransDir[isen,ilam]), axnames4)
+        m.add_dataset('direct transmission (dev)', np.exp(-tab_trans_dir[isen,ilam]), axnames4)
 
         for axis_name in prof_atm.coords:
             if axis_name not in m.axes:
@@ -1726,92 +1726,92 @@ def _finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPh
                     ):
                 m.rm_lut(d)
             elif d.startswith('I_') or d.startswith('N_'):
-                l = m[d].reduce(np.sum, 'Azimuth angles').reduce(np.sum, 'Zenith angles', as_lut=True)
+                flux_lut = m[d].reduce(np.sum, 'Azimuth angles').reduce(np.sum, 'Zenith angles', as_lut=True)
                 m.rm_lut(d)
-                m.add_lut(l, desc=d.replace('I_', 'flux_'))
+                m.add_lut(flux_lut, desc=d.replace('I_', 'flux_'))
 
-    if (cMatVisuRecep is not None):
+    if (c_mat_visu_recep is not None):
         # Indice 0 = Sum of all Cats, then cat1 to cat8, def of cats -> see Moulana et al, 2019
         m.add_axis('Categories', np.array([0, 1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32))
-        var_x, var_y = np.shape(cMatVisuRecep[0][:][:])
+        var_x, var_y = np.shape(c_mat_visu_recep[0][:][:])
         x_indices = np.arange(var_x); y_indices = np.arange(var_y)
         m.add_axis('X_Cell_Index', x_indices); m.add_axis('Y_Cell_Index', y_indices)
-        m.add_dataset('C_Receiver', cMatVisuRecep[:][:][:], ['Categories', 'X_Cell_Index', 'Y_Cell_Index'])
-        m.set_attr('S_Receiver', str(dicSTP["SREC"])) # Receiver surface in km²
-        m.set_attr('S_Cell', str(dicSTP["TC"]))       # Cell surface in km²
+        m.add_dataset('C_Receiver', c_mat_visu_recep[:][:][:], ['Categories', 'X_Cell_Index', 'Y_Cell_Index'])
+        m.set_attr('S_Receiver', str(dic_stp["SREC"])) # Receiver surface in km²
+        m.set_attr('S_Cell', str(dic_stp["TC"]))       # Cell surface in km²
         # half-angle of the receiver solid angle
-        if back: m.set_attr('ALDEG', str(dicSTP["ALDEG"]))
+        if back: m.set_attr('ALDEG', str(dic_stp["ALDEG"]))
         else : m.set_attr('ALDEG', str(90))
 
-    if (matCats is not None):
-        m.add_dataset('cat_PhNb', matCats[:,0], ['Categories'])
-        m.add_dataset('cat_w', matCats[:,1], ['Categories'])
-        m.add_dataset('cat_w2', matCats[:,2], ['Categories'])
-        m.add_dataset('cat_irr', matCats[:,3], ['Categories'])
-        m.add_dataset('cat_errAbs', matCats[:,4], ['Categories'])
-        m.add_dataset('cat_err%', matCats[:,5], ['Categories'])
+    if (mat_cats is not None):
+        m.add_dataset('cat_PhNb', mat_cats[:,0], ['Categories'])
+        m.add_dataset('cat_w', mat_cats[:,1], ['Categories'])
+        m.add_dataset('cat_w2', mat_cats[:,2], ['Categories'])
+        m.add_dataset('cat_irr', mat_cats[:,3], ['Categories'])
+        m.add_dataset('cat_errAbs', mat_cats[:,4], ['Categories'])
+        m.add_dataset('cat_err%', mat_cats[:,5], ['Categories'])
         
-        arrWC = np.zeros((9, NLAM), dtype=np.float64)
-        arrWC2 = np.zeros((9, NLAM), dtype=np.float64)
+        arr_wc = np.zeros((9, n_lam), dtype=np.float64)
+        arr_wc2 = np.zeros((9, n_lam), dtype=np.float64)
             
-        arrWC[0, ilam] = np.sum(wPhCats[:, ilam], axis=0)
-        arrWC[1:, ilam] = wPhCats[:, ilam]
+        arr_wc[0, ilam] = np.sum(w_ph_cats[:, ilam], axis=0)
+        arr_wc[1:, ilam] = w_ph_cats[:, ilam]
         
-        arrWC2[0, ilam] = np.sum(wPhCats2[:, ilam], axis=0)
-        arrWC2[1:, ilam] = wPhCats2[:, ilam]
+        arr_wc2[0, ilam] = np.sum(w_ph_cats2[:, ilam], axis=0)
+        arr_wc2[1:, ilam] = w_ph_cats2[:, ilam]
         
-        axe_wPh = ['Categories']
-        if (NLAM > 1): axe_wPh.append('wavelength')
+        axe_w_ph = ['Categories']
+        if (n_lam > 1): axe_w_ph.append('wavelength')
             
-        m.add_dataset('wPhCats', arrWC[:,ilam], axe_wPh)
-        m.add_dataset('wPhCats2', arrWC2[:,ilam], axe_wPh)
+        m.add_dataset('wPhCats', arr_wc[:,ilam], axe_w_ph)
+        m.add_dataset('wPhCats2', arr_wc2[:,ilam], axe_w_ph)
         m.add_dataset('norm_npho', norm_npho[0,0,0,:,0,0], ['wavelength'])
         
-        m.set_attr('n_cte', str(dicSTP["n_cte"]))
+        m.set_attr('n_cte', str(dic_stp["n_cte"]))
 
-    if (matLoss is not None):
-        m.add_dataset('wLoss', np.array(matLoss[:,0], dtype=np.float64), ['index'])
-        m.add_dataset('wLoss2', np.array(matLoss[:,1], dtype=np.float64), ['index'])
-        m.set_attr('n_cos', str(dicSTP["n_cos"]))
+    if (mat_loss is not None):
+        m.add_dataset('wLoss', np.array(mat_loss[:,0], dtype=np.float64), ['index'])
+        m.add_dataset('wLoss2', np.array(mat_loss[:,1], dtype=np.float64), ['index'])
+        m.set_attr('n_cos', str(dic_stp["n_cos"]))
         
         # To consider also the multispectral case
-        if (NLAM > 1) : lwl = len(wl)
+        if (n_lam > 1) : lwl = len(wl)
         else : lwl = 1
 
         # ======== Find the extinction between TOA and heliostats
         tau_ext = np.zeros(lwl, dtype=np.float64)
-        Tr_tau = np.zeros(lwl, dtype=np.float64)
-        P_pyt = np.zeros(lwl, dtype=np.float64)
+        tr_tau = np.zeros(lwl, dtype=np.float64)
+        p_pyt = np.zeros(lwl, dtype=np.float64)
 
         # find the atm layer where the mean heliostats z altitude is located
-        Ci = 0
+        ci = 0
         zatm = prof_atm.coords['z_atm'].to_numpy()
         od_atm = prof_atm['OD_atm'].to_numpy()
-        while(zatm[Ci] > dicSTP["MZAlt_H"]):
-            Ci += 1
+        while(zatm[ci] > dic_stp["MZAlt_H"]):
+            ci += 1
 
         for i in range (0, lwl):
-            tau_ext[i] = (od_atm[i,Ci] - od_atm[i,Ci-1]) * (dicSTP["MZAlt_H"]/zatm[Ci-1])
-            tau_ext[i] = od_atm[i,Ci] - tau_ext[i]
+            tau_ext[i] = (od_atm[i,ci] - od_atm[i,ci-1]) * (dic_stp["MZAlt_H"]/zatm[ci-1])
+            tau_ext[i] = od_atm[i,ci] - tau_ext[i]
             # Beer-Lamber law to find the transmisttance
-            Tr_tau[i] = np.exp(-abs(tau_ext[i]/-dicSTP["vSun"].z))
+            tr_tau[i] = np.exp(-abs(tau_ext[i]/-dic_stp["vSun"].z))
             # theoric computation of the total power collected by all the heliostats
-            P_pyt[i] = Tr_tau[i]*dicSTP["totS_H"]*1e6 # mult by 1e6 to convert km² to m²
+            p_pyt[i] = tr_tau[i]*dic_stp["totS_H"]*1e6 # mult by 1e6 to convert km² to m²
         # Save results
-        m.add_dataset('n_tr', Tr_tau, ['wavelength'])
-        m.add_dataset('powc_H', P_pyt, ['wavelength'])
+        m.add_dataset('n_tr', tr_tau, ['wavelength'])
+        m.add_dataset('powc_H', p_pyt, ['wavelength'])
         # ========
 
         # === Here allows the calculation of the analytical approx of n_atm in backward ->
-        if (back and (dicSTP["LPH"] is not None) and (dicSTP["LPR"] is not None)):
+        if (back and (dic_stp["LPH"] is not None) and (dic_stp["LPR"] is not None)):
             naatm = np.zeros(lwl, dtype=np.float64)
-            p = make_progress(lwl-1, dicSTP["prog"])
+            p = make_progress(lwl-1, dic_stp["prog"])
             for j in range (0, lwl):
-                SUM_naatm=0
+                sum_naatm=0
                 p.update(j+1, 'n_aatm computed : {:.3g} / {:.3g}'.format(j+1, lwl))
-                for i in range (len(dicSTP["LPH"])):
-                    SUM_naatm += _find_extinction(dicSTP["LPH"][i], dicSTP["LPR"][0], prof_atm, j)
-                naatm[j] = SUM_naatm/len(dicSTP["LPH"])
+                for i in range (len(dic_stp["LPH"])):
+                    sum_naatm += _find_extinction(dic_stp["LPH"][i], dic_stp["LPR"][0], prof_atm, j)
+                naatm[j] = sum_naatm/len(dic_stp["LPH"])
             p.finish('Done! | Analytic approx of n_atm computed for {:.3g} wavelengths'.format(lwl))
             m.add_dataset('n_aatm', naatm, ['wavelength'])
         # ===
@@ -2621,7 +2621,7 @@ def reduce_diff(ds_sg, varnames, delta=None):
 
 def _loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_abs, 
                 max_hist, n_low, n_pstk, xblock, xgrid, nb_theta, nb_phi, n_lam, n_sensor,
-                double, kernel, kernel2, progress, x0, le, tab_sensor, envmap, spectrum,
+                double, kernel, progress, x0, le, tab_sensor, envmap, spectrum,
                 prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf,
                 cell_proba_icdf, stdev, stdev_lim, rng, alis, lobj_gpu, receiver_cell_size,
                 nb_cx, nb_cy, lgobj_gpu, lrobj_gpu, lobj_spect, hist=False,
@@ -2663,8 +2663,6 @@ def _loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce
         If True, use double precision for kernel accumulators.
     kernel : callable
         Main GPU kernel entry point.
-    kernel2 : callable
-        Secondary kernel handle (kept for API compatibility).
     progress : progress
         Progress-bar-like object exposing ``update(value, message)``.
     x0 : pycuda.gpuarray.GPUArray
@@ -2723,7 +2721,6 @@ def _loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce
         16. ``w_ph_cat_tot`` (ndarray)
         17. ``w_ph_cat2_tot`` (ndarray)
     """
-    _ = kernel2
     # Initializations
     n_threads_active = gpuzeros(1, dtype=np.uint32)
     counter = gpuzeros(1, dtype=np.uint64)
@@ -3094,14 +3091,14 @@ def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
         ``exp(-tau_total)`` for each wavelength.
     """
     if prof_atm is None:
-        Hatm = 0.
+        h_atm = 0.
         natm = 0
     else:
         if hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
-        Zatm = prof_atm.coords['z_atm'].to_numpy()
-        Hatm = Zatm[0]
-        natm = len(Zatm)-1
+        z_atm = prof_atm.coords['z_atm'].to_numpy()
+        h_atm = z_atm[0]
+        natm = len(z_atm)-1
 
     if prof_atm is not None:
         od_atm = prof_atm['OD_atm'].to_numpy()
@@ -3114,8 +3111,8 @@ def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
     tautot = np.zeros(nlam, dtype=np.float64)
 
     if pp:
-        z0 = Hatm
-        x0 = Hatm*np.tan(thv_deg*np.pi/180.)
+        z0 = h_atm
+        x0 = h_atm*np.tan(thv_deg*np.pi/180.)
         y0 = 0.
 
         if natm != 0:
@@ -3139,9 +3136,9 @@ def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
         #     (origin is at the surface)
         # * Z is the projection of M on z axis
         # tan(thv) = x0/z0
-        # earth_radius is the radius of the earth and Hatm the thickness of the atmosphere
-        # solve the equation x0^2 + (earth_radius+z0)^2 = (earth_radius+Hatm)^2 for z0
-        delta = 4*earth_radius**2 + 4*(tanthv**2 + 1) * (Hatm**2 + 2*Hatm*earth_radius)
+        # earth_radius is the radius of the earth and h_atm the thickness of the atmosphere
+        # solve the equation x0^2 + (earth_radius+z0)^2 = (earth_radius+h_atm)^2 for z0
+        delta = 4*earth_radius**2 + 4*(tanthv**2 + 1) * (h_atm**2 + 2*h_atm*earth_radius)
         z0 = (-2.*earth_radius + np.sqrt(delta))/(2 *(tanthv**2 + 1.))
         x0 = z0*tanthv
         y0 = 0.
@@ -3152,45 +3149,45 @@ def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
         yph = y0
         zph = z0
         for i in range(1, natm+1):
-            # V is the direction vector, X is the position vector, D is the
+            # V is the direction vector, X is the position vector, d is the
             # distance to the next layer and R is the position vector at the
             # next layer
-            # we have: R = X + V.D
-            # R² = X² + (V.D)² + 2XVD
+            # we have: R = X + V.d
+            # R² = X² + (V.d)² + 2XVD
             # where R is earth_radius+ALT[i]
-            # solve for D:
-            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (earth_radius + Zatm[i])**2)
+            # solve for d:
+            delta = 4.*(vx*xph + vy*yph + vz*zph)**2 - 4*((xph**2 + yph**2 + zph**2) - (earth_radius + z_atm[i])**2)
 
             # the 2 solutions are:
-            D1 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) + np.sqrt(delta))
-            D2 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) - np.sqrt(delta))
+            d1 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) + np.sqrt(delta))
+            d2 = 0.5 * (-2. * (vx*xph+vy*yph+vz*zph) - np.sqrt(delta))
 
             # the solution is the smallest positive one
-            if D1 > 0:
-                if D2 > 0:
-                    D = min(D1, D2)
+            if d1 > 0:
+                if d2 > 0:
+                    d = min(d1, d2)
                 else:
-                    D = D1
+                    d = d1
             else:
-                if D2 > 0:
-                    D = D2
+                if d2 > 0:
+                    d = d2
                 else:
                     raise RuntimeError('No solution in _impact_init')
 
             # photon moves forward
-            xph += vx * D
-            yph += vy * D
-            zph += vz * D
+            xph += vx * d
+            yph += vy * d
+            zph += vz * d
 
             for ilam in range(nlam):
                 # optical thickness of the layer in vertical direction
                 hlay0 = abs(od_atm[ilam, i] - od_atm[ilam, i - 1])
 
                 # thickness of the layer
-                D0 = abs(Zatm[i-1] - Zatm[i])
+                d0 = abs(z_atm[i-1] - z_atm[i])
 
                 # optical thickness of the layer at current wavelength
-                hlay = hlay0*D/D0
+                hlay = hlay0*d/d0
 
                 # cumulative optical thickness
                 tautot[ilam] += hlay
