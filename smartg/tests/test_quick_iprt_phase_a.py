@@ -159,8 +159,6 @@ def test_a1(request, s1df, s1db):
         stdev=True,
         progress=True,
     )
-
-    m_a1_b = m_a1_b.to_xarray() if hasattr(m_a1_b, "to_xarray") else m_a1_b
     m_a1_b = drop_axes(m_a1_b, "Azimuth angles", "Zenith angles")
 
     for name in list(m_a1_b.data_vars):
@@ -215,8 +213,6 @@ def test_a1(request, s1df, s1db):
         stdev=True,
         progress=True,
     )
-
-    m_a1_b = m_a1_b.to_xarray() if hasattr(m_a1_b, "to_xarray") else m_a1_b
     m_a1_b = drop_axes(m_a1_b, "Azimuth angles", "Zenith angles")
 
     for name in list(m_a1_b.data_vars):
@@ -267,9 +263,6 @@ def test_a1(request, s1df, s1db):
         depo=0.03,
         stdev=True,
     )
-    m_a1_f_dep003 = (
-        m_a1_f_dep003.to_xarray() if hasattr(m_a1_f_dep003, "to_xarray") else m_a1_f_dep003
-    )
 
     # ************************* DEPOL = 0.1 **************************
     # We use the previous vaa, vza and le
@@ -293,9 +286,6 @@ def test_a1(request, s1df, s1db):
         beer=1,
         depo=0.1,
         stdev=True,
-    )
-    m_a1_f_dep01 = (
-        m_a1_f_dep01.to_xarray() if hasattr(m_a1_f_dep01, "to_xarray") else m_a1_f_dep01
     )
     # *****************************************************************
 

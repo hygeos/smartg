@@ -122,7 +122,6 @@ def test_smartg_jax2(
                 n_f=1e3,
             )
         )
-        m = m.to_xarray() if hasattr(m, "to_xarray") else m
         m = drop_axes(m, "Zenith angles", "Azimuth angles")
         m0 = (
             sg.run(
@@ -138,7 +137,6 @@ def test_smartg_jax2(
                 n_f=1e3,
             )
         )
-        m0 = m0.to_xarray() if hasattr(m0, "to_xarray") else m0
         m0 = drop_axes(m0, "Zenith angles", "Azimuth angles")
         sg.clear_context()
 
@@ -302,7 +300,6 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             n_f=1e3,
         )
     )
-    m1 = m1.to_xarray() if hasattr(m1, "to_xarray") else m1
     m1 = drop_axes(m1, "Zenith angles", "Azimuth angles")
     m2 = (
         sg.run(
@@ -324,7 +321,6 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             n_f=1e3,
         )
     )
-    m2 = m2.to_xarray() if hasattr(m2, "to_xarray") else m2
     m2 = drop_axes(m2, "Zenith angles", "Azimuth angles")
     sg.clear_context()
     print("GPU time no hist: %.4f" % float(m1.attrs["kernel time (s)"]), "s")

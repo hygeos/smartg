@@ -726,7 +726,6 @@ def _run_case_backward(
         xgrid=xg,
         seed=SEED,
     )
-    m = m.to_xarray() if hasattr(m, "to_xarray") else m
 
     return m, np.cos(np.radians(theta_0)) / np.pi
 
@@ -795,7 +794,6 @@ def _run_group_forward(
         xgrid=xg,
         seed=SEED,
     )
-    m = m.to_xarray() if hasattr(m, "to_xarray") else m
 
     return m, np.cos(np.radians(theta_0)) / np.pi
 

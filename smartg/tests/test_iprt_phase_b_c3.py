@@ -571,7 +571,6 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
         xgrid=xg,
         seed=SEED,
     )
-    m = m.to_xarray() if hasattr(m, "to_xarray") else m
 
     return m, np.cos(np.radians(theta_0)) / np.pi
 
