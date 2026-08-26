@@ -30,7 +30,7 @@ from scipy.interpolate import interp1d
 #from scipy.integrate import simpson
 import subprocess
 from collections import OrderedDict
-from pycuda.gpuarray import to_gpu, zeros as gpuzeros
+from pycuda.gpuarray import GPUArray, to_gpu, zeros as gpuzeros
 import pycuda.driver as cuda
 from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
@@ -261,8 +261,16 @@ class StdevLim(object):
     For the moment, it does not work correctly with kdis and reptran.
     """
 
-    def __init__(self, err_abs_min=float(0), err_rel_min=float(0), nb_loop_min=int(10),
-     stk=int(0), level=int(0), verbose=False, fmt=".5e"):
+    def __init__(
+        self,
+        err_abs_min: float = 0.,
+        err_rel_min: float = 0.,
+        nb_loop_min: int = 10,
+        stk: int = 0,
+        level: int = 0,
+        verbose: bool = False,
+        fmt: str = ".5e",
+    ) -> None:
       
         self.dict = {
             'err_abs_min':  err_abs_min,
@@ -274,10 +282,10 @@ class StdevLim(object):
             'format'     :  fmt
         }
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.dict.__str__()
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return 'Stdevlim dict: %s' %  self.dict.__repr__()
         
 
@@ -391,12 +399,31 @@ class Smartg(object):
         If scatter_classes is not one of the accepted values.
         If scatter_classes='scattering_order_per_layer' and norders < 1.
     """
-    def __init__(self, pp=True, debug=False, autoinit=True,
-                 verbose_photon=False,
-                 double=True, alis=False, back=False, bias=True, alt_pp=False, obj3d=False, 
-                 opt3d=False, device=None, sif=False, thermal=False, rng='PHILOX', cache_dir=None,
-                 keep_context=None, amf_variance=False, cdist_wabs=False, nscl=1, scatter_classes='last_scattering_layer',
-                 norders=1):
+    def __init__(
+        self,
+        pp: bool = True,
+        debug: bool = False,
+        autoinit: bool = True,
+        verbose_photon: bool = False,
+        double: bool = True,
+        alis: bool = False,
+        back: bool = False,
+        bias: bool = True,
+        alt_pp: bool = False,
+        obj3d: bool = False,
+        opt3d: bool = False,
+        device: int | None = None,
+        sif: bool = False,
+        thermal: bool = False,
+        rng: str = 'PHILOX',
+        cache_dir: str | None = None,
+        keep_context: bool | None = None,
+        amf_variance: bool = False,
+        cdist_wabs: bool = False,
+        nscl: int = 1,
+        scatter_classes: str | list = 'last_scattering_layer',
+        norders: int = 1,
+    ) -> None:
         assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), "Can not use the 'device' option while the CUDA_DEVICE is set"
 
         if device is not None:
@@ -562,7 +589,7 @@ class Smartg(object):
         self.common_attrs.update(_get_git_attrs())
 
 
-    def clear_context(self):
+    def clear_context(self) -> None:
         """
         Manually kill the CUDA context.
 
@@ -585,18 +612,58 @@ class Smartg(object):
             print("There is no current context to clear.")
 
 
-    def run(self, wl, atm=None, surf=None, water=None, env=None, alis_options=None,
-            nb_photons=1e9, depo=0.0279, depo_water= 0.0906, th_v_deg=0., ph_v_deg=0., seed=-1,
-            earth_radius=6371., wl_proba=None, sensor_proba=None, cell_proba=None,
-            nb_theta=45, nb_phi=90, n_f=1e6,
-            output_layers=0, xblock=256, xgrid=256,
-            nb_loop=None, progress=True, 
-            le=None, flux=None, stdev=False, stdev_lim=None,
-            beer=1, r_r=0, weight_r_r=0.1, sza_max=90., sun_disc=0.,
-            sensor=None, refraction=False, reflectance=True,
-            my_objects=None, interval = None,
-            is_atm = 1, cus_l = None, s_min=0, s_max=1e6, r_min=0, r_max=1e6, ffs=False, direct=False,
-            ocean_interaction=None, pol_off=False, no_aer_output=False):
+    def run(
+        self,
+        wl,
+        atm=None,
+        surf=None,
+        water=None,
+        env=None,
+        alis_options: dict | None = None,
+        nb_photons: float = 1e9,
+        depo: float = 0.0279,
+        depo_water: float = 0.0906,
+        th_v_deg: float = 0.,
+        ph_v_deg: float = 0.,
+        seed: int = -1,
+        earth_radius: float = 6371.,
+        wl_proba: np.ndarray | None = None,
+        sensor_proba: np.ndarray | None = None,
+        cell_proba=None,
+        nb_theta: int = 45,
+        nb_phi: int = 90,
+        n_f: float = 1e6,
+        output_layers: int = 0,
+        xblock: int = 256,
+        xgrid: int = 256,
+        nb_loop: float | None = None,
+        progress: bool = True,
+        le: dict | None = None,
+        flux: str | None = None,
+        stdev: bool = False,
+        stdev_lim: StdevLim | None = None,
+        beer: int = 1,
+        r_r: int = 0,
+        weight_r_r: float = 0.1,
+        sza_max: float = 90.,
+        sun_disc: float = 0.,
+        sensor=None,
+        refraction: bool = False,
+        reflectance: bool = True,
+        my_objects=None,
+        interval=None,
+        is_atm: int | None = 1,
+        cus_l=None,
+        s_min: float = 0,
+        s_max: float = 1e6,
+        r_min: float = 0,
+        r_max: float = 1e6,
+        ffs: bool = False,
+        direct: bool = False,
+        ocean_interaction: bool | None = None,
+        pol_off: bool = False,
+        no_aer_output: bool = False,
+    ) -> MLUT:
         """
         Run a SMART-G simulation
 
@@ -1330,7 +1397,12 @@ class Smartg(object):
         return output
 
 
-def _calc_solid_angles(n_theta, n_phi, sza_max=90., sun_disc=0):
+def _calc_solid_angles(
+    n_theta: int,
+    n_phi: int,
+    sza_max: float = 90.,
+    sun_disc: float = 0,
+) -> tuple:
     """
     Compute zenith angles, azimuth angles, and solid angles for the sensor grid.
 
@@ -1380,11 +1452,39 @@ def _calc_solid_angles(n_theta, n_phi, sza_max=90., sun_disc=0):
     return tab_th, tab_phi, tab_omega
 
 
-def _finalize(tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_tot, wl, n_photons_in_tot, errorcount, n_photons_out_tot,
-             n_photons_out_tot_no_aer, output_layers, tab_trans_dir, tab_trans_dir_analytic, attrs, prof_atm, prof_oc,
-             sigma, th_v_deg, horiz, le=None, flux=None,
-             back=False, sza_max=90., sun_disc=0, hist=False, c_mat_visu_recep = None,
-             dic_stp = None, mat_cats=None, mat_loss=None, w_ph_cats=None, w_ph_cats2=None, no_aer_output=False):
+def _finalize(
+    tab_photons_tot: np.ndarray,
+    tab_photons_tot_no_aer: np.ndarray,
+    tab_dist_tot: np.ndarray,
+    tab_hist_tot,
+    wl: np.ndarray,
+    n_photons_in_tot: np.ndarray,
+    errorcount: GPUArray,
+    n_photons_out_tot: np.ndarray,
+    n_photons_out_tot_no_aer: np.ndarray,
+    output_layers: int,
+    tab_trans_dir: np.ndarray,
+    tab_trans_dir_analytic: np.ndarray | None,
+    attrs: dict,
+    prof_atm,
+    prof_oc,
+    sigma: np.ndarray | None,
+    th_v_deg: float,
+    horiz: int,
+    le: dict | None = None,
+    flux: str | None = None,
+    back: bool = False,
+    sza_max: float = 90.,
+    sun_disc: float = 0,
+    hist: bool = False,
+    c_mat_visu_recep: np.ndarray | None = None,
+    dic_stp: dict | None = None,
+    mat_cats: np.ndarray | None = None,
+    mat_loss: np.ndarray | None = None,
+    w_ph_cats: np.ndarray | None = None,
+    w_ph_cats2: np.ndarray | None = None,
+    no_aer_output: bool = False,
+) -> MLUT:
     """
     Create and return the final output of a simulation.
 
@@ -1775,7 +1875,7 @@ def _finalize(tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_to
                 da = prof_oc[name]
                 m.add_dataset(name, da.to_numpy(), list(da.dims), attrs=da.attrs)
 
-    # write the error )count
+    # write the error count
     err = errorcount.get()
     for i, d in enumerate([
             'ERROR_THETA',
@@ -1893,7 +1993,7 @@ def _finalize(tab_photons_tot, tab_photons_tot_no_aer, tab_dist_tot, tab_hist_to
     return m
 
 
-def _isotropic(n_theta):
+def _isotropic(n_theta: int) -> np.ndarray:
     """
     Build the isotropic phase-function lookup table.
 
@@ -1964,7 +2064,7 @@ def _isotropic(n_theta):
     return phase_H
 
 
-def _rayleigh(n_theta, depo, pol_off=False):
+def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     """
     Build the Rayleigh phase-function lookup table.
 
@@ -2058,7 +2158,13 @@ def _rayleigh(n_theta, depo, pol_off=False):
     return pha
 
 
-def _calc_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
+def _calc_phase_gpu(
+    profile,
+    n_theta: int,
+    depo: float,
+    kind: str,
+    pol_off: bool = False,
+) -> GPUArray:
     """
     Build the phase-function lookup table uploaded to the GPU.
 
@@ -2244,14 +2350,80 @@ def _calc_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
     return to_gpu(phase_H)
 
 
-def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_v_deg,
-                xblock, xgrid, n_lam, sim, n_f, nb_theta, nb_phi, output_layers, earth_radius, 
-                le, zip_mode, flux, ffs, direct, ocean_interaction, n_lvl, n_pstk, n_wl_proba, 
-                n_sensor_proba, n_cell_proba, beer, s_min, s_max, r_min, r_max, r_r, weight_r_r, 
-                n_low, n_jac, n_sensor, refrac, horiz, sza_max, sun_disc, cus_l, n_obj, n_gobj, n_robj,
-                p_min_x, p_min_y, p_min_z, p_max_x, p_max_y, p_max_z, is_atm, tc, nb_cx, nb_cy, 
-                v_sun, hist, z_toa, cell_size, sx_min, sx_max, sy_min, sy_max, nb_sx, nb_sy, 
-                no_aer_output, n_scl=1, scl_mode=0, n_orders=1, n_jac_abs=0) :
+def _init_const(
+    surf,
+    env,
+    n_atm: int,
+    n_atm_abs: int | np.integer,
+    n_oce: int,
+    n_oce_abs: int | np.integer,
+    mod: SourceModule,
+    nb_loop: float | None,
+    th_v_deg: float,
+    xblock: int,
+    xgrid: int,
+    n_lam: int,
+    sim: int,
+    n_f: float,
+    nb_theta: int,
+    nb_phi: int,
+    output_layers: int,
+    earth_radius: float,
+    le: int,
+    zip_mode: int,
+    flux: int,
+    ffs: bool,
+    direct: bool,
+    ocean_interaction: bool | None,
+    n_lvl: int,
+    n_pstk: int,
+    n_wl_proba: int,
+    n_sensor_proba: int,
+    n_cell_proba: int,
+    beer: int,
+    s_min: float,
+    s_max: float,
+    r_min: float,
+    r_max: float,
+    r_r: int,
+    weight_r_r: float,
+    n_low: int,
+    n_jac: int,
+    n_sensor: int,
+    refrac: int,
+    horiz: int,
+    sza_max: float,
+    sun_disc: float,
+    cus_l,
+    n_obj: int,
+    n_gobj: int,
+    n_robj: int,
+    p_min_x: float | None,
+    p_min_y: float | None,
+    p_min_z: float | None,
+    p_max_x: float | None,
+    p_max_y: float | None,
+    p_max_z: float | None,
+    is_atm: int | None,
+    tc: float | None,
+    nb_cx: int,
+    nb_cy: int,
+    v_sun,
+    hist: int,
+    z_toa: float,
+    cell_size,
+    sx_min: float,
+    sx_max: float,
+    sy_min: float,
+    sy_max: float,
+    nb_sx: int,
+    nb_sy: int,
+    no_aer_output: bool,
+    n_scl: int = 1,
+    scl_mode: int = 0,
+    n_orders: int = 1,
+    n_jac_abs: int = 0,
+) -> None:
     """Initialize and upload simulation constants to CUDA device globals.
 
     This routine computes a few derived geometric quantities and copies all
@@ -2327,7 +2499,7 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
     px_d = -v_sun.x * t_temp
     py_d = -v_sun.y * t_temp
 
-    def copy_to_device(name, scalar, dtype):
+    def copy_to_device(name: str, scalar, dtype) -> None:
         cuda.memcpy_htod(mod.get_global(name)[0], np.array([scalar], dtype=dtype))
 
     # copy constants to device
@@ -2453,7 +2625,7 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
             copy_to_device('LMODEd', 0, np.int32)
 
 
-def _init_profile(wl, prof, kind):
+def _init_profile(wl, prof, kind: str) -> tuple:
     """Prepare profile and cell arrays on the GPU.
 
     Convert an atmospheric or oceanic profile into the internal SMART-G
@@ -2545,7 +2717,7 @@ def _init_profile(wl, prof, kind):
     return to_gpu(prof_gpu), to_gpu(cell_gpu)
 
 
-def multi_profiles(profs, kind='atm'):
+def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
     """Reorganize a list of profiles into a single multi-profile table.
 
     This helper concatenates compatible profile fields so several atmosphere
@@ -2604,7 +2776,7 @@ def multi_profiles(profs, kind='atm'):
     return pro
 
 
-def reduce_diff(ds_sg, varnames, delta=None):
+def reduce_diff(ds_sg: xr.Dataset, varnames, delta=None) -> xr.Dataset:
     """Post-process ALIS finite-difference runs into sensitivities/Jacobians.
 
     The input lookup tables are expected to be packed along the wavelength
@@ -2697,13 +2869,54 @@ def reduce_diff(ds_sg, varnames, delta=None):
     return res
 
 
-def _loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_abs, 
-                max_hist, n_low, n_pstk, xblock, xgrid, nb_theta, nb_phi, n_lam, n_sensor,
-                double, kernel, progress, x0, le, tab_sensor, envmap, spectrum,
-                prof_atm, prof_oc, cell_atm, cell_oc, wl_proba_icdf, sensor_proba_icdf,
-                cell_proba_icdf, stdev, stdev_lim, rng, alis, lobj_gpu, receiver_cell_size,
-                nb_cx, nb_cy, lgobj_gpu, lrobj_gpu, lobj_spect, hist=False,
-                amf_variance=False, nscl=1):
+def _loop_kernel(
+    nb_photons: float,
+    faer: GPUArray | None,
+    foce: GPUArray | None,
+    n_level: int,
+    n_atm: int,
+    n_atm_abs: int | np.integer,
+    n_oce: int,
+    n_oce_abs: int | np.integer,
+    max_hist: int | np.integer,
+    n_low: int,
+    n_pstk: int,
+    xblock: int,
+    xgrid: int,
+    nb_theta: int,
+    nb_phi: int,
+    n_lam: int,
+    n_sensor: int,
+    double: bool,
+    kernel,
+    progress,
+    x0: GPUArray | None,
+    le: dict | None,
+    tab_sensor: GPUArray,
+    envmap: GPUArray,
+    spectrum: GPUArray,
+    prof_atm: GPUArray,
+    prof_oc: GPUArray,
+    cell_atm: GPUArray,
+    cell_oc: GPUArray,
+    wl_proba_icdf: GPUArray | None,
+    sensor_proba_icdf: GPUArray | None,
+    cell_proba_icdf: GPUArray | None,
+    stdev: bool,
+    stdev_lim: StdevLim | None,
+    rng,
+    alis: bool,
+    lobj_gpu: GPUArray | None,
+    receiver_cell_size: float | None,
+    nb_cx: int,
+    nb_cy: int,
+    lgobj_gpu: GPUArray | None,
+    lrobj_gpu: GPUArray | None,
+    lobj_spect: GPUArray | None,
+    hist: bool = False,
+    amf_variance: bool = False,
+    nscl: int = 1,
+) -> tuple:
     """Run the Monte Carlo transport kernel until the requested photon budget.
 
     This function repeatedly launches the GPU kernel, accumulates radiometric
@@ -3082,7 +3295,7 @@ def _loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce
         n_photons_out_tot.get(), n_photons_out_tot_no_aer.get(), sigma, n_simu, secs_cuda_clock, tab_mat_recep, mat_cats, mat_loss, w_ph_cat_tot.get(), w_ph_cat2_tot.get()
 
 
-def _get_git_attrs():
+def _get_git_attrs() -> dict:
     """Retrieve git repository metadata as output attributes.
 
     Queries the current git repository for the HEAD commit hash and working
@@ -3139,7 +3352,13 @@ def _get_git_attrs():
     return attrs
 
 
-def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
+def _impact_init(
+    prof_atm,
+    nlam: int,
+    thv_deg: float,
+    earth_radius: float,
+    pp: bool,
+) -> tuple:
     """Compute atmospheric entry point coordinates and direct transmittance.
 
     Calculates the cartesian coordinates of the photon entry point at the top
@@ -3274,7 +3493,7 @@ def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
     return to_gpu(np.array([x0, y0, z0], dtype='float32')), np.exp(-tautot)
 
 
-def _init_rng(rng):
+def _init_rng(rng: str) -> '_RngPhilox | _RngCurandPhilox':
     """
     Return the RNG backend instance for the given RNG name.
 
@@ -3303,10 +3522,10 @@ class _RngPhilox(object):
     This helper manages the RNG seed and state buffer for Philox-based
     random number generation on the GPU.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
-    def setup(self, seed, xblock, xgrid):
+    def setup(self, seed: int, xblock: int, xgrid: int) -> int:
         """Initialize Philox RNG state on GPU.
 
         Parameters
@@ -3334,8 +3553,8 @@ class _RngPhilox(object):
         if seed == -1:
             # seed is based on clock
             # A multiply by 1000 has been removed to avoid OverflowError due to uint32 limit
-            seed = np.uint32((datetime.now(tz=timezone.utc)
-                              - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
+            seed = int(np.uint32((datetime.now(tz=timezone.utc)
+                - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds()))
 
         state = np.zeros(xblock*xgrid+1, dtype='uint32')
         state[0] = seed
@@ -3351,7 +3570,7 @@ class _RngCurandPhilox(object):
     ``curandStatePhilox4_32_10_t`` states on device memory for all active
     threads.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         # build module containing the initialization functions
         source = r'''
         #include <curand.h>
@@ -3382,7 +3601,7 @@ class _RngCurandPhilox(object):
         self.mod.get_function('get_state_size')(s, block=(1, 1, 1), grid=(1, 1, 1))
         self.STATE_SIZE = int(np.squeeze(s.get()))  # size in bytes
 
-    def setup(self, seed, xblock, xgrid):
+    def setup(self, seed: int, xblock: int, xgrid: int) -> int:
         """Initialize CURAND Philox RNG state on GPU.
 
         Parameters
@@ -3411,8 +3630,8 @@ class _RngCurandPhilox(object):
         """
         if seed == -1:
             # seed is based on clock
-            seed = np.uint32((datetime.now(tz=timezone.utc)
-                             - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds())
+            seed = int(np.uint32((datetime.now(tz=timezone.utc)
+                - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds()))
 
         cuda.memcpy_htod(self.mod.get_global('XBLOCKd')[0], np.array([xblock], dtype=np.int32))
         cuda.memcpy_htod(self.mod.get_global('XGRIDd')[0], np.array([xgrid], dtype=np.int32))
@@ -3426,7 +3645,7 @@ class _RngCurandPhilox(object):
         return seed
 
 
-def _init_obj(lgobj, v_sun, wl, cus_l=None):
+def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
     """Initialize object-related GPU buffers and receiver metadata.
 
     Parameters
@@ -3734,8 +3953,18 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             nb_cx, nb_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect, n_cos)
 
 
-def _normalize_rec(c_mat_visu_recep, mat_cats, nb_cx, nb_cy, nb_photons, surf_lph, 
-                   cell_size, cus_l, sun_disc, le):
+def _normalize_rec(
+    c_mat_visu_recep: np.ndarray,
+    mat_cats: np.ndarray,
+    nb_cx: int,
+    nb_cy: int,
+    nb_photons: float,
+    surf_lph,
+    cell_size: float,
+    cus_l,
+    sun_disc: float,
+    le: int,
+) -> tuple:
     """
     Normalize receiver signal.
 
@@ -3825,7 +4054,7 @@ def _normalize_rec(c_mat_visu_recep, mat_cats, nb_cx, nb_cy, nb_photons, surf_lp
     return c_mat_visu_recep, mat_cats, norm_c
 
 
-def _find_extinction(ip, fp, prof_atm, w_ind=0):
+def _find_extinction(ip, fp, prof_atm, w_ind: int = 0):
     """
     Compute the atmospheric extinction along a segment between two points.
 
