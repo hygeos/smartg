@@ -1284,7 +1284,7 @@ class Smartg(object):
                 'MLUT-like object or equal to None!'
             )
 
-        if hasattr(prof_atm, 'to_xarray'):
+        if prof_atm is not None and hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
 
         if prof_atm is not None:
@@ -1429,7 +1429,7 @@ class Smartg(object):
                 'MLUT-like object or equal to None!'
             )
 
-        if hasattr(prof_oc, 'to_xarray'):
+        if prof_oc is not None and hasattr(prof_oc, 'to_xarray'):
             prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
@@ -1503,6 +1503,7 @@ class Smartg(object):
         if water is None:
             spectrum['alb_seafloor'] = -999.0
         else:
+            assert prof_oc is not None
             spectrum['alb_seafloor'] = prof_oc['albedo_seafloor'].data[...]
 
         envmap = to_gpu(envmap)
@@ -1573,6 +1574,7 @@ class Smartg(object):
 
         if cell_proba is not None:
             if (cell_proba == 'auto') and not self.back and self.thermal:
+                assert prof_atm is not None
                 kabs = od2k(prof_atm, 'OD_abs_atm')
                 z = -prof_atm.coords['z_atm'].to_numpy()
                 B = blackbody_radiance(
@@ -2823,6 +2825,8 @@ def _finalize(
                 m.add_lut(flux_lut, desc=d.replace('I_', 'flux_'))
 
     if c_mat_visu_recep is not None:
+        # a receiver implies the Solar Tower Power parameters
+        assert dic_stp is not None
         # Indice 0 = Sum of all Cats, then cat1 to cat8, def of cats ->
         # see Moulana et al, 2019
         m.add_axis(
@@ -2849,6 +2853,8 @@ def _finalize(
             m.set_attr('ALDEG', str(90))
 
     if mat_cats is not None:
+        assert dic_stp is not None
+        assert w_ph_cats is not None and w_ph_cats2 is not None
         m.add_dataset('cat_PhNb', mat_cats[:, 0], ['Categories'])
         m.add_dataset('cat_w', mat_cats[:, 1], ['Categories'])
         m.add_dataset('cat_w2', mat_cats[:, 2], ['Categories'])
@@ -2876,6 +2882,8 @@ def _finalize(
         m.set_attr('n_cte', str(dic_stp["n_cte"]))
 
     if mat_loss is not None:
+        assert dic_stp is not None
+        assert prof_atm is not None
         m.add_dataset(
             'wLoss', np.array(mat_loss[:, 0], dtype=np.float64), ['index']
         )
@@ -4633,7 +4641,7 @@ def _impact_init(
         y0 = 0.0
 
         if natm != 0:
-            assert od_atm is not None
+            assert prof_atm is not None and od_atm is not None
             for ilam in range(nlam):
                 if prof_atm['OD_atm'].ndim == 2:
                     # lam, z
