@@ -259,6 +259,11 @@ final `v2.0.0` release.
   - The remaining `NameError` exceptions raised by `CusForward`, `CusBackward`
     and the `cusL` guard of `Smartg.run` are now `ValueError`, and the `V`
     validity check of `CusBackward` no longer compares a `Vector` with `!=`
+  - All the `NameError` and generic `Exception` exceptions of the smartg
+    module are now `ValueError` (`RuntimeError` for the impact-point solver),
+    and two `UnboundLocalError` hazards are fixed: the error format of a
+    receiver run without `stdev`, and the base normal of a spherical
+    reflector in the RF launching mode
   - Fix a bug in `read_cld_nth_cte`
   - Fix the numpy 2.5 shape-setter deprecation in the interp module, and the
     strictly-increasing coordinate requirement of `make_interp_spline`

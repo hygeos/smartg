@@ -13,7 +13,7 @@ import numpy as np
 from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
-from smartg.sensor import LOC_CODE, Sensor, get_sensor
+from smartg.sensor import Sensor
 from smartg.phase import convert_phase_to_iparper
 from smartg.water import Water
 from warnings import warn
@@ -21,7 +21,7 @@ from smartg.surface import Environment
 from smartg.progress import progress as make_progress
 from smartg.cdf import icdf_2d
 from smartg.environ import modified_environ
-from luts.luts import LUT, MLUT
+from luts.luts import MLUT
 from scipy.interpolate import interp1d
 #from scipy.integrate import simpson
 import subprocess
@@ -415,7 +415,7 @@ class Smartg(object):
                 try:
                     import pycuda.autoinit
                     self.ctx = pycuda.autoinit.context
-                except:
+                except Exception:
                     # In case cuda context has been manually popped
                     from importlib import reload, import_module
                     pycuda.autoinit = import_module('pycuda.autoinit')
@@ -576,7 +576,7 @@ class Smartg(object):
                 # In case of autoinit delete pycuda.autoinit
                 import pycuda.autoinit
                 del pycuda.autoinit
-        except:
+        except Exception:
             print("There is no current context to clear.")
 
 
@@ -804,9 +804,9 @@ class Smartg(object):
 
         """
 
-        if (not self.pp and water is not None): raise NameError("Ocean + spherical atm is not allowed! Still in progress...")
+        if (not self.pp and water is not None): raise ValueError("Ocean + spherical atm is not allowed! Still in progress...")
 
-        if ( not (OUTPUT_LAYERS in (np.arange(9, dtype=np.int32)-1)) ):
+        if OUTPUT_LAYERS not in (np.arange(9, dtype=np.int32)-1):
             raise ValueError('The OUTPUT_LAYERS value must be an integer between -1 and 7.')
 
         # Compute the sun direction as vector 
@@ -817,11 +817,11 @@ class Smartg(object):
         surfLPH = 0
         if (cusL is not None):
             if myObjects is None:
-                raise NameError('The parameter cusL can be used only if parameter myObjects is provided.')
-            if (cusL.dict['LMODE'] == "B" and self.back == False):
+                raise ValueError('The parameter cusL can be used only if parameter myObjects is provided.')
+            if (cusL.dict['LMODE'] == "B" and not self.back):
                 raise ValueError('CusBackward can be used only with the compilation option back=True')
-            elif (sensor != None):
-                raise NameError('The use of sensor(s) and a custum launching mode' + \
+            elif sensor is not None:
+                raise ValueError('The use of sensor(s) and a custum launching mode' + \
                                 ' (cusForward or cusBackward) is prohibited!')
             elif (cusL.dict['LMODE'] == "B"):
                 sensor = Sensor(POSX=cusL.dict['POS'].x, POSY=cusL.dict['POS'].y, POSZ=cusL.dict['POS'].z,
@@ -876,7 +876,7 @@ class Smartg(object):
         # END OBJ ===================================================
 
         if NBPHI%2 == 1:
-            warn('Odd number of azimuth')
+            warn('Odd number of azimuth', stacklevel=2)
 
         if (NBLOOP is None) and (nObj <= 0):
             NBLOOP = min(NBPHOTONS/30, 1e6)
@@ -952,7 +952,7 @@ class Smartg(object):
         elif (atm is None) and (surf is None) and (water is not None):
             SIM = 3  # ocean only
         else:
-            raise Exception('Error in SIM')
+            raise ValueError('Error in SIM')
 
         #
         # atmosphere
@@ -964,7 +964,7 @@ class Smartg(object):
         elif hasattr(atm, 'to_xarray'):
             prof_atm = atm.to_xarray()
         else:
-            raise NameError('atm must be an Atmosphere class, an xr.Dataset, an MLUT-like object or equal to None!')
+            raise ValueError('atm must be an Atmosphere class, an xr.Dataset, an MLUT-like object or equal to None!')
 
         if hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
@@ -1013,7 +1013,7 @@ class Smartg(object):
         elif isinstance(sensor, list):
             sensor2=sensor
         else:
-            raise NameError('sensor must be a Sensor class, a list or Sensor classes or equal to None!')
+            raise ValueError('sensor must be a Sensor class, a list or Sensor classes or equal to None!')
 
         NSENSOR=len(sensor2)
 
@@ -1066,7 +1066,7 @@ class Smartg(object):
         elif hasattr(water, 'to_xarray'):
             prof_oc = water.to_xarray()
         else:
-            raise NameError('water must be a Water class, an xr.Dataset, an MLUT-like object or equal to None!')
+            raise ValueError('water must be a Water class, an xr.Dataset, an MLUT-like object or equal to None!')
 
         if hasattr(prof_oc, 'to_xarray'):
             prof_oc = prof_oc.to_xarray()
@@ -1123,7 +1123,6 @@ class Smartg(object):
                 shp = env.alb.map.data.shape
                 env.nxenvmap = shp[0]
                 env.nyenvmap = shp[1]
-                size = shp[0]*shp[1]
                 envmap = np.zeros(shp, dtype=type_EnvMap)
                 X, Y = np.meshgrid(env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij')
                 envmap['x'] = X
@@ -1145,11 +1144,11 @@ class Smartg(object):
         ZIP= 0
         if le is not None:
             LE = 1
-            if not 'th' in le:
+            if 'th' not in le:
                 le['th'] = np.array(le['th_deg'], dtype='float32').ravel() * np.pi/180.
             else:
                 le['th'] = np.array(le['th'], dtype='float32').ravel()
-            if not 'phi' in le:
+            if 'phi' not in le:
                 le['phi'] = np.array(le['phi_deg'], dtype='float32').ravel() * np.pi/180.
             else:
                 le['phi'] = np.array(le['phi'], dtype='float32').ravel()
@@ -1396,7 +1395,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
     norm_npho = NPhotonsInTot.reshape((1,1,NSENSOR,NLAM,1,1))
     zip=False
     if flux is None:
-        if le!=None : 
+        if le is not None:
             tabTh = le['th']
             tabPhi = le['phi']
             if 'zip' not in le.keys():
@@ -1742,7 +1741,7 @@ def finalize(tabPhotonsTot, tabPhotonsTotNoAer, tabDistTot, tabHistTot, wl, NPho
         m.set_attr('S_Receiver', str(dicSTP["SREC"])) # Receiver surface in km²
         m.set_attr('S_Cell', str(dicSTP["TC"]))       # Cell surface in km²
         # half-angle of the receiver solid angle
-        if (back == True) : m.set_attr('ALDEG', str(dicSTP["ALDEG"]))
+        if back: m.set_attr('ALDEG', str(dicSTP["ALDEG"]))
         else : m.set_attr('ALDEG', str(90))
 
     if (matCats is not None):
@@ -2091,7 +2090,7 @@ def _calcul_phase_gpu(profile, n_theta, depo, kind, pol_off=False):
 
         if pol_off:
             if (len(phase[:,0]) == 4):
-                raise NameError("old profiles with only 4 stk available are not supported without polarization")
+                raise ValueError("old profiles with only 4 stk available are not supported without polarization")
             # back to IQUV convention to obtain F11
             F11 = 0.5 * (phase[0,:] + 2*phase[1,:] + phase[4,:])
             # reset all values to 0
@@ -2308,7 +2307,7 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
     copy_to_device('NSCLd', n_scl, np.int32)
     copy_to_device('SCL_MODEd', scl_mode, np.int32)
     copy_to_device('NORDERSd', n_orders, np.int32)
-    if surf != None:
+    if surf is not None:
         copy_to_device('SURd', surf.dict['SUR'], np.int32)
         copy_to_device('BRDFd', surf.dict['BRDF'], np.int32)
         copy_to_device('DIOPTREd', surf.dict['DIOPTRE'], np.int32)
@@ -2316,7 +2315,7 @@ def _init_const(surf, env, n_atm, n_atm_abs, n_oce, n_oce_abs, mod, nb_loop, th_
         copy_to_device('NH2Od', surf.dict['NH2O'], np.float32)
         copy_to_device('WAVE_SHADOWd', surf.dict['WAVE_SHADOW'], np.int32)
         copy_to_device('SINGLEd', surf.dict['SINGLE'], np.int32)
-    if env != None:
+    if env is not None:
         copy_to_device('ENVd', env.dict['ENV'], np.int32)
         copy_to_device('ENV_SIZEd', env.dict['ENV_SIZE'], np.float32)
         copy_to_device('X0d', env.dict['X0'], np.float32)
@@ -2958,6 +2957,7 @@ def loop_kernel(nb_photons, faer, foce, n_level, n_atm, n_atm_abs, n_oce, n_oce_
             err_p_tmp = (num / den) * 100
             min_loop = stdev_lim.dict['nb_loop_min']
             rel_min = stdev_lim.dict['err_rel_min']
+            format_std = stdev_lim.dict['format']
 
             if stdev_lim.dict['verbose']:
                 print(f"relative_err = {err_p_tmp:{format_std}}")
@@ -3130,7 +3130,7 @@ def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
                     #tautot[ilam] = prof_atm['OD_atm'][natm]/np.cos(thv_deg*pi/180.)
                     tautot[ilam] = od_atm[-1]/np.cos(thv_deg*np.pi/180.)
                 else:
-                    raise Exception('invalid number of dimensions in prof_atm')
+                    raise ValueError('invalid number of dimensions in prof_atm')
     else:
         tanthv = np.tan(thv_deg*np.pi/180.)
 
@@ -3176,7 +3176,7 @@ def _impact_init(prof_atm, nlam, thv_deg, earth_radius, pp):
                 if D2 > 0:
                     D = D2
                 else:
-                    raise Exception('No solution in _impact_init')
+                    raise RuntimeError('No solution in _impact_init')
 
             # photon moves forward
             xph += vx * D
@@ -3205,7 +3205,7 @@ def _init_rng(rng):
     elif rng == 'CURAND_PHILOX':
         return _RngCurandPhilox()
     else:
-        raise Exception('Invalid RNG "{}"'.format(rng))
+        raise ValueError('Invalid RNG "{}"'.format(rng))
 
 
 class _RngPhilox(object):
@@ -3392,7 +3392,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             index_offset += 1
             lobj.append(lgobj[i])
         else:
-            raise NameError('In myObjects list, only Entity and GroupE classes are autorised!')
+            raise ValueError('In myObjects list, only Entity and GroupE classes are autorised!')
 
     lgobj_gpu = to_gpu(lgobj_gpu)
     n_obj = len(lobj)
@@ -3428,7 +3428,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         elif cus_l.dict['REC'].transformation.rot_order == "ZYX":
             lobj_gpu['rotOrder'][n_obj] = 6
         else:
-            raise NameError('Unknown rotation order')
+            raise ValueError('Unknown rotation order')
         lobj_gpu['mvTx'][n_obj] = cus_l.dict['REC'].transformation.transx
         lobj_gpu['mvTy'][n_obj] = cus_l.dict['REC'].transformation.transy
         lobj_gpu['mvTz'][n_obj] = cus_l.dict['REC'].transformation.transz
@@ -3463,6 +3463,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
 
     # Iterate over all objects.
     for i in range(0, n_obj):
+        normal_base = gc.Vector(0., 0., 1.)
         if isinstance(lobj[i].geo, Spheric):
             lobj_gpu['geo'][i] = 1
             lobj_gpu['myRad'][i] = lobj[i].geo.radius
@@ -3502,7 +3503,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             elif lobj[i].transformation.rot_order == "ZYX":
                 tp_t0 = tp_rz0 * tp_ry0 * tp_rx0
             else:
-                raise NameError('Unknown rotation order')
+                raise ValueError('Unknown rotation order')
 
             normal_base = tp_t0(normal_base)
             normal_base = gc.normalize(normal_base)
@@ -3510,7 +3511,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             lobj_gpu['nBy'][i] = normal_base.y
             lobj_gpu['nBz'][i] = normal_base.z
         else:
-            raise NameError("Your geometry can be only spheric or plane, please choose between Spheric or Plane classes!")
+            raise ValueError("Your geometry can be only spheric or plane, please choose between Spheric or Plane classes!")
 
         # Apply transformation parameters.
         lobj_gpu['mvRx'][i] = lobj[i].transformation.rotx
@@ -3529,7 +3530,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         elif lobj[i].transformation.rot_order == "ZYX":
             lobj_gpu['rotOrder'][i] = 6
         else:
-            raise NameError('Unknown rotation order')
+            raise ValueError('Unknown rotation order')
         lobj_gpu['mvTx'][i] = lobj[i].transformation.transx
         lobj_gpu['mvTy'][i] = lobj[i].transformation.transy
         lobj_gpu['mvTz'][i] = lobj[i].transformation.transz
@@ -3543,7 +3544,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         if np.array(lobj[i].material_front.reflectivity).size == 1:
             lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].material_front.reflectivity)
         elif lobj[i].material_front.reflectivity.size != nlam:
-            raise NameError('The number of reflectivities must be equal to the number of wavelengths!')
+            raise ValueError('The number of reflectivities must be equal to the number of wavelengths!')
         else:
             lobj_spect['reflectAV'][(i * nlam):((i * nlam) + nlam)] = lobj[i].material_front.reflectivity[:]
 
@@ -3560,7 +3561,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             lobj_gpu['distAV'][i] = lobj[i].material_front.distribution
             lobj_gpu['roughAV'][i] = lobj[i].material_front.roughness
         else:
-            raise NameError('Unknown material AV')
+            raise ValueError('Unknown material AV')
 
         # Back material (AR).
         lobj_gpu['materialAR'][i] = 0
@@ -3571,7 +3572,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         if np.array(lobj[i].material_back.reflectivity).size == 1:
             lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = np.full((nlam), lobj[i].material_back.reflectivity)
         elif lobj[i].material_back.reflectivity.size != nlam:
-            raise NameError('The number of reflectivities must be equal to the number of wavelengths!')
+            raise ValueError('The number of reflectivities must be equal to the number of wavelengths!')
         else:
             lobj_spect['reflectAR'][(i * nlam):((i * nlam) + nlam)] = lobj[i].material_back.reflectivity[:]
 
@@ -3588,7 +3589,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
             lobj_gpu['distAR'][i] = lobj[i].material_back.distribution
             lobj_gpu['roughAR'][i] = lobj[i].material_back.roughness
         else:
-            raise NameError('Unknown material AR')
+            raise ValueError('Unknown material AR')
 
         # Object role: reflector, receiver, or environment.
         if lobj[i].name == "reflector":
@@ -3629,7 +3630,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None):
         elif lobj[i].name == "environment":
             lobj_gpu['type'][i] = 3
         else:
-            raise NameError('You have to specify if your object is a reflector or a receiver!')
+            raise ValueError('You have to specify if your object is a reflector or a receiver!')
 
     # Create receiver-only GPU table.
     n_robj = len(ind_robj)
@@ -3738,7 +3739,7 @@ def _normalize_rec(c_mat_visu_recep, mat_cats, nb_cx, nb_cy, nb_photons, surf_lp
             mat_cats[i,3] = mat_cats[i,1]*norm_c
             mat_cats[i,4] *= norm_c
     else:
-        raise NameError('Unknown launching mode!')
+        raise ValueError('Unknown launching mode!')
 
     return c_mat_visu_recep, mat_cats, norm_c
 
@@ -3773,7 +3774,7 @@ def _find_extinction(ip, fp, prof_atm, w_ind=0):
     """
     # Be sure ip and fp are Point classes
     if not all(isinstance(i, gc.Point) for i in [ip, fp]):
-        raise NameError('Both ip and fp must be Point classes!')
+        raise ValueError('Both ip and fp must be Point classes!')
 
     # If there is no atm then there are no scattering and abs -> n_ext = 1
     if (prof_atm is None):
