@@ -11,48 +11,96 @@ Key Functions
 -------------
 convert_sgout_to_iprtout
     Convert SMART-G output into the IPRT ASCII output format.
+select_iprt_iquv
+    Select I, Q, U and V results from an IPRT matrix.
 select_and_plot_polar_iprt
     Select I, Q, U and V results from an IPRT matrix and plot
     them in polar coordinates.
 plot_iprt_radiances
     Plot radiances and the differences between a reference model
     and the model radiances.
+group_iquv
+    Gather several IQUV result matrices into a single array.
+compute_deltam
+    Compute the IPRT delta_m metric between two IQUV signal sets.
+compute_deltam_iprtout
+    Compute the IPRT delta_m metric between two IPRT matrices.
 read_phase_nth_cte
     Read a libRadtran or IPRT aerosol/cloud file and convert it
     to a LUT object.
 """
 
-import numpy as np
+from pathlib import Path
+import warnings
+
+from luts.luts import LUT, MLUT
+from matplotlib.colors import Colormap
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-
-from luts.luts import LUT
+import numpy as np
 import xarray as xr
 
 
 
-def select_iprt_iquv(model_val, z_alti, thetas=None, phis=None, inv_thetas=False, inv_phis=False, change_u_sign=False,
-                      i_index=int(6), va_index=int(4), phi_index=int(5), z_index=int(1), stdev=False):
-    """
-    Description: Select U,Q,U and V results from IPRT matrix results
+def select_iprt_iquv(
+    model_val: np.ndarray,
+    z_alti: float,
+    thetas: np.ndarray | None = None,
+    phis: np.ndarray | None = None,
+    inv_thetas: bool = False,
+    inv_phis: bool = False,
+    change_u_sign: bool = False,
+    i_index: int = 6,
+    va_index: int = 4,
+    phi_index: int = 5,
+    z_index: int = 1,
+    stdev: bool = False,
+) -> tuple[np.ndarray, ...]:
+    """Select the I, Q, U and V results from an IPRT result matrix.
 
-    === Parameters:
-    model_val       : Matrix with the model values (read from IPRT phase A result files)
-    z_alti          : Keep only results at this z_alti
-    thetas          : Keep only results with these theta values
-    phis            : Same as thetas but with phi values
-    inv_thetas      : Inverse the vector with theta values
-    inv_phis        : Same as inv_thetas but with phi values
-    change_u_sign   : multiply by -1 the U results (can be useful since in backward and forward the convention change)
-    i_index         : In case we don't follow exactly the IPRT output format convention we can specify the index where I begin,
-                      but next the order must be the same: I, Q, U and then V.
-    va_index        : Same as i_index but with va (VZA)
-    phi_index       : Same as i_index but with phi (VAA)
-    stdev           : If true return also IQUV stdev
+    The records of the matrix are scattered over the (theta, phi)
+    grid, one Stokes parameter per output array.
 
-    === Retrun
-    I,...,V              : The selected values of I, Q, U and V
-    I,...,V,Istd,...Vstd : If stdev = True retrun also Istd to Vstd
+    Parameters
+    ----------
+    model_val : ndarray
+        Model values, as read from an IPRT phase A result file: one
+        row per record, the columns following the IPRT convention.
+    z_alti : float
+        Keep only the records at this altitude, in km.
+    thetas : ndarray, optional
+        Keep only the records with these viewing zenith angles, in
+        degrees. By default all the angles found at z_alti are kept,
+        sorted in increasing order.
+    phis : ndarray, optional
+        Same as thetas, for the viewing azimuth angles.
+    inv_thetas : bool
+        Store the results by increasing zenith angle. By default the
+        zenith axis is reversed.
+    inv_phis : bool
+        Store the results by decreasing azimuth angle. By default the
+        azimuth axis follows the increasing order.
+    change_u_sign : bool
+        Multiply U by -1, the convention for U being opposite in the
+        backward and in the forward mode.
+    i_index : int
+        Column index where I is found. Q, U and V must follow it in
+        that order, and their standard deviations right after them.
+    va_index : int
+        Column index of the viewing zenith angle.
+    phi_index : int
+        Column index of the viewing azimuth angle.
+    z_index : int
+        Column index of the altitude.
+    stdev : bool
+        Also return the standard deviations of I, Q, U and V.
+
+    Returns
+    -------
+    tuple of ndarray
+        The I, Q, U and V values, each of shape (ntheta, nphi),
+        followed by their standard deviations in the same order when
+        stdev is True.
     """
 
     n_records = model_val.shape[0]
@@ -108,39 +156,117 @@ def select_iprt_iquv(model_val, z_alti, thetas=None, phis=None, inv_thetas=False
         return stokes_i, stokes_q, stokes_u, stokes_v, stokes_i_std, stokes_q_std, stokes_u_std, stokes_v_std
 
 
-def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=None, inv_thetas=False, inv_phis=False, change_q_sign=False, change_u_sign=False,
-                               change_v_sign=False, max_i=None, max_q=None, max_u=None, max_v=None,  cmap_i=None, cmap_q=None, cmap_u=None, cmap_v=None,
-                               force_iquv = None, title=None, save_fig=None, sym=False, i_index=int(6), va_index=int(4),
-                               phi_index=int(5), z_index=int(1), depol_index=int(0), output_iquv=False, output_iquv_std=False, avoid_plot=False):
-    """
-    Description: Select U,Q,U and V results from IPRT matrix results, then plot the results
+def select_and_plot_polar_iprt(
+    model_val: np.ndarray,
+    z_alti: float,
+    depol: float | None = None,
+    thetas: np.ndarray | None = None,
+    phis: np.ndarray | None = None,
+    inv_thetas: bool = False,
+    inv_phis: bool = False,
+    change_q_sign: bool = False,
+    change_u_sign: bool = False,
+    change_v_sign: bool = False,
+    max_i: float | None = None,
+    max_q: float | None = None,
+    max_u: float | None = None,
+    max_v: float | None = None,
+    cmap_i: str | Colormap | None = None,
+    cmap_q: str | Colormap | None = None,
+    cmap_u: str | Colormap | None = None,
+    cmap_v: str | Colormap | None = None,
+    force_iquv: list[np.ndarray] | None = None,
+    title: str | None = None,
+    save_fig: str | Path | None = None,
+    sym: bool = False,
+    i_index: int = 6,
+    va_index: int = 4,
+    phi_index: int = 5,
+    z_index: int = 1,
+    depol_index: int = 0,
+    output_iquv: bool = False,
+    output_iquv_std: bool = False,
+    avoid_plot: bool = False,
+) -> tuple[np.ndarray, ...]:
+    """Select the I, Q, U and V results and plot them in polar view.
 
-    === Parameters:
-    model_val       : Matrix with the model values (read from IPRT phase A result files)
-    z_alti          : Keep only results at this z_alti
-    depol           : depolarisation factor
-    thetas          : Keep only results with these theta values
-    phis            : Same as thetas but with phi values
-    inv_thetas      : Inverse the vector with theta values
-    inv_phis        : Same as inv_thetas but with phi values
-    change_u_sign   : multiply by -1 the U results (can be useful since in backward and forward the convention change)
-    change_v_sign   : same as change_u_sign but with V
-    max_i,...,max_v   : We can specify the max values in I, Q, U and V for the plots
-    cmap_i,...,cmap_v : We can specify a specific color map for I, Q, U or/and V results
-    force_iquv       : Circumvent the result selection of model_val by giving direclty the I, Q, U and V values (list of matrices)
-    title           : Title of the global plot
-    save_fig        : If given, save the figure at the given format, e.g save_fig='myFigName.png'
-    sym             : IPRT phi results are from 0 to 180 deg, if sym = True plot the symmetrical results from 180 to 360 deg
-    i_index         : In case we don't follow exactly the IPRT output format convention we can specify the index where I begin,
-                      but next the order must be the same: I, Q, U and then V.
-    va_index        : Same as i_index but with va (VZA)
-    phi_index       : Same as i_index but with phi (VAA)
-    output_iquv      : If True, retrun I, Q, U and V values
-    output_iquv_std   : If True, retrun I, Q, U and V stdev values
-    avoid_plot      : Do not plot, can be useful if we only want to get the I, Q, U and V values
+    The selection follows select_iprt_iquv, with the depolarisation
+    factor as an extra filter, and the four Stokes parameters are
+    drawn side by side on polar axes.
 
-    === Retrun
-    valI,...,valV : if output_iquv is True return the selected values of I, Q, U and V, else return nothing
+    Parameters
+    ----------
+    model_val : ndarray
+        Model values, as read from an IPRT phase A result file: one
+        row per record, the columns following the IPRT convention.
+    z_alti : float
+        Keep only the records at this altitude, in km.
+    depol : float, optional
+        Keep only the records with this depolarisation factor. By
+        default the factor is not used to filter the records.
+    thetas : ndarray, optional
+        Keep only the records with these viewing zenith angles, in
+        degrees. By default all the angles found at z_alti are kept,
+        sorted in increasing order.
+    phis : ndarray, optional
+        Same as thetas, for the viewing azimuth angles.
+    inv_thetas : bool
+        Store the results by increasing zenith angle. By default the
+        zenith axis is reversed.
+    inv_phis : bool
+        Store the results by decreasing azimuth angle. By default the
+        azimuth axis follows the increasing order.
+    change_q_sign : bool
+        Multiply Q by -1.
+    change_u_sign : bool
+        Multiply U by -1, the convention for U being opposite in the
+        backward and in the forward mode.
+    change_v_sign : bool
+        Multiply V by -1.
+    max_i, max_q, max_u, max_v : float, optional
+        Upper bound of the colour scale of each panel. By default the
+        largest absolute value of the panel is used. I is drawn from
+        0 to max_i, the other panels from -max to +max.
+    cmap_i, cmap_q, cmap_u, cmap_v : str or Colormap, optional
+        Colour map of each panel, 'jet' for I and 'RdBu_r' for the
+        other panels by default.
+    force_iquv : list of ndarray, optional
+        Plot these I, Q, U and V matrices instead of selecting them
+        from model_val.
+    title : str, optional
+        Title of the whole figure.
+    save_fig : str or Path, optional
+        Save the figure at this path, the extension giving the
+        format, e.g. save_fig='myFigName.png'.
+    sym : bool
+        The IPRT azimuth angles cover 0 to 180 degrees; also plot the
+        symmetrical results from 180 to 360 degrees.
+    i_index : int
+        Column index where I is found. Q, U and V must follow it in
+        that order, and their standard deviations right after them.
+    va_index : int
+        Column index of the viewing zenith angle.
+    phi_index : int
+        Column index of the viewing azimuth angle.
+    z_index : int
+        Column index of the altitude.
+    depol_index : int
+        Column index of the depolarisation factor.
+    output_iquv : bool
+        Return the selected I, Q, U and V values.
+    output_iquv_std : bool
+        Return the selected standard deviations of I, Q, U and V.
+    avoid_plot : bool
+        Skip the plot, which is useful when only the selected values
+        are needed.
+
+    Returns
+    -------
+    tuple of ndarray
+        The I, Q, U and V values when output_iquv is True, followed
+        by their standard deviations when output_iquv_std is also
+        True. The standard deviations alone when they are the only
+        ones requested, and an empty tuple when neither is.
     """
 
     n_records = model_val.shape[0]
@@ -220,13 +346,13 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
 
         thetas_scaled = (thetas - np.min(thetas))/(np.max(thetas)- np.min(thetas))*90.
         if max_i is None:
-            max_i = max(np.abs(np.min(val_i)), np.abs(np.max(val_i)))
+            max_i = float(max(np.abs(np.min(val_i)), np.abs(np.max(val_i))))
             min_i = 0.
         else:
             min_i=-max_i
-        if max_q is None: max_q = max(np.abs(np.min(val_q)), np.abs(np.max(val_q)))
-        if max_u is None: max_u = max(np.abs(np.min(val_u)), np.abs(np.max(val_u)))
-        if max_v is None: max_v = max(np.abs(np.min(val_v)), np.abs(np.max(val_v)))
+        if max_q is None: max_q = float(max(np.abs(np.min(val_q)), np.abs(np.max(val_q))))
+        if max_u is None: max_u = float(max(np.abs(np.min(val_u)), np.abs(np.max(val_u))))
+        if max_v is None: max_v = float(max(np.abs(np.min(val_v)), np.abs(np.max(val_v))))
 
         if cmap_i is None: cmap_i = "jet"
         if cmap_q is None: cmap_q = "RdBu_r"
@@ -276,31 +402,71 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
         return val_i[:,0:n_phi_data], val_q[:,0:n_phi_data], val_u[:,0:n_phi_data], val_v[:,0:n_phi_data]
     elif (output_iquv_std) :
         return val_i_std, val_q_std, val_u_std, val_v_std
+    return ()
 
-def convert_sgout_to_iprtout(datasets, u_signs, case_name, depols, altitudes, szas, saas, vzas, vaas, file_name, output_layer=None, interp=False):
-    """
-    Description: Convert SMART-G output into IPRT ascii output format
+def convert_sgout_to_iprtout(
+    datasets: list[xr.Dataset | MLUT],
+    u_signs: list[float],
+    case_name: str,
+    depols: list[float],
+    altitudes: list[float],
+    szas: list[float],
+    saas: list[float],
+    vzas: list[np.ndarray],
+    vaas: list[np.ndarray],
+    file_name: str | Path,
+    output_layer: list[str] | None = None,
+    interp: bool = False,
+) -> None:
+    """Convert SMART-G outputs into the IPRT ASCII output format.
 
-    === Parameters:
-    datasets           : List of SMART-G output (xarray Dataset; MLUT input is deprecated)
-    u_signs      : List with multiplication to perform to U of each output
-    case_name    : The IPRT case name
-    depols       : List of Depol values
-    altitudes         : List with the viewing altitude of each output
-    szas         : List of Sun Zenith Angles
-    saas         : List of Sun Azimuth Angles
-    vzas         : List or numpy 1d array with VZA values
-    vaas         : Same as vzas but with VAA values
-    file_name    : The name of the ascci file to be created
-    output_layer : If None the output layer is always '_up (TOA)', else a list with wanted ones ('_down (0+)', ...)
+    All the list arguments are parallel to datasets: they hold, for
+    each output, the geometry it was computed with. The radiances are
+    normalised by cos(sza)/pi before being written.
 
+    Parameters
+    ----------
+    datasets : list of Dataset
+        SMART-G outputs. Legacy MLUT outputs are still accepted but
+        are deprecated.
+    u_signs : list of float
+        Factor applied to U of each output, to reconcile the backward
+        and the forward convention.
+    case_name : str
+        IPRT case name, written in the file header.
+    depols : list of float
+        Depolarisation factor of each output.
+    altitudes : list of float
+        Viewing altitude of each output, in km.
+    szas : list of float
+        Sun zenith angle of each output, in degrees.
+    saas : list of float
+        Sun azimuth angle of each output, in degrees.
+    vzas : list of ndarray
+        Viewing zenith angles of each output, in degrees.
+    vaas : list of ndarray
+        Viewing azimuth angles of each output, in degrees.
+    file_name : str or Path
+        Path of the ASCII file to write.
+    output_layer : list of str, optional
+        Output layer of each output, e.g. '_down (0+)'. By default
+        '_up (TOA)' is used for all of them.
+    interp : bool
+        Interpolate the outputs at the requested angles instead of
+        reading them at the matching indices.
     """
     output =  "# IPRT case " + case_name + "\n"
     output += "# RT model: SMARTG\n"
     output += "# depol altitude sza saa va phi I Q U V Istd Qstd Ustd Vstd\n"
 
     for im, m in enumerate(datasets):
-        if hasattr(m, 'to_xarray'): m = m.to_xarray()  # legacy MLUT input
+        if isinstance(m, MLUT):
+            warn_message = (
+                "\nUsing an MLUT in datasets is deprecated, use an "
+                + "xarray.Dataset instead."
+            )
+            warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
+            m = m.to_xarray()
         fac = np.cos(np.radians(szas[im]))/np.pi
         vza = vzas[im]
         vaa = vaas[im]
@@ -337,19 +503,50 @@ def convert_sgout_to_iprtout(datasets, u_signs, case_name, depols, altitudes, sz
     with open(file_name, 'w') as f:
         f.write(output)
 
-def plot_iprt_radiances(iquv_obs, iquv_mod, iquv_std_obs, iquv_std_mod, xaxis, xlabel, iquv_ymin=None, iquv_ymax=None, title=None, save_fig=None):
-    """
-    Description: Plot radiances and dif between observation (or reference model) and model radiances
+def plot_iprt_radiances(
+    iquv_obs: np.ndarray,
+    iquv_mod: np.ndarray,
+    iquv_std_obs: np.ndarray,
+    iquv_std_mod: np.ndarray,
+    xaxis: np.ndarray,
+    xlabel: str,
+    iquv_ymin: np.ndarray | list[float] | None = None,
+    iquv_ymax: np.ndarray | list[float] | None = None,
+    title: str | None = None,
+    save_fig: str | Path | None = None,
+) -> None:
+    """Plot radiances and their difference with a reference.
 
-    === Parameters:
-    iquv_obs, iquv_mod       : Numpy matrices with observation and model IQUV signals (matrix of dim [NSTK, NXAXIS])
-    iquv_std_obs, iquv_std_mod : Numpy matrices with observation and model IQUV signal stdev
-    xaxis                    : IQUV signals are varying as function of xaxis (can be VZA or VAA)
-    xlabel                   : Plot xaxis label
-    iquv_ymin                 : Min IQUV values to set for radiance plot ylim
-    iquv_ymax                 : Max IQUV values to set for radiance plot ylim
-    title                    : Title of the global plot
-    save_fig                 : If given, save the figure at the given format, e.g save_fig='myFigName.png'
+    The figure holds two rows of four panels: the observed and the
+    modelled I, Q, U and V on top, and their absolute difference,
+    with error bars, below.
+
+    Parameters
+    ----------
+    iquv_obs : ndarray
+        Observed, or reference model, I, Q, U and V signals, of shape
+        (4, nxaxis).
+    iquv_mod : ndarray
+        Modelled I, Q, U and V signals, of the same shape.
+    iquv_std_obs : ndarray
+        Standard deviations of the observed signals.
+    iquv_std_mod : ndarray
+        Standard deviations of the modelled signals.
+    xaxis : ndarray
+        Abscissa the signals vary along, usually the viewing zenith
+        or the viewing azimuth angle.
+    xlabel : str
+        Label of the abscissa.
+    iquv_ymin : ndarray or list of float, optional
+        Lower bound of the radiance panels, one per Stokes parameter.
+        By default it is taken from the drawn values.
+    iquv_ymax : ndarray or list of float, optional
+        Upper bound of the radiance panels, one per Stokes parameter.
+    title : str, optional
+        Title of the whole figure.
+    save_fig : str or Path, optional
+        Save the figure at this path, the extension giving the
+        format, e.g. save_fig='myFigName.png'.
     """
 
     fig, ax = plt.subplots(2,4, figsize=(13,8))
@@ -398,7 +595,40 @@ def plot_iprt_radiances(iquv_obs, iquv_mod, iquv_std_obs, iquv_std_mod, xaxis, x
     fig.tight_layout()
     if save_fig is not None: plt.savefig(save_fig)
     
-def compute_deltam_iprtout(obs, mod, i_obs_id=6, i_mod_id=6, print_res=True):
+def compute_deltam_iprtout(
+    obs: np.ndarray,
+    mod: np.ndarray,
+    i_obs_id: int = 6,
+    i_mod_id: int = 6,
+    print_res: bool = True,
+) -> np.ndarray:
+    """Compute the IPRT delta_m metric from two IPRT ASCII matrices.
+
+    delta_m is the root mean square of the difference between the
+    model and the reference, relative to the root mean square of the
+    reference, in percent. It is reported per Stokes parameter, and
+    is set to 0 when the reference is uniformly zero.
+
+    Parameters
+    ----------
+    obs : ndarray
+        Observed, or reference model, values, as read from an IPRT
+        result file: one row per record.
+    mod : ndarray
+        Modelled values, with the records in the same order.
+    i_obs_id : int
+        Column index where I is found in obs. Q, U and V must follow
+        it in that order.
+    i_mod_id : int
+        Same as i_obs_id, for mod.
+    print_res : bool
+        Print each delta_m next to its Stokes parameter.
+
+    Returns
+    -------
+    ndarray
+        The delta_m of I, Q, U and V, in percent.
+    """
     if (not isinstance(obs, np.ndarray) or not isinstance(mod, np.ndarray)): raise NameError("obs and mod must be np.ndarray!")
     id_obs = [i_obs_id, i_obs_id+1, i_obs_id+2, i_obs_id+3]
     id_mod = [i_mod_id, i_mod_id+1, i_mod_id+2, i_mod_id+3]
@@ -413,8 +643,33 @@ def compute_deltam_iprtout(obs, mod, i_obs_id=6, i_mod_id=6, print_res=True):
         if print_res: print(stk[i], f"{delta_m[i]:.3f}")
     return delta_m
 
-def compute_deltam(obs, mod, print_res=True):
+def compute_deltam(
+    obs: np.ndarray | list[np.ndarray],
+    mod: np.ndarray | list[np.ndarray],
+    print_res: bool = True,
+) -> np.ndarray:
+    """Compute the IPRT delta_m metric from two IQUV signal sets.
 
+    delta_m is the root mean square of the difference between the
+    model and the reference, relative to the root mean square of the
+    reference, in percent. It is reported per Stokes parameter, and
+    is set to 0 when the reference is uniformly zero.
+
+    Parameters
+    ----------
+    obs : ndarray or list of ndarray
+        Observed, or reference model, I, Q, U and V signals, either
+        as an array of shape (4, nvalues) or as four arrays.
+    mod : ndarray or list of ndarray
+        Modelled I, Q, U and V signals, in the same layout.
+    print_res : bool
+        Print each delta_m next to its Stokes parameter.
+
+    Returns
+    -------
+    ndarray
+        The delta_m of I, Q, U and V, in percent.
+    """
     if (isinstance(obs, np.ndarray)):
         obs_tmp = obs.copy()
         obs = []
@@ -438,8 +693,34 @@ def compute_deltam(obs, mod, print_res=True):
 
 
 
-def group_iquv(i_list, q_list, u_list, v_list):
+def group_iquv(
+    i_list: list[np.ndarray],
+    q_list: list[np.ndarray],
+    u_list: list[np.ndarray],
+    v_list: list[np.ndarray],
+) -> np.ndarray:
+    """Gather several IQUV result matrices into a single array.
 
+    Each matrix is flattened and the matrices are concatenated in the
+    given order, so that several viewing configurations can be
+    compared with a single delta_m.
+
+    Parameters
+    ----------
+    i_list : list of ndarray
+        The I matrices to gather.
+    q_list : list of ndarray
+        The Q matrices, in the same order.
+    u_list : list of ndarray
+        The U matrices, in the same order.
+    v_list : list of ndarray
+        The V matrices, in the same order.
+
+    Returns
+    -------
+    ndarray
+        The gathered signals, of shape (4, nvalues).
+    """
     n_values = int(0)
     i_tot = i_list[0].flatten()
     q_tot = q_list[0].flatten()
@@ -462,26 +743,38 @@ def group_iquv(i_list, q_list, u_list, v_list):
 
     return iquv_tot
 
-def read_phase_nth_cte(filename, nb_theta=int(721), convert_ipar_iper=True, normalize=False):
-    """
-    Read libRatran aerosol/cloud files (i.g. wc.sol.mie.cdf) or monochromatic IPRT netcdf aerosol/cloud files,
-    and convert to LUT object with a constant theta discretisation i.e. nb_theta = cte.
+def read_phase_nth_cte(
+    filename: str | Path,
+    nb_theta: int = 721,
+    convert_ipar_iper: bool = True,
+    normalize: bool = False,
+) -> LUT:
+    """Read an aerosol or cloud file on a constant theta grid.
+
+    Both the libRadtran files (e.g. wc.sol.mie.cdf) and the
+    monochromatic IPRT netCDF files are accepted. Their phase matrix
+    is given on a theta grid whose length varies with the wavelength
+    and the component; it is interpolated here on a single grid of
+    nb_theta angles, which is what the LUT layout requires.
 
     Parameters
     ----------
-    filename : str 
-        File name with path location of netcdf file.
+    filename : str or Path
+        Path of the netCDF file to read.
     nb_theta : int
-        Number of theta discretization between 0 and 180 degrees.
+        Number of theta values between 0 and 180 degrees.
     convert_ipar_iper : bool
-        Convert IQUV phase matrix into IparIperUV phase matrix
+        Convert the IQUV phase matrix into an IparIperUV one.
     normalize : bool
-        Normalize such that the integral of P0 is equal to 2
-        
+        Normalise the phase matrix so that the integral of P0 is
+        equal to 2.
+
     Returns
     -------
-    out : LUT
-        The cloud phase matrix with a constant theta number
+    LUT
+        The phase matrix, of shape (nwav, nrh_or_reff, 6, nb_theta),
+        with the axes 'wav_phase', 'rh' or 'reff', 'stk' and
+        'theta_atm'.
     """
 
     ds = xr.open_dataset(filename)

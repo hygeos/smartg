@@ -584,6 +584,11 @@ def test_a1(request, s1df, s1db):
                     axis=1,
                 )
 
+    assert iquv_mystic_tot is not None
+    assert iquv_smartg_tot is not None
+    assert iquv_smartg_ref_tot is not None
+    assert iquv_smartg_std_ref_tot is not None
+
     # Compute the delta_m values from the ref smartg results
     delta_m_ref = compute_deltam(
         obs=iquv_mystic_tot, mod=iquv_smartg_ref_tot, print_res=False
@@ -594,9 +599,6 @@ def test_a1(request, s1df, s1db):
     )
 
     # Compute the delta_m values from the ref smartg results +- err
-    assert iquv_mystic_tot is not None
-    assert iquv_smartg_ref_tot is not None
-    assert iquv_smartg_std_ref_tot is not None
     delta_m_ref_p = compute_deltam(
         obs=iquv_mystic_tot,
         mod=iquv_smartg_ref_tot + STDFAC * iquv_smartg_std_ref_tot,
