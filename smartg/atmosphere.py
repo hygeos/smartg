@@ -1359,7 +1359,6 @@ class Comp3D(ABC):
         self,
         wav_phase: NDArray[np.floating],
         n_theta: int = 721,
-        conv_Iparper: bool = True,
     ) -> tuple[list[LUT], NDArray[np.int32], int]:
         """Return the component phase matrices.
 
@@ -1590,10 +1589,14 @@ class _Comp3DFile(Comp3D):
                 ]
         return ssa
 
-    def get_phase(self, n_theta: int = 721, conv_Iparper: bool = True) -> LUT:
+    def get_phase(self, n_theta: int = 721) -> LUT:
         """Return the component phase matrix LUT with the dimensions
         ``('wav_phase', <parameter>, 'stk', 'theta_atm')``, the
         parameter axis being ``'reff'`` or ``'hum'``.
+
+        The matrices keep the IQUV convention of the source file, the
+        conversion into the parallel/perpendicular convention of the
+        kernels being done by the run method.
         """
         # First check if we have already phase
         if self.phase is not None:
@@ -1625,25 +1628,9 @@ class _Comp3DFile(Comp3D):
             names=["wav_phase", self._lut_axis, "stk", "theta_atm"],
         )
 
-        if conv_Iparper:
-            if nstklut == 4:  # spherical particles
-                P.data[:, :, 4, :] = P.data[:, :, 0, :].copy()
-                P.data[:, :, 5, :] = P.data[:, :, 2, :].copy()
-                P0 = P.data[:, :, 0, :].copy()
-                P1 = P.data[:, :, 1, :].copy()
-                P4 = P.data[:, :, 4, :].copy()
-                P.data[:, :, 0, :] = 0.5*(P0+2*P1+P4)  # P11
-                P.data[:, :, 1, :] = 0.5*(P0-P4)       # P12=P21
-                P.data[:, :, 4, :] = 0.5*(P0-2*P1+P4)  # P22
-            elif nstklut == 6:  # non spherical particles
-                # note: the sign of P43/P34 affects only the sign of V,
-                # since V=0 for rayleigh scattering it does not matter
-                P0 = P.data[:, :, 0, :].copy()
-                P1 = P.data[:, :, 1, :].copy()
-                P4 = P.data[:, :, 4, :].copy()
-                P.data[:, :, 0, :] = 0.5*(P0+2*P1+P4)  # P11
-                P.data[:, :, 1, :] = 0.5*(P0-P4)       # P12=P21
-                P.data[:, :, 4, :] = 0.5*(P0-2*P1+P4)  # P22
+        if nstklut == 4:  # spherical particles
+            P.data[:, :, 4, :] = P.data[:, :, 0, :].copy()  # F22 = F11
+            P.data[:, :, 5, :] = P.data[:, :, 2, :].copy()  # F44 = F33
 
         return P
 
@@ -1651,12 +1638,11 @@ class _Comp3DFile(Comp3D):
         self,
         wav_phase: NDArray[np.floating],
         n_theta: int = 721,
-        conv_Iparper: bool = True,
     ) -> tuple[list[LUT], NDArray[np.int32], int]:
         param_unique = np.unique(self._param)
         n_unique = param_unique.size
 
-        phase = self.get_phase(n_theta=n_theta, conv_Iparper=conv_Iparper)
+        phase = self.get_phase(n_theta=n_theta)
 
         luts = []
         for iwav in range(0, len(wav_phase)):

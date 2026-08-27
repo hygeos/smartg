@@ -165,9 +165,9 @@ def test_phase_mixing_shared_voxel(scene):
         e1[j] + e2[0]
     )
     assert np.allclose(pha, expected, rtol=1e-5, atol=1e-9)
-    # the ice crystals are non-spherical: the 0.5 * (P11 - P22)
-    # component of the mixture is nonzero
-    assert np.max(np.abs(pha[1])) > 0.0
+    # the ice crystals are non-spherical: F22 differs from F11 in the
+    # mixture
+    assert np.max(np.abs(pha[4] - pha[0])) > 0.0
 
 
 def test_phase_single_component_voxels(scene):
@@ -185,8 +185,20 @@ def test_phase_single_component_voxels(scene):
         assert np.allclose(
             pha, s1[j] * p1[j], rtol=1e-5, atol=1e-9
         ), cell
-        # water droplets are spherical: P11 == P22
-        assert np.allclose(pha[1], 0.0, atol=1e-12), cell
+        # water droplets are spherical: F22 == F11
+        assert np.allclose(pha[4], pha[0], rtol=1e-12), cell
+
+
+def test_phase_kept_in_iquv_convention(scene):
+    # the profile stores the phase matrices in the IQUV convention of
+    # the source files, the conversion into the parallel/perpendicular
+    # convention of the kernels being done by the run method: F12 of a
+    # spherical water cloud is nonzero, whereas its parallel/
+    # perpendicular counterpart 0.5 * (F11 - F22) would be zero
+    grid3, _, _, pro = scene
+    cell = next(c for c in WC_CELLS if c != IC_CELL)
+    _, _, pha = _voxel_props(pro, grid3, cell)
+    assert np.max(np.abs(pha[1])) > 0.0
 
 
 def test_empty_voxels_no_atmosphere(scene):
@@ -449,10 +461,9 @@ def test_aer3d_hydrophobic_species():
 
 
 def test_aer3d_phase_stk_signature():
-    # desert aerosols are non-spherical (6-term phase matrices): the
-    # 0.5 * (P11 - P22) component is nonzero; continental_clean is
-    # spherical (4-term): it is zero and P22 (row 4) is populated by
-    # the 4 -> 6 expansion
+    # desert aerosols are non-spherical (6-term phase matrices): F22
+    # differs from F11; continental_clean is spherical (4-term): its
+    # F22 (row 4) is a copy of F11, populated by the 4 -> 6 expansion
     one_cell = dict(
         ext_ref=AER_EXT[:1],
         rh=AER_RH[:1],
@@ -462,13 +473,13 @@ def test_aer3d_phase_stk_signature():
         WAV, n_theta=NTH
     )
     pha = luts[idx[0]].data
-    assert np.max(np.abs(pha[1])) > 0.0
+    assert np.max(np.abs(pha[4] - pha[0])) > 0.0
 
     luts, idx, _ = _build_aerosol(
         "continental_clean", **one_cell
     ).get_phase_set(WAV, n_theta=NTH)
     pha = luts[idx[0]].data
-    assert np.allclose(pha[1], 0.0, atol=1e-12)
+    assert np.allclose(pha[4], pha[0], rtol=1e-12)
     assert np.max(np.abs(pha[4])) > 0.0
 
 
@@ -492,9 +503,9 @@ def test_cloud_aerosol_mixing(aer_scene):
             e_c[j] * s_c[j] * p_c[j] + e_a[j] * s_a[j] * p_a[j]
         ) / ext_tot
         assert np.allclose(pha, expected, rtol=1e-5, atol=1e-9), cell
-        # the non-spherical desert makes 0.5 * (P11 - P22) nonzero
-        # even though the water droplets are spherical
-        assert np.max(np.abs(pha[1])) > 0.0, cell
+        # the non-spherical desert makes F22 differ from F11 even
+        # though the water droplets are spherical
+        assert np.max(np.abs(pha[4] - pha[0])) > 0.0, cell
 
 
 def test_two_aerosols_mixing():
@@ -532,7 +543,7 @@ def test_two_aerosols_mixing():
 
     # desert-only voxel: non-spherical signature
     _, _, pha = _voxel_props(pro, grid3, (0, 0, 1))
-    assert np.max(np.abs(pha[1])) > 0.0
-    # continental-only voxel: spherical, no P11 - P22 component
+    assert np.max(np.abs(pha[4] - pha[0])) > 0.0
+    # continental-only voxel: spherical, F22 == F11
     _, _, pha = _voxel_props(pro, grid3, (2, 0, 1))
-    assert np.allclose(pha[1], 0.0, atol=1e-12)
+    assert np.allclose(pha[4], pha[0], rtol=1e-12)
