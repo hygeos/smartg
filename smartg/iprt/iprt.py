@@ -76,12 +76,11 @@ def select_iprt_iquv(model_val, z_alti, thetas=None, phis=None, inv_thetas=False
     stokes_u = np.zeros((n_theta, n_phi))
     stokes_v = np.zeros((n_theta, n_phi))
 
-    if stdev:
-        stokes_i_std = np.zeros((n_theta, n_phi))
-        stokes_q_std = np.zeros((n_theta, n_phi))
-        stokes_u_std = np.zeros((n_theta, n_phi))
-        stokes_v_std = np.zeros((n_theta, n_phi))
-    
+    stokes_i_std = np.zeros((n_theta, n_phi))
+    stokes_q_std = np.zeros((n_theta, n_phi))
+    stokes_u_std = np.zeros((n_theta, n_phi))
+    stokes_v_std = np.zeros((n_theta, n_phi))
+
     if change_u_sign: u_sign = int(-1)
     else            : u_sign = int(1)
 
@@ -170,11 +169,10 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
     val_u = np.zeros((n_theta, n_phi))
     val_v = np.zeros((n_theta, n_phi))
 
-    if output_iquv_std:
-        val_i_std = np.zeros((n_theta, n_phi_data))
-        val_q_std = np.zeros((n_theta, n_phi_data))
-        val_u_std = np.zeros((n_theta, n_phi_data))
-        val_v_std = np.zeros((n_theta, n_phi_data))
+    val_i_std = np.zeros((n_theta, n_phi_data))
+    val_q_std = np.zeros((n_theta, n_phi_data))
+    val_u_std = np.zeros((n_theta, n_phi_data))
+    val_v_std = np.zeros((n_theta, n_phi_data))
 
     if change_q_sign: q_sign = int(-1)
     else            : q_sign = int(1) 
@@ -277,7 +275,7 @@ def select_and_plot_polar_iprt(model_val, z_alti, depol=None, thetas=None, phis=
     elif (output_iquv):
         return val_i[:,0:n_phi_data], val_q[:,0:n_phi_data], val_u[:,0:n_phi_data], val_v[:,0:n_phi_data]
     elif (output_iquv_std) :
-        val_i_std, val_q_std, val_u_std, val_v_std
+        return val_i_std, val_q_std, val_u_std, val_v_std
 
 def convert_sgout_to_iprtout(datasets, u_signs, case_name, depols, altitudes, szas, saas, vzas, vaas, file_name, output_layer=None, interp=False):
     """
@@ -388,7 +386,7 @@ def plot_iprt_radiances(iquv_obs, iquv_mod, iquv_std_obs, iquv_std_mod, xaxis, x
         if (istk==0): ax[1,istk].set_ylabel("abs. diff", fontsize=13)
         ax[1,istk].set_xlabel(xlabel, fontsize=13)
         ax[1,istk].yaxis.set_major_formatter(mtick.FormatStrFormatter('%5.1e'))
-        markers, caps, bars = ax[1,istk].errorbar(xaxis, iquv_obs[istk,:]-iquv_mod[istk,:], yerr=iquv_std_obs[istk]+iquv_std_mod[istk], fmt='x', color='blue', ecolor='grey', capsize=2)
+        _, caps, bars = ax[1,istk].errorbar(xaxis, iquv_obs[istk,:]-iquv_mod[istk,:], yerr=iquv_std_obs[istk]+iquv_std_mod[istk], fmt='x', color='blue', ecolor='grey', capsize=2)
         [bar.set_alpha(0.25) for bar in bars]
         [cap.set_alpha(0.25) for cap in caps]
         ax[1,istk].axhline(0, color='black')
