@@ -18,10 +18,10 @@ read_phase_nc
 read_phase_cdf
     Read and process phase function data from libRadtran NetCDF
     aerosol/cloud files (``.cdf`` suffix).
-read_cld_nth_cte
-    Read a libRadtran or monochromatic IPRT NetCDF cloud file and
-    resample its phase matrix onto a constant number of scattering
-    angles.
+read_phase_nth_cte
+    Read a libRadtran or monochromatic IPRT NetCDF aerosol/cloud
+    file and resample its phase matrix onto a constant number of
+    scattering angles.
 
 Phase Matrix Processing
 ------------------------
@@ -1092,56 +1092,107 @@ def get_prof_phases(
     return prof_phases
 
 
-def read_cld_nth_cte(filename: PathType, nb_theta: int = 721) -> LUT:
-    """Read a libRadtran water cloud file (e.g. wc.sol.mie.cdf) or a
-    monochromatic IPRT NetCDF cloud file, and convert it to a LUT
-    object with a constant theta discretisation i.e. nb_theta = cte.
+def read_phase_nth_cte(
+    filename: PathType,
+    nb_theta: int = 721,
+    normalize: bool = False,
+) -> LUT:
+    """Read an aerosol or cloud file on a constant theta grid.
+
+    Both the libRadtran files (e.g. wc.sol.mie.cdf) and the
+    monochromatic IPRT netCDF files are accepted. Their phase matrix
+    is given on a theta grid whose length varies with the wavelength
+    and the component; it is interpolated here on a single grid of
+    nb_theta angles, which is what the LUT layout requires.
+
+    The matrix keeps the IQUV convention of the file, the conversion
+    into the parallel/perpendicular convention of the kernels being
+    done by the run method.
 
     Parameters
     ----------
-    filename : PathType
-        File name with path location of the NetCDF cloud file.
+    filename : str or path-like
+        Path of the netCDF file to read.
     nb_theta : int, optional
-        Number of theta discretization between 0 and 180 degrees.
+        Number of theta values between 0 and 180 degrees.
+        Default: 721
+    normalize : bool, optional
+        If True, normalize the phase matrix so that the integral of
+        the F11 term over all angles equals 2.
+        Default: False
 
     Returns
     -------
     LUT
-        LUT object with the cloud phase matrix but with a constant
-        theta number = nb_theta, and with the dimensions
-        ``('wav_phase', 'reff', 'stk', 'theta_atm')``.
+        The phase matrix, of shape (nwav, nrh_or_reff, 6, nb_theta),
+        with the axes 'wav_phase', 'rh' or 'reff', 'stk' and
+        'theta_atm'.
     """
     ds = xr.open_dataset(filename)
 
-    # Phase matrix (wl=670nm, reff, stk, ntheta)
+    if "hum" in ds.variables:
+        rh_reff = ds["hum"].data
+        rh_or_reff = "rh"
+    elif "reff" in ds.variables:
+        rh_reff = ds["reff"].data
+        rh_or_reff = "reff"
+    else:
+        raise ValueError(
+            "The phase function file must contain either a 'hum' or "
+            "a 'reff' variable."
+        )
+
     phase = ds["phase"][:, :, :, :].data
 
-    NBSTK   = ds.nphamat.size
-    NBTHETA = nb_theta
-    NBREFF  = ds["reff"].size
-    NWAV    = ds["wavelen"].size
-    theta = np.linspace(0., 180., num=NBTHETA)
-    reff = ds["reff"].data
-    wavelength = ds["wavelen"].data*1e3
+    n_stk = ds.nphamat.size
+    if n_stk not in (4, 6):
+        raise ValueError(
+            "The number of phase matrix terms in the file must be "
+            f"equal to 4 or 6, got {n_stk}."
+        )
 
-    P = LUT( np.full((NWAV, NBREFF, 6, NBTHETA), np.nan, dtype=np.float32),
-             axes=[wavelength, reff, None, theta],
-             names=['wav_phase', 'reff', 'stk', 'theta_atm'],
-             desc="phase_atm" )
+    n_theta = nb_theta
+    n_rh_or_reff = rh_reff.size
+    n_wav = ds["wavelen"].size
+    theta = np.linspace(0., 180., num=n_theta)
+    wavelength = ds["wavelen"].data * 1e3
 
-    for iwav in range (0, NWAV):
-        for ireff in range(NBREFF):
-            for istk in range (0, NBSTK):
+    phase_matrix = LUT(
+        np.full((n_wav, n_rh_or_reff, 6, n_theta), np.nan,
+                dtype=np.float32),
+        axes=[wavelength, rh_reff, None, theta],
+        names=['wav_phase', rh_or_reff, 'stk', 'theta_atm'],
+        desc="phase_atm",
+    )
+
+    for iwav in range(0, n_wav):
+        for irhreff in range(n_rh_or_reff):
+            for istk in range(n_stk):
                 # ntheta (wl, reff, stk)
-                nth = ds["ntheta"][iwav, ireff, istk].data
+                nth = ds["ntheta"][iwav, irhreff, istk].data
 
                 # theta (wl, reff, stk, ntheta)
-                th = ds["theta"][iwav, ireff, istk, :].data
+                th = ds["theta"][iwav, irhreff, istk, :].data
 
-                P.data[iwav, ireff, istk, :] = np.interp(theta, th[:nth], phase[iwav,ireff,istk,:nth],  period=np.inf)
+                phase_matrix.data[iwav, irhreff, istk, :] = np.interp(
+                    theta,
+                    th[:nth],
+                    phase[iwav, irhreff, istk, :nth],
+                    period=np.inf,
+                )
 
-    if (NBSTK == 4): # spherical particles
-        P.data[:,:,4,:] = P.data[:,:,0,:].copy()
-        P.data[:,:,5,:] = P.data[:,:,2,:].copy()
+    if n_stk == 4:  # only spherical particles
+        data = phase_matrix.data
+        data[:, :, 4, :] = data[:, :, 0, :].copy()  # F22 = F11
+        data[:, :, 5, :] = data[:, :, 2, :].copy()  # F44 = F33
 
-    return P
+    if normalize:
+        mu = np.cos(np.deg2rad(theta))
+        idmu = np.argsort(mu)
+        for iwav in range(0, n_wav):
+            for irhreff in range(0, n_rh_or_reff):
+                f = phase_matrix.data[iwav, irhreff, 0, :]  # F11 term
+                norm = np.trapezoid(f[idmu], mu[idmu])
+                phase_matrix.data[iwav, irhreff, :, :] *= 2. / abs(norm)
+
+    return phase_matrix

@@ -1722,7 +1722,7 @@ class Cloud3D(_Comp3DFile):
     phase : LUT or None, optional
         LUT object with the cloud phase matrix depending on wav_phase,
         reff, stk and theta_atm (e.g. from
-        :func:`smartg.phase.read_cld_nth_cte`). If None, the phase
+        :func:`smartg.phase.read_phase_nth_cte`). If None, the phase
         matrices are computed from the bulk optical properties file.
     ssa_cst : float or None, optional
         Force the cloud single scattering albedo to this constant

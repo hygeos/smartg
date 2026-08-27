@@ -28,7 +28,7 @@ from smartg.grid3d import Grid3D
 from smartg.iprt.iprt import compute_deltam, group_iquv
 from smartg.sensor import get_sensors_grid
 from smartg.view import satellite_view
-from smartg.phase import read_cld_nth_cte
+from smartg.phase import read_phase_nth_cte
 from smartg.albedo import AlbedoCst
 from smartg.surface import LambSurface
 from smartg.smartg import Smartg
@@ -329,7 +329,7 @@ def _build_cloud_c3():
     """
     dir_phase_b = DIR_AUXDATA / "IPRT" / "phaseB"
 
-    cld_phase = read_cld_nth_cte(
+    cld_phase = read_phase_nth_cte(
         filename=dir_phase_b / "opt_prop" / "watercloud_670.mie.cdf",
         nb_theta=NTH,
     )
@@ -390,7 +390,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
         ext_aer = _k_from_cumulated_od(od[:, 2], zgrid_desc)
 
         # 1D aerosol phase matrix
-        phase_waso = read_cld_nth_cte(
+        phase_waso = read_phase_nth_cte(
             dir_phase_b / "opt_prop" / "waso_670.mie.cdf", nb_theta=NTH
         )
         aer = AerOPAC(

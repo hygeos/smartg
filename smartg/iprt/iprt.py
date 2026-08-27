@@ -22,15 +22,12 @@ compute_deltam
     Compute the IPRT delta_m metric between two IQUV signal sets.
 compute_deltam_iprtout
     Compute the IPRT delta_m metric between two IPRT matrices.
-read_phase_nth_cte
-    Read a libRadtran or IPRT aerosol/cloud file and convert it
-    to a LUT object.
 """
 
 from pathlib import Path
 import warnings
 
-from luts.luts import LUT, MLUT
+from luts.luts import MLUT
 from matplotlib.colors import Colormap
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
@@ -860,102 +857,3 @@ def group_iquv(
 
     return iquv_tot
 
-
-def read_phase_nth_cte(
-    filename: str | Path,
-    nb_theta: int = 721,
-    normalize: bool = False,
-) -> LUT:
-    """Read an aerosol or cloud file on a constant theta grid.
-
-    Both the libRadtran files (e.g. wc.sol.mie.cdf) and the
-    monochromatic IPRT netCDF files are accepted. Their phase matrix
-    is given on a theta grid whose length varies with the wavelength
-    and the component; it is interpolated here on a single grid of
-    nb_theta angles, which is what the LUT layout requires.
-
-    The matrix keeps the IQUV convention of the file, the conversion
-    into the parallel/perpendicular convention of the kernels being
-    done by the run method.
-
-    Parameters
-    ----------
-    filename : str or Path
-        Path of the netCDF file to read.
-    nb_theta : int
-        Number of theta values between 0 and 180 degrees.
-    normalize : bool
-        Normalise the phase matrix so that the integral of F11 is
-        equal to 2.
-
-    Returns
-    -------
-    LUT
-        The phase matrix, of shape (nwav, nrh_or_reff, 6, nb_theta),
-        with the axes 'wav_phase', 'rh' or 'reff', 'stk' and
-        'theta_atm'.
-    """
-
-    ds = xr.open_dataset(filename)
-
-    if 'hum' in ds.variables:
-        rh_reff = ds["hum"].data
-        rh_or_reff = 'rh'
-    elif 'reff' in ds.variables:
-        rh_reff = ds["reff"].data
-        rh_or_reff = 'reff'
-    else:
-        raise Exception('Error')
-
-    phase = ds["phase"][:, :, :, :].data
-
-    n_stk = ds.nphamat.size
-    n_theta = nb_theta
-    n_rh_or_reff = rh_reff.size
-    n_wav = ds["wavelen"].size
-    theta = np.linspace(0., 180., num=n_theta)
-    wavelength = ds["wavelen"].data * 1e3
-
-    phase_matrix = LUT(
-        np.full((n_wav, n_rh_or_reff, 6, n_theta), np.nan,
-                dtype=np.float32),
-        axes=[wavelength, rh_reff, None, theta],
-        names=['wav_phase', rh_or_reff, 'stk', 'theta_atm'],
-        desc="phase_atm",
-    )
-
-    for iwav in range(0, n_wav):
-        for irhreff in range(n_rh_or_reff):
-            for istk in range(n_stk):
-                # ntheta (wl, reff, stk)
-                nth = ds["ntheta"][iwav, irhreff, istk].data
-
-                # theta (wl, reff, stk, ntheta)
-                th = ds["theta"][iwav, irhreff, istk, :].data
-
-                phase_matrix.data[iwav, irhreff, istk, :] = np.interp(
-                    theta,
-                    th[:nth],
-                    phase[iwav, irhreff, istk, :nth],
-                    period=np.inf,
-                )
-    if n_stk not in (4, 6):
-        raise NameError(
-            "Number of unique phase components is different "
-            "than 4 or 6!"
-        )
-
-    if n_stk == 4:  # only spherical particles
-        data = phase_matrix.data
-        data[:, :, 4, :] = data[:, :, 0, :].copy()  # F22 = F11
-        data[:, :, 5, :] = data[:, :, 2, :].copy()  # F44 = F33
-
-    if normalize:
-        for iwav in range(0, n_wav):
-            for irhreff in range(0, n_rh_or_reff):
-                f = phase_matrix.data[iwav, irhreff, 0, :]  # F11
-                mu = np.cos(np.radians(theta))
-                norm = np.trapezoid(f, -mu)
-                phase_matrix.data[iwav, irhreff, :, :] *= 2. / abs(norm)
-
-    return phase_matrix
