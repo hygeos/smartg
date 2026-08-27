@@ -576,10 +576,10 @@ def _phase_cdf_rh_or_reff(
     rh_reff : ndarray
         Values of the relative humidity or effective radius axis.
     rh_or_reff : str
-        Name of the axis, 'rh' or 'reff'.
+        Name of the axis, 'hum' or 'reff'.
     """
     if "hum" in ds.variables:
-        return ds["hum"].data, "rh"
+        return ds["hum"].data, "hum"
     if "reff" in ds.variables:
         return ds["reff"].data, "reff"
     raise ValueError(
@@ -1148,14 +1148,14 @@ def read_phase_nth_cte(
     filename: PathType,
     nb_theta: int = 721,
     normalize: bool = False,
-) -> LUT:
+) -> xr.DataArray:
     """Read an aerosol or cloud file on a constant theta grid.
 
     Both the libRadtran files (e.g. wc.sol.mie.cdf) and the
     monochromatic IPRT netCDF files are accepted. Their phase matrix
     is given on a theta grid whose length varies with the wavelength
     and the component; it is interpolated here on a single grid of
-    nb_theta angles, which is what the LUT layout requires.
+    nb_theta angles.
 
     The matrix keeps the IQUV convention of the file, the conversion
     into the parallel/perpendicular convention of the kernels being
@@ -1175,10 +1175,10 @@ def read_phase_nth_cte(
 
     Returns
     -------
-    LUT
+    DataArray
         The phase matrix, of shape (nwav, nrh_or_reff, 6, nb_theta),
-        with the axes 'wav_phase', 'rh' or 'reff', 'stk' and
-        'theta_atm'.
+        with the dimensions 'wav_phase' (nm), 'hum' or 'reff' (kept
+        from the file), 'stk' and 'theta_atm' (degrees).
     """
     ds = xr.open_dataset(filename)
 
@@ -1197,18 +1197,11 @@ def read_phase_nth_cte(
     theta = np.linspace(0., 180., num=n_theta)
     wavelength = ds["wavelen"].data * 1e3
 
-    phase_matrix = LUT(
-        np.full((n_wav, n_rh_or_reff, 6, n_theta), np.nan,
-                dtype=np.float32),
-        axes=[wavelength, rh_reff, None, theta],
-        names=['wav_phase', rh_or_reff, 'stk', 'theta_atm'],
-        desc="phase_atm",
-    )
-
-    phase_matrix.data[:, :, :n_stk, :] = _resample_cdf_phase(ds, theta)
+    data = np.full((n_wav, n_rh_or_reff, 6, n_theta), np.nan,
+                   dtype=np.float32)
+    data[:, :, :n_stk, :] = _resample_cdf_phase(ds, theta)
 
     if n_stk == 4:  # only spherical particles
-        data = phase_matrix.data
         data[:, :, 4, :] = data[:, :, 0, :].copy()  # F22 = F11
         data[:, :, 5, :] = data[:, :, 2, :].copy()  # F44 = F33
 
@@ -1217,8 +1210,13 @@ def read_phase_nth_cte(
         idmu = np.argsort(mu)
         for iwav in range(0, n_wav):
             for irhreff in range(0, n_rh_or_reff):
-                f = phase_matrix.data[iwav, irhreff, 0, :]  # F11 term
+                f = data[iwav, irhreff, 0, :]  # F11 term
                 norm = np.trapezoid(f[idmu], mu[idmu])
-                phase_matrix.data[iwav, irhreff, :, :] *= 2. / abs(norm)
+                data[iwav, irhreff, :, :] *= 2. / abs(norm)
 
-    return phase_matrix
+    return xr.DataArray(
+        data,
+        coords=[wavelength, rh_reff, np.arange(6), theta],
+        dims=["wav_phase", rh_or_reff, "stk", "theta_atm"],
+        name="phase_atm",
+    )

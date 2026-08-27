@@ -1413,7 +1413,7 @@ class _Comp3DFile(Comp3D):
         param_acc: int | None = None,
         param_min: float | None = None,
         param_max: float | None = None,
-        phase: LUT | None = None,
+        phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
     ) -> None:
 
@@ -1502,11 +1502,26 @@ class _Comp3DFile(Comp3D):
             param[param > param_max] = param_max
         self._param = self._normalize_param(param)
 
+        # Convert a phase DataArray into the LUT object used by the
+        # internal lookups
+        if isinstance(phase, xr.DataArray):
+            phase = LUT(
+                phase.data,
+                axes=[
+                    phase.coords[d].values if d in phase.coords
+                    else None
+                    for d in phase.dims
+                ],
+                names=[str(d) for d in phase.dims],
+                desc=str(phase.name),
+            )
+
         if phase is None:
             self.phase = phase
-        # Check if phase is a LUT object with the correct axes
         elif not isinstance(phase, LUT):
-            raise ValueError("phase must be a LUT object!")
+            raise ValueError(
+                "phase must be an xr.DataArray or a LUT object!"
+            )
         elif not all(
             item in phase.names
             for item in ["wav_phase", self._lut_axis, "stk", "theta_atm"]
@@ -1719,9 +1734,9 @@ class Cloud3D(_Comp3DFile):
     reff_min, reff_max : float or None, optional
         The reff values less than reff_min are replaced by reff_min.
         The same for values greater than reff_max.
-    phase : LUT or None, optional
-        LUT object with the cloud phase matrix depending on wav_phase,
-        reff, stk and theta_atm (e.g. from
+    phase : DataArray or LUT or None, optional
+        The cloud phase matrix depending on wav_phase, reff, stk and
+        theta_atm (e.g. from
         :func:`smartg.phase.read_phase_nth_cte`). If None, the phase
         matrices are computed from the bulk optical properties file.
     ssa_cst : float or None, optional
@@ -1747,7 +1762,7 @@ class Cloud3D(_Comp3DFile):
         reff_acc: int | None = None,
         reff_min: float | None = None,
         reff_max: float | None = None,
-        phase: LUT | None = None,
+        phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
     ) -> None:
         super().__init__(
@@ -1846,11 +1861,12 @@ class Aer3D(_Comp3DFile):
     rh_min, rh_max : float or None, optional
         The rh values less than rh_min are replaced by rh_min. The
         same for values greater than rh_max.
-    phase : LUT or None, optional
-        LUT object with the aerosol phase matrix depending on
-        wav_phase, hum, stk and theta_atm (the humidity axis is named
-        ``hum`` as in the OPAC files). If None, the phase matrices are
-        computed from the bulk optical properties file.
+    phase : DataArray or LUT or None, optional
+        The aerosol phase matrix depending on wav_phase, hum, stk and
+        theta_atm (the humidity axis is named ``hum`` as in the OPAC
+        files; e.g. from :func:`smartg.phase.read_phase_nth_cte`). If
+        None, the phase matrices are computed from the bulk optical
+        properties file.
     ssa_cst : float or None, optional
         Force the aerosol single scattering albedo to this constant
         value. If None, the single scattering albedo is interpolated
@@ -1874,7 +1890,7 @@ class Aer3D(_Comp3DFile):
         rh_acc: int | None = None,
         rh_min: float | None = None,
         rh_max: float | None = None,
-        phase: LUT | None = None,
+        phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
     ) -> None:
         super().__init__(

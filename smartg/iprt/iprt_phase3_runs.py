@@ -25,7 +25,7 @@ from smartg.phase import calc_iphase
 # may be to replace
 from smartg.phase import read_phase_nth_cte
 
-from luts.luts import LUT, Idx
+from luts.luts import LUT
 from smartg.xarray import drop_axes
 
 from tempfile import TemporaryDirectory
@@ -774,7 +774,7 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
         aer_pha = np.zeros((nwl, nz, nstk, nth), dtype=np.float32)
         # Same phase for all altitude (here only one)
         for iz in range (0, nz):
-            aer_pha[:,iz,:,:] = aer_phase.sub()[:,0,:,:].sub({'wav_phase':Idx(wl)}).sub({'theta_atm':Idx(theta)}).data
+            aer_pha[:,iz,:,:] = aer_phase.isel({aer_phase.dims[1]: 0}).interp(wav_phase=wl, theta_atm=theta).data
         aer_phase = LUT(aer_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'stk', 'theta'])
         pha_atm, ipha_atm = calc_iphase(aer_phase, np.array([wl]), z)
         lpha_lut = []
@@ -850,7 +850,7 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
         aer_pha = np.zeros((nwl, nz, nstk, nth), dtype=np.float32)
         # Same phase for all altitude (here only one)
         for iz in range (0, nz):
-            aer_pha[:,iz,:,:] = aer_phase.sub()[:,0,:,:].sub({'wav_phase':Idx(wl)}).sub({'theta_atm':Idx(theta)}).data
+            aer_pha[:,iz,:,:] = aer_phase.isel({aer_phase.dims[1]: 0}).interp(wav_phase=wl, theta_atm=theta).data
         aer_phase = LUT(aer_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'stk', 'theta'])
 
         pha_atm, ipha_atm = calc_iphase(aer_phase, np.array([wl]), z)
@@ -986,7 +986,7 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
         cld_pha = np.zeros((nwl, nz, nstk, nth), dtype=np.float32)
         # Same phase for all altitude (here only one)
         for iz in range (0, nz):
-            cld_pha[:,iz,:,:] = cld_phase.sub()[:,0,:,:].sub({'wav_phase':Idx(wl)}).sub({'theta_atm':Idx(theta)}).data
+            cld_pha[:,iz,:,:] = cld_phase.isel({cld_phase.dims[1]: 0}).interp(wav_phase=wl, theta_atm=theta).data
         cld_phase = LUT(cld_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'stk', 'theta'])
 
         pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([wl]), z)
