@@ -864,7 +864,6 @@ def group_iquv(
 def read_phase_nth_cte(
     filename: str | Path,
     nb_theta: int = 721,
-    convert_ipar_iper: bool = True,
     normalize: bool = False,
 ) -> LUT:
     """Read an aerosol or cloud file on a constant theta grid.
@@ -875,16 +874,18 @@ def read_phase_nth_cte(
     and the component; it is interpolated here on a single grid of
     nb_theta angles, which is what the LUT layout requires.
 
+    The matrix keeps the IQUV convention of the file, the conversion
+    into the parallel/perpendicular convention of the kernels being
+    done by the run method.
+
     Parameters
     ----------
     filename : str or Path
         Path of the netCDF file to read.
     nb_theta : int
         Number of theta values between 0 and 180 degrees.
-    convert_ipar_iper : bool
-        Convert the IQUV phase matrix into an IparIperUV one.
     normalize : bool
-        Normalise the phase matrix so that the integral of P0 is
+        Normalise the phase matrix so that the integral of F11 is
         equal to 2.
 
     Returns
@@ -938,46 +939,23 @@ def read_phase_nth_cte(
                     phase[iwav, irhreff, istk, :nth],
                     period=np.inf,
                 )
-    if n_stk == 4:
+    if n_stk not in (4, 6):
+        raise NameError(
+            "Number of unique phase components is different "
+            "than 4 or 6!"
+        )
+
+    if n_stk == 4:  # only spherical particles
         data = phase_matrix.data
-        data[:, :, 4, :] = data[:, :, 0, :].copy()
-        data[:, :, 5, :] = data[:, :, 2, :].copy()
+        data[:, :, 4, :] = data[:, :, 0, :].copy()  # F22 = F11
+        data[:, :, 5, :] = data[:, :, 2, :].copy()  # F44 = F33
 
     if normalize:
         for iwav in range(0, n_wav):
             for irhreff in range(0, n_rh_or_reff):
-                # Note: from Ipar Iper phase, if n_stk=4 then
-                # P0=(P11+P12)/2, and if n_stk=6 then
-                # P0=(P11+P22+2*P12)/2
-                f = phase_matrix.data[iwav, irhreff, 0, :]
+                f = phase_matrix.data[iwav, irhreff, 0, :]  # F11
                 mu = np.cos(np.radians(theta))
                 norm = np.trapezoid(f, -mu)
                 phase_matrix.data[iwav, irhreff, :, :] *= 2. / abs(norm)
-
-    if convert_ipar_iper:
-        # convert I, Q into Ipar, Iper
-        data = phase_matrix.data
-        if n_stk == 4:  # only spherical particles
-            p0 = data[:, :, 0, :].copy()
-            p1 = data[:, :, 1, :].copy()
-            p4 = data[:, :, 4, :].copy()
-            data[:, :, 0, :] = 0.5 * (p0 + 2 * p1 + p4)  # P11
-            data[:, :, 1, :] = 0.5 * (p0 - p4)           # P12=P21
-            data[:, :, 4, :] = 0.5 * (p0 - 2 * p1 + p4)  # P22
-        elif n_stk == 6:  # spherical or non spherical particles
-            # note: the sign of P43/P34 affects only the sign of V,
-            # and since V=0 for rayleigh scattering it does not
-            # matter
-            p0 = data[:, :, 0, :].copy()
-            p1 = data[:, :, 1, :].copy()
-            p4 = data[:, :, 4, :].copy()
-            data[:, :, 0, :] = 0.5 * (p0 + 2 * p1 + p4)  # P11
-            data[:, :, 1, :] = 0.5 * (p0 - p4)           # P12=P21
-            data[:, :, 4, :] = 0.5 * (p0 - 2 * p1 + p4)  # P22
-        else:
-            raise NameError(
-                "Number of unique phase components is different "
-                "than 4 or 6!"
-            )
 
     return phase_matrix
