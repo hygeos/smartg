@@ -561,6 +561,79 @@ def read_phase_dat(
     return da_pha
 
 
+def _phase_cdf_rh_or_reff(
+    ds: xr.Dataset,
+) -> tuple[NDArray[np.floating[Any]], str]:
+    """Return the hum or reff axis of a cdf phase function file.
+
+    Parameters
+    ----------
+    ds : Dataset
+        The open phase function file.
+
+    Returns
+    -------
+    rh_reff : ndarray
+        Values of the relative humidity or effective radius axis.
+    rh_or_reff : str
+        Name of the axis, 'rh' or 'reff'.
+    """
+    if "hum" in ds.variables:
+        return ds["hum"].data, "rh"
+    if "reff" in ds.variables:
+        return ds["reff"].data, "reff"
+    raise ValueError(
+        "The phase function file must contain either a 'hum' or "
+        "a 'reff' variable."
+    )
+
+
+def _resample_cdf_phase(
+    ds: xr.Dataset,
+    theta: NDArray[np.floating[Any]],
+) -> NDArray[np.floating[Any]]:
+    """Resample the phase matrix of a cdf file onto a uniform grid.
+
+    The theta grid of a libRadtran cdf file varies with the
+    wavelength, the rh/reff value and the matrix term; each entry is
+    linearly interpolated here onto the single grid *theta*.
+
+    Parameters
+    ----------
+    ds : Dataset
+        The open phase function file, with the variables 'phase',
+        'theta' and 'ntheta'.
+    theta : ndarray
+        Scattering angles to resample on, in degrees.
+
+    Returns
+    -------
+    ndarray
+        The resampled phase matrices, of shape
+        (nwav, n_rh_reff, nphamat, ntheta).
+    """
+    phase = ds["phase"][:, :, :, :].data
+    n_wav, n_rh_reff, n_stk = phase.shape[:3]
+
+    data = np.zeros((n_wav, n_rh_reff, n_stk, theta.size))
+    for iwav in range(0, n_wav):
+        for irhreff in range(n_rh_reff):
+            for istk in range(n_stk):
+                # ntheta (wl, rh/reff, stk)
+                nth = ds["ntheta"][iwav, irhreff, istk].data
+
+                # theta (wl, rh/reff, stk, ntheta)
+                th = ds["theta"][iwav, irhreff, istk, :].data
+
+                data[iwav, irhreff, istk, :] = np.interp(
+                    theta,
+                    th[:nth],
+                    phase[iwav, irhreff, istk, :nth],
+                    period=np.inf,
+                )
+    return data
+
+
 def read_phase_cdf(
     fname: PathType,
     kind: str = "atm",
@@ -686,16 +759,7 @@ def read_phase_cdf(
 
     ds = xr.open_dataset(fname)
 
-    if "hum" in ds.variables:
-        rh_reff = ds["hum"].data
-        rh_or_reff = "rh"
-    elif "reff" in ds.variables:
-        rh_reff = ds["reff"].data
-        rh_or_reff = "reff"
-    else:
-        raise Exception("Error")
-
-    phase = ds["phase"][:, :, :, :].data
+    rh_reff, rh_or_reff = _phase_cdf_rh_or_reff(ds)
 
     dtheta_min = np.nanmin(np.abs(np.diff(ds.theta.values, axis=3)))
     ntheta = np.ceil(180 / dtheta_min).astype(int) + 1
@@ -739,23 +803,11 @@ def read_phase_cdf(
         )
 
     da_pha = xr.DataArray(
-        np.zeros((nwl, n_rh_reff, nphamat, ntheta)),
+        _resample_cdf_phase(ds, theta),
         coords=[wl, rh_reff, np.arange(nphamat), theta],
         dims=["wav_phase", rh_or_reff, "stk", "theta_" + kind],
         name="phase_" + kind,
     )
-
-    for iwav in range(0, nwl):
-        for irhreff in range(n_rh_reff):
-            for istk in range(nphamat):
-                nth = ds["ntheta"][iwav, irhreff, istk].data
-                th = ds["theta"][iwav, irhreff, istk, :].data
-                da_pha.data[iwav, irhreff, istk, :] = np.interp(
-                    theta,
-                    th[:nth],
-                    phase[iwav, irhreff, istk, :nth],
-                    period=np.inf,
-                )
 
     if normalize:
         mu = np.cos(np.deg2rad(theta))
@@ -1130,19 +1182,7 @@ def read_phase_nth_cte(
     """
     ds = xr.open_dataset(filename)
 
-    if "hum" in ds.variables:
-        rh_reff = ds["hum"].data
-        rh_or_reff = "rh"
-    elif "reff" in ds.variables:
-        rh_reff = ds["reff"].data
-        rh_or_reff = "reff"
-    else:
-        raise ValueError(
-            "The phase function file must contain either a 'hum' or "
-            "a 'reff' variable."
-        )
-
-    phase = ds["phase"][:, :, :, :].data
+    rh_reff, rh_or_reff = _phase_cdf_rh_or_reff(ds)
 
     n_stk = ds.nphamat.size
     if n_stk not in (4, 6):
@@ -1165,21 +1205,7 @@ def read_phase_nth_cte(
         desc="phase_atm",
     )
 
-    for iwav in range(0, n_wav):
-        for irhreff in range(n_rh_or_reff):
-            for istk in range(n_stk):
-                # ntheta (wl, reff, stk)
-                nth = ds["ntheta"][iwav, irhreff, istk].data
-
-                # theta (wl, reff, stk, ntheta)
-                th = ds["theta"][iwav, irhreff, istk, :].data
-
-                phase_matrix.data[iwav, irhreff, istk, :] = np.interp(
-                    theta,
-                    th[:nth],
-                    phase[iwav, irhreff, istk, :nth],
-                    period=np.inf,
-                )
+    phase_matrix.data[:, :, :n_stk, :] = _resample_cdf_phase(ds, theta)
 
     if n_stk == 4:  # only spherical particles
         data = phase_matrix.data
