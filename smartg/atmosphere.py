@@ -1386,7 +1386,9 @@ class _Comp3DFile(Comp3D):
     I3RC/IPRT ASCII files. See :class:`Cloud3D` (parameter: the
     droplet effective radius) and :class:`Aer3D` (parameter: the
     relative humidity). The bulk optical properties are available
-    as the ``ds_bulk`` dataset attribute.
+    as the ``mixture`` dataset attribute, like in the 1D
+    :class:`AerOPAC` and :class:`Cloud` classes, and the 3D field
+    as the ``distribution`` attribute.
     """
 
     # per-cell parameter name in the public API and the dense
@@ -1433,7 +1435,7 @@ class _Comp3DFile(Comp3D):
             raise FileNotFoundError(f"{fname} does not exist")
 
         self.fname = fname
-        self.ds_bulk = xr.open_dataset(self.fname)
+        self.mixture = xr.open_dataset(self.fname)
         self.ssa_cst = ssa_cst
 
         if ds is not None:
@@ -1455,7 +1457,7 @@ class _Comp3DFile(Comp3D):
                     "('z', 'y', 'x') and the 'x_bounds', 'y_bounds' "
                     f"and 'z_bounds' coordinates; missing: {missing}"
                 )
-            self.ds = ds
+            self.distribution = ds
             # extract the occupied cells in C order with x slowest,
             # which follows the row order of the I3RC/IPRT ASCII files
             ext_xyz = ds["ext"].transpose("x", "y", "z").to_numpy()
@@ -1478,7 +1480,7 @@ class _Comp3DFile(Comp3D):
                     f"If ds is not given, then {self._param_name}, "
                     "ext_ref and cell_indices must all be given!"
                 )
-            self.ds = None
+            self.distribution = None
             # the IPRT convention cell indices start at 1 instead of 0
             self._cell_indices = (
                 np.asarray(cell_indices, dtype=np.int32) - 1
@@ -1583,15 +1585,15 @@ class _Comp3DFile(Comp3D):
         field, from which the :class:`smartg.grid3d.Grid3D` can be
         built. Only available with the dataset input route.
         """
-        if self.ds is None:
+        if self.distribution is None:
             raise ValueError(
                 f"The {self._label} grid is only known when the "
                 f"{self._label} is provided as a dataset (ds parameter)"
             )
         return (
-            self.ds["x_bounds"].to_numpy(),
-            self.ds["y_bounds"].to_numpy(),
-            self.ds["z_bounds"].to_numpy(),
+            self.distribution["x_bounds"].to_numpy(),
+            self.distribution["y_bounds"].to_numpy(),
+            self.distribution["z_bounds"].to_numpy(),
         )
 
     def get_cell_indices(self) -> NDArray[np.int32]:
@@ -1608,7 +1610,7 @@ class _Comp3DFile(Comp3D):
         per-cell parameter values, over ('cell', 'wav').
         """
         return self._interp_axis(
-            self.ds_bulk[var],
+            self.mixture[var],
             self._bulk_axis,
             self._param,
             clamp=(self._param_oor == "clamp"),
@@ -1660,7 +1662,7 @@ class _Comp3DFile(Comp3D):
                 return self.phase.interp(theta_atm=theta)
 
         theta = np.linspace(0.0, 180.0, n_theta)
-        pha = self.ds_bulk["phase"].interp(theta=theta).transpose(
+        pha = self.mixture["phase"].interp(theta=theta).transpose(
             "wav", self._bulk_axis, "stk", "theta"
         )
         nwav, n_param, nstk = pha.shape[:3]
@@ -1675,8 +1677,8 @@ class _Comp3DFile(Comp3D):
         return xr.DataArray(
             pha_,
             coords=[
-                self.ds_bulk["wav"].values,
-                self.ds_bulk[self._bulk_axis].values,
+                self.mixture["wav"].values,
+                self.mixture[self._bulk_axis].values,
                 np.arange(6),
                 theta,
             ],
@@ -1943,7 +1945,7 @@ class Aer3D(_Comp3DFile):
         # hydrophobic species (e.g. 'inso', 'soot') have a single
         # humidity node, and the lookups on a size-1 axis reject any
         # other value even with the clamping policy: clamp rh to it
-        hum = self.ds_bulk["hum"].values.astype(np.float64)
+        hum = self.mixture["hum"].values.astype(np.float64)
         if hum.size == 1:
             param = np.full_like(param, hum[0])
         return param
