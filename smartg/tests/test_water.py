@@ -173,6 +173,7 @@ def hl_pw_rrs() -> xr.Dataset:
 WAVELENGTHS = [440.0, 550.0, 600.0]
 SZA_DEG = 30.0
 WATER_GRID = [0, -9990, -10000]  # metres; sea bottom at 10 km ≈ ∞
+SEED = 1234
 
 
 def _build_water_iop() -> Water1D:
@@ -263,6 +264,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         water=_water_iop,
         nb_photons=5e7,
         nb_loop=1e6,
+        seed=SEED,
         xblock=64,
         xgrid=1024,
         alis_options={"nlow": -1, "njac": 0},
@@ -288,6 +290,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         water=_water_iop,
         nb_photons=1e7,
         nb_loop=1e6,
+        seed=SEED,
         xblock=64,
         xgrid=1024,
         alis_options={"nlow": -1, "njac": 0},
