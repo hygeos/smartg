@@ -94,7 +94,7 @@ from smartg.typing import NumericArrayLike, PathType, RealNumber
 from smartg.diff import diff1
 from numpy.typing import NDArray
 from typing import Any, cast
-from luts.luts import LUT, Idx, from_xarray, read_mlut
+from luts.luts import LUT
 from smartg.grid3d import Grid3D, create_1d_grid
 
 if TYPE_CHECKING:
@@ -1359,12 +1359,12 @@ class Comp3D(ABC):
         self,
         wav_phase: NDArray[np.floating],
         n_theta: int = 721,
-    ) -> tuple[list[LUT], NDArray[np.int32], int]:
+    ) -> tuple[list[xr.DataArray], NDArray[np.int32], int]:
         """Return the component phase matrices.
 
         Returns
         -------
-        luts : list of LUT
+        phases : list of DataArray
             The unique phase matrices ``('stk', 'theta_atm')``, as
             ``nwav_phase`` consecutive blocks of ``n_unique`` matrices.
         cell_phase_index : ndarray
@@ -1385,20 +1385,21 @@ class _Comp3DFile(Comp3D):
     ``xr.Dataset``, as raw arrays or converted from the legacy
     I3RC/IPRT ASCII files. See :class:`Cloud3D` (parameter: the
     droplet effective radius) and :class:`Aer3D` (parameter: the
-    relative humidity).
+    relative humidity). The bulk optical properties are available
+    as the ``ds_bulk`` dataset attribute.
     """
 
     # per-cell parameter name in the public API and the dense
     # dataset: "reff" | "rh"
     _param_name: str
     # parameter axis name of the bulk optical properties file and of
-    # the `phase` override LUT: "reff" | "hum"
-    _lut_axis: str
+    # the `phase` override matrix: "reff" | "hum"
+    _bulk_axis: str
     # subdirectory of DIR_AUXDATA holding the bulk files
     _auxdata_subdir: tuple[str, ...]
-    # out-of-range policy of the parameter lookups: None raises,
-    # "extrema" clamps to the axis bounds
-    _idx_fill_value: str | None
+    # out-of-range policy of the parameter lookups: "raise" rejects,
+    # "clamp" clamps to the axis bounds
+    _param_oor: str
     # component label used in the messages: "cloud" | "aerosol"
     _label: str
 
@@ -1432,7 +1433,7 @@ class _Comp3DFile(Comp3D):
             raise FileNotFoundError(f"{fname} does not exist")
 
         self.fname = fname
-        self._mlut = read_mlut(self.fname)
+        self.ds_bulk = xr.open_dataset(self.fname)
         self.ssa_cst = ssa_cst
 
         if ds is not None:
@@ -1502,33 +1503,24 @@ class _Comp3DFile(Comp3D):
             param[param > param_max] = param_max
         self._param = self._normalize_param(param)
 
-        # Convert a phase DataArray into the LUT object used by the
-        # internal lookups
-        if isinstance(phase, xr.DataArray):
-            phase = LUT(
-                phase.data,
-                axes=[
-                    phase.coords[d].values if d in phase.coords
-                    else None
-                    for d in phase.dims
-                ],
-                names=[str(d) for d in phase.dims],
-                desc=str(phase.name),
-            )
+        # Convert a legacy phase LUT into the DataArray used
+        # internally
+        if isinstance(phase, LUT):
+            phase = phase.to_xarray()
 
         if phase is None:
             self.phase = phase
-        elif not isinstance(phase, LUT):
+        elif not isinstance(phase, xr.DataArray):
             raise ValueError(
                 "phase must be an xr.DataArray or a LUT object!"
             )
         elif not all(
-            item in phase.names
-            for item in ["wav_phase", self._lut_axis, "stk", "theta_atm"]
+            item in phase.dims
+            for item in ["wav_phase", self._bulk_axis, "stk", "theta_atm"]
         ):
             raise ValueError(
                 "Phase matrix must have 4 dimensions: wav_phase, "
-                f"{self._lut_axis}, stk and theta_atm"
+                f"{self._bulk_axis}, stk and theta_atm"
             )
         else:
             self.phase = phase
@@ -1542,14 +1534,45 @@ class _Comp3DFile(Comp3D):
         """
         return param
 
-    def _idx_param(
-        self, values: NDArray[np.floating] | float | None = None
-    ) -> Any:
-        """The parameter index of the bulk LUT lookups, with the
-        subclass out-of-range policy.
+    def _interp_axis(
+        self,
+        da: xr.DataArray,
+        dim: str,
+        values: NDArray[np.floating] | float,
+        clamp: bool = False,
+    ) -> xr.DataArray:
+        """Linearly interpolate `da` along `dim` at `values`.
+
+        Out-of-range values are clamped to the axis bounds when
+        `clamp` is True and rejected otherwise, and a single-node
+        axis only accepts its own value. An array of values becomes
+        a pointwise 'cell' dimension, while a scalar removes the
+        dimension.
         """
-        v = self._param if values is None else values
-        return Idx(v, fill_value=self._idx_fill_value)
+        axis = da[dim].values.astype(np.float64)
+        vals = np.asarray(values, dtype=np.float64)
+        if axis.size == 1:
+            if not np.allclose(vals, axis[0]):
+                raise ValueError(
+                    f"The {dim} values must be equal to the single "
+                    f"node of the {dim} axis ({axis[0]:g}), got "
+                    f"{values}."
+                )
+            res = da.isel({dim: 0}, drop=True)
+            if vals.ndim > 0:
+                res = res.expand_dims({"cell": vals.size})
+            return res
+        lo, hi = axis.min(), axis.max()
+        if clamp:
+            vals = np.clip(vals, lo, hi)
+        elif (vals < lo).any() or (vals > hi).any():
+            raise ValueError(
+                f"The {dim} values must be within the [{lo:g}, "
+                f"{hi:g}] range of the {dim} axis, got {values}."
+            )
+        if vals.ndim > 0:
+            return da.interp({dim: xr.DataArray(vals, dims="cell")})
+        return da.interp({dim: vals[()]}).drop_vars(dim)
 
     def get_xyz_grid(
         self,
@@ -1580,13 +1603,27 @@ class _Comp3DFile(Comp3D):
         """
         return self._ext_ref
 
+    def _interp_bulk_cells(self, var: str) -> xr.DataArray:
+        """The 'ext' or 'ssa' bulk variable interpolated at the
+        per-cell parameter values, over ('cell', 'wav').
+        """
+        return self._interp_axis(
+            self.ds_bulk[var],
+            self._bulk_axis,
+            self._param,
+            clamp=(self._param_oor == "clamp"),
+        )
+
     def get_ext(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
         nwav = len(wav)
         ext = np.zeros((nwav, self._ext_ref.size), dtype=np.float64)
-        ext_ref0 = self._mlut["ext"][self._idx_param(), Idx(self.w_ref)]
+        ext_cells = self._interp_bulk_cells("ext")
+        ext_ref0 = self._interp_axis(
+            ext_cells, "wav", self.w_ref
+        ).values
         for iw in range(0, nwav):
             ext_factor = (
-                self._mlut["ext"][self._idx_param(), Idx(wav[iw])]
+                self._interp_axis(ext_cells, "wav", wav[iw]).values
                 / ext_ref0
             )
             ext[iw, :] = self._ext_ref * ext_factor
@@ -1598,16 +1635,17 @@ class _Comp3DFile(Comp3D):
         if self.ssa_cst is not None:
             ssa[:, :] = self.ssa_cst
         else:
+            ssa_cells = self._interp_bulk_cells("ssa")
             for iw in range(0, nwav):
-                ssa[iw, :] = self._mlut["ssa"][
-                    self._idx_param(), Idx(wav[iw])
-                ]
+                ssa[iw, :] = self._interp_axis(
+                    ssa_cells, "wav", wav[iw]
+                ).values
         return ssa
 
-    def get_phase(self, n_theta: int = 721) -> LUT:
-        """Return the component phase matrix LUT with the dimensions
-        ``('wav_phase', <parameter>, 'stk', 'theta_atm')``, the
-        parameter axis being ``'reff'`` or ``'hum'``.
+    def get_phase(self, n_theta: int = 721) -> xr.DataArray:
+        """Return the component phase matrix DataArray with the
+        dimensions ``('wav_phase', <parameter>, 'stk', 'theta_atm')``,
+        the parameter axis being ``'reff'`` or ``'hum'``.
 
         The matrices keep the IQUV convention of the source file, the
         conversion into the parallel/perpendicular convention of the
@@ -1615,61 +1653,62 @@ class _Comp3DFile(Comp3D):
         """
         # First check if we have already phase
         if self.phase is not None:
-            if len(self.phase.axes[3]) == n_theta:
+            if self.phase.sizes["theta_atm"] == n_theta:
                 return self.phase
             else:
                 theta = np.linspace(0.0, 180.0, n_theta)
-                return self.phase.sub()[:, :, :, Idx(theta)]
+                return self.phase.interp(theta_atm=theta)
 
         theta = np.linspace(0.0, 180.0, n_theta)
-        pha = self._mlut["phase"].swapaxes(self._lut_axis, "wav")[
-            :, :, :, Idx(theta)
-        ]
-        nwav = pha.shape[0]
-        n_param = pha.shape[1]
-        nstklut = pha.shape[2]
+        pha = self.ds_bulk["phase"].interp(theta=theta).transpose(
+            "wav", self._bulk_axis, "stk", "theta"
+        )
+        nwav, n_param, nstk = pha.shape[:3]
 
         pha_ = np.zeros((nwav, n_param, 6, n_theta), dtype=np.float64)
-        pha_[:, :, :nstklut, :] = pha
+        pha_[:, :, :nstk, :] = pha.values
 
-        P = LUT(
+        if nstk == 4:  # spherical particles
+            pha_[:, :, 4, :] = pha_[:, :, 0, :]  # F22 = F11
+            pha_[:, :, 5, :] = pha_[:, :, 2, :]  # F44 = F33
+
+        return xr.DataArray(
             pha_,
-            axes=[
-                self._mlut.axes["wav"],
-                self._mlut.axes[self._lut_axis],
+            coords=[
+                self.ds_bulk["wav"].values,
+                self.ds_bulk[self._bulk_axis].values,
                 np.arange(6),
                 theta,
             ],
-            names=["wav_phase", self._lut_axis, "stk", "theta_atm"],
+            dims=["wav_phase", self._bulk_axis, "stk", "theta_atm"],
+            name="phase_atm",
         )
-
-        if nstklut == 4:  # spherical particles
-            P.data[:, :, 4, :] = P.data[:, :, 0, :].copy()  # F22 = F11
-            P.data[:, :, 5, :] = P.data[:, :, 2, :].copy()  # F44 = F33
-
-        return P
 
     def get_phase_set(
         self,
         wav_phase: NDArray[np.floating],
         n_theta: int = 721,
-    ) -> tuple[list[LUT], NDArray[np.int32], int]:
+    ) -> tuple[list[xr.DataArray], NDArray[np.int32], int]:
         param_unique = np.unique(self._param)
         n_unique = param_unique.size
 
         phase = self.get_phase(n_theta=n_theta)
+        clamp = self._param_oor == "clamp"
 
-        luts = []
+        phases = []
         for iwav in range(0, len(wav_phase)):
+            phase_w = self._interp_axis(
+                phase, "wav_phase", wav_phase[iwav]
+            )
             # Loop only on the unique parameter values
             for iparam in range(0, n_unique):
-                luts.append(
-                    phase.sub()[
-                        Idx(wav_phase[iwav]),
-                        self._idx_param(param_unique[iparam]),
-                        :,
-                        :,
-                    ]
+                phases.append(
+                    self._interp_axis(
+                        phase_w,
+                        self._bulk_axis,
+                        param_unique[iparam],
+                        clamp=clamp,
+                    )
                 )
 
         # Obtain the correct indices from the unique-value phase bank
@@ -1681,7 +1720,7 @@ class _Comp3DFile(Comp3D):
                 np.squeeze(np.argwhere(self._param == param_unique[iparam]))
             ] = iparam
 
-        return luts, cell_phase_index, n_unique
+        return phases, cell_phase_index, n_unique
 
 
 class Cloud3D(_Comp3DFile):
@@ -1746,9 +1785,9 @@ class Cloud3D(_Comp3DFile):
     """
 
     _param_name = "reff"
-    _lut_axis = "reff"
+    _bulk_axis = "reff"
     _auxdata_subdir = ("clouds",)
-    _idx_fill_value = None
+    _param_oor = "raise"
     _label = "cloud"
 
     def __init__(
@@ -1787,15 +1826,6 @@ class Cloud3D(_Comp3DFile):
     @reff.setter
     def reff(self, value: NDArray[np.float64]) -> None:
         self._param = value
-
-    @property
-    def cld_mlut(self) -> Any:
-        """The cloud bulk optical properties MLUT."""
-        return self._mlut
-
-    @cld_mlut.setter
-    def cld_mlut(self, value: Any) -> None:
-        self._mlut = value
 
 
 class Aer3D(_Comp3DFile):
@@ -1874,9 +1904,9 @@ class Aer3D(_Comp3DFile):
     """
 
     _param_name = "rh"
-    _lut_axis = "hum"
+    _bulk_axis = "hum"
     _auxdata_subdir = ("aerosols", "OPAC", "mixtures")
-    _idx_fill_value = "extrema"
+    _param_oor = "clamp"
     _label = "aerosol"
 
     def __init__(
@@ -1911,9 +1941,9 @@ class Aer3D(_Comp3DFile):
         self, param: NDArray[np.float64]
     ) -> NDArray[np.float64]:
         # hydrophobic species (e.g. 'inso', 'soot') have a single
-        # humidity node, and the LUT lookups on a size-1 axis reject
-        # any other value even with the extrema fill: clamp rh to it
-        hum = np.asarray(self._mlut.axes["hum"], dtype=np.float64)
+        # humidity node, and the lookups on a size-1 axis reject any
+        # other value even with the clamping policy: clamp rh to it
+        hum = self.ds_bulk["hum"].values.astype(np.float64)
         if hum.size == 1:
             param = np.full_like(param, hum[0])
         return param
@@ -1926,15 +1956,6 @@ class Aer3D(_Comp3DFile):
     @rh.setter
     def rh(self, value: NDArray[np.float64]) -> None:
         self._param = value
-
-    @property
-    def aer_mlut(self) -> Any:
-        """The aerosol bulk optical properties MLUT."""
-        return self._mlut
-
-    @aer_mlut.setter
-    def aer_mlut(self, value: Any) -> None:
-        self._mlut = value
 
 
 def read_i3rc_cloud(
@@ -3703,8 +3724,9 @@ class Atm3D(Atmosphere):
     aer_phase_1d : tuple or None, optional
         Force the 1D aerosol phase matrices, as a tuple
         (iphase, phases) where iphase is the (nwavelength, NZ + 1)
-        phase matrix indices profile and phases a LUT of phase
-        matrices. If None, computed from `atm_1d`.
+        phase matrix indices profile and phases a DataArray (or
+        legacy LUT) of phase matrices over (iphase, stk, theta_atm).
+        If None, computed from `atm_1d`.
     """
 
     def __init__(
@@ -3887,12 +3909,21 @@ class Atm3D(Atmosphere):
             ipha_aer_1d = self.aer_phase_1d[0]
             pha_aer_1d = self.aer_phase_1d[1]
 
-        # Atm1D.calc returns xarray objects, while the 3D optical
-        # properties are numpy arrays and LUT. The 1d aerosol ones are
-        # converted once here, so that the merge can mix the 1d and the
-        # 3d ones.
+        # The merge works on xarray objects and numpy arrays: convert
+        # a legacy 1d aerosol phase LUT to a DataArray, with the dim
+        # names the merge expects
+        if isinstance(pha_aer_1d, LUT):
+            pha_aer_1d = pha_aer_1d.to_xarray()
         if isinstance(pha_aer_1d, xr.DataArray):
-            pha_aer_1d = from_xarray(pha_aer_1d)
+            pha_aer_1d = pha_aer_1d.rename(
+                dict(
+                    zip(
+                        pha_aer_1d.dims,
+                        ("iphase", "stk", "theta_atm"),
+                        strict=True,
+                    )
+                )
+            )
         if isinstance(ipha_aer_1d, xr.DataArray):
             ipha_aer_1d = ipha_aer_1d.values
         if isinstance(ssa_aer_1d, xr.DataArray):
@@ -3986,18 +4017,18 @@ class Atm3D(Atmosphere):
         if not self.comp_3d:
             if pha_aer_1d is None:
                 return ext_aer_1d, ssa_aer_1d, None
-            luts = []
+            phases = []
             for iwav in range(0, len(wav_pha)):
                 for iz in range(0, nbz):
-                    luts.append(
-                        pha_aer_1d.sub()[ipha_aer_1d[iwav, iz], :, :]
+                    phases.append(
+                        pha_aer_1d.isel(iphase=ipha_aer_1d[iwav, iz])
                     )
             ipha3d = np.zeros((len(wav_pha), nbz), dtype=np.int32)
             for iwav in range(0, len(wav_pha)):
                 ipha3d[iwav, :] = np.arange(nbz, dtype=np.int32) + (
                     iwav * nbz
                 )
-            return ext_aer_1d, ssa_aer_1d, (ipha3d, luts)
+            return ext_aer_1d, ssa_aer_1d, (ipha3d, phases)
 
         if len(self.comp_3d) > 1:
             return self._glob_particles_multi(
@@ -4015,7 +4046,7 @@ class Atm3D(Atmosphere):
         n_cell = self._cell_indices.shape[0]
         ext_3d = comp.get_ext(wls)
         ssa_3d = comp.get_ssa(wls)
-        cld_luts, cell_pha_idx, n_unique = comp.get_phase_set(
+        cld_phases, cell_pha_idx, n_unique = comp.get_phase_set(
             wav_pha, n_theta=n_theta
         )
 
@@ -4026,22 +4057,23 @@ class Atm3D(Atmosphere):
             ext_mix_3d[:, :] = ext_3d
             ssa_mix_3d[:, :] = ssa_3d
 
-            luts = cld_luts
+            phases = cld_phases
             # Concatenate plan parallel + 3d optical prop (first
             # without considering wl)
             phase_glob_indices_w0 = np.concatenate(
                 [np.zeros(nbz, dtype=np.int32), cell_pha_idx[:]]
             )
         else:  # case list of 1d aer is given
-            # Dim of pha_aer: iphase, stk, theta.
-            # 3d phase : cld_luts[0].axes[1] -> theta dim
-            # 1d phase : pha_aer_1d.axes[2] -> theta dim
-            if len(pha_aer_1d.axes[2]) == n_theta:
-                phase_aer_1d = pha_aer_1d
+            # resample the 1d aerosol phase matrices on the component
+            # scattering angles, so that the mixing arithmetic below
+            # aligns exactly
+            theta = cld_phases[0]["theta_atm"].values
+            if pha_aer_1d.sizes["theta_atm"] == n_theta:
+                phase_aer_1d = pha_aer_1d.assign_coords(
+                    theta_atm=theta
+                )
             else:
-                phase_aer_1d = pha_aer_1d.sub()[
-                    :, :, Idx(cld_luts[0].axes[1])
-                ]
+                phase_aer_1d = pha_aer_1d.interp(theta_atm=theta)
 
             # the altitude level of the 1D aerosols co-located with
             # each component cell (kept as-is from the historical
@@ -4053,11 +4085,13 @@ class Atm3D(Atmosphere):
                 idz_atm.append(NZ + 1 - idz)
 
             # First plan parallel phase
-            luts = []
+            phases = []
             for iwav in range(0, len(wav_pha)):
                 for iz in range(0, nbz):
-                    luts.append(
-                        phase_aer_1d.sub()[ipha_aer_1d[iwav, iz], :, :]
+                    phases.append(
+                        phase_aer_1d.isel(
+                            iphase=ipha_aer_1d[iwav, iz]
+                        )
                     )
 
             # Second 3d mix phase, weighted by the extinctions at the
@@ -4070,12 +4104,12 @@ class Atm3D(Atmosphere):
                 ext_mix_tmp = ext_aer_tmp + ext_3d_pha[iwav, :]
 
                 for icell in range(0, n_cell):
-                    pha_cld_tmp = cld_luts[
+                    pha_cld_tmp = cld_phases[
                         iwav * n_unique + cell_pha_idx[icell]
                     ]
-                    pha_aer_tmp = phase_aer_1d.sub()[
-                        ipha_aer_1d[iwav, idz_atm[icell]], :, :
-                    ]
+                    pha_aer_tmp = phase_aer_1d.isel(
+                        iphase=ipha_aer_1d[iwav, idz_atm[icell]]
+                    )
                     pha_tot = (
                         (
                             pha_aer_tmp
@@ -4088,7 +4122,7 @@ class Atm3D(Atmosphere):
                             * ssa_3d_pha[iwav, icell]
                         )
                     ) / ext_mix_tmp[icell]
-                    luts.append(pha_tot)
+                    phases.append(pha_tot)
 
             # the mixed extinctions and ssa of the profile, at the
             # profile wavelengths
@@ -4116,10 +4150,10 @@ class Atm3D(Atmosphere):
         ssa_glob = np.concatenate([ssa_aer_1d[:, :], ssa_mix_3d], axis=1)
 
         # Now consider the wl dimension
-        # NB: with a 1D aerosol the per-wavelength stride in `luts`
+        # NB: with a 1D aerosol the per-wavelength stride in `phases`
         # is nbz + n_cell, not n_unique, so the offset below is only
         # correct when len(wav_pha) == 1 (the only exercised case;
-        # kept as-is for bit-identity with the saved references)
+        # kept as-is for consistency with the saved references)
         ipha3d = np.zeros(
             (len(wav_pha), phase_glob_indices_w0.size), dtype=np.int32
         )
@@ -4128,7 +4162,7 @@ class Atm3D(Atmosphere):
                 iwav * n_unique
             )
 
-        return ext_glob, ssa_glob, (ipha3d, luts)
+        return ext_glob, ssa_glob, (ipha3d, phases)
 
     def _glob_particles_multi(
         self,
@@ -4172,26 +4206,27 @@ class Atm3D(Atmosphere):
 
         # align every phase matrix set (and the 1D aerosol one) on
         # the scattering angles of the first component
-        theta_ref = cast(
-            NDArray[np.floating], phase_sets[0][0][0].axes[1]
-        )
-        cld_luts_all = []
-        for cld_luts, _, _ in phase_sets:
-            theta = cast(
-                NDArray[np.floating], cld_luts[0].axes[1]
-            )
+        theta_ref = phase_sets[0][0][0]["theta_atm"].values
+        cld_phases_all = []
+        for cld_phases, _, _ in phase_sets:
+            theta = cld_phases[0]["theta_atm"].values
             if np.array_equal(theta, theta_ref):
-                cld_luts_all.append(cld_luts)
+                cld_phases_all.append(cld_phases)
             else:
-                cld_luts_all.append(
-                    [lut.sub()[:, Idx(theta_ref)] for lut in cld_luts]
+                cld_phases_all.append(
+                    [
+                        pha.interp(theta_atm=theta_ref)
+                        for pha in cld_phases
+                    ]
                 )
         phase_aer_1d = None
         if pha_aer_1d is not None:
-            if len(pha_aer_1d.axes[2]) == len(theta_ref):
-                phase_aer_1d = pha_aer_1d
+            if pha_aer_1d.sizes["theta_atm"] == len(theta_ref):
+                phase_aer_1d = pha_aer_1d.assign_coords(
+                    theta_atm=theta_ref
+                )
             else:
-                phase_aer_1d = pha_aer_1d.sub()[:, :, Idx(theta_ref)]
+                phase_aer_1d = pha_aer_1d.interp(theta_atm=theta_ref)
 
         # the altitude level of the 1D aerosols co-located with each
         # cell (same historical mapping as `_glob_particles`)
@@ -4228,13 +4263,15 @@ class Atm3D(Atmosphere):
         # wavelengths (sharing the matrices of the cells occupied by
         # a single component is a possible future memory
         # optimization)
-        luts = []
+        phases = []
         for iwav in range(0, len(wav_pha)):
             if phase_aer_1d is not None:
                 assert ipha_aer_1d is not None
                 for iz in range(0, nbz):
-                    luts.append(
-                        phase_aer_1d.sub()[ipha_aer_1d[iwav, iz], :, :]
+                    phases.append(
+                        phase_aer_1d.isel(
+                            iphase=ipha_aer_1d[iwav, iz]
+                        )
                     )
             for icell in range(0, n_cell):
                 pha_tot = None
@@ -4243,9 +4280,9 @@ class Atm3D(Atmosphere):
                 if phase_aer_1d is not None:
                     assert ipha_aer_1d is not None
                     idz = idz_atm[icell]
-                    pha_first = phase_aer_1d.sub()[
-                        ipha_aer_1d[iwav, idz], :, :
-                    ]
+                    pha_first = phase_aer_1d.isel(
+                        iphase=ipha_aer_1d[iwav, idz]
+                    )
                     pha_tot = pha_first * (
                         ext_aer_1d[iwav, idz] * ssa_aer_1d[iwav, idz]
                     )
@@ -4255,7 +4292,7 @@ class Atm3D(Atmosphere):
                     if iloc < 0:
                         continue
                     _, cell_pha_idx, n_unique = phase_sets[icomp]
-                    pha_cld = cld_luts_all[icomp][
+                    pha_cld = cld_phases_all[icomp][
                         iwav * n_unique + cell_pha_idx[iloc]
                     ]
                     if pha_first is None:
@@ -4276,10 +4313,10 @@ class Atm3D(Atmosphere):
                     # never sampled (zero extinction): keep a valid
                     # unweighted matrix rather than a null one
                     pha_tot = pha_first
-                luts.append(pha_tot)
+                phases.append(pha_tot)
 
         # the phase matrix indices, with the per-wavelength stride of
-        # the `luts` layout above
+        # the `phases` layout above
         if phase_aer_1d is not None:
             stride = nbz + n_cell
             phase_glob_indices_w0 = np.arange(
@@ -4301,7 +4338,7 @@ class Atm3D(Atmosphere):
 
         ext_glob = np.concatenate([ext_aer_1d, ext_mix_3d], axis=1)
         ssa_glob = np.concatenate([ssa_aer_1d, ssa_mix_3d], axis=1)
-        return ext_glob, ssa_glob, (ipha3d, luts)
+        return ext_glob, ssa_glob, (ipha3d, phases)
 
     def _cells_info(
         self,

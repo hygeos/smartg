@@ -452,7 +452,7 @@ def test_aer3d_hydrophobic_species():
         rh=np.array([30.0, 70.0]),
         cell_indices=AER_CELL_INDICES[:2],
     )
-    hum0 = float(np.asarray(aer.aer_mlut.axes["hum"])[0])
+    hum0 = float(aer.ds_bulk["hum"].values[0])
     assert np.array_equal(aer.rh, [hum0, hum0])
     ssa = aer.get_ssa(WAV)
     assert ssa[0, 0] == ssa[0, 1]
