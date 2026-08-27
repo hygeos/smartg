@@ -1388,7 +1388,7 @@ class _Comp3DFile(Comp3D):
     relative humidity). The bulk optical properties are available
     as the ``mixture`` dataset attribute, like in the 1D
     :class:`AerOPAC` and :class:`Cloud` classes, and the 3D field
-    as the ``distribution`` attribute.
+    as the ``ds_dist`` dataset attribute.
     """
 
     # per-cell parameter name in the public API and the dense
@@ -1457,7 +1457,7 @@ class _Comp3DFile(Comp3D):
                     "('z', 'y', 'x') and the 'x_bounds', 'y_bounds' "
                     f"and 'z_bounds' coordinates; missing: {missing}"
                 )
-            self.distribution = ds
+            self.ds_dist = ds
             # extract the occupied cells in C order with x slowest,
             # which follows the row order of the I3RC/IPRT ASCII files
             ext_xyz = ds["ext"].transpose("x", "y", "z").to_numpy()
@@ -1480,7 +1480,7 @@ class _Comp3DFile(Comp3D):
                     f"If ds is not given, then {self._param_name}, "
                     "ext_ref and cell_indices must all be given!"
                 )
-            self.distribution = None
+            self.ds_dist = None
             # the IPRT convention cell indices start at 1 instead of 0
             self._cell_indices = (
                 np.asarray(cell_indices, dtype=np.int32) - 1
@@ -1585,15 +1585,15 @@ class _Comp3DFile(Comp3D):
         field, from which the :class:`smartg.grid3d.Grid3D` can be
         built. Only available with the dataset input route.
         """
-        if self.distribution is None:
+        if self.ds_dist is None:
             raise ValueError(
                 f"The {self._label} grid is only known when the "
                 f"{self._label} is provided as a dataset (ds parameter)"
             )
         return (
-            self.distribution["x_bounds"].to_numpy(),
-            self.distribution["y_bounds"].to_numpy(),
-            self.distribution["z_bounds"].to_numpy(),
+            self.ds_dist["x_bounds"].to_numpy(),
+            self.ds_dist["y_bounds"].to_numpy(),
+            self.ds_dist["z_bounds"].to_numpy(),
         )
 
     def get_cell_indices(self) -> NDArray[np.int32]:
