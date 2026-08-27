@@ -16,7 +16,7 @@ from smartg.atmosphere import Atm1D, Atm3D, Cloud3D
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.grid3d import Grid3D
-from smartg.iprt.iprt import compute_deltam, groupIQUV
+from smartg.iprt.iprt import compute_deltam, group_iquv
 from smartg.sensor import get_sensors_grid
 from smartg.view import satellite_view
 from smartg.phase import read_cld_nth_cte
@@ -964,11 +964,17 @@ def _check_deltam(delta_m_ref, signal_ref, iquv_my, iquv_sg, label, tol):
     the case is reported as a failure, which is how a new reference is
     measured before being written in the tables above.
     """
-    iquv_mystic = groupIQUV(
-        lI=[iquv_my[0]], lQ=[iquv_my[1]], lU=[iquv_my[2]], lV=[iquv_my[3]]
+    iquv_mystic = group_iquv(
+        i_list=[iquv_my[0]],
+        q_list=[iquv_my[1]],
+        u_list=[iquv_my[2]],
+        v_list=[iquv_my[3]],
     )
-    iquv_smartg = groupIQUV(
-        lI=[iquv_sg[0]], lQ=[iquv_sg[1]], lU=[iquv_sg[2]], lV=[iquv_sg[3]]
+    iquv_smartg = group_iquv(
+        i_list=[iquv_sg[0]],
+        q_list=[iquv_sg[1]],
+        u_list=[iquv_sg[2]],
+        v_list=[iquv_sg[3]],
     )
 
     delta_m = compute_deltam(

@@ -15,12 +15,12 @@ import numpy as np
 import xarray as xr
 
 from smartg.iprt.iprt import (
-    convert_SGout_to_IPRTout,
+    convert_sgout_to_iprtout,
     select_and_plot_polar_iprt,
     compute_deltam,
-    seclect_iprt_IQUV,
+    select_iprt_iquv,
     plot_iprt_radiances,
-    groupIQUV,
+    group_iquv,
 )
 from smartg.phase import calc_iphase
 from luts.luts import LUT
@@ -305,8 +305,8 @@ def test_a1(request, s1df, s1db):
         vaa_dep01 = -m_a1_f_dep01.coords["Azimuth angles"].values
 
         # convert
-        convert_SGout_to_IPRTout(
-            lm=[
+        convert_sgout_to_iprtout(
+            datasets=[
                 m_a1_b_boa_dep0,
                 m_a1_b_toa_dep0,
                 m_a1_f_dep003,
@@ -314,13 +314,13 @@ def test_a1(request, s1df, s1db):
                 m_a1_f_dep01,
                 m_a1_f_dep01,
             ],
-            lU_sign=[1.0, 1, -1, -1, -1, -1],
+            u_signs=[1.0, 1, -1, -1, -1, -1],
             case_name="A1",
-            ldepol=[0.0, 0.0, 0.03, 0.03, 0.1, 0.1],
-            lalt=[0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
-            lSZA=[0.0, 0.0, 30.0, 30.0, 30.0, 30.0],
-            lSAA=[65.0, 65.0, 0.0, 0.0, 65.0, 65.0],
-            lVZA=[
+            depols=[0.0, 0.0, 0.03, 0.03, 0.1, 0.1],
+            altitudes=[0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            szas=[0.0, 0.0, 30.0, 30.0, 30.0, 30.0],
+            saas=[65.0, 65.0, 0.0, 0.0, 65.0, 65.0],
+            vzas=[
                 vza_boa_dep0,
                 vza_toa_dep0,
                 180.0 - vza_dep003,
@@ -328,7 +328,7 @@ def test_a1(request, s1df, s1db):
                 180.0 - vza_dep01,
                 vza_dep01,
             ],
-            lVAA=[
+            vaas=[
                 vaa_boa_dep0,
                 vaa_toa_dep0,
                 vaa_dep003,
@@ -388,10 +388,10 @@ def test_a1(request, s1df, s1db):
                         z_alti=l_alt[ialt],
                         depol=l_dep[isim],
                         title=title,
-                        change_U_sign=True,
+                        change_u_sign=True,
                         inv_thetas=l_invth[ialt],
                         sym=False,
-                        outputIQUV=True,
+                        output_iquv=True,
                         avoid_plot=avoid_p,
                         save_fig=Path(tmpdir) / tmp_filename,
                     )
@@ -412,10 +412,10 @@ def test_a1(request, s1df, s1db):
                         z_alti=l_alt[ialt],
                         depol=l_dep[isim],
                         title=title,
-                        change_U_sign=True,
+                        change_u_sign=True,
                         inv_thetas=l_invth[ialt],
                         sym=False,
-                        outputIQUV=True,
+                        output_iquv=True,
                         avoid_plot=avoid_p,
                         save_fig=Path(tmpdir) / tmp_filename,
                     )
@@ -423,17 +423,17 @@ def test_a1(request, s1df, s1db):
                 imgs.append(mpimg.imread(Path(tmpdir) / tmp_filename))
 
                 if isim == 0 and ialt == 0:
-                    iquv_smartg_tot = groupIQUV(
-                        lI=[i_smartg],
-                        lQ=[q_smartg],
-                        lU=[u_smartg],
-                        lV=[v_smartg],
+                    iquv_smartg_tot = group_iquv(
+                        i_list=[i_smartg],
+                        q_list=[q_smartg],
+                        u_list=[u_smartg],
+                        v_list=[v_smartg],
                     )
-                    iquv_mystic_tot = groupIQUV(
-                        lI=[i_mystic],
-                        lQ=[q_mystic],
-                        lU=[u_mystic],
-                        lV=[v_mystic],
+                    iquv_mystic_tot = group_iquv(
+                        i_list=[i_mystic],
+                        q_list=[q_mystic],
+                        u_list=[u_mystic],
+                        v_list=[v_mystic],
                     )
                 else:
                     assert iquv_smartg_tot is not None
@@ -441,11 +441,11 @@ def test_a1(request, s1df, s1db):
                     iquv_smartg_tot = np.concatenate(
                         (
                             iquv_smartg_tot,
-                            groupIQUV(
-                                lI=[i_smartg],
-                                lQ=[q_smartg],
-                                lU=[u_smartg],
-                                lV=[v_smartg],
+                            group_iquv(
+                                i_list=[i_smartg],
+                                q_list=[q_smartg],
+                                u_list=[u_smartg],
+                                v_list=[v_smartg],
                             ),
                         ),
                         axis=1,
@@ -453,11 +453,11 @@ def test_a1(request, s1df, s1db):
                     iquv_mystic_tot = np.concatenate(
                         (
                             iquv_mystic_tot,
-                            groupIQUV(
-                                lI=[i_mystic],
-                                lQ=[q_mystic],
-                                lU=[u_mystic],
-                                lV=[v_mystic],
+                            group_iquv(
+                                i_list=[i_mystic],
+                                q_list=[q_mystic],
+                                u_list=[u_mystic],
+                                v_list=[v_mystic],
                             ),
                         ),
                         axis=1,
@@ -484,12 +484,12 @@ def test_a1(request, s1df, s1db):
                     z_alti=l_alt[ialt],
                     depol=l_dep[isim],
                     title=title,
-                    forceIQUV=[i_val, q_val, u_val, v_val],
-                    maxI=max_i,
-                    maxQ=max_q,
-                    maxU=max_u,
-                    maxV=max_v,
-                    cmapI="RdBu_r",
+                    force_iquv=[i_val, q_val, u_val, v_val],
+                    max_i=max_i,
+                    max_q=max_q,
+                    max_u=max_u,
+                    max_v=max_v,
+                    cmap_i="RdBu_r",
                     avoid_plot=avoid_p,
                     save_fig=Path(tmpdir) / tmp_filename,
                 )
@@ -535,26 +535,26 @@ def test_a1(request, s1df, s1db):
                 smartg_a1_ref,
                 z_alti=l_alt[ialt],
                 depol=l_dep[isim],
-                change_U_sign=True,
+                change_u_sign=True,
                 inv_thetas=l_invth[ialt],
                 sym=False,
-                outputIQUV=True,
-                outputIQUVstd=True,
+                output_iquv=True,
+                output_iquv_std=True,
                 avoid_plot=True,
             )
 
             if isim == 0 and ialt == 0:
-                iquv_smartg_ref_tot = groupIQUV(
-                    lI=[i_smartg_ref],
-                    lQ=[q_smartg_ref],
-                    lU=[u_smartg_ref],
-                    lV=[v_smartg_ref],
+                iquv_smartg_ref_tot = group_iquv(
+                    i_list=[i_smartg_ref],
+                    q_list=[q_smartg_ref],
+                    u_list=[u_smartg_ref],
+                    v_list=[v_smartg_ref],
                 )
-                iquv_smartg_std_ref_tot = groupIQUV(
-                    lI=[i_smartg_std_ref],
-                    lQ=[q_smartg_std_ref],
-                    lU=[u_smartg_std_ref],
-                    lV=[v_smartg_std_ref],
+                iquv_smartg_std_ref_tot = group_iquv(
+                    i_list=[i_smartg_std_ref],
+                    q_list=[q_smartg_std_ref],
+                    u_list=[u_smartg_std_ref],
+                    v_list=[v_smartg_std_ref],
                 )
             else:
                 assert iquv_smartg_ref_tot is not None
@@ -562,11 +562,11 @@ def test_a1(request, s1df, s1db):
                 iquv_smartg_ref_tot = np.concatenate(
                     (
                         iquv_smartg_ref_tot,
-                        groupIQUV(
-                            lI=[i_smartg_ref],
-                            lQ=[q_smartg_ref],
-                            lU=[u_smartg_ref],
-                            lV=[v_smartg_ref],
+                        group_iquv(
+                            i_list=[i_smartg_ref],
+                            q_list=[q_smartg_ref],
+                            u_list=[u_smartg_ref],
+                            v_list=[v_smartg_ref],
                         ),
                     ),
                     axis=1,
@@ -574,11 +574,11 @@ def test_a1(request, s1df, s1db):
                 iquv_smartg_std_ref_tot = np.concatenate(
                     (
                         iquv_smartg_std_ref_tot,
-                        groupIQUV(
-                            lI=[i_smartg_std_ref],
-                            lQ=[q_smartg_std_ref],
-                            lU=[u_smartg_std_ref],
-                            lV=[v_smartg_std_ref],
+                        group_iquv(
+                            i_list=[i_smartg_std_ref],
+                            q_list=[q_smartg_std_ref],
+                            u_list=[u_smartg_std_ref],
+                            v_list=[v_smartg_std_ref],
                         ),
                     ),
                     axis=1,
@@ -688,16 +688,16 @@ def test_a2(request, s1df):
         # === Convert smartg output to iprt ascii output format
         # (Forward, U must be multiplied by -1)
         tmp_file_a2 = Path(tmpdir) / "a2.dat"
-        convert_SGout_to_IPRTout(
-            lm=[m_a2_f, m_a2_f],
-            lU_sign=[-1, -1],
+        convert_sgout_to_iprtout(
+            datasets=[m_a2_f, m_a2_f],
+            u_signs=[-1, -1],
             case_name="A2",
-            ldepol=[0.03, 0.03],
-            lalt=[0.0, 1.0],
-            lSZA=[50.0, 50.0],
-            lSAA=[0.0, 0.0],
-            lVZA=[180.0 - vza, vza],
-            lVAA=[vaa, vaa],
+            depols=[0.03, 0.03],
+            altitudes=[0.0, 1.0],
+            szas=[50.0, 50.0],
+            saas=[0.0, 0.0],
+            vzas=[180.0 - vza, vza],
+            vaas=[vaa, vaa],
             file_name=tmp_file_a2,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
@@ -725,9 +725,9 @@ def test_a2(request, s1df):
                 smartg_a2,
                 0.0,
                 title=title,
-                change_U_sign=True,
+                change_u_sign=True,
                 sym=True,
-                outputIQUV=True,
+                output_iquv=True,
                 avoid_plot=avoid_p,
                 save_fig=Path(tmpdir) / "a2_0km_smartg.png",
             )
@@ -739,9 +739,9 @@ def test_a2(request, s1df):
                 mystic_a2,
                 0.0,
                 title=title,
-                change_U_sign=True,
+                change_u_sign=True,
                 sym=True,
-                outputIQUV=True,
+                output_iquv=True,
                 avoid_plot=avoid_p,
                 save_fig=Path(tmpdir) / "a2_0km_mystic.png",
             )
@@ -760,12 +760,12 @@ def test_a2(request, s1df):
             mystic_a2,
             0.0,
             title=title,
-            forceIQUV=[i_val, q_val, u_val, v_val],
-            maxI=max_i,
-            maxQ=max_q,
-            maxU=max_u,
-            maxV=max_v,
-            cmapI="RdBu_r",
+            force_iquv=[i_val, q_val, u_val, v_val],
+            max_i=max_i,
+            max_q=max_q,
+            max_u=max_u,
+            max_v=max_v,
+            cmap_i="RdBu_r",
             avoid_plot=avoid_p,
             save_fig=Path(tmpdir) / "a2_0km_dif.png",
         )
@@ -791,10 +791,10 @@ def test_a2(request, s1df):
                 smartg_a2,
                 1.0,
                 title=title,
-                change_U_sign=True,
+                change_u_sign=True,
                 inv_thetas=True,
                 sym=True,
-                outputIQUV=True,
+                output_iquv=True,
                 avoid_plot=avoid_p,
                 save_fig=Path(tmpdir) / "a2_1km_smartg.png",
             )
@@ -806,10 +806,10 @@ def test_a2(request, s1df):
                 mystic_a2,
                 1.0,
                 title=title,
-                change_U_sign=True,
+                change_u_sign=True,
                 inv_thetas=True,
                 sym=True,
-                outputIQUV=True,
+                output_iquv=True,
                 avoid_plot=avoid_p,
                 save_fig=Path(tmpdir) / "a2_1km_mystic.png",
             )
@@ -828,12 +828,12 @@ def test_a2(request, s1df):
             mystic_a2,
             1.0,
             title=title,
-            forceIQUV=[i_val, q_val, u_val, v_val],
-            maxI=max_i,
-            maxQ=max_q,
-            maxU=max_u,
-            maxV=max_v,
-            cmapI="RdBu_r",
+            force_iquv=[i_val, q_val, u_val, v_val],
+            max_i=max_i,
+            max_q=max_q,
+            max_u=max_u,
+            max_v=max_v,
+            cmap_i="RdBu_r",
             avoid_plot=avoid_p,
             save_fig=Path(tmpdir) / "a2_1km_dif.png",
         )
@@ -855,17 +855,17 @@ def test_a2(request, s1df):
     # === Compute the delta_m values and analyse them with the previous
     # saved validated ones
     # MYSTIC and calculated SMART-G total IQUV
-    iquv_smartg_tot = groupIQUV(
-        lI=[i_smartg_0km, i_smartg_1km],
-        lQ=[q_smartg_0km, q_smartg_1km],
-        lU=[u_smartg_0km, u_smartg_1km],
-        lV=[v_smartg_0km, v_smartg_1km],
+    iquv_smartg_tot = group_iquv(
+        i_list=[i_smartg_0km, i_smartg_1km],
+        q_list=[q_smartg_0km, q_smartg_1km],
+        u_list=[u_smartg_0km, u_smartg_1km],
+        v_list=[v_smartg_0km, v_smartg_1km],
     )
-    iquv_mystic_tot = groupIQUV(
-        lI=[i_mystic_0km, i_mystic_1km],
-        lQ=[q_mystic_0km, q_mystic_1km],
-        lU=[u_mystic_0km, u_mystic_1km],
-        lV=[v_mystic_0km, v_mystic_1km],
+    iquv_mystic_tot = group_iquv(
+        i_list=[i_mystic_0km, i_mystic_1km],
+        q_list=[q_mystic_0km, q_mystic_1km],
+        u_list=[u_mystic_0km, u_mystic_1km],
+        v_list=[v_mystic_0km, v_mystic_1km],
     )
 
     # SMARTG ref results
@@ -893,9 +893,9 @@ def test_a2(request, s1df):
     ) = select_and_plot_polar_iprt(
         smartg_a2_ref,
         0.0,
-        change_U_sign=True,
-        outputIQUV=True,
-        outputIQUVstd=True,
+        change_u_sign=True,
+        output_iquv=True,
+        output_iquv_std=True,
         avoid_plot=True,
     )
     (
@@ -910,24 +910,24 @@ def test_a2(request, s1df):
     ) = select_and_plot_polar_iprt(
         smartg_a2_ref,
         1.0,
-        change_U_sign=True,
+        change_u_sign=True,
         inv_thetas=True,
-        outputIQUVstd=True,
-        outputIQUV=True,
+        output_iquv_std=True,
+        output_iquv=True,
         avoid_plot=True,
     )
 
-    iquv_smartg_ref_tot = groupIQUV(
-        lI=[i_smartg_0km_ref, i_smartg_1km_ref],
-        lQ=[q_smartg_0km_ref, q_smartg_1km_ref],
-        lU=[u_smartg_0km_ref, u_smartg_1km_ref],
-        lV=[v_smartg_0km_ref, v_smartg_1km_ref],
+    iquv_smartg_ref_tot = group_iquv(
+        i_list=[i_smartg_0km_ref, i_smartg_1km_ref],
+        q_list=[q_smartg_0km_ref, q_smartg_1km_ref],
+        u_list=[u_smartg_0km_ref, u_smartg_1km_ref],
+        v_list=[v_smartg_0km_ref, v_smartg_1km_ref],
     )
-    iquv_smartg_std_ref_tot = groupIQUV(
-        lI=[i_smartg_std_0km_ref, i_smartg_std_1km_ref],
-        lQ=[q_smartg_std_0km_ref, q_smartg_std_1km_ref],
-        lU=[u_smartg_std_0km_ref, u_smartg_std_1km_ref],
-        lV=[v_smartg_std_0km_ref, v_smartg_std_1km_ref],
+    iquv_smartg_std_ref_tot = group_iquv(
+        i_list=[i_smartg_std_0km_ref, i_smartg_std_1km_ref],
+        q_list=[q_smartg_std_0km_ref, q_smartg_std_1km_ref],
+        u_list=[u_smartg_std_0km_ref, u_smartg_std_1km_ref],
+        v_list=[v_smartg_std_0km_ref, v_smartg_std_1km_ref],
     )
 
     # Compute the delta_m values from the ref smartg results
@@ -1053,16 +1053,16 @@ def test_a5_pp(request, s1df):
     with TemporaryDirectory() as tmpdir:
         # === Convert smartg output to iprt ascii output format
         tmp_file_a5_pp = Path(tmpdir) / "a5_pp.dat"
-        convert_SGout_to_IPRTout(
-            lm=[m_a5_f_pp, m_a5_f_pp],
-            lU_sign=[-1, -1],
+        convert_sgout_to_iprtout(
+            datasets=[m_a5_f_pp, m_a5_f_pp],
+            u_signs=[-1, -1],
             case_name="A5",
-            ldepol=[0.03, 0.03],
-            lalt=[0.0, 1.0],
-            lSZA=[50.0, 50.0],
-            lSAA=[0.0, 0.0],
-            lVZA=[vza, vza],
-            lVAA=[vaa, vaa],
+            depols=[0.03, 0.03],
+            altitudes=[0.0, 1.0],
+            szas=[50.0, 50.0],
+            saas=[0.0, 0.0],
+            vzas=[vza, vza],
+            vaas=[vaa, vaa],
             file_name=tmp_file_a5_pp,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
@@ -1086,15 +1086,15 @@ def test_a5_pp(request, s1df):
     nvza = len(vza_n)
 
     # Reflectance
-    iquvs_with_std = seclect_iprt_IQUV(
-        smartg_a5_pp, 1.0, change_U_sign=False, inv_thetas=True, stdev=True
+    iquvs_with_std = select_iprt_iquv(
+        smartg_a5_pp, 1.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
-    iquvm_with_std = seclect_iprt_IQUV(
+    iquvm_with_std = select_iprt_iquv(
         mystic_a5_pp,
         1.0,
-        change_U_sign=False,
+        change_u_sign=False,
         inv_thetas=True,
-        I_index=5,
+        i_index=5,
         va_index=3,
         phi_index=4,
         z_index=0,
@@ -1126,28 +1126,28 @@ def test_a5_pp(request, s1df):
     iquvy_min = [0.0, -2e-2, -1.2e-4, -1e-5]
     iquvy_max = [2.5e-1, 1.5e-2, 6e-5, 1e-5]
     plot_iprt_radiances(
-        IQUV_obs=iquvm_pp,
-        IQUV_mod=iquvs_pp,
-        IQUVstd_obs=iquvstdm_pp,
-        IQUVstd_mod=iquvstds_pp,
+        iquv_obs=iquvm_pp,
+        iquv_mod=iquvs_pp,
+        iquv_std_obs=iquvstdm_pp,
+        iquv_std_mod=iquvstds_pp,
         xaxis=vza_n,
         xlabel="vza [deg]",
-        IQUVyMin=iquvy_min,
-        IQUVyMax=iquvy_max,
+        iquv_ymin=iquvy_min,
+        iquv_ymax=iquvy_max,
         title="reflectance  MYSTIC-red SMARTG-blue",
     )
     conftest.savefig(request, bbox_inches="tight")
 
     # Transmittance
-    iquvs_with_std = seclect_iprt_IQUV(
-        smartg_a5_pp, 0.0, change_U_sign=False, inv_thetas=True, stdev=True
+    iquvs_with_std = select_iprt_iquv(
+        smartg_a5_pp, 0.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
-    iquvm_with_std = seclect_iprt_IQUV(
+    iquvm_with_std = select_iprt_iquv(
         mystic_a5_pp,
         0.0,
-        change_U_sign=False,
+        change_u_sign=False,
         inv_thetas=True,
-        I_index=5,
+        i_index=5,
         va_index=3,
         phi_index=4,
         z_index=0,
@@ -1173,14 +1173,14 @@ def test_a5_pp(request, s1df):
     iquvy_max = [3.5, 4e-3, 2e-4, 3e-5]
 
     plot_iprt_radiances(
-        IQUV_obs=iquvm_pp,
-        IQUV_mod=iquvs_pp,
-        IQUVstd_obs=iquvstdm_pp,
-        IQUVstd_mod=iquvstds_pp,
+        iquv_obs=iquvm_pp,
+        iquv_mod=iquvs_pp,
+        iquv_std_obs=iquvstdm_pp,
+        iquv_std_mod=iquvstds_pp,
         xaxis=vza_n,
         xlabel="vza [deg]",
-        IQUVyMin=iquvy_min,
-        IQUVyMax=iquvy_max,
+        iquv_ymin=iquvy_min,
+        iquv_ymax=iquvy_max,
         title="transmittance  MYSTIC-red SMARTG-blue",
     )
     conftest.savefig(request, bbox_inches="tight")
@@ -1203,8 +1203,8 @@ def test_a5_pp(request, s1df):
         dtype=float,
         comment="#",
     ).values
-    iquvs_with_std_ref = seclect_iprt_IQUV(
-        smartg_a5_pp_ref, 1.0, change_U_sign=False, inv_thetas=True, stdev=True
+    iquvs_with_std_ref = select_iprt_iquv(
+        smartg_a5_pp_ref, 1.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
     iquvs_pp_ref = np.zeros((4, nvza), dtype=np.float32)
     iquvs_pp_std_ref = np.zeros((4, nvza), dtype=np.float32)
@@ -1220,8 +1220,8 @@ def test_a5_pp(request, s1df):
         )
     iquvs_pp_ref_tot = iquvs_pp_ref.copy()
     iquvs_pp_std_ref_tot = iquvs_pp_std_ref.copy()
-    iquvs_with_std_ref = seclect_iprt_IQUV(
-        smartg_a5_pp_ref, 0.0, change_U_sign=False, inv_thetas=True, stdev=True
+    iquvs_with_std_ref = select_iprt_iquv(
+        smartg_a5_pp_ref, 0.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
     for i in range(0, 4):
         iquvs_pp_ref[i, :] = np.concatenate(
@@ -1361,16 +1361,16 @@ def test_a5_al(request, s1df):
     with TemporaryDirectory() as tmpdir:
         # === Convert smartg output to iprt ascii output format
         tmp_file_a5_al = Path(tmpdir) / "a5_al.dat"
-        convert_SGout_to_IPRTout(
-            lm=[m_a5_f_al, m_a5_f_al],
-            lU_sign=[-1, -1],
+        convert_sgout_to_iprtout(
+            datasets=[m_a5_f_al, m_a5_f_al],
+            u_signs=[-1, -1],
             case_name="A5",
-            ldepol=[0.03, 0.03],
-            lalt=[0.0, 1.0],
-            lSZA=[50.0, 50.0],
-            lSAA=[0.0, 0.0],
-            lVZA=[vza, vza],
-            lVAA=[vaa, vaa],
+            depols=[0.03, 0.03],
+            altitudes=[0.0, 1.0],
+            szas=[50.0, 50.0],
+            saas=[0.0, 0.0],
+            vzas=[vza, vza],
+            vaas=[vaa, vaa],
             file_name=tmp_file_a5_al,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
@@ -1394,15 +1394,15 @@ def test_a5_al(request, s1df):
     nvaa = len(vaa_n)
 
     # Reflectance
-    iquvs_with_std = seclect_iprt_IQUV(
-        smartg_a5_al, 1.0, change_U_sign=False, inv_thetas=True, stdev=True
+    iquvs_with_std = select_iprt_iquv(
+        smartg_a5_al, 1.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
-    iquvm_with_std = seclect_iprt_IQUV(
+    iquvm_with_std = select_iprt_iquv(
         mystic_a5_al,
         1.0,
-        change_U_sign=False,
+        change_u_sign=False,
         inv_thetas=True,
-        I_index=5,
+        i_index=5,
         va_index=3,
         phi_index=4,
         z_index=0,
@@ -1426,28 +1426,28 @@ def test_a5_al(request, s1df):
     iquvy_min = [6e-2, -1e-2, -2e-3, -5e-5]
     iquvy_max = [1.2e-1, 2e-2, 1.2e-2, 2e-5]
     plot_iprt_radiances(
-        IQUV_obs=iquvm_al,
-        IQUV_mod=iquvs_al,
-        IQUVstd_obs=iquvstdm_al,
-        IQUVstd_mod=iquvstds_al,
+        iquv_obs=iquvm_al,
+        iquv_mod=iquvs_al,
+        iquv_std_obs=iquvstdm_al,
+        iquv_std_mod=iquvstds_al,
         xaxis=vaa_n,
         xlabel="vza [deg]",
-        IQUVyMin=iquvy_min,
-        IQUVyMax=iquvy_max,
+        iquv_ymin=iquvy_min,
+        iquv_ymax=iquvy_max,
         title="reflectance  MYSTIC-red SMARTG-blue",
     )
     conftest.savefig(request, bbox_inches="tight")
 
     # Transmittance
-    iquvs_with_std = seclect_iprt_IQUV(
-        smartg_a5_al, 0.0, change_U_sign=False, inv_thetas=True, stdev=True
+    iquvs_with_std = select_iprt_iquv(
+        smartg_a5_al, 0.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
-    iquvm_with_std = seclect_iprt_IQUV(
+    iquvm_with_std = select_iprt_iquv(
         mystic_a5_al,
         0.0,
-        change_U_sign=False,
+        change_u_sign=False,
         inv_thetas=True,
-        I_index=5,
+        i_index=5,
         va_index=3,
         phi_index=4,
         z_index=0,
@@ -1465,14 +1465,14 @@ def test_a5_al(request, s1df):
     iquvy_max = [3.5, 5e-4, 5e-4, 2.5e-5]
 
     plot_iprt_radiances(
-        IQUV_obs=iquvm_al,
-        IQUV_mod=iquvs_al,
-        IQUVstd_obs=iquvstdm_al,
-        IQUVstd_mod=iquvstds_al,
+        iquv_obs=iquvm_al,
+        iquv_mod=iquvs_al,
+        iquv_std_obs=iquvstdm_al,
+        iquv_std_mod=iquvstds_al,
         xaxis=vaa_n,
         xlabel="vza [deg]",
-        IQUVyMin=iquvy_min,
-        IQUVyMax=iquvy_max,
+        iquv_ymin=iquvy_min,
+        iquv_ymax=iquvy_max,
         title="transmittance  MYSTIC-red SMARTG-blue",
     )
     conftest.savefig(request, bbox_inches="tight")
@@ -1495,8 +1495,8 @@ def test_a5_al(request, s1df):
         dtype=float,
         comment="#",
     ).values
-    iquvs_with_std_ref = seclect_iprt_IQUV(
-        smartg_a5_al_ref, 1.0, change_U_sign=False, inv_thetas=True, stdev=True
+    iquvs_with_std_ref = select_iprt_iquv(
+        smartg_a5_al_ref, 1.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
     iquvs_al_ref = np.zeros((4, nvaa), dtype=np.float32)
     iquvs_al_std_ref = np.zeros((4, nvaa), dtype=np.float32)
@@ -1505,8 +1505,8 @@ def test_a5_al(request, s1df):
         iquvs_al_std_ref[i, :] = iquvs_with_std_ref[i + 4][0, :]
     iquvs_al_ref_tot = iquvs_al_ref.copy()
     iquvs_al_std_ref_tot = iquvs_al_std_ref.copy()
-    iquvs_with_std_ref = seclect_iprt_IQUV(
-        smartg_a5_al_ref, 0.0, change_U_sign=False, inv_thetas=True, stdev=True
+    iquvs_with_std_ref = select_iprt_iquv(
+        smartg_a5_al_ref, 0.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
     for i in range(0, 4):
         iquvs_al_ref[i, :] = iquvs_with_std_ref[i][0, :]
