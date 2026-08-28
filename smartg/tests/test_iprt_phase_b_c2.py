@@ -546,7 +546,7 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
         atm_1d=Atm1D("afglt", **atm1d_kwargs),
         grid_3d=grid3,
         comp_3d=[cloud3],
-        pfwav=[800.0],
+        wavelength_phase=[800.0],
         **atm3_kwargs,
     )
     pro = atm3.calc(wavelengths, n_theta=NTH, truncation=truncation)

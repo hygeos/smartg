@@ -151,7 +151,8 @@ class IOPDict(TypedDict):
     """
     Inherent optical properties returned by the `iop` and `coeffs`
     methods of the hydrosols. All entries are coefficients in m-1 with
-    dimensions [nwav, nz], except `bbp_ratio` which is dimensionless and
+    dimensions [n_wavelength, nz], except `bbp_ratio` which is
+    dimensionless and
     may be None when no backscattering ratio is available.
     """
 
@@ -232,13 +233,15 @@ class Hydrosol(object):
     Parameters
     ----------
     phase : DataArray or LUT or None, optional
-        Phase matrices with dimensions [nwav, nz, nphamat, angle].
+        Phase matrices with dimensions [n_wavelength, nz, nphamat,
+        angle].
         If None, the phase matrices are derived from `bbp_ratio`
         (see notes).
     bp : array_like or None, optional
-        Particle scattering coefficient in m-1, dimensions [nwav, nz].
+        Particle scattering coefficient in m-1, dimensions
+        [n_wavelength, nz].
         If None, it is taken as null. A scalar or a lower-dimensional
-        array is broadcast over [nwav, nz].
+        array is broadcast over [n_wavelength, nz].
     ap : array_like or None, optional
         Particle absorption coefficient in m-1, same shape rules as
         `bp`.
@@ -255,7 +258,7 @@ class Hydrosol(object):
         truncation of the atmospheric phase matrices in `Atm1D.calc`).
         None disables the truncation. Defaults to
         `DEFAULT_WATER_TRUNC`.
-    pfwav : array_like or None, optional
+    wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
 
@@ -293,7 +296,7 @@ class Hydrosol(object):
         bbp_ratio: NumericArrayLike | None = None,
         n_theta: int = 721,
         truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
-        pfwav: NumericArrayLike | None = None,
+        wavelength_phase: NumericArrayLike | None = None,
     ) -> None:
         self.bp = bp
         self.ap = ap
@@ -302,13 +305,16 @@ class Hydrosol(object):
         self._phase = expand_phase_4_to_6(phase)
         self.n_theta = n_theta
         self.truncation = truncation
-        self.pfwav = None if pfwav is None else np.array(pfwav)
+        self.wavelength_phase = (
+            None if wavelength_phase is None
+            else np.array(wavelength_phase)
+        )
 
         self._pha: xr.DataArray | None = None
         self._coef_trunc: xr.DataArray | None = None
         self._bsca: NDArray | None = None
 
-    def iop(self, wav: NDArray, z: NDArray) -> IOPDict:
+    def iop(self, wavelength: NDArray, z: NDArray) -> IOPDict:
         """
         Inherent optical properties of the hydrosol at the given
         wavelengths and depths.
@@ -319,7 +325,7 @@ class Hydrosol(object):
 
         Parameters
         ----------
-        wav : ndarray
+        wavelength : ndarray
             Wavelengths in nm.
         z : ndarray
             Vertical grid of the water column in m. These are z
@@ -328,8 +334,8 @@ class Hydrosol(object):
         Returns
         -------
         IOPDict
-            Inherent optical properties, each with dimensions [len(wav),
-            len(z)]:
+            Inherent optical properties, each with dimensions
+            [len(wavelength), len(z)]:
 
             - 'ap' : particle absorption coefficient in m-1
             - 'bp' : particle scattering coefficient in m-1, before the
@@ -347,13 +353,14 @@ class Hydrosol(object):
         ------
         ValueError
             If a supplied coefficient cannot be broadcast over
-            [len(wav), len(z)].
+            [len(wavelength), len(z)].
         """
-        shp = (len(wav), len(z))
+        shp = (len(wavelength), len(z))
         zeros = np.zeros(shp, dtype="float")
 
         def as_2d(x: NumericArrayLike | None) -> NDArray:
-            """Broadcast `x` over [len(wav), len(z)], None giving 0."""
+            """Broadcast `x` over [len(wavelength), len(z)], None
+            giving 0."""
             if x is None:
                 return zeros.copy()
             x = np.asarray(x, dtype="float")
@@ -362,7 +369,8 @@ class Hydrosol(object):
             except ValueError:
                 raise ValueError(
                     "Cannot evaluate the hydrosol coefficients over "
-                    + f"{len(wav)} wavelengths and {len(z)} depths: the "
+                    + f"{len(wavelength)} wavelengths and {len(z)} "
+                    + "depths: the "
                     + f"provided arrays have shape {x.shape}."
                 ) from None
 
@@ -396,7 +404,7 @@ class Hydrosol(object):
 
     def calc_phase(
         self,
-        wav: NDArray,
+        wavelength: NDArray,
         z: NDArray,
         bbp_ratio: NDArray,
     ) -> tuple[xr.DataArray, xr.DataArray]:
@@ -413,14 +421,14 @@ class Hydrosol(object):
 
         Parameters
         ----------
-        wav : ndarray
+        wavelength : ndarray
             Wavelengths in nm.
         z : ndarray
             Vertical grid of the water column in m. These are z
             coordinates: 0 at the surface, negative downwards.
         bbp_ratio : 2-D ndarray
-            Backscattering ratio (dimensionless), dimensions [len(wav),
-            len(z)].
+            Backscattering ratio (dimensionless), dimensions
+            [len(wavelength), len(z)].
 
         Returns
         -------
@@ -449,7 +457,7 @@ class Hydrosol(object):
            reflectance including bidirectional effects for case 1 and
            case 2 waters," Appl. Opt. 44, 1236-1249 (2005).
         """
-        nwav = len(wav)
+        n_wavelength = len(wavelength)
         nz = len(z)
 
         # particles phase function
@@ -476,7 +484,7 @@ class Hydrosol(object):
         # normalize and truncate each unique value once
         r1 = (bbp_ratio - 0.002) / 0.028
         r1_uniq, inv = np.unique(r1.ravel(), return_inverse=True)
-        inv = inv.reshape(nwav, nz)
+        inv = inv.reshape(n_wavelength, nz)
 
         f11 = r1_uniq[:, None] * ff1 + (1 - r1_uniq[:, None]) * ff2
 
@@ -501,7 +509,7 @@ class Hydrosol(object):
                     "the truncation angle (theta_tr=None)."
                 )
 
-        pha = np.zeros((nwav, nz, 6, self.n_theta), dtype="float64")
+        pha = np.zeros((n_wavelength, nz, 6, self.n_theta), dtype="float64")
         pha[:, :, 0, :] = f11[inv]
         pha[:, :, 4, :] = pha[:, :, 0, :]  # P22 = P11
 
@@ -509,7 +517,7 @@ class Hydrosol(object):
             pha,
             dims=["wavelength_phase", "z_phase", "nphamat", "theta_oc"],
             coords={
-                "wavelength_phase": wav,
+                "wavelength_phase": wavelength,
                 "z_phase": z,
                 "theta_oc": np.rad2deg(ang),
             },
@@ -517,14 +525,14 @@ class Hydrosol(object):
         coef_trunc = xr.DataArray(
             coef[inv],
             dims=["wavelength_phase", "z_phase"],
-            coords={"wavelength_phase": wav, "z_phase": z},
+            coords={"wavelength_phase": wavelength, "z_phase": z},
         )
 
         return pha_da, coef_trunc
 
     def phase(
         self,
-        wav: NDArray,
+        wavelength: NDArray,
         z: NDArray,
         use_old_calc_iphase: bool = False,
     ) -> xr.DataArray | None:
@@ -537,7 +545,7 @@ class Hydrosol(object):
 
         Parameters
         ----------
-        wav : ndarray
+        wavelength : ndarray
             Wavelengths in nm.
         z : ndarray
             Vertical grid of the water column in m. These are z
@@ -561,7 +569,7 @@ class Hydrosol(object):
         if self._phase is not None:
             return self._phase
 
-        iop = self.iop(wav, z)
+        iop = self.iop(wavelength, z)
         if not (np.asarray(iop["bp"]) > 0).any():
             return None
         if iop["bbp_ratio"] is None:
@@ -569,18 +577,18 @@ class Hydrosol(object):
                 "No phase function nor bbp_ratio has been provided, but bp>0"
             )
 
-        self._resolve_truncation(wav, z, use_old_calc_iphase)
+        self._resolve_truncation(wavelength, z, use_old_calc_iphase)
         return self._pha
 
     def _resolve_truncation(
         self,
-        wav: NDArray,
+        wavelength: NDArray,
         z: NDArray,
         use_old_calc_iphase: bool = False,
     ) -> None:
         """
         Compute the phase matrices at the tabulation wavelengths
-        `pfwav`, along with the associated truncation factor.
+        `wavelength_phase`, along with the associated truncation factor.
 
         The result is memoized in `_pha`, `_coef_trunc` and `_bsca`, so
         that the scattering coefficient and the phase matrices stay
@@ -591,8 +599,8 @@ class Hydrosol(object):
 
         Parameters
         ----------
-        wav : ndarray
-            Wavelengths in nm. Only used if `pfwav` is None.
+        wavelength : ndarray
+            Wavelengths in nm. Only used if `wavelength_phase` is None.
         z : ndarray
             Vertical grid of the water column in m. These are z
             coordinates: 0 at the surface, negative downwards.
@@ -609,9 +617,12 @@ class Hydrosol(object):
         if self._coef_trunc is not None:
             return
 
-        wav_pha = wav if self.pfwav is None else self.pfwav
+        wavelength_pha = (
+            wavelength if self.wavelength_phase is None
+            else self.wavelength_phase
+        )
         z = np.asarray(z, dtype="float")
-        iop = self.iop(wav_pha, z)
+        iop = self.iop(wavelength_pha, z)
         bbp_ratio, bp = iop["bbp_ratio"], iop["bp"]
         if bbp_ratio is None:
             raise Exception(
@@ -629,7 +640,7 @@ class Hydrosol(object):
             sl = slice(None)
 
         self._pha, self._coef_trunc = self.calc_phase(
-            wav_pha, z[sl], bbp_ratio[:, sl]
+            wavelength_pha, z[sl], bbp_ratio[:, sl]
         )
         self._bsca = (
             bp[:, sl] * self._coef_trunc.values * self._trunc_scaling()
@@ -637,7 +648,7 @@ class Hydrosol(object):
 
     def _coef_trunc_on(
         self,
-        wav: NDArray,
+        wavelength: NDArray,
         z: NDArray,
         use_old_calc_iphase: bool = False,
     ) -> NDArray:
@@ -649,7 +660,7 @@ class Hydrosol(object):
 
         Parameters
         ----------
-        wav : ndarray
+        wavelength : ndarray
             Wavelengths in nm.
         z : ndarray
             Vertical grid of the water column in m. These are z
@@ -660,7 +671,7 @@ class Hydrosol(object):
         Returns
         -------
         ndarray
-            Truncation factor with dimensions [len(wav), len(z)].
+            Truncation factor with dimensions [len(wavelength), len(z)].
         """
         # only called once _resolve_truncation has filled the cache
         assert (self._pha is not None) and (self._coef_trunc is not None)
@@ -668,7 +679,8 @@ class Hydrosol(object):
         # index with ipha, so that each wavelength/depth gets the factor
         # of the phase matrix it is actually assigned to
         _, ipha = calc_iphase(
-            self._pha, np.asarray(wav), np.asarray(z), use_old_calc_iphase
+            self._pha, np.asarray(wavelength), np.asarray(z),
+            use_old_calc_iphase
         )
         return self._coef_trunc.values.ravel()[ipha]
 
@@ -704,7 +716,7 @@ class Hydrosol(object):
 
     def coeffs(
         self,
-        wav: NDArray,
+        wavelength: NDArray,
         z: NDArray,
         phase: bool = True,
         use_old_calc_iphase: bool = False,
@@ -715,7 +727,7 @@ class Hydrosol(object):
 
         Parameters
         ----------
-        wav : ndarray
+        wavelength : ndarray
             Wavelengths in nm.
         z : ndarray
             Vertical grid of the water column in m. These are z
@@ -738,7 +750,7 @@ class Hydrosol(object):
             If the hydrosol scatters but neither the phase matrices nor
             the backscattering ratio have been provided.
         """
-        iop = self.iop(wav, z)
+        iop = self.iop(wavelength, z)
 
         if (self._phase is None) and (np.asarray(iop["bp"]) > 0).any():
             if iop["bbp_ratio"] is None:
@@ -746,8 +758,10 @@ class Hydrosol(object):
                     "No phase function nor bbp_ratio has been provided, but bp>0"
                 )
             if phase:
-                self._resolve_truncation(wav, z, use_old_calc_iphase)
-                coef_trunc = self._coef_trunc_on(wav, z, use_old_calc_iphase)
+                self._resolve_truncation(wavelength, z, use_old_calc_iphase)
+                coef_trunc = self._coef_trunc_on(
+                    wavelength, z, use_old_calc_iphase
+                )
                 iop["bp"] = iop["bp"] * coef_trunc * self._trunc_scaling()
 
         return iop
@@ -772,7 +786,7 @@ class HydrosolPR(Hydrosol):
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None disables the truncation. Defaults to
         `DEFAULT_WATER_TRUNC`.
-    pfwav : array_like or None, optional
+    wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
     fqyc : float, optional
@@ -806,10 +820,13 @@ class HydrosolPR(Hydrosol):
         chl: float,
         n_theta: int = 72001,
         truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
-        pfwav: NumericArrayLike | None = None,
+        wavelength_phase: NumericArrayLike | None = None,
         fqyc: float = 0.0,
     ) -> None:
-        super().__init__(n_theta=n_theta, truncation=truncation, pfwav=pfwav)
+        super().__init__(
+            n_theta=n_theta, truncation=truncation,
+            wavelength_phase=wavelength_phase,
+        )
         self.chl = chl
         self.fqyc = fqyc
 
@@ -839,7 +856,7 @@ class HydrosolPR(Hydrosol):
         """
         return 0.5
 
-    def iop(self, wav: NDArray, z: NDArray) -> IOPDict:
+    def iop(self, wavelength: NDArray, z: NDArray) -> IOPDict:
         """
         Inherent optical properties derived from the chlorophyll
         concentration.
@@ -850,7 +867,7 @@ class HydrosolPR(Hydrosol):
 
         Parameters
         ----------
-        wav : ndarray
+        wavelength : ndarray
             Wavelengths in nm.
         z : ndarray
             Vertical grid of the water column in m. Only its length is
@@ -863,22 +880,22 @@ class HydrosolPR(Hydrosol):
             both the phytoplankton absorption, 'acdom' is the CDM
             absorption, and 'bbp_ratio' is always defined.
         """
-        wav = np.asarray(wav, dtype="float")
+        wavelength = np.asarray(wavelength, dtype="float")
         chl = self.chl
 
         # phytoplankton absorption
         aphy = interp_1d_coord(
-            self.bricaud["A"], "wavelength", wav, extrema=True
+            self.bricaud["A"], "wavelength", wavelength, extrema=True
         ) * chl ** interp_1d_coord(
-            self.bricaud["E"], "wavelength", wav, extrema=True
+            self.bricaud["E"], "wavelength", wavelength, extrema=True
         )
 
         # chlorophyll fluorescence (scattering coefficient)
         fqyc = np.full_like(
             aphy, self.fqyc
         )  # Fluorescence Quantum Yield for Chlorophyll
-        fqyc[wav < 370.0] = 0.0
-        fqyc[wav > 690.0] = 0.0
+        fqyc[wavelength < 370.0] = 0.0
+        fqyc[wavelength > 690.0] = 0.0
 
         # CDM absorption central value
         # from Bricaud et al GBC, 2012 (data from nov 2007)
@@ -891,9 +908,9 @@ class HydrosolPR(Hydrosol):
         if s_cdom < 0.011:
             s_cdom = 0.011
 
-        acdm = acdm443 * np.exp(-s_cdom * (wav - 443))
+        acdm = acdm443 * np.exp(-s_cdom * (wavelength - 443))
 
-        bp = 0.416 * (chl**0.766) * 550.0 / wav
+        bp = 0.416 * (chl**0.766) * 550.0 / wavelength
 
         #
         # backscattering coefficient
@@ -903,10 +920,10 @@ class HydrosolPR(Hydrosol):
         else:
             v = 0
         bbp_ratio = 0.002 + 0.01 * (0.5 - 0.25 * np.log10(chl)) * (
-            (wav / 550.0) ** v
+            (wavelength / 550.0) ** v
         )
 
-        shp = (len(wav), len(z))
+        shp = (len(wavelength), len(z))
 
         def as_2d(x: NDArray) -> NDArray:
             """Broadcast the spectrum `x` over the depth profile."""
@@ -941,7 +958,7 @@ class HydrosolZhai(Hydrosol):
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None disables the truncation. Defaults to
         `DEFAULT_WATER_TRUNC`.
-    pfwav : array_like or None, optional
+    wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
     euphotic_depth : float or None, optional
@@ -986,12 +1003,15 @@ class HydrosolZhai(Hydrosol):
         chl_surf: float,
         n_theta: int = 7201,
         truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
-        pfwav: NumericArrayLike | None = None,
+        wavelength_phase: NumericArrayLike | None = None,
         euphotic_depth: float | None = None,
         mixed: bool = False,
         fqyc: float = 0.0,
     ) -> None:
-        super().__init__(n_theta=n_theta, truncation=truncation, pfwav=pfwav)
+        super().__init__(
+            n_theta=n_theta, truncation=truncation,
+            wavelength_phase=wavelength_phase,
+        )
         self.chl_surf = chl_surf
         self.fqyc = fqyc
 
@@ -1111,7 +1131,7 @@ class HydrosolZhai(Hydrosol):
 
     def iop(
         self,
-        wav: NDArray,
+        wavelength: NDArray,
         z: NDArray,
         p1: float = 0.33,
         r1: float = 0.5,
@@ -1127,7 +1147,7 @@ class HydrosolZhai(Hydrosol):
 
         Parameters
         ----------
-        wav : ndarray
+        wavelength : ndarray
             Wavelengths in nm.
         z : ndarray
             Vertical grid of the water column in m. These are z
@@ -1147,17 +1167,17 @@ class HydrosolZhai(Hydrosol):
             'acdom' is the CDOM absorption covariant with it, and
             'bbp_ratio' is that of the non-algal particles.
         """
-        wav = np.asarray(wav, dtype="float")
-        chl2, wav2 = np.meshgrid(self.chl(z), wav)
+        wavelength = np.asarray(wavelength, dtype="float")
+        chl2, wavelength_2 = np.meshgrid(self.chl(z), wavelength)
 
         # specific phytoplankton absorption
         chl2star = np.full_like(chl2, 1.0)
         aphystar = interp_1d_coord(
-            self.bricaud["A"], "wavelength", wav2, extrema=True
+            self.bricaud["A"], "wavelength", wavelength_2, extrema=True
         ) * (
             chl2star
             ** interp_1d_coord(
-                self.bricaud["E"], "wavelength", wav2, extrema=True
+                self.bricaud["E"], "wavelength", wavelength_2, extrema=True
             )
         )
         aphy = aphystar * chl2
@@ -1166,7 +1186,7 @@ class HydrosolZhai(Hydrosol):
         ) * (
             chl2star
             ** interp_1d_coord(
-                self.bricaud["E"], "wavelength", wav2, extrema=True
+                self.bricaud["E"], "wavelength", wavelength_2, extrema=True
             )
         )
         aphy440 = aphystar440 * chl2
@@ -1174,19 +1194,19 @@ class HydrosolZhai(Hydrosol):
         # phytoplankton covariant particles extinction
         piz440 = 0.68
         bp440 = aphy440 * piz440 / (1 - piz440)
-        bp = bp440 * (wav2 / 440.0) ** (-1.0)
+        bp = bp440 * (wavelength_2 / 440.0) ** (-1.0)
 
         # chlorophyll fluorescence (scattering coefficient)
         fqyc = np.full_like(
             aphy, self.fqyc
         )  # Fluorescence Quantum Yield for Chlorophyll
-        fqyc[wav2 < 370.0] = 0.0
-        fqyc[wav2 > 690.0] = 0.0
+        fqyc[wavelength_2 < 370.0] = 0.0
+        fqyc[wavelength_2 > 690.0] = 0.0
 
         # CDOM covariant absorption
         acdm440 = 0.24 * aphy440**0.43
         s_cdom = 0.02
-        acdom = acdm440 * np.exp(-s_cdom * (wav2 - 440))
+        acdom = acdm440 * np.exp(-s_cdom * (wavelength_2 - 440))
 
         # non-algal particles backscattering
         spm = 0.0  # g/m3
@@ -1194,7 +1214,7 @@ class HydrosolZhai(Hydrosol):
         bbpnap650 = 10 ** (
             1.03 * np.log10(spm) - 2.06
         )  # Neukermans et al 2012
-        bbpnap = bbpnap650 * (wav2 / 650.0) ** (-gamma)
+        bbpnap = bbpnap650 * (wavelength_2 / 650.0) ** (-gamma)
         bbp_ratio_nap = np.zeros_like(aphy)
         bbp_ratio_nap[:] = 0.04
         bpnap = bbpnap / bbp_ratio_nap
@@ -1213,7 +1233,7 @@ class HydrosolZhai(Hydrosol):
 class Water(object):
     """Base class for water."""
 
-    def calc(self, wav, *args, **kwargs) -> xr.Dataset:
+    def calc(self, wavelength, *args, **kwargs) -> xr.Dataset:
         """
         Compute the water column profile as an xr.Dataset.
 
@@ -1244,12 +1264,12 @@ class Water1D(Water):
         or/and HydrosolZhai objects.
     aw : None or 2-D ndarray, optional
         Force the pure water absorption coefficient in m-1, with
-        dimensions [nwav, nz]. If None, it is read from the auxiliary
-        data (see `_read_aw`).
+        dimensions [n_wavelength, nz]. If None, it is read from the
+        auxiliary data (see `_read_aw`).
     bw : None or 2-D ndarray, optional
         Force the pure water scattering coefficient in m-1, with
-        dimensions [nwav, nz]. If None, it is computed as
-        19.3e-4*(wav/550)**-4.3.
+        dimensions [n_wavelength, nz]. If None, it is computed as
+        19.3e-4*(wavelength/550)**-4.3.
     alb : albedo object, optional
         Albedo of the sea floor, i.e. of the reflector placed at the
         bottom of the water column, at the deepest level of `grid`. This
@@ -1286,7 +1306,7 @@ class Water1D(Water):
 
     def calc(
         self,
-        wav: NumericArrayLike | BandSet,
+        wavelength: NumericArrayLike | BandSet,
         phase: bool = True,
         use_old_calc_iphase: bool = False,
     ) -> xr.Dataset:
@@ -1300,7 +1320,7 @@ class Water1D(Water):
 
         Parameters
         ----------
-        wav : array_like or BandSet
+        wavelength : array_like or BandSet
             Wavelengths in nm at which to calculate the profile.
         phase : bool, optional
             Whether to calculate the phase matrices. If False, the
@@ -1323,24 +1343,24 @@ class Water1D(Water):
             hydrosol scatters, it also holds 'phase_oc' and 'iphase_oc'
             on the added `theta_oc` coordinate.
         """
-        if not isinstance(wav, BandSet):
-            wav = BandSet(wav)
-        wav = np.array(wav)
+        if not isinstance(wavelength, BandSet):
+            wavelength = BandSet(wavelength)
+        wavelength = np.array(wavelength)
 
         z = self.grid
-        shp = (len(wav), len(z))
-        wav2 = np.stack([wav] * len(z), axis=1)
+        shp = (len(wavelength), len(z))
+        wavelength_2 = np.stack([wavelength] * len(z), axis=1)
 
         #
         # pure water absorption and scattering
         #
         if self.aw is None:
-            aw = interp_1d_coord(self.aw_table, "wavelength", wav2)
+            aw = interp_1d_coord(self.aw_table, "wavelength", wavelength_2)
         else:
             aw = self.aw
 
         if self.bw is None:
-            bw = 19.3e-4 * ((wav2 / 550.0) ** -4.3)
+            bw = 19.3e-4 * ((wavelength_2 / 550.0) ** -4.3)
         else:
             bw = self.bw
 
@@ -1355,7 +1375,8 @@ class Water1D(Water):
 
         for comp in self.comp:
             iop = comp.coeffs(
-                wav, z, phase=phase, use_old_calc_iphase=use_old_calc_iphase
+                wavelength, z, phase=phase,
+                use_old_calc_iphase=use_old_calc_iphase
             )
             ap += iop["ap"]
             bp += iop["bp"]
@@ -1369,7 +1390,7 @@ class Water1D(Water):
         btot = bw + bp + aphy_fluo
 
         pro = xr.Dataset()
-        pro = pro.assign_coords(wavelength=wav[:], z_oc=z)
+        pro = pro.assign_coords(wavelength=wavelength[:], z_oc=z)
 
         pro["T_oc"] = xr.DataArray(
             np.array([280.0] * len(z), dtype="float32"), dims=["z_oc"]
@@ -1379,7 +1400,9 @@ class Water1D(Water):
         # phase matrices
         #
         if phase:
-            pha = self.phase(wav, use_old_calc_iphase=use_old_calc_iphase)
+            pha = self.phase(
+                wavelength, use_old_calc_iphase=use_old_calc_iphase
+            )
 
             if pha is not None:
                 pha_, ipha = calc_iphase(
@@ -1488,14 +1511,14 @@ class Water1D(Water):
         pro["FQY1_oc"] = xr.DataArray(fqy1, dims=["wavelength", "z_oc"])
 
         pro["albedo_seafloor"] = xr.DataArray(
-            self.alb.get(wav), dims=["wavelength"]
+            self.alb.get(wavelength), dims=["wavelength"]
         )
 
         return pro
 
     def phase(
         self,
-        wav: NDArray,
+        wavelength: NDArray,
         use_old_calc_iphase: bool = False,
     ) -> xr.DataArray | None:
         """
@@ -1507,7 +1530,7 @@ class Water1D(Water):
 
         Parameters
         ----------
-        wav : ndarray
+        wavelength : ndarray
             Wavelengths in nm.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
@@ -1530,7 +1553,9 @@ class Water1D(Water):
 
         phases = []
         for comp in self.comp:
-            pha = comp.phase(wav, z, use_old_calc_iphase=use_old_calc_iphase)
+            pha = comp.phase(
+                wavelength, z, use_old_calc_iphase=use_old_calc_iphase
+            )
             if pha is not None:
                 phases.append((comp, pha))
 
@@ -1548,7 +1573,8 @@ class Water1D(Water):
                     raise ValueError(
                         "The phase matrices of the hydrosols must share the "
                         + f"same {dim} grid to be averaged. Use a common "
-                        + "pfwav, or provide the phase matrices directly."
+                        + "wavelength_phase, or provide the phase "
+                        + "matrices directly."
                     )
 
         pha_tot: xr.DataArray | float = 0.0
@@ -1631,7 +1657,7 @@ class WaterRw(Water):
     def __init__(self, alb: AlbedoLike) -> None:
         self.alb = alb
 
-    def calc(self, wav: NumericArrayLike | BandSet) -> xr.Dataset:
+    def calc(self, wavelength: NumericArrayLike | BandSet) -> xr.Dataset:
         """
         Profile calculation at the given wavelengths.
 
@@ -1642,7 +1668,7 @@ class WaterRw(Water):
 
         Parameters
         ----------
-        wav : array_like or BandSet
+        wavelength : array_like or BandSet
             Wavelengths in nm at which to calculate the profile.
 
         Returns
@@ -1652,13 +1678,13 @@ class WaterRw(Water):
             `Water1D.calc` except the phase matrices, 'ssa_p_oc' and
             'ssa_w'. The `z_oc` coordinate holds two null levels.
         """
-        if not isinstance(wav, BandSet):
-            wav = BandSet(wav)
-        wav = np.array(wav)
+        if not isinstance(wavelength, BandSet):
+            wavelength = BandSet(wavelength)
+        wavelength = np.array(wavelength)
 
         pro = xr.Dataset()
-        pro = pro.assign_coords(wavelength=wav[:], z_oc=np.zeros(2))
-        shp = (len(wav), 2)
+        pro = pro.assign_coords(wavelength=wavelength[:], z_oc=np.zeros(2))
+        shp = (len(wavelength), 2)
 
         pro["T_oc"] = xr.DataArray(
             np.array([280.0, 280.0], dtype="float32"), dims=["z_oc"]
@@ -1694,7 +1720,7 @@ class WaterRw(Water):
             np.ones(shp, dtype="float32"), dims=["wavelength", "z_oc"]
         )
         pro["albedo_seafloor"] = xr.DataArray(
-            self.alb.get(wav), dims=["wavelength"]
+            self.alb.get(wavelength), dims=["wavelength"]
         )
 
         return pro

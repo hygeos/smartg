@@ -93,8 +93,13 @@ final `v2.0.0` release.
     (was `wav_phase`); it remains distinct from the `wavelength` axis of
     the profiles and run outputs
   - The wavelength parameters are now consistently named `wavelength`:
-    `Smartg.run(wl=...)` is now `run(wavelength=...)` and the `get(wl)`
-    method of the albedo objects is now `get(wavelength)`
+    `Smartg.run(wl=...)` is now `run(wavelength=...)`, the `get(wl)`
+    method of the albedo objects is now `get(wavelength)`, the `wav`
+    parameter of `Atm1D.calc` / `calc_split`, `BandSet` and the water
+    classes is now `wavelength`, and the `pfwav` parameter of the
+    atmosphere and water components is now `wavelength_phase` (matching
+    the dimension it defines). The auxdata files keep their `wav`
+    dimension, mirrored by the in-memory `ds_mix` datasets
   - The `filename` parameter of `read_phase`, `read_phase_dat`, `read_phase_nc`
     and `read_phase_cdf` has been renamed to `fname` (positional usage is
     unaffected, keyword usage must be updated).

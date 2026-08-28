@@ -8,7 +8,8 @@ import numpy as np
 
 """Tests for the ``Atm1D`` profile calculation.
 
-The ``wav`` fixture parametrizes the wavelength input across the formats
+The ``wavelength`` fixture parametrizes the wavelength input
+across the formats
 accepted by :meth:`Atm1D.calc` (float, 0-d array, list, multi-element
 array).
 Each ``test_profile*`` exercises a different ``Atm1D`` configuration:
@@ -26,35 +27,35 @@ aerosol or aerosol+cloud components, and with overridden ``tau_r`` or
         np.array([400.0, 800.0]),
     ]
 )
-def wav(request):
+def wavelength(request):
     return request.param
 
 
-def test_profile1(wav):
+def test_profile1(wavelength):
     atm = Atm1D("afglt")
-    atm.calc(wav)
+    atm.calc(wavelength)
 
 
-def test_profile2(wav):
+def test_profile2(wavelength):
     atm = Atm1D(
         "afglms",
         grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
         pfgrid=[100.0, 10.0, 0.0],
     )
-    atm.calc(wav)
+    atm.calc(wavelength)
 
 
-def test_profile3(wav):
+def test_profile3(wavelength):
     atm = Atm1D(
         "afglms",
         comp=[AerOPAC("desert", 0.1, 550.0)],
         grid="100[20]10[1]0",
         pfgrid=[100.0, 10.0, 0.0],
     )
-    atm.calc(wav)
+    atm.calc(wavelength)
 
 
-def test_profile4(wav):
+def test_profile4(wavelength):
     atm = Atm1D(
         "afglms",
         comp=[
@@ -64,7 +65,7 @@ def test_profile4(wav):
         grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
         pfgrid=[100.0, 10.0, 0.0],
     )
-    atm.calc(wav)
+    atm.calc(wavelength)
 
 
 def test_profile5():

@@ -411,7 +411,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
         atm_1d=Atm1D("afglt", comp=comp),
         grid_3d=grid3,
         comp_3d=[cloud3],
-        pfwav=[W_REF],
+        wavelength_phase=[W_REF],
         mol_sca_1d=mol_sca,
         mol_abs_1d=mol_abs,
         **atm3_kwargs,

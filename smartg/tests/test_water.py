@@ -576,13 +576,13 @@ def test_hydrosol_calc_phase_truncation():
     truncation). Configurations yielding a negative truncated phase
     must be rejected.
     """
-    wav = np.array([440.0, 550.0])
+    wavelength = np.array([440.0, 550.0])
     z = np.array([0.0, -10.0])
     bbp = np.full((2, 2), 0.01)
 
     def calc(**kwargs):
         h = Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=721, **kwargs)
-        pha, coef = h.calc_phase(wav, z, bbp)
+        pha, coef = h.calc_phase(wavelength, z, bbp)
         ang = np.deg2rad(pha["theta_oc"].values)
         p = pha.values
         assert not np.isnan(p).any()
@@ -617,11 +617,11 @@ def test_hydrosol_calc_phase_truncation():
             bbp_ratio=0.03,
             n_theta=721,
             truncation=GT_trunc(trunc_frac=0.5, theta_tr=5.0),
-        ).calc_phase(wav, z, np.full((2, 2), 0.03))
+        ).calc_phase(wavelength, z, np.full((2, 2), 0.03))
     with pytest.raises(ValueError, match="negative"):
         Hydrosol(
             bp=0.1,
             bbp_ratio=0.01,
             n_theta=721,
             truncation=DM_trunc(nb_streams=8),
-        ).calc_phase(wav, z, bbp)
+        ).calc_phase(wavelength, z, bbp)

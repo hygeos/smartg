@@ -126,7 +126,7 @@ def integ_phase(
 
 def calc_iphase(
     phase: xr.DataArray | LUT,
-    wav_full: NumericArrayLike,
+    wavelength_full: NumericArrayLike,
     z_full: NumericArrayLike,
     old_method: bool = False,
 ) -> tuple[NDArray[np.floating[Any]], NDArray[np.int32]]:
@@ -143,8 +143,8 @@ def calc_iphase(
         coordinates ``wavelength_phase``, ``z_phase`` and dimensions
         ``(wavelength_phase, z_phase, nphamat, theta)``, or a LUT object
         exposing a ``to_xarray()`` method.
-    wav_full : array_like
-        Full model wavelength grid, shape ``(nwav,)``.
+    wavelength_full : array_like
+        Full model wavelength grid, shape ``(n_wavelength,)``.
     z_full : array_like
         Full model altitude grid, shape ``(nz,)``.
     old_method : bool, optional
@@ -157,27 +157,29 @@ def calc_iphase(
     -------
     pha : ndarray
         Phase function values reshaped from *phase* of shape
-        ``(nwav_pf * nz_pf, nstk, ntheta)``.
+        ``(n_wavelength_pf * nz_pf, nstk, ntheta)``.
     ipha : ndarray
-        Index array of shape ``(nwav_full, nz_full)`` mapping each
-        model grid point to an entry in *pha*.  Indices are zero-based.
+        Index array of shape ``(n_wavelength_full, nz_full)``
+        mapping each model grid point to an entry in *pha*.  Indices
+        are zero-based.
     """
     # Deals with the case where the legacy LUT object is used for phase
     if isinstance(phase, LUT):
         phase = phase.to_xarray()
 
     z_full = np.atleast_1d(z_full).astype(np.float32)
-    wav_full = np.atleast_1d(wav_full).astype(np.float32)
+    wavelength_full = np.atleast_1d(wavelength_full).astype(np.float32)
 
     # Extract wavelength and altitude coordinates from DataArray
-    wav = phase.coords["wavelength_phase"].values
+    wavelength = phase.coords["wavelength_phase"].values
     altitude = phase.coords["z_phase"].values
 
-    nwav, nz, nstk, ntheta = phase.shape
-    pha = phase.values.reshape(nwav * nz, nstk, ntheta)
+    n_wavelength, nz, nstk, ntheta = phase.shape
+    pha = phase.values.reshape(n_wavelength * nz, nstk, ntheta)
 
     ipha_w = np.array(
-        [np.abs(wav - x).argmin() for x in wav_full], dtype="int32"
+        [np.abs(wavelength - x).argmin() for x in wavelength_full],
+        dtype="int32",
     )
     if old_method:
         ipha_a = np.array(
@@ -208,7 +210,8 @@ def get_ipha_a(
         Phase-function altitude grid, shape ``(nz_pf,)``.
     phase : DataArray or None, optional
         If provided, the phase function values (dimension order
-        ``wav, z, nphamat, theta``) are used to detect and penalise
+        ``wavelength, z, nphamat, theta``) are used to detect and
+        penalise
         layers with a zero phase function.  Layers whose first
         wavelength / Stokes component sums to zero have their weight
         scaled by ``1e-6`` and trigger a warning.
@@ -315,7 +318,7 @@ def read_phase_nc(
     fname: PathType,
     kind: str = "atm",
     normalize: bool = True,
-    pfwav: NumericArrayLike | None = None,
+    wavelength_phase: NumericArrayLike | None = None,
     pfgrid: NumericArrayLike | None = None,
     z_rh_reff: NumericArrayLike | None = None,
 ) -> xr.DataArray:
@@ -334,7 +337,7 @@ def read_phase_nc(
         Path to a SMART-G phase function NetCDF file (suffix: .nc).
 
         The file must include variables:
-        - 'phase': phase matrix data [rh/reff, wav, stk, theta]
+        - 'phase': phase matrix data [rh/reff, wavelength, stk, theta]
         - 'wav': wavelength values (in nm)
         - 'theta': scattering angle grid (uniform, in degrees)
         - 'hum' or 'reff': relative humidity (%) or effective radius
@@ -352,11 +355,11 @@ def read_phase_nc(
         integral over all angles equals 2.
         Default: True
 
-    pfwav : float or array_like, optional
+    wavelength_phase : float or array_like, optional
         Wavelength(s) (in nm) to interpolate to. Required if the file
         contains multiple wavelengths (n_wavelength > 1). This
-        parameter has the same meaning as ``pfwav`` in the ``Atm1D``
-        constructor.
+        parameter has the same meaning as ``wavelength_phase`` in
+        the ``Atm1D`` constructor.
         Default: None
 
     pfgrid : array_like, optional
@@ -400,14 +403,17 @@ def read_phase_nc(
     Read phase function for a single wavelength and rh:
 
     >>> pha = read_phase_nc(
-    ...     'desert_sol.nc', pfwav=550.0,
+    ...     'desert_sol.nc', wavelength_phase=550.0,
     ...     z_rh_reff=[70.0, 60., 58.],
     ...     pfgrid=[100., 50., 10., 0.],
     ...     normalize=True)
     >>> pha.shape
     (1, 3, 6, 721)  # (wavelength_phase, z_phase, nphamat, theta_atm)
     """
-    pfwav = np.asarray(pfwav, dtype=np.float32) if pfwav is not None else None
+    wavelength_phase = (
+        np.asarray(wavelength_phase, dtype=np.float32)
+        if wavelength_phase is not None else None
+    )
     pfgrid = (
         np.atleast_1d(pfgrid).astype(np.float32)
         if pfgrid is not None
@@ -450,16 +456,18 @@ def read_phase_nc(
     if normalize:
         mu = np.cos(np.deg2rad(theta))
         idmu = np.argsort(mu)
-        for iwav in range(0, n_wavelength):
+        for i_wavelength in range(0, n_wavelength):
             for irhreff in range(0, n_rh_reff):
-                f = da_pha.data[iwav, irhreff, 0, :]  # P11 term
+                f = da_pha.data[i_wavelength, irhreff, 0, :]  # P11 term
                 norm = np.trapezoid(f[idmu], mu[idmu])
-                da_pha.data[iwav, irhreff, :, :] *= 2.0 / abs(norm)
+                da_pha.data[i_wavelength, irhreff, :, :] *= 2.0 / abs(norm)
 
-    if n_wavelength > 1 and pfwav is not None:
-        da_pha = da_pha.interp(wavelength_phase=pfwav)
-    elif n_wavelength > 1 and pfwav is None:
-        raise ValueError("pfwav must be provided when n_wavelength > 1")
+    if n_wavelength > 1 and wavelength_phase is not None:
+        da_pha = da_pha.interp(wavelength_phase=wavelength_phase)
+    elif n_wavelength > 1 and wavelength_phase is None:
+        raise ValueError(
+            "wavelength_phase must be provided when n_wavelength > 1"
+        )
 
     if n_rh_reff > 1 and z_rh_reff is not None:
         da_pha = da_pha.interp(
@@ -612,25 +620,25 @@ def _resample_cdf_phase(
     -------
     ndarray
         The resampled phase matrices, of shape
-        (nwav, n_rh_reff, nphamat, ntheta).
+        (n_wavelength, n_rh_reff, nphamat, ntheta).
     """
     phase = ds["phase"][:, :, :, :].data
-    n_wav, n_rh_reff, n_stk = phase.shape[:3]
+    n_wavelength, n_rh_reff, n_stk = phase.shape[:3]
 
-    data = np.zeros((n_wav, n_rh_reff, n_stk, theta.size))
-    for iwav in range(0, n_wav):
+    data = np.zeros((n_wavelength, n_rh_reff, n_stk, theta.size))
+    for i_wavelength in range(0, n_wavelength):
         for irhreff in range(n_rh_reff):
             for istk in range(n_stk):
                 # ntheta (wavelength, rh/reff, nphamat)
-                nth = ds["ntheta"][iwav, irhreff, istk].data
+                nth = ds["ntheta"][i_wavelength, irhreff, istk].data
 
                 # theta (wavelength, rh/reff, nphamat, ntheta)
-                th = ds["theta"][iwav, irhreff, istk, :].data
+                th = ds["theta"][i_wavelength, irhreff, istk, :].data
 
-                data[iwav, irhreff, istk, :] = np.interp(
+                data[i_wavelength, irhreff, istk, :] = np.interp(
                     theta,
                     th[:nth],
-                    phase[iwav, irhreff, istk, :nth],
+                    phase[i_wavelength, irhreff, istk, :nth],
                     period=np.inf,
                 )
     return data
@@ -641,7 +649,7 @@ def read_phase_cdf(
     kind: str = "atm",
     normalize: bool = True,
     ntheta_max: int = 18001,
-    pfwav: NumericArrayLike | None = None,
+    wavelength_phase: NumericArrayLike | None = None,
     pfgrid: NumericArrayLike | None = None,
     z_rh_reff: NumericArrayLike | None = None,
 ) -> xr.DataArray:
@@ -692,11 +700,11 @@ def read_phase_cdf(
         limit.
         Default: 18001
 
-    pfwav : float or array_like, optional
+    wavelength_phase : float or array_like, optional
         Wavelength(s) (in micrometers) to interpolate to. Required
         if the file contains multiple wavelengths (n_wavelength > 1).
-        This parameter has the same meaning as ``pfwav`` in the
-        ``Atm1D`` constructor.
+        This parameter has the same meaning as ``wavelength_phase``
+        in the ``Atm1D`` constructor.
         Default: None
 
     pfgrid : array_like, optional
@@ -740,14 +748,17 @@ def read_phase_cdf(
     Read phase function for a single wavelength and rh:
 
     >>> pha = read_phase_cdf(
-    ...     'ssam.mie.cdf', pfwav=550.0,
+    ...     'ssam.mie.cdf', wavelength_phase=550.0,
     ...     z_rh_reff=[70.0, 60., 58.],
     ...     pfgrid=[100., 50., 10., 0.],
     ...     normalize=True)
     >>> pha.shape
     (1, 3, 6, 18001)  # (wavelength_phase, z_phase, nphamat, theta_atm)
     """
-    pfwav = np.asarray(pfwav, dtype=np.float32) if pfwav is not None else None
+    wavelength_phase = (
+        np.asarray(wavelength_phase, dtype=np.float32)
+        if wavelength_phase is not None else None
+    )
     pfgrid = (
         np.atleast_1d(pfgrid).astype(np.float32)
         if pfgrid is not None
@@ -773,10 +784,11 @@ def read_phase_cdf(
     wavelength = ds["wavelen"].data * 1e3
 
     # checks at the beginning to avoid unnecessary computations
-    if n_wavelength > 1 and pfwav is None:
+    if n_wavelength > 1 and wavelength_phase is None:
         raise ValueError(
             "Phase function file contains more than 1 wavelength. "
-            "Please provide the 'pfwav' parameter (float or 1-D array) "
+            "Please provide the 'wavelength_phase' parameter "
+            "(float or 1-D array) "
             "to select/interpolate the desired wavelength(s)."
         )
     if n_rh_reff > 1 and (
@@ -814,14 +826,14 @@ def read_phase_cdf(
     if normalize:
         mu = np.cos(np.deg2rad(theta))
         idmu = np.argsort(mu)
-        for iwav in range(0, n_wavelength):
+        for i_wavelength in range(0, n_wavelength):
             for irhreff in range(0, n_rh_reff):
-                f = da_pha.data[iwav, irhreff, 0, :]  # P11 term
+                f = da_pha.data[i_wavelength, irhreff, 0, :]  # P11 term
                 norm = np.trapezoid(f[idmu], mu[idmu])
-                da_pha.data[iwav, irhreff, :, :] *= 2.0 / abs(norm)
+                da_pha.data[i_wavelength, irhreff, :, :] *= 2.0 / abs(norm)
 
     if n_wavelength > 1:
-        da_pha = da_pha.interp(wavelength_phase=pfwav)
+        da_pha = da_pha.interp(wavelength_phase=wavelength_phase)
 
     if n_rh_reff > 1:
         da_pha = da_pha.interp(
@@ -887,7 +899,8 @@ def read_phase(
         - for ``.nc``: forwarded to :func:`read_phase_nc`
         - for ``.cdf``: forwarded to :func:`read_phase_cdf`
 
-        Typical arguments include ``pfwav``, ``pfgrid``, ``z_rh_reff``,
+        Typical arguments include ``wavelength_phase``, ``pfgrid``,
+        ``z_rh_reff``,
         and ``ntheta_max`` (only for ``.cdf``).
 
     Returns
@@ -907,10 +920,12 @@ def read_phase(
     Examples
     --------
     >>> pha = read_phase('phase.dat', kind='atm', normalize=True)
-    >>> pha = read_phase('desert_sol.nc', kind='atm', pfwav=550.0,
+    >>> pha = read_phase('desert_sol.nc', kind='atm',
+    ...                  wavelength_phase=550.0,
     ...                  z_rh_reff=[70.0, 60.0, 58.0],
     ...                  pfgrid=[100.0, 50.0, 10.0, 0.0])
-    >>> pha = read_phase('ssam.mie.cdf', kind='atm', pfwav=550.0,
+    >>> pha = read_phase('ssam.mie.cdf', kind='atm',
+    ...                  wavelength_phase=550.0,
     ...                  z_rh_reff=[70.0, 60.0, 58.0],
     ...                  pfgrid=[100.0, 50.0, 10.0, 0.0],
     ...                  ntheta_max=18001)
@@ -955,8 +970,8 @@ def expand_phase_4_to_6(
     Parameters
     ----------
     phase : DataArray or LUT or None
-        Phase matrices with dimensions [nwav, nz, stk, angle]. A LUT is
-        converted to a DataArray first.
+        Phase matrices with dimensions [n_wavelength, nz, nphamat,
+        angle]. A LUT is converted to a DataArray first.
 
     Returns
     -------
@@ -1095,7 +1110,7 @@ def convert_phase_to_iparper(
 
 def get_prof_phases(
     phase: xr.DataArray,
-    wav: NumericArrayLike,
+    wavelength: NumericArrayLike,
     z: NumericArrayLike,
 ) -> tuple[NDArray[np.int32], list[xr.DataArray]]:
     """
@@ -1110,9 +1125,10 @@ def get_prof_phases(
     phase : DataArray
         Phase matrix data read from read_phase(). Expected dimensions:
         ('wavelength_phase', 'z_phase', 'nphamat', 'theta_atm')
-    wav : array_like
+    wavelength : array_like
         Full wavelength grid in nanometers. Must match the wavelengths
-        used in Atm1D.calc() method. Equivalent to the 'wav' parameter
+        used in Atm1D.calc() method. Equivalent to the 'wavelength'
+        parameter
         passed to Atm1D.calc().
     z : array_like
         Full altitude grid in kilometers (descending order from TOA to
@@ -1128,10 +1144,10 @@ def get_prof_phases(
         List of phase matrix DataArrays with dimensions
         ``('nphamat', 'theta_atm')``.
     """
-    wav = np.atleast_1d(wav).astype(np.float32)
+    wavelength = np.atleast_1d(wavelength).astype(np.float32)
     z = np.atleast_1d(z).astype(np.float32)
 
-    pha_atm, ipha_atm = calc_iphase(phase, wav, z)
+    pha_atm, ipha_atm = calc_iphase(phase, wavelength, z)
     lpha_da = []
     for i in range(pha_atm.shape[0]):
         lpha_da.append(
@@ -1179,7 +1195,8 @@ def read_phase_nth_cte(
     Returns
     -------
     DataArray
-        The phase matrix, of shape (nwav, nrh_or_reff, 6, nb_theta),
+        The phase matrix, of shape (n_wavelength, nrh_or_reff, 6,
+        nb_theta),
         with the dimensions 'wavelength_phase' (nm), 'hum' or 'reff'
         (kept from the file), 'nphamat' and 'theta_atm' (degrees).
     """
@@ -1196,11 +1213,11 @@ def read_phase_nth_cte(
 
     n_theta = nb_theta
     n_rh_or_reff = rh_reff.size
-    n_wav = ds["wavelen"].size
+    n_wavelength = ds["wavelen"].size
     theta = np.linspace(0., 180., num=n_theta)
     wavelength = ds["wavelen"].data * 1e3
 
-    data = np.full((n_wav, n_rh_or_reff, 6, n_theta), np.nan,
+    data = np.full((n_wavelength, n_rh_or_reff, 6, n_theta), np.nan,
                    dtype=np.float32)
     data[:, :, :n_stk, :] = _resample_cdf_phase(ds, theta)
 
@@ -1211,11 +1228,11 @@ def read_phase_nth_cte(
     if normalize:
         mu = np.cos(np.deg2rad(theta))
         idmu = np.argsort(mu)
-        for iwav in range(0, n_wav):
+        for i_wavelength in range(0, n_wavelength):
             for irhreff in range(0, n_rh_or_reff):
-                f = data[iwav, irhreff, 0, :]  # F11 term
+                f = data[i_wavelength, irhreff, 0, :]  # F11 term
                 norm = np.trapezoid(f[idmu], mu[idmu])
-                data[iwav, irhreff, :, :] *= 2. / abs(norm)
+                data[i_wavelength, irhreff, :, :] *= 2. / abs(norm)
 
     return xr.DataArray(
         data,

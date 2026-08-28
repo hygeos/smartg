@@ -469,16 +469,20 @@ def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
     ssa_out = np.zeros_like(ext_out)
     pha_out = np.zeros((NBRH_OR_REFF, NWAV, NBSTK, NBTHETA), dtype=np.float64)
 
-    for iwav in range (0, ds["wavelen"].size):
+    for i_wavelength in range (0, ds["wavelen"].size):
         for irhreff in range(NBRH_OR_REFF):
-            ext_out[irhreff,iwav] = ds["ext"][iwav,irhreff]
-            ssa_out[irhreff,iwav] = ds["ssa"][iwav,irhreff]
+            ext_out[irhreff,i_wavelength] = ds["ext"][i_wavelength,irhreff]
+            ssa_out[irhreff,i_wavelength] = ds["ssa"][i_wavelength,irhreff]
             for istk in range (NBSTK):
                 # ntheta (wavelength, reff, stk)
-                nth = ds["ntheta"][iwav,irhreff,istk].data
+                nth = ds["ntheta"][i_wavelength,irhreff,istk].data
                 # theta (wavelength, reff, stk, ntheta)
-                th = ds["theta"][iwav,irhreff,istk,:].data
-                pha_out[irhreff,iwav,istk,:] = np.interp(theta, th[:nth], phase[iwav,irhreff,istk,:nth],  period=np.inf)
+                th = ds["theta"][i_wavelength,irhreff,istk,:].data
+                pha_out[irhreff,i_wavelength,istk,:] = np.interp(
+                    theta, th[:nth],
+                    phase[i_wavelength,irhreff,istk,:nth],
+                    period=np.inf,
+                )
     
     if NWAV > ds["wavelen"].size:
         ext_out[:,-1] = ext_out[irhreff,0]
@@ -1469,8 +1473,12 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
 
         file_cld1_phase = OPT_PROP_PATH_PHASE3 + "ic.ghm.baum.cdf"
         ds_ic_baum_ghm_ = xr.open_dataset(file_cld1_phase)
-        wav_ = ds_ic_baum_ghm_.wavelen.values
-        nlam_ = np.squeeze(np.argwhere(np.logical_and(wav_>=0.4, wav_<=0.5))) # wav in micrometers, here take only between 400 and 500nm
+        wavelength_ = ds_ic_baum_ghm_.wavelen.values
+        # wavelength in micrometers, here take only between 400
+        # and 500nm
+        nlam_ = np.squeeze(np.argwhere(
+            np.logical_and(wavelength_>=0.4, wavelength_<=0.5)
+        ))
         ds_ic_baum_ghm_  = ds_ic_baum_ghm_ .sel(nlam = nlam_)
         ds_ic_baum_ghm = aer2smartg(ds_ic_baum_ghm_, nb_theta=nth)
         with TemporaryDirectory() as tmpdir:

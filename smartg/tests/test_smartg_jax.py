@@ -224,11 +224,11 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
     # aerosols phase matrix import
     faer_phase = Path(valpath) / "validation" / f"phasemat_ray_{typ}_O2.dat"
     n = int(np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int))
-    pfwav = []
+    wavelength_phase = []
     npf = 3
     data = np.zeros((npf, 1, n, 5), dtype=np.float32)
     for k in range(npf):
-        pfwav.append(
+        wavelength_phase.append(
             np.genfromtxt(
                 faer_phase,
                 usecols=range(1),
@@ -254,7 +254,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
     phase_valid = LUT(
         pha_data,
         names=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
-        axes=[pfwav, [0], None, data[0, 0, 0, :]],
+        axes=[wavelength_phase, [0], None, data[0, 0, 0, :]],
     )
     data_valid = np.loadtxt(
         Path(valpath) / "validation" / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat"
@@ -268,7 +268,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
         grid=z_valid,
         tco3=0.0,
         no2=False,
-        pfwav=pfwav,
+        wavelength_phase=wavelength_phase,
         comp=comp,
         prof_ray=ray_valid,
         prof_aer=(aer_ext_valid, aer_ssa_valid),

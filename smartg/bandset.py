@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 
 
 class BandSet(object):
-    def __init__(self, wav: NumericArrayLike | list[BandLike]) -> None:
+    def __init__(self, wavelength: NumericArrayLike | list[BandLike]) -> None:
         """Initialize a BandSet from wavelength band definitions.
 
         Common object for formatting input band definitions. Accepts a
@@ -69,14 +69,14 @@ class BandSet(object):
 
         Parameters
         ----------
-        wav : float, list, ndarray, or list of IBandS
+        wavelength : float, list, ndarray, or list of IBandS
             Wavelength band definition. A float or 1-D array of
             wavelengths (in nm), or a list of KDIS/RepTran ``IBandS``
             objects whose ``w`` attribute gives the band wavelength.
 
         Notes
         -----
-        When ``wav`` is a list of ``IBandS`` objects,
+        When ``wavelength`` is a list of ``IBandS`` objects,
         ``use_reptran_kdis`` is set to ``True``, ``data`` holds the
         original objects, and ``calc_profile`` delegates to each band's
         own ``calc_profile`` method. Otherwise ``data`` is ``None`` and
@@ -86,28 +86,36 @@ class BandSet(object):
         # Scalar inputs (int/float) have no __getitem__ and fall back
         # to the except branch.
         try:
-            first = wav[0] if isinstance(wav, (list, np.ndarray)) else wav
+            first = (
+                wavelength[0]
+                if isinstance(wavelength, (list, np.ndarray))
+                else wavelength
+            )
             self.use_reptran_kdis: bool = isinstance(first, BandLike)
         except Exception:
             self.use_reptran_kdis = False
 
-        self.type_wav: type | None = None
+        self.type_wavelength: type | None = None
         if self.use_reptran_kdis:
-            bands = cast(list[BandLike], wav)
-            wav_vals: list[float] | NumericArrayLike = [x.w for x in bands]
+            bands = cast(list[BandLike], wavelength)
+            wavelength_vals: list[float] | NumericArrayLike = [
+                x.w for x in bands
+            ]
             self.data: list[BandLike] | None = bands
-            self.type_wav = type(bands[0])
+            self.type_wavelength = type(bands[0])
         else:
-            wav_vals = cast(NumericArrayLike, wav)
+            wavelength_vals = cast(NumericArrayLike, wavelength)
             self.data = None
-            self.type_wav = None
+            self.type_wavelength = None
 
-        assert isinstance(wav_vals, (float, list, np.ndarray))
-        self.wav: NDArray[np.float32] = np.array(wav_vals, dtype="float32")
-        self.scalar: bool = self.wav.ndim == 0
+        assert isinstance(wavelength_vals, (float, list, np.ndarray))
+        self.wavelength: NDArray[np.float32] = np.array(
+            wavelength_vals, dtype="float32"
+        )
+        self.scalar: bool = self.wavelength.ndim == 0
         if self.scalar:
-            self.wav = self.wav.reshape(1)
-        self.size: int = int(self.wav.size)
+            self.wavelength = self.wavelength.reshape(1)
+        self.size: int = int(self.wavelength.size)
 
     @overload
     def __getitem__(self, key: int) -> np.floating: ...
@@ -132,7 +140,7 @@ class BandSet(object):
             The wavelength value(s) selected from the internal
             ``float32`` wavelength array.
         """
-        return self.wav[key]
+        return self.wavelength[key]
 
     def __len__(self) -> int:
         """Return the number of bands in the set.

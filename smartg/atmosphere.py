@@ -169,8 +169,9 @@ class AerOPAC(object):
         nphamat, theta
         Where:
         - wavelength_phase is the wavelength. It must be equal to
-          the `pfwav` parameter of Atm1D if defined, else the `wav`
-          parameter wavelengths of the Atm1D calc method.
+          the `wavelength_phase` parameter of Atm1D if defined, else
+          the `wavelength` parameter wavelengths of the Atm1D calc
+          method.
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
           of Atm1D
@@ -385,10 +386,12 @@ class AerOPAC(object):
                 if nwcur != nwprev or (
                     nwcur == nwprev and not np.array_equal(w_cur, w_prev)
                 ):
-                    wav_clip = w_prev.clip(
+                    wavelength_clip = w_prev.clip(
                         min=w_cur.min().item(), max=w_cur.max().item()
                     )
-                    self.free_tropo = self.free_tropo.interp(wav=wav_clip)
+                    self.free_tropo = self.free_tropo.interp(
+                        wav=wavelength_clip
+                    )
             self.vert_content.append(self.free_tropo)
             self.h_min.append(h_free_min)
             self.h_max.append(h_free_max)
@@ -413,10 +416,10 @@ class AerOPAC(object):
                 if nwcur != nwprev or (
                     nwcur == nwprev and not np.array_equal(w_cur, w_prev)
                 ):
-                    wav_clip = w_prev.clip(
+                    wavelength_clip = w_prev.clip(
                         min=w_cur.min().item(), max=w_cur.max().item()
                     )
-                    self.strato = self.strato.interp(wav=wav_clip)
+                    self.strato = self.strato.interp(wav=wavelength_clip)
             self.vert_content.append(self.strato)
             self.h_min.append(h_stra_min)
             self.h_max.append(h_stra_max)
@@ -424,7 +427,7 @@ class AerOPAC(object):
 
     def dtau_ssa(
         self,
-        wav: np.ndarray,
+        wavelength: np.ndarray,
         z: np.ndarray,
         rh: float | np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
@@ -442,7 +445,7 @@ class AerOPAC(object):
 
         Parameters
         ----------
-        wav : array-like
+        wavelength : array-like
             Wavelengths (in nm) at which to calculate optical properties
         z : array-like
             Altitude profile (in km) for which to calculate optical
@@ -460,11 +463,12 @@ class AerOPAC(object):
         Returns
         -------
         dtau : ndarray
-            Optical depth with shape (len(wav), len(z))
+            Optical depth with shape (len(wavelength), len(z))
         ssa : ndarray
-            Single scattering albedo with shape (len(wav), len(z))
+            Single scattering albedo with shape (len(wavelength),
+            len(z))
         """
-        dtau = np.zeros((len(wav), len(z)), dtype=np.float32)
+        dtau = np.zeros((len(wavelength), len(z)), dtype=np.float32)
         dtau_ref = np.zeros((1, len(z)), dtype=np.float32)
         ssa = np.zeros_like(dtau)
 
@@ -491,7 +495,7 @@ class AerOPAC(object):
         hor = self.hum_or_reff
         for icont, cont in enumerate(self.vert_content):
             cont_hor_vals = cont.coords[hor].values.astype(np.float64)
-            cont_wav_vals = cont.coords["wav"].values.astype(np.float64)
+            cont_wavelength_vals = cont.coords["wav"].values.astype(np.float64)
             ext_data = cont["ext"].values.astype(np.float64)
             ssa_data = cont["ssa"].values.astype(np.float64)
             if (hor == "hum") and (self.force_rh[icont] is not None):
@@ -500,11 +504,11 @@ class AerOPAC(object):
                 rh_reff = hum_or_reff_val
             # Axes values
             hor_vals = cont_hor_vals
-            wav_vals = cont_wav_vals
+            wavelength_vals = cont_wavelength_vals
             # Float indices with extrema fill for humidity/reff, strict
             # bounds for wavelength
             nhor = len(hor_vals)
-            nwav_orig = len(wav_vals)
+            n_wavelength_orig = len(wavelength_vals)
             idf_hor = np.interp(
                 np.asarray(rh_reff, dtype=np.float64),
                 hor_vals,
@@ -512,73 +516,81 @@ class AerOPAC(object):
                 left=0,
                 right=nhor - 1,
             )
-            idf_wav = np.interp(
-                np.asarray(wav, dtype=np.float64),
-                wav_vals,
-                np.arange(nwav_orig),
+            idf_wavelength = np.interp(
+                np.asarray(wavelength, dtype=np.float64),
+                wavelength_vals,
+                np.arange(n_wavelength_orig),
             )
-            idf_wav_ref = np.interp(
+            idf_wavelength_ref = np.interp(
                 np.atleast_1d(np.asarray(self.w_ref, dtype=np.float64)),
-                wav_vals,
-                np.arange(nwav_orig),
+                wavelength_vals,
+                np.arange(n_wavelength_orig),
             )
             if len(rh_reff) == 1:
-                # Interpolate along hor (dim 0) -> (1, wav_orig)
+                # Interpolate along hor (dim 0) -> (1, wavelength_orig)
                 ext_at_hor = cast(
                     NDArray,
                     vec_float_indexing(ext_data, [idf_hor, slice(None)]),
-                )  # (1, wav_orig)
+                )  # (1, wavelength_orig)
                 ssa_at_hor = cast(
                     NDArray,
                     vec_float_indexing(ssa_data, [idf_hor, slice(None)]),
-                )  # (1, wav_orig)
-                # Transpose to (wav_orig, 1), interpolate along wav (dim
-                # 0) -> (nwav, 1)
+                )  # (1, wavelength_orig)
+                # Transpose to (wavelength_orig, 1), interpolate
+                # along wavelength (dim 0) -> (n_wavelength, 1)
                 ext_tmp = cast(
                     NDArray,
-                    vec_float_indexing(ext_at_hor.T, [idf_wav, slice(None)]),
-                )  # (nwav, 1)
+                    vec_float_indexing(
+                        ext_at_hor.T, [idf_wavelength, slice(None)]
+                    ),
+                )  # (n_wavelength, 1)
                 ext_ref_tmp = cast(
                     NDArray,
                     vec_float_indexing(
-                        ext_at_hor.T, [idf_wav_ref, slice(None)]
+                        ext_at_hor.T, [idf_wavelength_ref, slice(None)]
                     ),
-                )  # (nwav_ref, 1)
+                )  # (n_wavelength_ref, 1)
                 ssa_tmp = cast(
                     NDArray,
-                    vec_float_indexing(ssa_at_hor.T, [idf_wav, slice(None)]),
-                )  # (nwav, 1)
+                    vec_float_indexing(
+                        ssa_at_hor.T, [idf_wavelength, slice(None)]
+                    ),
+                )  # (n_wavelength, 1)
                 for iz in range(0, len(z)):
                     ext_[:, iz] = ext_tmp[:, 0]
                     ext_ref_[:, iz] = ext_ref_tmp[:, 0]
                     ssa_[:, iz] = ssa_tmp[:, 0]
             else:
                 # Interpolate along hor (dim 0) -> (nhor_query,
-                # wav_orig)
+                # wavelength_orig)
                 ext_at_hor = cast(
                     NDArray,
                     vec_float_indexing(ext_data, [idf_hor, slice(None)]),
-                )  # (nhor, wav_orig)
+                )  # (nhor, wavelength_orig)
                 ssa_at_hor = cast(
                     NDArray,
                     vec_float_indexing(ssa_data, [idf_hor, slice(None)]),
-                )  # (nhor, wav_orig)
-                # Transpose to (wav_orig, nhor), interpolate along wav
-                # (dim 0) -> (nwav, nhor)
+                )  # (nhor, wavelength_orig)
+                # Transpose to (wavelength_orig, nhor), interpolate
+                # along wavelength (dim 0) -> (n_wavelength, nhor)
                 ext_ = cast(
                     NDArray,
-                    vec_float_indexing(ext_at_hor.T, [idf_wav, slice(None)]),
-                )  # (nwav, nhor)
+                    vec_float_indexing(
+                        ext_at_hor.T, [idf_wavelength, slice(None)]
+                    ),
+                )  # (n_wavelength, nhor)
                 ext_ref_ = cast(
                     NDArray,
                     vec_float_indexing(
-                        ext_at_hor.T, [idf_wav_ref, slice(None)]
+                        ext_at_hor.T, [idf_wavelength_ref, slice(None)]
                     ),
-                )  # (nwav_ref, nhor)
+                )  # (n_wavelength_ref, nhor)
                 ssa_ = cast(
                     NDArray,
-                    vec_float_indexing(ssa_at_hor.T, [idf_wav, slice(None)]),
-                )  # (nwav, nhor)
+                    vec_float_indexing(
+                        ssa_at_hor.T, [idf_wavelength, slice(None)]
+                    ),
+                )  # (n_wavelength, nhor)
             dtau_ = np.zeros_like(dtau)
             dtau_ref_ = np.zeros_like(dtau_ref)
             h1 = np.maximum(self.h_min[icont], z[1:])
@@ -608,12 +620,12 @@ class AerOPAC(object):
                 )
             elif isinstance(self.tau_ref, xr.DataArray):
                 # xr.DataArray
-                wav_axis = self.tau_ref.coords[
+                wavelength_axis = self.tau_ref.coords[
                     self.tau_ref.dims[0]
                 ].values.astype(np.float64)
                 tau_ref_interp = np.interp(
-                    np.asarray(wav, dtype=np.float64),
-                    wav_axis,
+                    np.asarray(wavelength, dtype=np.float64),
+                    wavelength_axis,
                     self.tau_ref.values,
                 )
                 dtau *= (tau_ref_interp / np.sum(dtau, axis=1))[:, None]
@@ -632,12 +644,12 @@ class AerOPAC(object):
                 elif self.ssa.ndim == 2:
                     ssa[:, :] = self.ssa[:, :]
             elif isinstance(self.ssa, xr.DataArray):  # xr.DataArray
-                wav_axis = self.ssa.coords[self.ssa.dims[0]].values.astype(
-                    np.float64
-                )
+                wavelength_axis = self.ssa.coords[
+                    self.ssa.dims[0]
+                ].values.astype(np.float64)
                 ssa_interp = np.interp(
-                    np.asarray(wav, dtype=np.float64),
-                    wav_axis,
+                    np.asarray(wavelength, dtype=np.float64),
+                    wavelength_axis,
                     self.ssa.values,
                 )
                 ssa[:, :] = ssa_interp[:, None]
@@ -645,7 +657,7 @@ class AerOPAC(object):
 
     def phase(
         self,
-        wav: np.ndarray,
+        wavelength: np.ndarray,
         z: np.ndarray,
         rh: np.ndarray,
         n_theta: int = 721,
@@ -665,7 +677,7 @@ class AerOPAC(object):
 
         Parameters
         ----------
-        wav : array-like
+        wavelength : array-like
             Wavelengths (in nm) at which to calculate phase matrix
         z : array-like
             Altitude profile (in km) for which to calculate phase matrix
@@ -690,7 +702,8 @@ class AerOPAC(object):
         phase_matrix : DataArray
             DataArray containing the phase matrix with dimensions
             [wavelength_phase, z_phase, nphamat, theta_atm].
-            Shape is (len(wav), len(z)-1, nphamat, n_theta) where:
+            Shape is (len(wavelength), len(z)-1, nphamat, n_theta)
+            where:
             - nphamat = 4 for spherical particles only (phase matrix
               unique terms P11, P21, P33, P34)
             - nphamat = 6 for spherical and non-spherical particles
@@ -718,7 +731,7 @@ class AerOPAC(object):
                         "theta_atm",
                     ],
                     coords={
-                        "wavelength_phase": [wav[0]],
+                        "wavelength_phase": [wavelength[0]],
                         "z_phase": [0.0],
                         "nphamat": np.arange(6),
                         "theta_atm": self._phase.coords["theta_atm"].values,
@@ -754,7 +767,7 @@ class AerOPAC(object):
 
         theta = np.linspace(0.0, 180.0, num=n_theta)
         lam_tabulated = self.ds_mix.coords["wav"].values
-        nwav = len(wav)
+        n_wavelength = len(wavelength)
 
         if not self.vert_content:
             raise ValueError(
@@ -770,27 +783,31 @@ class AerOPAC(object):
 
             phase_data = cont["phase"].values
             hor_vals = cont.coords[hor].values.astype(np.float64)
-            wav_vals = cont.coords["wav"].values.astype(np.float64)
+            wavelength_vals = cont.coords["wav"].values.astype(np.float64)
             theta_orig = cont.coords["theta"].values.astype(np.float64)
             ext_data = cont["ext"].values.astype(np.float64)
             ssa_data = cont["ssa"].values.astype(np.float64)
 
             nphamat = phase_data.shape[2]
             nhor = len(hor_vals)
-            nwav_orig = len(wav_vals)
+            n_wavelength_orig = len(wavelength_vals)
 
             # Wavelength optimization: subset to bracketing wavelengths
-            if (np.max(wav) > np.max(lam_tabulated)) or (
-                np.min(wav) < np.min(lam_tabulated)
+            if (np.max(wavelength) > np.max(lam_tabulated)) or (
+                np.min(wavelength) < np.min(lam_tabulated)
             ):
                 # Out of range: use full axis
-                wav_subset = wav_vals
+                wavelength_subset = wavelength_vals
                 phase_subset = phase_data
             else:
                 range_ind = np.array(
                     [
-                        np.argwhere((lam_tabulated <= np.min(wav)))[-1][0],
-                        np.argwhere((lam_tabulated >= np.max(wav)))[0][0],
+                        np.argwhere(
+                            (lam_tabulated <= np.min(wavelength))
+                        )[-1][0],
+                        np.argwhere(
+                            (lam_tabulated >= np.max(wavelength))
+                        )[0][0],
                     ]
                 )
                 ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
@@ -800,54 +817,55 @@ class AerOPAC(object):
                         & (ilam_tabulated <= range_ind[1])
                     )
                 )
-                wav_subset = wav_vals[ilam_opti]
+                wavelength_subset = wavelength_vals[ilam_opti]
                 phase_subset = phase_data[:, ilam_opti, :, :]
 
-            nwav_sub = len(wav_subset)
+            n_wavelength_sub = len(wavelength_subset)
 
-            # Interpolate along wav: transpose to (wav, hor, stk, theta)
-            # for vec_float_indexing
-            if nwav_sub > 1:
-                idf_wav = np.interp(
-                    np.asarray(wav, dtype=np.float64),
-                    wav_subset,
-                    np.arange(nwav_sub),
+            # Interpolate along wavelength: transpose to
+            # (wavelength, hor, stk, theta) for vec_float_indexing
+            if n_wavelength_sub > 1:
+                idf_wavelength = np.interp(
+                    np.asarray(wavelength, dtype=np.float64),
+                    wavelength_subset,
+                    np.arange(n_wavelength_sub),
                 )
-                phase_at_wav = cast(
+                phase_at_wavelength = cast(
                     NDArray,
                     vec_float_indexing(
                         np.ascontiguousarray(
                             phase_subset.transpose(1, 0, 2, 3)
                         ),
-                        [idf_wav, slice(None), slice(None), slice(None)],
+                        [idf_wavelength, slice(None), slice(None),
+                         slice(None)],
                     ),
                 )
             else:
-                phase_at_wav = np.broadcast_to(
+                phase_at_wavelength = np.broadcast_to(
                     phase_subset.transpose(1, 0, 2, 3),
-                    (nwav, nhor, nphamat, len(theta_orig)),
+                    (n_wavelength, nhor, nphamat, len(theta_orig)),
                 ).copy()
-            # Result: (nwav, hor, stk, theta_orig)
+            # Result: (n_wavelength, hor, stk, theta_orig)
 
-            # Theta resampling if needed: transpose to (theta, nwav,
-            # hor, stk)
+            # Theta resampling if needed: transpose to
+            # (theta, n_wavelength, hor, stk)
             if n_theta != len(theta_orig):
                 idf_theta = np.interp(
                     theta, theta_orig, np.arange(len(theta_orig))
                 )
-                phase_at_wav = cast(
+                phase_at_wavelength = cast(
                     NDArray,
                     vec_float_indexing(
                         np.ascontiguousarray(
-                            phase_at_wav.transpose(3, 0, 1, 2)
+                            phase_at_wavelength.transpose(3, 0, 1, 2)
                         ),
                         [idf_theta, slice(None), slice(None), slice(None)],
                     ),
                 )
-                # Result: (n_theta, nwav, hor, stk) -> transpose to
-                # (nwav, hor, stk, n_theta)
-                phase_at_wav = phase_at_wav.transpose(1, 2, 3, 0)
-            # phase_at_wav: (nwav, hor, stk, n_theta)
+                # Result: (n_theta, n_wavelength, hor, stk) ->
+                # transpose to (n_wavelength, hor, stk, n_theta)
+                phase_at_wavelength = phase_at_wavelength.transpose(1, 2, 3, 0)
+            # phase_at_wavelength: (n_wavelength, hor, stk, n_theta)
 
             # Determine humidity/reff values
             nphamat_ = 6
@@ -871,8 +889,8 @@ class AerOPAC(object):
             else:
                 hum_or_reff_val = np.array(hum_or_reff_val)
 
-            # Interpolate along hor: transpose to (hor, nwav, stk,
-            # n_theta)
+            # Interpolate along hor: transpose to
+            # (hor, n_wavelength, stk, n_theta)
             if len(hum_or_reff_val) == 1:
                 hor_query = hum_or_reff_val
                 nz_phase = len(z) - 1
@@ -890,25 +908,28 @@ class AerOPAC(object):
             P_data = cast(
                 NDArray,
                 vec_float_indexing(
-                    np.ascontiguousarray(phase_at_wav.transpose(1, 0, 2, 3)),
+                    np.ascontiguousarray(
+                        phase_at_wavelength.transpose(1, 0, 2, 3)
+                    ),
                     [idf_hor, slice(None), slice(None), slice(None)],
                 ),
             )
-            # Result: (nz, nwav, stk, n_theta) -> transpose to (nwav,
-            # nz, stk, n_theta)
+            # Result: (nz, n_wavelength, stk, n_theta) -> transpose
+            # to (n_wavelength, nz, stk, n_theta)
             P_data = np.ascontiguousarray(P_data.transpose(1, 0, 2, 3)).astype(
                 np.float32
             )
             if len(hum_or_reff_val) == 1:
                 P_data = np.broadcast_to(
                     P_data,
-                    (nwav, nz_phase, P_data.shape[2], P_data.shape[3]),
+                    (n_wavelength, nz_phase, P_data.shape[2], P_data.shape[3]),
                 ).copy()
 
             # Expand 4 stk to 6 if needed
             if nphamat == 4:
                 P_data_6 = np.zeros(
-                    (nwav, nz_phase, nphamat_, n_theta), dtype="float32"
+                    (n_wavelength, nz_phase, nphamat_, n_theta),
+                    dtype="float32",
                 )
                 P_data_6[:, :, 0:4, :] = P_data
                 # F22 = F11 ; F44 = F33
@@ -919,7 +940,8 @@ class AerOPAC(object):
                 pass
             else:
                 P_data_6 = np.zeros(
-                    (nwav, nz_phase, nphamat_, n_theta), dtype="float32"
+                    (n_wavelength, nz_phase, nphamat_, n_theta),
+                    dtype="float32",
                 )
                 P_data_6[:, :, 0:nphamat, :] = P_data
                 P_data = P_data_6
@@ -928,7 +950,7 @@ class AerOPAC(object):
                 P_data,
                 dims=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
                 coords={
-                    "wavelength_phase": wav,
+                    "wavelength_phase": wavelength,
                     "z_phase": np.arange(P_data.shape[1]),
                     "nphamat": np.arange(P_data.shape[2]),
                     "theta_atm": theta,
@@ -944,10 +966,10 @@ class AerOPAC(object):
                 left=0,
                 right=nhor - 1,
             )
-            idf_wav_ext = np.interp(
-                np.asarray(wav, dtype=np.float64),
-                wav_vals,
-                np.arange(nwav_orig),
+            idf_wavelength_ext = np.interp(
+                np.asarray(wavelength, dtype=np.float64),
+                wavelength_vals,
+                np.arange(n_wavelength_orig),
             )
             ext_at_hor = cast(
                 NDArray,
@@ -959,17 +981,21 @@ class AerOPAC(object):
             )
             ext_ = cast(
                 NDArray,
-                vec_float_indexing(ext_at_hor.T, [idf_wav_ext, slice(None)]),
-            )  # (nwav, nhor_q)
+                vec_float_indexing(
+                    ext_at_hor.T, [idf_wavelength_ext, slice(None)]
+                ),
+            )  # (n_wavelength, nhor_q)
             ssa_ = cast(
                 NDArray,
-                vec_float_indexing(ssa_at_hor.T, [idf_wav_ext, slice(None)]),
-            )  # (nwav, nhor_q)
+                vec_float_indexing(
+                    ssa_at_hor.T, [idf_wavelength_ext, slice(None)]
+                ),
+            )  # (n_wavelength, nhor_q)
             if len(hum_or_reff_val) == 1:
-                ext_ = np.broadcast_to(ext_, (nwav, len(z))).copy()
-                ssa_ = np.broadcast_to(ssa_, (nwav, len(z))).copy()
+                ext_ = np.broadcast_to(ext_, (n_wavelength, len(z))).copy()
+                ssa_ = np.broadcast_to(ssa_, (n_wavelength, len(z))).copy()
 
-            dtau_ = np.zeros((len(wav), len(z)), dtype=np.float32)
+            dtau_ = np.zeros((len(wavelength), len(z)), dtype=np.float32)
             h1 = np.maximum(self.h_min[icont], z[1:])
             h2 = np.minimum(self.h_max[icont], z[:-1])
             cond = h2 > h1
@@ -1056,8 +1082,9 @@ class Cloud(AerOPAC):
         nphamat, theta
         Where:
         - wavelength_phase is the wavelength. It must be equal to
-          the `pfwav` parameter of Atm1D if defined, else the `wav`
-          parameter wavelengths of the Atm1D calc method.
+          the `wavelength_phase` parameter of Atm1D if defined, else
+          the `wavelength` parameter wavelengths of the Atm1D calc
+          method.
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
           of Atm1D
@@ -1226,12 +1253,13 @@ class AerUser(AerOPAC):
     Parameters
     ----------
     aod : 2-D ndarray
-        aerosol optical depth values with shape (len(hum), len(wav))
+        aerosol optical depth values with shape (len(hum), len(wavelength))
     ssa : 2-D ndarray
-        Single scattering albedo values with shape (len(hum), len(wav))
+        Single scattering albedo values with shape (len(hum),
+        len(wavelength))
     phase : 4-D ndarray
-        Phase function values with shape (len(hum), len(wav), len(stk),
-        len(theta)).
+        Phase function values with shape (len(hum),
+        len(wavelength), len(stk), len(theta)).
 
         Where len(stk) is the number of unique phase terms.
 
@@ -1242,7 +1270,7 @@ class AerUser(AerOPAC):
           spherical and non-spherical particles)
     hum : 1-D ndarray
         Relative humidity values in percentage
-    wav : 1-D ndarray
+    wavelength : 1-D ndarray
         Wavelength values in nanometers
     theta : 1-D ndarray
         Scattering angle values in degrees
@@ -1270,7 +1298,7 @@ class AerUser(AerOPAC):
         ssa: np.ndarray,
         phase: np.ndarray,
         hum: np.ndarray,
-        wav: np.ndarray,
+        wavelength: np.ndarray,
         theta: np.ndarray,
         h_mix_min: float = 0.0,
         h_mix_max: float = 2.0,
@@ -1292,7 +1320,7 @@ class AerUser(AerOPAC):
             },
             coords={
                 "hum": hum,
-                "wav": wav,
+                "wav": wavelength,
                 "theta": theta,
                 "stk": np.arange(phase.shape[2]),
             },
@@ -1361,14 +1389,14 @@ class Comp3D(ABC):
         """
 
     @abstractmethod
-    def get_ext(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
-        """Return the (nwav, N) extinction coefficients in km-1 of the
-        component cells at the given wavelengths in nm.
+    def get_ext(self, wavelength: NDArray[np.floating]) -> NDArray[np.float64]:
+        """Return the (n_wavelength, N) extinction coefficients in
+        km-1 of the component cells at the given wavelengths in nm.
         """
 
     @abstractmethod
-    def get_ssa(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
-        """Return the (nwav, N) single scattering albedos of the
+    def get_ssa(self, wavelength: NDArray[np.floating]) -> NDArray[np.float64]:
+        """Return the (n_wavelength, N) single scattering albedos of the
         component cells at the given wavelengths in nm.
         """
 
@@ -1640,31 +1668,31 @@ class _Comp3DFile(Comp3D):
             clamp=(self._param_oor == "clamp"),
         )
 
-    def get_ext(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
-        nwav = len(wav)
-        ext = np.zeros((nwav, self._ext_ref.size), dtype=np.float64)
+    def get_ext(self, wavelength: NDArray[np.floating]) -> NDArray[np.float64]:
+        n_wavelength = len(wavelength)
+        ext = np.zeros((n_wavelength, self._ext_ref.size), dtype=np.float64)
         ext_cells = self._interp_bulk_cells("ext")
         ext_ref0 = self._interp_axis(
             ext_cells, "wav", self.w_ref
         ).values
-        for iw in range(0, nwav):
+        for iw in range(0, n_wavelength):
             ext_factor = (
-                self._interp_axis(ext_cells, "wav", wav[iw]).values
+                self._interp_axis(ext_cells, "wav", wavelength[iw]).values
                 / ext_ref0
             )
             ext[iw, :] = self._ext_ref * ext_factor
         return ext
 
-    def get_ssa(self, wav: NDArray[np.floating]) -> NDArray[np.float64]:
-        nwav = len(wav)
-        ssa = np.ones((nwav, self._ext_ref.size), dtype=np.float64)
+    def get_ssa(self, wavelength: NDArray[np.floating]) -> NDArray[np.float64]:
+        n_wavelength = len(wavelength)
+        ssa = np.ones((n_wavelength, self._ext_ref.size), dtype=np.float64)
         if self.ssa_cst is not None:
             ssa[:, :] = self.ssa_cst
         else:
             ssa_cells = self._interp_bulk_cells("ssa")
-            for iw in range(0, nwav):
+            for iw in range(0, n_wavelength):
                 ssa[iw, :] = self._interp_axis(
-                    ssa_cells, "wav", wav[iw]
+                    ssa_cells, "wav", wavelength[iw]
                 ).values
         return ssa
 
@@ -1690,9 +1718,9 @@ class _Comp3DFile(Comp3D):
         pha = self.ds_mix["phase"].interp(theta=theta).transpose(
             "wav", self._bulk_axis, "stk", "theta"
         )
-        nwav, n_param, nstk = pha.shape[:3]
+        n_wavelength, n_param, nstk = pha.shape[:3]
 
-        pha_ = np.zeros((nwav, n_param, 6, n_theta), dtype=np.float64)
+        pha_ = np.zeros((n_wavelength, n_param, 6, n_theta), dtype=np.float64)
         pha_[:, :, :nstk, :] = pha.values
 
         if nstk == 4:  # spherical particles
@@ -1723,9 +1751,9 @@ class _Comp3DFile(Comp3D):
         clamp = self._param_oor == "clamp"
 
         phases = []
-        for iwav in range(0, len(wavelength_phase)):
+        for i_wavelength in range(0, len(wavelength_phase)):
             phase_w = self._interp_axis(
-                phase, "wavelength_phase", wavelength_phase[iwav]
+                phase, "wavelength_phase", wavelength_phase[i_wavelength]
             )
             # Loop only on the unique parameter values
             for iparam in range(0, n_unique):
@@ -2124,7 +2152,7 @@ def _read_i3rc_field(
 class Atmosphere(object):
     """Base class for atmosphere."""
 
-    def calc(self, wav, *args, **kwargs) -> xr.Dataset:
+    def calc(self, wavelength, *args, **kwargs) -> xr.Dataset:
         """
         Compute the atmospheric profile as an xr.Dataset.
 
@@ -2216,7 +2244,7 @@ class Atm1D(Atmosphere):
     tau_r : float or array_like or None, optional
         Force the Rayleigh optical thickness. If None, computed from
         atmospheric profile and wavelength.
-    pfwav : array_like or None, optional
+    wavelength_phase : array_like or None, optional
         The wavelengths over which the phase matrices are
         calculated. Then use the nearest wavelength
         during cuda simulation. Useful to reduce the memory. If None,
@@ -2287,7 +2315,7 @@ class Atm1D(Atmosphere):
         no2: bool = True,
         o3_h2o_alt: float | None = None,
         tau_r: float | NumericArrayLike | None = None,
-        pfwav: NumericArrayLike | None = None,
+        wavelength_phase: NumericArrayLike | None = None,
         pfgrid: NumericArrayLike | None = None,
         prof_abs: NDArray[np.floating] | None = None,
         prof_ray: NDArray[np.floating] | None = None,
@@ -2302,7 +2330,10 @@ class Atm1D(Atmosphere):
 
         self.lat = lat
         self.comp = [] if comp is None else comp
-        self.pfwav = None if pfwav is None else np.asarray(pfwav)
+        self.wavelength_phase = (
+            None if wavelength_phase is None
+            else np.asarray(wavelength_phase)
+        )
         self.pfgrid = (
             np.array([100.0, 0.0]) if pfgrid is None else np.asarray(pfgrid)
         )
@@ -2388,18 +2419,18 @@ class Atm1D(Atmosphere):
 
     def calc(
         self,
-        wav: NumericArrayLike | BandSet,
+        wavelength: NumericArrayLike | BandSet,
         phase: bool = True,
         n_theta: int = 721,
         use_old_calc_iphase: bool = False,
         truncation: DM_trunc | GT_trunc | None = None,
     ) -> xr.Dataset:
         """
-        Profile and phase matrix calculation at bands / wav
+        Profile and phase matrix calculation at bands / wavelength
 
         Parameters
         ----------
-        wav : array_like or BandSet
+        wavelength : array_like or BandSet
             Wavelengths at which to calculate the profile. It can be a
             list of ReptranIband or KdisIband.
         n_theta : int, optional
@@ -2416,17 +2447,17 @@ class Atm1D(Atmosphere):
             True) the phase matrices.
         """
 
-        if not isinstance(wav, BandSet):
-            wav = BandSet(wav)
+        if not isinstance(wavelength, BandSet):
+            wavelength = BandSet(wavelength)
 
-        profile = self.profile(wav)
+        profile = self.profile(wavelength)
 
         if phase:
-            if self.pfwav is None:
-                wav_pha = wav[:]
+            if self.wavelength_phase is None:
+                wavelength_pha = wavelength[:]
             else:
-                wav_pha = self.pfwav
-            pha = self.phase(wav_pha, n_theta=n_theta)
+                wavelength_pha = self.wavelength_phase
+            pha = self.phase(wavelength_pha, n_theta=n_theta)
             ipha = None
 
             pro_var = list(profile.data_vars)
@@ -2767,7 +2798,7 @@ class Atm1D(Atmosphere):
 
     def profile(
         self,
-        wav: NumericArrayLike | BandSet,
+        wavelength: NumericArrayLike | BandSet,
         prof: ProfileBase | None = None,
     ) -> xr.Dataset:
         """Calculate the profile of optical properties at given
@@ -2782,7 +2813,7 @@ class Atm1D(Atmosphere):
 
         Parameters
         ----------
-        wav : array_like or BandSet
+        wavelength : array_like or BandSet
             Wavelengths at which to calculate optical properties [nm].
             If not a BandSet, it will be converted to one.
         prof : ProfileBase, optional
@@ -2853,8 +2884,8 @@ class Atm1D(Atmosphere):
         scattering to extinction
         optical thicknesses for each layer.
         """
-        if not isinstance(wav, BandSet):
-            wav = BandSet(wav)
+        if not isinstance(wavelength, BandSet):
+            wavelength = BandSet(wavelength)
 
         if prof is None:
             prof = self.prof
@@ -2868,30 +2899,36 @@ class Atm1D(Atmosphere):
             pro = xr.Dataset(
                 coords={
                     "iopt": np.arange(len(prof.z)),
-                    "wavelength": wav[:],
+                    "wavelength": wavelength[:],
                 }
             )
         else:
             pro = xr.Dataset(
-                coords={"z_atm": prof.z, "wavelength": wav[:]}
+                coords={"z_atm": prof.z, "wavelength": wavelength[:]}
             )
 
         if self.opt3d and self.prof_ray is not None:
             ray_coef = np.zeros_like(self.prof_ray)
         else:
-            ray_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
+            ray_coef = np.zeros(
+                (len(wavelength), len(prof.z)), dtype="float32"
+            )
         if self.opt3d and self.prof_aer is not None:
             aer_coef = np.zeros_like(self.prof_aer[0])
         else:
-            aer_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
+            aer_coef = np.zeros(
+                (len(wavelength), len(prof.z)), dtype="float32"
+            )
         if self.opt3d and self.prof_abs is not None:
             abs_coef = np.zeros_like(self.prof_abs)
         else:
-            abs_coef = np.zeros((len(wav), len(prof.z)), dtype="float32")
+            abs_coef = np.zeros(
+                (len(wavelength), len(prof.z)), dtype="float32"
+            )
 
         # refractive index
         n = refractivity(
-            wav[:] * 1e-3,
+            wavelength[:] * 1e-3,
             prof.p,
             prof.t,
             np.divide(
@@ -2923,10 +2960,10 @@ class Atm1D(Atmosphere):
         #
         # Rayleigh optical thickness
         #
-        # cumulated Rayleigh optical thickness (wav, z)
+        # cumulated Rayleigh optical thickness (wavelength, z)
         if self.prof_ray is None:
             tauray = rayleigh_od(
-                wav[:] * 1e-3,
+                wavelength[:] * 1e-3,
                 prof.dens_co2 / prof.dens_air * 1e6,
                 self.lat,
                 prof.z * 1e3,
@@ -2979,11 +3016,11 @@ class Atm1D(Atmosphere):
         # Aerosol optical thickness and single scattering albedo
         #
         if self.prof_aer is None:
-            dtaua = np.zeros((len(wav), len(prof.z)), dtype="float32")
-            ssa_p = np.zeros((len(wav), len(prof.z)), dtype="float32")
+            dtaua = np.zeros((len(wavelength), len(prof.z)), dtype="float32")
+            ssa_p = np.zeros((len(wavelength), len(prof.z)), dtype="float32")
             for comp in self.comp:
                 dtau_, ssa_ = comp.dtau_ssa(
-                    wav[:], prof.z, prof.relative_humidity()
+                    wavelength[:], prof.z, prof.relative_humidity()
                 )
                 dtaua += dtau_
                 ssa_p += dtau_ * ssa_
@@ -3055,18 +3092,18 @@ class Atm1D(Atmosphere):
             # Consider gaseous from reptran/kdis
             use_o3_acs = True
             use_no2_acs = True
-            tau_o3 = np.zeros((len(wav), len(prof.z)), dtype="float32")
-            tau_no2 = np.zeros((len(wav), len(prof.z)), dtype="float32")
-            if wav.use_reptran_kdis:
-                tau_mol = wav.calc_profile(self.prof) * dz
+            tau_o3 = np.zeros((len(wavelength), len(prof.z)), dtype="float32")
+            tau_no2 = np.zeros((len(wavelength), len(prof.z)), dtype="float32")
+            if wavelength.use_reptran_kdis:
+                tau_mol = wavelength.calc_profile(self.prof) * dz
                 # If not reptran (i.e. Kdis case) we set 03 and NO2 to 0
                 # (already calculated in Kdis)
                 if not (
-                    str(wav.type_wav)
+                    str(wavelength.type_wavelength)
                     == "<class 'smartg.reptran.ReptranIband'>"
                 ):
-                    assert wav.data is not None
-                    kdis_iband = cast("KdisIband", wav.data[0])
+                    assert wavelength.data is not None
+                    kdis_iband = cast("KdisIband", wavelength.data[0])
                     all_kdis_gas = (
                         kdis_iband.band.kdis.species
                         + kdis_iband.band.kdis.species_c
@@ -3077,7 +3114,9 @@ class Atm1D(Atmosphere):
                         use_o3_acs = False
             else:
                 tau_mol = (
-                    np.zeros((len(wav), len(prof.z)), dtype="float32") * dz
+                    np.zeros(
+                        (len(wavelength), len(prof.z)), dtype="float32"
+                    ) * dz
                 )
 
             # Compute o3 and no2 (if kdis only compute them if not
@@ -3095,7 +3134,7 @@ class Atm1D(Atmosphere):
                         np.max(self.acs_o3["wavelength"].values)
                     )
                     wavelength_query = xr.DataArray(
-                        wav[:], dims=["wavelength"]
+                        wavelength[:], dims=["wavelength"]
                     )
                     c0 = (
                         self.acs_o3["O3_C0"]
@@ -3115,8 +3154,8 @@ class Atm1D(Atmosphere):
                     tau_o3 = c0 + c1 * (t - t0) + c2 * (t - t0) * (t - t0)
                     tau_o3[
                         ~np.logical_and(
-                            wav[:] > min_wavelength,
-                            wav[:] < max_wavelength,
+                            wavelength[:] > min_wavelength,
+                            wavelength[:] < max_wavelength,
                         )
                     ] = 0.0
                     tau_o3 *= (
@@ -3133,7 +3172,7 @@ class Atm1D(Atmosphere):
                         np.max(self.acs_no2["wavelength"].values)
                     )
                     wavelength_query = xr.DataArray(
-                        wav[:], dims=["wavelength"]
+                        wavelength[:], dims=["wavelength"]
                     )
                     c0 = (
                         self.acs_no2["NO2_C0"]
@@ -3153,8 +3192,8 @@ class Atm1D(Atmosphere):
                     tau_no2 = c0 + c1 * (t - t0) + c2 * (t - t0) * (t - t0)
                     tau_no2[
                         ~np.logical_and(
-                            wav[:] > min_wavelength,
-                            wav[:] < max_wavelength,
+                            wavelength[:] > min_wavelength,
+                            wavelength[:] < max_wavelength,
                         )
                     ] = 0.0
                     tau_no2 *= (
@@ -3444,7 +3483,7 @@ class Atm1D(Atmosphere):
         return pro
 
     def phase(
-        self, wav: NumericArrayLike, n_theta: int = 721
+        self, wavelength: NumericArrayLike, n_theta: int = 721
     ) -> xr.DataArray | None:
         """
         Calculate phase matrix of aerosols and clouds at specified
@@ -3458,7 +3497,7 @@ class Atm1D(Atmosphere):
 
         Parameters
         ----------
-        wav : array_like
+        wavelength : array_like
             Wavelengths at which to calculate phase matrix [nm].
             If scalar, will be converted to 1-D array.
         n_theta : int, optional
@@ -3472,7 +3511,7 @@ class Atm1D(Atmosphere):
             axes
             [wavelength_phase, z_phase, nphamat, theta_atm] if
             aerosol components are present.
-            Shape is (len(wav), nz, nphamat, n_theta) where:
+            Shape is (len(wavelength), nz, nphamat, n_theta) where:
             - nz: number of altitude levels in the reduced profile
               (self.pfgrid)
             - nphamat = 4 for spherical particles only (phase matrix
@@ -3501,14 +3540,14 @@ class Atm1D(Atmosphere):
         The relative humidity used for calculations is obtained from
         the reduced profile (self.prof_red).
         """
-        wav = np.atleast_1d(wav)
+        wavelength = np.atleast_1d(wavelength)
         pha = None
         norm = None
         rh = self.prof_red.relative_humidity()
 
         for comp in self.comp:
-            dtau, ssa_p = comp.dtau_ssa(wav, self.pfgrid, rh=rh)
-            comp_pha = comp.phase(wav, self.pfgrid, rh, n_theta=n_theta)
+            dtau, ssa_p = comp.dtau_ssa(wavelength, self.pfgrid, rh=rh)
+            comp_pha = comp.phase(wavelength, self.pfgrid, rh, n_theta=n_theta)
             if hasattr(comp_pha, "to_xarray"):
                 comp_pha = comp_pha.to_xarray()
 
@@ -3537,7 +3576,7 @@ class Atm1D(Atmosphere):
 
     def calc_split(
         self,
-        wav: NumericArrayLike | BandSet,
+        wavelength: NumericArrayLike | BandSet,
         phase: bool = True,
         n_theta: int = 721,
     ) -> tuple[
@@ -3557,7 +3596,7 @@ class Atm1D(Atmosphere):
 
         Parameters
         ----------
-        wav : array_like or BandSet
+        wavelength : array_like or BandSet
             Wavelengths at which to calculate optical properties [nm].
         phase : bool, optional
             If True (default), calculates phase functions. Set to False
@@ -3617,11 +3656,11 @@ class Atm1D(Atmosphere):
         --------
         >>> atm = Atm1D('afglus')
         >>> (prof_abs, prof_ray, (prof_aer, ssa_aer)
-        ...  (pro_iphase, pro_phases)) = atm.calc_split(wav=500.)
+        ...  (pro_iphase, pro_phases)) = atm.calc_split(wavelength=500.)
         """
-        if not isinstance(wav, BandSet):
-            wav = np.atleast_1d(wav)
-        pro = self.calc(wav=wav, phase=phase, n_theta=n_theta)
+        if not isinstance(wavelength, BandSet):
+            wavelength = np.atleast_1d(wavelength)
+        pro = self.calc(wavelength=wavelength, phase=phase, n_theta=n_theta)
         pro_aer = diff1(pro["OD_p"].values.astype(np.float32), axis=1)
         ssa_aer = pro["ssa_p_atm"].values
         pro_ray = diff1(pro["OD_r"].values.astype(np.float32), axis=1)
@@ -3667,7 +3706,7 @@ class _Atm3DBackend(Atm1D):
 
         self.lat = 45.0
         self.comp = []
-        self.pfwav = None
+        self.wavelength_phase = None
         self.pfgrid = np.array([100.0, 0.0])
         self.prof_abs = prof_abs
         self.prof_ray = prof_ray
@@ -3747,7 +3786,7 @@ class Atm3D(Atmosphere):
     ...     grid_3d=Grid3D(xgrid, ygrid, zgrid, periodic=True),
     ...     comp_3d=[Cloud3D("wc", w_ref=800., ds=cloud_field)],
     ... )
-    >>> pro = atm3d.calc(wav)
+    >>> pro = atm3d.calc(wavelength)
 
     Parameters
     ----------
@@ -3766,7 +3805,7 @@ class Atm3D(Atmosphere):
         extinction-weighted and the phase matrices are weighted by
         the scattering coefficients.
         If None or empty, the 3D atmosphere is horizontally uniform.
-    pfwav : array_like or None, optional
+    wavelength_phase : array_like or None, optional
         The wavelengths over which the phase matrices are calculated.
         Then use the nearest wavelength during cuda simulation. Useful
         to reduce the memory. If None, compute the phase matrices at
@@ -3798,7 +3837,7 @@ class Atm3D(Atmosphere):
         atm_1d: Atm1D,
         grid_3d: Grid3D,
         comp_3d: Sequence[Comp3D] | None = None,
-        pfwav: NumericArrayLike | None = None,
+        wavelength_phase: NumericArrayLike | None = None,
         mol_sca_1d: NDArray[np.floating] | None = None,
         mol_abs_1d: NDArray[np.floating] | None = None,
         aer_ext_1d: NDArray[np.floating] | None = None,
@@ -3826,7 +3865,10 @@ class Atm3D(Atmosphere):
         self.atm_1d = atm_1d
         self.grid_3d = grid_3d
         self.comp_3d = comp_3d
-        self.pfwav = None if pfwav is None else np.asarray(pfwav)
+        self.wavelength_phase = (
+            None if wavelength_phase is None
+            else np.asarray(wavelength_phase)
+        )
         self.mol_sca_1d = mol_sca_1d
         self.mol_abs_1d = mol_abs_1d
         self.aer_ext_1d = aer_ext_1d
@@ -3897,7 +3939,7 @@ class Atm3D(Atmosphere):
 
     def calc(
         self,
-        wav: NumericArrayLike | BandSet,
+        wavelength: NumericArrayLike | BandSet,
         phase: bool = True,
         n_theta: int = 721,
         use_old_calc_iphase: bool = False,
@@ -3907,7 +3949,7 @@ class Atm3D(Atmosphere):
 
         Parameters
         ----------
-        wav : array_like or BandSet
+        wavelength : array_like or BandSet
             Wavelengths in nm.
         phase : bool, optional
             If True (default), compute the phase matrices.
@@ -3927,11 +3969,14 @@ class Atm3D(Atmosphere):
             `iabs_atm`, `pmin_atm`, `pmax_atm`, `neighbour_atm`)
             consumed by :meth:`smartg.smartg.Smartg.run`.
         """
-        if isinstance(wav, BandSet):
-            wavelengths = np.asarray(wav.wav)
+        if isinstance(wavelength, BandSet):
+            wavelengths = np.asarray(wavelength.wavelength)
         else:
-            wavelengths = np.atleast_1d(np.asarray(wav))
-        wav_pha = self.pfwav if self.pfwav is not None else wavelengths
+            wavelengths = np.atleast_1d(np.asarray(wavelength))
+        wavelength_pha = (
+            self.wavelength_phase
+            if self.wavelength_phase is not None else wavelengths
+        )
 
         #
         # 1D background optical properties on the 3D vertical grid
@@ -3954,7 +3999,7 @@ class Atm3D(Atmosphere):
             atm_1d.prof = self.atm_1d._prof_src.regrid(
                 np.asarray(self.grid_3d.zGRID[::-1])
             )
-            ds_1d = atm_1d.calc(wav, phase=pha_1d, n_theta=n_theta)
+            ds_1d = atm_1d.calc(wavelength, phase=pha_1d, n_theta=n_theta)
             if mol_sca_1d is None:
                 mol_sca_1d = od2k(ds_1d, "OD_r")
             if mol_abs_1d is None:
@@ -4000,7 +4045,7 @@ class Atm3D(Atmosphere):
         mol_abs_glob = self._glob_molecular(mol_abs_1d)
         ext_glob, ssa_glob, prof_phases = self._glob_particles(
             wavelengths,
-            wav_pha,
+            wavelength_pha,
             n_theta,
             ext_aer_1d,
             ssa_aer_1d,
@@ -4020,7 +4065,7 @@ class Atm3D(Atmosphere):
             cells=self._cells_info(),
         )
         return backend.calc(
-            wav,
+            wavelength,
             phase=phase,
             n_theta=n_theta,
             use_old_calc_iphase=use_old_calc_iphase,
@@ -4039,8 +4084,9 @@ class Atm3D(Atmosphere):
     def _glob_molecular(
         self, mol_1d: NDArray[np.floating]
     ) -> NDArray[np.floating]:
-        """Merge the (nwav, NZ + 1) 1D molecular coefficients into the
-        global (nwav, Nopt) array: the component cells replicate the 1D
+        """Merge the (n_wavelength, NZ + 1) 1D molecular
+        coefficients into the global (n_wavelength, Nopt) array: the
+        component cells replicate the 1D
         value at the same altitude.
         """
         if self._cell_flat_indices is None:
@@ -4060,7 +4106,7 @@ class Atm3D(Atmosphere):
     def _glob_particles(
         self,
         wavelengths: NDArray[np.floating],
-        wav_pha: NDArray[np.floating],
+        wavelength_pha: NDArray[np.floating],
         n_theta: int,
         ext_aer_1d: NDArray[np.floating],
         ssa_aer_1d: NDArray[np.floating],
@@ -4072,7 +4118,7 @@ class Atm3D(Atmosphere):
         tuple[NDArray[np.int32], list[Any]] | None,
     ]:
         """Merge the 1D aerosols and the 3D component into the global
-        (nwav, Nopt) particle extinction and single scattering albedo
+        (n_wavelength, Nopt) particle extinction and single scattering albedo
         arrays and the global phase matrix set.
         """
         NZ = self.grid_3d.NZ
@@ -4082,22 +4128,22 @@ class Atm3D(Atmosphere):
             if pha_aer_1d is None:
                 return ext_aer_1d, ssa_aer_1d, None
             phases = []
-            for iwav in range(0, len(wav_pha)):
+            for i_wavelength in range(0, len(wavelength_pha)):
                 for iz in range(0, nbz):
                     phases.append(
-                        pha_aer_1d.isel(iphase=ipha_aer_1d[iwav, iz])
+                        pha_aer_1d.isel(iphase=ipha_aer_1d[i_wavelength, iz])
                     )
-            ipha3d = np.zeros((len(wav_pha), nbz), dtype=np.int32)
-            for iwav in range(0, len(wav_pha)):
-                ipha3d[iwav, :] = np.arange(nbz, dtype=np.int32) + (
-                    iwav * nbz
+            ipha3d = np.zeros((len(wavelength_pha), nbz), dtype=np.int32)
+            for i_wavelength in range(0, len(wavelength_pha)):
+                ipha3d[i_wavelength, :] = np.arange(nbz, dtype=np.int32) + (
+                    i_wavelength * nbz
                 )
             return ext_aer_1d, ssa_aer_1d, (ipha3d, phases)
 
         if len(self.comp_3d) > 1:
             return self._glob_particles_multi(
                 wavelengths,
-                wav_pha,
+                wavelength_pha,
                 n_theta,
                 ext_aer_1d,
                 ssa_aer_1d,
@@ -4111,7 +4157,7 @@ class Atm3D(Atmosphere):
         ext_3d = comp.get_ext(wavelengths)
         ssa_3d = comp.get_ssa(wavelengths)
         cld_phases, cell_pha_idx, n_unique = comp.get_phase_set(
-            wav_pha, n_theta=n_theta
+            wavelength_pha, n_theta=n_theta
         )
 
         ext_mix_3d = np.zeros((len(wavelengths), n_cell), dtype=np.float64)
@@ -4150,29 +4196,29 @@ class Atm3D(Atmosphere):
 
             # First plan parallel phase
             phases = []
-            for iwav in range(0, len(wav_pha)):
+            for i_wavelength in range(0, len(wavelength_pha)):
                 for iz in range(0, nbz):
                     phases.append(
                         phase_aer_1d.isel(
-                            iphase=ipha_aer_1d[iwav, iz]
+                            iphase=ipha_aer_1d[i_wavelength, iz]
                         )
                     )
 
             # Second 3d mix phase, weighted by the extinctions at the
             # phase wavelengths
-            ext_3d_pha = comp.get_ext(wav_pha)
-            ssa_3d_pha = comp.get_ssa(wav_pha)
-            for iwav in range(0, len(wav_pha)):
-                ssa_aer_tmp = ssa_aer_1d[iwav, idz_atm]
-                ext_aer_tmp = ext_aer_1d[iwav, idz_atm]
-                ext_mix_tmp = ext_aer_tmp + ext_3d_pha[iwav, :]
+            ext_3d_pha = comp.get_ext(wavelength_pha)
+            ssa_3d_pha = comp.get_ssa(wavelength_pha)
+            for i_wavelength in range(0, len(wavelength_pha)):
+                ssa_aer_tmp = ssa_aer_1d[i_wavelength, idz_atm]
+                ext_aer_tmp = ext_aer_1d[i_wavelength, idz_atm]
+                ext_mix_tmp = ext_aer_tmp + ext_3d_pha[i_wavelength, :]
 
                 for icell in range(0, n_cell):
                     pha_cld_tmp = cld_phases[
-                        iwav * n_unique + cell_pha_idx[icell]
+                        i_wavelength * n_unique + cell_pha_idx[icell]
                     ]
                     pha_aer_tmp = phase_aer_1d.isel(
-                        iphase=ipha_aer_1d[iwav, idz_atm[icell]]
+                        iphase=ipha_aer_1d[i_wavelength, idz_atm[icell]]
                     )
                     pha_tot = (
                         (
@@ -4182,22 +4228,22 @@ class Atm3D(Atmosphere):
                         )
                         + (
                             pha_cld_tmp
-                            * ext_3d_pha[iwav, icell]
-                            * ssa_3d_pha[iwav, icell]
+                            * ext_3d_pha[i_wavelength, icell]
+                            * ssa_3d_pha[i_wavelength, icell]
                         )
                     ) / ext_mix_tmp[icell]
                     phases.append(pha_tot)
 
             # the mixed extinctions and ssa of the profile, at the
             # profile wavelengths
-            for iwav in range(0, len(wavelengths)):
-                ssa_aer_tmp = ssa_aer_1d[iwav, idz_atm]
-                ext_aer_tmp = ext_aer_1d[iwav, idz_atm]
-                ext_mix_tmp = ext_aer_tmp + ext_3d[iwav, :]
-                ext_mix_3d[iwav, :] = ext_mix_tmp
-                ssa_mix_3d[iwav, :] = (
+            for i_wavelength in range(0, len(wavelengths)):
+                ssa_aer_tmp = ssa_aer_1d[i_wavelength, idz_atm]
+                ext_aer_tmp = ext_aer_1d[i_wavelength, idz_atm]
+                ext_mix_tmp = ext_aer_tmp + ext_3d[i_wavelength, :]
+                ext_mix_3d[i_wavelength, :] = ext_mix_tmp
+                ssa_mix_3d[i_wavelength, :] = (
                     ext_aer_tmp * ssa_aer_tmp
-                    + ext_3d[iwav, :] * ssa_3d[iwav, :]
+                    + ext_3d[i_wavelength, :] * ssa_3d[i_wavelength, :]
                 ) / ext_mix_tmp
 
             # Concatenate plan parallel + 3d optical prop (first
@@ -4216,14 +4262,15 @@ class Atm3D(Atmosphere):
         # Now consider the wavelength dimension
         # NB: with a 1D aerosol the per-wavelength stride in `phases`
         # is nbz + n_cell, not n_unique, so the offset below is only
-        # correct when len(wav_pha) == 1 (the only exercised case;
+        # correct when len(wavelength_pha) == 1 (the only exercised
+        # case;
         # kept as-is for consistency with the saved references)
         ipha3d = np.zeros(
-            (len(wav_pha), phase_glob_indices_w0.size), dtype=np.int32
+            (len(wavelength_pha), phase_glob_indices_w0.size), dtype=np.int32
         )
-        for iwav in range(0, len(wav_pha)):
-            ipha3d[iwav, :] = phase_glob_indices_w0[:] + (
-                iwav * n_unique
+        for i_wavelength in range(0, len(wavelength_pha)):
+            ipha3d[i_wavelength, :] = phase_glob_indices_w0[:] + (
+                i_wavelength * n_unique
             )
 
         return ext_glob, ssa_glob, (ipha3d, phases)
@@ -4231,7 +4278,7 @@ class Atm3D(Atmosphere):
     def _glob_particles_multi(
         self,
         wavelengths: NDArray[np.floating],
-        wav_pha: NDArray[np.floating],
+        wavelength_pha: NDArray[np.floating],
         n_theta: int,
         ext_aer_1d: NDArray[np.floating],
         ssa_aer_1d: NDArray[np.floating],
@@ -4243,7 +4290,7 @@ class Atm3D(Atmosphere):
         tuple[NDArray[np.int32], list[Any]] | None,
     ]:
         """Merge the 1D aerosols and several 3D components into the
-        global (nwav, Nopt) particle extinction and single scattering
+        global (n_wavelength, Nopt) particle extinction and single scattering
         albedo arrays and the global phase matrix set.
 
         In each cell the extinctions are summed, the single
@@ -4261,10 +4308,10 @@ class Atm3D(Atmosphere):
         # per-component optical properties and phase matrix sets
         ext_3d = [comp.get_ext(wavelengths) for comp in self.comp_3d]
         ssa_3d = [comp.get_ssa(wavelengths) for comp in self.comp_3d]
-        ext_3d_pha = [comp.get_ext(wav_pha) for comp in self.comp_3d]
-        ssa_3d_pha = [comp.get_ssa(wav_pha) for comp in self.comp_3d]
+        ext_3d_pha = [comp.get_ext(wavelength_pha) for comp in self.comp_3d]
+        ssa_3d_pha = [comp.get_ssa(wavelength_pha) for comp in self.comp_3d]
         phase_sets = [
-            comp.get_phase_set(wav_pha, n_theta=n_theta)
+            comp.get_phase_set(wavelength_pha, n_theta=n_theta)
             for comp in self.comp_3d
         ]
 
@@ -4328,13 +4375,13 @@ class Atm3D(Atmosphere):
         # a single component is a possible future memory
         # optimization)
         phases = []
-        for iwav in range(0, len(wav_pha)):
+        for i_wavelength in range(0, len(wavelength_pha)):
             if phase_aer_1d is not None:
                 assert ipha_aer_1d is not None
                 for iz in range(0, nbz):
                     phases.append(
                         phase_aer_1d.isel(
-                            iphase=ipha_aer_1d[iwav, iz]
+                            iphase=ipha_aer_1d[i_wavelength, iz]
                         )
                     )
             for icell in range(0, n_cell):
@@ -4345,31 +4392,32 @@ class Atm3D(Atmosphere):
                     assert ipha_aer_1d is not None
                     idz = idz_atm[icell]
                     pha_first = phase_aer_1d.isel(
-                        iphase=ipha_aer_1d[iwav, idz]
+                        iphase=ipha_aer_1d[i_wavelength, idz]
                     )
                     pha_tot = pha_first * (
-                        ext_aer_1d[iwav, idz] * ssa_aer_1d[iwav, idz]
+                        ext_aer_1d[i_wavelength, idz]
+                        * ssa_aer_1d[i_wavelength, idz]
                     )
-                    ext_tot += ext_aer_1d[iwav, idz]
+                    ext_tot += ext_aer_1d[i_wavelength, idz]
                 for icomp in range(0, len(self.comp_3d)):
                     iloc = local_pos[icomp, icell]
                     if iloc < 0:
                         continue
                     _, cell_pha_idx, n_unique = phase_sets[icomp]
                     pha_cld = cld_phases_all[icomp][
-                        iwav * n_unique + cell_pha_idx[iloc]
+                        i_wavelength * n_unique + cell_pha_idx[iloc]
                     ]
                     if pha_first is None:
                         pha_first = pha_cld
                     pha_comp = pha_cld * (
-                        ext_3d_pha[icomp][iwav, iloc]
-                        * ssa_3d_pha[icomp][iwav, iloc]
+                        ext_3d_pha[icomp][i_wavelength, iloc]
+                        * ssa_3d_pha[icomp][i_wavelength, iloc]
                     )
                     pha_tot = (
                         pha_comp if pha_tot is None
                         else pha_tot + pha_comp
                     )
-                    ext_tot += ext_3d_pha[icomp][iwav, iloc]
+                    ext_tot += ext_3d_pha[icomp][i_wavelength, iloc]
                 assert pha_tot is not None and pha_first is not None
                 if ext_tot > 0.0:
                     pha_tot = pha_tot / ext_tot
@@ -4394,10 +4442,10 @@ class Atm3D(Atmosphere):
                     np.arange(n_cell, dtype=np.int32),
                 ]
             )
-        ipha3d = np.zeros((len(wav_pha), nbz + n_cell), dtype=np.int32)
-        for iwav in range(0, len(wav_pha)):
-            ipha3d[iwav, :] = phase_glob_indices_w0[:] + (
-                iwav * stride
+        ipha3d = np.zeros((len(wavelength_pha), nbz + n_cell), dtype=np.int32)
+        for i_wavelength in range(0, len(wavelength_pha)):
+            ipha3d[i_wavelength, :] = phase_glob_indices_w0[:] + (
+                i_wavelength * stride
             )
 
         ext_glob = np.concatenate([ext_aer_1d, ext_mix_3d], axis=1)
@@ -5358,7 +5406,7 @@ def od2k(
 
 
 def blackbody_radiance(
-    wav: NumericArrayLike, T: NumericArrayLike
+    wavelength: NumericArrayLike, T: NumericArrayLike
 ) -> float | NDArray:
     """
     Calculate the spectral blackbody radiance.
@@ -5369,7 +5417,7 @@ def blackbody_radiance(
 
     Parameters
     ----------
-    wav : array_like
+    wavelength : array_like
         Wavelength in meters.
     T : array_like
         Temperature in Kelvin.
@@ -5388,9 +5436,9 @@ def blackbody_radiance(
     --------
     >>> import numpy as np
     >>> from scipy.constants import speed_of_light, Planck, Boltzmann
-    >>> wav = 10e-6  # 10 micrometers (thermal infrared)
+    >>> wavelength = 10e-6  # 10 micrometers (thermal infrared)
     >>> T = 288.0    # 288 K (room temperature)
-    >>> L_b_wavelength = blackbody_radiance(wav, T)
+    >>> L_b_wavelength = blackbody_radiance(wavelength, T)
     >>> print(f"Spectral radiance: {L_b_wavelength:.2e} W·m⁻³·sr⁻¹")
 
     >>> # Calculate for multiple wavelengths at a fixed temperature
@@ -5398,17 +5446,19 @@ def blackbody_radiance(
     >>> T = 5778  # Sun's surface temperature
     >>> L_b_wavelength = blackbody_radiance(wavelengths, T)
     """
-    wav = np.asarray(wav, dtype=np.float64)
+    wavelength = np.asarray(wavelength, dtype=np.float64)
     T = np.asarray(T, dtype=np.float64)
-    scalar_input = wav.ndim == 0 and T.ndim == 0
+    scalar_input = wavelength.ndim == 0 and T.ndim == 0
     try:
-        np.broadcast_shapes(wav.shape, T.shape)
+        np.broadcast_shapes(wavelength.shape, T.shape)
     except ValueError as err:
-        raise ValueError("wav and T must be broadcastable") from err
+        raise ValueError("wavelength and T must be broadcastable") from err
 
     c1 = 2.0 * Planck * speed_of_light**2
     c2 = Planck * speed_of_light / Boltzmann
-    L_b_wavelength = c1 / ((wav**5) * (np.exp(c2 / (wav * T)) - 1.0))
+    L_b_wavelength = c1 / (
+        (wavelength**5) * (np.exp(c2 / (wavelength * T)) - 1.0)
+    )
     if scalar_input:
         return float(L_b_wavelength)
     return L_b_wavelength
@@ -5516,25 +5566,25 @@ def read_aeronet_aod(file: PathType, year: int) -> xr.DataArray:
 
     check_date(dates=aod["Date(dd:mm:yyyy)"].values, year=year)
 
-    wav_ext = []
+    wavelength_ext = []
     for key in aod.keys():
         if "AOD_Extinction-Total" in key:
             str_bis = key.split("[")
-            wav_ext.append(float(str_bis[1][:-3]))
-    wav_ext = np.unique(wav_ext)
-    n_wav_ext = len(wav_ext)
+            wavelength_ext.append(float(str_bis[1][:-3]))
+    wavelength_ext = np.unique(wavelength_ext)
+    n_wavelength_ext = len(wavelength_ext)
 
-    mat_ext = np.zeros((ntime_aod, n_wav_ext), dtype=np.float64)
+    mat_ext = np.zeros((ntime_aod, n_wavelength_ext), dtype=np.float64)
     for itime in range(0, ntime_aod):
-        for iwav, wav in enumerate(wav_ext):
-            key = "AOD_Extinction-Total[" + str(int(wav)) + "nm]"
-            mat_ext[itime, iwav] = aod.iloc[itime][key]
+        for i_wavelength, wavelength in enumerate(wavelength_ext):
+            key = "AOD_Extinction-Total[" + str(int(wavelength)) + "nm]"
+            mat_ext[itime, i_wavelength] = aod.iloc[itime][key]
 
     aod_ext_da = xr.DataArray(
         mat_ext,
         coords={
             "Day_of_Year(Fraction)": aod["Day_of_Year(Fraction)"].values,
-            "wavelength": wav_ext,
+            "wavelength": wavelength_ext,
         },
         dims=["Day_of_Year(Fraction)", "wavelength"],
         name="aod",
@@ -5565,25 +5615,25 @@ def read_aeronet_ssa(file: PathType, year: int) -> xr.DataArray:
 
     check_date(dates=ssa["Date(dd:mm:yyyy)"].values, year=year)
 
-    wav_ssa = []
+    wavelength_ssa = []
     for key in ssa.keys():
         if "Single_Scattering_Albedo" in key:
             str_bis = key.split("[")
-            wav_ssa.append(float(str_bis[1][:-3]))
-    wav_ssa = np.unique(wav_ssa)
-    n_wav_ssa = len(wav_ssa)
+            wavelength_ssa.append(float(str_bis[1][:-3]))
+    wavelength_ssa = np.unique(wavelength_ssa)
+    n_wavelength_ssa = len(wavelength_ssa)
 
-    mat_ssa = np.zeros((ntime_ssa, n_wav_ssa), dtype=np.float64)
+    mat_ssa = np.zeros((ntime_ssa, n_wavelength_ssa), dtype=np.float64)
     for itime in range(0, ntime_ssa):
-        for iwav, wav in enumerate(wav_ssa):
-            key = "Single_Scattering_Albedo[" + str(int(wav)) + "nm]"
-            mat_ssa[itime, iwav] = ssa.iloc[itime][key]
+        for i_wavelength, wavelength in enumerate(wavelength_ssa):
+            key = "Single_Scattering_Albedo[" + str(int(wavelength)) + "nm]"
+            mat_ssa[itime, i_wavelength] = ssa.iloc[itime][key]
 
     ssa_da = xr.DataArray(
         mat_ssa,
         coords={
             "Day_of_Year(Fraction)": ssa["Day_of_Year(Fraction)"].values,
-            "wavelength": wav_ssa,
+            "wavelength": wavelength_ssa,
         },
         dims=["Day_of_Year(Fraction)", "wavelength"],
         name="ssa",
@@ -5617,30 +5667,30 @@ def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
     check_date(dates=pfn["Date(dd:mm:yyyy)"].values, year=year)
 
     ang = []
-    wav_pfn = []
+    wavelength_pfn = []
     for key in pfn.keys():
         if "0000" in key:
             str_bis = key.split("[")
             ang.append(float(str_bis[0]))
-            wav_pfn.append(float(str_bis[1][:-3]))
+            wavelength_pfn.append(float(str_bis[1][:-3]))
     ang = np.unique(ang)[::-1]
-    wav_pfn = np.unique(wav_pfn)
+    wavelength_pfn = np.unique(wavelength_pfn)
     n_ang = len(ang)
-    nwav_pfn = len(wav_pfn)
+    n_wavelength_pfn = len(wavelength_pfn)
 
-    mat_pfn = np.zeros((ntime_pfn, nwav_pfn, n_ang), dtype=np.float64)
+    mat_pfn = np.zeros((ntime_pfn, n_wavelength_pfn, n_ang), dtype=np.float64)
     for itime in range(0, ntime_pfn):
-        for iwav, wav in enumerate(wav_pfn):
+        for i_wavelength, wavelength in enumerate(wavelength_pfn):
             for iang, ag in enumerate(ang):
                 ang_str = "%.6f" % float(ag)
-                key = ang_str + "[" + str(int(wav)) + "nm]"
-                mat_pfn[itime, iwav, iang] = pfn.iloc[itime][key]
+                key = ang_str + "[" + str(int(wavelength)) + "nm]"
+                mat_pfn[itime, i_wavelength, iang] = pfn.iloc[itime][key]
 
     phase_da = xr.DataArray(
         mat_pfn,
         coords={
             "Day_of_Year(Fraction)": pfn["Day_of_Year(Fraction)"].values,
-            "wavelength": wav_pfn,
+            "wavelength": wavelength_pfn,
             "theta_atm": ang,
         },
         dims=["Day_of_Year(Fraction)", "wavelength", "theta_atm"],
@@ -5656,8 +5706,8 @@ def atm_pro_from_aeronet(
     aod_file: str | xr.DataArray,
     ssa_file: str | xr.DataArray,
     pfn_file: str | xr.DataArray,
-    b_wav: NumericArrayLike | BandSet,
-    pfwav: NumericArrayLike | None = None,
+    b_wavelength: NumericArrayLike | BandSet,
+    wavelength_phase: NumericArrayLike | None = None,
     grid: NumericArrayLike | None = None,
     atm_name: str = "afglt",
     P0: float | None = None,
@@ -5684,9 +5734,9 @@ def atm_pro_from_aeronet(
         DataArray
     pfn_file : str or xr.DataArray
         Phase matrix aeronet file (finishing by .pfn) or pfn DataArray
-    b_wav : array_like or BandSet, optional
+    b_wavelength : array_like or BandSet, optional
         Kdis bands or list of wavelengths
-    pfwav : array_like or None, optional
+    wavelength_phase : array_like or None, optional
         List of wavelengths where the phase functions are computed
     grid : array_like or None, optional
         Altitude grid profil
@@ -5750,30 +5800,39 @@ def atm_pro_from_aeronet(
     else:
         pfn_lut = read_aeronet_pfn(pfn_file, year=year)
 
-    if not isinstance(b_wav, BandSet):
-        b_wav_BS = BandSet(b_wav)
+    if not isinstance(b_wavelength, BandSet):
+        b_wavelength_BS = BandSet(b_wavelength)
     else:
-        b_wav_BS = b_wav
-    b_wav_unique = np.unique(b_wav_BS.wav)
+        b_wavelength_BS = b_wavelength
+    b_wavelength_unique = np.unique(b_wavelength_BS.wavelength)
 
-    if pfwav is None:
-        pf_wav = b_wav_unique
+    if wavelength_phase is None:
+        pf_wavelength = b_wavelength_unique
     else:
-        pf_wav = pfwav
+        pf_wavelength = wavelength_phase
 
     fv_time = "extrapolate"
     aod_lut = aod_lut.interp(
-        {"Day_of_Year(Fraction)": day_year_frac, "wavelength": b_wav_unique},
+        {
+            "Day_of_Year(Fraction)": day_year_frac,
+            "wavelength": b_wavelength_unique,
+        },
         method="linear",
         kwargs={"fill_value": fv_time},
     ).drop_vars("Day_of_Year(Fraction)")
     ssa_lut = ssa_lut.interp(
-        {"Day_of_Year(Fraction)": day_year_frac, "wavelength": b_wav_unique},
+        {
+            "Day_of_Year(Fraction)": day_year_frac,
+            "wavelength": b_wavelength_unique,
+        },
         method="linear",
         kwargs={"fill_value": fv_time},
     ).drop_vars("Day_of_Year(Fraction)")
     pfn_lut = pfn_lut.interp(
-        {"Day_of_Year(Fraction)": day_year_frac, "wavelength": b_wav_unique},
+        {
+            "Day_of_Year(Fraction)": day_year_frac,
+            "wavelength": b_wavelength_unique,
+        },
         method="linear",
         kwargs={"fill_value": fv_time},
     ).drop_vars("Day_of_Year(Fraction)")
@@ -5798,7 +5857,7 @@ def atm_pro_from_aeronet(
     )
 
     hum = np.array([0.0])
-    wav = aod_lut.wavelength.values.copy()
+    wavelength = aod_lut.wavelength.values.copy()
     theta = pfn_lut.theta_atm.values.copy()
     aod = aod_lut.values[None, :]
     ssa = ssa_lut.values[None, :]
@@ -5809,7 +5868,7 @@ def atm_pro_from_aeronet(
         ssa,
         phase,
         hum,
-        wav,
+        wavelength,
         theta,
         h_mix_min=h_mix_min,
         h_mix_max=h_mix_max,
@@ -5822,9 +5881,9 @@ def atm_pro_from_aeronet(
         p0=P0,
         tco3=O3,
         tcwp=H2O,
-        pfwav=pf_wav,
+        wavelength_phase=pf_wavelength,
         o3_h2o_alt=O3_H2O_alt,
-    ).calc(b_wav_BS)
+    ).calc(b_wavelength_BS)
 
     return pro
 
@@ -5935,7 +5994,7 @@ def artdeco_to_smartg_cld(
         coordinates:
 
         - reff: effective radius
-        - wav: wavelength (nm)
+        - wavelength: wavelength (nm)
         - stk: phase matrix unique terms (4 or 6)
         - theta: scattering angle (degrees)
 
@@ -6018,14 +6077,14 @@ def artdeco_to_smartg_cld(
     reff = art_cld.coords["reff"].to_numpy().astype(np.float32, copy=False)
     nreff = len(reff)
 
-    wav_full = np.round(
+    wavelength_full = np.round(
         art_cld.coords["wavelengths"].to_numpy().astype(np.float64, copy=False)
         * 1e3,
         decimals=3,
     ).astype(np.float32, copy=False)
-    wav_idx = np.flatnonzero(wav_full <= wavelength_max)
-    wav = wav_full[wav_idx]
-    nwav = len(wav)
+    wavelength_idx = np.flatnonzero(wavelength_full <= wavelength_max)
+    wavelength = wavelength_full[wavelength_idx]
+    n_wavelength = len(wavelength)
 
     stk = np.arange(nstk, dtype=np.int16)
 
@@ -6036,10 +6095,10 @@ def artdeco_to_smartg_cld(
     mu_sorted = mu[theta_idx]
     ntheta = len(theta)
 
-    phase = np.zeros((nreff, nwav, nstk, ntheta), dtype=np.float32)
+    phase = np.zeros((nreff, n_wavelength, nstk, ntheta), dtype=np.float32)
     for ipc, pc in enumerate(phase_comp):
         phac = art_cld[pc].transpose("reff", "wavelengths", "mu")
-        phac = phac.isel(wavelengths=wav_idx, mu=theta_idx)
+        phac = phac.isel(wavelengths=wavelength_idx, mu=theta_idx)
         phase[:, :, ipc, :] = phac.to_numpy().astype(np.float32, copy=False)
 
     if nstk == 6:
@@ -6055,21 +6114,21 @@ def artdeco_to_smartg_cld(
 
     # integral of P11 must be equal to 2
     if normalize:
-        for iwav in range(0, nwav):
+        for i_wavelength in range(0, n_wavelength):
             for ireff in range(0, nreff):
-                f = phase[ireff, iwav, 0, :]  # P11
+                f = phase[ireff, i_wavelength, 0, :]  # P11
                 norm = np.trapezoid(f, -mu_sorted)
-                phase[ireff, iwav, :, :] *= 2.0 / abs(norm)
+                phase[ireff, i_wavelength, :, :] *= 2.0 / abs(norm)
 
     ext = (
         art_cld["Cext"]
         .transpose("reff", "wavelengths")
-        .isel(wavelengths=wav_idx)
+        .isel(wavelengths=wavelength_idx)
     )
     ssa = (
         art_cld["single_scattering_albedo"]
         .transpose("reff", "wavelengths")
-        .isel(wavelengths=wav_idx)
+        .isel(wavelengths=wavelength_idx)
     )
 
     ds = xr.Dataset(
@@ -6092,7 +6151,7 @@ def artdeco_to_smartg_cld(
         },
         coords={
             "reff": reff,
-            "wav": wav,
+            "wav": wavelength,
             "stk": stk,
             "theta": theta,
         },

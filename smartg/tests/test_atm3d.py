@@ -75,7 +75,7 @@ def _build_profile(grid3, comp_3d):
         atm_1d=atm_1d,
         grid_3d=grid3,
         comp_3d=comp_3d,
-        pfwav=[550.0],
+        wavelength_phase=[550.0],
     )
     return atm3.calc(WAV, n_theta=NTH)
 
@@ -366,16 +366,17 @@ def test_read_i3rc_aerosol(tmp_path):
 
 def test_aer3d_ext_spectral_scaling(desert_ds):
     # on-grid rh and wavelengths, so the expected values are direct
-    # file lookups: ext(wav) = ext_ref * k(rh, wav) / k(rh, w_ref)
-    wav_axis = desert_ds["wav"].values
-    iw_ref = int(np.abs(wav_axis - 550.0).argmin())
-    w_ref = float(wav_axis[iw_ref])
-    wav = np.array([w_ref, float(wav_axis[iw_ref + 2])])
+    # file lookups:
+    # ext(wavelength) = ext_ref * k(rh, wavelength) / k(rh, w_ref)
+    wavelength_axis = desert_ds["wav"].values
+    iw_ref = int(np.abs(wavelength_axis - 550.0).argmin())
+    w_ref = float(wavelength_axis[iw_ref])
+    wavelength = np.array([w_ref, float(wavelength_axis[iw_ref + 2])])
     aer = _build_aerosol(w_ref=w_ref)
-    ext = aer.get_ext(wav)
+    ext = aer.get_ext(wavelength)
     for j, rh in enumerate(AER_RH):
         k = desert_ds["ext"].sel(hum=rh)
-        for iw, w in enumerate(wav):
+        for iw, w in enumerate(wavelength):
             expected = AER_EXT[j] * float(
                 k.sel(wav=w) / k.sel(wav=w_ref)
             )
@@ -384,8 +385,8 @@ def test_aer3d_ext_spectral_scaling(desert_ds):
 
 
 def test_aer3d_ssa_values(desert_ds):
-    wav_axis = desert_ds["wav"].values
-    w = float(wav_axis[np.abs(wav_axis - 550.0).argmin()])
+    wavelength_axis = desert_ds["wav"].values
+    w = float(wavelength_axis[np.abs(wavelength_axis - 550.0).argmin()])
     aer = _build_aerosol(w_ref=w)
     ssa = aer.get_ssa(np.array([w]))
     for j, rh in enumerate(AER_RH):
