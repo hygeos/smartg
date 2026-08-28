@@ -2820,7 +2820,10 @@ class Atm1D(Atmosphere):
                 - **3D Mode (opt3d=True)**: Returns extinction/absorption
           coefficients with axes
           [wavelength, iopt] for use in 3D radiative transfer
-          calculations
+          calculations. The dataset carries no ``z_atm`` axis: the
+          ``iopt`` axis is not a vertical dependence but the set of
+          unique optical properties (the 1D levels plus one entry
+          per 3D component cell).
 
         Optical properties include:
 
@@ -2844,7 +2847,20 @@ class Atm1D(Atmosphere):
 
         dz = -diff1(prof.z)
 
-        pro = xr.Dataset(coords={"z_atm": prof.z, "wavelength": wav[:]})
+        if self.opt3d:
+            # in 3D mode the property axis is not a vertical
+            # dependence but the set of unique optical properties
+            # (the 1D levels plus one entry per 3D component cell)
+            pro = xr.Dataset(
+                coords={
+                    "iopt": np.arange(len(prof.z)),
+                    "wavelength": wav[:],
+                }
+            )
+        else:
+            pro = xr.Dataset(
+                coords={"z_atm": prof.z, "wavelength": wav[:]}
+            )
 
         if self.opt3d and self.prof_ray is not None:
             ray_coef = np.zeros_like(self.prof_ray)
@@ -2872,20 +2888,21 @@ class Atm1D(Atmosphere):
             ),
         )
 
+        zdim = "iopt" if self.opt3d else "z_atm"
         pro["n_atm"] = xr.DataArray(
             n,
-            dims=["wavelength", "z_atm"],
+            dims=["wavelength", zdim],
             coords={
                 "wavelength": pro.coords["wavelength"],
-                "z_atm": pro.coords["z_atm"],
+                zdim: pro.coords[zdim],
             },
             attrs={"description": "atmospheric refractive index"},
         )
 
         pro["T_atm"] = xr.DataArray(
             prof.t,
-            dims=["z_atm"],
-            coords={"z_atm": pro.coords["z_atm"]},
+            dims=[zdim],
+            coords={zdim: pro.coords[zdim]},
             attrs={"description": "temperature (K)"},
         )
 

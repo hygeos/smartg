@@ -1299,17 +1299,24 @@ class Smartg(object):
         if prof_atm is not None and hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
 
-        if prof_atm is not None:
+        if prof_atm is None:
+            z_toa = 120.0
+        elif 'z_atm' in prof_atm.coords:
             z_toa = prof_atm.coords['z_atm'].to_numpy()[0]
         else:
-            z_toa = 120.0
+            # 3D profile: no vertical axis, and ZTOAd is not used by
+            # the OPT3D kernel path
+            z_toa = 0.0
 
         if prof_atm is not None:
             faer = _calc_phase_gpu(
                 prof_atm, n_theta=n_f, depo=depo, kind='atm', pol_off=pol_off
             )
             prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
-            n_atm = len(prof_atm.coords['z_atm']) - 1
+            if 'z_atm' in prof_atm.coords:
+                n_atm = len(prof_atm.coords['z_atm']) - 1
+            else:
+                n_atm = prof_atm.sizes['iopt'] - 1
             if self.opt3d:
                 n_atm_abs = np.int32(prof_atm['iabs_atm'].to_numpy().max())
             else:
@@ -1587,6 +1594,12 @@ class Smartg(object):
         if cell_proba is not None:
             if (cell_proba == 'auto') and not self.back and self.thermal:
                 assert prof_atm is not None
+                if 'z_atm' not in prof_atm.coords:
+                    raise ValueError(
+                        "cell_proba='auto' requires a 1D atmosphere "
+                        "profile (the 3D profile has no z_atm axis "
+                        "and no temperature profile)"
+                    )
                 kabs = od2k(prof_atm, 'OD_abs_atm')
                 z = -prof_atm.coords['z_atm'].to_numpy()
                 B = blackbody_radiance(
@@ -2621,6 +2634,12 @@ def _finalize(
 
         # find the atm layer where the mean heliostats z altitude is
         # located
+        if 'z_atm' not in prof_atm.coords:
+            raise ValueError(
+                "the STP optical efficiencies require a 1D "
+                "atmosphere profile (the 3D profile has no z_atm "
+                "axis)"
+            )
         ci = 0
         zatm = prof_atm.coords['z_atm'].to_numpy()
         od_atm = prof_atm['OD_atm'].to_numpy()
@@ -4315,8 +4334,9 @@ def _impact_init(
     ----------
     prof_atm : xr.Dataset | MLUT | None
         Atmospheric profile containing ``z_atm`` coordinates (km) and
-        ``OD_atm`` optical depth array. If None, no atmosphere is
-        assumed.
+        ``OD_atm`` optical depth array (a 3D profile carries the
+        ``iopt`` optical-property axis instead of ``z_atm``). If
+        None, no atmosphere is assumed.
     nlam : int
         Number of wavelengths.
     thv_deg : float
@@ -4344,9 +4364,16 @@ def _impact_init(
     else:
         if hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
-        z_atm = prof_atm.coords['z_atm'].to_numpy()
-        h_atm = z_atm[0]
-        natm = len(z_atm) - 1
+        if 'z_atm' in prof_atm.coords:
+            z_atm = prof_atm.coords['z_atm'].to_numpy()
+            h_atm = z_atm[0]
+            natm = len(z_atm) - 1
+        else:
+            # 3D profile: no vertical axis, the iopt axis indexes the
+            # unique optical properties
+            z_atm = None
+            h_atm = 0.0
+            natm = prof_atm.sizes['iopt'] - 1
         od_atm = prof_atm['OD_atm'].to_numpy()
 
     vx = -np.sin(thv_deg * np.pi / 180)
@@ -5201,6 +5228,11 @@ def _find_extinction(ip, fp, prof_atm, w_ind: int = 0):
     if hasattr(prof_atm, 'to_xarray'):
         prof_atm = prof_atm.to_xarray()
 
+    if 'z_atm' not in prof_atm.coords:
+        raise ValueError(
+            "_find_extinction requires a 1D plane-parallel "
+            "atmosphere profile (the 3D profile has no z_atm axis)"
+        )
     zatm = prof_atm.coords['z_atm'].to_numpy()
     od_atm = prof_atm['OD_atm'].to_numpy()
 
