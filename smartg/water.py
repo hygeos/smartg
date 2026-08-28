@@ -232,8 +232,9 @@ class Hydrosol(object):
     Parameters
     ----------
     phase : DataArray or LUT or None, optional
-        Phase matrices with dimensions [nwav, nz, nphamat, angle]. If None,
-        the phase matrices are derived from `bbp_ratio` (see notes).
+        Phase matrices with dimensions [nwav, nz, nphamat, angle].
+        If None, the phase matrices are derived from `bbp_ratio`
+        (see notes).
     bp : array_like or None, optional
         Particle scattering coefficient in m-1, dimensions [nwav, nz].
         If None, it is taken as null. A scalar or a lower-dimensional
@@ -1503,8 +1504,8 @@ class Water1D(Water):
         Returns
         -------
         out : DataArray or None
-            The phase matrices with dimensions [wav_phase, z_phase, nphamat,
-            theta_oc], or None if no hydrosol scatters.
+            The phase matrices with dimensions [wav_phase, z_phase,
+            nphamat, theta_oc], or None if no hydrosol scatters.
 
         Raises
         ------

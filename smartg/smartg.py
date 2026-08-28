@@ -2992,7 +2992,8 @@ def _calc_phase_gpu(
         # for ipha in range(nphases-1):
         assert angles is not None and dtheta is not None
 
-        phase = profile[name_phase][ipha, :, :].to_numpy()  # ipha, nphamat, theta
+        # (ipha, nphamat, theta)
+        phase = profile[name_phase][ipha, :, :].to_numpy()
 
         phase = convert_phase_to_iparper(phase)
 

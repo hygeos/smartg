@@ -141,8 +141,8 @@ def calc_iphase(
     phase : DataArray or LUT
         Phase function data as an ``xr.DataArray`` with
         coordinates ``wav_phase``, ``z_phase`` and dimensions
-        ``(wav_phase, z_phase, nphamat, theta)``, or a LUT object exposing
-        a ``to_xarray()`` method.
+        ``(wav_phase, z_phase, nphamat, theta)``, or a LUT object
+        exposing a ``to_xarray()`` method.
     wav_full : array_like
         Full model wavelength grid, shape ``(nwav,)``.
     z_full : array_like
@@ -208,10 +208,10 @@ def get_ipha_a(
         Phase-function altitude grid, shape ``(nz_pf,)``.
     phase : DataArray or None, optional
         If provided, the phase function values (dimension order
-        ``wav, z, nphamat, theta``) are used to detect and penalise layers
-        with a zero phase function.  Layers whose first wavelength /
-        Stokes component sums to zero have their weight scaled by
-        ``1e-6`` and trigger a warning.
+        ``wav, z, nphamat, theta``) are used to detect and penalise
+        layers with a zero phase function.  Layers whose first
+        wavelength / Stokes component sums to zero have their weight
+        scaled by ``1e-6`` and trigger a warning.
 
     Returns
     -------
@@ -384,9 +384,10 @@ def read_phase_nc(
         Phase matrix as xarray DataArray with dimensions:
         - 'wav_phase': wavelength (in nm)
         - 'z_phase': altitude (in km) from pfgrid or [0.]
-        - 'nphamat': phase matrix unique terms (0 to nphamat-1) nphamat = 4
-          for spherical particles only nphamat = 6 for spherical or
-          non-spherical particles (for spherical: P22=P11, P44=P33)
+        - 'nphamat': phase matrix unique terms (0 to nphamat-1)
+          nphamat = 4 for spherical particles only nphamat = 6 for
+          spherical or non-spherical particles (for spherical:
+          P22=P11, P44=P33)
         - 'theta_'+kind: scattering angle (in degrees)
 
         Coordinates are replaced/renamed such that the rh/reff dimension
