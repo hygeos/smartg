@@ -752,6 +752,13 @@ class AerOPAC(object):
         lam_tabulated = self.ds_mix.coords["wav"].values
         nwav = len(wav)
 
+        if not self.vert_content:
+            raise ValueError(
+                "The component holds no vertical layer (every layer "
+                "has a zero or negative thickness); cannot compute "
+                "its phase matrix."
+            )
+
         P_tot = 0.0
         dssa = 0.0
         for icont, cont in enumerate(self.vert_content):
@@ -1103,6 +1110,11 @@ class Cloud(AerOPAC):
         | None = None,
         phase: xr.DataArray | LUT | None = None,
     ) -> None:
+        if zmax - zmin <= 1e-6:
+            raise ValueError(
+                "The cloud layer must have zmax > zmin, got "
+                f"zmin={zmin} and zmax={zmax}."
+            )
         self.reff = reff
         self.tau_ref = tau_ref
         if np.isscalar(w_ref) or (
