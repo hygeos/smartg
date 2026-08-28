@@ -82,8 +82,16 @@ final `v2.0.0` release.
     `convert_phase_to_iparper` functions have been moved from `smartg.atmosphere`
     to `smartg.phase`
   - `read_phase_dat`, `read_phase_nc` and `read_phase_cdf` now always return a
-    4-D `xr.DataArray` (dims: `wav_phase`, `z_phase`, `stk`, `theta_atm/oc`).
-    The `nphamat` dimension is no longer squeezed when its size is 1.
+    4-D `xr.DataArray` (dims: `wavelength_phase`, `z_phase`, `nphamat`,
+    `theta_atm/oc`). The `nphamat` dimension is no longer squeezed when its
+    size is 1.
+  - The phase-matrix term dimension is now named `nphamat` internally
+    (was `stk`; the auxdata files keep `stk`, which is renamed on load),
+    and the run output dimensions `stk_atm` / `stk_oc` are now
+    `nphamat_atm` / `nphamat_oc`
+  - The phase-matrix wavelength dimension is now named `wavelength_phase`
+    (was `wav_phase`); it remains distinct from the `wavelength` axis of
+    the profiles and run outputs
   - The `filename` parameter of `read_phase`, `read_phase_dat`, `read_phase_nc`
     and `read_phase_cdf` has been renamed to `fname` (positional usage is
     unaffected, keyword usage must be updated).
@@ -265,8 +273,9 @@ final `v2.0.0` release.
   - Important corrections in the water (ocean) module:
     - Phase matrix always extended to 6 Stokes components (P22=P11, P44=P33 for
       spherical particles)
-    - Dimension names harmonised (`wav_phase_oc` / `z_phase_oc` → `wav_phase` /
-      `z_phase`) for consistency with the atmospheric phase pipeline
+    - Dimension names harmonised (`wav_phase_oc` / `z_phase_oc` →
+      `wavelength_phase` / `z_phase`) for consistency with the atmospheric
+      phase pipeline
   - Fix out-of-bounds index error in `AerOPAC.dtau_ssa` when relative humidity
     or wavelength is exactly at the upper axis boundary
   - Fix the 1D aerosol phase mixing with a 3D cloud

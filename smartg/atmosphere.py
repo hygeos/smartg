@@ -164,14 +164,13 @@ class AerOPAC(object):
         Phase matrix F as function of wavelength, altitude, stoke
         components and scattering angle
         The variable names must be:
-        If 4-D matrix -> wav_phase, z_phase, nphamat, theta
+        If 4-D matrix -> wavelength_phase, z_phase, nphamat, theta
         If 2-D matrix (assumed monochromatic and constant vertically) ->
         nphamat, theta
         Where:
-        - wav_phase is the wavelength. It must be equal to the `pfwav`
-          parameter of Atm1D
-          if defined, else `wav` parameter vavelengths of the Atm1D
-          calc method.
+        - wavelength_phase is the wavelength. It must be equal to
+          the `pfwav` parameter of Atm1D if defined, else the `wav`
+          parameter wavelengths of the Atm1D calc method.
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
           of Atm1D
@@ -691,7 +690,7 @@ class AerOPAC(object):
         -------
         phase_matrix : DataArray
             DataArray containing the phase matrix with dimensions
-            [wav_phase, z_phase, nphamat, theta_atm].
+            [wavelength_phase, z_phase, nphamat, theta_atm].
             Shape is (len(wav), len(z)-1, nphamat, n_theta) where:
             - nphamat = 4 for spherical particles only (phase matrix
               unique terms P11, P21, P33, P34)
@@ -703,7 +702,7 @@ class AerOPAC(object):
         if self._phase is not None:
             if self._phase.ndim == 2:
                 # convert to 4-dim by inserting empty dimensions
-                # wav_phase and z_phase
+                # wavelength_phase and z_phase
                 dims = list(self._phase.dims)
                 assert dims == ["nphamat", "theta_atm"]
                 pha_ = self._phase.values[:, :]
@@ -715,9 +714,12 @@ class AerOPAC(object):
                     pha_ = pha_6
                 return xr.DataArray(
                     pha_[None, None, :, :],
-                    dims=["wav_phase", "z_phase", "nphamat", "theta_atm"],
+                    dims=[
+                        "wavelength_phase", "z_phase", "nphamat",
+                        "theta_atm",
+                    ],
                     coords={
-                        "wav_phase": [wav[0]],
+                        "wavelength_phase": [wav[0]],
                         "z_phase": [0.0],
                         "nphamat": np.arange(6),
                         "theta_atm": self._phase.coords["theta_atm"].values,
@@ -925,9 +927,9 @@ class AerOPAC(object):
 
             P = xr.DataArray(
                 P_data,
-                dims=["wav_phase", "z_phase", "nphamat", "theta_atm"],
+                dims=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
                 coords={
-                    "wav_phase": wav,
+                    "wavelength_phase": wav,
                     "z_phase": np.arange(P_data.shape[1]),
                     "nphamat": np.arange(P_data.shape[2]),
                     "theta_atm": theta,
@@ -1050,14 +1052,13 @@ class Cloud(AerOPAC):
         Phase matrix F as function of wavelength, altitude, stoke
         components and scattering angle
         The variable names must be:
-        If 4-D matrix -> wav_phase, z_phase, nphamat, theta
+        If 4-D matrix -> wavelength_phase, z_phase, nphamat, theta
         If 2-D matrix (assumed monochromatic and contant vertically) ->
         nphamat, theta
         Where:
-        - wav_phase is the wavelength. It must be equal to the `pfwav`
-          parameter of Atm1D
-          if defined, else `wav` parameter wavelengths of the Atm1D
-          calc method.
+        - wavelength_phase is the wavelength. It must be equal to
+          the `pfwav` parameter of Atm1D if defined, else the `wav`
+          parameter wavelengths of the Atm1D calc method.
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
           of Atm1D
@@ -1375,7 +1376,7 @@ class Comp3D(ABC):
     @abstractmethod
     def get_phase_set(
         self,
-        wav_phase: NDArray[np.floating],
+        wavelength_phase: NDArray[np.floating],
         n_theta: int = 721,
     ) -> tuple[list[xr.DataArray], NDArray[np.int32], int]:
         """Return the component phase matrices.
@@ -1383,8 +1384,9 @@ class Comp3D(ABC):
         Returns
         -------
         phases : list of DataArray
-            The unique phase matrices ``('stk', 'theta_atm')``, as
-            ``nwav_phase`` consecutive blocks of ``n_unique`` matrices.
+            The unique phase matrices ``('nphamat', 'theta_atm')``,
+            as ``n_wavelength_phase`` consecutive blocks of
+            ``n_unique`` matrices.
         cell_phase_index : ndarray
             (N,) index of each cell's phase matrix within one block.
         n_unique : int
@@ -1539,10 +1541,12 @@ class _Comp3DFile(Comp3D):
             )
         elif not all(
             item in phase.dims
-            for item in ["wav_phase", self._bulk_axis, "nphamat", "theta_atm"]
+            for item in [
+                "wavelength_phase", self._bulk_axis, "nphamat", "theta_atm"
+            ]
         ):
             raise ValueError(
-                "Phase matrix must have 4 dimensions: wav_phase, "
+                "Phase matrix must have 4 dimensions: wavelength_phase, "
                 f"{self._bulk_axis}, nphamat and theta_atm"
             )
         else:
@@ -1667,8 +1671,9 @@ class _Comp3DFile(Comp3D):
 
     def get_phase(self, n_theta: int = 721) -> xr.DataArray:
         """Return the component phase matrix DataArray with the
-        dimensions ``('wav_phase', <parameter>, 'stk', 'theta_atm')``,
-        the parameter axis being ``'reff'`` or ``'hum'``.
+        dimensions ``('wavelength_phase', <parameter>, 'nphamat',
+        'theta_atm')``, the parameter axis being ``'reff'`` or
+        ``'hum'``.
 
         The matrices keep the IQUV convention of the source file, the
         conversion into the parallel/perpendicular convention of the
@@ -1703,13 +1708,13 @@ class _Comp3DFile(Comp3D):
                 np.arange(6),
                 theta,
             ],
-            dims=["wav_phase", self._bulk_axis, "nphamat", "theta_atm"],
+            dims=["wavelength_phase", self._bulk_axis, "nphamat", "theta_atm"],
             name="phase_atm",
         )
 
     def get_phase_set(
         self,
-        wav_phase: NDArray[np.floating],
+        wavelength_phase: NDArray[np.floating],
         n_theta: int = 721,
     ) -> tuple[list[xr.DataArray], NDArray[np.int32], int]:
         param_unique = np.unique(self._param)
@@ -1719,9 +1724,9 @@ class _Comp3DFile(Comp3D):
         clamp = self._param_oor == "clamp"
 
         phases = []
-        for iwav in range(0, len(wav_phase)):
+        for iwav in range(0, len(wavelength_phase)):
             phase_w = self._interp_axis(
-                phase, "wav_phase", wav_phase[iwav]
+                phase, "wavelength_phase", wavelength_phase[iwav]
             )
             # Loop only on the unique parameter values
             for iparam in range(0, n_unique):
@@ -1797,8 +1802,8 @@ class Cloud3D(_Comp3DFile):
         The reff values less than reff_min are replaced by reff_min.
         The same for values greater than reff_max.
     phase : DataArray or LUT or None, optional
-        The cloud phase matrix depending on wav_phase, reff, stk and
-        theta_atm (e.g. from
+        The cloud phase matrix depending on wavelength_phase, reff,
+        nphamat and theta_atm (e.g. from
         :func:`smartg.phase.read_phase_nth_cte`). If None, the phase
         matrices are computed from the bulk optical properties file.
     ssa_cst : float or None, optional
@@ -1915,8 +1920,9 @@ class Aer3D(_Comp3DFile):
         The rh values less than rh_min are replaced by rh_min. The
         same for values greater than rh_max.
     phase : DataArray or LUT or None, optional
-        The aerosol phase matrix depending on wav_phase, hum, stk and
-        theta_atm (the humidity axis is named ``hum`` as in the OPAC
+        The aerosol phase matrix depending on wavelength_phase, hum,
+        nphamat and theta_atm (the humidity axis is named ``hum`` as
+        in the OPAC
         files; e.g. from :func:`smartg.phase.read_phase_nth_cte`). If
         None, the phase matrices are computed from the bulk optical
         properties file.
@@ -3447,8 +3453,8 @@ class Atm1D(Atmosphere):
         phase_matrix : DataArray or None
             DataArray containing the weighted average phase matrix with
             axes
-            [wav_phase, z_phase, stk, theta_atm] if aerosol components
-            are present.
+            [wavelength_phase, z_phase, nphamat, theta_atm] if
+            aerosol components are present.
             Shape is (len(wav), nz, nphamat, n_theta) where:
             - nz: number of altitude levels in the reduced profile
               (self.pfgrid)
@@ -3493,9 +3499,10 @@ class Atm1D(Atmosphere):
             # bound to match z_phase layers.
             weight_2d = xr.DataArray(
                 dtau[:, 1:] * ssa_p[:, 1:],
-                dims=["wav_phase", "z_phase"],
+                dims=["wavelength_phase", "z_phase"],
                 coords={
-                    "wav_phase": comp_pha.coords["wav_phase"].values,
+                    "wavelength_phase":
+                        comp_pha.coords["wavelength_phase"].values,
                     "z_phase": comp_pha.coords["z_phase"].values,
                 },
             )

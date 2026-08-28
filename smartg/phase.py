@@ -140,8 +140,8 @@ def calc_iphase(
     ----------
     phase : DataArray or LUT
         Phase function data as an ``xr.DataArray`` with
-        coordinates ``wav_phase``, ``z_phase`` and dimensions
-        ``(wav_phase, z_phase, nphamat, theta)``, or a LUT object
+        coordinates ``wavelength_phase``, ``z_phase`` and dimensions
+        ``(wavelength_phase, z_phase, nphamat, theta)``, or a LUT object
         exposing a ``to_xarray()`` method.
     wav_full : array_like
         Full model wavelength grid, shape ``(nwav,)``.
@@ -170,7 +170,7 @@ def calc_iphase(
     wav_full = np.atleast_1d(wav_full).astype(np.float32)
 
     # Extract wavelength and altitude coordinates from DataArray
-    wav = phase.coords["wav_phase"].values
+    wav = phase.coords["wavelength_phase"].values
     altitude = phase.coords["z_phase"].values
 
     nwav, nz, nstk, ntheta = phase.shape
@@ -382,7 +382,7 @@ def read_phase_nc(
     -------
     da_pha : DataArray
         Phase matrix as xarray DataArray with dimensions:
-        - 'wav_phase': wavelength (in nm)
+        - 'wavelength_phase': wavelength (in nm)
         - 'z_phase': altitude (in km) from pfgrid or [0.]
         - 'nphamat': phase matrix unique terms (0 to nphamat-1)
           nphamat = 4 for spherical particles only nphamat = 6 for
@@ -404,7 +404,7 @@ def read_phase_nc(
     ...     pfgrid=[100., 50., 10., 0.],
     ...     normalize=True)
     >>> pha.shape
-    (1, 3, 6, 721)  # (wav_phase, z_phase, nphamat, theta_atm)
+    (1, 3, 6, 721)  # (wavelength_phase, z_phase, nphamat, theta_atm)
     """
     pfwav = np.asarray(pfwav, dtype=np.float32) if pfwav is not None else None
     pfgrid = (
@@ -441,7 +441,7 @@ def read_phase_nc(
     da_pha = xr.DataArray(
         np.zeros((nwl, n_rh_reff, nphamat, ntheta)),
         coords=[wl, rh_reff, np.arange(nphamat), theta],
-        dims=["wav_phase", rh_or_reff, "nphamat", "theta_" + kind],
+        dims=["wavelength_phase", rh_or_reff, "nphamat", "theta_" + kind],
         name="phase_" + kind,
     )
     da_pha.data[:, :, :, :] = ds["phase"].values.swapaxes(0, 1)
@@ -456,7 +456,7 @@ def read_phase_nc(
                 da_pha.data[iwav, irhreff, :, :] *= 2.0 / abs(norm)
 
     if nwl > 1 and pfwav is not None:
-        da_pha = da_pha.interp(wav_phase=pfwav)
+        da_pha = da_pha.interp(wavelength_phase=pfwav)
     elif nwl > 1 and pfwav is None:
         raise ValueError("pfwav must be provided when nwl > 1")
 
@@ -518,7 +518,7 @@ def read_phase_dat(
     da_pha : DataArray
         Phase matrix with dimensions:
 
-        - ``'wav_phase'`` : wavelength (single value: 0.0)
+        - ``'wavelength_phase'`` : wavelength (single value: 0.0)
         - ``'z_phase'`` : altitude (single value: 0.0 km)
         - ``'nphamat'`` : phase matrix element index (0 to nphamat-1)
           nphamat = 4 for spherical particles only
@@ -530,7 +530,7 @@ def read_phase_dat(
     --------
     >>> pha = read_phase_dat('phase.dat', kind='atm', normalize=True)
     >>> pha.dims
-    ('wav_phase', 'z_phase', 'nphamat', 'theta_atm')
+    ('wavelength_phase', 'z_phase', 'nphamat', 'theta_atm')
     """
     df = pd.read_csv(fname, sep=r"\s+", header=None)
 
@@ -544,9 +544,9 @@ def read_phase_dat(
         f = pha[0, :]  # P11 term
         pha = (2.0 * pha) / np.trapezoid(f[idmu], mu[idmu])
 
-    # Add wav_phase and z_phase dimensions for consistency
+    # Add wavelength_phase and z_phase dimensions for consistency
     # with other readers
-    wav_phase = np.array([0.0], dtype=float)
+    wavelength_phase = np.array([0.0], dtype=float)
     z_phase = np.array([0.0], dtype=float)
     pha_4d = pha[
         np.newaxis, np.newaxis, :, :
@@ -554,8 +554,8 @@ def read_phase_dat(
 
     da_pha = xr.DataArray(
         pha_4d,
-        coords=[wav_phase, z_phase, np.arange(pha.shape[0]), theta],
-        dims=["wav_phase", "z_phase", "nphamat", "theta_" + kind],
+        coords=[wavelength_phase, z_phase, np.arange(pha.shape[0]), theta],
+        dims=["wavelength_phase", "z_phase", "nphamat", "theta_" + kind],
         name="phase_" + kind,
     )
 
@@ -722,7 +722,7 @@ def read_phase_cdf(
     -------
     da_pha : DataArray
         Phase matrix as xarray DataArray with dimensions:
-        - 'wav_phase': wavelength (in nm)
+        - 'wavelength_phase': wavelength (in nm)
         - 'z_phase': altitude (in km) from pfgrid or [0.]
         - 'nphamat': phase matrix unique terms (0 to nphamat-1)
           nphamat = 4 for spherical particles only
@@ -744,7 +744,7 @@ def read_phase_cdf(
     ...     pfgrid=[100., 50., 10., 0.],
     ...     normalize=True)
     >>> pha.shape
-    (1, 3, 6, 18001)  # (wav_phase, z_phase, nphamat, theta_atm)
+    (1, 3, 6, 18001)  # (wavelength_phase, z_phase, nphamat, theta_atm)
     """
     pfwav = np.asarray(pfwav, dtype=np.float32) if pfwav is not None else None
     pfgrid = (
@@ -806,7 +806,7 @@ def read_phase_cdf(
     da_pha = xr.DataArray(
         _resample_cdf_phase(ds, theta),
         coords=[wl, rh_reff, np.arange(nphamat), theta],
-        dims=["wav_phase", rh_or_reff, "nphamat", "theta_" + kind],
+        dims=["wavelength_phase", rh_or_reff, "nphamat", "theta_" + kind],
         name="phase_" + kind,
     )
 
@@ -820,7 +820,7 @@ def read_phase_cdf(
                 da_pha.data[iwav, irhreff, :, :] *= 2.0 / abs(norm)
 
     if nwl > 1:
-        da_pha = da_pha.interp(wav_phase=pfwav)
+        da_pha = da_pha.interp(wavelength_phase=pfwav)
 
     if n_rh_reff > 1:
         da_pha = da_pha.interp(
@@ -895,7 +895,8 @@ def read_phase(
         Phase matrix data as returned by the selected backend reader.
         All backends return a 4-dimensional array with dimensions:
 
-        - ``('wav_phase', 'z_phase', 'nphamat', 'theta_' + kind)``
+        - ``('wavelength_phase', 'z_phase', 'nphamat',
+          'theta_' + kind)``
 
         where 'nphamat' has size nphamat:
         - nphamat = 4 for spherical particles only
@@ -1107,7 +1108,7 @@ def get_prof_phases(
     ----------
     phase : DataArray
         Phase matrix data read from read_phase(). Expected dimensions:
-        ('wav_phase', 'z_phase', 'nphamat', 'theta_atm')
+        ('wavelength_phase', 'z_phase', 'nphamat', 'theta_atm')
     wav : array_like
         Full wavelength grid in nanometers. Must match the wavelengths
         used in Atm1D.calc() method. Equivalent to the 'wav' parameter
@@ -1178,8 +1179,8 @@ def read_phase_nth_cte(
     -------
     DataArray
         The phase matrix, of shape (nwav, nrh_or_reff, 6, nb_theta),
-        with the dimensions 'wav_phase' (nm), 'hum' or 'reff' (kept
-        from the file), 'nphamat' and 'theta_atm' (degrees).
+        with the dimensions 'wavelength_phase' (nm), 'hum' or 'reff'
+        (kept from the file), 'nphamat' and 'theta_atm' (degrees).
     """
     ds = xr.open_dataset(filename)
 
@@ -1218,6 +1219,6 @@ def read_phase_nth_cte(
     return xr.DataArray(
         data,
         coords=[wavelength, rh_reff, np.arange(6), theta],
-        dims=["wav_phase", rh_or_reff, "nphamat", "theta_atm"],
+        dims=["wavelength_phase", rh_or_reff, "nphamat", "theta_atm"],
         name="phase_atm",
     )

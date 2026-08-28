@@ -425,10 +425,10 @@ class Hydrosol(object):
         Returns
         -------
         pha_da : DataArray
-            Phase matrices with dimensions [wav_phase, z_phase, nphamat,
-            theta_oc].
+            Phase matrices with dimensions [wavelength_phase,
+            z_phase, nphamat, theta_oc].
         coef_trunc : DataArray
-            Truncation factor `1 - f` with dimensions [wav_phase,
+            Truncation factor `1 - f` with dimensions [wavelength_phase,
             z_phase], by which the scattering coefficient must be
             scaled to compensate for the truncated peak (`f` is the
             truncated fraction of the scattered energy). All ones when
@@ -507,17 +507,17 @@ class Hydrosol(object):
 
         pha_da = xr.DataArray(
             pha,
-            dims=["wav_phase", "z_phase", "nphamat", "theta_oc"],
+            dims=["wavelength_phase", "z_phase", "nphamat", "theta_oc"],
             coords={
-                "wav_phase": wav,
+                "wavelength_phase": wav,
                 "z_phase": z,
                 "theta_oc": np.rad2deg(ang),
             },
         )
         coef_trunc = xr.DataArray(
             coef[inv],
-            dims=["wav_phase", "z_phase"],
-            coords={"wav_phase": wav, "z_phase": z},
+            dims=["wavelength_phase", "z_phase"],
+            coords={"wavelength_phase": wav, "z_phase": z},
         )
 
         return pha_da, coef_trunc
@@ -548,8 +548,9 @@ class Hydrosol(object):
         Returns
         -------
         DataArray or None
-            Phase matrices with dimensions [wav_phase, z_phase, nphamat,
-            theta_oc], or None if the hydrosol does not scatter.
+            Phase matrices with dimensions [wavelength_phase,
+            z_phase, nphamat, theta_oc], or None if the hydrosol
+            does not scatter.
 
         Raises
         ------
@@ -682,21 +683,23 @@ class Hydrosol(object):
         Parameters
         ----------
         pha : DataArray
-            Phase matrices of this hydrosol, whose `wav_phase` and
-            `z_phase` coordinates define the grid of the output.
+            Phase matrices of this hydrosol, whose
+            `wavelength_phase` and `z_phase` coordinates define the
+            grid of the output.
 
         Returns
         -------
         ndarray or None
-            Scattering coefficient in m-1 with dimensions [wav_phase,
-            z_phase], corrected for the phase matrix truncation when the
-            phase matrices are derived rather than supplied. None if the
+            Scattering coefficient in m-1 with dimensions
+            [wavelength_phase, z_phase], corrected for the phase
+            matrix truncation when the phase matrices are derived
+            rather than supplied. None if the
             truncation has not been resolved yet.
         """
         if self._phase is None:
             return self._bsca
         return self.iop(
-            pha.coords["wav_phase"].values, pha.coords["z_phase"].values
+            pha.coords["wavelength_phase"].values, pha.coords["z_phase"].values
         )["bp"]
 
     def coeffs(
@@ -817,9 +820,11 @@ class HydrosolPR(Hydrosol):
             skip_header=12,
         )  # header is lambda,Ap,Ep,Aphi,Ephi
         self.bricaud = xr.Dataset()
-        self.bricaud = self.bricaud.assign_coords(wav=ap_bricaud[:, 0])
-        self.bricaud["A"] = xr.DataArray(ap_bricaud[:, 1], dims=["wav"])
-        self.bricaud["E"] = xr.DataArray(1 - ap_bricaud[:, 2], dims=["wav"])
+        self.bricaud = self.bricaud.assign_coords(wavelength=ap_bricaud[:, 0])
+        self.bricaud["A"] = xr.DataArray(ap_bricaud[:, 1], dims=["wavelength"])
+        self.bricaud["E"] = xr.DataArray(
+            1 - ap_bricaud[:, 2], dims=["wavelength"]
+        )
 
     def _trunc_scaling(self) -> float:
         """
@@ -862,8 +867,10 @@ class HydrosolPR(Hydrosol):
         chl = self.chl
 
         # phytoplankton absorption
-        aphy = interp_1d_coord(self.bricaud["A"], "wav", wav, extrema=True) * (
-            chl ** interp_1d_coord(self.bricaud["E"], "wav", wav, extrema=True)
+        aphy = interp_1d_coord(
+            self.bricaud["A"], "wavelength", wav, extrema=True
+        ) * chl ** interp_1d_coord(
+            self.bricaud["E"], "wavelength", wav, extrema=True
         )
 
         # chlorophyll fluorescence (scattering coefficient)
@@ -1009,13 +1016,13 @@ class HydrosolZhai(Hydrosol):
         e_uv[::-1] = e_bricaud[ii]
         self.bricaud = xr.Dataset()
         self.bricaud = self.bricaud.assign_coords(
-            wav=np.concatenate((w_uv, ap_bricaud[:, 0]))
+            wavelength=np.concatenate((w_uv, ap_bricaud[:, 0]))
         )
         self.bricaud["A"] = xr.DataArray(
-            np.concatenate((a_uv, a_bricaud)), dims=["wav"]
+            np.concatenate((a_uv, a_bricaud)), dims=["wavelength"]
         )
         self.bricaud["E"] = xr.DataArray(
-            np.concatenate((e_uv, e_bricaud)), dims=["wav"]
+            np.concatenate((e_uv, e_bricaud)), dims=["wavelength"]
         )
 
         # Chlorophyll integrated over the euphotic column, from which
@@ -1146,17 +1153,21 @@ class HydrosolZhai(Hydrosol):
         # specific phytoplankton absorption
         chl2star = np.full_like(chl2, 1.0)
         aphystar = interp_1d_coord(
-            self.bricaud["A"], "wav", wav2, extrema=True
+            self.bricaud["A"], "wavelength", wav2, extrema=True
         ) * (
             chl2star
-            ** interp_1d_coord(self.bricaud["E"], "wav", wav2, extrema=True)
+            ** interp_1d_coord(
+                self.bricaud["E"], "wavelength", wav2, extrema=True
+            )
         )
         aphy = aphystar * chl2
         aphystar440 = interp_1d_coord(
-            self.bricaud["A"], "wav", 440.0, extrema=True
+            self.bricaud["A"], "wavelength", 440.0, extrema=True
         ) * (
             chl2star
-            ** interp_1d_coord(self.bricaud["E"], "wav", wav2, extrema=True)
+            ** interp_1d_coord(
+                self.bricaud["E"], "wavelength", wav2, extrema=True
+            )
         )
         aphy440 = aphystar440 * chl2
 
@@ -1504,14 +1515,15 @@ class Water1D(Water):
         Returns
         -------
         out : DataArray or None
-            The phase matrices with dimensions [wav_phase, z_phase,
-            nphamat, theta_oc], or None if no hydrosol scatters.
+            The phase matrices with dimensions [wavelength_phase,
+            z_phase, nphamat, theta_oc], or None if no hydrosol
+            scatters.
 
         Raises
         ------
         ValueError
             If several hydrosols scatter but their phase matrices are
-            not tabulated on the same `wav_phase`, `z_phase` and
+            not tabulated on the same `wavelength_phase`, `z_phase` and
             `theta_oc` grids, so that they cannot be averaged.
         """
         z = self.grid
@@ -1529,7 +1541,7 @@ class Water1D(Water):
 
         ref = phases[0][1]
         for _, pha in phases[1:]:
-            for dim in ["wav_phase", "z_phase", "theta_oc"]:
+            for dim in ["wavelength_phase", "z_phase", "theta_oc"]:
                 if not np.array_equal(
                     pha.coords[dim].values, ref.coords[dim].values
                 ):
@@ -1546,9 +1558,9 @@ class Water1D(Water):
             # tabulation grid of its phase matrices
             bsca_ = xr.DataArray(
                 comp.scattering(pha),
-                dims=["wav_phase", "z_phase"],
+                dims=["wavelength_phase", "z_phase"],
                 coords={
-                    "wav_phase": pha.coords["wav_phase"].values,
+                    "wavelength_phase": pha.coords["wavelength_phase"].values,
                     "z_phase": pha.coords["z_phase"].values,
                 },
             )

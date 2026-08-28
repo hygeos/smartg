@@ -397,7 +397,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
             "continental_clean",
             0.5,
             w_ref=550.0,
-            phase=phase_waso.isel(wav_phase=0, reff=0),
+            phase=phase_waso.isel(wavelength_phase=0, reff=0),
         )
         comp = [aer]
         atm3_kwargs = {
