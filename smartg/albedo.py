@@ -7,8 +7,9 @@ spectra to user-supplied or library-read spectra, and including a 2D
 horizontal map of spectral albedos for spatially heterogeneous
 surfaces.
 
-The albedo objects expose a common ``get(wl)`` interface returning the
-spectral albedo evaluated at the requested wavelengths (nm). They are
+The albedo objects expose a common ``get(wavelength)`` interface
+returning the spectral albedo evaluated at the requested
+wavelengths (nm). They are
 passed as the ``alb`` parameter when building a surface in
 ``smartg.atmosphere``.
 
@@ -69,23 +70,23 @@ class AlbedoCst(object):
     def __init__(self, alb: float) -> None:
         self.alb: float = alb
 
-    def get(self, wl: NumericArrayLike) -> NDArray[np.float32]:
+    def get(self, wavelength: NumericArrayLike) -> NDArray[np.float32]:
         """
         Return the spectral albedo at the requested wavelengths.
 
         Parameters
         ----------
-        wl : array_like
+        wavelength : array_like
             Wavelengths (nm) at which to evaluate the albedo. The
             shape is preserved in the output.
 
         Returns
         -------
         ndarray
-            Albedo values (float32), same shape as ``wl``, filled
-            with ``self.alb``.
+            Albedo values (float32), same shape as ``wavelength``,
+            filled with ``self.alb``.
         """
-        alb = np.zeros(np.array(wl).shape, dtype=np.float32)
+        alb = np.zeros(np.array(wavelength).shape, dtype=np.float32)
         alb[...] = self.alb
         return alb
 
@@ -122,7 +123,7 @@ class AlbedoSpeclib(object):
             names=["wavelength"],
         )
 
-    def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:
+    def get(self, wavelength: NumericArrayLike) -> NDArray[np.floating]:
         """
         Return the spectral albedo at the requested wavelengths.
 
@@ -131,16 +132,17 @@ class AlbedoSpeclib(object):
 
         Parameters
         ----------
-        wl : array_like
+        wavelength : array_like
             Wavelengths (nm) at which to evaluate the albedo.
 
         Returns
         -------
         ndarray
-            Albedo values, same shape as ``wl``.
+            Albedo values, same shape as ``wavelength``.
         """
         return cast(
-            NDArray[np.floating], self.data[Idx(wl, fill_value="extrapolate")]
+            NDArray[np.floating],
+            self.data[Idx(wavelength, fill_value="extrapolate")],
         )
 
 
@@ -165,7 +167,7 @@ class AlbedoSpectrum(object):
     def __init__(self, r: NumericArrayLike, lam: NumericArrayLike) -> None:
         self.data: LUT = LUT(r, axes=[lam], names=["wavelength"])
 
-    def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:
+    def get(self, wavelength: NumericArrayLike) -> NDArray[np.floating]:
         """
         Return the spectral albedo at the requested wavelengths.
 
@@ -174,16 +176,17 @@ class AlbedoSpectrum(object):
 
         Parameters
         ----------
-        wl : array_like
+        wavelength : array_like
             Wavelengths (nm) at which to evaluate the albedo.
 
         Returns
         -------
         ndarray
-            Albedo values, same shape as ``wl``.
+            Albedo values, same shape as ``wavelength``.
         """
         return cast(
-            NDArray[np.floating], self.data[Idx(wl, fill_value="extrapolate")]
+            NDArray[np.floating],
+            self.data[Idx(wavelength, fill_value="extrapolate")],
         )
 
 
@@ -247,23 +250,24 @@ class AlbedoMap(object):
         self.list: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum] = alist
         self.nalb: int = len(alist)
 
-    def get(self, wl: NumericArrayLike) -> NDArray[np.floating]:
+    def get(self, wavelength: NumericArrayLike) -> NDArray[np.floating]:
         """
         Return the spectral albedo of every entry in the map.
 
         Parameters
         ----------
-        wl : array_like
+        wavelength : array_like
             Wavelengths (nm) at which to evaluate the albedos.
 
         Returns
         -------
         ndarray
-            Array of shape ``(len(wl), nalb)`` holding the spectral
-            albedo of each entry in ``self.list`` at the requested
+            Array of shape ``(len(wavelength), nalb)`` holding the
+            spectral albedo of each entry in ``self.list`` at the
+            requested
             wavelengths.
         """
-        return np.stack([alb.get(wl) for alb in self.list]).T
+        return np.stack([alb.get(wavelength) for alb in self.list]).T
 
     def get_map(
         self, x0: NumericArrayLike, y0: NumericArrayLike
@@ -293,8 +297,8 @@ class AlbedoMap(object):
 
 
 #: Any of the albedo objects of this module, i.e. any object exposing
-#: the common ``get(wl)`` interface. Use it to annotate the parameters
-#: that accept a spectral albedo, such as the ``alb`` of
+#: the common ``get(wavelength)`` interface. Use it to annotate the
+#: parameters that accept a spectral albedo, such as the ``alb`` of
 #: ``smartg.water.Water1D`` or the ``ALB`` of the surfaces of
 #: ``smartg.surface``. ``typing.get_args(AlbedoLike)`` gives the
 #: corresponding tuple of classes, suitable for an ``isinstance`` check.

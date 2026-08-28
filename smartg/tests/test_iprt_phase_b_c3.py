@@ -361,7 +361,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
 
     Returns
     -------
-    (pro, grid3, surf, wls)
+    (pro, grid3, surf, wavelengths)
     """
     cloud3, grid3 = cloud_c3
     dir_phase_b = DIR_AUXDATA / "IPRT" / "phaseB"
@@ -406,7 +406,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
         }
 
     # ========= profiles computations
-    wls = np.array([W_REF])
+    wavelengths = np.array([W_REF])
     atm3 = Atm3D(
         atm_1d=Atm1D("afglt", comp=comp),
         grid_3d=grid3,
@@ -416,11 +416,11 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
         mol_abs_1d=mol_abs,
         **atm3_kwargs,
     )
-    pro = atm3.calc(wls, n_theta=NTH, truncation=truncation)
+    pro = atm3.calc(wavelengths, n_theta=NTH, truncation=truncation)
 
     surf = LambSurface(alb=AlbedoCst(0.2))
 
-    return pro, grid3, surf, wls
+    return pro, grid3, surf, wavelengths
 
 
 @pytest.fixture(scope="module")
@@ -528,7 +528,7 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
     -------
     (m, norm)
     """
-    pro, grid3, surf, wls = atm_c3
+    pro, grid3, surf, wavelengths = atm_c3
     posz_key, theta, phi, theta_0 = CASES[case]
     posz = _resolve_posz(sensor_grid, posz_key)
 
@@ -553,7 +553,7 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
     }
 
     kw = dict(
-        wl=wls,
+        wavelength=wavelengths,
         atm=pro,
         sensor=sensors,
         le=le,
@@ -627,7 +627,7 @@ def _plot_case(request, m, iquv_sg, iquv_my, case, sensor_grid, title_suffix):
     i_my, q_my, u_my, v_my = iquv_my
 
     stk = ["I", "Q", "U", "V"]
-    wl = m.coords["wavelength"].values
+    wavelength = m.coords["wavelength"].values
     xgrid = sensor_grid.xgrid
     ygrid = sensor_grid.ygrid
     max_i = np.max(i_sg)
@@ -639,7 +639,7 @@ def _plot_case(request, m, iquv_sg, iquv_my, case, sensor_grid, title_suffix):
         m,
         xgrid,
         ygrid,
-        wl,
+        wavelength,
         "none",
         ["jet", "coolwarm", "coolwarm", "coolwarm"],
         figsize=(10.5, 7),
@@ -660,7 +660,7 @@ def _plot_case(request, m, iquv_sg, iquv_my, case, sensor_grid, title_suffix):
         m,
         xgrid,
         ygrid,
-        wl,
+        wavelength,
         "none",
         ["coolwarm", "coolwarm", "coolwarm", "coolwarm"],
         figsize=(10.5, 7),

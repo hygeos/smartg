@@ -81,11 +81,12 @@ logger.addHandler(file_handler)
 
 @pytest.mark.parametrize("mod", AER_SPHERIC)
 def test_aer_spheric(mod):
-    wl_ref = 550.0
+    wavelength_ref = 550.0
     aer_comp = AerOPAC(
-        mod, tau_ref=None, w_ref=wl_ref, rh_mix=80.0, rh_free=0.0, rh_stra=0.0
+        mod, tau_ref=None, w_ref=wavelength_ref, rh_mix=80.0,
+        rh_free=0.0, rh_stra=0.0
     )
-    pro = Atm1D("afglt", comp=[aer_comp]).calc(wl_ref)
+    pro = Atm1D("afglt", comp=[aer_comp]).calc(wavelength_ref)
 
     opac_tau = AER_SPHERIC_OPAC[mod]["tau"]
     opac_ssa = AER_SPHERIC_OPAC[mod]["ssa"]

@@ -144,7 +144,7 @@ def test_a1(request, s1df, s1db):
             )
 
     m_a1_b = s1db.run(
-        wl=550.0,
+        wavelength=550.0,
         nb_photons=1e7 * nb_dir,
         nb_loop=1e7,
         atm=atm,
@@ -198,7 +198,7 @@ def test_a1(request, s1df, s1db):
             )
 
     m_a1_b = s1db.run(
-        wl=550.0,
+        wavelength=550.0,
         nb_photons=1e7 * nb_dir,
         nb_loop=1e7,
         atm=atm,
@@ -250,7 +250,7 @@ def test_a1(request, s1df, s1db):
     m_a1_f_dep003 = s1df.run(
         th_v_deg=sza,
         ph_v_deg=phi_0,
-        wl=550.0,
+        wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e5,
         atm=atm,
@@ -274,7 +274,7 @@ def test_a1(request, s1df, s1db):
     m_a1_f_dep01 = s1df.run(
         th_v_deg=sza,
         ph_v_deg=phi_0,
-        wl=550.0,
+        wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e5,
         atm=atm,
@@ -671,7 +671,7 @@ def test_a2(request, s1df):
     m_a2_f = s1df.run(
         th_v_deg=sza,
         ph_v_deg=phi_0,
-        wl=550.0,
+        wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e6,
         atm=atm,
@@ -1036,7 +1036,7 @@ def test_a5_pp(request, s1df):
     m_a5_f_pp = s1df.run(
         th_v_deg=sza,
         ph_v_deg=phi_0,
-        wl=800.0,
+        wavelength=800.0,
         nb_photons=1e7,
         nb_loop=1e6,
         n_f=nth,
@@ -1344,7 +1344,7 @@ def test_a5_al(request, s1df):
     m_a5_f_al = s1df.run(
         th_v_deg=sza,
         ph_v_deg=phi_0,
-        wl=800.0,
+        wavelength=800.0,
         nb_photons=1e7,
         nb_loop=1e6,
         n_f=nth,

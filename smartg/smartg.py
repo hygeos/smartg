@@ -737,7 +737,7 @@ class Smartg(object):
 
     def run(
         self,
-        wl,
+        wavelength,
         atm=None,
         surf=None,
         water=None,
@@ -750,7 +750,7 @@ class Smartg(object):
         ph_v_deg: float = 0.0,
         seed: int = -1,
         earth_radius: float = 6371.0,
-        wl_proba: np.ndarray | None = None,
+        wavelength_proba: np.ndarray | None = None,
         sensor_proba: np.ndarray | None = None,
         cell_proba=None,
         nb_theta: int = 45,
@@ -792,7 +792,7 @@ class Smartg(object):
 
         Parameters
         ----------
-        wl : float | list | 1-D ndarray
+        wavelength : float | list | 1-D ndarray
             Wavelength(s) in nm. It can be a list of ReptranIband or
             KdisIband objects.
         atm : None | Atm1D | MLUT, optional
@@ -854,7 +854,7 @@ class Smartg(object):
             Default based on clock time.
         earth_radius : float, optional
             The earth radius in km
-        wl_proba : None | 1-D ndarray, optional
+        wavelength_proba : None | 1-D ndarray, optional
             The inversed cumulative distribution function for wavelength
             selection. It is for example the result of function
             icdf(proba, n).
@@ -1037,7 +1037,8 @@ class Smartg(object):
         >>> atm = Atm1D('afglt', comp=[aer])
         >>> water = Water1D(grid=[0, -5.], comp=[HydrosolPR(chl=0.5)])
         >>> surf = RoughSurface(wind=5., nh2o=1.34)
-        >>> m = Smartg().run(wl=550., atm=atm, water=water, surf=surf)
+        >>> m = Smartg().run(wavelength=550., atm=atm, water=water,
+        ...                  surf=surf)
         >>> # Look at the TOA radiance/reflectance ('I_up (TOA)')
         >>> m['I_up (TOA)'].dims
         ('Azimuth angles', 'Zenith angles')
@@ -1163,7 +1164,10 @@ class Smartg(object):
                 my_robj0,
                 my_spect_obj0,
                 n_cos,
-            ) = _init_obj(lgobj=my_objects, v_sun=v_sun, wl=wl, cus_l=cus_l)
+            ) = _init_obj(
+                lgobj=my_objects, v_sun=v_sun, wavelength=wavelength,
+                cus_l=cus_l,
+            )
 
             # If we are in RF mode don't forget to update the value of
             # surf_lph
@@ -1177,7 +1181,7 @@ class Smartg(object):
             my_robj0 = gpuzeros(1, dtype='int32')
             my_spect_obj0 = gpuzeros(
                 1, dtype='int32'
-            )  # normally 2 dims: obj dim + wl dim
+            )  # normally 2 dims: obj dim + wavelength dim
             n_obj = 0
             n_gobj = 0
             n_robj = 0
@@ -1230,9 +1234,9 @@ class Smartg(object):
         attrs.update({'XGRID': xgrid})
         attrs.update({'NPHOTONS': '{:g}'.format(nb_photons)})
 
-        if not isinstance(wl, BandSet):
-            wl = BandSet(wl)
-        n_lam = wl.size
+        if not isinstance(wavelength, BandSet):
+            wavelength = BandSet(wavelength)
+        n_lam = wavelength.size
 
         n_low = 0
         hist = False
@@ -1285,7 +1289,7 @@ class Smartg(object):
         # atmosphere
         #
         if isinstance(atm, Atmosphere):
-            prof_atm = atm.calc(wl)
+            prof_atm = atm.calc(wavelength)
         elif isinstance(atm, xr.Dataset) or (atm is None):
             prof_atm = atm
         elif hasattr(atm, 'to_xarray'):
@@ -1312,7 +1316,9 @@ class Smartg(object):
             faer = _calc_phase_gpu(
                 prof_atm, n_theta=n_f, depo=depo, kind='atm', pol_off=pol_off
             )
-            prof_atm_gpu, cell_atm_gpu = _init_profile(wl, prof_atm, 'atm')
+            prof_atm_gpu, cell_atm_gpu = _init_profile(
+                wavelength, prof_atm, 'atm'
+            )
             if 'z_atm' in prof_atm.coords:
                 n_atm = len(prof_atm.coords['z_atm']) - 1
             else:
@@ -1437,7 +1443,7 @@ class Smartg(object):
         # ocean
         #
         if isinstance(water, Water):
-            prof_oc = water.calc(wl)
+            prof_oc = water.calc(wavelength)
         elif isinstance(water, xr.Dataset) or (water is None):
             prof_oc = water
         elif hasattr(water, 'to_xarray'):
@@ -1459,7 +1465,7 @@ class Smartg(object):
                 kind='oc',
                 pol_off=pol_off,
             )
-            prof_oc_gpu, cell_oc_gpu = _init_profile(wl, prof_oc, 'oc')
+            prof_oc_gpu, cell_oc_gpu = _init_profile(wavelength, prof_oc, 'oc')
             n_oce = len(prof_oc.coords['z_oc']) - 1
             if self.opt3d:
                 n_oce_abs = np.int32(prof_oc['iabs_oc'].to_numpy().max())
@@ -1477,18 +1483,18 @@ class Smartg(object):
         #
         spectrum = np.zeros(n_lam, dtype=TYPE_SPECTRUM)
         envmap = np.zeros(1, dtype=TYPE_ENV_MAP)
-        spectrum['lambda'] = wl[:]
+        spectrum['lambda'] = wavelength[:]
         if env is None:
             # default values (no environment effect)
             env = Environment()
             if surf is not None:
                 if surf.alb is not None:
-                    spectrum['alb_surface'] = surf.alb.get(wl[:])
+                    spectrum['alb_surface'] = surf.alb.get(wavelength[:])
                 elif surf.kp is not None:
-                    spectrum['alb_surface'] = surf.kp[0].get(wl[:])
-                    spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
-                    spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
-                    spectrum['k3p_surface'] = surf.kp[3].get(wl[:])
+                    spectrum['alb_surface'] = surf.kp[0].get(wavelength[:])
+                    spectrum['k1p_surface'] = surf.kp[1].get(wavelength[:])
+                    spectrum['k2p_surface'] = surf.kp[2].get(wavelength[:])
+                    spectrum['k3p_surface'] = surf.kp[3].get(wavelength[:])
                 else:
                     spectrum['alb_surface'] = -999.0
             else:
@@ -1496,13 +1502,13 @@ class Smartg(object):
         else:
             assert surf is not None
             if surf.alb is not None:
-                spectrum['alb_surface'] = surf.alb.get(wl[:])
+                spectrum['alb_surface'] = surf.alb.get(wavelength[:])
             elif surf.kp is not None:
-                spectrum['alb_surface'] = surf.kp[0].get(wl[:])
-                spectrum['k1p_surface'] = surf.kp[1].get(wl[:])
-                spectrum['k2p_surface'] = surf.kp[2].get(wl[:])
-                spectrum['k3p_surface'] = surf.kp[3].get(wl[:])
-            albenv = env.alb.get(wl[:])
+                spectrum['alb_surface'] = surf.kp[0].get(wavelength[:])
+                spectrum['k1p_surface'] = surf.kp[1].get(wavelength[:])
+                spectrum['k2p_surface'] = surf.kp[2].get(wavelength[:])
+                spectrum['k3p_surface'] = surf.kp[3].get(wavelength[:])
+            albenv = env.alb.get(wavelength[:])
             if albenv.ndim == 2:
                 env.nenv = albenv.shape[1]
                 spectrum['alb_envs'][:, : env.nenv] = albenv
@@ -1575,13 +1581,13 @@ class Smartg(object):
             if flux == 'tilted planar':
                 flux_code = 3
 
-        if wl_proba is not None:
-            assert wl_proba.dtype == 'int64'
-            wl_proba_icdf = to_gpu(wl_proba)
-            n_wl_proba = len(wl_proba_icdf)
+        if wavelength_proba is not None:
+            assert wavelength_proba.dtype == 'int64'
+            wavelength_proba_icdf = to_gpu(wavelength_proba)
+            n_wavelength_proba = len(wavelength_proba_icdf)
         else:
-            wl_proba_icdf = gpuzeros(1, dtype='int64')
-            n_wl_proba = 0
+            wavelength_proba_icdf = gpuzeros(1, dtype='int64')
+            n_wavelength_proba = 0
 
         if sensor_proba is not None:
             assert sensor_proba.dtype == 'int64'
@@ -1603,12 +1609,13 @@ class Smartg(object):
                 kabs = od2k(prof_atm, 'OD_abs_atm')
                 z = -prof_atm.coords['z_atm'].to_numpy()
                 B = blackbody_radiance(
-                    wl[:][:, None], prof_atm['T_atm'].to_numpy()[None, :]
+                    wavelength[:][:, None],
+                    prof_atm['T_atm'].to_numpy()[None, :],
                 )
                 emission = xr.DataArray(
                     kabs * B,
                     dims=['wavelength', 'z_atm'],
-                    coords={'wavelength': wl[:], 'z_atm': z},
+                    coords={'wavelength': wavelength[:], 'z_atm': z},
                 )
                 norm_emission = (4 * np.pi) * emission.sum(dim='z_atm')
                 p_emission = emission * (4 * np.pi) / norm_emission
@@ -1659,7 +1666,7 @@ class Smartg(object):
             ocean_interaction,
             n_lvl,
             n_pstk,
-            n_wl_proba,
+            n_wavelength_proba,
             n_sensor_proba,
             n_cell_proba,
             beer,
@@ -1762,7 +1769,7 @@ class Smartg(object):
             prof_oc_gpu,
             cell_atm_gpu,
             cell_oc_gpu,
-            wl_proba_icdf,
+            wavelength_proba_icdf,
             sensor_proba_icdf,
             cell_proba_icdf,
             stdev,
@@ -1863,7 +1870,7 @@ class Smartg(object):
             tab_photons_tot_no_aer,
             tab_dist_tot,
             tab_hist_tot,
-            wl[:],
+            wavelength[:],
             n_photons_in_tot,
             errorcount,
             n_photons_out_tot,
@@ -1916,9 +1923,9 @@ class Smartg(object):
                 )
             )
 
-        if wl.scalar:
+        if wavelength.scalar:
             output = drop_axes(output, 'wavelength')
-            output.attrs['wavelength'] = wl[:]
+            output.attrs['wavelength'] = wavelength[:]
 
         if not self.autoinit and not self.keep_context:
             assert self.ctx is not None
@@ -2084,7 +2091,7 @@ def _finalize(
     tab_photons_tot_no_aer: np.ndarray,
     tab_dist_tot: np.ndarray,
     tab_hist_tot,
-    wl: np.ndarray,
+    wavelength: np.ndarray,
     n_photons_in_tot: np.ndarray,
     errorcount: GPUArray,
     n_photons_out_tot: np.ndarray,
@@ -2126,7 +2133,7 @@ def _finalize(
         Accumulated ALIS path-length distances.
     tab_hist_tot : np.ndarray | None
         Accumulated photon histories (hist mode).
-    wl : np.ndarray
+    wavelength : np.ndarray
         The wavelengths in nm.
     n_photons_in_tot : pycuda.gpuarray.GPUArray
         Number of launched photons per sensor and wavelength.
@@ -2278,12 +2285,12 @@ def _finalize(
 
     axnames4 = []
     if n_lam > 1:
-        ds.coords['wavelength'] = wl
+        ds.coords['wavelength'] = wavelength
         ilam = slice(None)
         axnames.insert(0, 'wavelength')
         axnames4.insert(0, 'wavelength')
     else:
-        ds.attrs['wavelength'] = str(wl)
+        ds.attrs['wavelength'] = str(wavelength)
         ilam = 0
 
     if n_sensor > 1:
@@ -2625,14 +2632,14 @@ def _finalize(
 
         # To consider also the multispectral case
         if n_lam > 1:
-            lwl = len(wl)
+            n_wavelength = len(wavelength)
         else:
-            lwl = 1
+            n_wavelength = 1
 
         # ======== Find the extinction between TOA and heliostats
-        tau_ext = np.zeros(lwl, dtype=np.float64)
-        tr_tau = np.zeros(lwl, dtype=np.float64)
-        p_pyt = np.zeros(lwl, dtype=np.float64)
+        tau_ext = np.zeros(n_wavelength, dtype=np.float64)
+        tr_tau = np.zeros(n_wavelength, dtype=np.float64)
+        p_pyt = np.zeros(n_wavelength, dtype=np.float64)
 
         # find the atm layer where the mean heliostats z altitude is
         # located
@@ -2648,7 +2655,7 @@ def _finalize(
         while zatm[ci] > dic_stp["MZAlt_H"]:
             ci += 1
 
-        for i in range(0, lwl):
+        for i in range(0, n_wavelength):
             tau_ext[i] = (od_atm[i, ci] - od_atm[i, ci - 1]) * (
                 dic_stp["MZAlt_H"] / zatm[ci - 1]
             )
@@ -2672,13 +2679,15 @@ def _finalize(
             and (dic_stp["LPH"] is not None)
             and (dic_stp["LPR"] is not None)
         ):
-            naatm = np.zeros(lwl, dtype=np.float64)
-            p = make_progress(lwl - 1, dic_stp["prog"])
-            for j in range(0, lwl):
+            naatm = np.zeros(n_wavelength, dtype=np.float64)
+            p = make_progress(n_wavelength - 1, dic_stp["prog"])
+            for j in range(0, n_wavelength):
                 sum_naatm = 0
                 p.update(
                     j + 1,
-                    'n_aatm computed : {:.3g} / {:.3g}'.format(j + 1, lwl),
+                    'n_aatm computed : {:.3g} / {:.3g}'.format(
+                        j + 1, n_wavelength
+                    ),
                 )
                 for i in range(len(dic_stp["LPH"])):
                     sum_naatm += _find_extinction(
@@ -2688,7 +2697,7 @@ def _finalize(
             p.finish(
                 'Done! | Analytic approx of n_atm computed for '
                 '{:.3g} wavelengths'.format(
-                    lwl
+                    n_wavelength
                 )
             )
             _add_variable(ds, 'n_aatm', naatm, ['wavelength'])
@@ -3135,7 +3144,7 @@ def _init_const(
     ocean_interaction: bool | None,
     n_lvl: int,
     n_pstk: int,
-    n_wl_proba: int,
+    n_wavelength_proba: int,
     n_sensor_proba: int,
     n_cell_proba: int,
     beer: int,
@@ -3218,7 +3227,7 @@ def _init_const(
         Integer flags controlling radiative-transfer modes.
     n_lvl, n_pstk, nb_theta, nb_phi, n_lam : int
         Angular/spectral and Stokes discretization controls.
-    n_wl_proba, n_sensor_proba, n_cell_proba : int
+    n_wavelength_proba, n_sensor_proba, n_cell_proba : int
         Sampling configuration parameters.
     s_min, s_max, r_min, r_max, r_r, n_low : int
         Path-length limits and Russian-roulette configuration.
@@ -3345,7 +3354,7 @@ def _init_const(
     copy_to_device('STHVd', s_th_v, np.float32)
     copy_to_device('CTHVd', c_th_v, np.float32)
     copy_to_device('RTER', earth_radius, np.float32)
-    copy_to_device('NWLPROBA', n_wl_proba, np.int32)
+    copy_to_device('NWLPROBA', n_wavelength_proba, np.int32)
     copy_to_device('NSENSORPROBA', n_sensor_proba, np.int32)
     copy_to_device('NCELLPROBA', n_cell_proba, np.int32)
     copy_to_device('REFRACd', refrac, np.int32)
@@ -3400,7 +3409,7 @@ def _init_const(
             copy_to_device('LMODEd', 0, np.int32)
 
 
-def _init_profile(wl, prof, kind: str) -> tuple:
+def _init_profile(wavelength, prof, kind: str) -> tuple:
     """Prepare profile and cell arrays on the GPU.
 
     Convert an atmospheric or oceanic profile into the internal SMART-G
@@ -3408,7 +3417,7 @@ def _init_profile(wl, prof, kind: str) -> tuple:
 
     Parameters
     ----------
-    wl : 1-D ndarray
+    wavelength : 1-D ndarray
         Wavelength grid used for the simulation. Its length defines the
         first dimension of the generated profile array.
     prof : xr.Dataset
@@ -3438,7 +3447,7 @@ def _init_profile(wl, prof, kind: str) -> tuple:
         NLAY = len(prof['OD_' + kind].to_numpy()[0, :])
     else:
         NLAY = len(prof.coords['z_' + kind])
-    shp = (len(wl), NLAY)
+    shp = (len(wavelength), NLAY)
     prof_gpu = np.zeros(shp, dtype=TYPE_PROFILE, order='C')
 
     if kind == "oc":
@@ -3616,9 +3625,9 @@ def reduce_diff(
         raise ValueError("Input must define a 'wavelength' dimension.")
 
     n_diff = len(varnames)
-    n_wl_total = ds_sg.sizes['wavelength']
-    block_size = int(n_wl_total / (n_diff + 1))
-    if block_size * (n_diff + 1) != n_wl_total:
+    n_wavelength_total = ds_sg.sizes['wavelength']
+    block_size = int(n_wavelength_total / (n_diff + 1))
+    if block_size * (n_diff + 1) != n_wavelength_total:
         raise ValueError(
             'wavelength size is not compatible with the number of '
             'perturbation blocks.'
@@ -3633,7 +3642,7 @@ def reduce_diff(
         if delta.shape[0] != n_diff:
             raise ValueError('delta must have the same length as varnames.')
 
-    wl_ref = ds_sg['wavelength'].isel(wavelength=slice(0, block_size))
+    wavelength_ref = ds_sg['wavelength'].isel(wavelength=slice(0, block_size))
     prefixes = ('I_', 'Q_', 'U_', 'V_', 'transmission', 'flux')
 
     out_vars = OrderedDict()
@@ -3644,14 +3653,14 @@ def reduce_diff(
             continue
 
         ref_da = da.isel(wavelength=slice(0, block_size)).assign_coords(
-            wavelength=wl_ref
+            wavelength=wavelength_ref
         )
         out_vars[var_name] = ref_da
 
         for k, pert_name in enumerate(varnames):
             pert_da = da.isel(
                 wavelength=slice((k + 1) * block_size, (k + 2) * block_size)
-            ).assign_coords(wavelength=wl_ref)
+            ).assign_coords(wavelength=wavelength_ref)
             diff_da = pert_da - ref_da
             if delta is not None:
                 diff_da = diff_da / delta[k]
@@ -3695,7 +3704,7 @@ def _loop_kernel(
     prof_oc: GPUArray,
     cell_atm: GPUArray,
     cell_oc: GPUArray,
-    wl_proba_icdf: GPUArray | None,
+    wavelength_proba_icdf: GPUArray | None,
     sensor_proba_icdf: GPUArray | None,
     cell_proba_icdf: GPUArray | None,
     stdev: bool,
@@ -3764,7 +3773,7 @@ def _loop_kernel(
         Atmospheric and ocean profile tables.
     cell_atm, cell_oc : pycuda.gpuarray.GPUArray
         Atmospheric and ocean cell lookup tables.
-    wl_proba_icdf, sensor_proba_icdf, cell_proba_icdf : GPUArray
+    wavelength_proba_icdf, sensor_proba_icdf, cell_proba_icdf : GPUArray
         Inverse-CDF tables for wavelength, sensor, and cell sampling.
     stdev : bool
         If True, estimate standard deviation of normalized outputs.
@@ -4059,7 +4068,7 @@ def _loop_kernel(
             prof_oc,
             cell_atm,
             cell_oc,
-            wl_proba_icdf,
+            wavelength_proba_icdf,
             sensor_proba_icdf,
             cell_proba_icdf,
             rng.state,
@@ -4672,7 +4681,7 @@ class _RngCurandPhilox(object):
         return seed
 
 
-def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
+def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
     """Initialize object-related GPU buffers and receiver metadata.
 
     Parameters
@@ -4681,7 +4690,7 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
         List of object groups/entities used by the 3-D object mode.
     v_sun : gc.Vector
         Sun direction vector, used in restricted-forward (``RF``) mode.
-    wl : float or array-like or BandSet
+    wavelength : float or array-like or BandSet
         Wavelength definition in nm. It can also be a list of
         REPTRAN/KDIS bands and will be converted to ``BandSet`` when
         needed.
@@ -4791,9 +4800,9 @@ def _init_obj(lgobj, v_sun, wl, cus_l=None) -> tuple:
 
     # Account for spectral variability of object reflectivity.
     n_obj_total = lobj_gpu.size
-    if not isinstance(wl, BandSet):
-        wl = BandSet(wl)
-    nlam = wl.size
+    if not isinstance(wavelength, BandSet):
+        wavelength = BandSet(wavelength)
+    nlam = wavelength.size
     lobj_spect = np.zeros(
         (n_obj_total * nlam), dtype=TYPE_SPECTRUM_OBJ, order='C'
     )

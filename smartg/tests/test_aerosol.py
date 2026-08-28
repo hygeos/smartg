@@ -86,7 +86,7 @@ logger.addHandler(file_handler)
 
 @pytest.mark.parametrize("mix", MIXTURES)
 def test_aer_mixtures(request, mix):
-    wls = np.array([400.0, 700.0])
+    wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC(
         mix,
         1.0,
@@ -96,7 +96,7 @@ def test_aer_mixtures(request, mix):
         h_stra_min=0.0,
         h_free_max=0.0,
     )
-    pro = Atm1D("afglt", comp=[aer]).calc(wls)
+    pro = Atm1D("afglt", comp=[aer]).calc(wavelengths)
 
     ref_fname = (
         DIR_AUXDATA / "aerosols" / "test_ref" / "atm_afglt_{}.nc".format(mix)
@@ -209,7 +209,7 @@ def test_aer_mixtures(request, mix):
 
 @pytest.mark.parametrize("spe", SPECIES)
 def test_aer_species(request, spe):
-    wls = np.array([400.0, 700.0])
+    wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC(
         spe,
         1.0,
@@ -219,7 +219,7 @@ def test_aer_species(request, spe):
         h_stra_min=0.0,
         h_free_max=0.0,
     )
-    pro = Atm1D("afglt", comp=[aer]).calc(wls)
+    pro = Atm1D("afglt", comp=[aer]).calc(wavelengths)
 
     ref_fname = (
         DIR_AUXDATA / "aerosols" / "test_ref" / "atm_afglt_{}.nc".format(spe)
@@ -331,9 +331,11 @@ def test_aer_species(request, spe):
 
 
 def test_desert_free_stra(request):
-    wls = np.array([400.0, 700.0])
+    wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC("desert", 1.0, 550.0)
-    pro = Atm1D("afglt", comp=[aer], pfgrid=[100.0, 12.0, 6.0, 0.0]).calc(wls)
+    pro = Atm1D(
+        "afglt", comp=[aer], pfgrid=[100.0, 12.0, 6.0, 0.0]
+    ).calc(wavelengths)
 
     ref_fname = (
         DIR_AUXDATA / "aerosols" / "test_ref" / "atm_afglt_desert_free_stra.nc"
@@ -447,7 +449,7 @@ def test_desert_free_stra(request):
 
 
 def test_dd_cc_mixture(request):
-    wls = np.array([400.0, 700.0])
+    wavelengths = np.array([400.0, 700.0])
     pfgrid = [100.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]
     aer1 = AerOPAC(
         "desert",
@@ -467,7 +469,7 @@ def test_dd_cc_mixture(request):
         h_stra_min=0.0,
         h_free_max=0.0,
     )
-    pro = Atm1D("afglt", comp=[aer1, aer2], pfgrid=pfgrid).calc(wls)
+    pro = Atm1D("afglt", comp=[aer1, aer2], pfgrid=pfgrid).calc(wavelengths)
 
     ref_fname = (
         DIR_AUXDATA
@@ -583,8 +585,8 @@ def test_dd_cc_mixture(request):
     ), "Problem with dd + cc phase function"
 
 
-def test_desert_one_wl(request):
-    wl = 400.0
+def test_desert_one_wavelength(request):
+    wavelength = 400.0
     aer = AerOPAC(
         "desert",
         1.0,
@@ -594,7 +596,7 @@ def test_desert_one_wl(request):
         h_stra_min=0.0,
         h_free_max=0.0,
     )
-    pro = Atm1D("afglt", comp=[aer]).calc(wl)
+    pro = Atm1D("afglt", comp=[aer]).calc(wavelength)
 
     ref_fname = DIR_AUXDATA / "aerosols" / "test_ref" / "atm_afglt_desert.nc"
     pro_ref = xr.open_dataset(ref_fname)
@@ -605,21 +607,21 @@ def test_desert_one_wl(request):
     ssa_aer_ref_400 = pro_ref["ssa_p_atm"][0, -1].values
 
     logger.info(
-        f"desert one wl - 400nm - tau_ref={tau_aer_ref_400:.3f} - "
+        f"desert one wavelength - 400nm - tau_ref={tau_aer_ref_400:.3f} - "
         + f"tau_calc={tau_aer_400:.3f}"
     )
     logger.info(
-        f"desert one wl - 400nm - ssa_ref={ssa_aer_ref_400:.3f} - "
+        f"desert one wavelength - 400nm - ssa_ref={ssa_aer_ref_400:.3f} - "
         + f"ssa_calc={ssa_aer_400:.3f}"
     )
 
     assert np.isclose(tau_aer_400, tau_aer_ref_400, atol=2e-3), (
-        "Problem with desert one wl tau value at 400nm, "
+        "Problem with desert one wavelength tau value at 400nm, "
         + f"get {tau_aer_400:.5f} instead of {tau_aer_ref_400:.5f}"
     )
 
     assert np.isclose(ssa_aer_400, ssa_aer_ref_400, atol=2e-3), (
-        "Problem with desert one wl ssa value at 400nm, "
+        "Problem with desert one wavelength ssa value at 400nm, "
         + f"get {ssa_aer_400:.5f} instead of {ssa_aer_ref_400:.5f}"
     )
 
@@ -684,4 +686,4 @@ def test_desert_one_wl(request):
             atol=1e-5,
             rtol=1e-3,
         )
-    ), "Problem with desert one wl phase function"
+    ), "Problem with desert one wavelength phase function"

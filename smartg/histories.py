@@ -149,7 +149,7 @@ def BigSum(S, grad=None, only_I=False):
 
 def compute_cdist_hist(
     D_h, S_h, w_h, nref_h, nint_h, nlscl_h,
-    wl_lr_r, wl_ref, alb_ref, natm_abs,
+    wavelength_lr_r, wavelength_ref, alb_ref, natm_abs,
     *,
     amf_variance    = True,
     nscl            = 1,
@@ -172,9 +172,10 @@ def compute_cdist_hist(
     nref_h   : (NLE,)           – surface-reflection count per photon
     nint_h   : (NLE,) int       – scattering order (total interaction count)
     nlscl_h  : (NLE,) int       – last-scattering layer index (-1 = surface/none)
-    wl_lr_r  : (NLR,)           – LR wavelength axis [nm]
-    wl_ref   : float            – reference wavelength [nm] for weight evaluation
-    alb_ref  : float            – surface albedo at wl_ref
+    wavelength_lr_r  : (NLR,)           – LR wavelength axis [nm]
+    wavelength_ref   : float            – reference wavelength [nm]
+                                          (weight evaluation)
+    alb_ref  : float            – surface albedo at wavelength_ref
     natm_abs : int              – number of atmospheric absorption layers
     amf_variance : bool         – store 3rd moment Σ d²·w
     nscl     : int              – number of scatter classes (1 = no decomposition)
@@ -182,7 +183,8 @@ def compute_cdist_hist(
                                   | 'scattering_order_per_layer'
     norders  : int              – scattering-order bins per layer (mode 3 only)
     cdist_wabs : bool           – include Beer-Lambert transmittance in w_n
-    kabs_ref : (natm_abs,) or None – kabs [km⁻¹] at wl_ref (for cdist_wabs=True)
+    kabs_ref : (natm_abs,) or None – kabs [km⁻¹] at wavelength_ref
+                                     (for cdist_wabs=True)
 
     Returns
     -------
@@ -194,14 +196,16 @@ def compute_cdist_hist(
     niamf = 3 if amf_variance else 2
     NLE   = int(D_h.shape[0])
 
-    wl_lr_j  = jnp.array(wl_lr_r, dtype=jnp.float32)
-    wl_ref_j = jnp.float32(wl_ref)
+    wavelength_lr_j  = jnp.array(wavelength_lr_r, dtype=jnp.float32)
+    wavelength_ref_j = jnp.float32(wavelength_ref)
 
-    # 1. ALIS scattering-correction weight at wl_ref
+    # 1. ALIS scattering-correction weight at wavelength_ref
     w_h_j    = jnp.array(w_h,  dtype=jnp.float32)
-    w_scalar = vmap(lambda wi: jnp.interp(wl_ref_j, wl_lr_j, wi))(w_h_j)
+    w_scalar = vmap(
+        lambda wi: jnp.interp(wavelength_ref_j, wavelength_lr_j, wi)
+    )(w_h_j)
 
-    # 2. Optional Beer-Lambert transmittance at wl_ref
+    # 2. Optional Beer-Lambert transmittance at wavelength_ref
     D_abs = jnp.array(D_h[:, :natm_abs], dtype=jnp.float32)
     if cdist_wabs and kabs_ref is not None:
         k_ref_j = jnp.array(kabs_ref[:natm_abs], dtype=jnp.float32)
@@ -330,7 +334,8 @@ def amf_from_cdist(cdist, thick):
     return result
 
 
-def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
+def compute_amf(m, *, wavelength_lr_r=None, wavelength_ref=None,
+                alb_ref=None, natm_abs=None,
                 amf_variance=True, nscl=1,
                 scatter_classes='last_scattering_layer',
                 norders=1, cdist_wabs=False, kabs_ref=None):
@@ -344,12 +349,13 @@ def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
     Parameters
     ----------
     m : xr.Dataset – Smartg.run() output (MLUT input is deprecated)
-    wl_lr_r : (NLR,) array, optional
+    wavelength_lr_r : (NLR,) array, optional
         LR wavelength axis [nm].  Defaults to m['wavelength'].
-    wl_ref : float, optional
-        Reference wavelength [nm].  Defaults to median of wl_lr_r.
+    wavelength_ref : float, optional
+        Reference wavelength [nm].  Defaults to the median of
+        wavelength_lr_r.
     alb_ref : float
-        Surface albedo at wl_ref (required for hist=True path).
+        Surface albedo at wavelength_ref (required for hist=True path).
     natm_abs : int, optional
         Number of atmospheric absorption layers.
         Defaults to m['z_atm'].size - 1.
@@ -359,7 +365,8 @@ def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
                             | 'scattering_order_per_layer'
     norders : int         – scatter-order bins per layer (mode 3 only)
     cdist_wabs : bool     – include Beer-Lambert transmittance weight in w_n
-    kabs_ref : (natm_abs,) array – kabs [km⁻¹] at wl_ref (for cdist_wabs=True)
+    kabs_ref : (natm_abs,) array – kabs [km⁻¹] at wavelength_ref
+                                   (for cdist_wabs=True)
 
     Returns
     -------
@@ -375,10 +382,10 @@ def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
     thick = np.abs(np.diff(m['z_atm'].values))
 
     # Auto-fill optional parameters from the output
-    if wl_lr_r is None:
-        wl_lr_r  = m['wavelength'].values
-    if wl_ref is None:
-        wl_ref   = float(np.median(wl_lr_r))
+    if wavelength_lr_r is None:
+        wavelength_lr_r  = m['wavelength'].values
+    if wavelength_ref is None:
+        wavelength_ref   = float(np.median(wavelength_lr_r))
     if natm_abs is None:
         natm_abs = int(m['z_atm'].size) - 1
 
@@ -402,7 +409,7 @@ def compute_amf(m, *, wl_lr_r=None, wl_ref=None, alb_ref=None, natm_abs=None,
         _, S, D, w, _, nref, _, _, _, nint, nlscl = get_histories(m)
         cdist = compute_cdist_hist(
             D, S, w, nref, nint, nlscl,
-            wl_lr_r, wl_ref, alb_ref, natm_abs,
+            wavelength_lr_r, wavelength_ref, alb_ref, natm_abs,
             amf_variance    = amf_variance,
             nscl            = nscl,
             scatter_classes = scatter_classes,

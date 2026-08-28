@@ -257,7 +257,7 @@ def _smartg_run(_water_iop, _atm, _surf):
 
     # --- Irradiance run (planar flux, 5x photons) ---
     m_flux = sg.run(
-        wl=WAVELENGTHS,
+        wavelength=WAVELENGTHS,
         th_v_deg=SZA_DEG,
         atm=_atm,
         surf=_surf,
@@ -283,7 +283,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         "count_level": np.array([4]),
     }
     m_le = sg.run(
-        wl=WAVELENGTHS,
+        wavelength=WAVELENGTHS,
         th_v_deg=SZA_DEG,
         atm=_atm,
         surf=_surf,
@@ -338,11 +338,11 @@ def test_hydrolight(hl_pw, hl_pw_rrs, _smartg_run):
     )
 
     logger.info("---- Eu/Ed ----")
-    for i, wl in enumerate(WAVELENGTHS):
+    for i, wavelength in enumerate(WAVELENGTHS):
         pct = abs(r_smartg[i] - r_hl[i]) / abs(r_hl[i]) * 100.0
         status = "PASS" if pct < MAX_DIFF_PCT else "FAIL"
         logger.info(
-            f"wl={wl:.0f}nm - "
+            f"wavelength={wavelength:.0f}nm - "
             f"SMART-G={r_smartg[i]:.4E} - "
             f"HydroLight={r_hl[i]:.4E} - "
             f"diff(%)={pct:.3f} - "
@@ -371,14 +371,14 @@ def test_hydrolight(hl_pw, hl_pw_rrs, _smartg_run):
     )
 
     logger.info("---- Lu/Ed ----")
-    for i, wl in enumerate(WAVELENGTHS):
+    for i, wavelength in enumerate(WAVELENGTHS):
         diff = abs(rrs_smartg[i] - rrs_hl[i])
         pct = diff / abs(rrs_hl[i]) * 100.0
         threshold = 4.0 * rrs_stdev[i]
         pct_sigma = threshold / abs(rrs_hl[i]) * 100.0
         status = "PASS" if diff < threshold else "FAIL"
         logger.info(
-            f"wl={wl:.0f}nm - "
+            f"wavelength={wavelength:.0f}nm - "
             f"SMART-G={rrs_smartg[i]:.4E} - "
             f"HydroLight={rrs_hl[i]:.4E} - "
             f"diff(%)={pct:.3f} - "
@@ -502,7 +502,7 @@ def _rw_vs_w1d_run(_atm_rayleigh, _surf):
         Water1D(grid=[0.0, 0.0], comp=[], alb=alb),
     ):
         m = sg.run(
-            wl=WAVELENGTHS,
+            wavelength=WAVELENGTHS,
             th_v_deg=SZA_DEG,
             atm=_atm_rayleigh,
             surf=_surf,
@@ -542,11 +542,11 @@ def test_waterrw_simulation_matches_water1d(_rw_vs_w1d_run, stokes):
     tol = 4.0 * sigma + STOKES_ATOL
 
     logger.info(f"---- WaterRw vs Water1D, {stokes}_up (TOA) ----")
-    for i, wl in enumerate(WAVELENGTHS):
+    for i, wavelength in enumerate(WAVELENGTHS):
         diff = abs(a[i] - b[i])
         status = "PASS" if diff < tol[i] else "FAIL"
         logger.info(
-            f"wl={wl:.0f}nm - "
+            f"wavelength={wavelength:.0f}nm - "
             f"WaterRw={a[i]:.4E} - "
             f"Water1D={b[i]:.4E} - "
             f"diff={diff:.3E} - "

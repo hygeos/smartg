@@ -374,8 +374,8 @@ class AerOPAC(object):
                 / "free_troposphere_sol.nc"
             )
             self.free_tropo = xr.open_dataset(filename_tmp)
-            # check we have the same wl dim than previous aer pro in
-            # vert_content
+            # check we have the same wavelength dim than previous aer
+            # pro in vert_content
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
                 w_cur = self.free_tropo.wav.values
@@ -402,8 +402,8 @@ class AerOPAC(object):
                 / "stratosphere_sol.nc"
             )
             self.strato = xr.open_dataset(filename_tmp)
-            # check we have the same wl dim than previous aer pro in
-            # vert_content
+            # check we have the same wavelength dim than previous aer
+            # pro in vert_content
             if len(self.vert_content) > 0:
                 aer_prev = self.vert_content[-1]
                 w_cur = self.strato.wav.values
@@ -627,9 +627,8 @@ class AerOPAC(object):
                 if self.ssa.ndim == 0:
                     ssa[:, :] = self.ssa
                 elif self.ssa.ndim == 1:
-                    ssa[:, :] = self.ssa[
-                        :, None
-                    ]  # If 1d array -> consider only wl variability
+                    # if 1d array -> only wavelength variability
+                    ssa[:, :] = self.ssa[:, None]
                 elif self.ssa.ndim == 2:
                     ssa[:, :] = self.ssa[:, :]
             elif isinstance(self.ssa, xr.DataArray):  # xr.DataArray
@@ -3089,27 +3088,36 @@ class Atm1D(Atmosphere):
                 t = prof.t[None, :]  # temperature variability in z
                 if use_o3_acs:
                     # O3 optical thickness
-                    min_wl = float(np.min(self.acs_o3["wavelength"].values))
-                    max_wl = float(np.max(self.acs_o3["wavelength"].values))
-                    wl_query = xr.DataArray(wav[:], dims=["wavelength"])
+                    min_wavelength = float(
+                        np.min(self.acs_o3["wavelength"].values)
+                    )
+                    max_wavelength = float(
+                        np.max(self.acs_o3["wavelength"].values)
+                    )
+                    wavelength_query = xr.DataArray(
+                        wav[:], dims=["wavelength"]
+                    )
                     c0 = (
                         self.acs_o3["O3_C0"]
-                        .sel(wavelength=wl_query, method="nearest")
+                        .sel(wavelength=wavelength_query, method="nearest")
                         .values[:, None]
                     )
                     c1 = (
                         self.acs_o3["O3_C1"]
-                        .sel(wavelength=wl_query, method="nearest")
+                        .sel(wavelength=wavelength_query, method="nearest")
                         .values[:, None]
                     )
                     c2 = (
                         self.acs_o3["O3_C2"]
-                        .sel(wavelength=wl_query, method="nearest")
+                        .sel(wavelength=wavelength_query, method="nearest")
                         .values[:, None]
                     )
                     tau_o3 = c0 + c1 * (t - t0) + c2 * (t - t0) * (t - t0)
                     tau_o3[
-                        ~np.logical_and(wav[:] > min_wl, wav[:] < max_wl)
+                        ~np.logical_and(
+                            wav[:] > min_wavelength,
+                            wav[:] < max_wavelength,
+                        )
                     ] = 0.0
                     tau_o3 *= (
                         prof.dens_o3 * 1e-15
@@ -3118,27 +3126,36 @@ class Atm1D(Atmosphere):
                     tau_o3[tau_o3 < 0] = 0
                 if use_no2_acs:
                     # NO2 optical thickness
-                    min_wl = float(np.min(self.acs_no2["wavelength"].values))
-                    max_wl = float(np.max(self.acs_no2["wavelength"].values))
-                    wl_query = xr.DataArray(wav[:], dims=["wavelength"])
+                    min_wavelength = float(
+                        np.min(self.acs_no2["wavelength"].values)
+                    )
+                    max_wavelength = float(
+                        np.max(self.acs_no2["wavelength"].values)
+                    )
+                    wavelength_query = xr.DataArray(
+                        wav[:], dims=["wavelength"]
+                    )
                     c0 = (
                         self.acs_no2["NO2_C0"]
-                        .sel(wavelength=wl_query, method="nearest")
+                        .sel(wavelength=wavelength_query, method="nearest")
                         .values[:, None]
                     )
                     c1 = (
                         self.acs_no2["NO2_C1"]
-                        .sel(wavelength=wl_query, method="nearest")
+                        .sel(wavelength=wavelength_query, method="nearest")
                         .values[:, None]
                     )
                     c2 = (
                         self.acs_no2["NO2_C2"]
-                        .sel(wavelength=wl_query, method="nearest")
+                        .sel(wavelength=wavelength_query, method="nearest")
                         .values[:, None]
                     )
                     tau_no2 = c0 + c1 * (t - t0) + c2 * (t - t0) * (t - t0)
                     tau_no2[
-                        ~np.logical_and(wav[:] > min_wl, wav[:] < max_wl)
+                        ~np.logical_and(
+                            wav[:] > min_wavelength,
+                            wav[:] < max_wavelength,
+                        )
                     ] = 0.0
                     tau_no2 *= (
                         prof.dens_no2 * 1e-15
@@ -3911,10 +3928,10 @@ class Atm3D(Atmosphere):
             consumed by :meth:`smartg.smartg.Smartg.run`.
         """
         if isinstance(wav, BandSet):
-            wls = np.asarray(wav.wav)
+            wavelengths = np.asarray(wav.wav)
         else:
-            wls = np.atleast_1d(np.asarray(wav))
-        wav_pha = self.pfwav if self.pfwav is not None else wls
+            wavelengths = np.atleast_1d(np.asarray(wav))
+        wav_pha = self.pfwav if self.pfwav is not None else wavelengths
 
         #
         # 1D background optical properties on the 3D vertical grid
@@ -3982,7 +3999,7 @@ class Atm3D(Atmosphere):
         mol_sca_glob = self._glob_molecular(mol_sca_1d)
         mol_abs_glob = self._glob_molecular(mol_abs_1d)
         ext_glob, ssa_glob, prof_phases = self._glob_particles(
-            wls,
+            wavelengths,
             wav_pha,
             n_theta,
             ext_aer_1d,
@@ -4042,7 +4059,7 @@ class Atm3D(Atmosphere):
 
     def _glob_particles(
         self,
-        wls: NDArray[np.floating],
+        wavelengths: NDArray[np.floating],
         wav_pha: NDArray[np.floating],
         n_theta: int,
         ext_aer_1d: NDArray[np.floating],
@@ -4079,7 +4096,7 @@ class Atm3D(Atmosphere):
 
         if len(self.comp_3d) > 1:
             return self._glob_particles_multi(
-                wls,
+                wavelengths,
                 wav_pha,
                 n_theta,
                 ext_aer_1d,
@@ -4091,14 +4108,14 @@ class Atm3D(Atmosphere):
         comp = self.comp_3d[0]
         assert self._cell_indices is not None
         n_cell = self._cell_indices.shape[0]
-        ext_3d = comp.get_ext(wls)
-        ssa_3d = comp.get_ssa(wls)
+        ext_3d = comp.get_ext(wavelengths)
+        ssa_3d = comp.get_ssa(wavelengths)
         cld_phases, cell_pha_idx, n_unique = comp.get_phase_set(
             wav_pha, n_theta=n_theta
         )
 
-        ext_mix_3d = np.zeros((len(wls), n_cell), dtype=np.float64)
-        ssa_mix_3d = np.ones((len(wls), n_cell), dtype=np.float64)
+        ext_mix_3d = np.zeros((len(wavelengths), n_cell), dtype=np.float64)
+        ssa_mix_3d = np.ones((len(wavelengths), n_cell), dtype=np.float64)
 
         if pha_aer_1d is None:  # case no 1d aer given
             ext_mix_3d[:, :] = ext_3d
@@ -4106,7 +4123,7 @@ class Atm3D(Atmosphere):
 
             phases = cld_phases
             # Concatenate plan parallel + 3d optical prop (first
-            # without considering wl)
+            # without considering wavelength)
             phase_glob_indices_w0 = np.concatenate(
                 [np.zeros(nbz, dtype=np.int32), cell_pha_idx[:]]
             )
@@ -4173,7 +4190,7 @@ class Atm3D(Atmosphere):
 
             # the mixed extinctions and ssa of the profile, at the
             # profile wavelengths
-            for iwav in range(0, len(wls)):
+            for iwav in range(0, len(wavelengths)):
                 ssa_aer_tmp = ssa_aer_1d[iwav, idz_atm]
                 ext_aer_tmp = ext_aer_1d[iwav, idz_atm]
                 ext_mix_tmp = ext_aer_tmp + ext_3d[iwav, :]
@@ -4184,7 +4201,7 @@ class Atm3D(Atmosphere):
                 ) / ext_mix_tmp
 
             # Concatenate plan parallel + 3d optical prop (first
-            # without considering wl)
+            # without considering wavelength)
             phase_glob_indices_w0 = np.arange(
                 nbz + n_cell, dtype=np.int32
             )
@@ -4196,7 +4213,7 @@ class Atm3D(Atmosphere):
         ext_glob = np.concatenate([ext_aer_1d, ext_mix_3d], axis=1)
         ssa_glob = np.concatenate([ssa_aer_1d[:, :], ssa_mix_3d], axis=1)
 
-        # Now consider the wl dimension
+        # Now consider the wavelength dimension
         # NB: with a 1D aerosol the per-wavelength stride in `phases`
         # is nbz + n_cell, not n_unique, so the offset below is only
         # correct when len(wav_pha) == 1 (the only exercised case;
@@ -4213,7 +4230,7 @@ class Atm3D(Atmosphere):
 
     def _glob_particles_multi(
         self,
-        wls: NDArray[np.floating],
+        wavelengths: NDArray[np.floating],
         wav_pha: NDArray[np.floating],
         n_theta: int,
         ext_aer_1d: NDArray[np.floating],
@@ -4242,8 +4259,8 @@ class Atm3D(Atmosphere):
         n_cell = self._cell_indices.shape[0]
 
         # per-component optical properties and phase matrix sets
-        ext_3d = [comp.get_ext(wls) for comp in self.comp_3d]
-        ssa_3d = [comp.get_ssa(wls) for comp in self.comp_3d]
+        ext_3d = [comp.get_ext(wavelengths) for comp in self.comp_3d]
+        ssa_3d = [comp.get_ssa(wavelengths) for comp in self.comp_3d]
         ext_3d_pha = [comp.get_ext(wav_pha) for comp in self.comp_3d]
         ssa_3d_pha = [comp.get_ssa(wav_pha) for comp in self.comp_3d]
         phase_sets = [
@@ -4288,7 +4305,7 @@ class Atm3D(Atmosphere):
             local_pos[icomp, pos] = np.arange(pos.size)
 
         # the mixed extinctions and ssa, at the profile wavelengths
-        ext_mix_3d = np.zeros((len(wls), n_cell), dtype=np.float64)
+        ext_mix_3d = np.zeros((len(wavelengths), n_cell), dtype=np.float64)
         sca_mix_3d = np.zeros_like(ext_mix_3d)
         for icomp, pos in enumerate(self._comp_cell_pos):
             ext_mix_3d[:, pos] += ext_3d[icomp]
@@ -5359,7 +5376,7 @@ def blackbody_radiance(
 
     Returns
     -------
-    L_b_wl : NDArray
+    L_b_wavelength : NDArray
         Spectral radiance in W·m⁻³·sr⁻¹.
 
     References
@@ -5373,13 +5390,13 @@ def blackbody_radiance(
     >>> from scipy.constants import speed_of_light, Planck, Boltzmann
     >>> wav = 10e-6  # 10 micrometers (thermal infrared)
     >>> T = 288.0    # 288 K (room temperature)
-    >>> L_b_wl = blackbody_radiance(wav, T)
-    >>> print(f"Spectral radiance: {L_b_wl:.2e} W·m⁻³·sr⁻¹")
+    >>> L_b_wavelength = blackbody_radiance(wav, T)
+    >>> print(f"Spectral radiance: {L_b_wavelength:.2e} W·m⁻³·sr⁻¹")
 
     >>> # Calculate for multiple wavelengths at a fixed temperature
     >>> wavelengths = np.array([0.5e-6, 1e-6, 10e-6]) # UV, NIR, TIR
     >>> T = 5778  # Sun's surface temperature
-    >>> L_b_wl = blackbody_radiance(wavelengths, T)
+    >>> L_b_wavelength = blackbody_radiance(wavelengths, T)
     """
     wav = np.asarray(wav, dtype=np.float64)
     T = np.asarray(T, dtype=np.float64)
@@ -5391,10 +5408,10 @@ def blackbody_radiance(
 
     c1 = 2.0 * Planck * speed_of_light**2
     c2 = Planck * speed_of_light / Boltzmann
-    L_b_wl = c1 / ((wav**5) * (np.exp(c2 / (wav * T)) - 1.0))
+    L_b_wavelength = c1 / ((wav**5) * (np.exp(c2 / (wav * T)) - 1.0))
     if scalar_input:
-        return float(L_b_wl)
-    return L_b_wl
+        return float(L_b_wavelength)
+    return L_b_wavelength
 
 
 def get_aer_dist_integral(
@@ -5874,7 +5891,7 @@ def artdeco_to_smartg_cld(
     normalize: bool = True,
     overwrite: bool = False,
     veff: float | None = None,
-    wl_max: float = 4500,
+    wavelength_max: float = 4500,
 ) -> xr.Dataset:
     """Convert ARTDECO cloud HDF5 file to SMART-G NetCDF file format.
 
@@ -5906,9 +5923,9 @@ def artdeco_to_smartg_cld(
         Effective volume fraction. Required if cloud properties are
         dependent on veff.
         Default: None
-    wl_max : float, optional
-        Maximum wavelength in nanometers. Only wavelengths <= wl_max are
-        included.
+    wavelength_max : float, optional
+        Maximum wavelength in nanometers. Only wavelengths <=
+        wavelength_max are included.
         Default: 4500
 
     Returns
@@ -6006,7 +6023,7 @@ def artdeco_to_smartg_cld(
         * 1e3,
         decimals=3,
     ).astype(np.float32, copy=False)
-    wav_idx = np.flatnonzero(wav_full <= wl_max)
+    wav_idx = np.flatnonzero(wav_full <= wavelength_max)
     wav = wav_full[wav_idx]
     nwav = len(wav)
 

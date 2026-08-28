@@ -3115,7 +3115,7 @@ def _get_cmaps(
 def _extract_matrices(
     ds_sg: xr.Dataset,
     stokes_labels: list[str],
-    wl: float | None,
+    wavelength: float | None,
     factor: float,
     n_x: int,
     n_y: int,
@@ -3164,7 +3164,7 @@ def _extract_matrices(
         if "wavelength" in da.dims:
             # TODO Enable a default value, for example for the
             # monochromatic case
-            da = da.interp(wavelength=wl)
+            da = da.interp(wavelength=wavelength)
         matrices.append(np.asarray(da).reshape(n_y, n_x) * factor)
     return matrices
 
@@ -3238,7 +3238,7 @@ def satellite_view(
     ds_sg: xr.Dataset | MLUT | None,
     xgrid: np.ndarray,
     ygrid: np.ndarray,
-    wl: float | None = None,
+    wavelength: float | None = None,
     interpolation: str = "none",
     cmap: str | mcolors.Colormap | list = "Blues_r",
     cmap_reverse: bool | list[bool] = False,
@@ -3272,7 +3272,7 @@ def satellite_view(
         Numpy array with the grid profile in the x axis.
     ygrid : np.ndarray
         Numpy array with the grid profile in the y axis.
-    wl : float, optional
+    wavelength : float, optional
         The wavelength (nm). Required when the Dataset has a
         wavelength dimension.
     interpolation : str, optional
@@ -3351,7 +3351,7 @@ def satellite_view(
                           stacklevel=2)
             ds_sg = ds_sg.to_xarray()
         matrix = _extract_matrices(
-            ds_sg, stokes_labels, wl, factor, n_x, n_y)
+            ds_sg, stokes_labels, wavelength, factor, n_x, n_y)
     else:
         matrix = _as_list(matrices, 1)
         if n_x * n_y != matrix[0].shape[0] * matrix[0].shape[1]:
@@ -3564,7 +3564,7 @@ def cat_view(
     is_wave_axis = "wavelength" in ds["wPhCats"].dims
 
     # Fill needed parameters considering the case with and without
-    # the wl
+    # the wavelength
     # dimension
     nph_int: float | None = None
     if is_wave_axis:
@@ -3575,7 +3575,7 @@ def cat_view(
 
     # DataArrays with sum of photon weight (and squared weight)
     # as function of
-    # Categories and (if there is wl dim) wavelength
+    # Categories and (if there is wavelength dim) wavelength
     mf = ds["wPhCats"]
     mf2 = ds["wPhCats2"]
 
@@ -3719,10 +3719,10 @@ def cat_view(
 
     # Absolute error calculation and normalization
     if is_wave_axis:
-        s_wl = len(ds.wavelength)
-        abs_err = np.zeros((9, s_wl), dtype="float64")
-        sum_2_z = np.zeros((9, s_wl), dtype="float64")
-        sum_z_2 = np.zeros((9, s_wl), dtype="float64")
+        s_wavelength = len(ds.wavelength)
+        abs_err = np.zeros((9, s_wavelength), dtype="float64")
+        sum_2_z = np.zeros((9, s_wavelength), dtype="float64")
+        sum_z_2 = np.zeros((9, s_wavelength), dtype="float64")
 
         n_bis = nph / (nph - 1)
 

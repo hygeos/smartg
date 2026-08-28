@@ -79,17 +79,17 @@ def cleanup_after_each_test():
         pass
 
 
-@pytest.mark.parametrize("n_wl_abs", [301])
+@pytest.mark.parametrize("n_wavelength_abs", [301])
 @pytest.mark.parametrize("wmax", [350.0])
 @pytest.mark.parametrize("wmin", [320.0])
 def test_smartg_jax2(
-    n_wl_abs, wmin, wmax, request, nb_photons=5e4, max_hist=1e6
+    n_wavelength_abs, wmin, wmax, request, nb_photons=5e4, max_hist=1e6
 ):
     alb_snow = AlbedoCst(0.6)
     alb_hist = AlbedoCst(1.0)
-    wl_sca = np.linspace(wmin, wmax, num=11)
-    wl_abs = np.linspace(wmin, wmax, num=n_wl_abs)
-    alb = alb_snow.get(wl_abs)
+    wavelength_sca = np.linspace(wmin, wmax, num=11)
+    wavelength_abs = np.linspace(wmin, wmax, num=n_wavelength_abs)
+    alb = alb_snow.get(wavelength_abs)
     lez = {"th_deg": np.array([0.0]), "phi_deg": np.array([0.0]), "zip": False}
 
     for aod, fmt1 in zip(
@@ -101,19 +101,19 @@ def test_smartg_jax2(
             comp=[AerOPAC("urban", aod, 550.0)],
             grid=np.linspace(50.0, 0.0, num=40),
         )
-        sigma = od2k(atm.calc(wl_abs), "OD_abs_atm")[:, 1:]
+        sigma = od2k(atm.calc(wavelength_abs), "OD_abs_atm")[:, 1:]
         sg = Smartg(alis=True, alt_pp=True)
         m = (
             sg.run(
                 seed=0,
                 th_v_deg=45.0,
-                wl=wl_sca,
+                wavelength=wavelength_sca,
                 surf=LambSurface(alb_hist),
                 le=lez,
                 beer=0,
-                atm=atm.calc(wl_sca),
+                atm=atm.calc(wavelength_sca),
                 alis_options={
-                    "nlow": wl_sca.size,
+                    "nlow": wavelength_sca.size,
                     "hist": True,
                     "max_hist": np.int64(max_hist),
                 },
@@ -127,12 +127,12 @@ def test_smartg_jax2(
             sg.run(
                 seed=0,
                 th_v_deg=45.0,
-                wl=wl_abs,
+                wavelength=wavelength_abs,
                 surf=LambSurface(alb_snow),
                 le=lez,
                 beer=0,
-                atm=atm.calc(wl_abs),
-                alis_options={"nlow": wl_sca.size, "hist": False},
+                atm=atm.calc(wavelength_abs),
+                alis_options={"nlow": wavelength_sca.size, "hist": False},
                 nb_photons=nb_photons,
                 n_f=1e3,
             )
@@ -149,7 +149,8 @@ def test_smartg_jax2(
             stk_i = (
                 np.array(
                     BigSum(Si, only_I=True)(
-                        wl_abs, sigma, alb, S[:, 0], w, D, nref, wl_sca
+                        wavelength_abs, sigma, alb, S[:, 0], w, D,
+                        nref, wavelength_sca
                     ).sum(axis=0)
                 )
                 / N
@@ -157,7 +158,8 @@ def test_smartg_jax2(
             stk_i2 = (
                 np.array(
                     BigSum(Si2, only_I=True)(
-                        wl_abs, sigma, alb, S[:, 0], w, D, nref, wl_sca
+                        wavelength_abs, sigma, alb, S[:, 0], w, D,
+                        nref, wavelength_sca
                     ).sum(axis=0)
                 )
                 / N
@@ -166,7 +168,7 @@ def test_smartg_jax2(
         upper = stk_i + 1.95 * std
         lower = stk_i - 1.95 * std
         p = plt.plot(
-            wl_abs,
+            wavelength_abs,
             stk_i,
             fmt1,
             label="AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}".format(
@@ -176,7 +178,7 @@ def test_smartg_jax2(
         col = p[0].get_color()
         print(stk_i2, std)
         plt.fill_between(
-            wl_abs,
+            wavelength_abs,
             lower,
             upper,
             facecolor=col,
@@ -185,7 +187,7 @@ def test_smartg_jax2(
             label="95 percent confidence",
         )
         plt.plot(
-            wl_abs,
+            wavelength_abs,
             m0["I_up (TOA)"][:],
             marker="+",
             ls="",
@@ -281,14 +283,14 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
         "zip": False,
     }
     nlow = 3
-    wl_lr = np.linspace(w_valid.min(), w_valid.max(), num=nlow)
+    wavelength_lr = np.linspace(w_valid.min(), w_valid.max(), num=nlow)
 
     sg = Smartg(alis=True, alt_pp=True)
     m1 = (
         sg.run(
             seed=0,
             th_v_deg=30.0,
-            wl=w_valid,
+            wavelength=w_valid,
             surf=None,
             le=le,
             beer=0,
@@ -305,7 +307,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
         sg.run(
             seed=0,
             th_v_deg=30.0,
-            wl=w_valid,
+            wavelength=w_valid,
             surf=None,
             le=le,
             beer=0,
@@ -342,7 +344,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
                     w,
                     D,
                     nref,
-                    wl_lr,
+                    wavelength_lr,
                 ).sum(axis=0)
             )
             / N

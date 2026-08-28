@@ -493,7 +493,7 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
 
     Returns
     -------
-    (pro, grid3, surf, wls)
+    (pro, grid3, surf, wavelengths)
     """
     # ========= phase matrix
     file_cld_phase = (
@@ -541,7 +541,7 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
         atm3_kwargs["mol_abs_1d"] = np.zeros_like(sca_ray)
 
     # ========= profiles computations
-    wls = np.array([800.0])
+    wavelengths = np.array([800.0])
     atm3 = Atm3D(
         atm_1d=Atm1D("afglt", **atm1d_kwargs),
         grid_3d=grid3,
@@ -549,11 +549,11 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
         pfwav=[800.0],
         **atm3_kwargs,
     )
-    pro = atm3.calc(wls, n_theta=NTH, truncation=truncation)
+    pro = atm3.calc(wavelengths, n_theta=NTH, truncation=truncation)
 
     surf = LambSurface(alb=AlbedoCst(0.2))
 
-    return pro, grid3, surf, wls
+    return pro, grid3, surf, wavelengths
 
 
 @pytest.fixture(scope="module")
@@ -681,7 +681,7 @@ def _run_case_backward(
     -------
     (m, norm)
     """
-    pro, grid3, surf, wls = atm_c2
+    pro, grid3, surf, wavelengths = atm_c2
     posz_key, theta, phi, theta_0 = CASES[case]
     posz = _resolve_posz(sensor_grid, posz_key)
 
@@ -706,7 +706,7 @@ def _run_case_backward(
     }
 
     kw = dict(
-        wl=wls,
+        wavelength=wavelengths,
         atm=pro,
         sensor=sensors,
         le=le,
@@ -743,7 +743,7 @@ def _run_group_forward(
     -------
     (m, norm)
     """
-    pro, grid3, surf, wls = atm_c2
+    pro, grid3, surf, wavelengths = atm_c2
     cases = group["cases"]
     # All the cases of a group share the same sun position
     theta_0 = CASES[cases[0]][3]
@@ -774,7 +774,7 @@ def _run_group_forward(
 
     kw = dict(
         th_v_deg=theta_0,
-        wl=wls,
+        wavelength=wavelengths,
         atm=pro,
         sensor=sensors,
         le=le,
@@ -870,7 +870,7 @@ def _plot_case(
     i_my, q_my, u_my, v_my = iquv_my
 
     stk = ["I", "Q", "U", "V"]
-    wl = m.coords["wavelength"].values
+    wavelength = m.coords["wavelength"].values
     xgrid = sensor_grid.xgrid
     ygrid = sensor_grid.ygrid
     max_i = np.max(i_sg)
@@ -882,7 +882,7 @@ def _plot_case(
         m,
         xgrid,
         ygrid,
-        wl,
+        wavelength,
         "none",
         ["jet", "coolwarm", "coolwarm", "coolwarm"],
         figsize=(10.5, 7),
@@ -908,7 +908,7 @@ def _plot_case(
         m,
         xgrid,
         ygrid,
-        wl,
+        wavelength,
         "none",
         ["coolwarm", "coolwarm", "coolwarm", "coolwarm"],
         figsize=(10.5, 7),
