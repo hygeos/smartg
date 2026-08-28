@@ -232,7 +232,7 @@ class Hydrosol(object):
     Parameters
     ----------
     phase : DataArray or LUT or None, optional
-        Phase matrices with dimensions [nwav, nz, stk, angle]. If None,
+        Phase matrices with dimensions [nwav, nz, nphamat, angle]. If None,
         the phase matrices are derived from `bbp_ratio` (see notes).
     bp : array_like or None, optional
         Particle scattering coefficient in m-1, dimensions [nwav, nz].
@@ -424,7 +424,7 @@ class Hydrosol(object):
         Returns
         -------
         pha_da : DataArray
-            Phase matrices with dimensions [wav_phase, z_phase, stk,
+            Phase matrices with dimensions [wav_phase, z_phase, nphamat,
             theta_oc].
         coef_trunc : DataArray
             Truncation factor `1 - f` with dimensions [wav_phase,
@@ -506,7 +506,7 @@ class Hydrosol(object):
 
         pha_da = xr.DataArray(
             pha,
-            dims=["wav_phase", "z_phase", "stk", "theta_oc"],
+            dims=["wav_phase", "z_phase", "nphamat", "theta_oc"],
             coords={
                 "wav_phase": wav,
                 "z_phase": z,
@@ -547,7 +547,7 @@ class Hydrosol(object):
         Returns
         -------
         DataArray or None
-            Phase matrices with dimensions [wav_phase, z_phase, stk,
+            Phase matrices with dimensions [wav_phase, z_phase, nphamat,
             theta_oc], or None if the hydrosol does not scatter.
 
         Raises
@@ -1379,7 +1379,7 @@ class Water1D(Water):
 
                 pro = pro.assign_coords(theta_oc=pha.coords["theta_oc"].values)
                 pro["phase_oc"] = xr.DataArray(
-                    pha_, dims=["iphase", "stk", "theta_oc"]
+                    pha_, dims=["iphase", "nphamat", "theta_oc"]
                 )
                 pro["iphase_oc"] = xr.DataArray(
                     ipha, dims=["wavelength", "z_oc"]
@@ -1503,7 +1503,7 @@ class Water1D(Water):
         Returns
         -------
         out : DataArray or None
-            The phase matrices with dimensions [wav_phase, z_phase, stk,
+            The phase matrices with dimensions [wav_phase, z_phase, nphamat,
             theta_oc], or None if no hydrosol scatters.
 
         Raises

@@ -164,9 +164,9 @@ class AerOPAC(object):
         Phase matrix F as function of wavelength, altitude, stoke
         components and scattering angle
         The variable names must be:
-        If 4-D matrix -> wav_phase, z_phase, stk, theta
+        If 4-D matrix -> wav_phase, z_phase, nphamat, theta
         If 2-D matrix (assumed monochromatic and constant vertically) ->
-        stk, theta
+        nphamat, theta
         Where:
         - wav_phase is the wavelength. It must be equal to the `pfwav`
           parameter of Atm1D
@@ -175,7 +175,7 @@ class AerOPAC(object):
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
           of Atm1D
-        - stk the phase matrix unique terms.
+        - nphamat the phase matrix unique terms.
         - theta the scattering angle.
 
         The phase matrix terms (IQUV convention) must be given in the
@@ -279,6 +279,9 @@ class AerOPAC(object):
             raise ValueError(
                 "The phase variable must be an xr.DataArray or be None."
             )
+        if self._phase is not None and "stk" in self._phase.dims:
+            # legacy phase inputs name the term dimension stk
+            self._phase = self._phase.rename(stk="nphamat")
 
         if ssa is None:
             self.ssa = None
@@ -688,7 +691,7 @@ class AerOPAC(object):
         -------
         phase_matrix : DataArray
             DataArray containing the phase matrix with dimensions
-            [wav_phase, z_phase, stk, theta_atm].
+            [wav_phase, z_phase, nphamat, theta_atm].
             Shape is (len(wav), len(z)-1, nphamat, n_theta) where:
             - nphamat = 4 for spherical particles only (phase matrix
               unique terms P11, P21, P33, P34)
@@ -702,7 +705,7 @@ class AerOPAC(object):
                 # convert to 4-dim by inserting empty dimensions
                 # wav_phase and z_phase
                 dims = list(self._phase.dims)
-                assert dims == ["stk", "theta_atm"]
+                assert dims == ["nphamat", "theta_atm"]
                 pha_ = self._phase.values[:, :]
                 if pha_.shape[0] == 4:
                     pha_6 = np.zeros((6, pha_.shape[1]), dtype=pha_.dtype)
@@ -712,11 +715,11 @@ class AerOPAC(object):
                     pha_ = pha_6
                 return xr.DataArray(
                     pha_[None, None, :, :],
-                    dims=["wav_phase", "z_phase", "stk", "theta_atm"],
+                    dims=["wav_phase", "z_phase", "nphamat", "theta_atm"],
                     coords={
                         "wav_phase": [wav[0]],
                         "z_phase": [0.0],
-                        "stk": np.arange(6),
+                        "nphamat": np.arange(6),
                         "theta_atm": self._phase.coords["theta_atm"].values,
                     },
                 )
@@ -738,7 +741,7 @@ class AerOPAC(object):
                         coords={
                             dims[0]: self._phase.coords[dims[0]].values,
                             dims[1]: self._phase.coords[dims[1]].values,
-                            "stk": np.arange(6),
+                            "nphamat": np.arange(6),
                             dims[3]: self._phase.coords[dims[3]].values,
                         },
                     )
@@ -922,11 +925,11 @@ class AerOPAC(object):
 
             P = xr.DataArray(
                 P_data,
-                dims=["wav_phase", "z_phase", "stk", "theta_atm"],
+                dims=["wav_phase", "z_phase", "nphamat", "theta_atm"],
                 coords={
                     "wav_phase": wav,
                     "z_phase": np.arange(P_data.shape[1]),
-                    "stk": np.arange(P_data.shape[2]),
+                    "nphamat": np.arange(P_data.shape[2]),
                     "theta_atm": theta,
                 },
             )
@@ -1047,9 +1050,9 @@ class Cloud(AerOPAC):
         Phase matrix F as function of wavelength, altitude, stoke
         components and scattering angle
         The variable names must be:
-        If 4-D matrix -> wav_phase, z_phase, stk, theta
+        If 4-D matrix -> wav_phase, z_phase, nphamat, theta
         If 2-D matrix (assumed monochromatic and contant vertically) ->
-        stk, theta
+        nphamat, theta
         Where:
         - wav_phase is the wavelength. It must be equal to the `pfwav`
           parameter of Atm1D
@@ -1058,7 +1061,7 @@ class Cloud(AerOPAC):
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
           of Atm1D
-        - stk the phase matrix unique terms.
+        - nphamat the phase matrix unique terms.
         - theta the scattering angle.
 
         The phase matrix terms (IQUV convention) must be given in the
@@ -1192,6 +1195,9 @@ class Cloud(AerOPAC):
             raise ValueError(
                 "The phase variable must be an xr.DataArray or be None."
             )
+        if self._phase is not None and "stk" in self._phase.dims:
+            # legacy phase inputs name the term dimension stk
+            self._phase = self._phase.rename(stk="nphamat")
 
     @staticmethod
     def list() -> list[str]:
@@ -1521,6 +1527,9 @@ class _Comp3DFile(Comp3D):
         # internally
         if isinstance(phase, LUT):
             phase = phase.to_xarray()
+        if isinstance(phase, xr.DataArray) and "stk" in phase.dims:
+            # legacy phase inputs name the term dimension stk
+            phase = phase.rename(stk="nphamat")
 
         if phase is None:
             self.phase = phase
@@ -1530,11 +1539,11 @@ class _Comp3DFile(Comp3D):
             )
         elif not all(
             item in phase.dims
-            for item in ["wav_phase", self._bulk_axis, "stk", "theta_atm"]
+            for item in ["wav_phase", self._bulk_axis, "nphamat", "theta_atm"]
         ):
             raise ValueError(
                 "Phase matrix must have 4 dimensions: wav_phase, "
-                f"{self._bulk_axis}, stk and theta_atm"
+                f"{self._bulk_axis}, nphamat and theta_atm"
             )
         else:
             self.phase = phase
@@ -1694,7 +1703,7 @@ class _Comp3DFile(Comp3D):
                 np.arange(6),
                 theta,
             ],
-            dims=["wav_phase", self._bulk_axis, "stk", "theta_atm"],
+            dims=["wav_phase", self._bulk_axis, "nphamat", "theta_atm"],
             name="phase_atm",
         )
 
@@ -2526,10 +2535,10 @@ class Atm1D(Atmosphere):
                     profile = profile.assign_coords(theta_atm=theta_atm)
                     profile["phase_atm"] = xr.DataArray(
                         pha_,
-                        dims=["iphase", "stk", "theta_atm"],
+                        dims=["iphase", "nphamat", "theta_atm"],
                         coords={
                             "iphase": np.arange(pha_.shape[0]),
-                            "stk": np.arange(pha_.shape[1]),
+                            "nphamat": np.arange(pha_.shape[1]),
                             "theta_atm": theta_atm,
                         },
                     )
@@ -2558,10 +2567,10 @@ class Atm1D(Atmosphere):
                     )
                     profile["phase_atm"] = xr.DataArray(
                         pha_,
-                        dims=["iphase", "stk", "theta_atm"],
+                        dims=["iphase", "nphamat", "theta_atm"],
                         coords={
                             "iphase": np.arange(pha_.shape[0]),
-                            "stk": np.arange(pha_.shape[1]),
+                            "nphamat": np.arange(pha_.shape[1]),
                             "theta_atm": theta_atm,
                         },
                         attrs=attrs_tmp,
@@ -2578,10 +2587,10 @@ class Atm1D(Atmosphere):
                     theta_atm = np.linspace(0.0, 180.0, pha_tr.shape[-1])
                     profile["phase_atm"] = xr.DataArray(
                         pha_tr,
-                        dims=["iphase", "stk", "theta_atm"],
+                        dims=["iphase", "nphamat", "theta_atm"],
                         coords={
                             "iphase": np.arange(pha_tr.shape[0]),
-                            "stk": np.arange(pha_tr.shape[1]),
+                            "nphamat": np.arange(pha_tr.shape[1]),
                             "theta_atm": theta_atm,
                         },
                         attrs=attrs_tmp,
@@ -3388,10 +3397,10 @@ class Atm1D(Atmosphere):
             pro = pro.assign_coords(theta_atm=theta)
             pro["phase_atm"] = xr.DataArray(
                 pha,
-                dims=["iphase", "stk", "theta_atm"],
+                dims=["iphase", "nphamat", "theta_atm"],
                 coords={
                     "iphase": np.arange(pha.shape[0]),
-                    "stk": np.arange(pha.shape[1]),
+                    "nphamat": np.arange(pha.shape[1]),
                     "theta_atm": pro.coords["theta_atm"],
                 },
                 attrs={"description": "phase matrices"},
@@ -3950,7 +3959,7 @@ class Atm3D(Atmosphere):
                 dict(
                     zip(
                         pha_aer_1d.dims,
-                        ("iphase", "stk", "theta_atm"),
+                        ("iphase", "nphamat", "theta_atm"),
                         strict=True,
                     )
                 )
@@ -5756,10 +5765,10 @@ def atm_pro_from_aeronet(
     pfn_val[:, 2:3, :] = 0.0
     pfn_lut = xr.DataArray(
         pfn_val,
-        dims=["wavelength", "stk", "theta_atm"],
+        dims=["wavelength", "nphamat", "theta_atm"],
         coords={
             "wavelength": pfn_lut.wavelength,
-            "stk": np.arange(4),
+            "nphamat": np.arange(4),
             "theta_atm": pfn_lut.theta_atm,
         },
     )

@@ -997,7 +997,7 @@ def test_a5_pp(request, s1df):
             LUT(
                 pha_atm[i, :, :],
                 axes=[None, np.linspace(0, 180, nth)],
-                names=["stk", "theta_atm"],
+                names=["nphamat", "theta_atm"],
             )
         )
     atm = Atm1D(
@@ -1305,7 +1305,7 @@ def test_a5_al(request, s1df):
             LUT(
                 pha_atm[i, :, :],
                 axes=[None, np.linspace(0, 180, nth)],
-                names=["stk", "theta_atm"],
+                names=["nphamat", "theta_atm"],
             )
         )
     atm = Atm1D(

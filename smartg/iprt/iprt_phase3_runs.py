@@ -775,11 +775,11 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
         # Same phase for all altitude (here only one)
         for iz in range (0, nz):
             aer_pha[:,iz,:,:] = aer_phase.isel({aer_phase.dims[1]: 0}).interp(wav_phase=wl, theta_atm=theta).data
-        aer_phase = LUT(aer_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'stk', 'theta'])
+        aer_phase = LUT(aer_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'nphamat', 'theta'])
         pha_atm, ipha_atm = calc_iphase(aer_phase, np.array([wl]), z)
         lpha_lut = []
         for i in range (0, pha_atm.shape[0]):
-            lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, nth)], names=['stk', 'theta_atm'])) 
+            lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, nth)], names=['nphamat', 'theta_atm'])) 
 
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut)).calc(wl, phase=False)
         surf  = None
@@ -851,12 +851,12 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
         # Same phase for all altitude (here only one)
         for iz in range (0, nz):
             aer_pha[:,iz,:,:] = aer_phase.isel({aer_phase.dims[1]: 0}).interp(wav_phase=wl, theta_atm=theta).data
-        aer_phase = LUT(aer_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'stk', 'theta'])
+        aer_phase = LUT(aer_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'nphamat', 'theta'])
 
         pha_atm, ipha_atm = calc_iphase(aer_phase, np.array([wl]), z)
         lpha_lut = []
         for i in range (0, pha_atm.shape[0]):
-            lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, nth)], names=['stk', 'theta_atm'])) 
+            lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, np.linspace(0, 180, nth)], names=['nphamat', 'theta_atm'])) 
 
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut)).calc(wl, phase=False)
         surf  = None
@@ -987,12 +987,12 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
         # Same phase for all altitude (here only one)
         for iz in range (0, nz):
             cld_pha[:,iz,:,:] = cld_phase.isel({cld_phase.dims[1]: 0}).interp(wav_phase=wl, theta_atm=theta).data
-        cld_phase = LUT(cld_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'stk', 'theta'])
+        cld_phase = LUT(cld_pha, axes=[wl, z[1:], None, theta], names=['wav', 'z', 'nphamat', 'theta'])
 
         pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([wl]), z)
         lpha_lut = []
         for i in range (0, pha_atm.shape[0]):
-            lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, theta], names=['stk', 'theta_atm']))
+            lpha_lut.append(LUT(pha_atm[i,:,:], axes=[None, theta], names=['nphamat', 'theta_atm']))
 
         # atmosphere profil
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer,

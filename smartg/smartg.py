@@ -2416,11 +2416,12 @@ def _finalize(
         if 'phase_atm' in prof_atm.data_vars:
             for name in ['phase_atm', 'iphase_atm']:
                 da = prof_atm[name]
-                # Rename 'iphase' and 'stk' per domain to avoid
-                # sharing dimensions across atm/oc
+                # Rename 'iphase' and 'nphamat' per domain to
+                # avoid sharing dimensions across atm/oc ('stk' is
+                # the legacy name of the nphamat dimension)
                 dims = [
                     'phase_index_atm' if d == 'iphase'
-                    else 'stk_atm' if d == 'stk'
+                    else 'nphamat_atm' if d in ('nphamat', 'stk')
                     else d
                     for d in da.dims
                 ]
@@ -2430,7 +2431,7 @@ def _finalize(
                 da = prof_atm[name]
                 dims = [
                     'phase_index_atm' if d == 'iphase'
-                    else 'stk_atm' if d == 'stk'
+                    else 'nphamat_atm' if d in ('nphamat', 'stk')
                     else d
                     for d in da.dims
                 ]
@@ -2481,11 +2482,12 @@ def _finalize(
         if 'phase_oc' in prof_oc.data_vars:
             for name in ['phase_oc', 'iphase_oc']:
                 da = prof_oc[name]
-                # Rename 'iphase' and 'stk' per domain to avoid
-                # sharing dimensions across atm/oc
+                # Rename 'iphase' and 'nphamat' per domain to
+                # avoid sharing dimensions across atm/oc ('stk' is
+                # the legacy name of the nphamat dimension)
                 dims = [
                     'phase_index_oc' if d == 'iphase'
-                    else 'stk_oc' if d == 'stk'
+                    else 'nphamat_oc' if d in ('nphamat', 'stk')
                     else d
                     for d in da.dims
                 ]
@@ -2495,7 +2497,7 @@ def _finalize(
                 da = prof_oc[name]
                 dims = [
                     'phase_index_oc' if d == 'iphase'
-                    else 'stk_oc' if d == 'stk'
+                    else 'nphamat_oc' if d in ('nphamat', 'stk')
                     else d
                     for d in da.dims
                 ]
@@ -2990,14 +2992,14 @@ def _calc_phase_gpu(
         # for ipha in range(nphases-1):
         assert angles is not None and dtheta is not None
 
-        phase = profile[name_phase][ipha, :, :].to_numpy()  # ipha, stk, theta
+        phase = profile[name_phase][ipha, :, :].to_numpy()  # ipha, nphamat, theta
 
         phase = convert_phase_to_iparper(phase)
 
         if pol_off:
             if len(phase[:, 0]) == 4:
                 raise ValueError(
-                    "old profiles with only 4 stk available are not "
+                    "old profiles with only 4 phase matrix terms are not "
                     "supported without polarization"
                 )
             # back to IQUV convention to obtain F11

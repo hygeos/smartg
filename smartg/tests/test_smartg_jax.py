@@ -251,7 +251,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
 
     phase_valid = LUT(
         pha_data,
-        names=["wav_phase", "z_phase", "stk", "theta_atm"],
+        names=["wav_phase", "z_phase", "nphamat", "theta_atm"],
         axes=[pfwav, [0], None, data[0, 0, 0, :]],
     )
     data_valid = np.loadtxt(
