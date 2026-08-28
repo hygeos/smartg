@@ -209,7 +209,7 @@ class AerOPAC(object):
     --------
     >>> from smartg.atmosphere import AerOPAC
     >>> aer_mc = AerOPAC('maritime_clean', 0.1, 550.)
-    >>> print(aer_mc.mixture)
+    >>> print(aer_mc.ds_mix)
     <xarray.Dataset> Size: 6MB
     Dimensions:  (hum: 8, wav: 26, stk: 4, theta: 1801)
     Coordinates:
@@ -316,37 +316,37 @@ class AerOPAC(object):
 
         self.filename = filename
 
-        self.mixture = xr.open_dataset(self.filename)
+        self.ds_mix = xr.open_dataset(self.filename)
         # check if hum dim size == 1 (to avoid interpolation/indexing
         # crash)
-        if self.mixture.sizes["hum"] == 1:
-            hum_v1 = float(self.mixture.coords["hum"].values[0])
+        if self.ds_mix.sizes["hum"] == 1:
+            hum_v1 = float(self.ds_mix.coords["hum"].values[0])
             hum_v2 = hum_v1 + 1
-            ds2 = self.mixture.assign_coords(hum=[hum_v2])
-            self.mixture = xr.concat([self.mixture, ds2], dim="hum")
+            ds2 = self.ds_mix.assign_coords(hum=[hum_v2])
+            self.ds_mix = xr.concat([self.ds_mix, ds2], dim="hum")
 
         if h_min_mix is None:
-            h_min_mix = float(self.mixture.attrs["H_mix_min"])
+            h_min_mix = float(self.ds_mix.attrs["H_mix_min"])
         if h_mix_max is None:
-            h_mix_max = float(self.mixture.attrs["H_mix_max"])
+            h_mix_max = float(self.ds_mix.attrs["H_mix_max"])
         if h_free_min is None:
-            h_free_min = float(self.mixture.attrs["H_free_min"])
+            h_free_min = float(self.ds_mix.attrs["H_free_min"])
         if h_free_max is None:
-            h_free_max = float(self.mixture.attrs["H_free_max"])
+            h_free_max = float(self.ds_mix.attrs["H_free_max"])
         if h_stra_min is None:
-            h_stra_min = float(self.mixture.attrs["H_stra_min"])
+            h_stra_min = float(self.ds_mix.attrs["H_stra_min"])
         if h_stra_max is None:
-            h_stra_max = float(self.mixture.attrs["H_stra_max"])
+            h_stra_max = float(self.ds_mix.attrs["H_stra_max"])
 
         if z_mix is None:
-            z_mix = float(self.mixture.attrs["Z_mix"])
+            z_mix = float(self.ds_mix.attrs["Z_mix"])
         if z_free is None:
-            z_free = float(self.mixture.attrs["Z_free"])
+            z_free = float(self.ds_mix.attrs["Z_free"])
         if z_stra is None:
-            if self.mixture.attrs["Z_stra"] == "99":
+            if self.ds_mix.attrs["Z_stra"] == "99":
                 z_stra = 1e6  # -> OPAC Z=99 for constant vertical dist
             else:
-                z_stra = float(self.mixture.attrs["Z_stra"])
+                z_stra = float(self.ds_mix.attrs["Z_stra"])
 
         self.hum_or_reff = "hum"
         self.free_tropo = None
@@ -359,7 +359,7 @@ class AerOPAC(object):
         self.z_sh = []
 
         if h_mix_max - h_min_mix > 1e-6:
-            self.vert_content.append(self.mixture)
+            self.vert_content.append(self.ds_mix)
             self.h_min.append(h_min_mix)
             self.h_max.append(h_mix_max)
             self.z_sh.append(z_mix)
@@ -749,7 +749,7 @@ class AerOPAC(object):
                 )
 
         theta = np.linspace(0.0, 180.0, num=n_theta)
-        lam_tabulated = self.mixture.coords["wav"].values
+        lam_tabulated = self.ds_mix.coords["wav"].values
         nwav = len(wav)
 
         P_tot = 0.0
@@ -1065,7 +1065,7 @@ class Cloud(AerOPAC):
     --------
     >>> from smartg.atmophere import Cloud
     >>> cld_wc = Cloud('wc', 12.68, 2, 3, 10., 550.)
-    >>> print(cld_wc.mixture)
+    >>> print(cld_wc.ds_mix)
     <xarray.Dataset> Size: 52MB
     Dimensions:  (reff: 26, wav: 209, stk: 4, theta: 594)
     Coordinates:
@@ -1146,14 +1146,14 @@ class Cloud(AerOPAC):
 
         self.filename = filename
 
-        self.mixture = xr.open_dataset(self.filename)
+        self.ds_mix = xr.open_dataset(self.filename)
         # check if reff dim size == 1 (to avoid interpolation/indexing
         # crash)
-        if self.mixture.sizes["reff"] == 1:
-            reff_v1 = float(self.mixture.coords["reff"].values[0])
+        if self.ds_mix.sizes["reff"] == 1:
+            reff_v1 = float(self.ds_mix.coords["reff"].values[0])
             reff_v2 = reff_v1 + 1
-            ds2 = self.mixture.assign_coords(reff=[reff_v2])
-            self.mixture = xr.concat([self.mixture, ds2], dim="reff")
+            ds2 = self.ds_mix.assign_coords(reff=[reff_v2])
+            self.ds_mix = xr.concat([self.ds_mix, ds2], dim="reff")
 
         self.hum_or_reff = "reff"
         self.free_tropo = None
@@ -1165,7 +1165,7 @@ class Cloud(AerOPAC):
         self.z_sh = []
 
         if zmax - zmin > 1e-6:
-            self.vert_content.append(self.mixture)
+            self.vert_content.append(self.ds_mix)
             self.h_min.append(zmin)
             self.h_max.append(zmax)
             self.z_sh.append(1e6)  # constant dist
@@ -1285,16 +1285,16 @@ class AerUser(AerOPAC):
         ds.attrs["H_mix_max"] = str(h_mix_max)
         ds.attrs["Z_mix"] = str(z_mix)
 
-        self.mixture = ds
+        self.ds_mix = ds
         # check if hum dim size == 1 (to avoid interpolation/indexing
         # crash)
-        if self.mixture.sizes["hum"] == 1:
-            hum_v1 = float(self.mixture.coords["hum"].values[0])
+        if self.ds_mix.sizes["hum"] == 1:
+            hum_v1 = float(self.ds_mix.coords["hum"].values[0])
             hum_v2 = hum_v1 + 1
-            ds2 = self.mixture.assign_coords(hum=[hum_v2])
-            self.mixture = xr.concat([self.mixture, ds2], dim="hum")
+            ds2 = self.ds_mix.assign_coords(hum=[hum_v2])
+            self.ds_mix = xr.concat([self.ds_mix, ds2], dim="hum")
 
-        self.w_ref = np.array([float(self.mixture.coords["wav"].values[0])])
+        self.w_ref = np.array([float(self.ds_mix.coords["wav"].values[0])])
         self.ssa = None
 
         self.hum_or_reff = "hum"
@@ -1308,7 +1308,7 @@ class AerUser(AerOPAC):
         self.z_sh = []
 
         if h_mix_max - h_mix_min > 1e-6:
-            self.vert_content.append(self.mixture)
+            self.vert_content.append(self.ds_mix)
             self.h_min.append(h_mix_min)
             self.h_max.append(h_mix_max)
             self.z_sh.append(z_mix)
@@ -1386,7 +1386,7 @@ class _Comp3DFile(Comp3D):
     I3RC/IPRT ASCII files. See :class:`Cloud3D` (parameter: the
     droplet effective radius) and :class:`Aer3D` (parameter: the
     relative humidity). The bulk optical properties are available
-    as the ``mixture`` dataset attribute, like in the 1D
+    as the ``ds_mix`` dataset attribute, like in the 1D
     :class:`AerOPAC` and :class:`Cloud` classes, and the 3D field
     as the ``ds_dist`` dataset attribute.
     """
@@ -1435,7 +1435,7 @@ class _Comp3DFile(Comp3D):
             raise FileNotFoundError(f"{fname} does not exist")
 
         self.fname = fname
-        self.mixture = xr.open_dataset(self.fname)
+        self.ds_mix = xr.open_dataset(self.fname)
         self.ssa_cst = ssa_cst
 
         if ds is not None:
@@ -1610,7 +1610,7 @@ class _Comp3DFile(Comp3D):
         per-cell parameter values, over ('cell', 'wav').
         """
         return self._interp_axis(
-            self.mixture[var],
+            self.ds_mix[var],
             self._bulk_axis,
             self._param,
             clamp=(self._param_oor == "clamp"),
@@ -1662,7 +1662,7 @@ class _Comp3DFile(Comp3D):
                 return self.phase.interp(theta_atm=theta)
 
         theta = np.linspace(0.0, 180.0, n_theta)
-        pha = self.mixture["phase"].interp(theta=theta).transpose(
+        pha = self.ds_mix["phase"].interp(theta=theta).transpose(
             "wav", self._bulk_axis, "stk", "theta"
         )
         nwav, n_param, nstk = pha.shape[:3]
@@ -1677,8 +1677,8 @@ class _Comp3DFile(Comp3D):
         return xr.DataArray(
             pha_,
             coords=[
-                self.mixture["wav"].values,
-                self.mixture[self._bulk_axis].values,
+                self.ds_mix["wav"].values,
+                self.ds_mix[self._bulk_axis].values,
                 np.arange(6),
                 theta,
             ],
@@ -1945,7 +1945,7 @@ class Aer3D(_Comp3DFile):
         # hydrophobic species (e.g. 'inso', 'soot') have a single
         # humidity node, and the lookups on a size-1 axis reject any
         # other value even with the clamping policy: clamp rh to it
-        hum = self.mixture["hum"].values.astype(np.float64)
+        hum = self.ds_mix["hum"].values.astype(np.float64)
         if hum.size == 1:
             param = np.full_like(param, hum[0])
         return param
