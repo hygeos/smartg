@@ -2438,6 +2438,11 @@ class CusBackward:
     v : Vector, optional
         The normal vector of the receiver. If provided,
         circumvent thdeg and phdeg.
+    v_sun : Vector, optional
+        The sun direction vector, for example the result of
+        gc.ang2vec(sza, phi, vec_view='nadir'). If provided, it
+        replaces the sun direction that the run method of Smartg
+        computes from its th_v_deg and ph_v_deg parameters.
     aldeg : float, optional
         Launch in a solid angle where alpha is the half-angle of
         the cone.
@@ -2476,6 +2481,7 @@ class CusBackward:
         thdeg: float = 0.,
         phdeg: float = 0.,
         v: gc.Vector | None = None,
+        v_sun: gc.Vector | None = None,
         aldeg: float = 0.,
         rec: Entity | None = None,
         sampling: str = "lambertian",
@@ -2490,6 +2496,8 @@ class CusBackward:
             thdeg, phdeg = float(th), float(ph)
         elif v is not None:
             raise ValueError('The v argument must be a Vector')
+        if v_sun is not None and not isinstance(v_sun, gc.Vector):
+            raise ValueError('The v_sun argument must be a Vector')
         if lmode == "BR" and not isinstance(rec, Entity):
             raise ValueError(
                 'In the BR lmode you have to specify a receiver!')
@@ -2515,6 +2523,7 @@ class CusBackward:
             'POS':   pos,
             'THDEG': thdeg,
             'PHDEG': phdeg,
+            'VSUN':  v_sun,
             'ALDEG': aldeg,
             'REC':   rec,
             'TYPE':  sampling_code,
@@ -2527,6 +2536,6 @@ class CusBackward:
     def __str__(self) -> str:
         return (
             'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'
-            '-ALDEG={ALDEG}-TYPE={TYPE}'
+            '-VSUN={VSUN}-ALDEG={ALDEG}-TYPE={TYPE}'
             '-LMODE={LMODE}'.format(**self.dict)
         )

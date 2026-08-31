@@ -844,11 +844,14 @@ class Smartg(object):
         th_v_deg : float, optional
             The sun/viewing zenith angle in forward/backward mode, in
             degrees. This parameter is ignored if the parameter `sensor`
-            is used.
+            is used. If the parameter `cus_l` is a CusBackward with a
+            v_sun vector, that vector gives the sun direction instead
+            of th_v_deg and ph_v_deg, which then only define the
+            atmosphere impact point and the VZA attribute.
         ph_v_deg : float, optional
             The sun/viewing azimuth angle in forward/backward mode, in
             degrees. This parameter is ignored if the parameter `sensor`
-            is used.
+            is used. See also th_v_deg.
         seed : int, optional
             The seed used to initiate the series of random numbers.
             Default based on clock time.
@@ -980,6 +983,8 @@ class Smartg(object):
         cus_l : None | CusForward | CusBackward, optional
             Use the RF, FF (CusForward) or B, BR (CusBackward) launching
             modes. The compilation option `obj3d` must be set to True.
+            A CusBackward can also carry the sun direction as a vector
+            in its v_sun parameter (see th_v_deg).
         s_min : int, optional
             The minimum number of interactions (scattering/reflection).
             Default 0.
@@ -1059,8 +1064,12 @@ class Smartg(object):
                 'The output_layers value must be an integer between -1 and 7.'
             )
 
-        # Compute the sun direction as vector
-        v_sun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir')
+        # Compute the sun direction as vector, given either by the
+        # v_sun attribute of CusBackward or by th_v_deg and ph_v_deg
+        if cus_l is not None and cus_l.dict.get('VSUN') is not None:
+            v_sun = cus_l.dict['VSUN']
+        else:
+            v_sun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir')
         v_sun = gc.normalize(v_sun)
 
         # First check if back option is activated in case of the use of

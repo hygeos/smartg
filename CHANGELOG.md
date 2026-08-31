@@ -269,6 +269,11 @@ final `v2.0.0` release.
     - kdis and reptran tests
     - GPU-free tests of the 3D profile construction (`test_atm3d.py`:
       Atm3D multi-component mixing, Cloud3D, Aer3D)
+  - New `v_sun` parameter of `CusBackward`: the sun direction of a backward
+    object simulation can be given as a vector (for example
+    `gc.ang2vec(sza, phi, vec_view='nadir')`) on the launching mode itself,
+    where it replaces the direction computed from the `th_v_deg` and
+    `ph_v_deg` angles of `Smartg.run`
   - README overhauled, with the new SMART-G logo
   - Updated dependency requirements: geoclide >= 4 (the 3D object code has
     been adapted to the geoclide 4 API), pytrunc >= 2, gatiab >= 1.1.2
