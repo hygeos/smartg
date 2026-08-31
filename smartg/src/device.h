@@ -178,7 +178,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            long long *cell_proba_icdf, float* tabthv, float* tabphi,
                            struct RNG_State*
 			   #ifdef OBJ3D
-			   , float*, float*, struct IObjets *myObjets
+			   , float*, float*, float*, struct IObjets *myObjets
 			   #endif
 	);
 
@@ -334,7 +334,8 @@ __device__ float fVRS(float);
 
 __device__ void DirectionToUV(float, float, float3*, float3*) ;
 #ifdef OBJ3D
-__device__ void DirectionToUV2(float, float, float3*, float3*, struct RNG_State*) ;
+__device__ void DirectionToUV2(float, float, float, float, float3*, float3*) ;
+__device__ int  setLEConeDir(Photon*, float*, float*, float*, float*, float*) ;
 #endif
 __device__ float3 LocalToGlobal(float3, float3, float3, float3) ;
 __device__ float3 GlobalToLocal(float3, float3, float3, float3) ;

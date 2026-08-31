@@ -122,6 +122,7 @@ extern "C" {
     float3 phit_le=make_float3(0.f, 0.f, 0.f);
     float tabthv_le[NTHLE];
     float tabphi_le[NPHILE];
+    float le_cone[2] = {0.f, 0.f}; // point sampled in the LE cone
     #endif
 
 
@@ -178,7 +179,7 @@ extern "C" {
                        cell_proba_icdf,
                        tabthv, tabphi, &rngstate
 					   #ifdef OBJ3D
-					   ,tabthv_le, tabphi_le, myObjets
+					   ,tabthv_le, tabphi_le, le_cone, myObjets
 					   #endif
 				);
 			
@@ -390,6 +391,12 @@ extern "C" {
                             ph_le.ith = ilevel_le;
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
+                            #ifdef OBJ3D
+                            // The direction is sampled inside its cone
+                            if (!setLEConeDir(&ph_le, tabthv, tabphi,
+                                              tabthv_le, tabphi_le,
+                                              le_cone)) continue;
+                            #endif
                             // azimuth && zenith LE
                             #ifdef OBJ3D
                             phi = tabphi_le[ph_le.iph];
@@ -614,6 +621,12 @@ extern "C" {
                         ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
+                        #ifdef OBJ3D
+                        // The direction is sampled inside its cone
+                        if (!setLEConeDir(&ph_le, tabthv, tabphi,
+                                          tabthv_le, tabphi_le,
+                                          le_cone)) continue;
+                        #endif
 
                         // Reflect || Tramsit the virtual photon, using le=1 && count_level
                         if (BRDFd != 0)
@@ -790,6 +803,12 @@ extern "C" {
                         ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
+                        #ifdef OBJ3D
+                        // The direction is sampled inside its cone
+                        if (!setLEConeDir(&ph_le, tabthv, tabphi,
+                                          tabthv_le, tabphi_le,
+                                          le_cone)) continue;
+                        #endif
 
                         surfaceLambert(&ph_le, 1,
                                        #ifdef OBJ3D
@@ -913,6 +932,12 @@ extern "C" {
                         ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
+                        #ifdef OBJ3D
+                        // The direction is sampled inside its cone
+                        if (!setLEConeDir(&ph_le, tabthv, tabphi,
+                                          tabthv_le, tabphi_le,
+                                          le_cone)) continue;
+                        #endif
 
                         /* LE for BRDF type*/
                         surfaceLambert(&ph_le, 1,
@@ -1037,6 +1062,12 @@ extern "C" {
                     ph_le.ith = ilevel_le;
                     if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                     else ph_le.iph =  ph_le.ith;
+                    #ifdef OBJ3D
+                    // The direction is sampled inside its cone
+                    if (!setLEConeDir(&ph_le, tabthv, tabphi,
+                                      tabthv_le, tabphi_le,
+                                      le_cone)) continue;
+                    #endif
 
                     /* LE on SEAFLOOR*/
                     surfaceLambert(&ph_le, 1,
@@ -1127,6 +1158,10 @@ extern "C" {
                             ph_le.ith = (ith + ith0)%NBTHETAd;
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
+                            // The direction is sampled inside its cone
+                            if (!setLEConeDir(&ph_le, tabthv, tabphi,
+                                              tabthv_le, tabphi_le,
+                                              le_cone)) continue;
 							surfaceLambert3D(&ph_le, 1, tabthv_le, tabphi_le, spectrum,
 												  &rngstate, &geoStruc);			
 							// Only two levels for counting by definition
@@ -1185,6 +1220,10 @@ extern "C" {
 							ph_le.ith = (ith + ith0)%NBTHETAd;
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
+                            // The direction is sampled inside its cone
+                            if (!setLEConeDir(&ph_le, tabthv, tabphi,
+                                              tabthv_le, tabphi_le,
+                                              le_cone)) continue;
 							Obj3DRoughSurf(&ph_le, 1, tabthv_le, tabphi_le, &geoStruc, &rngstate);
 							// Only two levels for counting by definition
                             mask_le = false;
@@ -1342,7 +1381,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            float* tabthv, float* tabphi,
                            struct RNG_State *rngstate
 						   #ifdef OBJ3D
-						   , float* tabthv_le, float* tabphi_le, struct IObjets *myObjets
+						   , float* tabthv_le, float* tabphi_le, float* le_cone, struct IObjets *myObjets
 						   #endif
 	) {
     float cTh, sTh, phi;
@@ -1387,23 +1426,21 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->stokes.z = 0.F;
     ph->stokes.w = 0.F;
 
-    // To consider sun solid angle. For the moment only for one direction.
+    // The directions of the local estimate. When a solid angle is
+    // considered (LE_FOVd), one point of the cone is sampled here,
+    // && setLEConeDir applies it to each direction, when the
+    // direction loops reach it.
     #ifdef OBJ3D
-    if (LEd == 1 && LE_FOVd > 1e-6 && NBPHId ==1 && NBTHETAd == 1)
+    if (LEd == 1)
     {
-        float3 u_bis, v_bis;
-
-        DirectionToUV2(tabthv[0]*(180.0/PI), tabphi[0]*(180.0/PI), &u_bis, &v_bis, rngstate);
-        findRots(v_bis, &tabthv_le[0], &tabphi_le[0]);
-
-        // very rare case where SZA almost = 90 deg && we look at a sampled SZA ( + sun solid angle) > 90 deg
-        if (cos(tabthv_le[0]) <= 0) { ph->loc = ABSORBED; return;}
-        
-    }
-    else if (LEd == 1)
-    {   
         for (int ith=0; ith<NBTHETAd; ith++){ tabthv_le[ith] = tabthv[ith]; }
         for (int iph=0; iph<NBPHId; iph++)  { tabphi_le[iph] = tabphi[iph]; }
+
+        if (LE_FOVd > 1e-6)
+        {
+            le_cone[0] = 360*RAND;                                       // azimuth
+            le_cone[1] = acosf(RAND*(cos(radians(LE_FOVd))-1)+1)*180./CUDART_PI_F; // zenith, isotropic
+        }
     }
     #endif
 
@@ -8239,17 +8276,15 @@ __device__ void DirectionToUV(float th, float phi, float3* v, float3* u) {
 }
 
 #ifdef OBJ3D
-__device__ void DirectionToUV2(float th, float phi, float3* u, float3* v, struct RNG_State *rngstate)
+__device__ void DirectionToUV2(float th, float phi, float th_c, float ph_c, float3* u, float3* v)
 {
+    // th_c && ph_c place the direction inside the cone, they are
+    // sampled once per photon by initPhoton
     double3 vd = make_double3(0., 0., 1.);
     double3 ud = make_double3(1., 0., 0.);
 
-    if (LE_FOVd > 1e-6)
+    if (th_c > 1e-6 || ph_c > 1e-6)
     {
-        float ph_c = 360*RAND;
-        float th_c = acosf(RAND*(cos(radians(LE_FOVd))-1)+1)*180./CUDART_PI_F; //isotropic
-        //float th_c = asin(sqrt(RAND)*sin(radiansd(LE_FOVd)))*180./CUDART_PI; //lambertian, but must find the correct normalisation...
-
         // Creation of transforms
 	    Transform<double> TPHconed, TTHconed;
 	    TPHconed = TPHconed.RotateZ(ph_c); TTHconed = TTHconed.RotateY(th_c);
@@ -8274,6 +8309,26 @@ __device__ void DirectionToUV2(float th, float phi, float3* u, float3* v, struct
 	// update of u && v
 	*v = normalize(make_float3(float(vd.x), float(vd.y), float(vd.z)));
 	*u = normalize(make_float3(float(ud.x), float(ud.y), float(ud.z)));
+}
+
+__device__ int setLEConeDir(Photon* ph, float* tabthv, float* tabphi,
+							float* tabthv_le, float* tabphi_le,
+							float* le_cone)
+{
+	/* Place the current local estimate direction (ith, iph) inside
+	   the cone of half-angle LE_FOVd, on the point le_cone sampled
+	   for that photon, && store it where all the local estimate code
+	   reads it. Only the direction of the current iteration is
+	   alive, so the two slots can be overwritten. Return 0 if the
+	   direction falls below the horizon, the caller then skips it. */
+	if (LE_FOVd <= 1e-6) return 1;
+
+	float3 u_bis, v_bis;
+	DirectionToUV2(tabthv[ph->ith]*(180.0/PI), tabphi[ph->iph]*(180.0/PI),
+				   le_cone[1], le_cone[0], &u_bis, &v_bis);
+	findRots(v_bis, &tabthv_le[ph->ith], &tabphi_le[ph->iph]);
+
+	return (cos(tabthv_le[ph->ith]) > 0);
 }
 #endif
 

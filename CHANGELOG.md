@@ -322,6 +322,12 @@ final `v2.0.0` release.
     Similarly `my_objects` now requires `obj3d=True`, the `lmode` value is
     validated by the `CusForward` and `CusBackward` constructors, and a
     `cus_l` which is neither of these two classes is refused
+  - The cone of the local estimate (`le_fov`) is now sampled around every
+    requested direction. It was applied only to a single direction
+    (`NBPHId == 1 && NBTHETAd == 1`) and silently skipped otherwise, so a
+    multi-direction run ignored the angular size of the source: the
+    radiance of the solar direction of a 5 degrees cone came out 6.8 times
+    too high compared with the same direction run alone
   - All the `NameError` and generic `Exception` exceptions of the smartg
     module are now `ValueError` (`RuntimeError` for the impact-point solver),
     and two `UnboundLocalError` hazards are fixed: the error format of a
