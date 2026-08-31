@@ -2445,6 +2445,12 @@ class CusBackward:
         gc.ang2vec(sza, phi, vec_view='nadir'). If provided, it
         replaces the sun direction that the run method of Smartg
         computes from its th_v_deg and ph_v_deg parameters.
+    sun_fov : float, optional
+        The half-angle in degrees of the cone subtended by the
+        sun, 0.266 by default (the solar disc). It replaces the
+        sun_disc parameter of the run method of Smartg, which has
+        no effect on the signal collected by the receiver in the B
+        and BR modes.
     aldeg : float, optional
         Launch in a solid angle where alpha is the half-angle of
         the cone.
@@ -2484,6 +2490,7 @@ class CusBackward:
         phdeg: float = 0.,
         v: gc.Vector | None = None,
         v_sun: gc.Vector | None = None,
+        sun_fov: float = 0.266,
         aldeg: float = 0.,
         rec: Entity | None = None,
         sampling: str = "lambertian",
@@ -2500,6 +2507,9 @@ class CusBackward:
             raise ValueError('The v argument must be a Vector')
         if v_sun is not None and not isinstance(v_sun, gc.Vector):
             raise ValueError('The v_sun argument must be a Vector')
+        if sun_fov <= 0. or sun_fov >= 90.:
+            raise ValueError(
+                'The CusBackward sun_fov must be in ]0, 90[ degrees')
         if lmode not in ("B", "BR"):
             raise ValueError('The CusBackward lmode must be B or BR')
         if lmode == "BR" and not isinstance(rec, Entity):
@@ -2528,6 +2538,7 @@ class CusBackward:
             'THDEG': thdeg,
             'PHDEG': phdeg,
             'VSUN':  v_sun,
+            'SFOV':  sun_fov,
             'ALDEG': aldeg,
             'REC':   rec,
             'TYPE':  sampling_code,
@@ -2540,6 +2551,6 @@ class CusBackward:
     def __str__(self) -> str:
         return (
             'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'
-            '-VSUN={VSUN}-ALDEG={ALDEG}-TYPE={TYPE}'
+            '-VSUN={VSUN}-SFOV={SFOV}-ALDEG={ALDEG}-TYPE={TYPE}'
             '-LMODE={LMODE}'.format(**self.dict)
         )

@@ -959,7 +959,10 @@ class Smartg(object):
             grid and cone sampling.
         sun_disc : float, optional
             The angular size of the Sun disc in degrees, 0 (default
-            means no angular size)
+            means no angular size). In the B and BR modes the angular
+            size of the Sun is given by the sun_fov parameter of
+            CusBackward instead, and sun_disc has no effect on the
+            signal collected by the receiver.
         sensor : None | Sensor | list, optional
             The light source / sensor (Sensor object or list of Sensor
             objects) in forward / backward mode.
@@ -986,7 +989,8 @@ class Smartg(object):
             Use the RF, FF (CusForward) or B, BR (CusBackward) launching
             modes. The compilation option `obj3d` must be set to True.
             A CusBackward can also carry the sun direction as a vector
-            in its v_sun parameter (see th_v_deg).
+            in its v_sun parameter (see th_v_deg) and the angular size
+            of the sun in its sun_fov parameter (see sun_disc).
         s_min : int, optional
             The minimum number of interactions (scattering/reflection).
             Default 0.
@@ -1836,7 +1840,6 @@ class Smartg(object):
                 surf_lph=surf_lph,
                 cell_size=tc,
                 cus_l=cus_l,
-                sun_disc=sun_disc,
                 le=le_code,
             )
 
@@ -3431,6 +3434,7 @@ def _init_const(
             copy_to_device('PHDEGd', cus_l.dict['PHDEG'], np.float32)
             copy_to_device('ALDEGd', cus_l.dict['ALDEG'], np.float32)
             copy_to_device('TYPEd', cus_l.dict['TYPE'], np.int32)
+            copy_to_device('CBACK_SFOVd', cus_l.dict['SFOV'], np.float32)
         if (cus_l is not None) and (cus_l.dict['LMODE'] == "B"):
             copy_to_device('LMODEd', 3, np.int32)
         if (cus_l is not None) and (cus_l.dict['LMODE'] == "BR"):
@@ -5110,7 +5114,6 @@ def _normalize_rec(
     surf_lph,
     cell_size: float,
     cus_l,
-    sun_disc: float,
     le: int,
 ) -> tuple:
     """
@@ -5141,10 +5144,9 @@ def _normalize_rec(
         Side length (km) of a square receiver cell (taille cellule).
     cus_l : object or None
         Custom launching mode object with attributes like
-        ``dict['LMODE']`` and ``dict['FOV']``. If `None`, no
-        normalization is applied.
-    sun_disc : float
-        Half-angle (degrees) of the solar disk solid angle.
+        ``dict['LMODE']``, ``dict['FOV']`` and, in the "B" and "BR"
+        modes, ``dict['SFOV']``, the half-angle (degrees) of the cone
+        subtended by the sun. If `None`, no normalization is applied.
     le : bool
         Flag indicating whether the local estimate mode is enabled.
 
@@ -5208,7 +5210,7 @@ def _normalize_rec(
 
         if not le:
             norm_c = norm_br / (
-                nb_photons * 2 * (1 - np.cos(np.radians(sun_disc)))
+                nb_photons * 2 * (1 - np.cos(np.radians(cus_l.dict['SFOV'])))
             )
         else:
             norm_c = norm_br / nb_photons

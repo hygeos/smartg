@@ -6766,15 +6766,15 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 		double3 vecSUN = normalize(make_double3(-DIRSXd, -DIRSYd, -DIRSZd));
 		double3 vecPH = normalize(make_double3(ph->v.x, ph->v.y, ph->v.z));
 		
-		cosANGD = cos( radiansd( SUN_DISCd )  );
+		cosANGD = cos( radiansd( CBACK_SFOVd )  );
 		cosPHSUN = dot(vecSUN, vecPH);
 		p_t = ph->posIni;
         
-        if (SUN_DISCd < 5 && (ph->E > 0 || ph->S > 0))
+        if (CBACK_SFOVd < 5 && (ph->E > 0 || ph->S > 0))
         {
             // Below an other method normally more efficient with small angle. Verification is needed
             double angleBis = atan2(length(cross(vecSUN, vecPH)), cosPHSUN)*180./CUDART_PI;
-            if(angleBis > double(SUN_DISCd)+double(0.001)) { return; }
+            if(angleBis > double(CBACK_SFOVd)+double(0.001)) { return; }
         }
         else
         {

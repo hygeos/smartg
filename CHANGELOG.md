@@ -274,6 +274,11 @@ final `v2.0.0` release.
     `gc.ang2vec(sza, phi, vec_view='nadir')`) on the launching mode itself,
     where it replaces the direction computed from the `th_v_deg` and
     `ph_v_deg` angles of `Smartg.run`
+  - New `sun_fov` parameter of `CusBackward`: the angular size of the sun in
+    a backward object simulation is carried by the launching mode itself
+    (0.266 degree by default, the solar disc) and uploaded as the
+    `CBACK_SFOVd` device constant, so the B and BR modes no longer depend on
+    the `sun_disc` parameter of `Smartg.run`
   - README overhauled, with the new SMART-G logo
   - Updated dependency requirements: geoclide >= 4 (the 3D object code has
     been adapted to the geoclide 4 API), pytrunc >= 2, gatiab >= 1.1.2

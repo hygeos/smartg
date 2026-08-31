@@ -114,6 +114,7 @@ __device__ __constant__ float PHDEGd;
 __device__ __constant__ float ALDEGd;
 __device__ __constant__ int TYPEd;
 __device__ __constant__ int LMODEd;
+__device__ __constant__ float CBACK_SFOVd; // sun_fov of CusBackward
 #endif
 
 /**********************************************************
