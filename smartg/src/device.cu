@@ -1389,7 +1389,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 
     // To consider sun solid angle. For the moment only for one direction.
     #ifdef OBJ3D
-    if (LEd == 1 && SUN_DISCd > 1e-6 && NBPHId ==1 && NBTHETAd == 1)
+    if (LEd == 1 && LE_FOVd > 1e-6 && NBPHId ==1 && NBTHETAd == 1)
     {
         float3 u_bis, v_bis;
 
@@ -8244,11 +8244,11 @@ __device__ void DirectionToUV2(float th, float phi, float3* u, float3* v, struct
     double3 vd = make_double3(0., 0., 1.);
     double3 ud = make_double3(1., 0., 0.);
 
-    if (SUN_DISCd > 1e-6)
+    if (LE_FOVd > 1e-6)
     {
         float ph_c = 360*RAND;
-        float th_c = acosf(RAND*(cos(radians(SUN_DISCd))-1)+1)*180./CUDART_PI_F; //isotropic
-        //float th_c = asin(sqrt(RAND)*sin(radiansd(SUN_DISCd)))*180./CUDART_PI; //lambertian, but must find the correct normalisation...
+        float th_c = acosf(RAND*(cos(radians(LE_FOVd))-1)+1)*180./CUDART_PI_F; //isotropic
+        //float th_c = asin(sqrt(RAND)*sin(radiansd(LE_FOVd)))*180./CUDART_PI; //lambertian, but must find the correct normalisation...
 
         // Creation of transforms
 	    Transform<double> TPHconed, TTHconed;

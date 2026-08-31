@@ -67,6 +67,7 @@ __device__ __constant__ int REFRACd;
 __device__ __constant__ int HORIZd;
 __device__ __constant__ float SZA_MAXd;
 __device__ __constant__ float SUN_DISCd;
+__device__ __constant__ float LE_FOVd;	// cone of the local estimate
 __device__ __constant__ int BEERd;
 __device__ __constant__ int SMINd;
 __device__ __constant__ int SMAXd;

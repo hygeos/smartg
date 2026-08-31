@@ -772,6 +772,7 @@ class Smartg(object):
         weight_r_r: float = 0.1,
         sza_max: float = 90.0,
         sun_disc: float = 0.0,
+        le_fov: float = 0.0,
         sensor=None,
         refraction: bool = False,
         reflectance: bool = True,
@@ -963,6 +964,13 @@ class Smartg(object):
             size of the Sun is given by the sun_fov parameter of
             CusBackward instead, and sun_disc has no effect on the
             signal collected by the receiver.
+        le_fov : float, optional
+            The half-angle in degrees of the cone sampled around each
+            local estimate direction, 0 (default) meaning the exact
+            directions. It gives its angular size to the source seen
+            by the local estimate, the Sun disc for example. It
+            requires the compilation option obj3d=True and the
+            parameter le.
         sensor : None | Sensor | list, optional
             The light source / sensor (Sensor object or list of Sensor
             objects) in forward / backward mode.
@@ -1069,6 +1077,24 @@ class Smartg(object):
             raise ValueError(
                 'The output_layers value must be an integer between -1 and 7.'
             )
+
+        # Check the cone of the local estimate: it is sampled by the
+        # object mode kernel, from the local estimate directions
+        if le_fov < 0. or le_fov >= 90.:
+            raise ValueError(
+                'The le_fov value must be in [0, 90[ degrees'
+            )
+        if le_fov > 0.:
+            if not self.obj3d:
+                raise ValueError(
+                    'The parameter le_fov can be used only with the '
+                    'compilation option obj3d=True'
+                )
+            if le is None:
+                raise ValueError(
+                    'The parameter le_fov can be used only with the '
+                    'parameter le'
+                )
 
         # Check the custom launching mode and the 3D objects against
         # the compilation options: the launching code of the forward
@@ -1717,6 +1743,7 @@ class Smartg(object):
             horiz,
             sza_max,
             sun_disc,
+            le_fov,
             cus_l,
             n_obj,
             n_gobj,
@@ -3194,6 +3221,7 @@ def _init_const(
     horiz: int,
     sza_max: float,
     sun_disc: float,
+    le_fov: float,
     cus_l,
     n_obj: int,
     n_gobj: int,
@@ -3252,7 +3280,7 @@ def _init_const(
         Main Monte Carlo control parameters.
     nb_theta, nb_phi, output_layers : int
         Output-grid control parameters.
-    th_v_deg, earth_radius, sza_max, sun_disc, z_toa : float
+    th_v_deg, earth_radius, sza_max, sun_disc, le_fov, z_toa : float
         Angular and physical scalar settings.
     cell_size, sx_min, sx_max, sy_min, sy_max : float
         Spatial scalar settings.
@@ -3394,6 +3422,7 @@ def _init_const(
     copy_to_device('HORIZd', horiz, np.int32)
     copy_to_device('SZA_MAXd', sza_max, np.float32)
     copy_to_device('SUN_DISCd', sun_disc, np.float32)
+    copy_to_device('LE_FOVd', le_fov, np.float32)
     # copy en rapport avec les objets :
     if n_obj != 0:
         copy_to_device('nObj', n_obj, np.int32)

@@ -279,6 +279,11 @@ final `v2.0.0` release.
     (0.266 degree by default, the solar disc) and uploaded as the
     `CBACK_SFOVd` device constant, so the B and BR modes no longer depend on
     the `sun_disc` parameter of `Smartg.run`
+  - New `le_fov` parameter of `Smartg.run`: the local estimate directions of
+    an object simulation are sampled inside a cone of that half-angle, which
+    gives its angular size to the source they look at (the Sun disc for
+    example). Uploaded as the `LE_FOVd` device constant, it replaces
+    `sun_disc` in that role
   - README overhauled, with the new SMART-G logo
   - Updated dependency requirements: geoclide >= 4 (the 3D object code has
     been adapted to the geoclide 4 API), pytrunc >= 2, gatiab >= 1.1.2
