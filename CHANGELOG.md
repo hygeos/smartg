@@ -304,6 +304,14 @@ final `v2.0.0` release.
   - The remaining `NameError` exceptions raised by `CusForward`, `CusBackward`
     and the `cusL` guard of `Smartg.run` are now `ValueError`, and the `V`
     validity check of `CusBackward` no longer compares a `Vector` with `!=`
+  - The custom launching modes are now checked against the compilation
+    options of `Smartg`: a `CusBackward` requires `back=True` and a
+    `CusForward` requires `back=False`. Only the deprecated `B` mode was
+    checked, so the launching code of the three other modes (which the
+    kernel compiles only for the matching mode) was silently ignored.
+    Similarly `my_objects` now requires `obj3d=True`, the `lmode` value is
+    validated by the `CusForward` and `CusBackward` constructors, and a
+    `cus_l` which is neither of these two classes is refused
   - All the `NameError` and generic `Exception` exceptions of the smartg
     module are now `ValueError` (`RuntimeError` for the impact-point solver),
     and two `UnboundLocalError` hazards are fixed: the error format of a

@@ -2390,6 +2390,8 @@ class CusForward:
         lph: object | None = None,
         lpr: object | None = None,
     ) -> None:
+        if lmode not in ("RF", "FF"):
+            raise ValueError('The CusForward lmode must be RF or FF')
         if sampling == "lambertian":
             sampling_code = 1
         elif sampling == "isotropic":
@@ -2498,6 +2500,8 @@ class CusBackward:
             raise ValueError('The v argument must be a Vector')
         if v_sun is not None and not isinstance(v_sun, gc.Vector):
             raise ValueError('The v_sun argument must be a Vector')
+        if lmode not in ("B", "BR"):
+            raise ValueError('The CusBackward lmode must be B or BR')
         if lmode == "BR" and not isinstance(rec, Entity):
             raise ValueError(
                 'In the BR lmode you have to specify a receiver!')

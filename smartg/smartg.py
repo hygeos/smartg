@@ -58,7 +58,9 @@ from smartg.bandset import BandSet
 from pycuda.compiler import SourceModule
 
 # bellow necessary for object incorporation
-from smartg.objects3d import Mirror, Plane, Spheric, LambMirror, Matte
+from smartg.objects3d import (
+    Mirror, Plane, Spheric, LambMirror, Matte, CusForward, CusBackward,
+)
 import xarray as xr
 import geoclide as gc
 import tempfile
@@ -1064,6 +1066,42 @@ class Smartg(object):
                 'The output_layers value must be an integer between -1 and 7.'
             )
 
+        # Check the custom launching mode and the 3D objects against
+        # the compilation options: the launching code of the forward
+        # modes (RF, FF) is compiled only without the back option, and
+        # the one of the backward modes (B, BR) only with it
+        if cus_l is not None:
+            if my_objects is None:
+                raise ValueError(
+                    'The parameter cus_l can be used only if parameter '
+                    'my_objects is provided.'
+                )
+            if not isinstance(cus_l, (CusForward, CusBackward)):
+                raise ValueError(
+                    'The cus_l parameter must be a CusForward or a '
+                    'CusBackward'
+                )
+            if isinstance(cus_l, CusBackward) and not self.back:
+                raise ValueError(
+                    'CusBackward can be used only with the compilation '
+                    'option back=True'
+                )
+            if isinstance(cus_l, CusForward) and self.back:
+                raise ValueError(
+                    'CusForward can be used only with the compilation '
+                    'option back=False'
+                )
+            if sensor is not None:
+                raise ValueError(
+                    'The use of sensor(s) and a custom launching mode'
+                    + ' (cusForward or cusBackward) is prohibited!'
+                )
+        if my_objects is not None and not self.obj3d:
+            raise ValueError(
+                'The parameter my_objects can be used only with the '
+                'compilation option obj3d=True'
+            )
+
         # Compute the sun direction as vector, given either by the
         # v_sun attribute of CusBackward or by th_v_deg and ph_v_deg
         if cus_l is not None and cus_l.dict.get('VSUN') is not None:
@@ -1072,26 +1110,9 @@ class Smartg(object):
             v_sun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir')
         v_sun = gc.normalize(v_sun)
 
-        # First check if back option is activated in case of the use of
-        # cusBackward launching mode
         surf_lph = 0
         if cus_l is not None:
-            if my_objects is None:
-                raise ValueError(
-                    'The parameter cus_l can be used only if parameter '
-                    'my_objects is provided.'
-                )
-            if cus_l.dict['LMODE'] == "B" and not self.back:
-                raise ValueError(
-                    'CusBackward can be used only with the compilation '
-                    'option back=True'
-                )
-            elif sensor is not None:
-                raise ValueError(
-                    'The use of sensor(s) and a custom launching mode'
-                    + ' (cusForward or cusBackward) is prohibited!'
-                )
-            elif cus_l.dict['LMODE'] == "B":
+            if cus_l.dict['LMODE'] == "B":
                 sensor = Sensor(
                     POSX=cus_l.dict['POS'].x,
                     POSY=cus_l.dict['POS'].y,
