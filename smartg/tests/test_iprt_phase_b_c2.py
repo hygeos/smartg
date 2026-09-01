@@ -711,7 +711,7 @@ def _run_case_backward(
         sensor=sensors,
         le=le,
         surface=surface,
-        n_f=NTH,
+        n_icdf=NTH,
         stdev=True,
     )
     if depo is not None:
@@ -779,7 +779,7 @@ def _run_group_forward(
         sensor=sensors,
         le=le,
         surface=surface,
-        n_f=NTH,
+        n_icdf=NTH,
         output_layers=group["output_layers"],
     )
     if depo is not None:

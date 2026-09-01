@@ -402,7 +402,7 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                         nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                         output_layers=1,
                         le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
-                        stdev=True, progress=True, n_f=ntheta)#, seed=1e8)
+                        stdev=True, progress=True, n_icdf=ntheta)#, seed=1e8)
 
         m_boa = reshape_sza_vaa_vza(m_boa, sza, vaa, vza)
         m_boa.to_netcdf(str(fboa_path))
@@ -415,7 +415,7 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                         nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                         output_layers=1,
                         le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
-                        stdev=True, progress=True, n_f=ntheta)#, seed=1e8)
+                        stdev=True, progress=True, n_icdf=ntheta)#, seed=1e8)
 
         m_toa = reshape_sza_vaa_vza(m_toa, sza, vaa, vza)
         m_toa.to_netcdf(str(ftoa_path))
@@ -1657,7 +1657,7 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
                     nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
-                    stdev=True, progress=True, n_f=ntheta)
+                    stdev=True, progress=True, n_icdf=ntheta)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))
         
@@ -1753,7 +1753,7 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
                     nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
-                    stdev=True, progress=True, n_f=ntheta)
+                    stdev=True, progress=True, n_icdf=ntheta)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))
         
@@ -1853,7 +1853,7 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
                     nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
-                    stdev=True, progress=True, n_f=ntheta)
+                    stdev=True, progress=True, n_icdf=ntheta)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))
         

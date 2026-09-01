@@ -295,7 +295,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         xgrid=1024,
         alis_options={"nlow": -1, "njac": 0},
         output_layers=4,
-        n_f=1e3,
+        n_icdf=1e3,
         le=local_est,
         stdev=True,
     )

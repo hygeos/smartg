@@ -757,7 +757,7 @@ class Smartg(object):
         cell_proba=None,
         nb_theta: int = 45,
         nb_phi: int = 90,
-        n_f: float = 1e6,
+        n_icdf: float = 1e6,
         output_layers: int = 0,
         xblock: int = 256,
         xgrid: int = 256,
@@ -880,7 +880,7 @@ class Smartg(object):
             The number of viewing/sun azimuth angles in forward/backward
             for the cone sampling. This parameter is ignored if the
             parameter `le` is used.
-        n_f : int, optional
+        n_icdf : int, optional
             The number of discretization of:
                 - the inversed aerosol phase functions
                 - the inversed ocean phase functions
@@ -1286,7 +1286,7 @@ class Smartg(object):
         elif (nb_loop is None) and (n_obj > 0):
             nb_loop = min(nb_photons / 10, 1e6)
 
-        n_f = int(n_f)
+        n_icdf = int(n_icdf)
 
         # number of output levels
         # warning! values defined in communs.h should be < LVL
@@ -1406,7 +1406,8 @@ class Smartg(object):
 
         if prof_atm is not None:
             faer = _calc_phase_gpu(
-                prof_atm, n_theta=n_f, depo=depo, kind='atm', pol_off=pol_off
+                prof_atm, n_theta=n_icdf, depo=depo, kind='atm',
+                pol_off=pol_off
             )
             prof_atm_gpu, cell_atm_gpu = _init_profile(
                 wavelength, prof_atm, 'atm'
@@ -1552,7 +1553,7 @@ class Smartg(object):
         if prof_oc is not None:
             foce = _calc_phase_gpu(
                 prof_oc,
-                n_theta=n_f,
+                n_theta=n_icdf,
                 depo=depo_water,
                 kind='oc',
                 pol_off=pol_off,
@@ -1747,7 +1748,7 @@ class Smartg(object):
             xgrid,
             n_lam,
             sim,
-            n_f,
+            n_icdf,
             nb_theta,
             nb_phi,
             output_layers,
@@ -3226,7 +3227,7 @@ def _init_const(
     xgrid: int,
     n_lam: int,
     sim: int,
-    n_f: float,
+    n_icdf: float,
     nb_theta: int,
     nb_phi: int,
     output_layers: int,
@@ -3311,7 +3312,7 @@ def _init_const(
         Numbers of atmospheric/oceanic layers and absorbing layers.
     mod : pycuda.compiler.SourceModule
         Compiled CUDA module containing global symbols to update.
-    nb_loop, xblock, xgrid, n_lam, sim, n_f : int
+    nb_loop, xblock, xgrid, n_lam, sim, n_icdf : int
         Main Monte Carlo control parameters.
     nb_theta, nb_phi, output_layers : int
         Output-grid control parameters.
@@ -3383,7 +3384,7 @@ def _init_const(
     copy_to_device('NOCEd', n_oce, np.int32)
     copy_to_device('NOCE_ABSd', n_oce_abs, np.int32)
     copy_to_device('OUTPUT_LAYERSd', output_layers, np.int32)
-    copy_to_device('NF', n_f, np.uint32)
+    copy_to_device('NF', n_icdf, np.uint32)
     copy_to_device('NATMd', n_atm, np.int32)
     copy_to_device('NATM_ABSd', n_atm_abs, np.int32)
     copy_to_device('XBLOCKd', xblock, np.int32)

@@ -119,7 +119,7 @@ def test_smartg_jax2(
                 },
                 nb_photons=nb_photons,
                 nb_loop=nb_photons,
-                n_f=1e3,
+                n_icdf=1e3,
             )
         )
         m = drop_axes(m, "Zenith angles", "Azimuth angles")
@@ -134,7 +134,7 @@ def test_smartg_jax2(
                 atmosphere=atmosphere.calc(wavelength_abs),
                 alis_options={"nlow": wavelength_sca.size, "hist": False},
                 nb_photons=nb_photons,
-                n_f=1e3,
+                n_icdf=1e3,
             )
         )
         m0 = drop_axes(m0, "Zenith angles", "Azimuth angles")
@@ -299,7 +299,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             alis_options={"nlow": nlow, "hist": False},
             nb_photons=nb_photons,
             nb_loop=nb_photons,
-            n_f=1e3,
+            n_icdf=1e3,
         )
     )
     m1 = drop_axes(m1, "Zenith angles", "Azimuth angles")
@@ -320,7 +320,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             },
             nb_photons=nb_photons,
             nb_loop=nb_photons,
-            n_f=1e3,
+            n_icdf=1e3,
         )
     )
     m2 = drop_axes(m2, "Zenith angles", "Azimuth angles")

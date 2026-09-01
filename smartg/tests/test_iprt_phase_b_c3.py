@@ -558,7 +558,7 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
         sensor=sensors,
         le=le,
         surface=surface,
-        n_f=NTH,
+        n_icdf=NTH,
         stdev=True,
     )
     xb, xg = _find_optimal_xb_xg(s3db, **kw)
