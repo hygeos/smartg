@@ -179,8 +179,9 @@ final `v2.0.0` release.
     - The `CusBackward` parameters have been renamed further, to spell out
       what they carry: `pos` → `position`, `thdeg` → `th_deg`,
       `phdeg` → `ph_deg`, `v` → `normal`, `aldeg` → `receiver_fov`,
-      `rec` → `receiver` and `lmode` → `mode` (`CusForward` keeps `lmode`).
-      `normal` also accepts a `Normal` now, converted to a `Vector`
+      `rec` → `receiver` and `lmode` → `mode`, which `CusForward` follows
+      (`lmode` → `mode` there too). `normal` also accepts a `Normal` now,
+      converted to a `Vector`
   - The parameters of `Smartg` and `Smartg.run` follow PEP 8. Constructor:
     `obj3D` → `obj3d` and `opt3D` → `opt3d`. `run`:
     - `NBPHOTONS` → `nb_photons`, `NBLOOP` → `nb_loop`,

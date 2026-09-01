@@ -2343,28 +2343,28 @@ class CusForward:
     Parameters
     ----------
     cfx : float, optional
-        The size along the x axis (only for the FF lmode).
+        The size along the x axis (only for the FF mode).
     cfy : float, optional
-        The size along the y axis (only for the FF lmode).
+        The size along the y axis (only for the FF mode).
     cftx : float, optional
         The translation to apply in x axis (only for the FF
-        lmode).
+        mode).
     cfty : float, optional
         The translation to apply in y axis (only for the FF
-        lmode).
+        mode).
     cftz : float, optional
         The translation to apply in z axis (only for the FF
-        lmode).
+        mode).
     fov : float, optional
         The field of view or half-angle of the sun (only for the
-        FF lmode).
+        FF mode).
     sampling : str, optional
-        The sampling type (only for the FF lmode). Choices:
+        The sampling type (only for the FF mode). Choices:
 
             * 'lambertian'
             * 'isotropic'
             * 'disk' (in development)
-    lmode : str, optional
+    mode : str, optional
         The launching mode. Two choices:
 
             * 'RF' -> Restricted Forward. Launch the photons such
@@ -2386,12 +2386,12 @@ class CusForward:
         cftz: float = 0.,
         fov: float = 0.,
         sampling: str = "isotropic",
-        lmode: str = "RF",
+        mode: str = "RF",
         lph: object | None = None,
         lpr: object | None = None,
     ) -> None:
-        if lmode not in ("RF", "FF"):
-            raise ValueError('The CusForward lmode must be RF or FF')
+        if mode not in ("RF", "FF"):
+            raise ValueError('The CusForward mode must be RF or FF')
         if sampling == "lambertian":
             sampling_code = 1
         elif sampling == "isotropic":
@@ -2410,7 +2410,7 @@ class CusForward:
             'CFTZ':  cftz,
             'FOV':   fov,
             'TYPE':  sampling_code,
-            'LMODE': lmode,
+            'LMODE': mode,
             # under development ->
             'LPH':   lph,
             'LPR':   lpr,
