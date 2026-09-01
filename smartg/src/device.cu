@@ -6777,6 +6777,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 {
 	int indI = 0; int indJ = 0;
 	float3 p_t; float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
+	double w_le = 1.; // projection of a local estimate direction
 
     // test single scattering || photons removed
     //if (ph->loc==REMOVED || ph->loc==ABSORBED || ph->nint>SMAXd || ph->nint<SMINd) { return; }
@@ -6822,8 +6823,10 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
     else if (LMODEd == 4 && le == 1)
     {
         p_t = ph->posIni;
-        // For the moment only one direction is considered
-        ph->weight *= cos(tabthv[0]);
+        // Project on the receiver the direction of this local
+        // estimate. Kept local: the caller counts the radiance of
+        // the same virtual photon, && must not see the projection.
+        w_le = cos(tabthv[ph->ith]);
     }
 	else
 	{
@@ -6864,7 +6867,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	else stokes = make_double2(0.5, 0.5);
 	tabCountObj = (double*)tabObjInfo;
 	wPhCatC = (double*)wPhCat; wPhCatC2 = (double*)wPhCat2;
-	weight = double(ph->weight) * double(stokes.x + stokes.y);
+	weight = double(ph->weight) * w_le * double(stokes.x + stokes.y);
     #else // If not DOUBLE
 	float *tabCountObj, *wPhCatC, *wPhCatC2;
 	float2 stokes; float weight, weight2;
@@ -6872,7 +6875,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	else stokes = make_float2(0.5, 0.5);
 	tabCountObj = (float*)tabObjInfo;
 	wPhCatC = (float*)wPhCat; wPhCatC2 = (float*)wPhCat2;
-	weight = ph->weight * float(stokes.x + stokes.y);
+	weight = ph->weight * float(w_le) * float(stokes.x + stokes.y);
 	#endif
 
 	if (le == 1)

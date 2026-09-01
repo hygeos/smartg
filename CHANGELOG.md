@@ -328,6 +328,12 @@ final `v2.0.0` release.
     multi-direction run ignored the angular size of the source: the
     radiance of the solar direction of a 5 degrees cone came out 6.8 times
     too high compared with the same direction run alone
+  - Each local estimate direction of a receiver run is now weighted by its
+    own zenith. `countPhotonObj3D` used `cos(tabthv[0])`, the zenith of the
+    first direction, for all of them, and applied it to the virtual photon
+    itself, so that projection also reached the radiance counted just after
+    in the scattering direction loop. On a six-direction run the radiance
+    was off by up to 37 %, and the receiver signal by 0.5 to 2 %
   - All the `NameError` and generic `Exception` exceptions of the smartg
     module are now `ValueError` (`RuntimeError` for the impact-point solver),
     and two `UnboundLocalError` hazards are fixed: the error format of a
