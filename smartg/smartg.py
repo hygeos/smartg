@@ -768,8 +768,8 @@ class Smartg(object):
         stdev: bool = False,
         stdev_lim: StdevLim | None = None,
         beer: int = 1,
-        r_r: int = 0,
-        weight_r_r: float = 0.1,
+        russian_roulette: int = 0,
+        russian_roulette_weight: float = 0.1,
         sza_max: float = 90.0,
         sun_disc: float = 0.0,
         le_fov: float = 0.0,
@@ -951,9 +951,9 @@ class Smartg(object):
             If beer=1 compute absorption using Beer-Lambert law,
             otherwise compute it with the Single scattering albedo. beer
             automatically set to 1 if ALIS is True.
-        r_r: int, optional
+        russian_roulette : int, optional
             Activate the Russian Roulette. ON = 1 and OFF = 0.
-        weight_r_r : float, optional
+        russian_roulette_weight : float, optional
             The threshold weight to apply to the Russian Roulette.
         sza_max : float, optional
             The maximum SZA value for solar BOXES in case a Regulard
@@ -1769,8 +1769,8 @@ class Smartg(object):
             s_max,
             r_min,
             r_max,
-            r_r,
-            weight_r_r,
+            russian_roulette,
+            russian_roulette_weight,
             n_low,
             n_jac,
             n_sensor,
@@ -3248,8 +3248,8 @@ def _init_const(
     s_max: float,
     r_min: float,
     r_max: float,
-    r_r: int,
-    weight_r_r: float,
+    russian_roulette: int,
+    russian_roulette_weight: float,
     n_low: int,
     n_jac: int,
     n_sensor: int,
@@ -3326,7 +3326,7 @@ def _init_const(
         Angular/spectral and Stokes discretization controls.
     n_wavelength_proba, n_sensor_proba, n_cell_proba : int
         Sampling configuration parameters.
-    s_min, s_max, r_min, r_max, r_r, n_low : int
+    s_min, s_max, r_min, r_max, russian_roulette, n_low : int
         Path-length limits and Russian-roulette configuration.
     n_jac, hist, n_sensor, refrac, horiz : int
         Jacobian/history, sensor, and geometry/refraction control flags.
@@ -3337,7 +3337,7 @@ def _init_const(
     ocean_interaction : bool or None
         Ocean-interaction flag. If ``None``, the dedicated device
         constant is set to ``-1``.
-    weight_r_r : float
+    russian_roulette_weight : float
         Weight associated with Russian roulette.
     cus_l : CusForward | CusBackward | None
         Optional custom launch/view configuration object exposing
@@ -3422,8 +3422,8 @@ def _init_const(
     copy_to_device('SMAXd', s_max, np.int32)
     copy_to_device('RMINd', r_min, np.int32)
     copy_to_device('RMAXd', r_max, np.int32)
-    copy_to_device('RRd', r_r, np.int32)
-    copy_to_device('WEIGHTRRd', weight_r_r, np.float32)
+    copy_to_device('RRd', russian_roulette, np.int32)
+    copy_to_device('WEIGHTRRd', russian_roulette_weight, np.float32)
     copy_to_device('NLOWd', n_low, np.int32)
     copy_to_device('NJACd', n_jac, np.int32)
     copy_to_device('NJACABSd', n_jac_abs, np.int32)

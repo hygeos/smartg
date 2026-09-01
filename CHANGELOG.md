@@ -197,8 +197,8 @@ final `v2.0.0` release.
     - `THVDEG` → `th_deg`, `PHVDEG` → `ph_deg`, `SEED` → `seed`,
       `RTER` → `earth_radius`, `DEPO` → `depo`, `DEPO_WATER` → `depo_water`
     - `OUTPUT_LAYERS` → `output_layers`, `XBLOCK` → `xblock`,
-      `XGRID` → `xgrid`, `BEER` → `beer`, `RR` → `r_r`,
-      `WEIGHTRR` → `weight_r_r`, `SZA_MAX` → `sza_max`,
+      `XGRID` → `xgrid`, `BEER` → `beer`, `RR` → `russian_roulette`,
+      `WEIGHTRR` → `russian_roulette_weight`, `SZA_MAX` → `sza_max`,
       `SUN_DISC` → `sun_disc`
     - `SMIN`/`SMAX`/`RMIN`/`RMAX` → `s_min`/`s_max`/`r_min`/`r_max`,
       `FFS` → `ffs`, `DIRECT` → `direct`,
@@ -215,6 +215,8 @@ final `v2.0.0` release.
   - The `n_f` parameter of `Smartg.run` is now `n_icdf`, after the `icdf` and
     `icdf_2d` helpers: it is the number of points of the inverted functions
     it sizes (the phase functions and the wavelength probability)
+  - The `r_r` and `weight_r_r` parameters of `Smartg.run` are now spelled out
+    as `russian_roulette` and `russian_roulette_weight`
   - The internal helpers of the smartg module are now private
     (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
     `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,
