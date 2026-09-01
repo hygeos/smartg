@@ -4089,7 +4089,10 @@ __device__ void scatter(Photon* ph,
 			// Get Theta from Cumulative Distribution Function
 			zang = RAND*(g.n-1);
 			iang= __float2int_rd(zang);
-			zang = zang - iang;
+			/* RAND is documented ]0;1], so the last entry is
+			   reachable and would read one entry too far */
+			if (iang > (int)g.n - 2) { iang = (int)g.n - 2; zang = 1.F; }
+			else zang = zang - iang;
 
 			theta = (1.-zang)*func[ipha*g.n+iang].p_ang + zang*func[ipha*g.n+iang+1].p_ang;
 			cTh = __cosf(theta);

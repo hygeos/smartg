@@ -37,9 +37,13 @@ struct AGrid {
 */
 __device__ float aIndex(float theta, const struct AGrid g, int *iang)
 {
+	int last = (int)g.n - 2;
 	float x = theta * (g.n-1)/PI;
 
+	if (!(x > 0.F)) x = 0.F;
 	*iang = __float2int_rd(x);
+	if (*iang > last) { *iang = last; return 1.F; }
+
 	return x - *iang;
 }
 

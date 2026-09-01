@@ -157,15 +157,47 @@ def test_aindex_uniform_matches_the_historical_expression():
 
     This is what guarantees that a run left on the default grid is
     unaffected by the introduction of ``aIndex``; the kernel itself
-    cannot be compared, as it is not reproducible run to run.
+    cannot be compared, as it is not reproducible run to run. The last
+    interval is excluded, as that is the one the clamp fixes.
     """
     n = 10001
     theta = _sample_angles(n)
-    iang, weight = _probe(theta, n, mode=0)
-
     x = theta * np.float32(n - 1) / np.float32(np.pi)
+    inside = x < n - 2
+    theta = theta[inside]
+    x = x[inside]
+
+    iang, weight = _probe(theta, n, mode=0)
     expected_iang = np.floor(x).astype(np.int32)
     expected_w = (x - expected_iang).astype(np.float32)
 
     assert np.array_equal(iang, expected_iang)
     assert weight.tobytes() == expected_w.tobytes()
+
+
+@pytest.mark.parametrize("n", (3, 721, 10001))
+def test_aindex_never_leaves_the_table(n):
+    """The index must address an existing interval, for any angle.
+
+    Both ``iang`` and ``iang + 1`` are read, so an index of ``n - 1``
+    reaches into the next phase function, or past the allocation for
+    the last one. Exact backscattering makes that reachable.
+    """
+    theta = np.concatenate(
+        [_sample_angles(n), [np.pi, np.nextafter(np.pi, 4.0), np.nan]]
+    ).astype(np.float32)
+    iang, weight = _probe(theta, n, mode=0)
+
+    assert iang.min() >= 0
+    assert iang.max() <= n - 2
+    assert np.all(weight >= 0.0)
+    assert np.all(weight <= 1.0)
+
+
+def test_aindex_backscattering_hits_the_last_node():
+    """theta = 180 degrees must interpolate onto the last entry."""
+    n = 10001
+    iang, weight = _probe(np.array([np.pi]), n, mode=0)
+
+    assert iang[0] == n - 2
+    assert weight[0] == 1.0
