@@ -2450,7 +2450,9 @@ class CusBackward:
         sun, 0.266 by default (the solar disc). It replaces the
         sun_disc parameter of the run method of Smartg, which has
         no effect on the signal collected by the receiver in the B
-        and BR modes.
+        and BR modes. It applies only without the le parameter of
+        that run method: under local estimate the angular size of
+        the source is given by le_fov instead.
     aldeg : float, optional
         Launch in a solid angle where alpha is the half-angle of
         the cone.

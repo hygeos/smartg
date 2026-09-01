@@ -278,7 +278,10 @@ final `v2.0.0` release.
     a backward object simulation is carried by the launching mode itself
     (0.266 degree by default, the solar disc) and uploaded as the
     `CBACK_SFOVd` device constant, so the B and BR modes no longer depend on
-    the `sun_disc` parameter of `Smartg.run`
+    the `sun_disc` parameter of `Smartg.run`. It applies only without the
+    `le` parameter, where `le_fov` gives the source its angular size
+    instead; a `CusBackward` run which uses `le` without `le_fov` now warns
+    that the local estimate looks at a point source
   - New `le_fov` parameter of `Smartg.run`: the local estimate directions of
     an object simulation are sampled inside a cone of that half-angle, which
     gives its angular size to the source they look at (the Sun disc for

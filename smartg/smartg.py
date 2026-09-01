@@ -962,14 +962,17 @@ class Smartg(object):
             The angular size of the Sun disc in degrees, 0 (default
             means no angular size). In the B and BR modes the angular
             size of the Sun is given by the sun_fov parameter of
-            CusBackward instead, and sun_disc has no effect on the
-            signal collected by the receiver.
+            CusBackward instead, or by le_fov under local estimate,
+            and sun_disc has no effect on the signal collected by the
+            receiver.
         le_fov : float, optional
             The half-angle in degrees of the cone sampled around each
             local estimate direction, 0 (default) meaning the exact
             directions. It gives its angular size to the source seen
-            by the local estimate, the Sun disc for example. It
-            requires the parameter le.
+            by the local estimate: 0.266 for the Sun disc, whose
+            angular radius it is. It requires the parameter le, and
+            it is the local estimate counterpart of the sun_fov
+            parameter of CusBackward, which applies only without le.
         sensor : None | Sensor | list, optional
             The light source / sensor (Sensor object or list of Sensor
             objects) in forward / backward mode.
@@ -997,7 +1000,8 @@ class Smartg(object):
             modes. The compilation option `obj3d` must be set to True.
             A CusBackward can also carry the sun direction as a vector
             in its v_sun parameter (see th_v_deg) and the angular size
-            of the sun in its sun_fov parameter (see sun_disc).
+            of the sun in its sun_fov parameter (see sun_disc), which
+            applies only without the parameter le (see le_fov).
         s_min : int, optional
             The minimum number of interactions (scattering/reflection).
             Default 0.
@@ -1118,6 +1122,25 @@ class Smartg(object):
                 raise ValueError(
                     'The use of sensor(s) and a custom launching mode'
                     + ' (cusForward or cusBackward) is prohibited!'
+                )
+            # sun_fov and le_fov give the same angular size to the
+            # sun on paths that never meet: sun_fov only without le
+            # (the solar cone of countPhotonObj3D and the
+            # normalization of the receiver signal), le_fov only
+            # with it
+            if (
+                isinstance(cus_l, CusBackward)
+                and le is not None
+                and le_fov == 0.
+            ):
+                warn(
+                    'The sun_fov of the CusBackward ({} degrees) has '
+                    'no effect with the le parameter, where the '
+                    'angular size of the source is given by le_fov, '
+                    'left at 0: the local estimate looks at a point '
+                    'source. Set le_fov=0.266 for the solar '
+                    'disc.'.format(cus_l.dict['SFOV']),
+                    stacklevel=2,
                 )
         if my_objects is not None and not self.obj3d:
             raise ValueError(
