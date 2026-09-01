@@ -283,7 +283,10 @@ final `v2.0.0` release.
     an object simulation are sampled inside a cone of that half-angle, which
     gives its angular size to the source they look at (the Sun disc for
     example). Uploaded as the `LE_FOVd` device constant, it replaces
-    `sun_disc` in that role
+    `sun_disc` in that role. It works in every build, not only with
+    `obj3d=True`: the directions sampled inside the cone live in a device
+    buffer allocated only when `le_fov` is set, and sized to the directions
+    actually requested
   - README overhauled, with the new SMART-G logo
   - Updated dependency requirements: geoclide >= 4 (the 3D object code has
     been adapted to the geoclide 4 API), pytrunc >= 2, gatiab >= 1.1.2

@@ -68,7 +68,8 @@ extern "C" {
 							 unsigned long long *nbPhCat,
 							 void *wPhCat, void *wPhCat2,
 							 void *wPhLoss,
-							 void *wPhLoss2
+							 void *wPhLoss2,
+							 float *tabDirLE
                              /*#ifdef TIME
                              , unsigned long long *time_spent
                              #endif*/
@@ -120,10 +121,19 @@ extern "C" {
 	#ifdef OBJ3D
 	IGeo geoStruc, geoStruc_le;
     float3 phit_le=make_float3(0.f, 0.f, 0.f);
-    float tabthv_le[NTHLE];
-    float tabphi_le[NPHILE];
-    float le_cone[2] = {0.f, 0.f}; // point sampled in the LE cone
     #endif
+
+    // The local estimate directions sampled inside the cone, one
+    // slice of the scratch per thread. Its azimuth part is NBTHETAd
+    // long when ZIPd, since iph then follows ith. The host sizes the
+    // scratch by the same rule.
+    float* tabthv_le = tabDirLE + idx*(NBTHETAd + (ZIPd ? NBTHETAd : NBPHId));
+    float* tabphi_le = tabthv_le + NBTHETAd;
+    float le_cone[2] = {0.f, 0.f}; // point sampled in the LE cone
+    // Without a cone the nominal directions are read directly, && the
+    // scratch is never touched
+    float* thv_le = (LE_FOVd > 1e-6) ? tabthv_le : tabthv;
+    float* phi_le = (LE_FOVd > 1e-6) ? tabphi_le : tabphi;
 
 
 	while (this_thread_active > 0 && nThreadsActive[0] > 0) {
@@ -177,9 +187,10 @@ extern "C" {
 
             initPhoton(&ph, prof_atm, prof_oc, tab_sensor, spectrum, X0, NPhotonsIn, wl_proba_icdf, sensor_proba_icdf, 
                        cell_proba_icdf,
-                       tabthv, tabphi, &rngstate
+                       tabthv, tabphi, &rngstate,
+					   tabthv_le, tabphi_le, le_cone
 					   #ifdef OBJ3D
-					   ,tabthv_le, tabphi_le, le_cone, myObjets
+					   , myObjets
 					   #endif
 				);
 			
@@ -325,7 +336,7 @@ extern "C" {
 
 		#if defined(BACK) && defined(OBJ3D)
 		if (count_level == UPTOA && LMODEd == 4 && LEd == 0) // the photon reach TOA
-		{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le);}
+		{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le);}
         #endif
 
 
@@ -391,20 +402,13 @@ extern "C" {
                             ph_le.ith = ilevel_le;
                             if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                             else ph_le.iph =  ph_le.ith;
-                            #ifdef OBJ3D
                             // The direction is sampled inside its cone
                             if (!setLEConeDir(&ph_le, tabthv, tabphi,
                                               tabthv_le, tabphi_le,
                                               le_cone)) continue;
-                            #endif
                             // azimuth && zenith LE
-                            #ifdef OBJ3D
-                            phi = tabphi_le[ph_le.iph];
-                            thv = tabthv_le[ph_le.ith];
-                            #else
-                            phi = tabphi[ph_le.iph];
-                            thv = tabthv[ph_le.ith];
-                            #endif
+                            phi = phi_le[ph_le.iph];
+                            thv = thv_le[ph_le.ith];
                             // LEMOD
                             // here function to randomly choose new phi && thv
 
@@ -468,11 +472,7 @@ extern "C" {
                                     #endif
                                     faer, foce,
                                     1, refrac_angle,
-                                     #ifdef OBJ3D
-                                     tabthv_le, tabphi_le,
-                                     #else
-                                     tabthv, tabphi,
-                                     #endif
+                                     thv_le, phi_le,
                                     count_level_le, &rngstate);
 
                             #ifdef VERBOSE_PHOTON
@@ -514,7 +514,7 @@ extern "C" {
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                            if (!mask_le && count_level_le == UPTOA && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && count_level_le == UPTOA && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le); }
 							#endif
                             if (!mask_le && if_count(count_level_le))
                             {
@@ -537,11 +537,7 @@ extern "C" {
                     #endif
                     faer, foce,
                     0, 0.F,
-                    #ifdef OBJ3D
-                    tabthv_le, tabphi_le,
-                    #else
-                    tabthv, tabphi,
-                    #endif
+                    thv_le, phi_le,
                     0,
                     &rngstate);
 
@@ -621,29 +617,19 @@ extern "C" {
                         ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
-                        #ifdef OBJ3D
                         // The direction is sampled inside its cone
                         if (!setLEConeDir(&ph_le, tabthv, tabphi,
                                           tabthv_le, tabphi_le,
                                           le_cone)) continue;
-                        #endif
 
                         // Reflect || Tramsit the virtual photon, using le=1 && count_level
                         if (BRDFd != 0)
                             surfaceBRDF(&ph_le, 1,
-                                      #ifdef OBJ3D
-                                      tabthv_le, tabphi_le,
-                                      #else
-                                      tabthv, tabphi,
-                                      #endif
+                                      thv_le, phi_le,
                                       count_level_le, &rngstate);
                         else 
                             surfaceWaterRough(&ph_le, 1,
-                                      #ifdef OBJ3D
-                                      tabthv_le, tabphi_le,
-                                      #else
-                                      tabthv, tabphi,
-                                      #endif
+                                      thv_le, phi_le,
                                       count_level_le, &rngstate);
 
                         #ifdef VERBOSE_PHOTON
@@ -708,7 +694,7 @@ extern "C" {
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
                             }
                             #ifdef OBJ3D
-                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le); }
                             #endif
                         }
                         // Only for downward photons in Ocean, count also them up to Bottom 
@@ -750,19 +736,11 @@ extern "C" {
                 //
                 if (BRDFd != 0)
 				    surfaceBRDF(&ph, 0,
-                              #ifdef OBJ3d
-                              tabthv_le, tabphi_le,
-                              #else
-                              tabthv, tabphi,
-                              #endif
+                              thv_le, phi_le,
                               count_level, &rngstate);
                 else
 				    surfaceWaterRough(&ph, 0,
-                              #ifdef OBJ3D
-                              tabthv_le, tabphi_le,
-                              #else
-                              tabthv, tabphi,
-                              #endif
+                              thv_le, phi_le,
                               count_level, &rngstate);
             } // Air-Sea interface 
 
@@ -803,19 +781,13 @@ extern "C" {
                         ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
-                        #ifdef OBJ3D
                         // The direction is sampled inside its cone
                         if (!setLEConeDir(&ph_le, tabthv, tabphi,
                                           tabthv_le, tabphi_le,
                                           le_cone)) continue;
-                        #endif
 
                         surfaceLambert(&ph_le, 1,
-                                       #ifdef OBJ3D
-                                       tabthv_le, tabphi_le,
-                                       #else
-                                       tabthv, tabphi,
-                                       #endif
+                                       thv_le, phi_le,
                                        envmap, spectrum, &rngstate);
 
                         #ifdef VERBOSE_PHOTON
@@ -877,7 +849,7 @@ extern "C" {
                             if (!mask_le && if_count(UPTOA)) { countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                 tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
                             #ifdef OBJ3D
-                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le); }
                             #endif
                         }
                     }//direction
@@ -888,11 +860,7 @@ extern "C" {
 		        // 2- Surface for propagation photon for the BRDF interface
                 //
                 surfaceLambert(&ph, 0,
-                               #ifdef OBJ3D
-                               tabthv_le, tabphi_le,
-                               #else
-                               tabthv, tabphi,
-                               #endif
+                               thv_le, phi_le,
                                envmap, spectrum, &rngstate);
 
             } // BRDF interface (DIOPTRE=!3)
@@ -932,20 +900,14 @@ extern "C" {
                         ph_le.ith = ilevel_le;
                         if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                         else ph_le.iph =  ph_le.ith;
-                        #ifdef OBJ3D
                         // The direction is sampled inside its cone
                         if (!setLEConeDir(&ph_le, tabthv, tabphi,
                                           tabthv_le, tabphi_le,
                                           le_cone)) continue;
-                        #endif
 
                         /* LE for BRDF type*/
                         surfaceLambert(&ph_le, 1,
-                                       #ifdef OBJ3D
-                                       tabthv_le, tabphi_le,
-                                       #else
-                                       tabthv, tabphi,
-                                       #endif
+                                       thv_le, phi_le,
                                        envmap, spectrum, &rngstate);
 
                         // Only two levels for counting by definition
@@ -1002,7 +964,7 @@ extern "C" {
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
                             }
                             #ifdef OBJ3D
-                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le); }
                             #endif
                         }
                     }//direction
@@ -1013,11 +975,7 @@ extern "C" {
 		        // 2- Surface for Propagation photon*/
                 //
                 surfaceLambert(&ph, 0,
-                               #ifdef OBJ3D
-                               tabthv_le, tabphi_le,
-                               #else
-                               tabthv, tabphi,
-                               #endif
+                               thv_le, phi_le,
                                envmap, spectrum, &rngstate);
            } // photon interaction with the environment 
 
@@ -1062,20 +1020,14 @@ extern "C" {
                     ph_le.ith = ilevel_le;
                     if (!ZIPd) ph_le.iph = (iph + iph0)%NBPHId;
                     else ph_le.iph =  ph_le.ith;
-                    #ifdef OBJ3D
                     // The direction is sampled inside its cone
                     if (!setLEConeDir(&ph_le, tabthv, tabphi,
                                       tabthv_le, tabphi_le,
                                       le_cone)) continue;
-                    #endif
 
                     /* LE on SEAFLOOR*/
                     surfaceLambert(&ph_le, 1,
-                                   #ifdef OBJ3D
-                                   tabthv_le, tabphi_le,
-                                   #else
-                                   tabthv, tabphi,
-                                   #endif
+                                   thv_le, phi_le,
                                    envmap, spectrum, &rngstate);
 
                     //  contribution to UP0M level
@@ -1113,11 +1065,7 @@ extern "C" {
 		   // 2- Seafloor propagation*/
            //
            surfaceLambert(&ph, 0,
-                          #ifdef OBJ3D
-                          tabthv_le, tabphi_le,
-                          #else
-                          tabthv, tabphi,
-                          #endif
+                          thv_le, phi_le,
                           envmap, spectrum, &rngstate);
 
            #ifdef VERBOSE_PHOTON
@@ -1142,7 +1090,7 @@ extern "C" {
 		{
 
 			if (geoStruc.type == RECEIVER && LMODEd != 4 && LEd == 0) // this is a receiver
-			{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le);}
+			{ countPhotonObj3D(&ph, 0, tabObjInfo, &geoStruc, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le);}
 
 			ph.weight_loss[0] = ph.weight;
 
@@ -1162,7 +1110,7 @@ extern "C" {
                             if (!setLEConeDir(&ph_le, tabthv, tabphi,
                                               tabthv_le, tabphi_le,
                                               le_cone)) continue;
-							surfaceLambert3D(&ph_le, 1, tabthv_le, tabphi_le, spectrum,
+							surfaceLambert3D(&ph_le, 1, thv_le, phi_le, spectrum,
 												  &rngstate, &geoStruc);			
 							// Only two levels for counting by definition
                             mask_le = false;
@@ -1187,7 +1135,7 @@ extern "C" {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh);
                             }
-                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le); }
 						}//direction
 					}//direction
                 } //LE
@@ -1195,7 +1143,7 @@ extern "C" {
                 //
 		        // obsjsurf propagation*/
                 //
-				surfaceLambert3D(&ph, 0, tabthv_le, tabphi_le, spectrum,
+				surfaceLambert3D(&ph, 0, thv_le, phi_le, spectrum,
                                       &rngstate, &geoStruc);
             } // END Lambertian Mirror
 
@@ -1224,7 +1172,7 @@ extern "C" {
                             if (!setLEConeDir(&ph_le, tabthv, tabphi,
                                               tabthv_le, tabphi_le,
                                               le_cone)) continue;
-							Obj3DRoughSurf(&ph_le, 1, tabthv_le, tabphi_le, &geoStruc, &rngstate);
+							Obj3DRoughSurf(&ph_le, 1, thv_le, phi_le, &geoStruc, &rngstate);
 							// Only two levels for counting by definition
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
@@ -1248,7 +1196,7 @@ extern "C" {
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
                                     tabPhotonsNoAer, MAX_HIST, tabTransDir, NPhotonsOut, NPhotonsOutRayleigh); }
-                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, tabthv_le, tabphi_le); }
+                            if (!mask_le && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le); }
                             
 						}//direction
 					}//direction
@@ -1257,7 +1205,7 @@ extern "C" {
                 //
 		        // obsjsurf propagation*/
                 //
-				Obj3DRoughSurf(&ph, 0, tabthv_le, tabphi_le, &geoStruc, &rngstate);
+				Obj3DRoughSurf(&ph, 0, thv_le, phi_le, &geoStruc, &rngstate);
             } // End Mirror
 
 			else {ph.loc = REMOVED;} // unknow material
@@ -1379,9 +1327,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            float *X0, unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf, long long *sensor_proba_icdf, long long *cell_proba_icdf, 
                            float* tabthv, float* tabphi,
-                           struct RNG_State *rngstate
+                           struct RNG_State *rngstate,
+						   float* tabthv_le, float* tabphi_le, float* le_cone
 						   #ifdef OBJ3D
-						   , float* tabthv_le, float* tabphi_le, float* le_cone, struct IObjets *myObjets
+						   , struct IObjets *myObjets
 						   #endif
 	) {
     float cTh, sTh, phi;
@@ -1426,23 +1375,19 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->stokes.z = 0.F;
     ph->stokes.w = 0.F;
 
-    // The directions of the local estimate. When a solid angle is
-    // considered (LE_FOVd), one point of the cone is sampled here,
+    // The directions of the local estimate, when a solid angle is
+    // considered (LE_FOVd): one point of the cone is sampled here,
     // && setLEConeDir applies it to each direction, when the
-    // direction loops reach it.
-    #ifdef OBJ3D
-    if (LEd == 1)
+    // direction loops reach it. Without a cone the nominal
+    // directions are read directly && the scratch stays untouched.
+    if (LEd == 1 && LE_FOVd > 1e-6)
     {
         for (int ith=0; ith<NBTHETAd; ith++){ tabthv_le[ith] = tabthv[ith]; }
         for (int iph=0; iph<NBPHId; iph++)  { tabphi_le[iph] = tabphi[iph]; }
 
-        if (LE_FOVd > 1e-6)
-        {
-            le_cone[0] = 360*RAND;                                       // azimuth
-            le_cone[1] = acosf(RAND*(cos(radians(LE_FOVd))-1)+1)*180./CUDART_PI_F; // zenith, isotropic
-        }
+        le_cone[0] = 360*RAND;                                       // azimuth
+        le_cone[1] = acosf(RAND*(cos(radians(LE_FOVd))-1)+1)*180./CUDART_PI_F; // zenith, isotropic
     }
-    #endif
 
     #ifdef BACK
     // Initialize also photon cumulative Mueller matrix
@@ -8278,7 +8223,6 @@ __device__ void DirectionToUV(float th, float phi, float3* v, float3* u) {
 	                  -sinf(th));
 }
 
-#ifdef OBJ3D
 __device__ void DirectionToUV2(float th, float phi, float th_c, float ph_c, float3* u, float3* v)
 {
     // th_c && ph_c place the direction inside the cone, they are
@@ -8292,9 +8236,11 @@ __device__ void DirectionToUV2(float th, float phi, float th_c, float ph_c, floa
 	    Transform<double> TPHconed, TTHconed;
 	    TPHconed = TPHconed.RotateZ(ph_c); TTHconed = TTHconed.RotateY(th_c);
 		
-	    // Apply transforms to vector u && v
-	    vd = TPHconed(   Vectord(  TTHconed( Vectord(vd) )  )   );
-	    ud = TPHconed(   Vectord(  TTHconed( Vectord(ud) )  )   );
+	    // Apply transforms to vector u && v. The transform is called
+	    // with the vector type code, the only form available outside
+	    // the object mode, where Vectord has no operator().
+	    vd = TPHconed(  TTHconed(vd, 2), 2  );
+	    ud = TPHconed(  TTHconed(ud, 2), 2  );
     }
 
     if (th > 1e-6)
@@ -8305,8 +8251,8 @@ __device__ void DirectionToUV2(float th, float phi, float th_c, float ph_c, floa
 	    TPhi = TPhi.RotateZ(phi);		
 
 	    // Apply transforms to vector u && v in function to theta && phi
-	    vd = TPhi(   Vectord(  TTheta( Vectord(vd) )  )   );
-	    ud = TPhi(   Vectord(  TTheta( Vectord(ud) )  )   );
+	    vd = TPhi(  TTheta(vd, 2), 2  );
+	    ud = TPhi(  TTheta(ud, 2), 2  );
     }
 
 	// update of u && v
@@ -8333,7 +8279,6 @@ __device__ int setLEConeDir(Photon* ph, float* tabthv, float* tabphi,
 
 	return (cos(tabthv_le[ph->ith]) > 0);
 }
-#endif
 
 __device__ float3 LocalToGlobal(float3 Nx, float3 Ny, float3 Nz, float3 v) {
      float3x3 B = make_float3x3(

@@ -156,7 +156,8 @@ __global__ void launchKernel(
 	unsigned long long *nbPhCat,
 	void *wPhCat, void *wPhCat2,
 	void *wPhLoss,
-	void *wPhLoss2
+	void *wPhLoss2,
+	float *tabDirLE
         );
 }
 
@@ -176,9 +177,10 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
                            unsigned long long *NPhotonsIn,
                            long long *wl_proba_icdf, long long *sensor_proba_icdf, 
                            long long *cell_proba_icdf, float* tabthv, float* tabphi,
-                           struct RNG_State*
+                           struct RNG_State*,
+			   float*, float*, float*
 			   #ifdef OBJ3D
-			   , float*, float*, float*, struct IObjets *myObjets
+			   , struct IObjets *myObjets
 			   #endif
 	);
 
@@ -333,10 +335,8 @@ __device__ float fRRS_air(float, float);
 __device__ float fVRS(float);
 
 __device__ void DirectionToUV(float, float, float3*, float3*) ;
-#ifdef OBJ3D
 __device__ void DirectionToUV2(float, float, float, float, float3*, float3*) ;
 __device__ int  setLEConeDir(Photon*, float*, float*, float*, float*, float*) ;
-#endif
 __device__ float3 LocalToGlobal(float3, float3, float3, float3) ;
 __device__ float3 GlobalToLocal(float3, float3, float3, float3) ;
 __device__ void MakeLocalFrame(float3, float3*, float3*, float3*) ;

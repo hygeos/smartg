@@ -969,8 +969,7 @@ class Smartg(object):
             local estimate direction, 0 (default) meaning the exact
             directions. It gives its angular size to the source seen
             by the local estimate, the Sun disc for example. It
-            requires the compilation option obj3d=True and the
-            parameter le.
+            requires the parameter le.
         sensor : None | Sensor | list, optional
             The light source / sensor (Sensor object or list of Sensor
             objects) in forward / backward mode.
@@ -1078,23 +1077,17 @@ class Smartg(object):
                 'The output_layers value must be an integer between -1 and 7.'
             )
 
-        # Check the cone of the local estimate: it is sampled by the
-        # object mode kernel, from the local estimate directions
+        # Check the cone of the local estimate: it is sampled around
+        # the directions given by the le parameter
         if le_fov < 0. or le_fov >= 90.:
             raise ValueError(
                 'The le_fov value must be in [0, 90[ degrees'
             )
-        if le_fov > 0.:
-            if not self.obj3d:
-                raise ValueError(
-                    'The parameter le_fov can be used only with the '
-                    'compilation option obj3d=True'
-                )
-            if le is None:
-                raise ValueError(
-                    'The parameter le_fov can be used only with the '
-                    'parameter le'
-                )
+        if le_fov > 0. and le is None:
+            raise ValueError(
+                'The parameter le_fov can be used only with the '
+                'parameter le'
+            )
 
         # Check the custom launching mode and the 3D objects against
         # the compilation options: the launching code of the forward
@@ -1847,6 +1840,7 @@ class Smartg(object):
             hist=hist,
             amf_variance=self.amf_variance,
             nscl=self.nscl,
+            le_fov=le_fov,
         )
 
         attrs['kernel time (s)'] = secs_cuda_clock
@@ -3784,6 +3778,7 @@ def _loop_kernel(
     hist: bool = False,
     amf_variance: bool = False,
     nscl: int = 1,
+    le_fov: float = 0.0,
 ) -> tuple:
     """Run the transport kernel until the requested photon budget.
 
@@ -3933,6 +3928,20 @@ def _loop_kernel(
         tab_mat_recep = None
         mat_cats = None
         mat_loss = None
+
+    # Scratch holding the local estimate directions sampled inside
+    # the cone, one slice per thread. Its azimuth part is nb_theta
+    # long when the directions are zipped, since the kernel then
+    # takes iph from ith; the kernel slices it by the same rule.
+    if le_fov > 0:
+        nb_phi_le = (
+            nb_theta if (le is not None and le.get('zip', False)) else nb_phi
+        )
+        tab_dir_le = gpuzeros(
+            xblock * xgrid * (nb_theta + nb_phi_le), dtype='float32'
+        )
+    else:
+        tab_dir_le = gpuzeros(1, dtype='float32')
 
     # Initialize the array for error counting
     n_error = 32
@@ -4145,6 +4154,7 @@ def _loop_kernel(
             w_ph_cat2,
             w_ph_loss,
             w_ph_loss2,
+            tab_dir_le,
             block=(xblock, 1, 1),
             grid=(xgrid, 1, 1),
         )
