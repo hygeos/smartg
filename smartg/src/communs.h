@@ -340,6 +340,8 @@ struct Phase {
 
 };
 
+#include "phase_grid.h"
+
 struct Profile {
     float z;      // altitude
     float n;      // refractive index

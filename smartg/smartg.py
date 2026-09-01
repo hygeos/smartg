@@ -122,6 +122,18 @@ TYPE_PHASE = [
     ('a_P44', 'float32'),  # /
 ]
 
+# mirrors struct AGrid of communs.h: align=True reproduces the 4 bytes
+# of padding the compiler inserts before the 8-byte pointer
+TYPE_AGRID = np.dtype(
+    [
+        ('n', 'uint32'),
+        ('mode', 'int32'),
+        ('log2n', 'int32'),
+        ('ang', 'uint64'),
+    ],
+    align=True,
+)
+
 TYPE_SPECTRUM = np.dtype(
     [
         ('lambda', 'float32'),
@@ -1263,6 +1275,9 @@ class Smartg(object):
             nb_loop = min(nb_photons / 10, 1e6)
 
         n_f = int(n_f)
+        # equally spaced angle grid of n_f points for both media
+        agrid_atm = (n_f, 0, None)
+        agrid_oc = (n_f, 0, None)
 
         # number of output levels
         # warning! values defined in communs.h should be < LVL
@@ -1706,7 +1721,8 @@ class Smartg(object):
             xgrid,
             n_lam,
             sim,
-            n_f,
+            agrid_atm,
+            agrid_oc,
             nb_theta,
             nb_phi,
             output_layers,
@@ -2938,13 +2954,41 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     return pha
 
 
-def _calc_phase_gpu(
+def _agrid_struct(agrid) -> np.void:
+    """
+    Pack a phase-table angle grid into its ``TYPE_AGRID`` record.
+
+    Parameters
+    ----------
+    agrid : tuple
+        ``(n, mode, ang_gpu)`` as returned by ``_resolve_agrid``, where
+        *ang_gpu* is the device copy of the angle axis for mode 2, and
+        ``None`` otherwise.
+
+    Returns
+    -------
+    numpy.void
+        A single ``TYPE_AGRID`` record ready to be copied to the
+        ``AGAERd`` / ``AGOCEd`` device constants.
+    """
+    n, mode, ang_gpu = agrid
+    rec = np.zeros(1, dtype=TYPE_AGRID)
+    rec['n'] = n
+    rec['mode'] = mode
+    # trip count of the mode 2 binary search: the largest power of two
+    # that can still be added to an index of the last interval, n - 2
+    rec['log2n'] = int(np.floor(np.log2(n - 2))) if n > 2 else 0
+    rec['ang'] = 0 if ang_gpu is None else int(ang_gpu.gpudata)
+    return rec[0]
+
+
+def _calc_phase_host(
     profile,
     n_theta: int,
     depo: float,
     kind: str,
     pol_off: bool = False,
-) -> GPUArray:
+) -> np.ndarray:
     """
     Build the phase-function lookup table uploaded to the GPU.
 
@@ -2998,8 +3042,8 @@ def _calc_phase_gpu(
 
     Returns
     -------
-    pycuda.gpuarray.GPUArray
-        GPU array of shape ``(n_phase_entries, n_theta)`` and dtype
+    ndarray
+        Host array of shape ``(n_phase_entries, n_theta)`` and dtype
         ``TYPE_PHASE``. Each row contains one phase-function lookup
         table ready to be indexed by ``iphase_<kind>`` in the profile
         uploaded by ``_init_profile``.
@@ -3168,7 +3212,33 @@ def _calc_phase_gpu(
 
         idx += 1
 
-    return to_gpu(phase_H)
+    return phase_H
+
+
+def _calc_phase_gpu(
+    profile,
+    n_theta: int,
+    depo: float,
+    kind: str,
+    pol_off: bool = False,
+) -> GPUArray:
+    """
+    Upload the phase-function lookup table built by
+    :func:`_calc_phase_host` to the GPU.
+
+    The table is built on the host so that it can be checked without a
+    GPU; see :func:`_calc_phase_host` for the parameters and for the
+    layout of the returned table.
+
+    Returns
+    -------
+    pycuda.gpuarray.GPUArray
+        GPU array of shape ``(n_phase_entries, n_theta)`` and dtype
+        ``TYPE_PHASE``.
+    """
+    return to_gpu(
+        _calc_phase_host(profile, n_theta, depo, kind, pol_off=pol_off)
+    )
 
 
 def _init_const(
@@ -3185,7 +3255,8 @@ def _init_const(
     xgrid: int,
     n_lam: int,
     sim: int,
-    n_f: float,
+    agrid_atm: tuple,
+    agrid_oc: tuple,
     nb_theta: int,
     nb_phi: int,
     output_layers: int,
@@ -3270,7 +3341,10 @@ def _init_const(
         Numbers of atmospheric/oceanic layers and absorbing layers.
     mod : pycuda.compiler.SourceModule
         Compiled CUDA module containing global symbols to update.
-    nb_loop, xblock, xgrid, n_lam, sim, n_f : int
+    agrid_atm, agrid_oc : tuple
+        Angle grid descriptors ``(n, mode, ang_gpu)`` of the
+        atmospheric and oceanic phase tables, see ``_resolve_agrid``.
+    nb_loop, xblock, xgrid, n_lam, sim : int
         Main Monte Carlo control parameters.
     nb_theta, nb_phi, output_layers : int
         Output-grid control parameters.
@@ -3342,7 +3416,8 @@ def _init_const(
     copy_to_device('NOCEd', n_oce, np.int32)
     copy_to_device('NOCE_ABSd', n_oce_abs, np.int32)
     copy_to_device('OUTPUT_LAYERSd', output_layers, np.int32)
-    copy_to_device('NF', n_f, np.uint32)
+    copy_to_device('AGAERd', _agrid_struct(agrid_atm), TYPE_AGRID)
+    copy_to_device('AGOCEd', _agrid_struct(agrid_oc), TYPE_AGRID)
     copy_to_device('NATMd', n_atm, np.int32)
     copy_to_device('NATM_ABSd', n_atm_abs, np.int32)
     copy_to_device('XBLOCKd', xblock, np.int32)
