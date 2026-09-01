@@ -25,6 +25,10 @@ read_phase_nth_cte
 
 Phase Matrix Processing
 ------------------------
+theta_grid
+    Build the scattering angle grid of a phase matrix, either
+    equally spaced or clustered towards the forward and backward
+    directions.
 integ_phase
     Numerically integrate a phase function weighted by
     ``sin(theta)`` along the scattering angle axis.
@@ -68,6 +72,106 @@ from smartg.typing import PathType, NumericArrayLike
 import pandas as pd
 import xarray as xr
 from luts.luts import LUT
+from pytrunc.utils import quadrature_lobatto
+
+
+THETA_GRID_KINDS = ('uniform', 'chebyshev', 'lobatto')
+
+
+def theta_grid(
+    n: int,
+    kind: str = 'uniform',
+    unit: str = 'deg',
+) -> NDArray[np.float64]:
+    """Build the scattering angle grid of a phase matrix.
+
+    The grid spans the whole scattering range and includes both end
+    points exactly, so it can be used directly as the ``theta_atm`` or
+    ``theta_oc`` axis of a phase matrix.
+
+    Parameters
+    ----------
+    n : int
+        Number of scattering angles. Must be >= 2.
+    kind : str, optional
+        Node distribution. Choices are:
+
+        - ``'uniform'`` -> equally spaced angles (default)
+        - ``'lobatto'`` -> Gauss-Lobatto-Legendre nodes in theta
+        - ``'chebyshev'`` -> Chebyshev-Lobatto nodes in theta,
+          ``theta_i = 180 sin^2(pi i / (2 (n-1)))``
+    unit : str, optional
+        Unit of the returned angles, ``'deg'`` (default) or ``'rad'``.
+
+    Returns
+    -------
+    ndarray
+        Strictly increasing angles of shape ``(n,)``, from 0 to 180
+        degrees, or from 0 to pi radians.
+
+    Notes
+    -----
+    Both non-uniform kinds cluster their nodes towards 0 and 180
+    degrees, which is what resolves the forward diffraction peak of
+    large particles such as desert aerosols and cloud droplets. At
+    n = 1801 they place 86 nodes below 1 degree where a uniform grid
+    places 10, and they are interchangeable in practice: their nodes
+    differ by at most 0.014 degrees.
+
+    Beware that Lobatto nodes in mu = cos(theta), such as the ones the
+    delta-M truncation uses to integrate Legendre moments, are of no
+    use here. At n = 1801 their first node lies at 0.12 degrees, which
+    is coarser than the 0.1 degrees of a uniform theta grid: only
+    clustering in theta resolves the peak.
+
+    ``'lobatto'`` is the recommended kind when the phase matrix is
+    truncated, because ``pytrunc.utils.integrate_lobatto`` interpolates
+    onto those very nodes before applying its weights. On a Lobatto
+    grid that interpolation is the identity and the truncation
+    quadrature becomes exact.
+
+    Examples
+    --------
+    >>> theta_grid(5)
+    array([  0.,  45.,  90., 135., 180.])
+    >>> theta_grid(5, kind='chebyshev').round(2)
+    array([  0.  ,  26.36,  90.  , 153.64, 180.  ])
+    """
+    if n < 2:
+        raise ValueError(f"The n parameter must be >= 2, got {n}.")
+    if kind not in THETA_GRID_KINDS:
+        raise ValueError(
+            f"Choices for the kind parameter are: {THETA_GRID_KINDS}, "
+            f"got {kind!r}."
+        )
+    if unit not in ('deg', 'rad'):
+        raise ValueError(
+            "Choices for the unit parameter are: ('deg', 'rad'), "
+            f"got {unit!r}."
+        )
+
+    span = 180.0 if unit == 'deg' else np.pi
+
+    if kind == 'uniform':
+        theta = np.linspace(0.0, span, n)
+    elif kind == 'chebyshev':
+        i = np.arange(n, dtype=np.float64)
+        theta = span * np.sin(0.5 * np.pi * i / (n - 1)) ** 2
+    elif n == 2:
+        # quadrature_lobatto needs a Legendre polynomial of order
+        # n - 1 >= 2; with only the two end points every kind agrees
+        theta = np.array([0.0, span])
+    else:
+        # quadrature_lobatto caches and returns read-only arrays
+        theta = quadrature_lobatto(0.0, span, n)[0].copy()
+
+    # the end points must be exact: they bound the interpolations of
+    # the callers, and the kernel maps theta = 180 degrees onto the
+    # last table entry
+    theta[0] = 0.0
+    theta[-1] = span
+
+    return theta
 
 
 def integ_phase(
