@@ -182,6 +182,14 @@ final `v2.0.0` release.
       `rec` → `receiver` and `lmode` → `mode`, which `CusForward` follows
       (`lmode` → `mode` there too). `normal` also accepts a `Normal` now,
       converted to a `Vector`
+    - The keys of the `dict` attribute of both classes are snake case now,
+      and named after the constructor parameters they carry: `POS` →
+      `position`, `THDEG` → `th_deg`, `PHDEG` → `ph_deg`,
+      `VSUN` → `v_sun`, `SFOV` → `sun_fov`, `ALDEG` → `receiver_fov`,
+      `REC` → `receiver`,
+      `LMODE` → `mode`, `CFX` → `cfx`, `FOV` → `fov`, ..., with
+      `TYPE` → `sampling_code` (it holds the code, not the `sampling`
+      string). The `ALDEG` attribute of the output dataset keeps its name
   - The parameters of `Smartg` and `Smartg.run` follow PEP 8. Constructor:
     `obj3D` → `obj3d` and `opt3D` → `opt3d`. `run`:
     - `NBPHOTONS` → `nb_photons`, `NBLOOP` → `nb_loop`,

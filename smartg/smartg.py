@@ -1139,7 +1139,7 @@ class Smartg(object):
                     'angular size of the source is given by le_fov, '
                     'left at 0: the local estimate looks at a point '
                     'source. Set le_fov=0.266 for the solar '
-                    'disc.'.format(cus_l.dict['SFOV']),
+                    'disc.'.format(cus_l.dict['sun_fov']),
                     stacklevel=2,
                 )
         if my_objects is not None and not self.obj3d:
@@ -1150,54 +1150,55 @@ class Smartg(object):
 
         # Compute the sun direction as vector, given either by the
         # v_sun attribute of CusBackward or by th_v_deg and ph_v_deg
-        if cus_l is not None and cus_l.dict.get('VSUN') is not None:
-            v_sun = cus_l.dict['VSUN']
+        if cus_l is not None and cus_l.dict.get('v_sun') is not None:
+            v_sun = cus_l.dict['v_sun']
         else:
             v_sun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir')
         v_sun = gc.normalize(v_sun)
 
         surf_lph = 0
         if cus_l is not None:
-            if cus_l.dict['LMODE'] == "B":
+            if cus_l.dict['mode'] == "B":
                 sensor = Sensor(
-                    POSX=cus_l.dict['POS'].x,
-                    POSY=cus_l.dict['POS'].y,
-                    POSZ=cus_l.dict['POS'].z,
-                    THDEG=cus_l.dict['THDEG'],
-                    PHDEG=cus_l.dict['PHDEG'],
+                    POSX=cus_l.dict['position'].x,
+                    POSY=cus_l.dict['position'].y,
+                    POSZ=cus_l.dict['position'].z,
+                    THDEG=cus_l.dict['th_deg'],
+                    PHDEG=cus_l.dict['ph_deg'],
                     LOC='ATMOS',
                     FOV=0.0,
                     TYPE=0,
                 )
-                # FOV=cus_l.dict['ALDEG'],
-                # TYPE=cus_l.dict['TYPE'])
-            elif cus_l.dict['LMODE'] == "BR":
+                # FOV=cus_l.dict['receiver_fov'],
+                # TYPE=cus_l.dict['sampling_code'])
+            elif cus_l.dict['mode'] == "BR":
                 sensor = Sensor(
-                    POSX=cus_l.dict['REC'].transformation.transx,
-                    POSY=cus_l.dict['REC'].transformation.transy,
-                    POSZ=cus_l.dict['REC'].transformation.transz,
-                    THDEG=cus_l.dict['THDEG'],
-                    PHDEG=cus_l.dict['PHDEG'],
+                    POSX=cus_l.dict['receiver'].transformation.transx,
+                    POSY=cus_l.dict['receiver'].transformation.transy,
+                    POSZ=cus_l.dict['receiver'].transformation.transz,
+                    THDEG=cus_l.dict['th_deg'],
+                    PHDEG=cus_l.dict['ph_deg'],
                     LOC='ATMOS',
                     FOV=0.0,
                     TYPE=0,
                 )
-                # FOV=cus_l.dict['ALDEG'],
-                # TYPE=cus_l.dict['TYPE'])
-            elif cus_l.dict['LMODE'] == "FF":
+                # FOV=cus_l.dict['receiver_fov'],
+                # TYPE=cus_l.dict['sampling_code'])
+            elif cus_l.dict['mode'] == "FF":
                 # The projected surface at TOA where the photons are
                 # launched
                 dot_nn = gc.dot(v_sun * -1, gc.Vector(0.0, 0.0, 1.0))
                 if (
-                    cus_l.dict['TYPE'] == 2 and cus_l.dict['FOV'] > 1e-6
+                    cus_l.dict['sampling_code'] == 2
+                    and cus_l.dict['fov'] > 1e-6
                 ):  # isotropic
-                    surf_lph = float(cus_l.dict['CFX']) * float(
-                        cus_l.dict['CFY']
+                    surf_lph = float(cus_l.dict['cfx']) * float(
+                        cus_l.dict['cfy']
                     )
                 else:
                     surf_lph = (
-                        float(cus_l.dict['CFX'])
-                        * float(cus_l.dict['CFY'])
+                        float(cus_l.dict['cfx'])
+                        * float(cus_l.dict['cfy'])
                         * dot_nn
                     )
 
@@ -1450,8 +1451,8 @@ class Smartg(object):
                         )
                     ]
                     # FOV=0.0, TYPE=0)]
-                    # FOV=cus_l.dict['FOV'],
-                    # TYPE=cus_l.dict['TYPE'])]
+                    # FOV=cus_l.dict['fov'],
+                    # TYPE=cus_l.dict['sampling_code'])]
                 else:
                     sensor2 = [
                         Sensor(
@@ -1894,7 +1895,7 @@ class Smartg(object):
             # dic_stp : tuple incorporating parameters for Solar Tower
             # Power applications
             if self.back:
-                receiver_fov = cus_l.dict['ALDEG']
+                receiver_fov = cus_l.dict['receiver_fov']
             else:
                 receiver_fov = 0.0
             dic_stp = {
@@ -1907,18 +1908,18 @@ class Smartg(object):
                 "wRec": mat_cats[2, 1],
                 "SREC": s_rec,
                 "TC": tc,
-                "LPH": cus_l.dict['LPH'],
-                "LPR": cus_l.dict['LPR'],
+                "LPH": cus_l.dict['lph'],
+                "LPR": cus_l.dict['lpr'],
                 "prog": progress,
                 "n_cte": n_cte,
-                "ALDEG": receiver_fov,
+                "receiver_fov": receiver_fov,
             }
         # If there are no heliostats --> no analyses of optical losses
         elif tc is not None and cus_l is not None:
             s_rec = tc * tc * nb_cx * nb_cy
             mat_loss = None  # ;weight_r=mat_cats[2, 1]
             if self.back:
-                receiver_fov = cus_l.dict['ALDEG']
+                receiver_fov = cus_l.dict['receiver_fov']
             else:
                 receiver_fov = 0.0
             dic_stp = {
@@ -1926,11 +1927,11 @@ class Smartg(object):
                 "wRec": mat_cats[2, 1],
                 "SREC": s_rec,
                 "TC": tc,
-                "LPH": cus_l.dict['LPH'],
-                "LPR": cus_l.dict['LPR'],
+                "LPH": cus_l.dict['lph'],
+                "LPR": cus_l.dict['lpr'],
                 "prog": progress,
                 "n_cte": n_cte,
-                "ALDEG": receiver_fov,
+                "receiver_fov": receiver_fov,
             }
         elif tc is not None:
             s_rec = tc * tc * nb_cx * nb_cy
@@ -2661,7 +2662,7 @@ def _finalize(
         ds.attrs['S_Cell'] = str(dic_stp["TC"])  # Cell surface in km²
         # half-angle of the receiver solid angle
         if back:
-            ds.attrs['ALDEG'] = str(dic_stp["ALDEG"])
+            ds.attrs['ALDEG'] = str(dic_stp["receiver_fov"])
         else:
             ds.attrs['ALDEG'] = str(90)
 
@@ -3347,8 +3348,8 @@ def _init_const(
     s_th_v = np.sin(th_v)
     c_th_v = np.cos(th_v)
 
-    if (cus_l is not None) and (cus_l.dict['LMODE'] == "FF"):
-        pz_d = z_toa + cus_l.dict['CFTZ']
+    if (cus_l is not None) and (cus_l.dict['mode'] == "FF"):
+        pz_d = z_toa + cus_l.dict['cftz']
     else:
         pz_d = z_toa
     t_temp = pz_d / -v_sun.z
@@ -3463,27 +3464,27 @@ def _init_const(
             copy_to_device('TCd', tc, np.float32)
             copy_to_device('nbCx', nb_cx, np.int32)
             copy_to_device('nbCy', nb_cy, np.int32)
-        if (cus_l is not None) and (cus_l.dict['LMODE'] == "RF"):
+        if (cus_l is not None) and (cus_l.dict['mode'] == "RF"):
             copy_to_device('LMODEd', 1, np.int32)
-        if (cus_l is not None) and (cus_l.dict['LMODE'] == "FF"):
-            copy_to_device('CFXd', cus_l.dict['CFX'], np.float32)
-            copy_to_device('CFYd', cus_l.dict['CFY'], np.float32)
-            copy_to_device('CFTXd', cus_l.dict['CFTX'], np.float32)
-            copy_to_device('CFTYd', cus_l.dict['CFTY'], np.float32)
-            copy_to_device('ALDEGd', cus_l.dict['FOV'], np.float32)
-            copy_to_device('TYPEd', cus_l.dict['TYPE'], np.int32)
+        if (cus_l is not None) and (cus_l.dict['mode'] == "FF"):
+            copy_to_device('CFXd', cus_l.dict['cfx'], np.float32)
+            copy_to_device('CFYd', cus_l.dict['cfy'], np.float32)
+            copy_to_device('CFTXd', cus_l.dict['cftx'], np.float32)
+            copy_to_device('CFTYd', cus_l.dict['cfty'], np.float32)
+            copy_to_device('ALDEGd', cus_l.dict['fov'], np.float32)
+            copy_to_device('TYPEd', cus_l.dict['sampling_code'], np.int32)
             copy_to_device('LMODEd', 2, np.int32)
         if (cus_l is not None) and (
-            cus_l.dict['LMODE'] == "B" or cus_l.dict['LMODE'] == "BR"
+            cus_l.dict['mode'] == "B" or cus_l.dict['mode'] == "BR"
         ):
-            copy_to_device('THDEGd', cus_l.dict['THDEG'], np.float32)
-            copy_to_device('PHDEGd', cus_l.dict['PHDEG'], np.float32)
-            copy_to_device('ALDEGd', cus_l.dict['ALDEG'], np.float32)
-            copy_to_device('TYPEd', cus_l.dict['TYPE'], np.int32)
-            copy_to_device('CBACK_SFOVd', cus_l.dict['SFOV'], np.float32)
-        if (cus_l is not None) and (cus_l.dict['LMODE'] == "B"):
+            copy_to_device('THDEGd', cus_l.dict['th_deg'], np.float32)
+            copy_to_device('PHDEGd', cus_l.dict['ph_deg'], np.float32)
+            copy_to_device('ALDEGd', cus_l.dict['receiver_fov'], np.float32)
+            copy_to_device('TYPEd', cus_l.dict['sampling_code'], np.int32)
+            copy_to_device('CBACK_SFOVd', cus_l.dict['sun_fov'], np.float32)
+        if (cus_l is not None) and (cus_l.dict['mode'] == "B"):
             copy_to_device('LMODEd', 3, np.int32)
-        if (cus_l is not None) and (cus_l.dict['LMODE'] == "BR"):
+        if (cus_l is not None) and (cus_l.dict['mode'] == "BR"):
             copy_to_device('LMODEd', 4, np.int32)
         if cus_l is None:
             copy_to_device('LMODEd', 0, np.int32)
@@ -4835,57 +4836,57 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
     lgobj_gpu = to_gpu(lgobj_gpu)
     n_obj = len(lobj)
 
-    if cus_l is not None and cus_l.dict['LMODE'] == "BR":
+    if cus_l is not None and cus_l.dict['mode'] == "BR":
         lobj_gpu = np.zeros(n_obj + 1, dtype=TYPE_IOBJECTS, order='C')
-        tc = cus_l.dict['REC'].tc
+        tc = cus_l.dict['receiver'].tc
         size_x_min = min(
-            cus_l.dict['REC'].geo.p1.x,
-            cus_l.dict['REC'].geo.p2.x,
-            cus_l.dict['REC'].geo.p3.x,
-            cus_l.dict['REC'].geo.p4.x,
+            cus_l.dict['receiver'].geo.p1.x,
+            cus_l.dict['receiver'].geo.p2.x,
+            cus_l.dict['receiver'].geo.p3.x,
+            cus_l.dict['receiver'].geo.p4.x,
         )
         size_x_max = max(
-            cus_l.dict['REC'].geo.p1.x,
-            cus_l.dict['REC'].geo.p2.x,
-            cus_l.dict['REC'].geo.p3.x,
-            cus_l.dict['REC'].geo.p4.x,
+            cus_l.dict['receiver'].geo.p1.x,
+            cus_l.dict['receiver'].geo.p2.x,
+            cus_l.dict['receiver'].geo.p3.x,
+            cus_l.dict['receiver'].geo.p4.x,
         )
         size_x = size_x_max - size_x_min
         size_y_min = min(
-            cus_l.dict['REC'].geo.p1.y,
-            cus_l.dict['REC'].geo.p2.y,
-            cus_l.dict['REC'].geo.p3.y,
-            cus_l.dict['REC'].geo.p4.y,
+            cus_l.dict['receiver'].geo.p1.y,
+            cus_l.dict['receiver'].geo.p2.y,
+            cus_l.dict['receiver'].geo.p3.y,
+            cus_l.dict['receiver'].geo.p4.y,
         )
         size_y_max = max(
-            cus_l.dict['REC'].geo.p1.y,
-            cus_l.dict['REC'].geo.p2.y,
-            cus_l.dict['REC'].geo.p3.y,
-            cus_l.dict['REC'].geo.p4.y,
+            cus_l.dict['receiver'].geo.p1.y,
+            cus_l.dict['receiver'].geo.p2.y,
+            cus_l.dict['receiver'].geo.p3.y,
+            cus_l.dict['receiver'].geo.p4.y,
         )
         size_y = size_y_max - size_y_min
         nb_cx = int(size_x / tc)
         nb_cy = int(size_y / tc)
-        lobj_gpu['mvRx'][n_obj] = cus_l.dict['REC'].transformation.rotx
-        lobj_gpu['mvRy'][n_obj] = cus_l.dict['REC'].transformation.roty
-        lobj_gpu['mvRz'][n_obj] = cus_l.dict['REC'].transformation.rotz
-        if cus_l.dict['REC'].transformation.rot_order == "XYZ":
+        lobj_gpu['mvRx'][n_obj] = cus_l.dict['receiver'].transformation.rotx
+        lobj_gpu['mvRy'][n_obj] = cus_l.dict['receiver'].transformation.roty
+        lobj_gpu['mvRz'][n_obj] = cus_l.dict['receiver'].transformation.rotz
+        if cus_l.dict['receiver'].transformation.rot_order == "XYZ":
             lobj_gpu['rotOrder'][n_obj] = 1
-        elif cus_l.dict['REC'].transformation.rot_order == "XZY":
+        elif cus_l.dict['receiver'].transformation.rot_order == "XZY":
             lobj_gpu['rotOrder'][n_obj] = 2
-        elif cus_l.dict['REC'].transformation.rot_order == "YXZ":
+        elif cus_l.dict['receiver'].transformation.rot_order == "YXZ":
             lobj_gpu['rotOrder'][n_obj] = 3
-        elif cus_l.dict['REC'].transformation.rot_order == "YZX":
+        elif cus_l.dict['receiver'].transformation.rot_order == "YZX":
             lobj_gpu['rotOrder'][n_obj] = 4
-        elif cus_l.dict['REC'].transformation.rot_order == "ZXY":
+        elif cus_l.dict['receiver'].transformation.rot_order == "ZXY":
             lobj_gpu['rotOrder'][n_obj] = 5
-        elif cus_l.dict['REC'].transformation.rot_order == "ZYX":
+        elif cus_l.dict['receiver'].transformation.rot_order == "ZYX":
             lobj_gpu['rotOrder'][n_obj] = 6
         else:
             raise ValueError('Unknown rotation order')
-        lobj_gpu['mvTx'][n_obj] = cus_l.dict['REC'].transformation.transx
-        lobj_gpu['mvTy'][n_obj] = cus_l.dict['REC'].transformation.transy
-        lobj_gpu['mvTz'][n_obj] = cus_l.dict['REC'].transformation.transz
+        lobj_gpu['mvTx'][n_obj] = cus_l.dict['receiver'].transformation.transx
+        lobj_gpu['mvTy'][n_obj] = cus_l.dict['receiver'].transformation.transy
+        lobj_gpu['mvTz'][n_obj] = cus_l.dict['receiver'].transformation.transz
 
         ind_robj.append(n_obj)  # For creating a receiver-only GPU table.
     else:
@@ -4912,7 +4913,7 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
     z_alt_h = 0.0
     tot_s_h = 0.0
     ncos = 0.0
-    if cus_l is not None and cus_l.dict['LMODE'] == "RF":
+    if cus_l is not None and cus_l.dict['mode'] == "RF":
         surf_lph = 0
     else:
         surf_lph = None
@@ -5080,7 +5081,7 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
                     normal_base, gc.Vector(-v_sun.x, -v_sun.y, -v_sun.z)
                 )
 
-            if cus_l is not None and cus_l.dict['LMODE'] == "RF":
+            if cus_l is not None and cus_l.dict['mode'] == "RF":
                 pp1 = lobj[i].geo.p1
                 pp2 = lobj[i].geo.p2
                 pp3 = lobj[i].geo.p3
@@ -5206,8 +5207,8 @@ def _normalize_rec(
         Side length (km) of a square receiver cell (taille cellule).
     cus_l : object or None
         Custom launching mode object with attributes like
-        ``dict['LMODE']``, ``dict['FOV']`` and, in the "B" and "BR"
-        modes, ``dict['SFOV']``, the half-angle (degrees) of the cone
+        ``dict['mode']``, ``dict['fov']`` and, in the "B" and "BR"
+        modes, ``dict['sun_fov']``, the half-angle (degrees) of the cone
         subtended by the sun. If `None`, no normalization is applied.
     le : bool
         Flag indicating whether the local estimate mode is enabled.
@@ -5234,7 +5235,7 @@ def _normalize_rec(
         # for i in range (0, 9):
         #     mat_cats[i,3] = mat_cats[i,1]*norm_c # intensity
         #     mat_cats[i,4] *= norm_c # Absolute err
-    elif cus_l.dict['LMODE'] == "FF" or cus_l.dict['LMODE'] == "RF":
+    elif cus_l.dict['mode'] == "FF" or cus_l.dict['mode'] == "RF":
         # Here results are already propor to watt unit
         norm_c = (
             surf_lph * 1e6
@@ -5242,18 +5243,18 @@ def _normalize_rec(
         norm_ff = 1.0
         # lambertian sampling normalization
         if (
-            cus_l.dict['LMODE'] == "FF"
-            and cus_l.dict['TYPE'] == 1
-            and cus_l.dict['FOV'] > 1e-6
+            cus_l.dict['mode'] == "FF"
+            and cus_l.dict['sampling_code'] == 1
+            and cus_l.dict['fov'] > 1e-6
         ):
-            norm_ff = (1 - np.cos(np.radians(2 * cus_l.dict['FOV']))) / (
-                4 * (1 - np.cos(np.radians(cus_l.dict['FOV'])))
+            norm_ff = (1 - np.cos(np.radians(2 * cus_l.dict['fov']))) / (
+                4 * (1 - np.cos(np.radians(cus_l.dict['fov'])))
             )
         # isotropic sampling normalization
         elif (
-            cus_l.dict['LMODE'] == "FF"
-            and cus_l.dict['TYPE'] == 2
-            and cus_l.dict['FOV'] > 1e-6
+            cus_l.dict['mode'] == "FF"
+            and cus_l.dict['sampling_code'] == 2
+            and cus_l.dict['fov'] > 1e-6
         ):
             norm_ff = 1.0
         norm_c *= norm_ff
@@ -5261,18 +5262,22 @@ def _normalize_rec(
             c_mat_visu_recep[i][:][:] = c_mat_visu_recep[i][:][:] * norm_c
             mat_cats[i, 3] = mat_cats[i, 1] * norm_c
             mat_cats[i, 4] *= norm_c
-    elif cus_l.dict['LMODE'] == "B" or cus_l.dict['LMODE'] == "BR":
+    elif cus_l.dict['mode'] == "B" or cus_l.dict['mode'] == "BR":
         norm_br = 2
         # lambertian sampling normalization
-        if cus_l.dict['TYPE'] == 1:
-            norm_br = (1 - np.cos(np.radians(2 * cus_l.dict['ALDEG']))) / 2.0
+        if cus_l.dict['sampling_code'] == 1:
+            norm_br = (
+                1 - np.cos(np.radians(2 * cus_l.dict['receiver_fov']))
+            ) / 2.0
         # isotropic sampling normalization
-        elif cus_l.dict['TYPE'] == 2:
-            norm_br = 2 * (1 - np.cos(np.radians(cus_l.dict['ALDEG'])))
+        elif cus_l.dict['sampling_code'] == 2:
+            norm_br = 2 * (1 - np.cos(np.radians(cus_l.dict['receiver_fov'])))
 
         if not le:
             norm_c = norm_br / (
-                nb_photons * 2 * (1 - np.cos(np.radians(cus_l.dict['SFOV'])))
+                nb_photons
+                * 2
+                * (1 - np.cos(np.radians(cus_l.dict['sun_fov'])))
             )
         else:
             norm_c = norm_br / nb_photons

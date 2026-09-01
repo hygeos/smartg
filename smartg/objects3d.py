@@ -2403,24 +2403,24 @@ class CusForward:
                 'You must choose lambertian or isotropic sampling')
 
         self.dict = {
-            'CFX':   cfx,
-            'CFY':   cfy,
-            'CFTX':  cftx,
-            'CFTY':  cfty,
-            'CFTZ':  cftz,
-            'FOV':   fov,
-            'TYPE':  sampling_code,
-            'LMODE': mode,
+            'cfx':           cfx,
+            'cfy':           cfy,
+            'cftx':          cftx,
+            'cfty':          cfty,
+            'cftz':          cftz,
+            'fov':           fov,
+            'sampling_code': sampling_code,
+            'mode':          mode,
             # under development ->
-            'LPH':   lph,
-            'LPR':   lpr,
+            'lph':           lph,
+            'lpr':           lpr,
         }
 
     def __str__(self) -> str:
         return (
-            'CusForward=-CFX{CFX}-CFY{CFY}-CFTX{CFTX}-CFTY{CFTY}'
-            '-CFTZ{CFTZ}-FOV{FOV}-TYPE{TYPE}'
-            '-LMODE{LMODE}'.format(**self.dict)
+            'CusForward=-cfx{cfx}-cfy{cfy}-cftx{cftx}-cfty{cfty}'
+            '-cftz{cftz}-fov{fov}-sampling_code{sampling_code}'
+            '-mode{mode}'.format(**self.dict)
         )
 
 
@@ -2539,23 +2539,25 @@ class CusBackward:
             )
 
         self.dict = {
-            'POS':   position,
-            'THDEG': th_deg,
-            'PHDEG': ph_deg,
-            'VSUN':  v_sun,
-            'SFOV':  sun_fov,
-            'ALDEG': receiver_fov,
-            'REC':   receiver,
-            'TYPE':  sampling_code,
-            'LMODE': mode,
+            'position':      position,
+            'th_deg':        th_deg,
+            'ph_deg':        ph_deg,
+            'v_sun':         v_sun,
+            'sun_fov':       sun_fov,
+            'receiver_fov':  receiver_fov,
+            'receiver':      receiver,
+            'sampling_code': sampling_code,
+            'mode':          mode,
             # under development ->
-            'LPH':   lph,
-            'LPR':   lpr,
+            'lph':           lph,
+            'lpr':           lpr,
         }
 
     def __str__(self) -> str:
         return (
-            'CusBackward:-POS={POS}-THDEG={THDEG}-PHDEG={PHDEG}'
-            '-VSUN={VSUN}-SFOV={SFOV}-ALDEG={ALDEG}-TYPE={TYPE}'
-            '-LMODE={LMODE}'.format(**self.dict)
+            'CusBackward:-position={position}-th_deg={th_deg}'
+            '-ph_deg={ph_deg}-v_sun={v_sun}-sun_fov={sun_fov}'
+            '-receiver_fov={receiver_fov}'
+            '-sampling_code={sampling_code}'
+            '-mode={mode}'.format(**self.dict)
         )
