@@ -1894,9 +1894,9 @@ class Smartg(object):
             # dic_stp : tuple incorporating parameters for Solar Tower
             # Power applications
             if self.back:
-                aldeg = cus_l.dict['ALDEG']
+                receiver_fov = cus_l.dict['ALDEG']
             else:
-                aldeg = 0.0
+                receiver_fov = 0.0
             dic_stp = {
                 "nb_H": nb_h,
                 "n_cos": n_cos,
@@ -1911,16 +1911,16 @@ class Smartg(object):
                 "LPR": cus_l.dict['LPR'],
                 "prog": progress,
                 "n_cte": n_cte,
-                "ALDEG": aldeg,
+                "ALDEG": receiver_fov,
             }
         # If there are no heliostats --> no analyses of optical losses
         elif tc is not None and cus_l is not None:
             s_rec = tc * tc * nb_cx * nb_cy
             mat_loss = None  # ;weight_r=mat_cats[2, 1]
             if self.back:
-                aldeg = cus_l.dict['ALDEG']
+                receiver_fov = cus_l.dict['ALDEG']
             else:
-                aldeg = 0.0
+                receiver_fov = 0.0
             dic_stp = {
                 "vSun": v_sun,
                 "wRec": mat_cats[2, 1],
@@ -1930,7 +1930,7 @@ class Smartg(object):
                 "LPR": cus_l.dict['LPR'],
                 "prog": progress,
                 "n_cte": n_cte,
-                "ALDEG": aldeg,
+                "ALDEG": receiver_fov,
             }
         elif tc is not None:
             s_rec = tc * tc * nb_cx * nb_cy

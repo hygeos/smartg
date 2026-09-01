@@ -2430,16 +2430,16 @@ class CusBackward:
 
     Parameters
     ----------
-    pos : Point, optional
+    position : Point, optional
         The position (X, Y, Z) in cartesian coordinates. The
         default is Point(0., 0., 0.).
-    thdeg : float, optional
+    th_deg : float, optional
         The zenith angle in degrees.
-    phdeg : float, optional
+    ph_deg : float, optional
         The azimuth angle in degrees.
-    v : Vector, optional
+    normal : Vector, optional
         The normal vector of the receiver. If provided,
-        circumvent thdeg and phdeg.
+        circumvent th_deg and ph_deg.
     v_sun : Vector, optional
         The sun direction vector, for example the result of
         gc.ang2vec(sza, phi, vec_view='nadir'). If provided, it
@@ -2453,28 +2453,28 @@ class CusBackward:
         and BR modes. It applies only without the le parameter of
         that run method: under local estimate the angular size of
         the source is given by le_fov instead.
-    aldeg : float, optional
-        Launch in a solid angle where alpha is the half-angle of
-        the cone.
-    rec : Entity, optional
+    receiver_fov : float, optional
+        Launch in a solid angle where receiver_fov is the
+        half-angle of the cone.
+    receiver : Entity, optional
         The receiver object to be used in 'BR' mode. It must be a
         plane Entity object of type 'receiver'. The photon
         position is sampled at the receiver surface.
     sampling : str, optional
-        The sampling type (only for the BR lmode). 2 choices:
+        The sampling type (only for the BR mode). 2 choices:
 
             * 'lambertian'
             * 'isotropic'
-    lmode : str, optional
+    mode : str, optional
         The launching mode. 2 choices:
 
             * 'B' -> Basic backward (deprecated, see notes).
               Launch the photons from a given point in a given
-              direction with a field of view aldeg.
+              direction with a field of view receiver_fov.
             * 'BR' -> Backward with receiver. Launch the photons
               from a given receiver (plane object) in a given
-              direction with a field of view aldeg. Default
-              value.
+              direction with a field of view receiver_fov.
+              Default value.
     lph : object, optional
         In progress...
     lpr : object, optional
@@ -2487,36 +2487,36 @@ class CusBackward:
     """
     def __init__(
         self,
-        pos: gc.Point | None = None,
-        thdeg: float = 0.,
-        phdeg: float = 0.,
-        v: gc.Vector | None = None,
+        position: gc.Point | None = None,
+        th_deg: float = 0.,
+        ph_deg: float = 0.,
+        normal: gc.Vector | None = None,
         v_sun: gc.Vector | None = None,
         sun_fov: float = 0.266,
-        aldeg: float = 0.,
-        rec: Entity | None = None,
+        receiver_fov: float = 0.,
+        receiver: Entity | None = None,
         sampling: str = "lambertian",
-        lmode: str = "BR",
+        mode: str = "BR",
         lph: object | None = None,
         lpr: object | None = None,
     ) -> None:
-        if pos is None:
-            pos = gc.Point(0., 0., 0.)
-        if isinstance(v, gc.Vector):
-            th, ph = gc.vec2ang(v)
-            thdeg, phdeg = float(th), float(ph)
-        elif v is not None:
-            raise ValueError('The v argument must be a Vector')
+        if position is None:
+            position = gc.Point(0., 0., 0.)
+        if isinstance(normal, gc.Vector):
+            th, ph = gc.vec2ang(normal)
+            th_deg, ph_deg = float(th), float(ph)
+        elif normal is not None:
+            raise ValueError('The normal argument must be a Vector')
         if v_sun is not None and not isinstance(v_sun, gc.Vector):
             raise ValueError('The v_sun argument must be a Vector')
         if sun_fov <= 0. or sun_fov >= 90.:
             raise ValueError(
                 'The CusBackward sun_fov must be in ]0, 90[ degrees')
-        if lmode not in ("B", "BR"):
-            raise ValueError('The CusBackward lmode must be B or BR')
-        if lmode == "BR" and not isinstance(rec, Entity):
+        if mode not in ("B", "BR"):
+            raise ValueError('The CusBackward mode must be B or BR')
+        if mode == "BR" and not isinstance(receiver, Entity):
             raise ValueError(
-                'In the BR lmode you have to specify a receiver!')
+                'In the BR mode you have to specify a receiver!')
         if sampling == "lambertian":
             sampling_code = 1
         elif sampling == "isotropic":
@@ -2525,26 +2525,26 @@ class CusBackward:
             raise ValueError(
                 'You must choose lambertian or isotropic sampling')
 
-        if lmode == "B":
+        if mode == "B":
             warn(
-                "\nThe lmode `B` is deprecated as of SMART-G 1.1.0 "
+                "\nThe mode `B` is deprecated as of SMART-G 1.1.0 "
                 "and will be removed in one of the next release.\n"
-                "Please use the lmode `BR` or the class Sensor "
+                "Please use the mode `BR` or the class Sensor "
                 "instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
 
         self.dict = {
-            'POS':   pos,
-            'THDEG': thdeg,
-            'PHDEG': phdeg,
+            'POS':   position,
+            'THDEG': th_deg,
+            'PHDEG': ph_deg,
             'VSUN':  v_sun,
             'SFOV':  sun_fov,
-            'ALDEG': aldeg,
-            'REC':   rec,
+            'ALDEG': receiver_fov,
+            'REC':   receiver,
             'TYPE':  sampling_code,
-            'LMODE': lmode,
+            'LMODE': mode,
             # under development ->
             'LPH':   lph,
             'LPR':   lpr,

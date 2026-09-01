@@ -3552,7 +3552,7 @@ def cat_view(
     output = output.assign_coords(Categories=categories)
 
     # Parameters not dependant on the wavelength
-    aldeg = float(ds.attrs["ALDEG"])
+    receiver_fov = float(ds.attrs["ALDEG"])
 
     # Parameters needed in case kdis or reptran is used
     norm: Any | None = None
@@ -3631,7 +3631,7 @@ def cat_view(
         str_type = "irradiance"
     elif output_unit == "RADIANCE":
         cst = (1.0 * k * kl) / (float(ds.attrs["S_Receiver"]) * 1e6)
-        cst *= 2.0 / (np.pi * (1 - np.cos(np.radians(2 * aldeg))))
+        cst *= 2.0 / (np.pi * (1 - np.cos(np.radians(2 * receiver_fov))))
         str_print = (
             f"Radiance in {flux_unit_long}/"
             f"{length_unit_long}²/sr for each categories"
