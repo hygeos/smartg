@@ -4188,10 +4188,10 @@ class Atm3D(Atmosphere):
             # scattering angles, so that the mixing arithmetic below
             # aligns exactly
             theta = cld_phases[0]["theta_atm"].values
-            if pha_aer_1d.sizes["theta_atm"] == n_theta:
-                phase_aer_1d = pha_aer_1d.assign_coords(
-                    theta_atm=theta
-                )
+            if np.array_equal(
+                pha_aer_1d.coords["theta_atm"].values, theta
+            ):
+                phase_aer_1d = pha_aer_1d
             else:
                 phase_aer_1d = pha_aer_1d.interp(theta_atm=theta)
 
