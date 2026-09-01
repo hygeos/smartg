@@ -27,7 +27,7 @@ struct AGrid {
     unsigned int n;   /* angles per phase function = table entries   */
     int   mode;
     int   log2n;      /* floor(log2(n-2)), binary search trip count  */
-    float *ang;       /* mode 2 only, n entries, device pointer      */
+    float *ang;       /* mode 1 only, n entries, device pointer      */
 };
 
 /* aIndex
