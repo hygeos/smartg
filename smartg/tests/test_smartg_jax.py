@@ -106,7 +106,7 @@ def test_smartg_jax2(
         m = (
             sg.run(
                 seed=0,
-                th_v_deg=45.0,
+                th_deg=45.0,
                 wavelength=wavelength_sca,
                 surface=LambSurface(alb_hist),
                 le=lez,
@@ -126,7 +126,7 @@ def test_smartg_jax2(
         m0 = (
             sg.run(
                 seed=0,
-                th_v_deg=45.0,
+                th_deg=45.0,
                 wavelength=wavelength_abs,
                 surface=LambSurface(alb_snow),
                 le=lez,
@@ -289,7 +289,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
     m1 = (
         sg.run(
             seed=0,
-            th_v_deg=30.0,
+            th_deg=30.0,
             wavelength=w_valid,
             surface=None,
             le=le,
@@ -306,7 +306,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
     m2 = (
         sg.run(
             seed=0,
-            th_v_deg=30.0,
+            th_deg=30.0,
             wavelength=w_valid,
             surface=None,
             le=le,

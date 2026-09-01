@@ -748,8 +748,8 @@ class Smartg(object):
         nb_photons: float = 1e9,
         depo: float = 0.0279,
         depo_water: float = 0.0906,
-        th_v_deg: float = 0.0,
-        ph_v_deg: float = 0.0,
+        th_deg: float = 0.0,
+        ph_deg: float = 0.0,
         seed: int = -1,
         earth_radius: float = 6371.0,
         wavelength_proba: np.ndarray | None = None,
@@ -844,17 +844,17 @@ class Smartg(object):
             The Rayleigh depolarization factor (air). Default 0.0279.
         depo_water : float, optional
             The Rayleigh depolarization factor (water). Default 0.0906.
-        th_v_deg : float, optional
+        th_deg : float, optional
             The sun/viewing zenith angle in forward/backward mode, in
             degrees. This parameter is ignored if the parameter `sensor`
             is used. If the parameter `cus_l` is a CusBackward with a
             v_sun vector, that vector gives the sun direction instead
-            of th_v_deg and ph_v_deg, which then only define the
+            of th_deg and ph_deg, which then only define the
             atmosphere impact point and the VZA attribute.
-        ph_v_deg : float, optional
+        ph_deg : float, optional
             The sun/viewing azimuth angle in forward/backward mode, in
             degrees. This parameter is ignored if the parameter `sensor`
-            is used. See also th_v_deg.
+            is used. See also th_deg.
         seed : int, optional
             The seed used to initiate the series of random numbers.
             Default based on clock time.
@@ -999,7 +999,7 @@ class Smartg(object):
             Use the RF, FF (CusForward) or B, BR (CusBackward) launching
             modes. The compilation option `obj3d` must be set to True.
             A CusBackward can also carry the sun direction as a vector
-            in its v_sun parameter (see th_v_deg) and the angular size
+            in its v_sun parameter (see th_deg) and the angular size
             of the sun in its sun_fov parameter (see sun_disc), which
             applies only without the parameter le (see le_fov).
         s_min : int, optional
@@ -1149,11 +1149,11 @@ class Smartg(object):
             )
 
         # Compute the sun direction as vector, given either by the
-        # v_sun attribute of CusBackward or by th_v_deg and ph_v_deg
+        # v_sun attribute of CusBackward or by th_deg and ph_deg
         if cus_l is not None and cus_l.dict.get('v_sun') is not None:
             v_sun = cus_l.dict['v_sun']
         else:
-            v_sun = gc.ang2vec(th_v_deg, ph_v_deg, vec_view='nadir')
+            v_sun = gc.ang2vec(th_deg, ph_deg, vec_view='nadir')
         v_sun = gc.normalize(v_sun)
 
         surf_lph = 0
@@ -1305,7 +1305,7 @@ class Smartg(object):
 
         attrs = OrderedDict()
         attrs.update({'processing started at': t0})
-        attrs.update({'VZA': th_v_deg})
+        attrs.update({'VZA': th_deg})
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[self.pp]})
         attrs.update({'XBLOCK': xblock})
         attrs.update({'XGRID': xgrid})
@@ -1427,29 +1427,29 @@ class Smartg(object):
             n_atm_abs = 0
 
         # computation of the impact point
-        # x0, _ = _impact_init(prof_atm, n_lam, th_v_deg, earth_radius,
+        # x0, _ = _impact_init(prof_atm, n_lam, th_deg, earth_radius,
         # self.pp)
         x0, tab_trans_dir_analytic = _impact_init(
-            prof_atm, n_lam, th_v_deg, earth_radius, self.pp
+            prof_atm, n_lam, th_deg, earth_radius, self.pp
         )
 
         # sensor definition
         if sensor is None:
-            # by defaut sensor in forward mode, with ZA=180.-th_v_deg,
+            # by defaut sensor in forward mode, with ZA=180.-th_deg,
             # PHDEG=180., FOV=0.
             if sim == 3:
                 sensor2 = [
                     Sensor(
-                        THDEG=180.0 - th_v_deg,
-                        PHDEG=ph_v_deg + 180.0,
+                        THDEG=180.0 - th_deg,
+                        PHDEG=ph_deg + 180.0,
                         LOC='OCEAN',
                     )
                 ]
             elif (sim == -1) or (sim == 0):
                 sensor2 = [
                     Sensor(
-                        THDEG=180.0 - th_v_deg,
-                        PHDEG=ph_v_deg + 180.0,
+                        THDEG=180.0 - th_deg,
+                        PHDEG=ph_deg + 180.0,
                         LOC='SURF0P',
                     )
                 ]
@@ -1460,8 +1460,8 @@ class Smartg(object):
                             POSX=x0.get()[0],
                             POSY=x0.get()[1],
                             POSZ=x0.get()[2],
-                            THDEG=180.0 - th_v_deg,
-                            PHDEG=ph_v_deg + 180.0,
+                            THDEG=180.0 - th_deg,
+                            PHDEG=ph_deg + 180.0,
                             LOC='ATMOS',
                         )
                     ]
@@ -1474,8 +1474,8 @@ class Smartg(object):
                             POSX=x0.get()[0],
                             POSY=x0.get()[1],
                             POSZ=x0.get()[2],
-                            THDEG=180.0 - th_v_deg,
-                            PHDEG=ph_v_deg + 180.0,
+                            THDEG=180.0 - th_deg,
+                            PHDEG=ph_deg + 180.0,
                             LOC='ATMOS',
                         )
                     ]
@@ -1742,7 +1742,7 @@ class Smartg(object):
             n_oce_abs,
             self.mod,
             nb_loop,
-            th_v_deg,
+            th_deg,
             xblock,
             xgrid,
             n_lam,
@@ -3221,7 +3221,7 @@ def _init_const(
     n_oce_abs: int | np.integer,
     mod: SourceModule,
     nb_loop: float | None,
-    th_v_deg: float,
+    th_deg: float,
     xblock: int,
     xgrid: int,
     n_lam: int,
@@ -3315,7 +3315,7 @@ def _init_const(
         Main Monte Carlo control parameters.
     nb_theta, nb_phi, output_layers : int
         Output-grid control parameters.
-    th_v_deg, earth_radius, sza_max, sun_disc, le_fov, z_toa : float
+    th_deg, earth_radius, sza_max, sun_disc, le_fov, z_toa : float
         Angular and physical scalar settings.
     cell_size, sx_min, sx_max, sy_min, sy_max : float
         Spatial scalar settings.
@@ -3361,7 +3361,7 @@ def _init_const(
     """
 
     # compute some needed constants
-    th_v = th_v_deg * np.pi / 180.0
+    th_v = th_deg * np.pi / 180.0
     s_th_v = np.sin(th_v)
     c_th_v = np.cos(th_v)
 

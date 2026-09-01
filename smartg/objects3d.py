@@ -2444,7 +2444,8 @@ class CusBackward:
         The sun direction vector, for example the result of
         gc.ang2vec(sza, phi, vec_view='nadir'). If provided, it
         replaces the sun direction that the run method of Smartg
-        computes from its th_v_deg and ph_v_deg parameters.
+        computes from the th_deg and ph_deg parameters of that
+        method.
     sun_fov : float, optional
         The half-angle in degrees of the cone subtended by the
         sun, 0.266 by default (the solar disc). It replaces the

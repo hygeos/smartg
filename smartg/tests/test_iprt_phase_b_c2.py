@@ -773,7 +773,7 @@ def _run_group_forward(
     }
 
     kw = dict(
-        th_v_deg=theta_0,
+        th_deg=theta_0,
         wavelength=wavelengths,
         atmosphere=pro,
         sensor=sensors,

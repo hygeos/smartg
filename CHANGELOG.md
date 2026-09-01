@@ -194,7 +194,7 @@ final `v2.0.0` release.
     `obj3D` → `obj3d` and `opt3D` → `opt3d`. `run`:
     - `NBPHOTONS` → `nb_photons`, `NBLOOP` → `nb_loop`,
       `NBTHETA` → `nb_theta`, `NBPHI` → `nb_phi`, `NF` → `n_f`
-    - `THVDEG` → `th_v_deg`, `PHVDEG` → `ph_v_deg`, `SEED` → `seed`,
+    - `THVDEG` → `th_deg`, `PHVDEG` → `ph_deg`, `SEED` → `seed`,
       `RTER` → `earth_radius`, `DEPO` → `depo`, `DEPO_WATER` → `depo_water`
     - `OUTPUT_LAYERS` → `output_layers`, `XBLOCK` → `xblock`,
       `XGRID` → `xgrid`, `BEER` → `beer`, `RR` → `r_r`,
@@ -208,6 +208,10 @@ final `v2.0.0` release.
     names are unchanged
   - The abbreviated parameters of `Smartg.run` have been given their full
     name: `atm` → `atmosphere`, `surf` → `surface` and `env` → `environment`
+  - The `th_v_deg` and `ph_v_deg` angles of `Smartg.run` are now `th_deg` and
+    `ph_deg`: they are the sun angles in forward mode and the viewing angles
+    in backward mode, so the `v` of the viewing direction did not belong in
+    their name
   - The internal helpers of the smartg module are now private
     (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
     `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,
@@ -288,8 +292,8 @@ final `v2.0.0` release.
   - New `v_sun` parameter of `CusBackward`: the sun direction of a backward
     object simulation can be given as a vector (for example
     `gc.ang2vec(sza, phi, vec_view='nadir')`) on the launching mode itself,
-    where it replaces the direction computed from the `th_v_deg` and
-    `ph_v_deg` angles of `Smartg.run`
+    where it replaces the direction computed from the `th_deg` and
+    `ph_deg` angles of `Smartg.run`
   - New `sun_fov` parameter of `CusBackward`: the angular size of the sun in
     a backward object simulation is carried by the launching mode itself
     (0.266 degree by default, the solar disc) and uploaded as the

@@ -258,7 +258,7 @@ def _smartg_run(_water_iop, _atm, _surf):
     # --- Irradiance run (planar flux, 5x photons) ---
     m_flux = sg.run(
         wavelength=WAVELENGTHS,
-        th_v_deg=SZA_DEG,
+        th_deg=SZA_DEG,
         atmosphere=_atm,
         surface=_surf,
         water=_water_iop,
@@ -284,7 +284,7 @@ def _smartg_run(_water_iop, _atm, _surf):
     }
     m_le = sg.run(
         wavelength=WAVELENGTHS,
-        th_v_deg=SZA_DEG,
+        th_deg=SZA_DEG,
         atmosphere=_atm,
         surface=_surf,
         water=_water_iop,
@@ -503,7 +503,7 @@ def _rw_vs_w1d_run(_atm_rayleigh, _surf):
     ):
         m = sg.run(
             wavelength=WAVELENGTHS,
-            th_v_deg=SZA_DEG,
+            th_deg=SZA_DEG,
             atmosphere=_atm_rayleigh,
             surface=_surf,
             water=water,

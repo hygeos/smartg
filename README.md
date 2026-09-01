@@ -159,7 +159,8 @@ from smartg.atmosphere import Atm1D
 from smartg.view import smartg_view
 
 # 1e8 photons at 500 nm, tropical atmosphere, sun at a 30° zenith angle
-res = Smartg().run(wl=500., th_v_deg=30., nb_photons=1e8, atm=Atm1D('afglt'))
+res = Smartg().run(wavelength=500., th_deg=30., nb_photons=1e8,
+                   atmosphere=Atm1D('afglt'))
 
 ds = res.to_xarray()  # 'I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)', 'V_up (TOA)', ...
 smartg_view(ds)       # polar view of the reflectance and of the polarization

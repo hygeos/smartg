@@ -77,7 +77,7 @@ def test_atm_surf(sg, wavelength, surface, thv):
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
 
     sg.run(wavelength, atmosphere=atmosphere, surface=surface,
-           th_v_deg=thv, nb_photons=NBPHOTONS)
+           th_deg=thv, nb_photons=NBPHOTONS)
 
 
 def test_surf_iop1_1():
@@ -124,7 +124,7 @@ def test_locale_estimate(sg):
         wavelength,
         atmosphere=atmosphere,
         surface=surface,
-        th_v_deg=10.0,
+        th_deg=10.0,
         le={
             "th_deg": np.array([40.0], dtype="float32"),
             "phi_deg": np.array([30.0], dtype="float32"),

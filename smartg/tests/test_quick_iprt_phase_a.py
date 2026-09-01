@@ -248,8 +248,8 @@ def test_a1(request, s1df, s1db):
         180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
     m_a1_f_dep003 = s1df.run(
-        th_v_deg=sza,
-        ph_v_deg=phi_0,
+        th_deg=sza,
+        ph_deg=phi_0,
         wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e5,
@@ -272,8 +272,8 @@ def test_a1(request, s1df, s1db):
         180.0 - saa
     )  # SMART-G anticlockwise converted to be consistent with MYSTIC
     m_a1_f_dep01 = s1df.run(
-        th_v_deg=sza,
-        ph_v_deg=phi_0,
+        th_deg=sza,
+        ph_deg=phi_0,
         wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e5,
@@ -669,8 +669,8 @@ def test_a2(request, s1df):
 
     # === Simulation
     m_a2_f = s1df.run(
-        th_v_deg=sza,
-        ph_v_deg=phi_0,
+        th_deg=sza,
+        ph_deg=phi_0,
         wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e6,
@@ -1034,8 +1034,8 @@ def test_a5_pp(request, s1df):
 
     # === Simulation
     m_a5_f_pp = s1df.run(
-        th_v_deg=sza,
-        ph_v_deg=phi_0,
+        th_deg=sza,
+        ph_deg=phi_0,
         wavelength=800.0,
         nb_photons=1e7,
         nb_loop=1e6,
@@ -1342,8 +1342,8 @@ def test_a5_al(request, s1df):
 
     # === Simulation
     m_a5_f_al = s1df.run(
-        th_v_deg=sza,
-        ph_v_deg=phi_0,
+        th_deg=sza,
+        ph_deg=phi_0,
         wavelength=800.0,
         nb_photons=1e7,
         nb_loop=1e6,
