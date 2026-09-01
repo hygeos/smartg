@@ -213,6 +213,25 @@ final `v2.0.0` release.
     coefficient is scaled by `1 - f`. `None` disables the truncation.
 
 * New features
+  - The scattering angles of a phase matrix no longer have to be equally
+    spaced. Clustering them towards the forward and backward directions
+    resolves the diffraction peak of large particles (desert aerosols,
+    cloud droplets) with far fewer angles, which is what sizes the phase
+    tables on the GPU: each angle costs 52 bytes per phase function.
+    - New `smartg.phase.theta_grid(n, kind)` builds such a grid, `kind`
+      being `'uniform'`, `'lobatto'` (Gauss-Lobatto-Legendre, the same
+      nodes the truncation integrates on) or `'chebyshev'`
+    - The `n_theta` argument of the phase methods of `Atm1D`, `AerOPAC`,
+      `Cloud`, `Hydrosol` and of `read_phase_nth_cte` now accepts those
+      angles directly, in addition to a number of equally spaced ones
+    - New `theta_grid` parameter of `Smartg.run` choosing the grid of
+      the GPU tables: `'phase'` adopts the grid the phase matrices
+      already carry, so no resampling takes place at all; a kind name or
+      an explicit array are also accepted. The default is unchanged
+    - On a water cloud phase matrix, 1801 Lobatto angles are 7 times
+      more accurate than 1801 equally spaced ones, and adopting the
+      594-angle grid of the source file is exact at a thirtieth of the
+      memory of the 18001 equally spaced angles it used to take
   - New 3D atmosphere user API in `smartg.atmosphere`: a 3D atmosphere is now
     built directly as
     `Atm3D(atm_1d=Atm1D(...), grid_3d=Grid3D(...), comp_3d=[Cloud3D(...)])`
@@ -296,6 +315,17 @@ final `v2.0.0` release.
   - Push to PyPI workflow added
 
 * Corrections
+  - Fix two out-of-bounds reads of the phase tables in `device.cu`: both
+    halves read entry `iang` and `iang+1`, so an index of `NF-1` reached
+    into the next phase function, or past the end of the allocation for
+    the last one. The equal-angle half reached it at a scattering angle
+    of exactly 180 degrees, which a backward local estimate does hit,
+    and the equal-probability half when `RAND` returned 1
+  - The scattering angle axis of a truncated phase matrix is no longer
+    overwritten with an equally spaced one in `Atm1D.calc`, which
+    discarded the grid the matrix was built on
+  - `Component.phase` and `_Comp3DFile.get_phase` no longer treat two
+    angle grids of the same length as the same grid
   - Important corrections in the water (ocean) module:
     - Phase matrix always extended to 6 Stokes components (P22=P11, P44=P33 for
       spherical particles)

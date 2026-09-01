@@ -29,6 +29,10 @@ theta_grid
     Build the scattering angle grid of a phase matrix, either
     equally spaced or clustered towards the forward and backward
     directions.
+as_theta_grid
+    Read a scattering angle grid from an ``n_theta`` argument, which
+    is either a number of equally spaced angles or the angles
+    themselves.
 integ_phase
     Numerically integrate a phase function weighted by
     ``sin(theta)`` along the scattering angle axis.
@@ -171,6 +175,60 @@ def theta_grid(
     theta[0] = 0.0
     theta[-1] = span
 
+    return theta
+
+
+def as_theta_grid(n_theta: int | NumericArrayLike) -> NDArray[np.float64]:
+    """Read a scattering angle grid from an ``n_theta`` argument.
+
+    Everywhere a phase matrix is built, its angular grid is described
+    by a single ``n_theta`` argument that is either a number of
+    equally spaced angles, or the angles themselves. This resolves
+    both into the angles, in degrees.
+
+    Parameters
+    ----------
+    n_theta : int or array_like
+        Number of equally spaced scattering angles, or the scattering
+        angles themselves in degrees, from 0 to 180. Build a clustered
+        grid with :func:`theta_grid`.
+
+    Returns
+    -------
+    ndarray
+        Strictly increasing angles in degrees, from 0 to 180.
+
+    Raises
+    ------
+    ValueError
+        If the angles are not strictly increasing, or do not span the
+        whole scattering range.
+
+    Examples
+    --------
+    >>> as_theta_grid(5)
+    array([  0.,  45.,  90., 135., 180.])
+    >>> as_theta_grid([0., 10., 180.])
+    array([  0.,  10., 180.])
+    """
+    if np.ndim(n_theta) == 0:
+        return theta_grid(int(n_theta))
+
+    theta = np.ascontiguousarray(n_theta, dtype=np.float64)
+    if theta.ndim != 1 or theta.size < 2:
+        raise ValueError(
+            "The scattering angles must be a 1-D array of at least 2 "
+            f"values, got shape {theta.shape}."
+        )
+    if np.any(np.diff(theta) <= 0.0):
+        raise ValueError(
+            "The scattering angles must be strictly increasing."
+        )
+    if theta[0] != 0.0 or theta[-1] != 180.0:
+        raise ValueError(
+            "The scattering angles must span 0 to 180 degrees, got "
+            f"{theta[0]} to {theta[-1]}."
+        )
     return theta
 
 
@@ -1288,8 +1346,11 @@ def read_phase_nth_cte(
     ----------
     filename : str or path-like
         Path of the netCDF file to read.
-    nb_theta : int, optional
-        Number of theta values between 0 and 180 degrees.
+    nb_theta : int or array_like, optional
+        Number of equally spaced theta values between 0 and 180
+        degrees, or the theta values themselves in degrees, which
+        :func:`theta_grid` can build clustered towards the forward and
+        backward directions.
         Default: 721
     normalize : bool, optional
         If True, normalize the phase matrix so that the integral of
@@ -1315,10 +1376,10 @@ def read_phase_nth_cte(
             f"equal to 4 or 6, got {n_stk}."
         )
 
-    n_theta = nb_theta
+    theta = as_theta_grid(nb_theta)
+    n_theta = len(theta)
     n_rh_or_reff = rh_reff.size
     n_wavelength = ds["wavelen"].size
-    theta = np.linspace(0., 180., num=n_theta)
     wavelength = ds["wavelen"].data * 1e3
 
     data = np.full((n_wavelength, n_rh_or_reff, 6, n_theta), np.nan,

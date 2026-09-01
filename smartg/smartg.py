@@ -38,7 +38,8 @@ from datetime import datetime, timezone
 from numpy import pi
 from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
 from smartg.sensor import Sensor
-from smartg.phase import convert_phase_to_iparper
+from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
+from smartg.phase import theta_grid as _make_theta_grid
 from smartg.water import Water
 from warnings import warn
 from smartg.surface import Environment
@@ -770,6 +771,7 @@ class Smartg(object):
         nb_theta: int = 45,
         nb_phi: int = 90,
         n_f: float = 1e6,
+        theta_grid: str | NDArray[np.floating] | None = None,
         output_layers: int = 0,
         xblock: int = 256,
         xgrid: int = 256,
@@ -893,10 +895,26 @@ class Smartg(object):
             for the cone sampling. This parameter is ignored if the
             parameter `le` is used.
         n_f : int, optional
-            The number of discretization of:
-                - the inversed aerosol phase functions
-                - the inversed ocean phase functions
-                - the inversed probability of each wavelength occurence
+            The number of scattering angles of the atmospheric and
+            oceanic phase tables uploaded to the GPU. Ignored when
+            `theta_grid` supplies its own grid. Each angle costs 52
+            bytes per phase function, so the 1e6 default costs 52 MB
+            per phase function.
+        theta_grid : str or ndarray, optional
+            Distribution of those scattering angles:
+
+            - None -> equally spaced (default)
+            - 'phase' -> adopt the grid the phase matrices already
+              carry, i.e. their `theta_atm` and `theta_oc` axes
+            - 'uniform', 'chebyshev' or 'lobatto' -> generate `n_f`
+              angles of that kind, see `smartg.phase.theta_grid`
+            - an array of angles in degrees, from 0 to 180
+
+            Clustering the angles towards 0 and 180 degrees resolves
+            the forward diffraction peak of large particles with far
+            fewer of them. On a cloud phase function, 1801 Lobatto
+            angles are more accurate than 18001 equally spaced ones,
+            for a tenth of the memory.
         output_layers : int, optional
             Which layers to consider. Possibilities are the following:
                 - -1 -> consider no layer (for development purposes)
@@ -1275,9 +1293,6 @@ class Smartg(object):
             nb_loop = min(nb_photons / 10, 1e6)
 
         n_f = int(n_f)
-        # equally spaced angle grid of n_f points for both media
-        agrid_atm = (n_f, 0, None)
-        agrid_oc = (n_f, 0, None)
 
         # number of output levels
         # warning! values defined in communs.h should be < LVL
@@ -1381,8 +1396,17 @@ class Smartg(object):
             z_toa = 0.0
 
         if prof_atm is not None:
+            ang_atm, agrid_atm = _resolve_agrid(
+                theta_grid, n_f, prof_atm, 'atm'
+            )
             faer = _calc_phase_gpu(
-                prof_atm, n_theta=n_f, depo=depo, kind='atm', pol_off=pol_off
+                prof_atm,
+                n_theta=agrid_atm[0],
+                depo=depo,
+                kind='atm',
+                pol_off=pol_off,
+                # mode 0 keeps the historical grid of each builder
+                ang_a=None if agrid_atm[1] == 0 else ang_atm,
             )
             prof_atm_gpu, cell_atm_gpu = _init_profile(
                 wavelength, prof_atm, 'atm'
@@ -1397,6 +1421,7 @@ class Smartg(object):
                 n_atm_abs = n_atm
         else:
             faer = gpuzeros(1, dtype='float32')
+            agrid_atm = (n_f, 0, None)
             prof_atm_gpu = to_gpu(np.zeros(1, dtype=TYPE_PROFILE))
             cell_atm_gpu = to_gpu(np.zeros(1, dtype=TYPE_CELL))
             n_atm = 0
@@ -1526,12 +1551,14 @@ class Smartg(object):
             prof_oc = prof_oc.to_xarray()
 
         if prof_oc is not None:
+            ang_oc, agrid_oc = _resolve_agrid(theta_grid, n_f, prof_oc, 'oc')
             foce = _calc_phase_gpu(
                 prof_oc,
-                n_theta=n_f,
+                n_theta=agrid_oc[0],
                 depo=depo_water,
                 kind='oc',
                 pol_off=pol_off,
+                ang_a=None if agrid_oc[1] == 0 else ang_oc,
             )
             prof_oc_gpu, cell_oc_gpu = _init_profile(wavelength, prof_oc, 'oc')
             n_oce = len(prof_oc.coords['z_oc']) - 1
@@ -1541,6 +1568,7 @@ class Smartg(object):
                 n_oce_abs = n_oce
         else:
             foce = gpuzeros(1, dtype='float32')
+            agrid_oc = (n_f, 0, None)
             prof_oc_gpu = to_gpu(np.zeros(1, dtype=TYPE_PROFILE))
             cell_oc_gpu = to_gpu(np.zeros(1, dtype=TYPE_CELL))
             n_oce = 0
@@ -2776,7 +2804,9 @@ def _finalize(
     return ds
 
 
-def _isotropic(n_theta: int) -> np.ndarray:
+def _isotropic(
+    n_theta: int, ang_a: NDArray[np.float64] | None = None
+) -> np.ndarray:
     """
     Build the isotropic phase-function lookup table.
 
@@ -2831,7 +2861,7 @@ def _isotropic(n_theta: int) -> np.ndarray:
 
     # probability between 0 and 1
     z = (np.arange(n_theta, dtype='float64') + 1) / n_theta
-    angN = (np.arange(n_theta, dtype='float64')) / (n_theta - 1) * np.pi
+    angN = _uniform_angles(n_theta) if ang_a is None else ang_a
     f1 = interp1d(angles, phase[0, :])
     f2 = interp1d(angles, phase[1, :])
     f3 = interp1d(angles, phase[2, :])
@@ -2855,7 +2885,12 @@ def _isotropic(n_theta: int) -> np.ndarray:
     return phase_H
 
 
-def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
+def _rayleigh(
+    n_theta: int,
+    depo: float,
+    pol_off: bool = False,
+    ang_a: NDArray[np.float64] | None = None,
+) -> np.ndarray:
     """
     Build the Rayleigh phase-function lookup table.
 
@@ -2896,8 +2931,12 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     a_coeff = np.float32(1.0 + beta / (3.0 * alpha))
 
     i = np.arange(int(n_theta), dtype=np.float32)
-    theta_le = np.linspace(
-        0.0, pi, int(n_theta), endpoint=True, dtype=np.float64
+    # the equal-probability half below is an analytic inversion of the
+    # Rayleigh CDF and is independent of the equal-angle grid
+    theta_le = (
+        np.linspace(0.0, pi, int(n_theta), endpoint=True, dtype=np.float64)
+        if ang_a is None
+        else ang_a
     )
     b = ((i / (n_theta - 1)) - 4.0 * alpha - beta) / (2.0 * alpha)
     u = (-b + (a_coeff**3.0 + b**2.0) ** (1.0 / 2.0)) ** (1.0 / 3.0)
@@ -2954,6 +2993,88 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     return pha
 
 
+def _uniform_angles(n: int) -> NDArray[np.float64]:
+    """Equally spaced angles over ``[0, pi]``, the historical grid."""
+    return np.arange(n, dtype='float64') / (n - 1) * np.pi
+
+
+def _resolve_agrid(
+    theta_grid, n_f: int, profile, kind: str
+) -> tuple[NDArray[np.float64], tuple]:
+    """
+    Pick the angular grid of the equal-angle half of a phase table.
+
+    The grid is classified into the cheapest device lookup that
+    reproduces it exactly, and returned in its canonical form so that
+    the table and the kernel always agree on the node positions.
+
+    Parameters
+    ----------
+    theta_grid : None, str or array_like
+        ``None`` for the equally spaced grid of *n_f* angles, the
+        string ``'phase'`` to adopt the grid the phase matrix already
+        carries, one of ``smartg.phase.THETA_GRID_KINDS`` to generate
+        *n_f* angles of that kind, or an explicit array of angles in
+        degrees.
+    n_f : int
+        Number of angles, ignored when the grid comes from the phase
+        matrix or is given explicitly.
+    profile : xr.Dataset or None
+        Optical profile holding the ``theta_<kind>`` coordinate.
+    kind : str
+        ``'atm'`` or ``'oc'``.
+
+    Returns
+    -------
+    ang : ndarray
+        The angles in radians, from 0 to pi.
+    agrid : tuple
+        ``(n, mode, ang_gpu)``, where *mode* is the device lookup
+        (0 equally spaced, 1 tabulated) and *ang_gpu* the device copy
+        of *ang* for mode 1, else ``None``.
+    """
+    if theta_grid is None:
+        ang = _uniform_angles(n_f)
+    elif isinstance(theta_grid, str) and theta_grid == 'phase':
+        name = 'theta_' + kind
+        if profile is not None and name in profile.coords:
+            ang = profile.coords[name].to_numpy() * np.pi / 180.0
+        else:
+            # no tabulated phase matrix: only the analytic molecular
+            # phase functions are needed, on any grid
+            ang = _uniform_angles(n_f)
+    elif isinstance(theta_grid, str):
+        if theta_grid not in THETA_GRID_KINDS:
+            raise ValueError(
+                "Choices for the theta_grid parameter are: 'phase', "
+                f"{THETA_GRID_KINDS}, or an array of angles in "
+                f"degrees, got {theta_grid!r}."
+            )
+        ang = _make_theta_grid(n_f, theta_grid, unit='rad')
+    else:
+        ang = np.deg2rad(np.asarray(theta_grid, dtype='float64'))
+
+    ang = np.ascontiguousarray(ang, dtype='float64')
+    n = len(ang)
+    if n < 2:
+        raise ValueError(f"The angular grid needs >= 2 angles, got {n}.")
+    if np.any(np.diff(ang) <= 0):
+        raise ValueError("The angular grid must be strictly increasing.")
+    if not (np.isclose(ang[0], 0.0) and np.isclose(ang[-1], np.pi)):
+        raise ValueError(
+            "The angular grid must span 0 to 180 degrees, got "
+            f"{np.rad2deg(ang[0])} to {np.rad2deg(ang[-1])}."
+        )
+
+    # classify, and snap onto the canonical nodes of the chosen mode so
+    # that the table and the kernel cannot disagree
+    canonical = _uniform_angles(n)
+    if np.allclose(ang, canonical, rtol=0.0, atol=1e-9):
+        return canonical, (n, 0, None)
+
+    return ang, (n, 1, to_gpu(ang.astype('float32')))
+
+
 def _agrid_struct(agrid) -> np.void:
     """
     Pack a phase-table angle grid into its ``TYPE_AGRID`` record.
@@ -2962,7 +3083,7 @@ def _agrid_struct(agrid) -> np.void:
     ----------
     agrid : tuple
         ``(n, mode, ang_gpu)`` as returned by ``_resolve_agrid``, where
-        *ang_gpu* is the device copy of the angle axis for mode 2, and
+        *ang_gpu* is the device copy of the angle axis for mode 1, and
         ``None`` otherwise.
 
     Returns
@@ -2975,8 +3096,7 @@ def _agrid_struct(agrid) -> np.void:
     rec = np.zeros(1, dtype=TYPE_AGRID)
     rec['n'] = n
     rec['mode'] = mode
-    # trip count of the mode 2 binary search: the largest power of two
-    # that can still be added to an index of the last interval, n - 2
+    # trip count of the tabulated binary search
     rec['log2n'] = int(np.floor(np.log2(n - 2))) if n > 2 else 0
     rec['ang'] = 0 if ang_gpu is None else int(ang_gpu.gpudata)
     return rec[0]
@@ -2988,6 +3108,7 @@ def _calc_phase_host(
     depo: float,
     kind: str,
     pol_off: bool = False,
+    ang_a: NDArray[np.float64] | None = None,
 ) -> np.ndarray:
     """
     Build the phase-function lookup table uploaded to the GPU.
@@ -3077,11 +3198,13 @@ def _calc_phase_host(
 
     # Set Rayleigh phase function or isotropic if depo <0
     if depo >= 0:
-        phase_H[0, :] = _rayleigh(n_theta, depo, pol_off=pol_off)
+        phase_H[0, :] = _rayleigh(
+            n_theta, depo, pol_off=pol_off, ang_a=ang_a
+        )
     # no pol_off in isotropic because the function needs first to be
     # corrected
     else:
-        phase_H[0, :] = _isotropic(n_theta)
+        phase_H[0, :] = _isotropic(n_theta, ang_a=ang_a)
     if 'theta_' + kind in profile.coords:
         angles = profile.coords['theta_' + kind].to_numpy() * pi / 180.0
         assert angles[-1] < 3.15  # assert that angles are in radians
@@ -3091,7 +3214,7 @@ def _calc_phase_host(
         dtheta = None
 
     # Set VRS phase function
-    phase_H[1, :] = _rayleigh(n_theta, 0.17)
+    phase_H[1, :] = _rayleigh(n_theta, 0.17, ang_a=ang_a)
 
     idx = 2
     # idx = 1
@@ -3137,7 +3260,7 @@ def _calc_phase_host(
 
         # probability between 0 and 1
         z = (np.arange(n_theta, dtype='float64') + 1) / n_theta
-        angN = (np.arange(n_theta, dtype='float64')) / (n_theta - 1) * np.pi
+        angN = _uniform_angles(n_theta) if ang_a is None else ang_a
         # f1 = interp1d(angles, phase[1,:])
         # f2 = interp1d(angles, phase[0,:])
         f1 = interp1d(angles, phase[0, :])
@@ -3221,6 +3344,7 @@ def _calc_phase_gpu(
     depo: float,
     kind: str,
     pol_off: bool = False,
+    ang_a: NDArray[np.float64] | None = None,
 ) -> GPUArray:
     """
     Upload the phase-function lookup table built by
@@ -3237,7 +3361,9 @@ def _calc_phase_gpu(
         ``TYPE_PHASE``.
     """
     return to_gpu(
-        _calc_phase_host(profile, n_theta, depo, kind, pol_off=pol_off)
+        _calc_phase_host(
+            profile, n_theta, depo, kind, pol_off=pol_off, ang_a=ang_a
+        )
     )
 
 

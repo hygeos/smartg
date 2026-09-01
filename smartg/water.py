@@ -60,6 +60,7 @@ from smartg.diff import diff1
 from smartg.albedo import AlbedoCst, AlbedoLike
 from smartg.phase import (
     integ_phase,
+    as_theta_grid,
     calc_iphase,
     expand_phase_4_to_6,
 )
@@ -250,8 +251,11 @@ class Hydrosol(object):
     bbp_ratio : array_like or None, optional
         Backscattering ratio (dimensionless), same shape rules as `bp`.
         Only used if `phase` is not provided.
-    n_theta : int, optional
-        Number of angles of the derived phase matrices.
+    n_theta : int or array_like, optional
+        Number of equally spaced angles of the derived phase matrices,
+        or the angles themselves in degrees, which
+        `smartg.phase.theta_grid` can build clustered towards the
+        forward and backward directions.
     truncation : DM_trunc or GT_trunc or None, optional
         Truncation of the forward peak of the derived phase matrices,
         performed with pytrunc (see `smartg.truncation`, and the
@@ -463,9 +467,8 @@ class Hydrosol(object):
         # particles phase function
         # see Park & Ruddick, 05
         # https://odnature.naturalsciences.be/downloads/publications/park_appliedoptics_2005.pdf
-        ang = np.linspace(
-            0, np.pi, self.n_theta, dtype="float64"
-        )  # angle in radians
+        # angle in radians
+        ang = np.deg2rad(as_theta_grid(self.n_theta))
         # pytrunc's raw Fournier-Forand integrates to 1/(4*pi) over the
         # sphere: scale by 4*pi to normalize to 4*pi as before
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -509,7 +512,7 @@ class Hydrosol(object):
                     "the truncation angle (theta_tr=None)."
                 )
 
-        pha = np.zeros((n_wavelength, nz, 6, self.n_theta), dtype="float64")
+        pha = np.zeros((n_wavelength, nz, 6, len(ang)), dtype="float64")
         pha[:, :, 0, :] = f11[inv]
         pha[:, :, 4, :] = pha[:, :, 0, :]  # P22 = P11
 
@@ -780,8 +783,11 @@ class HydrosolPR(Hydrosol):
     ----------
     chl : float
         Chlorophyll concentration in mg/m3.
-    n_theta : int, optional
-        Number of angles of the derived phase matrices.
+    n_theta : int or array_like, optional
+        Number of equally spaced angles of the derived phase matrices,
+        or the angles themselves in degrees, which
+        `smartg.phase.theta_grid` can build clustered towards the
+        forward and backward directions.
     truncation : DM_trunc or GT_trunc or None, optional
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None disables the truncation. Defaults to
@@ -952,8 +958,11 @@ class HydrosolZhai(Hydrosol):
         concentration at depth is derived from it (see notes), so this
         is the surface value only, unlike the depth-independent `chl` of
         HydrosolPR.
-    n_theta : int, optional
-        Number of angles of the derived phase matrices.
+    n_theta : int or array_like, optional
+        Number of equally spaced angles of the derived phase matrices,
+        or the angles themselves in degrees, which
+        `smartg.phase.theta_grid` can build clustered towards the
+        forward and backward directions.
     truncation : DM_trunc or GT_trunc or None, optional
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None disables the truncation. Defaults to

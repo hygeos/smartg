@@ -11,10 +11,25 @@ driven by a small probe kernel.
 
 import numpy as np
 import pytest
+import xarray as xr
 
-from smartg.phase import THETA_GRID_KINDS, theta_grid
+from smartg.phase import THETA_GRID_KINDS, as_theta_grid, theta_grid
+from smartg.smartg import _calc_phase_host
 
 N_TEST = (2, 3, 9, 721, 1801)
+
+
+def _peaked_phase(theta_deg):
+    """A phase function with a 0.2 degree wide forward peak.
+
+    Stands in for a cloud droplet or a coarse desert aerosol: a
+    diffraction peak far narrower than the grid step of any reasonable
+    equally spaced grid, on a smooth background.
+    """
+    theta = np.deg2rad(np.asarray(theta_deg, dtype=np.float64))
+    g = 0.85
+    background = (1.0 - g**2) / (1.0 + g**2 - 2.0 * g * np.cos(theta)) ** 1.5
+    return 1e4 * np.exp(-(theta / np.deg2rad(0.2)) ** 2) + background
 
 
 # --------------------------------------------------------------------
@@ -201,3 +216,139 @@ def test_aindex_backscattering_hits_the_last_node():
 
     assert iang[0] == n - 2
     assert weight[0] == 1.0
+
+
+@pytest.mark.parametrize("n", (721, 1801, 10001))
+@pytest.mark.parametrize("kind", ("chebyshev", "lobatto"))
+def test_aindex_brackets_the_angle(n, kind):
+    """The interval returned must contain the angle asked for.
+
+    This is the property the interpolation relies on, and the only one
+    that matters: it is what makes the weight a weight.
+    """
+    nodes = theta_grid(n, kind, unit="rad")
+    theta = _sample_angles(n)
+    theta = theta[(theta > 0.0) & (theta < np.float32(np.pi))]
+
+    iang, weight = _probe(theta, n, mode=1, ang=nodes)
+
+    lo = nodes[iang].astype(np.float32)
+    hi = nodes[iang + 1].astype(np.float32)
+    assert np.all(lo <= theta)
+    assert np.all(theta <= hi)
+    assert np.all((weight >= 0.0) & (weight <= 1.0))
+
+
+@pytest.mark.parametrize("n", (721, 1801, 10001))
+@pytest.mark.parametrize("kind", ("chebyshev", "lobatto"))
+def test_aindex_reconstructs_the_angle(n, kind):
+    """The index and weight together must give the angle back.
+
+    Interpolating a phase matrix is only as good as this, so it is
+    checked directly rather than through the index.
+    """
+    nodes = theta_grid(n, kind, unit="rad")
+    theta = _sample_angles(n)
+    theta = theta[(theta > 0.0) & (theta < np.float32(np.pi))]
+
+    iang, weight = _probe(theta, n, mode=1, ang=nodes)
+
+    lo = nodes[iang].astype(np.float32)
+    hi = nodes[iang + 1].astype(np.float32)
+    err = np.abs(lo + weight * (hi - lo) - theta) / (hi - lo)
+    assert err.max() < 1e-5
+
+
+@pytest.mark.parametrize("kind", ("chebyshev", "lobatto"))
+def test_aindex_recovers_the_nodes(kind):
+    """Interpolating at a node must land on that node."""
+    n = 1801
+    nodes = theta_grid(n, kind, unit="rad")
+
+    iang, weight = _probe(nodes.astype(np.float32), n, mode=1, ang=nodes)
+
+    # a node is either the lower end with weight 0, or the upper end
+    # with weight 1
+    recovered = np.where(weight > 0.5, iang + 1, iang)
+    assert np.array_equal(recovered, np.arange(n))
+    assert np.all(np.minimum(weight, 1.0 - weight) < 1e-5)
+
+
+# --------------------------------------------------------------------
+# the equal-angle table
+# --------------------------------------------------------------------
+
+
+def _profile(theta_deg):
+    """A one-entry atmospheric profile carrying a peaked phase matrix."""
+    theta_deg = np.asarray(theta_deg, dtype=np.float64)
+    f11 = _peaked_phase(theta_deg)
+    pha = np.zeros((1, 6, len(theta_deg)))
+    pha[0, 0] = f11          # F11
+    pha[0, 4] = f11          # F22 = F11, spherical particles
+    return xr.Dataset(
+        {"phase_atm": (("iphase", "nphamat", "theta_atm"), pha)},
+        coords={"theta_atm": theta_deg},
+    )
+
+
+def _intensity(table):
+    """The intensity the kernel reconstructs from an equal-angle row."""
+    return table["a_P11"] + table["a_P22"] + 2.0 * table["a_P12"]
+
+
+def _table_on(grid_deg, profile):
+    """The particle row of the table built on *grid_deg*."""
+    return _calc_phase_host(
+        profile, len(grid_deg), 0.0279, "atm",
+        ang_a=np.deg2rad(grid_deg),
+    )[2]
+
+
+@pytest.mark.parametrize("n", (901, 1801))
+def test_clustered_table_resolves_the_peak_better(n):
+    """At equal size, a clustered table is the more accurate one.
+
+    Same number of entries, same memory: the only difference is where
+    the angles sit. If this stops holding, clustering has stopped
+    paying for itself.
+    """
+    source = theta_grid(72001)
+    profile = _profile(source)
+    probe = np.sort(
+        np.concatenate([source, 0.5 * (source[1:] + source[:-1])])
+    )
+    reference = _peaked_phase(probe)
+
+    error = {}
+    for kind in ("uniform", "lobatto"):
+        grid = theta_grid(n, kind)
+        got = np.interp(probe, grid, _intensity(_table_on(grid, profile)))
+        # the table is normalised, so compare shapes not magnitudes
+        got = got * (reference[-1] / got[-1])
+        error[kind] = np.abs(got - reference).max() / reference.max()
+
+    assert error["lobatto"] < error["uniform"] / 5.0
+
+
+def test_adopting_the_matrix_grid_loses_nothing():
+    """On its own grid, the table is the phase matrix, not a resample.
+
+    This is what makes ``theta_grid='phase'`` worth having: the
+    equal-angle half is carried across rather than interpolated, so a
+    phase matrix given on a well chosen grid reaches the kernel intact.
+    """
+    grid = theta_grid(1801, "lobatto")
+
+    got = _intensity(_table_on(grid, _profile(grid)))
+    expected = _peaked_phase(grid)
+
+    np.testing.assert_allclose(
+        got / got[-1], expected / expected[-1], rtol=1e-5
+    )
+
+
+def test_as_theta_grid_accepts_a_grid_or_a_count():
+    assert np.array_equal(as_theta_grid(5), theta_grid(5))
+    lobatto = theta_grid(101, "lobatto")
+    assert np.array_equal(as_theta_grid(lobatto), lobatto)
