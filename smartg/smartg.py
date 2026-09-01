@@ -740,10 +740,10 @@ class Smartg(object):
     def run(
         self,
         wavelength,
-        atm=None,
-        surf=None,
+        atmosphere=None,
+        surface=None,
         water=None,
-        env=None,
+        environment=None,
         alis_options: dict | None = None,
         nb_photons: float = 1e9,
         depo: float = 0.0279,
@@ -798,14 +798,14 @@ class Smartg(object):
         wavelength : float | list | 1-D ndarray
             Wavelength(s) in nm. It can be a list of ReptranIband or
             KdisIband objects.
-        atm : None | Atm1D | MLUT, optional
+        atmosphere : None | Atm1D | MLUT, optional
             The atmosphere profile. If None, there is no atmosphere.
-        surf : None | RoughSurface | FlatSurface | LambSurface, optional
+        surface : None | RoughSurface | FlatSurface | LambSurface, optional
             The surface profile, see `smartg.surface`. If None, there is
             no surface.
         water : None | Water1D | MLUT, optional
             The water profile. If None, there is no water.
-        env : None | Environment, optional
+        environment : None | Environment, optional
             The environment (adjacency effect) profile. If None, there
             is no environment.
         alis_options : None | dict, optional
@@ -1056,11 +1056,11 @@ class Smartg(object):
         >>> from smartg.atmosphere import Atm1D, AerOPAC
         >>> from smartg.water import Water1D, HydrosolPR
         >>> aer = AerOPAC('maritime_clean', 0.5, 550.)
-        >>> atm = Atm1D('afglt', comp=[aer])
+        >>> atmosphere = Atm1D('afglt', comp=[aer])
         >>> water = Water1D(grid=[0, -5.], comp=[HydrosolPR(chl=0.5)])
-        >>> surf = RoughSurface(wind=5., nh2o=1.34)
-        >>> m = Smartg().run(wavelength=550., atm=atm, water=water,
-        ...                  surf=surf)
+        >>> surface = RoughSurface(wind=5., nh2o=1.34)
+        >>> m = Smartg().run(wavelength=550., atmosphere=atmosphere,
+        ...                  water=water, surface=surface)
         >>> # Look at the TOA radiance/reflectance ('I_up (TOA)')
         >>> m['I_up (TOA)'].dims
         ('Azimuth angles', 'Zenith angles')
@@ -1342,22 +1342,37 @@ class Smartg(object):
         if hist:
             hist_code = 1
 
-        if surf is not None:
-            if surf.dict['BRDF'] != 0:
+        if surface is not None:
+            if surface.dict['BRDF'] != 0:
                 water = None  # special case BRDF, water is shortcut
 
         # determine sim
-        if (atm is not None) and (surf is None) and (water is None):
+        if (atmosphere is not None) and (surface is None) and (water is None):
             sim = -2  # atmosphere only
-        elif (atm is None) and (surf is not None) and (water is None):
+        elif (
+            (atmosphere is None) and (surface is not None)
+            and (water is None)
+        ):
             sim = -1  # surface only
-        elif (atm is None) and (surf is not None) and (water is not None):
+        elif (
+            (atmosphere is None) and (surface is not None)
+            and (water is not None)
+        ):
             sim = 0  # ocean + dioptre
-        elif (atm is not None) and (surf is not None) and (water is None):
+        elif (
+            (atmosphere is not None) and (surface is not None)
+            and (water is None)
+        ):
             sim = 1  # atmosphere + dioptre
-        elif (atm is not None) and (surf is not None) and (water is not None):
+        elif (
+            (atmosphere is not None) and (surface is not None)
+            and (water is not None)
+        ):
             sim = 2  # atmosphere + dioptre + ocean
-        elif (atm is None) and (surf is None) and (water is not None):
+        elif (
+            (atmosphere is None) and (surface is None)
+            and (water is not None)
+        ):
             sim = 3  # ocean only
         else:
             raise ValueError('Error in SIM')
@@ -1365,15 +1380,15 @@ class Smartg(object):
         #
         # atmosphere
         #
-        if isinstance(atm, Atmosphere):
-            prof_atm = atm.calc(wavelength)
-        elif isinstance(atm, xr.Dataset) or (atm is None):
-            prof_atm = atm
-        elif hasattr(atm, 'to_xarray'):
-            prof_atm = atm.to_xarray()
+        if isinstance(atmosphere, Atmosphere):
+            prof_atm = atmosphere.calc(wavelength)
+        elif isinstance(atmosphere, xr.Dataset) or (atmosphere is None):
+            prof_atm = atmosphere
+        elif hasattr(atmosphere, 'to_xarray'):
+            prof_atm = atmosphere.to_xarray()
         else:
             raise ValueError(
-                'atm must be an Atmosphere class, an xr.Dataset, an '
+                'atmosphere must be an Atmosphere class, an xr.Dataset, an '
                 'MLUT-like object or equal to None!'
             )
 
@@ -1561,44 +1576,46 @@ class Smartg(object):
         spectrum = np.zeros(n_lam, dtype=TYPE_SPECTRUM)
         envmap = np.zeros(1, dtype=TYPE_ENV_MAP)
         spectrum['lambda'] = wavelength[:]
-        if env is None:
+        if environment is None:
             # default values (no environment effect)
-            env = Environment()
-            if surf is not None:
-                if surf.alb is not None:
-                    spectrum['alb_surface'] = surf.alb.get(wavelength[:])
-                elif surf.kp is not None:
-                    spectrum['alb_surface'] = surf.kp[0].get(wavelength[:])
-                    spectrum['k1p_surface'] = surf.kp[1].get(wavelength[:])
-                    spectrum['k2p_surface'] = surf.kp[2].get(wavelength[:])
-                    spectrum['k3p_surface'] = surf.kp[3].get(wavelength[:])
+            environment = Environment()
+            if surface is not None:
+                if surface.alb is not None:
+                    spectrum['alb_surface'] = surface.alb.get(wavelength[:])
+                elif surface.kp is not None:
+                    spectrum['alb_surface'] = surface.kp[0].get(wavelength[:])
+                    spectrum['k1p_surface'] = surface.kp[1].get(wavelength[:])
+                    spectrum['k2p_surface'] = surface.kp[2].get(wavelength[:])
+                    spectrum['k3p_surface'] = surface.kp[3].get(wavelength[:])
                 else:
                     spectrum['alb_surface'] = -999.0
             else:
                 spectrum['alb_surface'] = -999.0
         else:
-            assert surf is not None
-            if surf.alb is not None:
-                spectrum['alb_surface'] = surf.alb.get(wavelength[:])
-            elif surf.kp is not None:
-                spectrum['alb_surface'] = surf.kp[0].get(wavelength[:])
-                spectrum['k1p_surface'] = surf.kp[1].get(wavelength[:])
-                spectrum['k2p_surface'] = surf.kp[2].get(wavelength[:])
-                spectrum['k3p_surface'] = surf.kp[3].get(wavelength[:])
-            albenv = env.alb.get(wavelength[:])
+            assert surface is not None
+            if surface.alb is not None:
+                spectrum['alb_surface'] = surface.alb.get(wavelength[:])
+            elif surface.kp is not None:
+                spectrum['alb_surface'] = surface.kp[0].get(wavelength[:])
+                spectrum['k1p_surface'] = surface.kp[1].get(wavelength[:])
+                spectrum['k2p_surface'] = surface.kp[2].get(wavelength[:])
+                spectrum['k3p_surface'] = surface.kp[3].get(wavelength[:])
+            albenv = environment.alb.get(wavelength[:])
             if albenv.ndim == 2:
-                env.nenv = albenv.shape[1]
-                spectrum['alb_envs'][:, : env.nenv] = albenv
-                shp = env.alb.map.data.shape
-                env.nxenvmap = shp[0]
-                env.nyenvmap = shp[1]
+                environment.nenv = albenv.shape[1]
+                spectrum['alb_envs'][:, : environment.nenv] = albenv
+                shp = environment.alb.map.data.shape
+                environment.nxenvmap = shp[0]
+                environment.nyenvmap = shp[1]
                 envmap = np.zeros(shp, dtype=TYPE_ENV_MAP)
                 x_map, y_map = np.meshgrid(
-                    env.alb.map.axis('X'), env.alb.map.axis('Y'), indexing='ij'
+                    environment.alb.map.axis('X'),
+                    environment.alb.map.axis('Y'),
+                    indexing='ij',
                 )
                 envmap['x'] = x_map
                 envmap['y'] = y_map
-                envmap['env_index'] = env.alb.get_map(x_map, y_map)
+                envmap['env_index'] = environment.alb.get_map(x_map, y_map)
             else:
                 spectrum['alb_env'] = albenv
 
@@ -1717,8 +1734,8 @@ class Smartg(object):
 
         # initialization of the constants
         _init_const(
-            surf,
-            env,
+            surface,
+            environment,
             n_atm,
             n_atm_abs,
             n_oce,
@@ -3196,8 +3213,8 @@ def _calc_phase_gpu(
 
 
 def _init_const(
-    surf,
-    env,
+    surface,
+    environment,
     n_atm: int,
     n_atm_abs: int | np.integer,
     n_oce: int,
@@ -3278,14 +3295,14 @@ def _init_const(
 
     Parameters
     ----------
-    surf : object | None
+    surface : object | None
         Surface configuration object from ``smartg.surface``
         (FlatSurface, RoughSurface, LambSurface, RTLSSurface or
         RPVSurface) exposing a ``dict`` attribute with keys required
         by SMART-G (for example
         ``SUR``, ``BRDF``, ``DIOPTRE``, ``WINDSPEED``, ``NH2O``,
         ``WAVE_SHADOW``, ``SINGLE``).
-    env : Environment | None
+    environment : Environment | None
         Environment configuration object exposing a ``dict`` attribute
         and geometry metadata (for example ``nenv``, ``nxenvmap``,
         ``nyenvmap``). If ``None``, environment-related constants are
@@ -3414,22 +3431,22 @@ def _init_const(
     copy_to_device('NSCLd', n_scl, np.int32)
     copy_to_device('SCL_MODEd', scl_mode, np.int32)
     copy_to_device('NORDERSd', n_orders, np.int32)
-    if surf is not None:
-        copy_to_device('SURd', surf.dict['SUR'], np.int32)
-        copy_to_device('BRDFd', surf.dict['BRDF'], np.int32)
-        copy_to_device('DIOPTREd', surf.dict['DIOPTRE'], np.int32)
-        copy_to_device('WINDSPEEDd', surf.dict['WINDSPEED'], np.float32)
-        copy_to_device('NH2Od', surf.dict['NH2O'], np.float32)
-        copy_to_device('WAVE_SHADOWd', surf.dict['WAVE_SHADOW'], np.int32)
-        copy_to_device('SINGLEd', surf.dict['SINGLE'], np.int32)
-    if env is not None:
-        copy_to_device('ENVd', env.dict['ENV'], np.int32)
-        copy_to_device('ENV_SIZEd', env.dict['ENV_SIZE'], np.float32)
-        copy_to_device('X0d', env.dict['X0'], np.float32)
-        copy_to_device('Y0d', env.dict['Y0'], np.float32)
-        copy_to_device('NENVd', env.nenv, np.int32)
-        copy_to_device('NXENVMAPd', env.nxenvmap, np.int32)
-        copy_to_device('NYENVMAPd', env.nyenvmap, np.int32)
+    if surface is not None:
+        copy_to_device('SURd', surface.dict['SUR'], np.int32)
+        copy_to_device('BRDFd', surface.dict['BRDF'], np.int32)
+        copy_to_device('DIOPTREd', surface.dict['DIOPTRE'], np.int32)
+        copy_to_device('WINDSPEEDd', surface.dict['WINDSPEED'], np.float32)
+        copy_to_device('NH2Od', surface.dict['NH2O'], np.float32)
+        copy_to_device('WAVE_SHADOWd', surface.dict['WAVE_SHADOW'], np.int32)
+        copy_to_device('SINGLEd', surface.dict['SINGLE'], np.int32)
+    if environment is not None:
+        copy_to_device('ENVd', environment.dict['ENV'], np.int32)
+        copy_to_device('ENV_SIZEd', environment.dict['ENV_SIZE'], np.float32)
+        copy_to_device('X0d', environment.dict['X0'], np.float32)
+        copy_to_device('Y0d', environment.dict['Y0'], np.float32)
+        copy_to_device('NENVd', environment.nenv, np.int32)
+        copy_to_device('NXENVMAPd', environment.nxenvmap, np.int32)
+        copy_to_device('NYENVMAPd', environment.nyenvmap, np.int32)
     copy_to_device('STHVd', s_th_v, np.float32)
     copy_to_device('CTHVd', c_th_v, np.float32)
     copy_to_device('RTER', earth_radius, np.float32)

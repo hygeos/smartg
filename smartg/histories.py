@@ -45,10 +45,10 @@ def get_histories(m, LEVEL=0, IDIR=0,verbose=False):
             D : A ndarray of size (NLE, NL) for cumulative distances traveled in layers
             w : A ndarray of size (NLE, NLR) for corrective scattering weights for the different LR wavelengths
             nrrs : A ndarray of size (NLE) of Rotational Raman Scattering event flag (1 : RRS, 0: no RRS)
-            nref : A ndarray of size (NLE) of number of reflection on the surface (as described by the keyword surf in the run method)
+            nref : A ndarray of size (NLE) of number of reflection on the surface (as described by the keyword surface in the run method)
             nsif : A ndarray of size (NLE) of Sun Induced Fluorescence event flag (1 : SIF, 0: no SIF)
             nvrs : A ndarray of size (NLE) of Vibrational Raman Scattering event flag (1 : VRS, 0: no VRS)
-            nenv : A ndarray of size (NLE) of reflection on the environement (as described by the keyword env in the run method)
+            nenv : A ndarray of size (NLE) of reflection on the environement (as described by the keyword environment in the run method)
             nint : A ndarray of size (NLE) of number of reflection or scattering
             nlscl : A ndarray of size (NLE) of last-scattering layer index (-1 = surface/unscattered)
     '''

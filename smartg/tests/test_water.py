@@ -259,8 +259,8 @@ def _smartg_run(_water_iop, _atm, _surf):
     m_flux = sg.run(
         wavelength=WAVELENGTHS,
         th_v_deg=SZA_DEG,
-        atm=_atm,
-        surf=_surf,
+        atmosphere=_atm,
+        surface=_surf,
         water=_water_iop,
         nb_photons=5e7,
         nb_loop=1e6,
@@ -285,8 +285,8 @@ def _smartg_run(_water_iop, _atm, _surf):
     m_le = sg.run(
         wavelength=WAVELENGTHS,
         th_v_deg=SZA_DEG,
-        atm=_atm,
-        surf=_surf,
+        atmosphere=_atm,
+        surface=_surf,
         water=_water_iop,
         nb_photons=1e7,
         nb_loop=1e6,
@@ -504,8 +504,8 @@ def _rw_vs_w1d_run(_atm_rayleigh, _surf):
         m = sg.run(
             wavelength=WAVELENGTHS,
             th_v_deg=SZA_DEG,
-            atm=_atm_rayleigh,
-            surf=_surf,
+            atmosphere=_atm_rayleigh,
+            surface=_surf,
             water=water,
             nb_photons=2e7,
             nb_loop=1e6,

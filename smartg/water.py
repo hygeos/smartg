@@ -1275,7 +1275,7 @@ class Water1D(Water):
         bottom of the water column, at the deepest level of `grid`. This
         is the reflectance of the sea bottom seen from within the water,
         and it is not related to the albedo of the air-water interface:
-        the latter is set by the `surf` parameter of `smartg.run()`
+        the latter is set by the `surface` parameter of `smartg.run()`
         (e.g. `smartg.surface.LambSurface(alb=...)` or
         `RoughSurface(...)`). It fills
         the `albedo_seafloor` variable of the profile returned by
@@ -1626,7 +1626,7 @@ class WaterRw(Water):
     level, just above it: here the photons still cross the air-water
     interface, so the Fresnel transmission and the total internal
     reflection of the upwelling light are still accounted for by the
-    `surf` parameter of `smartg.run()`.
+    `surface` parameter of `smartg.run()`.
 
     Note that, unlike the `alb` of Water1D, this reflector is not a sea
     floor: it stands for the water body itself, and it is placed at the

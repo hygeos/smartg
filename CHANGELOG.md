@@ -206,6 +206,8 @@ final `v2.0.0` release.
       `cusL` → `cus_l`, `IsAtm` → `is_atm`
     The `le` and `alis_options` dictionary keys and the output variable
     names are unchanged
+  - The abbreviated parameters of `Smartg.run` have been given their full
+    name: `atm` → `atmosphere`, `surf` → `surface` and `env` → `environment`
   - The internal helpers of the smartg module are now private
     (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
     `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,

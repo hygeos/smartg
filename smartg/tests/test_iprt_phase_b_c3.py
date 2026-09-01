@@ -361,7 +361,7 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
 
     Returns
     -------
-    (pro, grid3, surf, wavelengths)
+    (pro, grid3, surface, wavelengths)
     """
     cloud3, grid3 = cloud_c3
     dir_phase_b = DIR_AUXDATA / "IPRT" / "phaseB"
@@ -418,9 +418,9 @@ def _build_atm_c3(cloud_c3, truncation=None, with_aer=True):
     )
     pro = atm3.calc(wavelengths, n_theta=NTH, truncation=truncation)
 
-    surf = LambSurface(alb=AlbedoCst(0.2))
+    surface = LambSurface(alb=AlbedoCst(0.2))
 
-    return pro, grid3, surf, wavelengths
+    return pro, grid3, surface, wavelengths
 
 
 @pytest.fixture(scope="module")
@@ -528,7 +528,7 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
     -------
     (m, norm)
     """
-    pro, grid3, surf, wavelengths = atm_c3
+    pro, grid3, surface, wavelengths = atm_c3
     posz_key, theta, phi, theta_0 = CASES[case]
     posz = _resolve_posz(sensor_grid, posz_key)
 
@@ -554,10 +554,10 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
 
     kw = dict(
         wavelength=wavelengths,
-        atm=pro,
+        atmosphere=pro,
         sensor=sensors,
         le=le,
-        surf=surf,
+        surface=surface,
         n_f=NTH,
         stdev=True,
     )

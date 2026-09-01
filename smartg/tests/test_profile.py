@@ -32,31 +32,31 @@ def wavelength(request):
 
 
 def test_profile1(wavelength):
-    atm = Atm1D("afglt")
-    atm.calc(wavelength)
+    atmosphere = Atm1D("afglt")
+    atmosphere.calc(wavelength)
 
 
 def test_profile2(wavelength):
-    atm = Atm1D(
+    atmosphere = Atm1D(
         "afglms",
         grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
         pfgrid=[100.0, 10.0, 0.0],
     )
-    atm.calc(wavelength)
+    atmosphere.calc(wavelength)
 
 
 def test_profile3(wavelength):
-    atm = Atm1D(
+    atmosphere = Atm1D(
         "afglms",
         comp=[AerOPAC("desert", 0.1, 550.0)],
         grid="100[20]10[1]0",
         pfgrid=[100.0, 10.0, 0.0],
     )
-    atm.calc(wavelength)
+    atmosphere.calc(wavelength)
 
 
 def test_profile4(wavelength):
-    atm = Atm1D(
+    atmosphere = Atm1D(
         "afglms",
         comp=[
             AerOPAC("desert", 0.1, 550.0),
@@ -65,7 +65,7 @@ def test_profile4(wavelength):
         grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
         pfgrid=[100.0, 10.0, 0.0],
     )
-    atm.calc(wavelength)
+    atmosphere.calc(wavelength)
 
 
 def test_profile5():

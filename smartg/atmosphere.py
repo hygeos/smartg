@@ -18,7 +18,7 @@ Typical usage involves:
    properties
    with specific parameters (if using optional parameters not set by
    default)
-4. Pass the resulting profile object as the `atm` parameter to
+4. Pass the resulting profile object as the `atmosphere` parameter to
    `smartg.run()`
 
 Key Classes

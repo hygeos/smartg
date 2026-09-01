@@ -105,10 +105,10 @@ def test_a1(request, s1df, s1db):
     mol_sca = np.array([0.0, 0.5])[None, :]
     mol_abs = np.array([0.0, 0.0])[None, :]
     z = np.array([1.0, 0.0])
-    atm = Atm1D("afglt", grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(
-        550.0
-    )
-    surf = None
+    atmosphere = Atm1D(
+        "afglt", grid=z, prof_ray=mol_sca, prof_abs=mol_abs
+    ).calc(550.0)
+    surface = None
 
     # *************************** DEPOL = 0 ***************************
     sza = 0.0
@@ -147,11 +147,11 @@ def test_a1(request, s1df, s1db):
         wavelength=550.0,
         nb_photons=1e7 * nb_dir,
         nb_loop=1e7,
-        atm=atm,
+        atmosphere=atmosphere,
         sensor=lsensors,
         output_layers=0,
         le=le,
-        surf=surf,
+        surface=surface,
         xblock=64,
         xgrid=1024,
         beer=1,
@@ -201,11 +201,11 @@ def test_a1(request, s1df, s1db):
         wavelength=550.0,
         nb_photons=1e7 * nb_dir,
         nb_loop=1e7,
-        atm=atm,
+        atmosphere=atmosphere,
         sensor=lsensors,
         output_layers=0,
         le=le,
-        surf=surf,
+        surface=surface,
         xblock=64,
         xgrid=1024,
         beer=1,
@@ -253,10 +253,10 @@ def test_a1(request, s1df, s1db):
         wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e5,
-        atm=atm,
+        atmosphere=atmosphere,
         output_layers=int(7),
         le=le,
-        surf=surf,
+        surface=surface,
         xblock=64,
         xgrid=1024,
         beer=1,
@@ -277,10 +277,10 @@ def test_a1(request, s1df, s1db):
         wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e5,
-        atm=atm,
+        atmosphere=atmosphere,
         output_layers=int(7),
         le=le,
-        surf=surf,
+        surface=surface,
         xblock=64,
         xgrid=1024,
         beer=1,
@@ -638,10 +638,10 @@ def test_a2(request, s1df):
     mol_sca = np.array([0.0, 0.1])[None, :]
     mol_abs = np.array([0.0, 0.0])[None, :]
     z = np.array([1.0, 0.0])
-    atm = Atm1D("afglt", grid=z, prof_ray=mol_sca, prof_abs=mol_abs).calc(
-        550.0
-    )
-    surf = LambSurface(alb=AlbedoCst(0.3))
+    atmosphere = Atm1D(
+        "afglt", grid=z, prof_ray=mol_sca, prof_abs=mol_abs
+    ).calc(550.0)
+    surface = LambSurface(alb=AlbedoCst(0.3))
 
     # === Illumination conditions
     vza_min = 100.0
@@ -674,10 +674,10 @@ def test_a2(request, s1df):
         wavelength=550.0,
         nb_photons=1e7,
         nb_loop=1e6,
-        atm=atm,
+        atmosphere=atmosphere,
         output_layers=int(7),
         le=le,
-        surf=surf,
+        surface=surface,
         xblock=64,
         xgrid=1024,
         beer=1,
@@ -1000,7 +1000,7 @@ def test_a5_pp(request, s1df):
                 names=["nphamat", "theta_atm"],
             )
         )
-    atm = Atm1D(
+    atmosphere = Atm1D(
         "afglt",
         grid=z,
         prof_ray=mol_sca,
@@ -1008,8 +1008,8 @@ def test_a5_pp(request, s1df):
         prof_aer=prof_aer,
         prof_phases=(ipha_atm, lpha_lut),
     )
-    pro = atm.calc(800.0, phase=False)
-    surf = None
+    pro = atmosphere.calc(800.0, phase=False)
+    surface = None
 
     # === Illumination conditions
     sza = 50.0
@@ -1040,10 +1040,10 @@ def test_a5_pp(request, s1df):
         nb_photons=1e7,
         nb_loop=1e6,
         n_f=nth,
-        atm=pro,
+        atmosphere=pro,
         output_layers=int(7),
         le=le,
-        surf=surf,
+        surface=surface,
         xblock=64,
         xgrid=1024,
         beer=1,
@@ -1308,7 +1308,7 @@ def test_a5_al(request, s1df):
                 names=["nphamat", "theta_atm"],
             )
         )
-    atm = Atm1D(
+    atmosphere = Atm1D(
         "afglt",
         grid=z,
         prof_ray=mol_sca,
@@ -1316,8 +1316,8 @@ def test_a5_al(request, s1df):
         prof_aer=prof_aer,
         prof_phases=(ipha_atm, lpha_lut),
     )
-    pro = atm.calc(800.0, phase=False)
-    surf = None
+    pro = atmosphere.calc(800.0, phase=False)
+    surface = None
 
     # === Illumination conditions
     sza = 50.0
@@ -1348,10 +1348,10 @@ def test_a5_al(request, s1df):
         nb_photons=1e7,
         nb_loop=1e6,
         n_f=nth,
-        atm=pro,
+        atmosphere=pro,
         output_layers=int(7),
         le=le,
-        surf=surf,
+        surface=surface,
         xblock=64,
         xgrid=1024,
         beer=1,

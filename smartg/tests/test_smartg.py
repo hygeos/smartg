@@ -40,7 +40,7 @@ def test_compile(pp, back):
 def test_basic(request):
     """Most basic test"""
     m = Smartg(autoinit=True).run(
-        500.0, atm=Atm1D("afglms"), nb_photons=NBPHOTONS
+        500.0, atmosphere=Atm1D("afglms"), nb_photons=NBPHOTONS
     )
     smartg_view(m)
     conftest.savefig(request)
@@ -48,14 +48,14 @@ def test_basic(request):
 
 @pytest.mark.parametrize("wavelength", wavelength_list)
 def test_atm(sg, wavelength):
-    atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
-    m = sg.run(wavelength, atm=atm, nb_photons=NBPHOTONS)
+    atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
+    m = sg.run(wavelength, atmosphere=atmosphere, nb_photons=NBPHOTONS)
     assert ("wavelength" in m.coords) == ("__getitem__" in dir(wavelength))
 
 
 @pytest.mark.parametrize("wavelength", wavelength_list)
 def test_cloud(sg, wavelength):
-    atm = Atm1D(
+    atmosphere = Atm1D(
         "afglt",
         comp=[
             AerOPAC("desert", 0.1, 550.0),
@@ -64,63 +64,66 @@ def test_cloud(sg, wavelength):
         grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
         pfgrid=[100.0, 10.0, 0.0],
     )
-    m = sg.run(wavelength, atm=atm, nb_photons=NBPHOTONS)
+    m = sg.run(wavelength, atmosphere=atmosphere, nb_photons=NBPHOTONS)
     assert ("wavelength" in m.coords) == ("__getitem__" in dir(wavelength))
 
 
 @pytest.mark.parametrize("wavelength", wavelength_list)
 @pytest.mark.parametrize("thv", [0.0, 40.0])
 @pytest.mark.parametrize(
-    "surf", [RoughSurface(wind=2.0), LambSurface(alb=AlbedoCst(0.2))]
+    "surface", [RoughSurface(wind=2.0), LambSurface(alb=AlbedoCst(0.2))]
 )
-def test_atm_surf(sg, wavelength, surf, thv):
-    atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
+def test_atm_surf(sg, wavelength, surface, thv):
+    atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
 
-    sg.run(wavelength, atm=atm, surf=surf, th_v_deg=thv, nb_photons=NBPHOTONS)
+    sg.run(wavelength, atmosphere=atmosphere, surface=surface,
+           th_v_deg=thv, nb_photons=NBPHOTONS)
 
 
 def test_surf_iop1_1():
-    surf = RoughSurface(wind=10.0)
+    surface = RoughSurface(wind=10.0)
     water = Water1D(comp=[HydrosolPR(chl=1.0)])
-    Smartg().run([400.0, 500.0], surf=surf, water=water, nb_photons=NBPHOTONS)
+    Smartg().run([400.0, 500.0], surface=surface, water=water,
+                 nb_photons=NBPHOTONS)
 
 
 def test_atm_surf_iop1():
-    atm = Atm1D(
+    atmosphere = Atm1D(
         "afglt",
         comp=[AerOPAC("desert", 0.1, 550.0)],
         wavelength_phase=[500.0, 600.0],
         pfgrid=[100.0, 5.0, 0.0],
     )
-    surf = RoughSurface(wind=10.0)
+    surface = RoughSurface(wind=10.0)
     water = Water1D(
         comp=[HydrosolPR(
             chl=1.0, wavelength_phase=np.array([450, 550, 650, 750])
         )]
     )
     wavelength = np.linspace(400, 800, 12)
-    Smartg().run(wavelength, atm=atm, surf=surf, water=water,
-                 nb_photons=NBPHOTONS)
+    Smartg().run(wavelength, atmosphere=atmosphere, surface=surface,
+                 water=water, nb_photons=NBPHOTONS)
 
 
 def test_reptran(sg):
-    atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
-    surf = RoughSurface(wind=2.0)
+    atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
+    surface = RoughSurface(wind=2.0)
 
     ibands = Reptran("reptran_solar_msg").to_smartg("msg1")
 
-    res = sg.run(ibands.l, atm=atm, surf=surf, water=None, nb_photons=NBPHOTONS)
+    res = sg.run(ibands.l, atmosphere=atmosphere, surface=surface,
+                 water=None, nb_photons=NBPHOTONS)
     reduce_reptran(res, ibands)
 
 
 def test_locale_estimate(sg):
-    atm = Atm1D("afglt")
-    surf = RoughSurface()
+    atmosphere = Atm1D("afglt")
+    surface = RoughSurface()
     wavelength = 400.0
     res = sg.run(
         wavelength,
-        atm=atm,
-        surf=surf,
+        atmosphere=atmosphere,
+        surface=surface,
         th_v_deg=10.0,
         le={
             "th_deg": np.array([40.0], dtype="float32"),
@@ -133,11 +136,11 @@ def test_locale_estimate(sg):
 
 def test_dataset_to_mlut_roundtrip():
     """The run output converts losslessly to the legacy MLUT"""
-    atm = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
+    atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     res = Smartg(autoinit=True).run(
         np.array([400.0, 600.0]),
-        atm=atm,
-        surf=LambSurface(alb=AlbedoCst(0.1)),
+        atmosphere=atmosphere,
+        surface=LambSurface(alb=AlbedoCst(0.1)),
         nb_photons=NBPHOTONS,
     )
     assert isinstance(res, xr.Dataset)
@@ -154,10 +157,11 @@ def test_dataset_to_mlut_roundtrip():
 
 @pytest.mark.parametrize("rng", ["PHILOX", "CURAND_PHILOX"])
 def test_rng(rng):
-    atm = Atm1D("afglt")
-    surf = RoughSurface()
+    atmosphere = Atm1D("afglt")
+    surface = RoughSurface()
     wavelength = np.linspace(400, 800, 5)
-    Smartg(rng=rng).run(wavelength, atm=atm, surf=surf, nb_photons=NBPHOTONS)
+    Smartg(rng=rng).run(wavelength, atmosphere=atmosphere,
+                        surface=surface, nb_photons=NBPHOTONS)
 
 
 def test_adjacency():
@@ -167,7 +171,7 @@ def test_adjacency():
 def test_no_aer_output():
     atm1 = Atm1D("afglt")
     water = Water1D(grid=[0, -5.0], comp=[HydrosolPR(chl=0.5)])
-    surf = RoughSurface(wind=5.0, nh2o=1.34)
+    surface = RoughSurface(wind=5.0, nh2o=1.34)
     sg = Smartg()
     le = {
         "th_deg": np.array([0.0, 45.0, 89.9]),
@@ -175,8 +179,8 @@ def test_no_aer_output():
     }
     m1 = sg.run(
         550.0,
-        atm=atm1,
-        surf=surf,
+        atmosphere=atm1,
+        surface=surface,
         water=water,
         output_layers=3,
         le=le,

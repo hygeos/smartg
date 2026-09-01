@@ -386,7 +386,7 @@ def to_iprt_output_e6_v2(case_name, sza, saa, nx, ny, vecs,
 
 def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
             sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wavelength, le,
-            surf, pro, dep, z, ntheta=18001, pp=False, is_e6=False):
+            surface, pro, dep, z, ntheta=18001, pp=False, is_e6=False):
     
     if pp :
         sg = S1DB_PP
@@ -399,9 +399,9 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
     if (overwrite or not fboa_exist) and not is_e6:
         sensors = get_d1_to_e5_boa_sensors(vza, phi, nvza, nvaa, earth_r)
         m_boa = sg.run(wavelength=wavelength, nb_photons=nvza*nvaa*nphotons,
-                        nb_loop=nphotons, atm=pro, sensor=sensors,
+                        nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                         output_layers=1,
-                        le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
+                        le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
                         stdev=True, progress=True, n_f=ntheta)#, seed=1e8)
 
         m_boa = reshape_sza_vaa_vza(m_boa, sza, vaa, vza)
@@ -412,9 +412,9 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
         if not is_e6: sensors = get_d1_to_e5_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
         else : sensors = get_e6_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
         m_toa = sg.run(wavelength=wavelength, nb_photons=nvza*nvaa*nphotons,
-                        nb_loop=nphotons, atm=pro, sensor=sensors,
+                        nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                         output_layers=1,
-                        le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
+                        le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
                         stdev=True, progress=True, n_f=ntheta)#, seed=1e8)
 
         m_toa = reshape_sza_vaa_vza(m_toa, sza, vaa, vza)
@@ -670,7 +670,7 @@ def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs
         ).calc(wavelength)
-        surf  = None
+        surface = None
         nvza = len(vza)
         nvaa = len(vaa)
         phi = -vaa
@@ -684,7 +684,7 @@ def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z)
+                wavelength, le, surface, pro, dep, z)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d1', sza, saa, vza, vaa, z,
@@ -721,7 +721,7 @@ def case_D2(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs
         ).calc(wavelength)
-        surf  = LambSurface(alb=AlbedoCst(0.3))
+        surface = LambSurface(alb=AlbedoCst(0.3))
         nvza = len(vza)
         nvaa = len(vaa)
         phi = -vaa
@@ -735,7 +735,7 @@ def case_D2(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z)
+                wavelength, le, surface, pro, dep, z)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d2', sza, saa, vza, vaa, z,
@@ -809,7 +809,7 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
             'afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs,
             prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut),
         ).calc(wavelength, phase=False)
-        surf  = None
+        surface = None
 
         nvza = len(vza)
         nvaa = len(vaa)
@@ -824,7 +824,7 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z, ntheta=nth)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d3', sza, saa, vza, vaa, z,
@@ -900,7 +900,7 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
             'afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs,
             prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut),
         ).calc(wavelength, phase=False)
-        surf  = None
+        surface = None
 
         nvza = len(vza)
         nvaa = len(vaa)
@@ -915,7 +915,7 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z, ntheta=nth)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d4', sza, saa, vza, vaa, z,
@@ -964,7 +964,7 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
             'afglt', comp=[aer], grid=z, prof_ray=mol_sca,
             prof_abs=mol_abs,
         ).calc(wavelength, phase=True, n_theta=nth)
-        surf  = None
+        surface = None
 
         nvza = len(vza)
         nvaa = len(vaa)
@@ -979,7 +979,7 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z, ntheta=nth)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d4_bis', sza, saa, vza, vaa, z,
@@ -1053,7 +1053,7 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer,
                     prof_phases=(ipha_atm, lpha_lut)
                     ).calc(wavelength, phase=False)
-        surf  = None
+        surface = None
 
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1068,7 +1068,7 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z, ntheta=nth)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d5', sza, saa, vza, vaa, z,
@@ -1107,7 +1107,7 @@ def case_D6(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs
         ).calc(wavelength)
-        surf = RoughSurface(wind=2., brdf=True, wave_shadow=True, nh2o=1.33)
+        surface = RoughSurface(wind=2., brdf=True, wave_shadow=True, nh2o=1.33)
 
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1122,7 +1122,7 @@ def case_D6(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z)
+                wavelength, le, surface, pro, dep, z)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d6', sza, saa, vza, vaa, z,
@@ -1160,9 +1160,9 @@ def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs
         ).calc(wavelength)
-        # surf = RoughSurface(wind=2., brdf=False, wave_shadow=True, nh2o=1.33,
+        # surface = RoughSurface(wind=2., brdf=False, wave_shadow=True, nh2o=1.33,
         #                     sur=1, single=True)
-        surf = RoughSurface(wind=2., brdf=True, wave_shadow=True, nh2o=1.33)
+        surface = RoughSurface(wind=2., brdf=True, wave_shadow=True, nh2o=1.33)
 
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1178,7 +1178,7 @@ def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./'):
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
                 wavelength, le,
-                surf, pro, dep, z, pp=True)
+                surface, pro, dep, z, pp=True)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d6_pp', sza, saa, vza, vaa, z,
@@ -1216,7 +1216,7 @@ def case_E1(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', grid=z, prof_ray=sca, prof_abs=np.zeros_like(sca)
         ).calc(wavelength)
-        surf = None
+        surface = None
         
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1231,7 +1231,7 @@ def case_E1(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z)
+                wavelength, le, surface, pro, dep, z)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e1', sza, saa, vza, vaa, z,
@@ -1272,7 +1272,7 @@ def case_E2(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', grid=z, prof_ray=sca, prof_abs=abs
         ).calc(wavelength)
-        surf = None
+        surface = None
         
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1287,7 +1287,7 @@ def case_E2(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z)
+                wavelength, le, surface, pro, dep, z)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e2', sza, saa, vza, vaa, z,
@@ -1339,7 +1339,7 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', comp=[aer1], grid=z, prof_ray=sca, prof_abs=abs
         ).calc(wavelength, phase=True, n_theta=nth)
-        surf = None
+        surface = None
         
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1354,7 +1354,7 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z, ntheta=nth)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e3', sza, saa, vza, vaa, z,
@@ -1416,7 +1416,7 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D('afglt', comp=[aer1, aer2], grid=z, prof_ray=sca, 
                       prof_abs=abs, pfgrid=[120., 21., 20., 3., 0.]
                       ).calc(wavelength, phase=True, n_theta=nth)
-        surf = None
+        surface = None
         
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1431,7 +1431,7 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z, ntheta=nth)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e4', sza, saa, vza, vaa, z,
@@ -1490,7 +1490,7 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', comp=[cld1], grid=z, prof_ray=sca, prof_abs=abs
         ).calc(wavelength, phase=True, n_theta=nth)
-        surf = None
+        surface = None
         
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1505,7 +1505,7 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surf, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z, ntheta=nth)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e5', sza, saa, vza, vaa, z,
@@ -1541,7 +1541,7 @@ def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', grid=z, prof_ray=sca, prof_abs=abs
         ).calc(wavelength)
-        surf = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
+        surface = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
         
         nvza = len(vza)
         nvaa = len(vaa)
@@ -1556,7 +1556,7 @@ def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, False, ftoa_exist, 'none.nc', ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, 
-                wavelength, le, surf, pro, dep, z, is_e6=True)
+                wavelength, le, surface, pro, dep, z, is_e6=True)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e6', sza, saa, vza, vaa, z,
@@ -1593,7 +1593,7 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
     sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
     abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
     pro = Atm1D('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wavelength)
-    surf = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
+    surface = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
     
     nvza = len(vza)
     dep = 0.03
@@ -1654,9 +1654,9 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
         sg = S1DB
         m_toa = sg.run(wavelength=wavelength, nb_photons=nsens*nphotons,
-                    nb_loop=nphotons, atm=pro, sensor=sensors,
+                    nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
-                    le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
+                    le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_f=ntheta)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))
@@ -1696,7 +1696,7 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
     sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
     abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
     pro = Atm1D('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wavelength)
-    surf = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
+    surface = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
     
     nvza = len(vza)
     dep = 0.03
@@ -1750,9 +1750,9 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
         sg = Smartg(back=True, double=True, bias=True, pp=False, obj3d=True)
         m_toa = sg.run(wavelength=wavelength, nb_photons=nsens*nphotons,
-                    nb_loop=nphotons, atm=pro, sensor=sensors,
+                    nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
-                    le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
+                    le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_f=ntheta)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))
@@ -1797,7 +1797,7 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
     abs = np.concatenate((np.array([[0.]]), abs), axis=1)
     
     pro = Atm1D('afglt', grid=z, prof_ray=sca, prof_abs=abs).calc(wavelength)
-    surf = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
+    surface = RoughSurface(wind=5., brdf=True, wave_shadow=True, nh2o=1.33)
     
     nvza = len(vza)
     dep = 0.03
@@ -1850,9 +1850,9 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
         sg = S1DB
         m_toa = sg.run(wavelength=wavelength, nb_photons=nsens*nphotons,
-                    nb_loop=nphotons, atm=pro, sensor=sensors,
+                    nb_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
-                    le=le, surf=surf, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
+                    le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_f=ntheta)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))

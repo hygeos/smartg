@@ -493,7 +493,7 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
 
     Returns
     -------
-    (pro, grid3, surf, wavelengths)
+    (pro, grid3, surface, wavelengths)
     """
     # ========= phase matrix
     file_cld_phase = (
@@ -551,9 +551,9 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
     )
     pro = atm3.calc(wavelengths, n_theta=NTH, truncation=truncation)
 
-    surf = LambSurface(alb=AlbedoCst(0.2))
+    surface = LambSurface(alb=AlbedoCst(0.2))
 
-    return pro, grid3, surf, wavelengths
+    return pro, grid3, surface, wavelengths
 
 
 @pytest.fixture(scope="module")
@@ -681,7 +681,7 @@ def _run_case_backward(
     -------
     (m, norm)
     """
-    pro, grid3, surf, wavelengths = atm_c2
+    pro, grid3, surface, wavelengths = atm_c2
     posz_key, theta, phi, theta_0 = CASES[case]
     posz = _resolve_posz(sensor_grid, posz_key)
 
@@ -707,10 +707,10 @@ def _run_case_backward(
 
     kw = dict(
         wavelength=wavelengths,
-        atm=pro,
+        atmosphere=pro,
         sensor=sensors,
         le=le,
-        surf=surf,
+        surface=surface,
         n_f=NTH,
         stdev=True,
     )
@@ -743,7 +743,7 @@ def _run_group_forward(
     -------
     (m, norm)
     """
-    pro, grid3, surf, wavelengths = atm_c2
+    pro, grid3, surface, wavelengths = atm_c2
     cases = group["cases"]
     # All the cases of a group share the same sun position
     theta_0 = CASES[cases[0]][3]
@@ -775,10 +775,10 @@ def _run_group_forward(
     kw = dict(
         th_v_deg=theta_0,
         wavelength=wavelengths,
-        atm=pro,
+        atmosphere=pro,
         sensor=sensors,
         le=le,
-        surf=surf,
+        surface=surface,
         n_f=NTH,
         output_layers=group["output_layers"],
     )

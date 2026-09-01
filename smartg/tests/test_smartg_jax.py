@@ -96,22 +96,22 @@ def test_smartg_jax2(
         np.linspace(0.1, 0.5, num=2), ["-m", "-c"], strict=True
     ):
         level = 0  # 1: BOA downward reflectance, 0 : TOA
-        atm = Atm1D(
+        atmosphere = Atm1D(
             "afglms",
             comp=[AerOPAC("urban", aod, 550.0)],
             grid=np.linspace(50.0, 0.0, num=40),
         )
-        sigma = od2k(atm.calc(wavelength_abs), "OD_abs_atm")[:, 1:]
+        sigma = od2k(atmosphere.calc(wavelength_abs), "OD_abs_atm")[:, 1:]
         sg = Smartg(alis=True, alt_pp=True)
         m = (
             sg.run(
                 seed=0,
                 th_v_deg=45.0,
                 wavelength=wavelength_sca,
-                surf=LambSurface(alb_hist),
+                surface=LambSurface(alb_hist),
                 le=lez,
                 beer=0,
-                atm=atm.calc(wavelength_sca),
+                atmosphere=atmosphere.calc(wavelength_sca),
                 alis_options={
                     "nlow": wavelength_sca.size,
                     "hist": True,
@@ -128,10 +128,10 @@ def test_smartg_jax2(
                 seed=0,
                 th_v_deg=45.0,
                 wavelength=wavelength_abs,
-                surf=LambSurface(alb_snow),
+                surface=LambSurface(alb_snow),
                 le=lez,
                 beer=0,
-                atm=atm.calc(wavelength_abs),
+                atmosphere=atmosphere.calc(wavelength_abs),
                 alis_options={"nlow": wavelength_sca.size, "hist": False},
                 nb_photons=nb_photons,
                 n_f=1e3,
@@ -291,10 +291,10 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             seed=0,
             th_v_deg=30.0,
             wavelength=w_valid,
-            surf=None,
+            surface=None,
             le=le,
             beer=0,
-            atm=atm_valid.calc(w_valid),
+            atmosphere=atm_valid.calc(w_valid),
             depo=0.0,
             alis_options={"nlow": nlow, "hist": False},
             nb_photons=nb_photons,
@@ -308,10 +308,10 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             seed=0,
             th_v_deg=30.0,
             wavelength=w_valid,
-            surf=None,
+            surface=None,
             le=le,
             beer=0,
-            atm=atm_valid.calc(w_valid),
+            atmosphere=atm_valid.calc(w_valid),
             depo=0.0,
             alis_options={
                 "nlow": nlow,

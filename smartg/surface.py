@@ -344,7 +344,7 @@ class Environment:
                 surface profile used inside the disk is a
                 LambSurface(alb) object using the Environment
                 parameter `alb`. The surface profile used outside
-                the disk is the parameter surf of the Smartg
+                the disk is the parameter surface of the Smartg
                 method run.
         *  0 -> Deactivated. The default value.
         *  1 -> Same as -1 but the opposite.
