@@ -217,6 +217,10 @@ final `v2.0.0` release.
     it sizes (the phase functions and the wavelength probability)
   - The `r_r` and `weight_r_r` parameters of `Smartg.run` are now spelled out
     as `russian_roulette` and `russian_roulette_weight`
+  - The `pol_off` parameter of `Smartg.run` has become `polarization`, with
+    the opposite meaning and a `True` default: polarized light is considered
+    unless `polarization=False` is passed. The `pol_off` parameter of the
+    internal `_rayleigh` and `_calc_phase_gpu` helpers follows
   - The internal helpers of the smartg module are now private
     (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
     `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,

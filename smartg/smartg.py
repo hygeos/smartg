@@ -787,7 +787,7 @@ class Smartg(object):
         ffs: bool = False,
         direct: bool = False,
         ocean_interaction: bool | None = None,
-        pol_off: bool = False,
+        polarization: bool = True,
         no_aer_output: bool = False,
     ) -> xr.Dataset:
         """
@@ -1022,9 +1022,9 @@ class Smartg(object):
         ocean_interaction : None | int, optional
             If ocean_interaction=1 select photons that interact with
             ocean. Default None, no selection.
-        pol_off : bool, optional
-            Deactivate (if True) the consideration of polarized light.
-            Default False.
+        polarization : bool, optional
+            Consider (if True) the polarization of the light. Default
+            True.
         no_aer_output : bool, optional
             Add output where only photons not scattered by aerosols are
             considered. Default False. For example, next to the output
@@ -1407,7 +1407,7 @@ class Smartg(object):
         if prof_atm is not None:
             faer = _calc_phase_gpu(
                 prof_atm, n_theta=n_icdf, depo=depo, kind='atm',
-                pol_off=pol_off
+                polarization=polarization
             )
             prof_atm_gpu, cell_atm_gpu = _init_profile(
                 wavelength, prof_atm, 'atm'
@@ -1556,7 +1556,7 @@ class Smartg(object):
                 n_theta=n_icdf,
                 depo=depo_water,
                 kind='oc',
-                pol_off=pol_off,
+                polarization=polarization,
             )
             prof_oc_gpu, cell_oc_gpu = _init_profile(wavelength, prof_oc, 'oc')
             n_oce = len(prof_oc.coords['z_oc']) - 1
@@ -2881,7 +2881,9 @@ def _isotropic(n_theta: int) -> np.ndarray:
     return phase_H
 
 
-def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
+def _rayleigh(
+    n_theta: int, depo: float, polarization: bool = True
+) -> np.ndarray:
     """
     Build the Rayleigh phase-function lookup table.
 
@@ -2899,11 +2901,11 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
         Molecular depolarization factor. Generates the Rayleigh phase
         entry. If negative, an isotropic phase function is used instead
         of Rayleigh.
-    pol_off : bool, optional
-        If ``True``, build scalar-equivalent phase tables with
-        polarization disabled. If ``False``, keep the polarized phase-
+    polarization : bool, optional
+        If ``False``, build scalar-equivalent phase tables with
+        polarization disabled. If ``True``, keep the polarized phase-
         matrix terms required by the vector radiative transfer kernels.
-        Default is ``False``.
+        Default is ``True``.
 
     Returns
     -------
@@ -2941,7 +2943,7 @@ def _rayleigh(n_theta: int, depo: float, pol_off: bool = False) -> np.ndarray:
     p33bis = t_half * delta
     p44bis = p33bis * delta_seco
 
-    if pol_off:
+    if not polarization:
         # P(theta) -> phase matrix in Iperpar convention
         # F(theta) -> phase matrix in IQUV convention
         # from IQUV to IperIpar (in the case only IQUV F11 != 0 i.e. no
@@ -2985,7 +2987,7 @@ def _calc_phase_gpu(
     n_theta: int,
     depo: float,
     kind: str,
-    pol_off: bool = False,
+    polarization: bool = True,
 ) -> GPUArray:
     """
     Build the phase-function lookup table uploaded to the GPU.
@@ -3013,9 +3015,9 @@ def _calc_phase_gpu(
 
     The profile phase matrices are first normalized to the internal
     I-parallel/I-perpendicular representation with
-    ``convert_phase_to_iparper``. When ``pol_off`` is enabled, tabulated
-    phase matrices are reduced to their scalar intensity equivalent
-    before the lookup tables are built.
+    ``convert_phase_to_iparper``. When ``polarization`` is disabled,
+    tabulated phase matrices are reduced to their scalar intensity
+    equivalent before the lookup tables are built.
 
     Parameters
     ----------
@@ -3033,9 +3035,9 @@ def _calc_phase_gpu(
     kind : str
         Profile family identifier. Must be either ``'atm'`` (atmosphere)
         or ``'oc'`` (ocean).
-    pol_off : bool, optional
-        If ``True``, build scalar-equivalent phase tables with
-        polarization disabled. If ``False``, keep the polarized phase-
+    polarization : bool, optional
+        If ``False``, build scalar-equivalent phase tables with
+        polarization disabled. If ``True``, keep the polarized phase-
         matrix terms required by the vector radiative transfer kernels.
 
     Returns
@@ -3075,9 +3077,11 @@ def _calc_phase_gpu(
 
     # Set Rayleigh phase function or isotropic if depo <0
     if depo >= 0:
-        phase_H[0, :] = _rayleigh(n_theta, depo, pol_off=pol_off)
-    # no pol_off in isotropic because the function needs first to be
-    # corrected
+        phase_H[0, :] = _rayleigh(
+            n_theta, depo, polarization=polarization
+        )
+    # no polarization switch in isotropic because the function needs
+    # first to be corrected
     else:
         phase_H[0, :] = _isotropic(n_theta)
     if 'theta_' + kind in profile.coords:
@@ -3102,7 +3106,7 @@ def _calc_phase_gpu(
 
         phase = convert_phase_to_iparper(phase)
 
-        if pol_off:
+        if not polarization:
             if len(phase[:, 0]) == 4:
                 raise ValueError(
                     "old profiles with only 4 phase matrix terms are not "
