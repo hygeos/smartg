@@ -2437,9 +2437,9 @@ class CusBackward:
         The zenith angle in degrees.
     ph_deg : float, optional
         The azimuth angle in degrees.
-    normal : Vector, optional
-        The normal vector of the receiver. If provided,
-        circumvent th_deg and ph_deg.
+    normal : Vector | Normal, optional
+        The normal vector of the receiver, given as a Vector or as
+        a Normal. If provided, circumvent th_deg and ph_deg.
     v_sun : Vector, optional
         The sun direction vector, for example the result of
         gc.ang2vec(sza, phi, vec_view='nadir'). If provided, it
@@ -2490,7 +2490,7 @@ class CusBackward:
         position: gc.Point | None = None,
         th_deg: float = 0.,
         ph_deg: float = 0.,
-        normal: gc.Vector | None = None,
+        normal: gc.Vector | gc.Normal | None = None,
         v_sun: gc.Vector | None = None,
         sun_fov: float = 0.266,
         receiver_fov: float = 0.,
@@ -2502,11 +2502,14 @@ class CusBackward:
     ) -> None:
         if position is None:
             position = gc.Point(0., 0., 0.)
+        if isinstance(normal, gc.Normal):
+            normal = gc.Vector(normal)
         if isinstance(normal, gc.Vector):
             th, ph = gc.vec2ang(normal)
             th_deg, ph_deg = float(th), float(ph)
         elif normal is not None:
-            raise ValueError('The normal argument must be a Vector')
+            raise ValueError(
+                'The normal argument must be a Vector or a Normal')
         if v_sun is not None and not isinstance(v_sun, gc.Vector):
             raise ValueError('The v_sun argument must be a Vector')
         if sun_fov <= 0. or sun_fov >= 90.:
