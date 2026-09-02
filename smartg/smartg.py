@@ -177,29 +177,29 @@ TYPE_CELL = [
 ]
 
 TYPE_SENSOR = [
-    ('POSX', 'float32'),  # // X position of the sensor
-    ('POSY', 'float32'),  # // Y position of the sensor
+    ('pos_x', 'float32'),  # // X position of the sensor
+    ('pos_y', 'float32'),  # // Y position of the sensor
     # // Z position of the sensor (from Earth's center in spherical,
     # from the ground in PP)
-    ('POSZ', 'float32'),
+    ('pos_z', 'float32'),
     # // zenith angle of viewing direction (Zenith> 90 for downward
     # looking, <90 for upward, default Zenith)
-    ('THDEG', 'float32'),
-    ('PHDEG', 'float32'),  # // azimut angle of viewing direction
+    ('th_deg', 'float32'),
+    ('ph_deg', 'float32'),  # // azimut angle of viewing direction
     # // localization (ATMOS=1, ...), see constant definitions in
     # communs.h
-    ('LOC', 'int32'),
-    ('FOV', 'float32'),  # // sensor FOV (degree)
+    ('loc', 'int32'),
+    ('fov', 'float32'),  # // sensor FOV (degree)
     # // sensor type: Radiance (0), Planar flux (1), Spherical Flux (2),
     # default 0
-    ('TYPE', 'int32'),
-    ('ICELL', 'int32'),  # // Box in which the sensor is
+    ('sensor_type', 'int32'),
+    ('icell', 'int32'),  # // Box in which the sensor is
     # // Wavelength start index that the sensor 'sees' (default -1 :
     # all)
-    ('ILAM_0', 'int32'),
+    ('ilam_0', 'int32'),
     # // Wavelength stop  index that the sensor 'sees' (default -1 :
     # all)
-    ('ILAM_1', 'int32'),
+    ('ilam_1', 'int32'),
 ]
 
 TYPE_SPECTRUM_OBJ = [
@@ -1503,8 +1503,8 @@ class Smartg(object):
         # direct beam tolerance
         if sun_disc == 0:
             for sens in sensor2:
-                if sens.dict['TYPE'] == 1 and sens.dict['FOV'] > 1e-6:
-                    sun_disc = sens.dict['FOV']
+                if sens.dict['sensor_type'] == 1 and sens.dict['fov'] > 1e-6:
+                    sun_disc = sens.dict['fov']
                     break  # Use first sensor with cone FOV
 
         # The min and max posx and posy of sensors. Useful for forward
@@ -1516,15 +1516,15 @@ class Smartg(object):
         for sens in sensor2:
             if sens.cell_size > 0:
                 half_csize = 0.5 * sens.cell_size
-                sxmin = min(sxmin, sens.dict['POSX'] - half_csize)
-                sxmax = max(sxmax, sens.dict['POSX'] + half_csize)
-                symin = min(symin, sens.dict['POSY'] - half_csize)
-                symax = max(symax, sens.dict['POSY'] + half_csize)
+                sxmin = min(sxmin, sens.dict['pos_x'] - half_csize)
+                sxmax = max(sxmax, sens.dict['pos_x'] + half_csize)
+                symin = min(symin, sens.dict['pos_y'] - half_csize)
+                symax = max(symax, sens.dict['pos_y'] + half_csize)
             else:
-                sxmin = min(sxmin, sens.dict['POSX'])
-                sxmax = max(sxmax, sens.dict['POSX'])
-                symin = min(symin, sens.dict['POSY'])
-                symax = max(symax, sens.dict['POSY'])
+                sxmin = min(sxmin, sens.dict['pos_x'])
+                sxmax = max(sxmax, sens.dict['pos_x'])
+                symin = min(symin, sens.dict['pos_y'])
+                symax = max(symax, sens.dict['pos_y'])
         if sensor2[0].cell_size > 0:
             nbsx = round((sxmax - sxmin) / sensor2[0].cell_size)
             nbsy = round((symax - symin) / sensor2[0].cell_size)

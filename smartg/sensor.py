@@ -91,23 +91,23 @@ class Sensor(object):
             fov = 0.  # also already forced to 0 in the CUDA code
 
         self.dict = {
-            'POSX':  pos_x,
-            'POSY':  pos_y,
-            'POSZ':  pos_z,
-            'THDEG': th_deg,
-            'PHDEG': ph_deg,
-            'LOC':   LOC_CODE.index(loc),
-            'FOV':   fov,
-            'TYPE':  sensor_type,
-            'ICELL': icell,
-            'ILAM_0': ilam_0,
-            'ILAM_1': ilam_1
+            'pos_x': pos_x,
+            'pos_y': pos_y,
+            'pos_z': pos_z,
+            'th_deg': th_deg,
+            'ph_deg': ph_deg,
+            'loc': LOC_CODE.index(loc),
+            'fov': fov,
+            'sensor_type': sensor_type,
+            'icell': icell,
+            'ilam_0': ilam_0,
+            'ilam_1': ilam_1,
         }
         self.cell_size = cell_size
 
     def __str__(self):
-        return ('SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}'
-                '-THETA={THDEG:.3f}-PHI={PHDEG:.3f}'
+        return ('SENSOR=-pos_x{pos_x}-pos_y{pos_y}-pos_z{pos_z}'
+                '-theta={th_deg:.3f}-phi={ph_deg:.3f}'
                 .format(**self.dict))
 
 
@@ -363,8 +363,8 @@ def get_sensors_grid(
         # atmosphere cell it belongs to
         *_, icells = _sensor_positions(grid_3d, pos_z)
         for sensor in sensors:
-            idx = _find_cell_index(sensor.dict['POSX'], grid_3d.xgrid)
-            idy = _find_cell_index(sensor.dict['POSY'], grid_3d.ygrid)
-            sensor.dict['ICELL'] = icells[idx + grid_3d.Nx*idy]
+            idx = _find_cell_index(sensor.dict['pos_x'], grid_3d.xgrid)
+            idy = _find_cell_index(sensor.dict['pos_y'], grid_3d.ygrid)
+            sensor.dict['icell'] = icells[idx + grid_3d.Nx*idy]
 
     return sensors
