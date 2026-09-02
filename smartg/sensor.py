@@ -26,31 +26,39 @@ from typing import cast
 from smartg.grid3d import Grid3D, locate_voxel_index
 
 
-# Localization codes of the device, see communs.h
-LOC_CODE = ['', 'ATMOS', 'SURF0P', 'SURF0M', '', '', 'OCEAN',
-            'SEAFLOOR', 'OBJSURF']
+# Localization names, at the index of their device code, see
+# communs.h. The empty names are the codes a sensor cannot take.
+LOC_CODE: list[str] = ['', 'ATMOS', 'SURF0P', 'SURF0M', '', '',
+                       'OCEAN', 'SEAFLOOR', 'OBJSURF']
 
 
 class Sensor(object):
-    """
-    Definition of the sensor
+    """Definition of a sensor.
+
+    A sensor is the point of the scene the photons are launched from,
+    with a direction, a localization and the radiative quantity it
+    estimates. Its parameters are gathered in the ``dict`` attribute,
+    keyed and ordered like the fields of the sensor structure of the
+    CUDA kernel.
 
     Parameters
     ----------
     pos_x : float, optional
-       The sensor position along the x axis. Default 0.
+        The sensor position along the x axis (km). Default 0.
     pos_y : float, optional
-        The sensor position along the y axis. Default 0.
+        The sensor position along the y axis (km). Default 0.
     pos_z : float, optional
-        The sensor position along the z axis. Default 0.
+        The sensor position along the z axis (km). It is the altitude
+        in plane-parallel geometry and the distance from the Earth
+        center in spherical-shell geometry. Default 0.
     th_deg : float, optional
-        The source/viewing zenith angle in forward/backward mode.
-        Zenith > 90 for downward looking, < 90 for upward.
-        Default Zenith.
+        The source (forward mode) or viewing (backward mode) zenith
+        angle, in degrees. Greater than 90 for a downward looking
+        direction, smaller than 90 for an upward one. Default 0
+        (zenith).
     ph_deg : float, optional
-        The source/viewing azimuth angle in forward/backward mode.
-        Zenith > 90 for downward looking, < 90 for upward.
-        Default Zenith.
+        The source (forward mode) or viewing (backward mode) azimuth
+        angle, in degrees. Default 180.
     loc : str, optional
         Localization of the sensor. Possibilities are:
 
@@ -63,7 +71,8 @@ class Sensor(object):
         * 'SEAFLOOR' -> Start from the sea floor.
         * 'OBJSURF' -> Start from a 3d object surface.
     fov : float, optional
-        The field of view in degrees. Default 0.
+        The field of view in degrees. Only for a flux sensor, it is
+        forced to 0 for a radiance one. Default 0.
     sensor_type : int, optional
         The radiative quantity type. Three possibilities:
 
@@ -72,15 +81,67 @@ class Sensor(object):
         * 2 -> Spherical flux.
     icell : int, optional
         The box index where the sensor is located. Only for
-        simulations with a 3D atmosphere.
+        simulations with a 3D atmosphere. Default 0.
+    ilam_0 : int, optional
+        The index of the first wavelength seen by the sensor. Default
+        -1, where the sensor sees all the wavelengths and ilam_1 is
+        ignored.
+    ilam_1 : int, optional
+        The index that stops, excluded, the wavelengths seen by the
+        sensor. Default -1.
+    direction : geoclide.Vector, optional
+        The sensor direction given as a vector. When provided, th_deg
+        and ph_deg are deduced from it. Default None.
+    cell_size : float, optional
+        The side (km) of the square cell, centered on (pos_x, pos_y),
+        where the photon start positions are drawn. Default -1, where
+        every photon starts at the sensor position. The special value
+        -2 moves the start position to the intersection with the top
+        of atmosphere sphere, in spherical geometry with 3D objects.
+
+    Attributes
+    ----------
+    dict : dict
+        The sensor parameters, keyed and ordered like the fields of
+        the sensor structure of the CUDA kernel. The localization is
+        stored as its device code and not as its name.
+    cell_size : float
+        The side (km) of the square cell where the photon start
+        positions are drawn.
+
+    Raises
+    ------
+    ValueError
+        If direction is given but is not a geoclide Vector, or if loc
+        is not one of the known localizations.
+
+    Warns
+    -----
+    UserWarning
+        If fov is greater than 0 for a radiance sensor, where it is
+        not yet allowed: fov is then forced to 0.
     """
-    def __init__(self, pos_x=0., pos_y=0., pos_z=0., th_deg=0.,
-                 ph_deg=180., loc='SURF0P', fov=0., sensor_type=0, icell=0,
-                 ilam_0=-1, ilam_1=-1, direction=None,
-                 cell_size=-1.):
+
+    def __init__(
+        self,
+        pos_x: float = 0.,
+        pos_y: float = 0.,
+        pos_z: float = 0.,
+        th_deg: float = 0.,
+        ph_deg: float = 180.,
+        loc: str = 'SURF0P',
+        fov: float = 0.,
+        sensor_type: int = 0,
+        icell: int = 0,
+        ilam_0: int = -1,
+        ilam_1: int = -1,
+        direction: gc.Vector | None = None,
+        cell_size: float = -1.,
+    ) -> None:
 
         if isinstance(direction, gc.Vector):
-            th_deg, ph_deg = gc.vec2ang(direction)
+            th_deg, ph_deg = cast(tuple[float, float],
+                                  gc.vec2ang(direction))
         elif direction is not None:
             raise ValueError('direction argument must be a Vector')
 
@@ -90,7 +151,7 @@ class Sensor(object):
                 '(sensor_type=0). It will be forced to 0.', stacklevel=2)
             fov = 0.  # also already forced to 0 in the CUDA code
 
-        self.dict = {
+        self.dict: dict[str, float | int] = {
             'pos_x': pos_x,
             'pos_y': pos_y,
             'pos_z': pos_z,
@@ -103,9 +164,10 @@ class Sensor(object):
             'ilam_0': ilam_0,
             'ilam_1': ilam_1,
         }
-        self.cell_size = cell_size
+        self.cell_size: float = cell_size
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Return the position and direction of the sensor."""
         return ('SENSOR=-pos_x{pos_x}-pos_y{pos_y}-pos_z{pos_z}'
                 '-theta={th_deg:.3f}-phi={ph_deg:.3f}'
                 .format(**self.dict))
@@ -122,8 +184,7 @@ def get_sensor(
     pp: bool = True,
     verbose: bool = False,
 ) -> Sensor:
-    """Build a sensor located on the atmospheric boundary from view
-    angles.
+    """Build a sensor on the atmospheric boundary from view angles.
 
     This helper is used in backward simulations. The viewing zenith
     angle (``vza_level``) is defined at altitude ``level`` and
@@ -164,6 +225,12 @@ def get_sensor(
     Sensor
         Sensor instance positioned on the atmospheric boundary with
         orientation derived from the input angles.
+
+    Raises
+    ------
+    ValueError
+        If the ray from the given position and direction misses the
+        atmospheric boundary.
     """
     large_dist = float("inf")  # large distance (km)
     # Compute the direction vector object from the zenith and
@@ -261,10 +328,11 @@ def _sensor_positions(
 
 
 def _find_cell_index(value: float, grid: NDArray) -> int:
-    """Find the index i of the cell such that grid[i] < value <= grid[i+1].
+    """Find the index i of the cell holding a value.
 
-    Note the upper-closed convention: a value lying exactly on a
-    boundary belongs to the cell below it.
+    The cell i is the one such that ``grid[i] < value <=
+    grid[i+1]``. Note the upper-closed convention: a value lying
+    exactly on a boundary belongs to the cell below it.
 
     Parameters
     ----------
@@ -365,6 +433,6 @@ def get_sensors_grid(
         for sensor in sensors:
             idx = _find_cell_index(sensor.dict['pos_x'], grid_3d.xgrid)
             idy = _find_cell_index(sensor.dict['pos_y'], grid_3d.ygrid)
-            sensor.dict['icell'] = icells[idx + grid_3d.Nx*idy]
+            sensor.dict['icell'] = int(icells[idx + grid_3d.Nx*idy])
 
     return sensors
