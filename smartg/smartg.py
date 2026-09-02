@@ -1160,30 +1160,30 @@ class Smartg(object):
         if cus_l is not None:
             if cus_l.dict['mode'] == "B":
                 sensor = Sensor(
-                    POSX=cus_l.dict['position'].x,
-                    POSY=cus_l.dict['position'].y,
-                    POSZ=cus_l.dict['position'].z,
-                    THDEG=cus_l.dict['th_deg'],
-                    PHDEG=cus_l.dict['ph_deg'],
-                    LOC='ATMOS',
-                    FOV=0.0,
-                    TYPE=0,
+                    pos_x=cus_l.dict['position'].x,
+                    pos_y=cus_l.dict['position'].y,
+                    pos_z=cus_l.dict['position'].z,
+                    th_deg=cus_l.dict['th_deg'],
+                    ph_deg=cus_l.dict['ph_deg'],
+                    loc='ATMOS',
+                    fov=0.0,
+                    sensor_type=0,
                 )
-                # FOV=cus_l.dict['receiver_fov'],
-                # TYPE=cus_l.dict['sampling_code'])
+                # fov=cus_l.dict['receiver_fov'],
+                # sensor_type=cus_l.dict['sampling_code'])
             elif cus_l.dict['mode'] == "BR":
                 sensor = Sensor(
-                    POSX=cus_l.dict['receiver'].transformation.transx,
-                    POSY=cus_l.dict['receiver'].transformation.transy,
-                    POSZ=cus_l.dict['receiver'].transformation.transz,
-                    THDEG=cus_l.dict['th_deg'],
-                    PHDEG=cus_l.dict['ph_deg'],
-                    LOC='ATMOS',
-                    FOV=0.0,
-                    TYPE=0,
+                    pos_x=cus_l.dict['receiver'].transformation.transx,
+                    pos_y=cus_l.dict['receiver'].transformation.transy,
+                    pos_z=cus_l.dict['receiver'].transformation.transz,
+                    th_deg=cus_l.dict['th_deg'],
+                    ph_deg=cus_l.dict['ph_deg'],
+                    loc='ATMOS',
+                    fov=0.0,
+                    sensor_type=0,
                 )
-                # FOV=cus_l.dict['receiver_fov'],
-                # TYPE=cus_l.dict['sampling_code'])
+                # fov=cus_l.dict['receiver_fov'],
+                # sensor_type=cus_l.dict['sampling_code'])
             elif cus_l.dict['mode'] == "FF":
                 # The projected surface at TOA where the photons are
                 # launched
@@ -1437,47 +1437,47 @@ class Smartg(object):
         # sensor definition
         if sensor is None:
             # by defaut sensor in forward mode, with ZA=180.-th_deg,
-            # PHDEG=180., FOV=0.
+            # ph_deg=180., fov=0.
             if sim == 3:
                 sensor2 = [
                     Sensor(
-                        THDEG=180.0 - th_deg,
-                        PHDEG=ph_deg + 180.0,
-                        LOC='OCEAN',
+                        th_deg=180.0 - th_deg,
+                        ph_deg=ph_deg + 180.0,
+                        loc='OCEAN',
                     )
                 ]
             elif (sim == -1) or (sim == 0):
                 sensor2 = [
                     Sensor(
-                        THDEG=180.0 - th_deg,
-                        PHDEG=ph_deg + 180.0,
-                        LOC='SURF0P',
+                        th_deg=180.0 - th_deg,
+                        ph_deg=ph_deg + 180.0,
+                        loc='SURF0P',
                     )
                 ]
             else:
                 if cus_l is not None:  # for FF mode
                     sensor2 = [
                         Sensor(
-                            POSX=x0.get()[0],
-                            POSY=x0.get()[1],
-                            POSZ=x0.get()[2],
-                            THDEG=180.0 - th_deg,
-                            PHDEG=ph_deg + 180.0,
-                            LOC='ATMOS',
+                            pos_x=x0.get()[0],
+                            pos_y=x0.get()[1],
+                            pos_z=x0.get()[2],
+                            th_deg=180.0 - th_deg,
+                            ph_deg=ph_deg + 180.0,
+                            loc='ATMOS',
                         )
                     ]
-                    # FOV=0.0, TYPE=0)]
-                    # FOV=cus_l.dict['fov'],
-                    # TYPE=cus_l.dict['sampling_code'])]
+                    # fov=0.0, sensor_type=0)]
+                    # fov=cus_l.dict['fov'],
+                    # sensor_type=cus_l.dict['sampling_code'])]
                 else:
                     sensor2 = [
                         Sensor(
-                            POSX=x0.get()[0],
-                            POSY=x0.get()[1],
-                            POSZ=x0.get()[2],
-                            THDEG=180.0 - th_deg,
-                            PHDEG=ph_deg + 180.0,
-                            LOC='ATMOS',
+                            pos_x=x0.get()[0],
+                            pos_y=x0.get()[1],
+                            pos_z=x0.get()[2],
+                            th_deg=180.0 - th_deg,
+                            ph_deg=ph_deg + 180.0,
+                            loc='ATMOS',
                         )
                     ]
         elif isinstance(sensor, Sensor):

@@ -221,6 +221,11 @@ final `v2.0.0` release.
     the opposite meaning and a `True` default: polarized light is considered
     unless `polarization=False` is passed. The `pol_off` parameter of the
     internal `_rayleigh` and `_calc_phase_gpu` helpers follows
+  - The `Sensor` constructor parameters are now PEP 8: `POSX`/`POSY`/`POSZ`
+    → `pos_x`/`pos_y`/`pos_z`, `THDEG` → `th_deg`, `PHDEG` → `ph_deg`,
+    `LOC` → `loc`, `FOV` → `fov`, `TYPE` → `sensor_type`,
+    `ICELL` → `icell`, `ILAM_0`/`ILAM_1` → `ilam_0`/`ilam_1`,
+    `CELL_SIZE` → `cell_size` and `V` → `direction`
   - The internal helpers of the smartg module are now private
     (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
     `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,

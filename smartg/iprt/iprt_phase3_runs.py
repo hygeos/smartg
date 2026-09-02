@@ -78,13 +78,13 @@ def get_d1_to_e5_boa_sensors(vza, phi, nvza, nvaa, earth_r):
             # Put 89.9999 instead of 90° to avoid problems due z=0 looking at horizon
             if vza_boa == 90.: vza_boa = 89.9999
             sen_tmp = Sensor(
-                            POSX = 0.,
-                            POSY = 0.,
-                            POSZ = earth_r,
-                            THDEG= vza_boa,
-                            PHDEG= phi_boa,
-                            LOC  = 'ATMOS',
-                            TYPE = 0
+                            pos_x=0.,
+                            pos_y=0.,
+                            pos_z=earth_r,
+                            th_deg=vza_boa,
+                            ph_deg=phi_boa,
+                            loc='ATMOS',
+                            sensor_type=0
                             )
             sensors.append(sen_tmp)
     return sensors
@@ -110,13 +110,13 @@ def get_d1_to_e5_toa_sensors_old(vza, phi, nvza, nvaa, earth_r, z):
             phit = gc.Point(ds_geo_tmp['phit'].values[ivaa,:])
             if ivaa == 9 : print('vza=', vza[ivza], '; phi=', phi[ivaa], ' ; point=', phit)
             sen_tmp = Sensor(
-                            POSX = phit.x,
-                            POSY = phit.y,
-                            POSZ = phit.z,
-                            THDEG= vza_toa[ivza],#180-vza[ivza],
-                            PHDEG= phi_toa[ivaa],
-                            LOC  = 'ATMOS',
-                            TYPE = 0
+                            pos_x=phit.x,
+                            pos_y=phit.y,
+                            pos_z=phit.z,
+                            th_deg=vza_toa[ivza],#180-vza[ivza],
+                            ph_deg=phi_toa[ivaa],
+                            loc='ATMOS',
+                            sensor_type=0
                             )
             sensors.append(sen_tmp)
     return sensors
@@ -130,13 +130,13 @@ def get_d1_to_e5_toa_sensors(vza, phi, nvza, nvaa, earth_r, z):
         for ivaa in range (0, nvaa):
             #vza_tmp, phi_tmp = gc.vec2ang(gc.ang2vec(theta=vza[ivza], phi=phi[ivaa]), vec_view='nadir')
             sen_tmp = Sensor(
-                            POSX = 0.,
-                            POSY = 0.,
-                            POSZ = earth_r+np.max(z),
-                            THDEG= vza_toa[ivza],
-                            PHDEG= phi_toa[ivaa],
-                            LOC  = 'ATMOS',
-                            TYPE = 0
+                            pos_x=0.,
+                            pos_y=0.,
+                            pos_z=earth_r+np.max(z),
+                            th_deg=vza_toa[ivza],
+                            ph_deg=phi_toa[ivaa],
+                            loc='ATMOS',
+                            sensor_type=0
                             )
             sensors.append(sen_tmp)
     return sensors
@@ -161,13 +161,13 @@ def get_e6_toa_sensors(vza, phi, nvza, nvaa, earth_r, z):
                                 " Please check input paramaters.")
             phit = gc.Point(ds_geo_tmp['phit'].values[ivaa,:])
             sen_tmp = Sensor(
-                            POSX = phit.x,
-                            POSY = phit.y,
-                            POSZ = phit.z,
-                            THDEG= vza_toa[ivza],#180-vza[ivza],
-                            PHDEG= phi_toa[ivaa],
-                            LOC  = 'ATMOS',
-                            TYPE = 0
+                            pos_x=phit.x,
+                            pos_y=phit.y,
+                            pos_z=phit.z,
+                            th_deg=vza_toa[ivza],#180-vza[ivza],
+                            ph_deg=phi_toa[ivaa],
+                            loc='ATMOS',
+                            sensor_type=0
                             )
             sensors.append(sen_tmp)
     return sensors
@@ -1641,13 +1641,13 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
             th, ph = gc.vec2ang(gc.Vector(vecs.x[isens], vecs.y[isens], vecs.z[isens]))
             if (th == 0. or th == 180.): ph = 0.
             sen_tmp = Sensor(
-                            POSX = phit.x,
-                            POSY = phit.y,
-                            POSZ = phit.z,
-                            THDEG= th,
-                            PHDEG= ph,
-                            LOC  = 'ATMOS',
-                            TYPE = 0,
+                            pos_x=phit.x,
+                            pos_y=phit.y,
+                            pos_z=phit.z,
+                            th_deg=th,
+                            ph_deg=ph,
+                            loc='ATMOS',
+                            sensor_type=0,
                             )
             sensors.append(sen_tmp)
     if (overwrite      or 
@@ -1735,15 +1735,15 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
         th, ph = gc.vec2ang(gc.Vector(vecs.x[isens], vecs.y[isens], vecs.z[isens]))
         if (th == 0. or th == 180.): ph = 0.
         sen_tmp = Sensor(
-                        POSX = 0.,
-                        POSY = 0.,
-                        POSZ = 3e5,
-                        THDEG= th,
-                        PHDEG= ph,
-                        LOC  = 'ATMOS',
-                        TYPE = 1,
-                        FOV = 0.04,
-                        CELL_SIZE=-2
+                        pos_x=0.,
+                        pos_y=0.,
+                        pos_z=3e5,
+                        th_deg=th,
+                        ph_deg=ph,
+                        loc='ATMOS',
+                        sensor_type=1,
+                        fov=0.04,
+                        cell_size=-2
                         )
         sensors.append(sen_tmp)
     if (overwrite      or 
@@ -1836,14 +1836,14 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
         th, ph = gc.vec2ang(gc.Vector(vecs.x[isens], vecs.y[isens], vecs.z[isens]))
         if (th == 0. or th == 180.): ph = 0.
         sen_tmp = Sensor(
-                        POSX = 0.,
-                        POSY = 0.,
-                        POSZ = 3e5,
-                        THDEG= th,
-                        PHDEG= ph,
-                        LOC  = 'ATMOS',
-                        TYPE = 1,
-                        FOV = 0.04,
+                        pos_x=0.,
+                        pos_y=0.,
+                        pos_z=3e5,
+                        th_deg=th,
+                        ph_deg=ph,
+                        loc='ATMOS',
+                        sensor_type=1,
+                        fov=0.04,
                         )
         sensors.append(sen_tmp)
     if (overwrite      or 

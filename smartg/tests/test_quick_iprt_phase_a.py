@@ -140,7 +140,7 @@ def test_a1(request, s1df, s1db):
         for _iaa, aa in enumerate(vaa):
             phi = -aa + 180
             lsensors.append(
-                Sensor(POSZ=np.min(z), THDEG=za, PHDEG=phi, LOC="ATMOS")
+                Sensor(pos_z=np.min(z), th_deg=za, ph_deg=phi, loc="ATMOS")
             )
 
     m_a1_b = s1db.run(
@@ -194,7 +194,7 @@ def test_a1(request, s1df, s1db):
         for _iaa, aa in enumerate(vaa):
             phi = -aa + 180
             lsensors.append(
-                Sensor(POSZ=np.max(z), THDEG=za, PHDEG=phi, LOC="ATMOS")
+                Sensor(pos_z=np.max(z), th_deg=za, ph_deg=phi, loc="ATMOS")
             )
 
     m_a1_b = s1db.run(

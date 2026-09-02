@@ -37,21 +37,21 @@ class Sensor(object):
 
     Parameters
     ----------
-    POSX : float, optional
+    pos_x : float, optional
        The sensor position along the x axis. Default 0.
-    POSY : float, optional
+    pos_y : float, optional
         The sensor position along the y axis. Default 0.
-    POSZ : float, optional
+    pos_z : float, optional
         The sensor position along the z axis. Default 0.
-    THDEG : float, optional
+    th_deg : float, optional
         The source/viewing zenith angle in forward/backward mode.
         Zenith > 90 for downward looking, < 90 for upward.
         Default Zenith.
-    PHDEG : float, optional
+    ph_deg : float, optional
         The source/viewing azimuth angle in forward/backward mode.
         Zenith > 90 for downward looking, < 90 for upward.
         Default Zenith.
-    LOC : str, optional
+    loc : str, optional
         Localization of the sensor. Possibilities are:
 
         * 'SURF0P' -> Start from the surface looking upward, at TOA
@@ -62,47 +62,48 @@ class Sensor(object):
         * 'OCEAN' -> Start from the ocean.
         * 'SEAFLOOR' -> Start from the sea floor.
         * 'OBJSURF' -> Start from a 3d object surface.
-    FOV : float, optional
+    fov : float, optional
         The field of view in degrees. Default 0.
-    TYPE : int, optional
+    sensor_type : int, optional
         The radiative quantity type. Three possibilities:
 
         * 0 -> Radiance (default).
         * 1 -> Planar flux.
         * 2 -> Spherical flux.
-    ICELL : int, optional
+    icell : int, optional
         The box index where the sensor is located. Only for
         simulations with a 3D atmosphere.
     """
-    def __init__(self, POSX=0., POSY=0., POSZ=0., THDEG=0.,
-                 PHDEG=180., LOC='SURF0P', FOV=0., TYPE=0, ICELL=0,
-                 ILAM_0=-1, ILAM_1=-1, V=None, CELL_SIZE=-1.):
+    def __init__(self, pos_x=0., pos_y=0., pos_z=0., th_deg=0.,
+                 ph_deg=180., loc='SURF0P', fov=0., sensor_type=0, icell=0,
+                 ilam_0=-1, ilam_1=-1, direction=None,
+                 cell_size=-1.):
 
-        if isinstance(V, gc.Vector):
-            THDEG, PHDEG = gc.vec2ang(V)
-        elif V is not None:
-            raise ValueError('V argument must be a Vector')
+        if isinstance(direction, gc.Vector):
+            th_deg, ph_deg = gc.vec2ang(direction)
+        elif direction is not None:
+            raise ValueError('direction argument must be a Vector')
 
-        if FOV > 0. and TYPE == 0:
+        if fov > 0. and sensor_type == 0:
             warnings.warn(
-                'FOV > 0 is not yet allowed for radiance sensor '
-                '(TYPE=0). It will be forced to 0.', stacklevel=2)
-            FOV = 0.  # also already forced to 0 in the CUDA code
+                'fov > 0 is not yet allowed for radiance sensor '
+                '(sensor_type=0). It will be forced to 0.', stacklevel=2)
+            fov = 0.  # also already forced to 0 in the CUDA code
 
         self.dict = {
-            'POSX':  POSX,
-            'POSY':  POSY,
-            'POSZ':  POSZ,
-            'THDEG': THDEG,
-            'PHDEG': PHDEG,
-            'LOC':   LOC_CODE.index(LOC),
-            'FOV':   FOV,
-            'TYPE':  TYPE,
-            'ICELL': ICELL,
-            'ILAM_0': ILAM_0,
-            'ILAM_1': ILAM_1
+            'POSX':  pos_x,
+            'POSY':  pos_y,
+            'POSZ':  pos_z,
+            'THDEG': th_deg,
+            'PHDEG': ph_deg,
+            'LOC':   LOC_CODE.index(loc),
+            'FOV':   fov,
+            'TYPE':  sensor_type,
+            'ICELL': icell,
+            'ILAM_0': ilam_0,
+            'ILAM_1': ilam_1
         }
-        self.cell_size = CELL_SIZE
+        self.cell_size = cell_size
 
     def __str__(self):
         return ('SENSOR=-POSX{POSX}-POSY{POSY}-POSZ{POSZ}'
@@ -197,9 +198,9 @@ def get_sensor(
     if th == 0. or th == 180.:
         # no impact on the I value, but possible impact on Q, U and V
         ph = vaa - 180.
-    return Sensor(POSX=float(pos.x), POSY=float(pos.y),
-                  POSZ=float(pos.z), THDEG=th, PHDEG=ph,
-                  LOC='ATMOS', FOV=fov, TYPE=sensor_type)
+    return Sensor(pos_x=float(pos.x), pos_y=float(pos.y),
+                  pos_z=float(pos.z), th_deg=th, ph_deg=ph,
+                  loc='ATMOS', fov=fov, sensor_type=sensor_type)
 
 
 def _sensor_positions(
@@ -331,9 +332,9 @@ def get_sensors_grid(
     cell_size : float, optional
         The size of the sensor cells (km). Default: -1 (not used).
     grid_3d : Grid3D, optional
-        The 3D atmosphere grid. When given, the ``ICELL`` index of
+        The 3D atmosphere grid. When given, the ``icell`` index of
         every sensor is set to the index of the atmosphere cell it
-        belongs to. Not needed with a 1D atmosphere, where ``ICELL``
+        belongs to. Not needed with a 1D atmosphere, where ``icell``
         is ignored.
 
     Returns
@@ -351,10 +352,10 @@ def get_sensors_grid(
     sensors = []
     for pos_x, pos_y in zip(xx.ravel(), yy.ravel(), strict=True):
         sensors.append(
-            Sensor(POSX=float(pos_x), POSY=float(pos_y),
-                   POSZ=pos_z, FOV=fov, TYPE=sensor_type,
-                   THDEG=th_deg, PHDEG=ph_deg,
-                   LOC=loc, CELL_SIZE=cell_size)
+            Sensor(pos_x=float(pos_x), pos_y=float(pos_y),
+                   pos_z=pos_z, fov=fov, sensor_type=sensor_type,
+                   th_deg=th_deg, ph_deg=ph_deg,
+                   loc=loc, cell_size=cell_size)
         )
 
     if grid_3d is not None:
