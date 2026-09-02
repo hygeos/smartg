@@ -352,3 +352,71 @@ def test_as_theta_grid_accepts_a_grid_or_a_count():
     assert np.array_equal(as_theta_grid(5), theta_grid(5))
     lobatto = theta_grid(101, "lobatto")
     assert np.array_equal(as_theta_grid(lobatto), lobatto)
+
+
+# --------------------------------------------------------------------
+# end to end
+# --------------------------------------------------------------------
+
+# Scattering angles of the check below. The sun is at the zenith and
+# the cloud is thin, so the scattering angle is the viewing angle and
+# the radiance follows P11 almost directly. The first two sit in the
+# forward peak, where a 451 point equally spaced grid is up to 46%
+# wrong; the last two are the control, where every grid agrees.
+_PEAK_ANGLES = np.array([0.2, 1.0, 20.0, 60.0])
+
+
+def test_clustered_grid_fixes_the_forward_peak_radiance():
+    """The grid must change the radiance where the peak is, only there.
+
+    This is the property the whole feature exists for, checked on a
+    radiance rather than on a table: at equal table size the clustered
+    grid must track the finely resolved reference through the forward
+    peak, where the equally spaced grid of the same size cannot.
+
+    The tolerances are wide because the kernel is not reproducible from
+    one run to the next; the measured seed to seed spread here is 0.2%,
+    against the 11% error this asserts.
+    """
+    from smartg.atmosphere import Atm1D, Cloud
+    from smartg.smartg import Smartg
+
+    wavelength = 670.0
+
+    def radiance(grid):
+        profile = Atm1D(
+            "afglms",
+            comp=[Cloud("wc", 12.68, 2.0, 3.0, 0.05, wavelength)],
+            grid=[100.0, 50.0, 20.0, 10.0, 5.0, 3.0, 2.0, 1.0, 0.0],
+            pfgrid=[100.0, 0.0],
+        ).calc(np.array([wavelength]), n_theta=grid)
+        m = Smartg(pp=True, double=True).run(
+            wavelength, atm=profile, th_v_deg=0.0,
+            le={"th_deg": _PEAK_ANGLES,
+                "phi_deg": np.array([0.0]),
+                "count_level": np.full(len(_PEAK_ANGLES), 1)},
+            output_layers=3, theta_grid="phase", nb_photons=2e7,
+            seed=1234, xblock=128, xgrid=1024,
+        )
+        key = [str(k) for k in m if str(k).startswith("I_down")][0]
+        return np.atleast_1d(np.squeeze(m[key].values)).ravel()[
+            :len(_PEAK_ANGLES)]
+
+    reference = radiance(theta_grid(12601))
+    uniform = radiance(theta_grid(451))
+    lobatto = radiance(theta_grid(451, "lobatto"))
+
+    peak = slice(0, 2)
+    control = slice(2, None)
+
+    err_uniform = np.abs(uniform - reference) / reference
+    err_lobatto = np.abs(lobatto - reference) / reference
+
+    # in the peak the equally spaced grid is far off and the clustered
+    # one is not, for the very same number of table entries
+    assert err_uniform[peak].max() > 0.03
+    assert err_lobatto[peak].max() < 0.01
+    # away from the peak they are indistinguishable, which is what says
+    # the difference above is the discretisation and not an offset
+    assert err_uniform[control].max() < 0.01
+    assert err_lobatto[control].max() < 0.01

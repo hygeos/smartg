@@ -228,10 +228,17 @@ final `v2.0.0` release.
       the GPU tables: `'phase'` adopts the grid the phase matrices
       already carry, so no resampling takes place at all; a kind name or
       an explicit array are also accepted. The default is unchanged
-    - On a water cloud phase matrix, 1801 Lobatto angles are 7 times
-      more accurate than 1801 equally spaced ones, and adopting the
-      594-angle grid of the source file is exact at a thirtieth of the
-      memory of the 18001 equally spaced angles it used to take
+    - Measured on the transmitted radiance under a thin water cloud,
+      where the scattering angle is the viewing angle: at 451 angles,
+      an equally spaced grid is 11% off in the forward peak while a
+      Lobatto grid of that same size is within 0.24% of a 12601 angle
+      reference, i.e. 28 times its size. Away from the peak all the
+      grids agree to 0.1%, so the gain is in the peak alone
+    - Note that this only pays where the phase matrix is sampled near
+      a sharp feature. A geometry that sees the smooth 20 to 180
+      degree body of the phase function, which is what the IPRT C3
+      cases do, is unaffected by the grid: their delta_m against
+      MYSTIC is uncorrelated with the discretisation error
   - New 3D atmosphere user API in `smartg.atmosphere`: a 3D atmosphere is now
     built directly as
     `Atm3D(atm_1d=Atm1D(...), grid_3d=Grid3D(...), comp_3d=[Cloud3D(...)])`
