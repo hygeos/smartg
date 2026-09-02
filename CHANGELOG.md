@@ -227,7 +227,8 @@ final `v2.0.0` release.
     `ICELL` → `icell`, `ILAM_0`/`ILAM_1` → `ilam_0`/`ilam_1`,
     `CELL_SIZE` → `cell_size` and `V` → `direction`. The keys of the
     `Sensor.dict` record and the fields of the `TYPE_SENSOR` numpy dtype
-    they fill follow the same naming
+    they fill follow the same naming. The `Sensor` class is now type
+    hinted, and its docstring documents every parameter
   - The internal helpers of the smartg module are now private
     (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
     `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,

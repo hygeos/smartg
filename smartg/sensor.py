@@ -8,8 +8,7 @@ Sensor
 Key Functions
 -------------
 get_sensor
-    Build a sensor located on the atmospheric boundary from view
-    angles.
+    Build a sensor on the atmospheric boundary from view angles.
 get_sensors_grid
     Create one sensor per cell of a regular (x, y) raster.
 """
@@ -17,11 +16,11 @@ get_sensors_grid
 from __future__ import annotations
 
 import warnings
+from typing import cast
 
 import geoclide as gc
 import numpy as np
 from numpy.typing import NDArray
-from typing import cast
 
 from smartg.grid3d import Grid3D, locate_voxel_index
 
@@ -32,7 +31,7 @@ LOC_CODE: list[str] = ['', 'ATMOS', 'SURF0P', 'SURF0M', '', '',
                        'OCEAN', 'SEAFLOOR', 'OBJSURF']
 
 
-class Sensor(object):
+class Sensor:
     """Definition of a sensor.
 
     A sensor is the point of the scene the photons are launched from,
@@ -262,7 +261,7 @@ def get_sensor(
 
     th, ph = cast(tuple[float, float],
                   gc.vec2ang(direction, vec_view='nadir'))
-    if th == 0. or th == 180.:
+    if th in (0., 180.):
         # no impact on the I value, but possible impact on Q, U and V
         ph = vaa - 180.
     return Sensor(pos_x=float(pos.x), pos_y=float(pos.y),
