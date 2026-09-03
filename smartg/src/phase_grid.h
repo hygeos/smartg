@@ -5,9 +5,10 @@
 *
 *			phase_grid.h
 *
-*	Angular grid of the equal-angle ("a") half of a phase
-*	table, and the lookup that turns a scattering angle
-*	into a table index.
+*	The two angular grids of a medium: the one a phase
+*	table is tabulated on, with the lookup that turns a
+*	scattering angle into a table index, and the inverse
+*	cumulative distribution a deflection is drawn from.
 *
 ***********************************************************/
 
@@ -15,9 +16,9 @@
 #define PI 3.141592654f
 #endif
 
-/* Shape of the equal-angle ("a") half of a phase table. One grid is
-   shared by every phase function of a medium, but the atmosphere and
-   the ocean have their own.
+/* Angular grid a phase table is tabulated on. One grid is shared by
+   every phase function of a medium, but the atmosphere and the ocean
+   have their own.
      mode 0 : theta_i = PI*i/(n-1)   (equally spaced)
      mode 1 : theta_i = ang[i]       (arbitrary, tabulated)
    Clustering the nodes towards 0 and PI resolves the forward
@@ -31,8 +32,8 @@ struct AGrid {
 };
 
 /* aIndex
-* Lower index of theta in the equal-angle ("a") half of a phase table,
-* returning the interpolation weight of the upper node.
+* Lower index of theta in a phase table, returning the interpolation
+* weight of the upper node.
 */
 __device__ float aIndex(float theta, const struct AGrid g, int *iang)
 {
@@ -67,6 +68,42 @@ __device__ float aIndex(float theta, const struct AGrid g, int *iang)
 	if (*iang > last) { *iang = last; return 1.F; }
 
 	return x - *iang;
+}
+
+/* Inverse cumulative distribution of a medium: the scattering angles
+   at n equally spaced cumulative probabilities over the closed
+   [0, 1], so entry 0 is theta = 0 and entry n-1 is theta = PI and no
+   part of the probability range is out of reach.
+
+   Its length is deliberately independent of the grid above, because
+   the two answer different questions: how finely a phase matrix must
+   be resolved to be read at an arbitrary angle, against how finely
+   the distribution must be resolved to be drawn from. Measured on a
+   water cloud at 670 nm, the Legendre moments of the drawn
+   distribution are converged to 1e-4 by 1801 nodes, where the angle
+   grid is still improving well past 12601. */
+struct PGrid {
+    unsigned int n;   /* CDF nodes per phase function          */
+    float *ang;       /* n * nphase entries, device pointer    */
+};
+
+/* pSample
+* Scattering angle drawn from phase function ipha, for u uniform on
+* ]0, 1].
+*/
+__device__ float pSample(float u, int ipha, const struct PGrid p)
+{
+	float x = u * (p.n - 1);
+	int i = __float2int_rd(x);
+
+	/* RAND is documented ]0;1], so the last node is reachable and
+	   would interpolate one entry past the phase function */
+	if (i > (int)p.n - 2) { i = (int)p.n - 2; x = 1.F; }
+	else x = x - i;
+
+	const float *a = p.ang + (unsigned int)ipha * p.n + i;
+
+	return (1.F - x) * __ldg(a) + x * __ldg(a + 1);
 }
 
 #endif // PHASE_GRID_H

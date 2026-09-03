@@ -297,12 +297,23 @@ def _intensity(table):
     return table["a_P11"] + table["a_P22"] + 2.0 * table["a_P12"]
 
 
-def _table_on(grid_deg, profile):
-    """The particle row of the table built on *grid_deg*."""
-    return _calc_phase_host(
+def _built_on(grid_deg, profile, n_cdf=None):
+    """The particle row of both tables built on *grid_deg*."""
+    phase, cdf = _calc_phase_host(
         profile, len(grid_deg), 0.0279, "atm",
-        ang_a=np.deg2rad(grid_deg),
-    )[2]
+        ang_a=np.deg2rad(grid_deg), n_cdf=n_cdf,
+    )
+    return phase[2], cdf[2]
+
+
+def _table_on(grid_deg, profile, n_cdf=None):
+    """The particle row of the phase matrix table."""
+    return _built_on(grid_deg, profile, n_cdf)[0]
+
+
+def _cdf_on(grid_deg, profile, n_cdf=None):
+    """The particle row of the cumulative distribution."""
+    return _built_on(grid_deg, profile, n_cdf)[1]
 
 
 @pytest.mark.parametrize("n", (901, 1801))
@@ -420,3 +431,203 @@ def test_clustered_grid_fixes_the_forward_peak_radiance():
     # the difference above is the discretisation and not an offset
     assert err_uniform[control].max() < 0.01
     assert err_lobatto[control].max() < 0.01
+
+
+# --------------------------------------------------------------------
+# the cumulative distribution
+# --------------------------------------------------------------------
+
+
+def _psample(u, cdf):
+    """Run the device ``pSample`` over *u*, and report the layout."""
+    import pycuda.autoinit  # noqa: F401
+    import pycuda.driver as cuda
+    from pycuda.compiler import SourceModule
+    from pycuda.gpuarray import empty as gpuempty
+    from pycuda.gpuarray import to_gpu
+
+    from smartg.smartg import DIR_SRC, TYPE_PGRID
+
+    mod = SourceModule(
+        """
+        #include "phase_grid.h"
+
+        __device__ __constant__ struct PGrid Pd;
+
+        extern "C" __global__ void probe(
+            float *u, int *ipha, float *theta, int n)
+        {
+            int i = blockIdx.x * blockDim.x + threadIdx.x;
+            if (i >= n) return;
+            theta[i] = pSample(u[i], ipha[i], Pd);
+        }
+
+        extern "C" __global__ void layout(int *out)
+        {
+            out[0] = (int)sizeof(struct PGrid);
+            out[1] = (int)offsetof(struct PGrid, ang);
+        }
+        """,
+        include_dirs=[str(DIR_SRC)],
+        no_extern_c=True,
+    )
+
+    cdf = np.ascontiguousarray(cdf, dtype=np.float32)
+    cdf_gpu = to_gpu(cdf.ravel())
+
+    rec = np.zeros(1, dtype=TYPE_PGRID)
+    rec["n"] = cdf.shape[-1]
+    rec["ang"] = int(cdf_gpu.gpudata)
+    cuda.memcpy_htod(mod.get_global("Pd")[0], rec)
+
+    out = gpuempty(2, np.int32)
+    mod.get_function("layout")(out, block=(1, 1, 1), grid=(1, 1))
+    sizeof, offset = out.get()
+
+    u = np.ascontiguousarray(u, dtype=np.float32).ravel()
+    ipha = np.zeros(u.size, dtype=np.int32)
+    theta = gpuempty(u.size, np.float32)
+    mod.get_function("probe")(
+        to_gpu(u), to_gpu(ipha), theta, np.int32(u.size),
+        block=(256, 1, 1), grid=((u.size + 255) // 256, 1),
+    )
+    return theta.get(), int(sizeof), int(offset)
+
+
+def test_the_phase_entry_is_24_bytes():
+    """The struct carries the matrix only, not a copy per CDF node."""
+    from smartg.smartg import TYPE_PHASE
+
+    assert np.dtype(TYPE_PHASE).itemsize == 24
+
+
+def test_the_pgrid_record_matches_the_device_struct():
+    """A mismatched pointer offset would read garbage, silently."""
+    from smartg.smartg import TYPE_PGRID
+
+    _, sizeof, offset = _psample([0.5], np.zeros((1, 8), np.float32))
+    assert sizeof == TYPE_PGRID.itemsize
+    assert offset == TYPE_PGRID.fields["ang"][1]
+
+
+@pytest.mark.parametrize("kind", THETA_GRID_KINDS)
+@pytest.mark.parametrize("n_cdf", (None, 257))
+def test_cdf_spans_the_closed_probability_range(kind, n_cdf):
+    """Every row must reach both end points and never go backwards.
+
+    The kernel indexes these nodes with ``RAND*(n-1)``, so a row that
+    does not start at 0 makes the smallest scattering angles
+    unreachable: the sharpest part of a forward peak is then never
+    drawn, whatever the phase matrix says.
+    """
+    grid = theta_grid(901, kind)
+    cdf = _calc_phase_host(
+        _profile(grid), len(grid), 0.0279, "atm",
+        ang_a=np.deg2rad(grid), n_cdf=n_cdf,
+    )[1]
+
+    assert cdf.shape[-1] == (len(grid) if n_cdf is None else n_cdf)
+    for row in range(cdf.shape[0]):
+        assert cdf[row, 0] == 0.0
+        assert cdf[row, -1] == pytest.approx(np.pi, abs=1e-6)
+        assert np.all(np.diff(cdf[row]) >= 0.0)
+
+
+@pytest.mark.parametrize("n_cdf", (129, 2001))
+def test_the_nodes_sit_where_the_kernel_reads_them(n_cdf):
+    """An isotropic matrix pins the node convention in closed form.
+
+    For a constant phase function the cumulative distribution is
+    ``(1 - cos theta)/2``, so the node at probability ``z`` is exactly
+    ``arccos(1 - 2z)``. The kernel indexes the nodes with
+    ``RAND*(n-1)``, i.e. ``z = i/(n-1)``: placing them anywhere else,
+    such as at ``(i+1)/n``, shows up here as a shift of one node.
+    """
+    n = 2001
+    grid = theta_grid(n)
+    pha = np.ones((1, 6, n))
+    pha[0, 1:4] = 0.0
+    pha[0, 5] = 0.0
+    profile = xr.Dataset(
+        {"phase_atm": (("iphase", "nphamat", "theta_atm"), pha)},
+        coords={"theta_atm": grid},
+    )
+
+    cdf = _calc_phase_host(
+        profile, n, 0.0279, "atm", ang_a=np.deg2rad(grid),
+        n_cdf=n_cdf,
+    )[1][2]
+
+    z = np.arange(n_cdf) / (n_cdf - 1)
+    assert cdf == pytest.approx(np.arccos(1.0 - 2.0 * z), abs=2e-3)
+
+
+def test_the_analytic_builders_use_the_same_convention():
+    """``_isotropic`` must land on those very nodes too.
+
+    It inverts its CDF numerically where ``_calc_phase_host`` inverts
+    a tabulated one, and ``_rayleigh`` inverts analytically. All three
+    have to agree on where node ``i`` sits, or the molecular rows and
+    the particle rows sample offset distributions.
+    """
+    from smartg.smartg import _isotropic
+
+    n_cdf = 513
+    cdf = _isotropic(1801, n_cdf=n_cdf)[1]
+
+    z = np.arange(n_cdf) / (n_cdf - 1)
+    assert cdf == pytest.approx(np.arccos(1.0 - 2.0 * z), abs=2e-3)
+
+
+def test_sampling_the_cdf_reproduces_the_phase_function():
+    """Drawing from the table must follow the tabulated distribution.
+
+    This is the end the table exists for: push uniform deviates
+    through the device sampler and the empirical distribution of the
+    drawn angles has to match the distribution the phase matrix
+    implies. An off-by-one in the nodes shows up here as an offset of
+    one node in probability.
+    """
+    grid = theta_grid(4001)
+    theta = np.deg2rad(grid)
+
+    # the distribution the matrix implies, by the quadrature
+    # _calc_phase_host uses
+    f11 = _peaked_phase(grid)
+    d = np.diff(theta)
+    s = np.sin(theta)
+    seg = d * (
+        (s[:-1] * f11[:-1] + s[1:] * f11[1:]) / 3.0
+        + (s[:-1] * f11[1:] + s[1:] * f11[:-1]) / 6.0
+    )
+    scum = np.cumsum(np.append([0.0], seg))
+    scum /= scum[-1]
+
+    cdf = _calc_phase_host(
+        _profile(grid), len(grid), 0.0279, "atm", ang_a=theta,
+    )[1][2:3]
+
+    u = (np.arange(1, 200001) - 0.5) / 200000.0
+    drawn, _, _ = _psample(u, cdf)
+
+    # the probability the sampler actually placed below each angle
+    got = np.interp(np.sort(drawn), theta, scum)
+    assert np.abs(got - u).max() < 2e-3
+
+
+def test_the_cdf_length_is_independent_of_the_angle_grid():
+    """Shortening the CDF must leave the phase matrix table alone."""
+    grid = theta_grid(901, "lobatto")
+    profile = _profile(grid)
+
+    coupled, cdf_coupled = _calc_phase_host(
+        profile, len(grid), 0.0279, "atm", ang_a=np.deg2rad(grid),
+    )
+    split, cdf_split = _calc_phase_host(
+        profile, len(grid), 0.0279, "atm", ang_a=np.deg2rad(grid),
+        n_cdf=257,
+    )
+
+    assert np.array_equal(coupled.view(np.uint8), split.view(np.uint8))
+    assert cdf_coupled.shape[-1] == 901
+    assert cdf_split.shape[-1] == 257

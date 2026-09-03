@@ -15,6 +15,8 @@ __device__ __constant__ int NOCE_ABSd;
 __device__ __constant__ int OUTPUT_LAYERSd;
 __device__ __constant__ struct AGrid AGAERd;
 __device__ __constant__ struct AGrid AGOCEd;
+__device__ __constant__ struct PGrid PGAERd;
+__device__ __constant__ struct PGrid PGOCEd;
 __device__ __constant__ int NATMd;
 __device__ __constant__ int NATM_ABSd;
 __device__ __constant__ float WINDSPEEDd;

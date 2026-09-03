@@ -3991,6 +3991,7 @@ __device__ void scatter(Photon* ph,
 	float psi, sign=1.F;
 	struct Phase *func;
 	struct AGrid g;
+	struct PGrid p;
 	float P11, P12, P22, P33, P43, P44;
 	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	#ifdef OBJ3D
@@ -4053,6 +4054,7 @@ __device__ void scatter(Photon* ph,
             #endif
 			func = faer; // atm phases
 			g = AGAERd;
+			p = PGAERd;
 			
 			/************************************/
 			/* Rayleigh || ptcle scattering */
@@ -4071,6 +4073,7 @@ __device__ void scatter(Photon* ph,
             #endif
 			func = foce; // oce phases
 			g = AGOCEd;
+			p = PGOCEd;
 			
 			if (ph->scatterer == RAY){ipha  = 0;}	// Rayleigh index
 			else if(ph->scatterer == VRS ){ ipha  = 1;} // VRS index
@@ -4083,28 +4086,31 @@ __device__ void scatter(Photon* ph,
 
 		if(!le) {
 
-			/* in the case of propagation (not LE) the photons scattering angle && Psi
-			   rotation angle are determined randomly */
+			/* in the case of propagation (not LE) the photon
+			   scattering angle is drawn randomly, where a LE has it
+			   imposed by the direction being estimated; the Psi
+			   rotation angle is drawn further down */
 			/////////////
-			// Get Theta from Cumulative Distribution Function
-			zang = RAND*(g.n-1);
-			iang= __float2int_rd(zang);
-			/* RAND is documented ]0;1], so the last entry is
-			   reachable and would read one entry too far */
-			if (iang > (int)g.n - 2) { iang = (int)g.n - 2; zang = 1.F; }
-			else zang = zang - iang;
-
-			theta = (1.-zang)*func[ipha*g.n+iang].p_ang + zang*func[ipha*g.n+iang+1].p_ang;
+			// Get Theta from the inverse Cumulative Distribution
+			// Function
+			theta = pSample(RAND, ipha, p);
 			cTh = __cosf(theta);
+		}
 
-			/////////////
-			// Get Scattering matrix from CDF
-			P11 = (1-zang)*func[ipha*g.n+iang].p_P11 + zang*func[ipha*g.n+iang+1].p_P11;
-			P12 = (1-zang)*func[ipha*g.n+iang].p_P12 + zang*func[ipha*g.n+iang+1].p_P12;
-			P22 = (1-zang)*func[ipha*g.n+iang].p_P22 + zang*func[ipha*g.n+iang+1].p_P22;
-			P33 = (1-zang)*func[ipha*g.n+iang].p_P33 + zang*func[ipha*g.n+iang+1].p_P33;
-			P43 = (1-zang)*func[ipha*g.n+iang].p_P43 + zang*func[ipha*g.n+iang+1].p_P43;
-			P44 = (1-zang)*func[ipha*g.n+iang].p_P44 + zang*func[ipha*g.n+iang+1].p_P44;
+		/////////////
+		/* Get the scattering matrix at theta. Both paths read the
+		   same table, each at the angle it uses: the one just drawn
+		   above, or the one the estimated direction imposes. */
+		zang = aIndex(theta, g, &iang);
+
+		P11 = (1-zang)*func[ipha*g.n+iang].a_P11 + zang*func[ipha*g.n+iang+1].a_P11;
+		P12 = (1-zang)*func[ipha*g.n+iang].a_P12 + zang*func[ipha*g.n+iang+1].a_P12;
+		P22 = (1-zang)*func[ipha*g.n+iang].a_P22 + zang*func[ipha*g.n+iang+1].a_P22;
+		P33 = (1-zang)*func[ipha*g.n+iang].a_P33 + zang*func[ipha*g.n+iang+1].a_P33;
+		P43 = (1-zang)*func[ipha*g.n+iang].a_P43 + zang*func[ipha*g.n+iang+1].a_P43;
+		P44 = (1-zang)*func[ipha*g.n+iang].a_P44 + zang*func[ipha*g.n+iang+1].a_P44;
+
+		if(!le) {
 
             #ifndef BIAS
 			/////////////
@@ -4139,19 +4145,6 @@ __device__ void scatter(Photon* ph,
 			psi = RAND * DEUXPI;	
             #endif
 
-
-		}else {
-	
-			/////////////
-			// Get Index of scattering angle && Scattering matrix directly 
-			zang = aIndex(theta, g, &iang);
-
-			P11 = (1-zang)*func[ipha*g.n+iang].a_P11 + zang*func[ipha*g.n+iang+1].a_P11;
-			P12 = (1-zang)*func[ipha*g.n+iang].a_P12 + zang*func[ipha*g.n+iang+1].a_P12;
-			P22 = (1-zang)*func[ipha*g.n+iang].a_P22 + zang*func[ipha*g.n+iang+1].a_P22;
-			P33 = (1-zang)*func[ipha*g.n+iang].a_P33 + zang*func[ipha*g.n+iang+1].a_P33;
-			P43 = (1-zang)*func[ipha*g.n+iang].a_P43 + zang*func[ipha*g.n+iang+1].a_P43;
-			P44 = (1-zang)*func[ipha*g.n+iang].a_P44 + zang*func[ipha*g.n+iang+1].a_P44;
 
 		}
 
