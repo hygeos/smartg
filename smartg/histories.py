@@ -110,7 +110,8 @@ def get_histories(
     if isinstance(m, xr.Dataset):
         nl = m['z_atm'].size - 1
     else:
-        nl = m.axis('z_atm').size - 1  # type: ignore[reportAttributeAccessIssue]
+        # LUT.axis().size works at runtime; missing from the stub.
+        nl = m.axis('z_atm').size - 1  # type: ignore
     tab_hist_ = np.squeeze(m['histories'].data)
     tab_hist = tab_hist_[level, :,:]
     if verbose : print (tab_hist.shape)
@@ -120,13 +121,15 @@ def get_histories(
     ngood   = np.sum(good)
     max_hist = tab_hist.shape[0]
     if ngood >= max_hist:
-        # Use print rather than warnings.warn: Python's default warning filter
-        # deduplicates per call-site, so the message would silently disappear
-        # on the second call in the same session.
+        # Use print rather than warnings.warn: Python's default
+        # warning filter deduplicates per call-site, so the message
+        # would silently disappear on the second call in the same
+        # session.
         print(
             f"\033[1;33m[ALIS hist WARNING] History buffer saturated: "
             f"{ngood:,}/{max_hist:,} slots used ({100.*ngood/max_hist:.0f}%). "
-            "Photons beyond max_hist were NOT recorded — results will be biased. "
+            "Photons beyond max_hist were NOT recorded — results "
+            "will be biased. "
             "→ Increase max_hist or reduce nb_photons per loop.\033[0m"
         )
     n = m['Nphotons_in'].data[0,0]
@@ -143,7 +146,13 @@ def get_histories(
     nint    = tab_hist[good,      -2  ]
     nlscl   = tab_hist[good,      -1  ]
     #
-    if verbose : print('Number of photons in : {}\nNumber of LE photons : {}\nNumber of LR wavelengths : {}\nNumber of Layers : {}'.format(n, *w.shape, nl))
+    if verbose:
+        print(
+            'Number of photons in : {}\n'
+            'Number of LE photons : {}\n'
+            'Number of LR wavelengths : {}\n'
+            'Number of Layers : {}'.format(n, *w.shape, nl)
+        )
 
     return n, s, d, w, nrrs, nref, nsif, nvrs, nenv, nint, nlscl
 
@@ -192,7 +201,8 @@ def si(
     float
         The Beer-Lambert weighted Stokes component.
     """
-    # interpolation of scattering weights at low spectral resolution to current lambda
+    # interpolation of scattering weights at low spectral
+    # resolution to current lambda
     wi = jnp.interp(lam, lam_lr_grid, wi_lr)
 
     return sik * wi * jnp.exp(- jnp.sum(dij * kabs)) * alb**ki
@@ -285,17 +295,20 @@ def big_sum(
         `sik`).
     """
     if grad is not None : s = value_and_grad(s, argnums=grad)
-    f1m = vmap(s,  in_axes=(0   ,    0,    0, None, None, None, None, None))  # co varying wavelengths inputs
-    f2m = vmap(f1m,in_axes=(None, None, None,    0,    0,    0,    0, None)) # co vaying LE photons inputs
-    f3m = vmap(f2m,in_axes=(None, None, None,    1, None, None, None, None)) # co varying Stoke components inputs
+    # co-varying wavelength inputs
+    f1m = vmap(s, in_axes=(0, 0, 0, None, None, None, None, None))
+    # co-varying LE photon inputs
+    f2m = vmap(f1m, in_axes=(None, None, None, 0, 0, 0, 0, None))
+    # co-varying Stokes-component inputs
+    f3m = vmap(f2m, in_axes=(None, None, None, 1, None, None, None, None))
 
     if only_i : return jit(f2m)
     else : return jit(f3m)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────
 # Post-hoc AMF computation from ALIS photon histories
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────
 
 def compute_cdist_hist(
     d_h: NDArray[np.floating],
@@ -418,11 +431,15 @@ def compute_cdist_hist(
             0,
         ).astype(np.int32)
     elif scatter_classes == 'scattering_order':
-        cls_np = np.clip(np.minimum(nint_np, nscl) - 1, 0, nscl - 1).astype(np.int32)
+        cls_np = np.clip(
+            np.minimum(nint_np, nscl) - 1, 0, nscl - 1
+        ).astype(np.int32)
     elif scatter_classes == 'scattering_order_per_layer':
         ilayer = np.where(nlscl_np >= 0, np.minimum(nlscl_np, natm_abs - 1), 0)
-        iorder = np.where(nint_np  >  0, np.minimum(nint_np - 1, norders - 1), 0)
-        cls_np = np.minimum(ilayer * norders + iorder, nscl - 1).astype(np.int32)
+        iorder = np.where(nint_np > 0, np.minimum(nint_np - 1, norders - 1), 0)
+        cls_np = np.minimum(
+            ilayer * norders + iorder, nscl - 1
+        ).astype(np.int32)
     else:
         raise ValueError(
             f"Unknown scatter_classes={scatter_classes!r}. "
@@ -438,10 +455,14 @@ def compute_cdist_hist(
         cdist_out[:, 0] = w_tot
         cdist_out[:, 1] = dw
         if amf_variance:
-            cdist_out[:, 2] = np.array(jnp.sum(d_abs ** 2 * w_n[:, None], axis=0))
+            cdist_out[:, 2] = np.array(
+                jnp.sum(d_abs ** 2 * w_n[:, None], axis=0)
+            )
     else:
         cls_j  = jnp.array(cls_np, dtype=jnp.int32)
-        cls_oh = (jnp.arange(nscl, dtype=jnp.int32)[None, :] == cls_j[:, None]).astype(jnp.float32)
+        cls_oh = (
+            jnp.arange(nscl, dtype=jnp.int32)[None, :] == cls_j[:, None]
+        ).astype(jnp.float32)
         w_cls  = w_n[:, None] * cls_oh
         w_cls_sum = np.array(jnp.sum(w_cls, axis=0))
         dw_cls = np.array(jnp.einsum('il,ic->lc', d_abs, w_cls))
@@ -511,14 +532,20 @@ def amf_from_cdist(
         mean_dist     = cdist[:, :, 1].sum(axis=1) / np.where(w > 0, w, 1.)
         amf           = mean_dist / thick
         amf_cls       = mean_dist_cls / thick[:, None]
-        result = dict(AMF=amf, W=w, mean_dist=mean_dist, W_cls=w_cls, AMF_cls=amf_cls)
+        result = dict(
+            AMF=amf, W=w, mean_dist=mean_dist, W_cls=w_cls, AMF_cls=amf_cls
+        )
         if niamf >= 3:
             mean_dist2_cls = cdist[:, :, 2] / np.where(w_cls > 0, w_cls, 1.)
             var_cls        = mean_dist2_cls - mean_dist_cls ** 2
             frac_cls       = w_cls / np.where(w > 0, w, 1.)[:, None]
             var_within     = (frac_cls * var_cls).sum(axis=1)
-            var_between    = (frac_cls * (mean_dist_cls - mean_dist[:, None]) ** 2).sum(axis=1)
-            std_amf        = np.sqrt(np.maximum(var_within + var_between, 0.)) / thick
+            var_between    = (
+                frac_cls * (mean_dist_cls - mean_dist[:, None]) ** 2
+            ).sum(axis=1)
+            std_amf        = (
+                np.sqrt(np.maximum(var_within + var_between, 0.)) / thick
+            )
             std_amf_cls    = np.sqrt(np.maximum(var_cls, 0.)) / thick[:, None]
             result.update(std_AMF=std_amf, std_AMF_cls=std_amf_cls,
                           var_within=var_within, var_between=var_between)
@@ -532,7 +559,9 @@ def amf_from_cdist(
         result    = dict(AMF=amf, W=w, mean_dist=mean_dist)
         if niamf >= 3:
             mean_dist2    = cdist[:, 2] / np.where(w > 0, w, 1.)
-            result['std_AMF'] = np.sqrt(np.maximum(mean_dist2 - mean_dist**2, 0.)) / thick
+            result['std_AMF'] = (
+                np.sqrt(np.maximum(mean_dist2 - mean_dist**2, 0.)) / thick
+            )
         else:
             result['std_AMF'] = np.zeros_like(amf)
 
@@ -552,7 +581,9 @@ def compute_amf(
     norders: int = 1,
     cdist_wabs: bool = False,
     kabs_ref: NDArray[np.floating] | None = None,
-) -> tuple[dict[str, NDArray[np.float64]], NDArray[np.float64], NDArray[np.float64]]:
+) -> tuple[
+    dict[str, NDArray[np.float64]], NDArray[np.float64], NDArray[np.float64]
+]:
     """Compute AMF from a Smartg output.
 
     Works transparently for hist=False and hist=True runs, by
