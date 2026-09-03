@@ -107,7 +107,10 @@ def get_histories(
         The last-scattering layer index (-1 for surface/unscattered
         photons).
     """
-    nl=m.axis('z_atm').size-1 if not isinstance(m, xr.Dataset) else m['z_atm'].size-1
+    if isinstance(m, xr.Dataset):
+        nl = m['z_atm'].size - 1
+    else:
+        nl = m.axis('z_atm').size - 1  # type: ignore[reportAttributeAccessIssue]
     tab_hist_ = np.squeeze(m['histories'].data)
     tab_hist = tab_hist_[level, :,:]
     if verbose : print (tab_hist.shape)
@@ -610,12 +613,19 @@ def compute_amf(
 
     Raises
     ------
+    TypeError
+        If m is neither an MLUT nor an xarray.Dataset.
     ValueError
         If alb_ref is not given for a hist=True output, or if m
         contains neither 'histories' nor 'cdist_up (TOA)'.
     """
-    if hasattr(m, 'to_xarray'):  # legacy MLUT input
+    if isinstance(m, MLUT):  # legacy MLUT input
         m = m.to_xarray()
+    elif not isinstance(m, xr.Dataset):
+        raise TypeError(
+            f"compute_amf: m must be an MLUT or xarray.Dataset, got "
+            f"{type(m).__name__}."
+        )
     thick = np.abs(np.diff(m['z_atm'].values))
 
     # Auto-fill optional parameters from the output
@@ -658,11 +668,11 @@ def compute_amf(
         # hist=False path: read GPU tabDist directly from the output
         try:
             da    = m['cdist_up (TOA)']
-        except Exception:
+        except Exception as err:
             raise ValueError(
                 "compute_amf: m contains neither 'histories' (hist=True) "
                 "nor 'cdist_up (TOA)' (hist=False)."
-            )
+            ) from err
         names = list(da.dims)
         arr   = da.data
         idx   = [slice(None)] * arr.ndim
