@@ -246,31 +246,38 @@ final `v2.0.0` release.
       degree body of the phase function, which is what the IPRT C3
       cases do, is unaffected by the grid: their delta_m against
       MYSTIC is uncorrelated with the discretisation error
-  - The scattering angle grid and the distribution a deflection is drawn
-    from are no longer forced to the same length. `struct Phase` used to
-    interleave both, one copy of the phase matrix per equal-probability
-    node, so asking for a finely resolved matrix also paid for a
-    sampling table nobody needed that fine.
-    - New `n_cdf` parameter of `Smartg.run`, the number of nodes of the
-      cumulative distribution, at 4 bytes each per phase function. It
-      defaults to the number of scattering angles, i.e. to what the two
-      were locked to before
-    - The 6 phase matrix terms the equal-probability half carried are
-      gone: the random walk now reads the matrix from the angle grid at
-      the angle it just drew, which is one table instead of two and is
-      consistent with that angle. An entry costs 24 bytes instead of 52
-    - The two resolutions converge at very different rates. Measured on
-      a water cloud at 670 nm, the Legendre moments of the drawn
-      distribution are converged to 1e-4 by 1801 nodes, where the angle
-      grid is still improving well past 12601, so a large `n_f` with
-      `n_cdf` left at 1801 is the cheap combination
-    - This is what makes the 18001 angle IPRT C3 case with aerosols fit
-      on a 16 GB card: 20491 phase matrices cost 19.2 GB interleaved,
-      10.3 GB split, and 9.0 GB with `n_cdf=1801`
-    - Beware that reading the matrix at the drawn angle rather than at
-      the equal-probability node is a numerical change for polarized
-      runs: the intensity is untouched, since the weight update divides
-      by the phase function it just multiplied by, but the polarization
+  - A random walk now draws its deflection from exactly the phase
+    matrix it then reads. `struct Phase` used to interleave a second
+    copy of the matrix at equal-probability nodes, and the kernel drew
+    the deflection by interpolating the inverse cumulative distribution
+    linearly between those nodes, which samples a staircase density,
+    constant inside each bin, and never corrects the mismatch with the
+    smooth matrix. That mismatch is ~1e-4 per event; a cloud multiplies
+    it by its ~1e3 scattering orders. Measured on IPRT C3 case 6 with
+    1e6 photons per sensor and 3 seeds per grid, it was a 2.6% bias of
+    the mean reflected intensity (delta_m of 3.0 against MYSTIC) that
+    only fell to 1.1 with 12601 nodes, whatever the angle grid: an exact
+    2818 angle grid from the file scored the same 3.0 as an equally
+    spaced one of that length, and the same 1.1 once it drew from a
+    12601 node distribution.
+    - The cumulative distribution is now tabulated at the nodes of the
+      angle grid itself, one float per entry, integrated exactly for
+      the tabulated matrix (F11 linear in theta between nodes times the
+      true sin(theta)), and `pSample` inverts one bin exactly: four
+      Newton steps on the bin's mass, itself a 3 point Gauss-Legendre
+      sum, which is what stays accurate in float32 inside the 0.01
+      degree bins of a forward peak where the closed form cancels. The
+      drawn density is the table's own interpolant, at any grid size,
+      with no knob
+    - The 6 copied matrix terms and the separate angle table are gone;
+      an entry costs 24 bytes plus the 4 of its cumulative probability,
+      instead of 52. This is what makes the 18001 angle IPRT C3 case
+      with aerosols fit on a 16 GB card: 20491 phase matrices cost
+      19.2 GB interleaved, 10.3 GB now
+    - Reading the matrix at the drawn angle rather than at the
+      equal-probability node is a numerical change for polarized runs:
+      the intensity is untouched, since the weight update divides by
+      the phase function it just multiplied by, but the polarization
       ratios now come from the angle grid
   - New 3D atmosphere user API in `smartg.atmosphere`: a 3D atmosphere is now
     built directly as

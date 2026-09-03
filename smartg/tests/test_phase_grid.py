@@ -297,23 +297,18 @@ def _intensity(table):
     return table["a_P11"] + table["a_P22"] + 2.0 * table["a_P12"]
 
 
-def _built_on(grid_deg, profile, n_cdf=None):
+def _built_on(grid_deg, profile):
     """The particle row of both tables built on *grid_deg*."""
     phase, cdf = _calc_phase_host(
         profile, len(grid_deg), 0.0279, "atm",
-        ang_a=np.deg2rad(grid_deg), n_cdf=n_cdf,
+        ang_a=np.deg2rad(grid_deg),
     )
     return phase[2], cdf[2]
 
 
-def _table_on(grid_deg, profile, n_cdf=None):
+def _table_on(grid_deg, profile):
     """The particle row of the phase matrix table."""
-    return _built_on(grid_deg, profile, n_cdf)[0]
-
-
-def _cdf_on(grid_deg, profile, n_cdf=None):
-    """The particle row of the cumulative distribution."""
-    return _built_on(grid_deg, profile, n_cdf)[1]
+    return _built_on(grid_deg, profile)[0]
 
 
 @pytest.mark.parametrize("n", (901, 1801))
@@ -434,64 +429,86 @@ def test_clustered_grid_fixes_the_forward_peak_radiance():
 
 
 # --------------------------------------------------------------------
-# the cumulative distribution
+# the cumulative distribution and the sampler
 # --------------------------------------------------------------------
 
 
-def _psample(u, cdf):
-    """Run the device ``pSample`` over *u*, and report the layout."""
+def _psample(u, table, cdf, grid_rad, ipha=0):
+    """Run the device ``pSample`` over *u* on one uploaded table.
+
+    Returns the drawn angles, the bin index and weight the sampler
+    hands back, and the layout of ``struct PGrid`` on the device.
+    """
     import pycuda.autoinit  # noqa: F401
     import pycuda.driver as cuda
     from pycuda.compiler import SourceModule
     from pycuda.gpuarray import empty as gpuempty
     from pycuda.gpuarray import to_gpu
 
-    from smartg.smartg import DIR_SRC, TYPE_PGRID
+    from smartg.smartg import DIR_SRC, TYPE_AGRID, TYPE_PGRID
 
     mod = SourceModule(
         """
         #include "phase_grid.h"
 
+        __device__ __constant__ struct AGrid Gd;
         __device__ __constant__ struct PGrid Pd;
 
         extern "C" __global__ void probe(
-            float *u, int *ipha, float *theta, int n)
+            float *u, struct Phase *func, int ipha,
+            float *theta, int *iang, float *zang, int n)
         {
             int i = blockIdx.x * blockDim.x + threadIdx.x;
             if (i >= n) return;
-            theta[i] = pSample(u[i], ipha[i], Pd);
+            int k; float w;
+            theta[i] = pSample(u[i], ipha, Pd, Gd, func, &k, &w);
+            iang[i] = k;
+            zang[i] = w;
         }
 
         extern "C" __global__ void layout(int *out)
         {
             out[0] = (int)sizeof(struct PGrid);
-            out[1] = (int)offsetof(struct PGrid, ang);
+            out[1] = (int)offsetof(struct PGrid, cdf);
+            out[2] = (int)sizeof(struct Phase);
         }
         """,
         include_dirs=[str(DIR_SRC)],
         no_extern_c=True,
     )
 
-    cdf = np.ascontiguousarray(cdf, dtype=np.float32)
-    cdf_gpu = to_gpu(cdf.ravel())
+    n = table.shape[-1]
+    table_gpu = to_gpu(np.ascontiguousarray(table))
+    cdf_gpu = to_gpu(np.ascontiguousarray(cdf, dtype=np.float32).ravel())
+    ang_gpu = to_gpu(np.ascontiguousarray(grid_rad, dtype=np.float32))
 
-    rec = np.zeros(1, dtype=TYPE_PGRID)
-    rec["n"] = cdf.shape[-1]
-    rec["ang"] = int(cdf_gpu.gpudata)
-    cuda.memcpy_htod(mod.get_global("Pd")[0], rec)
+    log2n = int(np.floor(np.log2(n - 2))) if n > 2 else 0
+    g = np.zeros(1, dtype=TYPE_AGRID)
+    g["n"] = n
+    g["mode"] = 1
+    g["log2n"] = log2n
+    g["ang"] = int(ang_gpu.gpudata)
+    cuda.memcpy_htod(mod.get_global("Gd")[0], g)
+    p = np.zeros(1, dtype=TYPE_PGRID)
+    p["n"] = n
+    p["log2n"] = log2n
+    p["cdf"] = int(cdf_gpu.gpudata)
+    cuda.memcpy_htod(mod.get_global("Pd")[0], p)
 
-    out = gpuempty(2, np.int32)
+    out = gpuempty(3, np.int32)
     mod.get_function("layout")(out, block=(1, 1, 1), grid=(1, 1))
-    sizeof, offset = out.get()
+    layout = [int(v) for v in out.get()]
 
     u = np.ascontiguousarray(u, dtype=np.float32).ravel()
-    ipha = np.zeros(u.size, dtype=np.int32)
     theta = gpuempty(u.size, np.float32)
+    iang = gpuempty(u.size, np.int32)
+    zang = gpuempty(u.size, np.float32)
     mod.get_function("probe")(
-        to_gpu(u), to_gpu(ipha), theta, np.int32(u.size),
+        to_gpu(u), table_gpu, np.int32(ipha), theta, iang, zang,
+        np.int32(u.size),
         block=(256, 1, 1), grid=((u.size + 255) // 256, 1),
     )
-    return theta.get(), int(sizeof), int(offset)
+    return theta.get(), iang.get(), zang.get(), layout
 
 
 def test_the_phase_entry_is_24_bytes():
@@ -501,133 +518,101 @@ def test_the_phase_entry_is_24_bytes():
     assert np.dtype(TYPE_PHASE).itemsize == 24
 
 
-def test_the_pgrid_record_matches_the_device_struct():
+def test_the_device_structs_match_their_numpy_mirrors():
     """A mismatched pointer offset would read garbage, silently."""
-    from smartg.smartg import TYPE_PGRID
+    from smartg.smartg import TYPE_PGRID, TYPE_PHASE
 
-    _, sizeof, offset = _psample([0.5], np.zeros((1, 8), np.float32))
-    assert sizeof == TYPE_PGRID.itemsize
-    assert offset == TYPE_PGRID.fields["ang"][1]
+    grid = theta_grid(9)
+    table, cdf = _built_on(grid, _profile(grid))
+    _, _, _, layout = _psample([0.5], table[None], cdf[None],
+                               np.deg2rad(grid))
+    assert layout[0] == TYPE_PGRID.itemsize
+    assert layout[1] == TYPE_PGRID.fields["cdf"][1]
+    assert layout[2] == np.dtype(TYPE_PHASE).itemsize
 
 
 @pytest.mark.parametrize("kind", THETA_GRID_KINDS)
-@pytest.mark.parametrize("n_cdf", (None, 257))
-def test_cdf_spans_the_closed_probability_range(kind, n_cdf):
-    """Every row must reach both end points and never go backwards.
+def test_cdf_spans_the_closed_probability_range(kind):
+    """Every row runs from 0 to 1 on its own grid and never goes back.
 
-    The kernel indexes these nodes with ``RAND*(n-1)``, so a row that
-    does not start at 0 makes the smallest scattering angles
-    unreachable: the sharpest part of a forward peak is then never
-    drawn, whatever the phase matrix says.
+    The sampler bisects it for the bin a uniform deviate falls in, so
+    a row that does not reach 0 or 1 leaves part of the deviates with
+    no bin, and one that goes backwards breaks the bisection.
     """
     grid = theta_grid(901, kind)
     cdf = _calc_phase_host(
         _profile(grid), len(grid), 0.0279, "atm",
-        ang_a=np.deg2rad(grid), n_cdf=n_cdf,
+        ang_a=np.deg2rad(grid),
     )[1]
 
-    assert cdf.shape[-1] == (len(grid) if n_cdf is None else n_cdf)
+    assert cdf.shape[-1] == len(grid)
     for row in range(cdf.shape[0]):
         assert cdf[row, 0] == 0.0
-        assert cdf[row, -1] == pytest.approx(np.pi, abs=1e-6)
+        assert cdf[row, -1] == pytest.approx(1.0, abs=2e-7)
         assert np.all(np.diff(cdf[row]) >= 0.0)
 
 
-@pytest.mark.parametrize("n_cdf", (129, 2001))
-def test_the_nodes_sit_where_the_kernel_reads_them(n_cdf):
-    """An isotropic matrix pins the node convention in closed form.
+def test_the_cdf_is_the_exact_integral_of_the_table():
+    """For a constant F11 the mass below theta is (1 - cos theta)/2.
 
-    For a constant phase function the cumulative distribution is
-    ``(1 - cos theta)/2``, so the node at probability ``z`` is exactly
-    ``arccos(1 - 2z)``. The kernel indexes the nodes with
-    ``RAND*(n-1)``, i.e. ``z = i/(n-1)``: placing them anywhere else,
-    such as at ``(i+1)/n``, shows up here as a shift of one node.
+    The bins are integrated with the true sin(theta), not a quadrature
+    of it, so an isotropic table pins the distribution in closed form
+    to float32 rounding, on any grid.
     """
-    n = 2001
-    grid = theta_grid(n)
-    pha = np.ones((1, 6, n))
-    pha[0, 1:4] = 0.0
-    pha[0, 5] = 0.0
-    profile = xr.Dataset(
-        {"phase_atm": (("iphase", "nphamat", "theta_atm"), pha)},
-        coords={"theta_atm": grid},
-    )
+    from smartg.smartg import TYPE_PHASE, _cdf_of_table
 
-    cdf = _calc_phase_host(
-        profile, n, 0.0279, "atm", ang_a=np.deg2rad(grid),
-        n_cdf=n_cdf,
-    )[1][2]
-
-    z = np.arange(n_cdf) / (n_cdf - 1)
-    assert cdf == pytest.approx(np.arccos(1.0 - 2.0 * z), abs=2e-3)
+    for kind in ("uniform", "lobatto"):
+        ang = np.deg2rad(theta_grid(1801, kind))
+        table = np.zeros((1, len(ang)), dtype=TYPE_PHASE)
+        table["a_P11"] = 0.5
+        table["a_P22"] = 0.5
+        cdf = _cdf_of_table(table, ang)
+        assert cdf[0] == pytest.approx(0.5 * (1.0 - np.cos(ang)),
+                                       abs=1e-6)
 
 
-def test_the_analytic_builders_use_the_same_convention():
-    """``_isotropic`` must land on those very nodes too.
+def test_sampling_reproduces_the_tabulated_distribution():
+    """Drawing from the table must follow the table, bin by bin.
 
-    It inverts its CDF numerically where ``_calc_phase_host`` inverts
-    a tabulated one, and ``_rayleigh`` inverts analytically. All three
-    have to agree on where node ``i`` sits, or the molecular rows and
-    the particle rows sample offset distributions.
+    This is what the sampler exists for: push uniform deviates through
+    ``pSample`` and the empirical distribution of the drawn angles has
+    to match the cumulative distribution of the very table it read,
+    inside the bins as well as at their edges. The earlier sampler,
+    linear between equal-probability nodes, was flat inside a bin and
+    fails this at the 1e-3 level on a peaked phase function.
     """
-    from smartg.smartg import _isotropic
+    grid = theta_grid(1801, "lobatto")
+    table, cdf = _built_on(grid, _profile(grid))
+    ang = np.deg2rad(grid)
 
-    n_cdf = 513
-    cdf = _isotropic(1801, n_cdf=n_cdf)[1]
+    u = (np.arange(1, 400001) - 0.5) / 400000.0
+    drawn, iang, zang, _ = _psample(u, table[None], cdf[None], ang)
 
-    z = np.arange(n_cdf) / (n_cdf - 1)
-    assert cdf == pytest.approx(np.arccos(1.0 - 2.0 * z), abs=2e-3)
-
-
-def test_sampling_the_cdf_reproduces_the_phase_function():
-    """Drawing from the table must follow the tabulated distribution.
-
-    This is the end the table exists for: push uniform deviates
-    through the device sampler and the empirical distribution of the
-    drawn angles has to match the distribution the phase matrix
-    implies. An off-by-one in the nodes shows up here as an offset of
-    one node in probability.
-    """
-    grid = theta_grid(4001)
-    theta = np.deg2rad(grid)
-
-    # the distribution the matrix implies, by the quadrature
-    # _calc_phase_host uses
-    f11 = _peaked_phase(grid)
-    d = np.diff(theta)
-    s = np.sin(theta)
-    seg = d * (
-        (s[:-1] * f11[:-1] + s[1:] * f11[1:]) / 3.0
-        + (s[:-1] * f11[1:] + s[1:] * f11[:-1]) / 6.0
+    # the mass the table puts below each drawn angle, from the same
+    # closed form the host used, with the drawn angle inside its bin
+    f11 = 0.5 * (table["a_P11"].astype(np.float64)
+                 + table["a_P22"].astype(np.float64)
+                 + 2.0 * table["a_P12"].astype(np.float64))
+    th0 = ang[iang]
+    dth = ang[iang + 1] - th0
+    f0 = f11[iang]
+    df = f11[iang + 1] - f0
+    th = drawn.astype(np.float64)
+    part = (
+        f0 * (np.cos(th0) - np.cos(th))
+        + df * ((np.sin(th) - np.sin(th0)) / dth
+                - (th - th0) / dth * np.cos(th))
     )
-    scum = np.cumsum(np.append([0.0], seg))
-    scum /= scum[-1]
-
-    cdf = _calc_phase_host(
-        _profile(grid), len(grid), 0.0279, "atm", ang_a=theta,
-    )[1][2:3]
-
-    u = (np.arange(1, 200001) - 0.5) / 200000.0
-    drawn, _, _ = _psample(u, cdf)
-
-    # the probability the sampler actually placed below each angle
-    got = np.interp(np.sort(drawn), theta, scum)
-    assert np.abs(got - u).max() < 2e-3
-
-
-def test_the_cdf_length_is_independent_of_the_angle_grid():
-    """Shortening the CDF must leave the phase matrix table alone."""
-    grid = theta_grid(901, "lobatto")
-    profile = _profile(grid)
-
-    coupled, cdf_coupled = _calc_phase_host(
-        profile, len(grid), 0.0279, "atm", ang_a=np.deg2rad(grid),
+    full = (
+        f0 * (np.cos(th0) - np.cos(ang[iang + 1]))
+        + df * ((np.sin(ang[iang + 1]) - np.sin(th0)) / dth
+                - np.cos(ang[iang + 1]))
     )
-    split, cdf_split = _calc_phase_host(
-        profile, len(grid), 0.0279, "atm", ang_a=np.deg2rad(grid),
-        n_cdf=257,
-    )
+    below = cdf[iang].astype(np.float64) + (
+        cdf[iang + 1].astype(np.float64) - cdf[iang]) * part / full
 
-    assert np.array_equal(coupled.view(np.uint8), split.view(np.uint8))
-    assert cdf_coupled.shape[-1] == 901
-    assert cdf_split.shape[-1] == 257
+    assert np.abs(below - u).max() < 2e-5
+    # the index and weight it hands back are the drawn angle's
+    assert np.allclose(th0 + zang * dth, drawn, atol=1e-6)
+    assert np.all(np.diff(drawn) >= 0.0)
+    assert drawn[0] >= 0.0 and drawn[-1] <= np.pi + 1e-6

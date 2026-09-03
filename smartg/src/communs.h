@@ -322,29 +322,9 @@ struct EnvMap {
     int env_index;
 };
 
-/* One phase matrix, tabulated on the scattering angle grid of its
-   medium (struct AGrid below). Every reader of a phase matrix goes
-   through this table: the local estimate, the ALIS correction, and
-   the random walk once it has drawn its deflection angle.
-
-   The deflection angle itself comes from a separate table, the
-   inverse cumulative distribution of struct PGrid, which holds
-   angles only. It used to be interleaved here, one copy of the
-   matrix per equal-probability node, which forced both tables to
-   the same length and cost 28 of the 52 bytes an entry took. Those
-   6 copied terms were redundant: the weight update divides by the
-   phase function it just multiplied by, so it is exactly 1 whatever
-   the values are, and reading the matrix here instead makes it
-   consistent with the angle actually drawn. */
-struct Phase {
-    float a_P11; /* \                          */
-    float a_P12; /*  |                         */
-    float a_P22; /*  | tabulated on the        */
-    float a_P33; /*  | scattering angle grid   */
-    float a_P43; /*  |                         */
-    float a_P44; /* /                          */
-};
-
+/* struct Phase, the phase matrix table, and the two grids that go
+   with it live in phase_grid.h so that a probe kernel can compile
+   the lookups on their own. */
 #include "phase_grid.h"
 
 struct Profile {

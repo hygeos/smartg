@@ -4093,15 +4093,20 @@ __device__ void scatter(Photon* ph,
 			/////////////
 			// Get Theta from the inverse Cumulative Distribution
 			// Function
-			theta = pSample(RAND, ipha, p);
+			theta = pSample(RAND, ipha, p, g, func, &iang, &zang);
 			cTh = __cosf(theta);
+		}
+		else {
+			/////////////
+			// Get Index of scattering angle imposed by the
+			// estimated direction
+			zang = aIndex(theta, g, &iang);
 		}
 
 		/////////////
 		/* Get the scattering matrix at theta. Both paths read the
-		   same table, each at the angle it uses: the one just drawn
-		   above, or the one the estimated direction imposes. */
-		zang = aIndex(theta, g, &iang);
+		   same table, at the entry the drawn angle came from, or at
+		   the one the estimated direction falls in. */
 
 		P11 = (1-zang)*func[ipha*g.n+iang].a_P11 + zang*func[ipha*g.n+iang+1].a_P11;
 		P12 = (1-zang)*func[ipha*g.n+iang].a_P12 + zang*func[ipha*g.n+iang+1].a_P12;

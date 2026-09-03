@@ -120,8 +120,9 @@ TYPE_PHASE = [
     ('a_P44', 'float32'),  # /
 ]
 
-# the inverse cumulative distribution: scattering angles in radians at
-# n equally spaced cumulative probabilities over the closed [0, 1]
+# the cumulative distribution of each phase function at the nodes of
+# its angle grid, from 0 to 1, integrated exactly for the tabulated
+# matrix: F11 linear in theta between nodes times the true sin(theta)
 TYPE_PCDF = 'float32'
 
 # mirrors struct AGrid of communs.h: align=True reproduces the 4 bytes
@@ -136,11 +137,13 @@ TYPE_AGRID = np.dtype(
     align=True,
 )
 
-# mirrors struct PGrid of phase_grid.h, same padding rule as above
+# mirrors struct PGrid of phase_grid.h: the two ints fill the 8 bytes
+# before the pointer, so align=True changes nothing here
 TYPE_PGRID = np.dtype(
     [
         ('n', 'uint32'),
-        ('ang', 'uint64'),
+        ('log2n', 'int32'),
+        ('cdf', 'uint64'),
     ],
     align=True,
 )
@@ -782,7 +785,6 @@ class Smartg(object):
         nb_phi: int = 90,
         n_f: float = 1e6,
         theta_grid: str | NDArray[np.floating] | None = None,
-        n_cdf: int | None = None,
         output_layers: int = 0,
         xblock: int = 256,
         xgrid: int = 256,
@@ -908,9 +910,10 @@ class Smartg(object):
         n_f : int, optional
             The number of scattering angles of the atmospheric and
             oceanic phase tables uploaded to the GPU. Ignored when
-            `theta_grid` supplies its own grid. Each angle costs 24
-            bytes per phase function, so the 1e6 default costs 24 MB
-            per phase function.
+            `theta_grid` supplies its own grid. Each angle costs 28
+            bytes per phase function, 24 for the matrix and 4 for its
+            cumulative probability, so the 1e6 default costs 28 MB per
+            phase function.
         theta_grid : str or ndarray, optional
             Distribution of those scattering angles:
 
@@ -929,19 +932,6 @@ class Smartg(object):
             it thins the middle of the range, where 1801 Lobatto
             angles are 3 times less accurate than 1801 equally spaced
             ones. Use 'peak' to choose that trade-off explicitly.
-        n_cdf : int, optional
-            The number of nodes of the cumulative distribution a
-            scattering deflection is drawn from, at 4 bytes each per
-            phase function. Defaults to the number of scattering
-            angles above, which is what it was locked to before the
-            two tables were separated.
-
-            The two resolutions are unrelated, and this one converges
-            much sooner: measured on a water cloud at 670 nm, the
-            Legendre moments of the drawn distribution are converged
-            to 1e-4 by 1801 nodes, where the angle grid is still
-            improving well past 12601. A large `n_f` with `n_cdf`
-            left at 1801 is the cheap combination.
         output_layers : int, optional
             Which layers to consider. Possibilities are the following:
                 - -1 -> consider no layer (for development purposes)
@@ -1437,7 +1427,6 @@ class Smartg(object):
                 pol_off=pol_off,
                 # mode 0 keeps the historical grid of each builder
                 ang_a=None if agrid_atm[1] == 0 else ang_atm,
-                n_cdf=n_cdf,
             )
             pgrid_atm = (caer.shape[-1], caer)
             prof_atm_gpu, cell_atm_gpu = _init_profile(
@@ -1594,7 +1583,6 @@ class Smartg(object):
                 kind='oc',
                 pol_off=pol_off,
                 ang_a=None if agrid_oc[1] == 0 else ang_oc,
-                n_cdf=n_cdf,
             )
             pgrid_oc = (coce.shape[-1], coce)
             prof_oc_gpu, cell_oc_gpu = _init_profile(wavelength, prof_oc, 'oc')
@@ -2848,8 +2836,7 @@ def _finalize(
 def _isotropic(
     n_theta: int,
     ang_a: NDArray[np.float64] | None = None,
-    n_cdf: int | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
     Build the isotropic phase-function lookup table.
 
@@ -2875,46 +2862,22 @@ def _isotropic(
     --------
     This function has not been validated yet.
     """
-    n_cdf = n_theta if n_cdf is None else n_cdf
     phase_H = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
     angles = np.linspace(
         0.0, pi, int(n_theta), endpoint=True, dtype=np.float64
     )
-    scum = [0]
     norm = 0.5
     phase = np.zeros((4, n_theta), dtype='float64')
     phase[0, :] = 0.5 / norm
     phase[1, :] = 0.5 / norm
     phase[2, :] = 0.5 / norm
     phase[3, :] = 0.5 / norm
-    pm = phase[1, :] + phase[0, :]
-    sin = np.sin(angles)
-    dtheta = np.diff(angles)
-    tmp = (
-        dtheta
-        * (
-            (sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.0
-            + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1]) / 6.0
-        )
-        * np.pi
-        * 2.0
-    )
-    scum = np.append(scum, tmp)
-    scum = np.cumsum(scum)
-    scum /= scum[-1]
 
-    # probability over the closed [0, 1]: the kernel indexes these
-    # nodes with RAND*(n-1), so the node at z = 0 is what makes the
-    # smallest scattering angles reachable at all
-    z = np.arange(n_cdf, dtype='float64') / (n_cdf - 1)
     angN = _uniform_angles(n_theta) if ang_a is None else ang_a
     f1 = interp1d(angles, phase[0, :])
     f2 = interp1d(angles, phase[1, :])
     f3 = interp1d(angles, phase[2, :])
     f4 = interp1d(angles, phase[3, :])
-
-    # the angles equally spaced in scattering probability
-    cdf = interp1d(scum, angles)(z).astype(TYPE_PCDF)
 
     # parameters equally spaced in scattering angle [0, 180]
     phase_H['a_P11'][:] = f1(angN)  # I par P11
@@ -2923,6 +2886,7 @@ def _isotropic(
     phase_H['a_P43'][:] = f4(angN)  # V P43
     phase_H['a_P44'][:] = f3(angN)  # V P44=P33
 
+    return phase_H
     return phase_H, cdf
 
 
@@ -2931,8 +2895,7 @@ def _rayleigh(
     depo: float,
     pol_off: bool = False,
     ang_a: NDArray[np.float64] | None = None,
-    n_cdf: int | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
     Build the Rayleigh phase-function lookup table.
 
@@ -2963,7 +2926,6 @@ def _rayleigh(
         the Rayleigh phase-function lookup table ready to be indexed by
         phase lookup routines.
     """
-    n_cdf = n_theta if n_cdf is None else n_cdf
     pha = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
 
     gama = depo / (2 - depo)
@@ -2973,24 +2935,11 @@ def _rayleigh(
     alpha = np.float32(1.0 / 8.0 * delta)
     a_coeff = np.float32(1.0 + beta / (3.0 * alpha))
 
-    i = np.arange(int(n_cdf), dtype=np.float32)
-    # the cumulative distribution below is an analytic inversion of
-    # the Rayleigh CDF and is independent of the angle grid
     theta_le = (
         np.linspace(0.0, pi, int(n_theta), endpoint=True, dtype=np.float64)
         if ang_a is None
         else ang_a
     )
-    b = ((i / (n_cdf - 1)) - 4.0 * alpha - beta) / (2.0 * alpha)
-    u = (-b + (a_coeff**3.0 + b**2.0) ** (1.0 / 2.0)) ** (1.0 / 3.0)
-    c_th = u - (a_coeff / u)
-    c_th = np.clip(c_th, -1, 1)
-    cdf = np.arccos(c_th).astype(TYPE_PCDF)
-    # the cubic is evaluated in float32 and lands a few 1e-4
-    # short of the end points; the kernel maps u -> 0 and
-    # u -> 1 exactly onto them, so pin them
-    cdf[0] = 0.0
-    cdf[-1] = pi
     c_th_le = np.cos(theta_le)
     c_th2_le = c_th_le * c_th_le
 
@@ -3021,7 +2970,7 @@ def _rayleigh(
         pha['a_P33'][:] = p33bis * c_th_le[:]  # U
         pha['a_P44'][:] = p44bis * c_th_le[:]  # V
 
-    return pha, cdf
+    return pha
 
 
 def _uniform_angles(n: int) -> NDArray[np.float64]:
@@ -3141,8 +3090,7 @@ def _pgrid_struct(pgrid) -> np.void:
     ----------
     pgrid : tuple
         ``(n, cdf_gpu)``, where *cdf_gpu* is the device copy of the
-        scattering angles at the ``n`` equally spaced cumulative
-        probabilities.
+        cumulative distribution at the ``n`` nodes of the angle grid.
 
     Returns
     -------
@@ -3159,7 +3107,9 @@ def _pgrid_struct(pgrid) -> np.void:
     n, cdf_gpu = pgrid
     rec = np.zeros(1, dtype=TYPE_PGRID)
     rec['n'] = n
-    rec['ang'] = int(cdf_gpu.gpudata)
+    # trip count of the binary search, as for the angle grid
+    rec['log2n'] = int(np.floor(np.log2(n - 2))) if n > 2 else 0
+    rec['cdf'] = int(cdf_gpu.gpudata)
     return rec[0]
 
 
@@ -3170,7 +3120,6 @@ def _calc_phase_host(
     kind: str,
     pol_off: bool = False,
     ang_a: NDArray[np.float64] | None = None,
-    n_cdf: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Build the phase-function lookup table uploaded to the GPU.
@@ -3187,19 +3136,17 @@ def _calc_phase_host(
       found in
         ``phase_<kind>``.
 
-    For each phase entry, two independent tables are precomputed:
+    For each phase entry, two tables are precomputed on the same
+    scattering angle grid over [0, pi]:
 
-    - the ``a_*`` fields of the phase matrix, sampled on the
-      scattering angle grid over [0, pi], which every reader of a
-      phase matrix goes through,
-    - the scattering angles at ``n_cdf`` equally spaced cumulative
-      probabilities over the closed [0, 1], which a random walk draws
-      its deflection from.
-
-    Their lengths are unrelated: the first says how finely a phase
-    matrix must be resolved to be read at an arbitrary angle, the
-    second how finely the distribution must be resolved to be drawn
-    from.
+    - the ``a_*`` fields of the phase matrix, which every reader of
+      a phase matrix goes through,
+    - its cumulative distribution at those very nodes, integrated
+      exactly for the tabulated matrix (F11 linear in theta between
+      nodes, times the true sin(theta)), which a random walk draws
+      its deflection from by inverting one bin in closed form. The
+      drawn deflection is therefore distributed exactly as the
+      matrix the walk then reads, whatever the grid.
 
     The profile phase matrices are first normalized to the internal
     I-parallel/I-perpendicular representation with
@@ -3230,20 +3177,15 @@ def _calc_phase_host(
     ang_a : ndarray, optional
         Scattering angle grid in radians the phase matrix is sampled
         on. Defaults to ``n_theta`` equally spaced angles.
-    n_cdf : int, optional
-        Nodes of the cumulative distribution. Defaults to ``n_theta``.
-        Measured on a water cloud at 670 nm, the Legendre moments of
-        the drawn distribution are converged to 1e-4 by 1801 nodes,
-        so a large angle grid does not need a matching one here.
 
     Returns
     -------
     (ndarray, ndarray)
         The phase matrix table, of shape ``(n_phase_entries,
         n_theta)`` and dtype ``TYPE_PHASE``, and the cumulative
-        distribution, of shape ``(n_phase_entries, n_cdf)`` and dtype
-        ``TYPE_PCDF``. Both are indexed by ``iphase_<kind>`` in the
-        profile uploaded by ``_init_profile``.
+        distribution, of the same shape and dtype ``TYPE_PCDF``. Both
+        are indexed by ``iphase_<kind>`` in the profile uploaded by
+        ``_init_profile``.
 
     Notes
     -----
@@ -3265,43 +3207,33 @@ def _calc_phase_host(
     nphases += 2  # include Rayleigh and VRS phase function
     # nphases += 1   # include Rayleigh phase function
 
-    n_cdf = n_theta if n_cdf is None else n_cdf
-
-    # Initialize the phase matrix table and the cumulative
-    # distribution it is drawn from, which are sized independently
     nrows = nphases if nphases > 0 else 1
     phase_H = np.zeros((nrows, n_theta), dtype=TYPE_PHASE, order='C')
-    cdf_H = np.zeros((nrows, n_cdf), dtype=TYPE_PCDF, order='C')
+    angN = _uniform_angles(n_theta) if ang_a is None else ang_a
 
     # Set Rayleigh phase function or isotropic if depo <0
     if depo >= 0:
-        phase_H[0, :], cdf_H[0, :] = _rayleigh(
-            n_theta, depo, pol_off=pol_off, ang_a=ang_a, n_cdf=n_cdf
+        phase_H[0, :] = _rayleigh(
+            n_theta, depo, pol_off=pol_off, ang_a=ang_a
         )
     # no pol_off in isotropic because the function needs first to be
     # corrected
     else:
-        phase_H[0, :], cdf_H[0, :] = _isotropic(
-            n_theta, ang_a=ang_a, n_cdf=n_cdf
-        )
+        phase_H[0, :] = _isotropic(n_theta, ang_a=ang_a)
     if 'theta_' + kind in profile.coords:
         angles = profile.coords['theta_' + kind].to_numpy() * pi / 180.0
         assert angles[-1] < 3.15  # assert that angles are in radians
-        dtheta = np.diff(angles)
     else:
         angles = None
-        dtheta = None
 
     # Set VRS phase function
-    phase_H[1, :], cdf_H[1, :] = _rayleigh(
-        n_theta, 0.17, ang_a=ang_a, n_cdf=n_cdf
-    )
+    phase_H[1, :] = _rayleigh(n_theta, 0.17, ang_a=ang_a)
 
     idx = 2
     # idx = 1
     for ipha in range(nphases - 2):
         # for ipha in range(nphases-1):
-        assert angles is not None and dtheta is not None
+        assert angles is not None
 
         # (ipha, nphamat, theta)
         phase = profile[name_phase][ipha, :, :].to_numpy()
@@ -3323,27 +3255,6 @@ def _calc_phase_host(
             phase[1, :] = 0.5 * F11
             phase[4, :] = 0.5 * F11
 
-        scum = [0]
-        pm = phase[1, :] + phase[0, :]
-        sin = np.sin(angles)
-        tmp = (
-            dtheta
-            * (
-                (sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.0
-                + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1]) / 6.0
-            )
-            * np.pi
-            * 2.0
-        )
-        scum = np.append(scum, tmp)
-        scum = np.cumsum(scum)
-        scum /= scum[-1]
-
-        # probability over the closed [0, 1]: the kernel indexes
-        # these nodes with RAND*(n-1), so the node at z = 0 is what
-        # makes the sharpest part of the forward peak reachable
-        z = np.arange(n_cdf, dtype='float64') / (n_cdf - 1)
-        angN = _uniform_angles(n_theta) if ang_a is None else ang_a
         # f1 = interp1d(angles, phase[1,:])
         # f2 = interp1d(angles, phase[0,:])
         f1 = interp1d(angles, phase[0, :])
@@ -3352,9 +3263,6 @@ def _calc_phase_host(
         f4 = interp1d(angles, phase[3, :])
 
         if len(phase[:, 0]) == 4:  # spherical particle
-            # the angles equally spaced in scattering probability
-            cdf_H[idx, :] = interp1d(scum, angles)(z)  # angle
-
             # parameters equally spaced in scattering angle [0, 180]
             phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
             phase_H['a_P22'][idx, :] = f2(angN)  # I per P22
@@ -3364,24 +3272,6 @@ def _calc_phase_host(
         else:  # non spherical particle
             f5 = interp1d(angles, phase[4, :])
             f6 = interp1d(angles, phase[5, :])
-
-            scum = [0]
-            pm = 0.5 * (phase[0, :] + 2 * phase[1, :] + phase[4, :])
-            sin = np.sin(angles)
-            tmp = (
-                dtheta
-                * (
-                    (sin[:-1] * pm[:-1] + sin[1:] * pm[1:]) / 3.0
-                    + (sin[:-1] * pm[1:] + sin[1:] * pm[:-1]) / 6.0
-                )
-                * np.pi
-                * 2.0
-            )
-            scum = np.append(scum, tmp)
-            scum = np.cumsum(scum)
-            scum /= scum[-1]
-
-            cdf_H[idx, :] = interp1d(scum, angles)(z)  # angle
 
             phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
             phase_H['a_P22'][idx, :] = f5(angN)  # I per P22
@@ -3393,7 +3283,56 @@ def _calc_phase_host(
 
         idx += 1
 
-    return phase_H, cdf_H
+    return phase_H, _cdf_of_table(phase_H, angN)
+
+
+def _cdf_of_table(
+    phase_H: np.ndarray, ang: NDArray[np.float64]
+) -> np.ndarray:
+    """
+    Cumulative distribution of every row of a phase table, at the
+    nodes of its angle grid.
+
+    The mass of a bin is the exact integral of the tabulated phase
+    function over it, F11 linear in theta between the two nodes times
+    the true sin(theta), which is the density the kernel's ``pSample``
+    inverts in closed form. The table's own float32 values are used,
+    so that the host and the device describe the same function.
+
+    Parameters
+    ----------
+    phase_H : ndarray
+        Table of dtype ``TYPE_PHASE`` and shape ``(nrows, n)``.
+    ang : ndarray
+        The ``n`` angles in radians, from 0 to pi.
+
+    Returns
+    -------
+    ndarray
+        ``(nrows, n)`` of dtype ``TYPE_PCDF``, each row from 0 to 1.
+    """
+    f11 = 0.5 * (
+        phase_H['a_P11'].astype(np.float64)
+        + phase_H['a_P22'].astype(np.float64)
+        + 2.0 * phase_H['a_P12'].astype(np.float64)
+    )
+    th0 = ang[:-1]
+    th1 = ang[1:]
+    dth = th1 - th0
+    f0 = f11[:, :-1]
+    df = f11[:, 1:] - f0
+    # int_th0^th1 (f0 + df (th-th0)/dth) sin(th) dth
+    mass = (
+        f0 * (np.cos(th0) - np.cos(th1))
+        + df * ((np.sin(th1) - np.sin(th0)) / dth - np.cos(th1))
+    )
+    cdf = np.zeros(phase_H.shape, dtype=np.float64)
+    cdf[:, 1:] = np.cumsum(mass, axis=1)
+    total = cdf[:, -1:]
+    # a row of zeros, e.g. a VRS entry of a profile that has none,
+    # keeps a cumulative distribution of zeros and is never drawn
+    np.divide(cdf, total, out=cdf, where=total > 0)
+    return cdf.astype(TYPE_PCDF)
 
 
 def _calc_phase_gpu(
@@ -3403,7 +3342,6 @@ def _calc_phase_gpu(
     kind: str,
     pol_off: bool = False,
     ang_a: NDArray[np.float64] | None = None,
-    n_cdf: int | None = None,
 ) -> tuple[GPUArray, GPUArray]:
     """
     Upload the phase matrix table and the cumulative distribution
@@ -3418,12 +3356,10 @@ def _calc_phase_gpu(
     (pycuda.gpuarray.GPUArray, pycuda.gpuarray.GPUArray)
         The phase matrix table, of shape ``(n_phase_entries,
         n_theta)`` and dtype ``TYPE_PHASE``, and the cumulative
-        distribution, of shape ``(n_phase_entries, n_cdf)`` and dtype
-        ``TYPE_PCDF``.
+        distribution, of the same shape and dtype ``TYPE_PCDF``.
     """
     phase_H, cdf_H = _calc_phase_host(
         profile, n_theta, depo, kind, pol_off=pol_off, ang_a=ang_a,
-        n_cdf=n_cdf,
     )
 
     return to_gpu(phase_H), to_gpu(cdf_H)
