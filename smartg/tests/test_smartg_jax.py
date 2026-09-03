@@ -18,7 +18,7 @@ from gc import collect
 jax = pytest.importorskip(
     "jax", reason="cannot test this since the jax package is not installed."
 )
-from smartg.histories import get_histories, BigSum, Si, Si2
+from smartg.histories import get_histories, big_sum, si, si2
 import numpy as np
 import matplotlib.pyplot as plt
 from smartg.smartg import Smartg
@@ -144,11 +144,11 @@ def test_smartg_jax2(
             jax.devices("cpu")[0]
         ):  # run on CPU to avoid slow GPU XLA compilation
             N, S, D, w, _, nref, _, _, _, _, _ = get_histories(
-                m, LEVEL=level, verbose=False
+                m, level=level, verbose=False
             )
             stk_i = (
                 np.array(
-                    BigSum(Si, only_I=True)(
+                    big_sum(si, only_i=True)(
                         wavelength_abs, sigma, alb, S[:, 0], w, D,
                         nref, wavelength_sca
                     ).sum(axis=0)
@@ -157,7 +157,7 @@ def test_smartg_jax2(
             )
             stk_i2 = (
                 np.array(
-                    BigSum(Si2, only_I=True)(
+                    big_sum(si2, only_i=True)(
                         wavelength_abs, sigma, alb, S[:, 0], w, D,
                         nref, wavelength_sca
                     ).sum(axis=0)
@@ -332,11 +332,11 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
         jax.devices("cpu")[0]
     ):  # run on CPU to avoid slow GPU XLA compilation
         N, S, D, w, _, nref, _, _, _, _, _ = get_histories(
-            m2, LEVEL=0, verbose=True
+            m2, level=0, verbose=True
         )
         stk_i = (
             np.array(
-                BigSum(Si, only_I=True)(
+                big_sum(si, only_i=True)(
                     w_valid,
                     sigma_valid,
                     np.zeros_like(w_valid),
