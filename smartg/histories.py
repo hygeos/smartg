@@ -27,13 +27,37 @@ compute_amf
     hist=True runs.
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 import jax.numpy as jnp
 from jax import value_and_grad, vmap, jit
-import xarray
+import xarray as xr
 import jax
+from luts.luts import MLUT
+from numpy.typing import NDArray
 
-def get_histories(m, level=0, idir=0,verbose=False):
+def get_histories(
+    m: MLUT | xr.Dataset,
+    level: int = 0,
+    idir: int = 0,
+    verbose: bool = False,
+) -> tuple[
+    int,
+    NDArray[np.float32],
+    NDArray[np.float32],
+    NDArray[np.float32],
+    NDArray[np.float32],
+    NDArray[np.float32],
+    NDArray[np.float32],
+    NDArray[np.float32],
+    NDArray[np.float32],
+    NDArray[np.float32],
+    NDArray[np.float32],
+]:
     """Return the main outputs of the recorded photon histories.
 
     Parameters
@@ -83,7 +107,7 @@ def get_histories(m, level=0, idir=0,verbose=False):
         The last-scattering layer index (-1 for surface/unscattered
         photons).
     """
-    nl=m.axis('z_atm').size-1 if not isinstance(m, xarray.Dataset) else m['z_atm'].size-1
+    nl=m.axis('z_atm').size-1 if not isinstance(m, xr.Dataset) else m['z_atm'].size-1
     tab_hist_ = np.squeeze(m['histories'].data)
     tab_hist = tab_hist_[level, :,:]
     if verbose : print (tab_hist.shape)
@@ -123,7 +147,16 @@ def get_histories(m, level=0, idir=0,verbose=False):
 
 
 
-def si(lam, kabs, alb, sik, wi_lr, dij, ki, lam_lr_grid):
+def si(
+    lam: float,
+    kabs: NDArray[np.floating],
+    alb: float,
+    sik: float,
+    wi_lr: NDArray[np.floating],
+    dij: NDArray[np.floating],
+    ki: float,
+    lam_lr_grid: NDArray[np.floating],
+) -> jax.Array:
     """Beer-Lambert weight of one photon's Stokes component.
 
     JAX based computation, for one virtual photon, one Stokes
@@ -162,7 +195,16 @@ def si(lam, kabs, alb, sik, wi_lr, dij, ki, lam_lr_grid):
     return sik * wi * jnp.exp(- jnp.sum(dij * kabs)) * alb**ki
 
 
-def si2(lam, kabs, alb, sik, wi_lr, dij, ki, lam_lr_grid):
+def si2(
+    lam: float,
+    kabs: NDArray[np.floating],
+    alb: float,
+    sik: float,
+    wi_lr: NDArray[np.floating],
+    dij: NDArray[np.floating],
+    ki: float,
+    lam_lr_grid: NDArray[np.floating],
+) -> jax.Array:
     """Square of `si`, the Beer-Lambert weighted Stokes component.
 
     JAX based computation, for one virtual photon, one Stokes
@@ -201,7 +243,11 @@ def si2(lam, kabs, alb, sik, wi_lr, dij, ki, lam_lr_grid):
 
 
 
-def big_sum(s, grad=None, only_i=False):
+def big_sum(
+    s: Callable[..., Any],
+    grad: int | None = None,
+    only_i: bool = False,
+) -> Callable[..., Any]:
     """Vectorize and JIT-compile a Stokes-component function.
 
     Wraps a per-photon, per-wavelength function such as `si` or
@@ -249,16 +295,24 @@ def big_sum(s, grad=None, only_i=False):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def compute_cdist_hist(
-    d_h, s_h, w_h, nref_h, nint_h, nlscl_h,
-    wavelength_lr_r, wavelength_ref, alb_ref, natm_abs,
+    d_h: NDArray[np.floating],
+    s_h: NDArray[np.floating],
+    w_h: NDArray[np.floating],
+    nref_h: NDArray[np.floating],
+    nint_h: NDArray[np.floating],
+    nlscl_h: NDArray[np.floating],
+    wavelength_lr_r: NDArray[np.floating],
+    wavelength_ref: float,
+    alb_ref: float,
+    natm_abs: int,
     *,
-    amf_variance    = True,
-    nscl            = 1,
-    scatter_classes = 'last_scattering_layer',
-    norders         = 1,
-    cdist_wabs      = False,
-    kabs_ref        = None,
-):
+    amf_variance: bool           = True,
+    nscl: int                    = 1,
+    scatter_classes: str         = 'last_scattering_layer',
+    norders: int                 = 1,
+    cdist_wabs: bool             = False,
+    kabs_ref: NDArray[np.floating] | None = None,
+) -> NDArray[np.float64]:
     """Compute cdist (tabDist) moments from ALIS photon histories.
 
     Replicates the GPU tabDist accumulation for the Smartg options
@@ -274,10 +328,11 @@ def compute_cdist_hist(
         ALIS LR scattering-correction weights.
     nref_h : ndarray of shape (NLE,)
         Surface-reflection count per photon.
-    nint_h : ndarray of shape (NLE,), int
-        Scattering order (total interaction count).
-    nlscl_h : ndarray of shape (NLE,), int
-        Last-scattering layer index (-1 for surface/none).
+    nint_h : ndarray of shape (NLE,)
+        Scattering order (total interaction count), integer-valued.
+    nlscl_h : ndarray of shape (NLE,)
+        Last-scattering layer index (-1 for surface/none),
+        integer-valued.
     wavelength_lr_r : ndarray of shape (NLR,)
         The LR wavelength axis (nm).
     wavelength_ref : float
@@ -397,7 +452,10 @@ def compute_cdist_hist(
     return cdist_out
 
 
-def amf_from_cdist(cdist, thick):
+def amf_from_cdist(
+    cdist: NDArray[np.float64],
+    thick: NDArray[np.floating],
+) -> dict[str, NDArray[np.float64]]:
     """Derive AMF statistics from a raw cdist moments array.
 
     Shared by the hist=False (GPU tabDist) and hist=True (post-hoc)
@@ -478,11 +536,20 @@ def amf_from_cdist(cdist, thick):
     return result
 
 
-def compute_amf(m, *, wavelength_lr_r=None, wavelength_ref=None,
-                alb_ref=None, natm_abs=None,
-                amf_variance=True, nscl=1,
-                scatter_classes='last_scattering_layer',
-                norders=1, cdist_wabs=False, kabs_ref=None):
+def compute_amf(
+    m: MLUT | xr.Dataset,
+    *,
+    wavelength_lr_r: NDArray[np.floating] | None = None,
+    wavelength_ref: float | None = None,
+    alb_ref: float | None = None,
+    natm_abs: int | None = None,
+    amf_variance: bool = True,
+    nscl: int = 1,
+    scatter_classes: str = 'last_scattering_layer',
+    norders: int = 1,
+    cdist_wabs: bool = False,
+    kabs_ref: NDArray[np.floating] | None = None,
+) -> tuple[dict[str, NDArray[np.float64]], NDArray[np.float64], NDArray[np.float64]]:
     """Compute AMF from a Smartg output.
 
     Works transparently for hist=False and hist=True runs, by
