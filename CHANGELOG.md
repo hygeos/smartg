@@ -279,6 +279,13 @@ final `v2.0.0` release.
       the intensity is untouched, since the weight update divides by
       the phase function it just multiplied by, but the polarization
       ratios now come from the angle grid
+    - New `smartg/tests/test_phase_grid_ice.py` runs the kernel on
+      the grids: the Iwabuchi and Suzuki (2009) figure 3 setup of the
+      demo notebook, truncation off, on the `ic_baum_asc` ice table,
+      reflected and transmitted radiance at two viewing angles for
+      every grid kind at 451 and 1801 nodes, the file grid and a
+      uniform 18001 grid, against saved 1e8 photon values at a fixed
+      seed; the 1e10 photon reference of the study is logged
   - New 3D atmosphere user API in `smartg.atmosphere`: a 3D atmosphere is now
     built directly as
     `Atm3D(atm_1d=Atm1D(...), grid_3d=Grid3D(...), comp_3d=[Cloud3D(...)])`
