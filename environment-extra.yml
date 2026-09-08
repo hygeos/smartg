@@ -1,11 +1,12 @@
 # To create an environment from this file, run the following command:
-# $ conda env create -p /path/to/env/env-name -f "environment.yml"
+# $ conda env create -p /path/to/env/env-name -f "environment-extra.yml"
 #
 channels:
   - conda-forge
 dependencies:
-  - python>=3.10,<3.14
+  - python>=3.11
   - numpy>=2
+  - xarray
   - pandas
   - scipy
   - h5py
@@ -23,10 +24,10 @@ dependencies:
   - ipympl
   - pyhdf
   - gatiab>=1.1.2
-  - geoclide
+  - geoclide>=4.0.0
   - statsmodels
   - luts
-  - pytrunc>=1.1.0
+  - pytrunc>=2.0.0
   - pip
   - pip:
     - pycuda

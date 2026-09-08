@@ -5,8 +5,8 @@
 Release date: xxx
 
 Note: this changelog entry has been started during the `v2.0.0dev1` stage,
-updated for `v2.0.0dev2`, and will be completed and corrected before the
-final `v2.0.0` release.
+updated for `v2.0.0dev2` and `v2.0.0dev3`, and will be completed and
+corrected before the final `v2.0.0` release.
 
 * Several breaking changes
   - The `AtmAFGL` class has been renamed to `Atm1D`, with PEP 8 constructor
@@ -62,6 +62,11 @@ final `v2.0.0` release.
       `AlbedoSpeclib`, `Albedo_spectrum` → `AlbedoSpectrum`,
       `Albedo_map` → `AlbedoMap`
     - bandset: the `Raman` parameter is now `raman`
+    - iprt: `seclect_iprt_IQUV` → `select_iprt_iquv` (the typo
+      included), `convert_SGout_to_IPRTout` →
+      `convert_sgout_to_iprtout`, `compute_deltam_IPRTout` →
+      `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`, and
+      their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...)
   - The water module has been restructured for consistency with the
     atmosphere module: the `IOP*` classes (`IOP_base`, `IOP`, `IOP_1`,
     `IOP_Rw`, `IOP_profile`) have been replaced by the new `Water` /
@@ -73,7 +78,17 @@ final `v2.0.0` release.
     LUT/MLUT objects to xarray across the package (atmosphere, smartg,
     water, reptran, postprocess, views); the new `smartg.xarray` module
     provides `dataarray_to_lut` / `dataset_to_mlut` converters for
-    backward compatibility
+    backward compatibility, and `drop_axes`, the equivalent of the
+    `MLUT.dropaxis` method
+  - `Smartg.run` returns an `xr.Dataset` instead of an MLUT. The
+    variable names, their order, the coordinates and the attributes
+    are unchanged, and the dimensions which were anonymous in the
+    MLUT are named (`sensor_in` / `wavelength_in`, `cdist_layer`,
+    `hist_*`);
+    `smartg.xarray.dataset_to_mlut` converts the output back to an MLUT
+  - The `mixture` attribute of `AerOPAC`, `Cloud` and `AerUser` is now
+    `ds_mix`, and holds the bulk optical properties as an `xr.Dataset`
+    instead of an MLUT
   - The functions of `smartg.atmosphere` now raise `ValueError` instead of
     `NameError` on invalid inputs
   - The `phase` module has been moved from `smartg/tools/` to `smartg/`
@@ -166,10 +181,21 @@ final `v2.0.0` release.
     - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
       `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
       new `smartg.grid3d` module
-    - `read_cld_nth_cte` has been moved from `smartg.libATM3D` to `smartg.phase`
+    - `read_cld_nth_cte` has been replaced by `read_phase_nth_cte`,
+      moved from `smartg.iprt` to `smartg.phase`: the two constant-theta
+      readers were the same, only the iprt one handling the `hum` axis
+      as well as `reff`. It returns an `xr.DataArray`, and its
+      `convert_IparIper` parameter has been removed, the conversion into
+      the parallel/perpendicular convention being done by `run`
     - The `cells` parameter and the `"ATM3D"` sentinel filename of `Atm1D`
       have been removed: a 3D atmosphere is now built with
       `smartg.atmosphere.Atm3D`
+    - The 3D profile dataset carries its optical properties on a
+      coordinate-bearing `iopt` axis; the `z_atm` axis it also had,
+      holding plain indices labelled as altitudes, is gone. The 1D-only
+      paths (the STP optical efficiencies, `cell_proba='auto'` and
+      `_find_extinction`) raise an informative error in 3D instead of
+      computing garbage from that index axis
   - The `CusForward` and `CusBackward` launching-mode classes have been
     moved from `smartg.smartg` to `smartg.objects3d`; they are NOT
     re-exported by `smartg.smartg`, so imports must be updated. Their
@@ -382,7 +408,19 @@ final `v2.0.0` release.
     and two `UnboundLocalError` hazards are fixed: the error format of a
     receiver run without `stdev`, and the base normal of a spherical
     reflector in the RF launching mode
-  - Fix a bug in `read_cld_nth_cte`
+  - Fix a bug in the constant-theta phase reader (`read_cld_nth_cte`,
+    now `read_phase_nth_cte`)
+  - The phase matrices of a 3D component reached the kernels in the
+    IQUV convention: `run` converts them into the parallel/perpendicular
+    convention of the kernels and the conversion is an involution, so
+    the second conversion done in `Comp3D.get_phase` cancelled it. The
+    4 → 6 term expansion, which is not part of the conversion, is kept.
+    The reader of the IPRT phase 3 runs is fixed the same way
+  - A `Cloud` built with `zmax <= zmin` is refused at construction: it
+    ended up with no vertical layer, and crashed far away with an
+    `AttributeError` on `P_tot`, or divided by zero and filled `OD_p`
+    with NaN when `phase=False`. `AerOPAC.phase` also raises when no
+    layer is left
   - Fix the numpy 2.5 shape-setter deprecation in the interp module, and the
     strictly-increasing coordinate requirement of `make_interp_spline`
   - The `ipha` parameter of `phase_view` in `smartg_view` is now flexible:

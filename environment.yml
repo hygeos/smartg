@@ -4,8 +4,9 @@
 channels:
   - conda-forge
 dependencies:
-  - python>=3.10,<3.14
-  - numpy
+  - python>=3.11
+  - numpy>=2
+  - xarray
   - pandas
   - scipy
   - h5py
@@ -22,9 +23,9 @@ dependencies:
   - ipywidgets
   - ipympl
   - pyhdf
-  - geoclide
+  - geoclide>=4.0.0
   - luts
-  - pytrunc>=1.1.0
+  - pytrunc>=2.0.0
   - pip
   - gatiab>=1.1.2
   - pip:
