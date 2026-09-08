@@ -1667,6 +1667,7 @@ packages:
   name: smartg
   requires_dist:
   - numpy>=2
+  - xarray
   - pandas
   - scipy
   - h5py

@@ -32,14 +32,15 @@ classifiers = [
 ]
 requires-python = ">= 3.11"
 dependencies = [
-    "numpy>=2", 
-    "pandas", 
-    "scipy", 
-    "h5py", 
-    "pyarrow", 
-    "openpyxl", 
-    "progressbar2", 
-    "matplotlib", 
+    "numpy>=2",
+    "xarray",
+    "pandas",
+    "scipy",
+    "h5py",
+    "pyarrow",
+    "openpyxl",
+    "progressbar2",
+    "matplotlib",
     "python-dotenv",
     "notebook",
     "ipywidgets",
@@ -98,14 +99,6 @@ test-basic = """
 pytest smartg/tests/test_cuda.py smartg/tests/test_profile.py \
 smartg/tests/test_atm3d.py smartg/tests/test_smartg.py -s -v"""
 test-all = "pytest smartg/tests/ -s -v"
-
-[tool.pixi.feature.extra.dependencies]
-
-[tool.pixi.feature.extra.pypi-dependencies]
-jax = {version = ">=0.4", extras = ["cuda12"]}
-radis = ">=0.17"
-statsmodels = "*"
-"hitran-api" = ">=1.1"
 
 [tool.pyright]
 # Suppress "partially unknown" errors from third-party libraries with incomplete stubs (e.g. xarray)
