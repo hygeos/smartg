@@ -276,6 +276,79 @@ corrected before the final `v2.0.0` release.
     coefficient is scaled by `1 - f`. `None` disables the truncation.
 
 * New features
+  - The scattering angles of a phase matrix no longer have to be equally
+    spaced. Clustering them towards the forward and backward directions
+    resolves the diffraction peak of large particles (desert aerosols,
+    cloud droplets) with far fewer angles, which is what sizes the phase
+    tables on the GPU: each angle costs 24 bytes per phase function.
+    - New `smartg.phase.theta_grid(n, kind)` builds such a grid, `kind`
+      being `'uniform'`, `'lobatto'` (Gauss-Lobatto-Legendre, the same
+      nodes the truncation integrates on), `'chebyshev'` or `'peak'`
+    - Clustering is not free: it takes its nodes from the middle of the
+      range, where 1801 Lobatto angles are 3 times less accurate than
+      1801 equally spaced ones (7.9e-3 against 2.7e-3 over 10 to 175
+      degrees, on `watercloud_670.mie.cdf`). `'peak'` says how many
+      nodes each end may take instead of fixing the shape, and its
+      default is marginally better than Lobatto on the worst band
+      (6.5e-3 against 7.9e-3)
+    - The `n_theta` argument of the phase methods of `Atm1D`, `AerOPAC`,
+      `Cloud`, `Hydrosol` and of `read_phase_nth_cte` now accepts those
+      angles directly, in addition to a number of equally spaced ones
+    - New `theta_grid` parameter of `Smartg.run` choosing the grid of
+      the GPU tables: `'phase'` adopts the grid the phase matrices
+      already carry, so no resampling takes place at all; a kind name or
+      an explicit array are also accepted. The default is unchanged
+    - Measured on the transmitted radiance under a thin water cloud,
+      where the scattering angle is the viewing angle: at 451 angles,
+      an equally spaced grid is 11% off in the forward peak while a
+      Lobatto grid of that same size is within 0.24% of a 12601 angle
+      reference, i.e. 28 times its size. Away from the peak all the
+      grids agree to 0.1%, so the gain is in the peak alone
+    - Note that this only pays where the phase matrix is sampled near
+      a sharp feature. A geometry that sees the smooth 20 to 180
+      degree body of the phase function, which is what the IPRT C3
+      cases do, is unaffected by the grid: their delta_m against
+      MYSTIC is uncorrelated with the discretisation error
+  - A random walk now draws its deflection from exactly the phase
+    matrix it then reads. `struct Phase` used to interleave a second
+    copy of the matrix at equal-probability nodes, and the kernel drew
+    the deflection by interpolating the inverse cumulative distribution
+    linearly between those nodes, which samples a staircase density,
+    constant inside each bin, and never corrects the mismatch with the
+    smooth matrix. That mismatch is ~1e-4 per event; a cloud multiplies
+    it by its ~1e3 scattering orders. Measured on IPRT C3 case 6 with
+    1e6 photons per sensor and 3 seeds per grid, it was a 2.6% bias of
+    the mean reflected intensity (delta_m of 3.0 against MYSTIC) that
+    only fell to 1.1 with 12601 nodes, whatever the angle grid: an exact
+    2818 angle grid from the file scored the same 3.0 as an equally
+    spaced one of that length, and the same 1.1 once it drew from a
+    12601 node distribution.
+    - The cumulative distribution is now tabulated at the nodes of the
+      angle grid itself, one float per entry, integrated exactly for
+      the tabulated matrix (F11 linear in theta between nodes times the
+      true sin(theta)), and `pSample` inverts one bin exactly: four
+      Newton steps on the bin's mass, itself a 3 point Gauss-Legendre
+      sum, which is what stays accurate in float32 inside the 0.01
+      degree bins of a forward peak where the closed form cancels. The
+      drawn density is the table's own interpolant, at any grid size,
+      with no knob
+    - The 6 copied matrix terms and the separate angle table are gone;
+      an entry costs 24 bytes plus the 4 of its cumulative probability,
+      instead of 52. This is what makes the 18001 angle IPRT C3 case
+      with aerosols fit on a 16 GB card: 20491 phase matrices cost
+      19.2 GB interleaved, 10.3 GB now
+    - Reading the matrix at the drawn angle rather than at the
+      equal-probability node is a numerical change for polarized runs:
+      the intensity is untouched, since the weight update divides by
+      the phase function it just multiplied by, but the polarization
+      ratios now come from the angle grid
+    - New `smartg/tests/test_phase_grid_ice.py` runs the kernel on
+      the grids: the Iwabuchi and Suzuki (2009) figure 3 setup of the
+      demo notebook, truncation off, on the `ic_baum_asc` ice table,
+      reflected and transmitted radiance at two viewing angles for
+      every grid kind at 451 and 1801 nodes, the file grid and a
+      uniform 18001 grid, against saved 1e8 photon values at a fixed
+      seed; the 1e10 photon reference of the study is logged
   - New 3D atmosphere user API in `smartg.atmosphere`: a 3D atmosphere is now
     built directly as
     `Atm3D(atm_1d=Atm1D(...), grid_3d=Grid3D(...), comp_3d=[Cloud3D(...)])`
@@ -362,6 +435,29 @@ corrected before the final `v2.0.0` release.
   - Push to PyPI workflow added
 
 * Corrections
+  - Fix the nodes of the cumulative distribution a scattering deflection
+    is drawn from. `_calc_phase_host` and `_isotropic` placed them at
+    probabilities `(i+1)/n`, but the kernel indexes them with
+    `RAND*(n-1)`, i.e. at `i/(n-1)`: the sampled probability spanned
+    `]1/n, 1]` instead of `]0, 1]` and the first `1/n` of the scattering
+    probability, the sharpest part of a forward peak, was unreachable.
+    `_rayleigh` inverts its CDF analytically and already used `i/(n-1)`,
+    so the molecular rows and the particle rows of the same table were
+    sampling distributions offset by one node from each other. Every
+    Monte Carlo result moves slightly; the fractions scattered below 1
+    degree now match the tabulated phase function at every table size
+    (0.2391 against 0.2386 at 1801 nodes, on a water cloud at 670 nm)
+  - Fix two out-of-bounds reads of the phase tables in `device.cu`: both
+    halves read entry `iang` and `iang+1`, so an index of `NF-1` reached
+    into the next phase function, or past the end of the allocation for
+    the last one. The equal-angle half reached it at a scattering angle
+    of exactly 180 degrees, which a backward local estimate does hit,
+    and the equal-probability half when `RAND` returned 1
+  - The scattering angle axis of a truncated phase matrix is no longer
+    overwritten with an equally spaced one in `Atm1D.calc`, which
+    discarded the grid the matrix was built on
+  - `Component.phase` and `_Comp3DFile.get_phase` no longer treat two
+    angle grids of the same length as the same grid
   - Important corrections in the water (ocean) module:
     - Phase matrix always extended to 6 Stokes components (P22=P11, P44=P33 for
       spherical particles)

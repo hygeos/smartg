@@ -322,23 +322,10 @@ struct EnvMap {
     int env_index;
 };
 
-struct Phase {
-    float p_ang; /* \                          */
-    float p_P11; /*  |                         */
-	float p_P12; /*  | equally spaced in       */
-    float p_P22; /*  | scattering probability  */
-    float p_P33; /*  | [0, 1]                  */
-    float p_P43; /*  |                         */
-	float p_P44; /* /                          */
-
-    float a_P11; /* \                          */
-    float a_P12; /*  |                         */
-    float a_P22; /*  | equally spaced in scat. */
-    float a_P33; /*  | angle [0, 180]          */
-    float a_P43; /*  |                         */
-    float a_P44; /* /                          */
-
-};
+/* struct Phase, the phase matrix table, and the two grids that go
+   with it live in phase_grid.h so that a probe kernel can compile
+   the lookups on their own. */
+#include "phase_grid.h"
 
 struct Profile {
     float z;      // altitude

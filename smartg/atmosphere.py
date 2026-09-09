@@ -77,7 +77,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable, Sequence, TYPE_CHECKING
-from smartg.phase import calc_iphase
+from smartg.phase import as_theta_grid, calc_iphase
 from scipy.interpolate import make_interp_spline
 from scipy.integrate import simpson
 from scipy import constants
@@ -765,7 +765,8 @@ class AerOPAC(object):
                     coords={d: self._phase.coords[d].values for d in dims},
                 )
 
-        theta = np.linspace(0.0, 180.0, num=n_theta)
+        theta = as_theta_grid(n_theta)
+        n_theta = len(theta)
         lam_tabulated = self.ds_mix.coords["wav"].values
         n_wavelength = len(wavelength)
 
@@ -849,7 +850,7 @@ class AerOPAC(object):
 
             # Theta resampling if needed: transpose to
             # (theta, n_wavelength, hor, stk)
-            if n_theta != len(theta_orig):
+            if not np.array_equal(theta, theta_orig):
                 idf_theta = np.interp(
                     theta, theta_orig, np.arange(len(theta_orig))
                 )
@@ -1706,15 +1707,18 @@ class _Comp3DFile(Comp3D):
         conversion into the parallel/perpendicular convention of the
         kernels being done by the run method.
         """
+        theta = as_theta_grid(n_theta)
+        n_theta = len(theta)
+
         # First check if we have already phase
         if self.phase is not None:
-            if self.phase.sizes["theta_atm"] == n_theta:
+            if np.array_equal(
+                self.phase.coords["theta_atm"].values, theta
+            ):
                 return self.phase
             else:
-                theta = np.linspace(0.0, 180.0, n_theta)
                 return self.phase.interp(theta_atm=theta)
 
-        theta = np.linspace(0.0, 180.0, n_theta)
         pha = self.ds_mix["phase"].interp(theta=theta).transpose(
             "wav", self._bulk_axis, "stk", "theta"
         )
@@ -2433,8 +2437,11 @@ class Atm1D(Atmosphere):
         wavelength : array_like or BandSet
             Wavelengths at which to calculate the profile. It can be a
             list of ReptranIband or KdisIband.
-        n_theta : int, optional
-            The number of angles to be considered for the phase matrix.
+        n_theta : int or array_like, optional
+            The number of equally spaced angles to be considered for
+            the phase matrix, or the angles themselves in degrees,
+            which `smartg.phase.theta_grid` can build clustered
+            towards the forward and backward directions.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (depracated).
         truncation : None or DM_trunc or GT_trunc, optional
@@ -2599,7 +2606,7 @@ class Atm1D(Atmosphere):
                     theta_atm = (
                         pha.coords["theta_atm"].values
                         if hasattr(pha, "coords")
-                        else np.linspace(0.0, 180.0, pha_.shape[-1])
+                        else as_theta_grid(pha_.shape[-1])
                     )
                     profile["phase_atm"] = xr.DataArray(
                         pha_,
@@ -2620,7 +2627,10 @@ class Atm1D(Atmosphere):
                     attrs_tmp = profile["phase_atm"].attrs
                     if "phase_atm" in profile.data_vars:
                         profile = profile.drop_vars("phase_atm")
-                    theta_atm = np.linspace(0.0, 180.0, pha_tr.shape[-1])
+                    # the truncated matrix comes back on the grid
+                    # it was given, so keep that grid
+                    assert len(theta) == pha_tr.shape[-1]
+                    theta_atm = theta
                     profile["phase_atm"] = xr.DataArray(
                         pha_tr,
                         dims=["iphase", "nphamat", "theta_atm"],
@@ -4178,10 +4188,10 @@ class Atm3D(Atmosphere):
             # scattering angles, so that the mixing arithmetic below
             # aligns exactly
             theta = cld_phases[0]["theta_atm"].values
-            if pha_aer_1d.sizes["theta_atm"] == n_theta:
-                phase_aer_1d = pha_aer_1d.assign_coords(
-                    theta_atm=theta
-                )
+            if np.array_equal(
+                pha_aer_1d.coords["theta_atm"].values, theta
+            ):
+                phase_aer_1d = pha_aer_1d
             else:
                 phase_aer_1d = pha_aer_1d.interp(theta_atm=theta)
 

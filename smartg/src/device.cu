@@ -3990,6 +3990,8 @@ __device__ void scatter(Photon* ph,
 	int iang, ilay, ipha;
 	float psi, sign=1.F;
 	struct Phase *func;
+	struct AGrid g;
+	struct PGrid p;
 	float P11, P12, P22, P33, P43, P44;
 	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 	#ifdef OBJ3D
@@ -4051,6 +4053,8 @@ __device__ void scatter(Photon* ph,
 			ilay = cell_atm[ph->layer].iopt + ph->ilam*(NATMd+1); // atm layer index
             #endif
 			func = faer; // atm phases
+			g = AGAERd;
+			p = PGAERd;
 			
 			/************************************/
 			/* Rayleigh || ptcle scattering */
@@ -4068,6 +4072,8 @@ __device__ void scatter(Photon* ph,
 			ilay = cell_oc[ph->layer].iopt + ph->ilam*(NOCEd+1); // oce layer index
             #endif
 			func = foce; // oce phases
+			g = AGOCEd;
+			p = PGOCEd;
 			
 			if (ph->scatterer == RAY){ipha  = 0;}	// Rayleigh index
 			else if(ph->scatterer == VRS ){ ipha  = 1;} // VRS index
@@ -4080,25 +4086,36 @@ __device__ void scatter(Photon* ph,
 
 		if(!le) {
 
-			/* in the case of propagation (not LE) the photons scattering angle && Psi
-			   rotation angle are determined randomly */
+			/* in the case of propagation (not LE) the photon
+			   scattering angle is drawn randomly, where a LE has it
+			   imposed by the direction being estimated; the Psi
+			   rotation angle is drawn further down */
 			/////////////
-			// Get Theta from Cumulative Distribution Function
-			zang = RAND*(NF-1);
-			iang= __float2int_rd(zang);
-			zang = zang - iang;
-
-			theta = (1.-zang)*func[ipha*NF+iang].p_ang + zang*func[ipha*NF+iang+1].p_ang;
+			// Get Theta from the inverse Cumulative Distribution
+			// Function
+			theta = pSample(RAND, ipha, p, g, func, &iang, &zang);
 			cTh = __cosf(theta);
-
+		}
+		else {
 			/////////////
-			// Get Scattering matrix from CDF
-			P11 = (1-zang)*func[ipha*NF+iang].p_P11 + zang*func[ipha*NF+iang+1].p_P11;
-			P12 = (1-zang)*func[ipha*NF+iang].p_P12 + zang*func[ipha*NF+iang+1].p_P12;
-			P22 = (1-zang)*func[ipha*NF+iang].p_P22 + zang*func[ipha*NF+iang+1].p_P22;
-			P33 = (1-zang)*func[ipha*NF+iang].p_P33 + zang*func[ipha*NF+iang+1].p_P33;
-			P43 = (1-zang)*func[ipha*NF+iang].p_P43 + zang*func[ipha*NF+iang+1].p_P43;
-			P44 = (1-zang)*func[ipha*NF+iang].p_P44 + zang*func[ipha*NF+iang+1].p_P44;
+			// Get Index of scattering angle imposed by the
+			// estimated direction
+			zang = aIndex(theta, g, &iang);
+		}
+
+		/////////////
+		/* Get the scattering matrix at theta. Both paths read the
+		   same table, at the entry the drawn angle came from, or at
+		   the one the estimated direction falls in. */
+
+		P11 = (1-zang)*func[ipha*g.n+iang].a_P11 + zang*func[ipha*g.n+iang+1].a_P11;
+		P12 = (1-zang)*func[ipha*g.n+iang].a_P12 + zang*func[ipha*g.n+iang+1].a_P12;
+		P22 = (1-zang)*func[ipha*g.n+iang].a_P22 + zang*func[ipha*g.n+iang+1].a_P22;
+		P33 = (1-zang)*func[ipha*g.n+iang].a_P33 + zang*func[ipha*g.n+iang+1].a_P33;
+		P43 = (1-zang)*func[ipha*g.n+iang].a_P43 + zang*func[ipha*g.n+iang+1].a_P43;
+		P44 = (1-zang)*func[ipha*g.n+iang].a_P44 + zang*func[ipha*g.n+iang+1].a_P44;
+
+		if(!le) {
 
             #ifndef BIAS
 			/////////////
@@ -4133,21 +4150,6 @@ __device__ void scatter(Photon* ph,
 			psi = RAND * DEUXPI;	
             #endif
 
-
-		}else {
-	
-			/////////////
-			// Get Index of scattering angle && Scattering matrix directly 
-			zang = theta * (NF-1)/PI ;
-			iang = __float2int_rd(zang);
-			zang = zang - iang;
-
-			P11 = (1-zang)*func[ipha*NF+iang].a_P11 + zang*func[ipha*NF+iang+1].a_P11;
-			P12 = (1-zang)*func[ipha*NF+iang].a_P12 + zang*func[ipha*NF+iang+1].a_P12;
-			P22 = (1-zang)*func[ipha*NF+iang].a_P22 + zang*func[ipha*NF+iang+1].a_P22;
-			P33 = (1-zang)*func[ipha*NF+iang].a_P33 + zang*func[ipha*NF+iang+1].a_P33;
-			P43 = (1-zang)*func[ipha*NF+iang].a_P43 + zang*func[ipha*NF+iang+1].a_P43;
-			P44 = (1-zang)*func[ipha*NF+iang].a_P44 + zang*func[ipha*NF+iang+1].a_P44;
 
 		}
 
@@ -4264,21 +4266,19 @@ __device__ void scatter(Photon* ph,
         #endif
        
 		if (pmol < 1.) {
-			zang = theta * (NF-1)/PI ;
-			iang = __float2int_rd(zang);
-			zang = zang - iang;
+			zang = aIndex(theta, g, &iang);
             #ifndef OPT3D
 			int ipharef = prof[ph->layer+ph->ilam*(layer_end+1)].iphase + 2; 
             #else
 			int ipharef = prof[cell[ph->layer].iopt+ph->ilam*(layer_end+1)].iphase + 2; 
             #endif
 			// Phase functions of particles && molecules, && mixture of both at reference wavelength
-			P11_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P11 + zang*func[ipharef*NF+iang+1].a_P11;
-			P11_ray     = (1-zang)*func[0      *NF+iang].a_P11 + zang*func[0      *NF+iang+1].a_P11;
-			P22_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P22 + zang*func[ipharef*NF+iang+1].a_P22;
-			P22_ray     = (1-zang)*func[0      *NF+iang].a_P22 + zang*func[0      *NF+iang+1].a_P22;
-			P12_aer_ref = (1-zang)*func[ipharef*NF+iang].a_P12 + zang*func[ipharef*NF+iang+1].a_P12;
-			P12_ray     = (1-zang)*func[0      *NF+iang].a_P12 + zang*func[0      *NF+iang+1].a_P12;
+			P11_aer_ref = (1-zang)*func[ipharef*g.n+iang].a_P11 + zang*func[ipharef*g.n+iang+1].a_P11;
+			P11_ray     = (1-zang)*func[0      *g.n+iang].a_P11 + zang*func[0      *g.n+iang+1].a_P11;
+			P22_aer_ref = (1-zang)*func[ipharef*g.n+iang].a_P22 + zang*func[ipharef*g.n+iang+1].a_P22;
+			P22_ray     = (1-zang)*func[0      *g.n+iang].a_P22 + zang*func[0      *g.n+iang+1].a_P22;
+			P12_aer_ref = (1-zang)*func[ipharef*g.n+iang].a_P12 + zang*func[ipharef*g.n+iang+1].a_P12;
+			P12_ray     = (1-zang)*func[0      *g.n+iang].a_P12 + zang*func[0      *g.n+iang+1].a_P12;
 			P_ref       = (P11_ray+P22_ray+2.F*P12_ray) * pmol + (P11_aer_ref+P22_aer_ref+2.F*P12_aer_ref) * (1.-pmol);
 		}
 
@@ -4301,9 +4301,9 @@ __device__ void scatter(Photon* ph,
 				float pmol_k = prof[cell[ph->layer].iopt + k*DL*(layer_end+1)].pmol;
                 #endif
 				// Phase functions of particles  at other wavelengths, molecular is supposed to be constant with wavelength
-				float P11_aer = (1-zang)*func[iphak*NF+iang].a_P11 + zang*func[iphak*NF+iang+1].a_P11;
-				float P22_aer = (1-zang)*func[iphak*NF+iang].a_P22 + zang*func[iphak*NF+iang+1].a_P22;
-				float P12_aer = (1-zang)*func[iphak*NF+iang].a_P12 + zang*func[iphak*NF+iang+1].a_P12;
+				float P11_aer = (1-zang)*func[iphak*g.n+iang].a_P11 + zang*func[iphak*g.n+iang+1].a_P11;
+				float P22_aer = (1-zang)*func[iphak*g.n+iang].a_P22 + zang*func[iphak*g.n+iang+1].a_P22;
+				float P12_aer = (1-zang)*func[iphak*g.n+iang].a_P12 + zang*func[iphak*g.n+iang+1].a_P12;
 				// Phase functions of the mixture of particles && molecules at other wavelengths
 				float P_k   = (P11_ray+P22_ray+2.F*P12_ray) * pmol_k + (P11_aer+P22_aer+2.F*P12_aer) * (1.-pmol_k);
 				ph->weight_sca[k] *= __fdividef(P_k, P_ref);
