@@ -67,6 +67,10 @@ corrected before the final `v2.0.0` release.
       `convert_sgout_to_iprtout`, `compute_deltam_IPRTout` →
       `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`, and
       their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...)
+    - histories: `Si` → `si`, `Si2` → `si2`, `BigSum` → `big_sum`, and
+      their parameters (`Dij` → `dij`, `Ki` → `ki`, `S` → `s`,
+      `only_I` → `only_i`); the `LEVEL` and `IDIR` parameters of
+      `get_histories` are now `level` and `idir`
   - The water module has been restructured for consistency with the
     atmosphere module: the `IOP*` classes (`IOP_base`, `IOP`, `IOP_1`,
     `IOP_Rw`, `IOP_profile`) have been replaced by the new `Water` /
@@ -80,6 +84,10 @@ corrected before the final `v2.0.0` release.
     provides `dataarray_to_lut` / `dataset_to_mlut` converters for
     backward compatibility, and `drop_axes`, the equivalent of the
     `MLUT.dropaxis` method
+  - The tracked notebooks and tests no longer use LUT/MLUT either: the
+    demo notebook selects and plots straight from the run Dataset
+    instead of converting it back with `dataset_to_mlut`, and the phase
+    matrices they build by hand are `xr.DataArray` objects
   - `Smartg.run` returns an `xr.Dataset` instead of an MLUT. The
     variable names, their order, the coordinates and the attributes
     are unchanged, and the dimensions which were anonymous in the
@@ -100,6 +108,9 @@ corrected before the final `v2.0.0` release.
     4-D `xr.DataArray` (dims: `wavelength_phase`, `z_phase`, `nphamat`,
     `theta_atm/oc`). The `nphamat` dimension is no longer squeezed when its
     size is 1.
+  - The `standard` parameter of the phase readers has been removed:
+    files are expected in the standard IQUV convention, `run` doing the
+    conversion into the parallel/perpendicular convention of the kernels
   - The phase-matrix term dimension is now named `nphamat` internally
     (was `stk`; the auxdata files keep `stk`, which is renamed on load),
     and the run output dimensions `stk_atm` / `stk_oc` are now
