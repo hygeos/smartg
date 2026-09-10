@@ -20,13 +20,13 @@ jax = pytest.importorskip(
 )
 from smartg.histories import get_histories, big_sum, si, si2
 import numpy as np
+import xarray as xr
 import matplotlib.pyplot as plt
 from smartg.smartg import Smartg
 from smartg.surface import LambSurface
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, od2k
 from smartg.diff import diff1
-from luts import LUT
 from smartg.view import mdesc
 from smartg import conftest
 from pathlib import Path
@@ -251,10 +251,14 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
     pha_data[:, :, 0, :] = (data[:, :, 1, :] + data[:, :, 2, :]) * 0.5
     pha_data[:, :, 1, :] = (data[:, :, 1, :] - data[:, :, 2, :]) * 0.5
 
-    phase_valid = LUT(
+    phase_valid = xr.DataArray(
         pha_data,
-        names=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
-        axes=[wavelength_phase, [0], None, data[0, 0, 0, :]],
+        dims=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
+        coords={
+            "wavelength_phase": wavelength_phase,
+            "z_phase": [0],
+            "theta_atm": data[0, 0, 0, :],
+        },
     )
     data_valid = np.loadtxt(
         Path(valpath) / "validation" / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat"

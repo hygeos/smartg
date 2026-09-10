@@ -23,7 +23,6 @@ from smartg.iprt.iprt import (
     group_iquv,
 )
 from smartg.phase import calc_iphase
-from luts.luts import LUT
 from smartg.config import DIR_AUXDATA
 from smartg.xarray import drop_axes
 
@@ -991,13 +990,13 @@ def test_a5_pp(request, s1df):
     )
     cld_phase = read_phase(fname=file_cld_phase)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.0]), z)
-    lpha_lut = []
+    lpha = []
     for i in range(0, pha_atm.shape[0]):
-        lpha_lut.append(
-            LUT(
+        lpha.append(
+            xr.DataArray(
                 pha_atm[i, :, :],
-                axes=[None, np.linspace(0, 180, nth)],
-                names=["nphamat", "theta_atm"],
+                dims=["nphamat", "theta_atm"],
+                coords={"theta_atm": np.linspace(0, 180, nth)},
             )
         )
     atmosphere = Atm1D(
@@ -1006,7 +1005,7 @@ def test_a5_pp(request, s1df):
         prof_ray=mol_sca,
         prof_abs=mol_abs,
         prof_aer=prof_aer,
-        prof_phases=(ipha_atm, lpha_lut),
+        prof_phases=(ipha_atm, lpha),
     )
     pro = atmosphere.calc(800.0, phase=False)
     surface = None
@@ -1299,13 +1298,13 @@ def test_a5_al(request, s1df):
     )
     cld_phase = read_phase(fname=file_cld_phase)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.0]), z)
-    lpha_lut = []
+    lpha = []
     for i in range(0, pha_atm.shape[0]):
-        lpha_lut.append(
-            LUT(
+        lpha.append(
+            xr.DataArray(
                 pha_atm[i, :, :],
-                axes=[None, np.linspace(0, 180, nth)],
-                names=["nphamat", "theta_atm"],
+                dims=["nphamat", "theta_atm"],
+                coords={"theta_atm": np.linspace(0, 180, nth)},
             )
         )
     atmosphere = Atm1D(
@@ -1314,7 +1313,7 @@ def test_a5_al(request, s1df):
         prof_ray=mol_sca,
         prof_abs=mol_abs,
         prof_aer=prof_aer,
-        prof_phases=(ipha_atm, lpha_lut),
+        prof_phases=(ipha_atm, lpha),
     )
     pro = atmosphere.calc(800.0, phase=False)
     surface = None
