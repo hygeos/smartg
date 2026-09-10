@@ -187,6 +187,18 @@ corrected before the final `v2.0.0` release.
       as well as `reff`. It returns an `xr.DataArray`, and its
       `convert_IparIper` parameter has been removed, the conversion into
       the parallel/perpendicular convention being done by `run`
+    - `read_phase_nth_cte` has in turn been merged into `read_phase_cdf`,
+      which read the same libRadtran / IPRT files and differed only in
+      what it handed back. `read_phase_cdf(fname, n_theta=...,
+      normalize=False, output_sg_ready=False)` is the former call
+      `read_phase_nth_cte(filename=..., nb_theta=...)`: the table on
+      the wavelength and `hum` / `reff` axes of the file, which the
+      `phase` argument of `Cloud3D` / `Aer3D` takes. Two differences:
+      the table keeps the number of terms of the file (4 for spherical
+      particles) instead of completing them into 6, which the
+      components now do themselves, and it is float64 rather than
+      float32, so the device tables of the IPRT C2 and C3 cases move
+      by one float32 rounding on a tenth of their entries
     - The `cells` parameter and the `"ATM3D"` sentinel filename of `Atm1D`
       have been removed: a 3D atmosphere is now built with
       `smartg.atmosphere.Atm3D`
@@ -292,7 +304,7 @@ corrected before the final `v2.0.0` release.
       default is marginally better than Lobatto on the worst band
       (6.5e-3 against 7.9e-3)
     - The `n_theta` argument of the phase methods of `Atm1D`, `AerOPAC`,
-      `Cloud`, `Hydrosol` and of `read_phase_nth_cte` now accepts those
+      `Cloud`, `Hydrosol` and of `read_phase_cdf` now accepts those
       angles directly, in addition to a number of equally spaced ones
     - New `theta_grid` parameter of `Smartg.run` choosing the grid of
       the GPU tables: `'phase'` adopts the grid the phase matrices
@@ -330,6 +342,23 @@ corrected before the final `v2.0.0` release.
       they are mixed on, whether the union was asked for with
       `'native'` or forced by a user phase matrix, which keeps its own
       grid whatever `n_theta`
+  - The phase matrix file readers return either of two layouts, chosen
+    by the new `output_sg_ready` parameter of `read_phase`,
+    `read_phase_nc` and `read_phase_cdf`: True (the default, and the
+    former output) lays the matrix on a 1D profile, interpolated at
+    `wavelength_phase` and `z_rh_reff` on a `z_phase` axis, for the
+    `phase` argument of `AerOPAC` / `Cloud` / `Hydrosol` and
+    `Atm1D.prof_phases`; False returns the table on the wavelength and
+    `hum` / `reff` axes of the file, which the `phase` argument of
+    `Cloud3D` / `Aer3D` takes, and which `read_phase_nth_cte` alone
+    used to produce. A `.dat` file, a single matrix, has only the
+    first layout
+    - `read_phase_cdf` gains `n_theta`: `None` keeps the automatic
+      equally spaced grid capped by `ntheta_max`, an int or the angles
+      themselves choose the grid, and `'native'` resamples onto the
+      union of every grid the file carries (2818 angles for the 25
+      radii of the IPRT `watercloud_670.mie.cdf`, 38 for
+      `waso_670.mie.cdf`), on which the file is reproduced exactly
   - A random walk now draws its deflection from exactly the phase
     matrix it then reads. `struct Phase` used to interleave a second
     copy of the matrix at equal-probability nodes, and the kernel drew
@@ -490,6 +519,17 @@ corrected before the final `v2.0.0` release.
     component or the longest one, and `_glob_particles_multi` no
     longer relabels a 1D aerosol matrix with the component grid when
     the two merely have the same length
+  - `Cloud3D` / `Aer3D` complete a 4-term user phase matrix into 6
+    terms, as they do for their bulk file; a 4-term matrix used to
+    reach the 3D mixing as it was
+  - `read_phase_nc` failed with a `KeyError` on any file with several
+    humidities or radii given a scalar `z_rh_reff`, and a scalar
+    `wavelength_phase` collapsed the output of `read_phase_nc` and
+    `read_phase_cdf` to 3 dimensions: a scalar target now keeps its
+    dimension, and a single `z_rh_reff` needs no `pfgrid`, as
+    documented
+  - The `Path + str` concatenations of `smartg/iprt/iprt_phase3_runs.py`
+    raised a `TypeError` before any run
   - Important corrections in the water (ocean) module:
     - Phase matrix always extended to 6 Stokes components (P22=P11, P44=P33 for
       spherical particles)
@@ -537,7 +577,7 @@ corrected before the final `v2.0.0` release.
     receiver run without `stdev`, and the base normal of a spherical
     reflector in the RF launching mode
   - Fix a bug in the constant-theta phase reader (`read_cld_nth_cte`,
-    now `read_phase_nth_cte`)
+    since merged into `read_phase_cdf`)
   - The phase matrices of a 3D component reached the kernels in the
     IQUV convention: `run` converts them into the parallel/perpendicular
     convention of the kernels and the conversion is an involution, so
