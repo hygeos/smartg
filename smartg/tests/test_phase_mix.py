@@ -27,6 +27,7 @@ from smartg.phase import (
     as_theta_grid, is_native_theta, theta_grid, union_theta_grid
 )
 from smartg.smartg import _calc_phase_host
+from smartg.truncation import DM_trunc, GT_trunc
 
 WAVELENGTH = 550.0
 WAV = np.array([WAVELENGTH])
@@ -273,6 +274,51 @@ def test_the_device_table_adopts_the_union_intact():
     np.testing.assert_allclose(
         got / got[-1], expected / expected[-1], rtol=1e-5
     )
+
+
+@pytest.mark.parametrize(
+    "truncation",
+    [
+        DM_trunc(nb_streams=16, integral_method="lobatto"),
+        DM_trunc(nb_streams=16, integral_method="trapezoid"),
+        DM_trunc(nb_streams=16, integral_method="simpson"),
+        GT_trunc(trunc_frac=0.9, integral_method="lobatto"),
+    ],
+    ids=["DM-lobatto", "DM-trapezoid", "DM-simpson", "GT-lobatto"],
+)
+def test_truncation_accepts_the_union_grid(truncation):
+    """The truncation comes back on the irregular union, unchanged.
+
+    The union has 0.01 degree bins in the peak and 1 degree bins in
+    the body; the truncation must integrate that grid as it is and
+    give the truncation factor it gives on an equally spaced grid of
+    the same order. Measured against 3601 equally spaced angles, the
+    factor moves by 4e-4 at most, less than the 6e-4 the integration
+    methods differ by among themselves on that grid. The comparison
+    here is against 1801 angles, to keep the test short, and the
+    trapezoid factor on that grid is itself 1.6e-3 from its converged
+    value, which the union already reaches: hence the tolerance.
+    """
+    def factor(n_theta):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            full = _atm([_aerosol(), _cloud()]).calc(WAV, n_theta=n_theta)
+            trunc = _atm([_aerosol(), _cloud()]).calc(
+                WAV, n_theta=n_theta, truncation=truncation
+            )
+        f = 1.0 - trunc["OD_p"].values[0, -1] / full["OD_p"].values[0, -1]
+        return f, trunc
+
+    f_union, pro = factor("native")
+    union = union_theta_grid(
+        [_aerosol().native_theta(), _cloud().native_theta()]
+    )
+    assert np.array_equal(pro.coords["theta_atm"].values, union)
+    assert pro["phase_atm"].shape[-1] == len(union)
+    assert not np.isnan(pro["phase_atm"].values).any()
+
+    f_uniform, _ = factor(theta_grid(1801))
+    assert abs(f_union - f_uniform) < 2e-3
 
 
 # --------------------------------------------------------------------
