@@ -33,6 +33,12 @@ as_theta_grid
     Read a scattering angle grid from an ``n_theta`` argument, which
     is either a number of equally spaced angles or the angles
     themselves.
+union_theta_grid
+    Merge several scattering angle grids into the union of their
+    nodes, on which a mixture of phase matrices is exact.
+is_native_theta
+    Whether an ``n_theta`` argument asks for the native grid of the
+    source tables, i.e. is the string ``'native'``.
 integ_phase
     Numerically integrate a phase function weighted by
     ``sin(theta)`` along the scattering angle axis.
@@ -68,11 +74,11 @@ convert_phase_to_iparper
 """
 
 from __future__ import annotations
-from typing import Any
+from typing import Any, Sequence
 import numpy as np
 from numpy.typing import NDArray
 from pathlib import Path
-from smartg.typing import PathType, NumericArrayLike
+from smartg.typing import PathType, NumericArrayLike, ThetaLike
 import pandas as pd
 import xarray as xr
 from luts.luts import LUT
@@ -80,6 +86,10 @@ from pytrunc.utils import quadrature_lobatto
 
 
 THETA_GRID_KINDS = ('uniform', 'chebyshev', 'lobatto', 'peak')
+
+# The ``n_theta`` value asking for the scattering angles the source
+# tables are tabulated on, resolved by the phase methods themselves
+NATIVE_THETA = 'native'
 
 
 def theta_grid(
@@ -244,13 +254,36 @@ def theta_grid(
     return theta
 
 
-def as_theta_grid(n_theta: int | NumericArrayLike) -> NDArray[np.float64]:
+def is_native_theta(n_theta: ThetaLike) -> bool:
+    """Whether an ``n_theta`` argument asks for the native angle grid.
+
+    The phase methods accept the string ``'native'`` to keep the
+    scattering angles their source tables are tabulated on; this is
+    the test they use, written so that an array is never compared
+    with a string.
+
+    Examples
+    --------
+    >>> is_native_theta('native')
+    True
+    >>> is_native_theta(721)
+    False
+    >>> is_native_theta([0., 90., 180.])
+    False
+    """
+    return isinstance(n_theta, str) and n_theta == NATIVE_THETA
+
+
+def as_theta_grid(n_theta: ThetaLike) -> NDArray[np.float64]:
     """Read a scattering angle grid from an ``n_theta`` argument.
 
     Everywhere a phase matrix is built, its angular grid is described
     by a single ``n_theta`` argument that is either a number of
     equally spaced angles, or the angles themselves. This resolves
-    both into the angles, in degrees.
+    both into the angles, in degrees. The string ``'native'`` is not
+    resolved here, since it stands for the angles of source tables
+    this function does not see: the phase methods resolve it
+    themselves, see :func:`union_theta_grid`.
 
     Parameters
     ----------
@@ -268,7 +301,7 @@ def as_theta_grid(n_theta: int | NumericArrayLike) -> NDArray[np.float64]:
     ------
     ValueError
         If the angles are not strictly increasing, or do not span the
-        whole scattering range.
+        whole scattering range, or if ``n_theta`` is a string.
 
     Examples
     --------
@@ -277,6 +310,13 @@ def as_theta_grid(n_theta: int | NumericArrayLike) -> NDArray[np.float64]:
     >>> as_theta_grid([0., 10., 180.])
     array([  0.,  10., 180.])
     """
+    if isinstance(n_theta, str):
+        raise ValueError(
+            f"The n_theta argument {n_theta!r} names a grid this "
+            "function cannot build: 'native' is resolved by the "
+            "phase methods from their source tables, see "
+            "union_theta_grid."
+        )
     if np.ndim(n_theta) == 0:
         return theta_grid(int(n_theta))
 
@@ -296,6 +336,64 @@ def as_theta_grid(n_theta: int | NumericArrayLike) -> NDArray[np.float64]:
             f"{theta[0]} to {theta[-1]}."
         )
     return theta
+
+
+def union_theta_grid(
+    grids: Sequence[NumericArrayLike], tol: float = 1e-6
+) -> NDArray[np.float64]:
+    """Merge scattering angle grids into the union of their nodes.
+
+    A phase matrix tabulated on a grid is, for the kernels, the
+    piecewise linear interpolant of its nodes: the random walk draws
+    its deflection from exactly that interpolant, whatever the grid.
+    A weighted sum of such matrices is piecewise linear on the union
+    of their breakpoints, so resampling every component onto that
+    union before mixing them reproduces each one exactly, whereas
+    mixing on the grid of any single component resamples the others.
+    This is how a mixture of components with different native grids,
+    say an OPAC aerosol on 1801 equally spaced angles and a water
+    cloud on 594 angles clustered in its diffraction peak, keeps every
+    node of every table.
+
+    Parameters
+    ----------
+    grids : sequence of array_like
+        Scattering angle grids in degrees, each strictly increasing
+        from 0 to 180, as :func:`as_theta_grid` accepts them.
+    tol : float, optional
+        Two nodes closer than *tol* degrees are one node, the smaller
+        being kept. The default of 1e-6 merges the float32 angles of
+        the OPAC files, where 0.1 is stored as 0.100000001, with the
+        float64 angles of the cloud files, without merging any two
+        distinct nodes: the finest step of the auxdata is 0.01
+        degrees.
+
+    Returns
+    -------
+    ndarray
+        Strictly increasing angles in degrees, from 0 to 180, float64.
+
+    Raises
+    ------
+    ValueError
+        If *grids* is empty, or one of them is not a valid scattering
+        angle grid.
+
+    Examples
+    --------
+    >>> union_theta_grid([[0., 90., 180.], [0., 45., 90., 180.]])
+    array([  0.,  45.,  90., 180.])
+    >>> union_theta_grid([[0., np.float32(0.1), 180.], [0., 0.1, 180.]])
+    array([0.0e+00, 1.0e-01, 1.8e+02])
+    """
+    if len(grids) == 0:
+        raise ValueError(
+            "At least one scattering angle grid is needed to build "
+            "their union."
+        )
+    theta = np.sort(np.concatenate([as_theta_grid(g) for g in grids]))
+    keep = np.concatenate([[True], np.diff(theta) > tol])
+    return as_theta_grid(theta[keep])
 
 
 def integ_phase(

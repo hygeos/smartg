@@ -14,6 +14,9 @@ Key Aliases
 -----------
 RealNumber, NumericArrayLike, PathType
     Common scalar, array-like, and filesystem-path type aliases.
+ThetaLike
+    The ``n_theta`` argument of the phase methods: a count of equally
+    spaced angles, the angles themselves, or ``'native'``.
 """
 
 from __future__ import annotations
@@ -44,6 +47,11 @@ NumericArrayLike: TypeAlias = Union[
 ]
 
 PathType: TypeAlias = str | Path | PathLike[str]
+
+# The ``n_theta`` argument of the phase methods: a number of equally
+# spaced scattering angles, the angles themselves in degrees, or the
+# string ``'native'`` for the angles the source tables carry.
+ThetaLike: TypeAlias = int | str | NumericArrayLike
 
 
 @runtime_checkable
