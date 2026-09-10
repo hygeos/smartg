@@ -23,7 +23,7 @@ from smartg.config import DIR_AUXDATA
 from smartg.phase import calc_iphase
 
 # may be to replace
-from smartg.phase import read_phase_nth_cte
+from smartg.phase import read_phase_cdf
 
 from luts.luts import LUT
 from smartg.xarray import drop_axes
@@ -781,8 +781,8 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
         theta = np.linspace(0, 180, nth)
         wavelength = np.array([350.])
         n_wavelength = len(wavelength)
-        file_aer_phase = OPT_PROP_PATH_PHASE3 + "waso.mie.cdf"
-        aer_phase = read_phase_nth_cte(filename=file_aer_phase, nb_theta=nth, normalize=True)
+        file_aer_phase = OPT_PROP_PATH_PHASE3 / "waso.mie.cdf"
+        aer_phase = read_phase_cdf(file_aer_phase, n_theta=nth, normalize=True, output_sg_ready=False)
         nstk = aer_phase.shape[2]
 
         aer_pha = np.zeros((n_wavelength, nz, nstk, nth), dtype=np.float32)
@@ -871,8 +871,8 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
         wavelength = np.array([350.])
         n_wavelength = len(wavelength)
 
-        file_aer_phase = OPT_PROP_PATH_PHASE3 + "sizedistr_spheroid.cdf"
-        aer_phase = read_phase_nth_cte(filename=file_aer_phase, nb_theta=nth, normalize=True)
+        file_aer_phase = OPT_PROP_PATH_PHASE3 / "sizedistr_spheroid.cdf"
+        aer_phase = read_phase_cdf(file_aer_phase, n_theta=nth, normalize=True, output_sg_ready=False)
         nstk = aer_phase.shape[2]
 
         aer_pha = np.zeros((n_wavelength, nz, nstk, nth), dtype=np.float32)
@@ -951,7 +951,7 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         wavelength = np.array([350.])
         nth = 1801
 
-        ds_spheroid = aer2smartg(OPT_PROP_PATH_PHASE3 + "sizedistr_spheroid.cdf",
+        ds_spheroid = aer2smartg(OPT_PROP_PATH_PHASE3 / "sizedistr_spheroid.cdf",
                                  nb_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
 
         with TemporaryDirectory() as tmpdir:
@@ -1025,8 +1025,8 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
         wavelength = np.array([800.])
         n_wavelength = len(wavelength)
         theta = np.linspace(0, 180, nth)
-        file_cld_phase = OPT_PROP_PATH_PHASE3 + "watercloud.mie.cdf"
-        cld_phase = read_phase_nth_cte(filename=file_cld_phase, nb_theta=nth, normalize=True)
+        file_cld_phase = OPT_PROP_PATH_PHASE3 / "watercloud.mie.cdf"
+        cld_phase = read_phase_cdf(file_cld_phase, n_theta=nth, normalize=True, output_sg_ready=False)
         nstk = cld_phase.shape[2]
 
         cld_pha = np.zeros((n_wavelength, nz, nstk, nth), dtype=np.float32)
@@ -1208,7 +1208,7 @@ def case_E1(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
 
         # atmosphere profil
-        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
         wavelength = 450.
         z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
         zs = len(z)
@@ -1262,8 +1262,8 @@ def case_E2(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
 
         # atmosphere profil
-        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_320nm_usstd.dat"
-        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_320nm_usstd.dat"
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_320nm_usstd.dat"
+        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_320nm_usstd.dat"
         wavelength = 320.
         z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
         zs = len(z)
@@ -1318,8 +1318,8 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
 
         # atmosphere profil
-        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
-        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
+        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
         wavelength = np.array([450.])
         z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
         zs = len(z)
@@ -1327,7 +1327,7 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
         nth = 18001
 
-        file_aer1_phase = OPT_PROP_PATH_PHASE3 + "desert.cdf"
+        file_aer1_phase = OPT_PROP_PATH_PHASE3 / "desert.cdf"
         ds_desert = aer2smartg(file_aer1_phase, nb_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'desert_e3.nc'
@@ -1385,8 +1385,8 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
 
         # atmosphere profil
-        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
-        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
+        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
         wavelength = np.array([450.])
         z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
         zs = len(z)
@@ -1394,8 +1394,8 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
         abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
         nth = 18001
 
-        file_aer1_phase = OPT_PROP_PATH_PHASE3 + "desert.cdf"
-        file_aer2_phase = OPT_PROP_PATH_PHASE3 + "sulfate.cdf"
+        file_aer1_phase = OPT_PROP_PATH_PHASE3 / "desert.cdf"
+        file_aer2_phase = OPT_PROP_PATH_PHASE3 / "sulfate.cdf"
         ds_desert = aer2smartg(file_aer1_phase, nb_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
         ds_sulfate = aer2smartg(file_aer2_phase, nb_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
         with TemporaryDirectory() as tmpdir:
@@ -1462,8 +1462,8 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
 
         # atmosphere profil
-        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
-        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
+        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
         wavelength = np.array([450.])
         z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
         zs = len(z)
@@ -1471,7 +1471,7 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
         abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
         nth = 18001
 
-        file_cld1_phase = OPT_PROP_PATH_PHASE3 + "ic.ghm.baum.cdf"
+        file_cld1_phase = OPT_PROP_PATH_PHASE3 / "ic.ghm.baum.cdf"
         ds_ic_baum_ghm_ = xr.open_dataset(file_cld1_phase)
         wavelength_ = ds_ic_baum_ghm_.wavelen.values
         # wavelength in micrometers, here take only between 400
@@ -1531,8 +1531,8 @@ def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
         not ftoa_exist  ):
 
         # atmosphere profil
-        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
-        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
+        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
         wavelength = np.array([450.])
         z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
         zs = len(z)
@@ -1585,8 +1585,8 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
     ntheta = 18001
 
     # atmosphere profil
-    mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
-    mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+    mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
+    mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
     wavelength = np.array([450.])
     z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
     zs = len(z)
@@ -1688,8 +1688,8 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
     ntheta = 18001
 
     # atmosphere profil
-    mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
-    mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+    mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
+    mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
     wavelength = np.array([450.])
     z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
     zs = len(z)
@@ -1784,8 +1784,8 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
     ntheta = 18001
 
     # atmosphere profil
-    mol_sca_filename  =  OPT_PROP_PATH_PHASE3 + "tau_rayleigh_450nm_usstd.dat"
-    mol_abs_filename  =  OPT_PROP_PATH_PHASE3 + "tau_absorption_450nm_usstd.dat"
+    mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
+    mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
     wavelength = np.array([450.])
     z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
     zs = len(z)

@@ -19,7 +19,7 @@ from smartg.grid3d import Grid3D
 from smartg.iprt.iprt import compute_deltam, group_iquv
 from smartg.sensor import get_sensors_grid
 from smartg.view import satellite_view
-from smartg.phase import read_phase_nth_cte
+from smartg.phase import read_phase_cdf
 from smartg.albedo import AlbedoCst
 from smartg.surface import LambSurface
 from smartg.smartg import Smartg
@@ -499,7 +499,9 @@ def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
     file_cld_phase = (
         DIR_AUXDATA / "IPRT" / "phaseB" / "opt_prop" / "watercloud_800.mie.cdf"
     )
-    cld_phase = read_phase_nth_cte(filename=file_cld_phase, nb_theta=NTH)
+    cld_phase = read_phase_cdf(
+        file_cld_phase, n_theta=NTH, normalize=False, output_sg_ready=False
+    )
 
     # ========= grid (reduced grid = faster)
     xgrid = np.array([0.0, 3.0, 4.0, 7.0]) * SCALE

@@ -17,11 +17,17 @@ read_phase_nc
     aerosol/cloud files (``.nc`` suffix).
 read_phase_cdf
     Read and process phase function data from libRadtran NetCDF
-    aerosol/cloud files (``.cdf`` suffix).
-read_phase_nth_cte
-    Read a libRadtran or monochromatic IPRT NetCDF aerosol/cloud
-    file and resample its phase matrix onto a constant number of
-    scattering angles.
+    aerosol/cloud files (``.cdf`` suffix), the monochromatic IPRT
+    files included, resampled onto one scattering angle grid.
+
+Each reader returns either the phase matrix laid on a 1D profile
+(``output_sg_ready=True``, the default: dimensions ``wavelength_phase``,
+``z_phase``, ``nphamat``, ``theta_<kind>``, for the ``phase`` argument
+of ``AerOPAC`` / ``Cloud`` / ``Hydrosol`` and ``Atm1D.prof_phases``) or
+the table on the axes of the file (``output_sg_ready=False``:
+``wavelength_phase``, ``hum`` or ``reff``, ``nphamat``,
+``theta_<kind>``, for the ``phase`` argument of ``Cloud3D`` /
+``Aer3D``).
 
 Phase Matrix Processing
 ------------------------
@@ -647,6 +653,7 @@ def read_phase_nc(
     wavelength_phase: NumericArrayLike | None = None,
     pfgrid: NumericArrayLike | None = None,
     z_rh_reff: NumericArrayLike | None = None,
+    output_sg_ready: bool = True,
 ) -> xr.DataArray:
     """
     Read and process phase function data from SMART-G NetCDF
@@ -654,8 +661,10 @@ def read_phase_nc(
 
     Loads phase matrix data from SMART-G aerosol and cloud files with
     .nc suffix. Supports wavelength and humidity/effective radius
-    interpolation and normalization. Produces phase function data ready
-    for SMART-G's AerOPAC/Cloud phase parameter.
+    interpolation and normalization, and returns either the phase
+    matrix laid on a 1D profile, ready for the `phase` parameter of
+    `AerOPAC` / `Cloud`, or the table on the axes of the file, ready
+    for the 3D components (`output_sg_ready`).
 
     Parameters
     ----------
@@ -665,7 +674,7 @@ def read_phase_nc(
         The file must include variables:
         - 'phase': phase matrix data [rh/reff, wavelength, stk, theta]
         - 'wav': wavelength values (in nm)
-        - 'theta': scattering angle grid (uniform, in degrees)
+        - 'theta': scattering angle grid (in degrees)
         - 'hum' or 'reff': relative humidity (%) or effective radius
           values
 
@@ -685,7 +694,7 @@ def read_phase_nc(
         Wavelength(s) (in nm) to interpolate to. Required if the file
         contains multiple wavelengths (n_wavelength > 1). This
         parameter has the same meaning as ``wavelength_phase`` in
-        the ``Atm1D`` constructor.
+        the ``Atm1D`` constructor. Only with `output_sg_ready` = True.
         Default: None
 
     pfgrid : array_like, optional
@@ -695,7 +704,7 @@ def read_phase_nc(
         interpolated onto this grid. The first element (z_top) is
         skipped; remaining elements define the z_phase coordinate. This
         parameter has the same meaning as ``pfgrid`` in the ``Atm1D``
-        constructor.
+        constructor. Only with `output_sg_ready` = True.
         Default: None
 
     z_rh_reff : float or array_like, optional
@@ -705,24 +714,43 @@ def read_phase_nc(
         Required if the file contains multiple rh/reff values
         (n_rh_reff > 1). If array_like (1-D), pfgrid must also be
         provided to map these values to specific altitudes, and
-        ``len(z_rh_reff)`` must equal ``len(pfgrid) - 1``.
+        ``len(z_rh_reff)`` must equal ``len(pfgrid) - 1``. Only with
+        `output_sg_ready` = True.
         Default: None
+
+    output_sg_ready : bool, optional
+        Which of the two layouts to return.
+        True (default): the phase matrix ready for the ``phase``
+        argument of ``AerOPAC``, ``Cloud`` and ``Hydrosol`` and for
+        ``Atm1D.prof_phases``: interpolated at ``wavelength_phase`` and
+        ``z_rh_reff`` and laid out on the profile altitudes, with the
+        dimensions ('wavelength_phase', 'z_phase', 'nphamat',
+        'theta_' + kind).
+        False: the table as the file carries it, with the dimensions
+        ('wavelength_phase', 'hum' or 'reff', 'nphamat', 'theta_' +
+        kind) on every wavelength and humidity/effective radius of the
+        file. This is what the ``phase`` argument of the 3D components
+        ``Cloud3D`` and ``Aer3D`` takes, which interpolate it per cell
+        themselves; ``wavelength_phase``, ``pfgrid`` and ``z_rh_reff``
+        must then be left to None.
 
     Returns
     -------
     da_pha : DataArray
         Phase matrix as xarray DataArray with dimensions:
         - 'wavelength_phase': wavelength (in nm)
-        - 'z_phase': altitude (in km) from pfgrid or [0.]
-        - 'nphamat': phase matrix unique terms (0 to nphamat-1)
-          nphamat = 4 for spherical particles only nphamat = 6 for
-          spherical or non-spherical particles (for spherical:
-          P22=P11, P44=P33)
+        - 'z_phase': altitude (in km) from pfgrid or [0.], or with
+          `output_sg_ready` = False 'hum' or 'reff' as in the file
+        - 'nphamat': phase matrix unique terms (0 to nphamat-1), as
+          many as the file carries: nphamat = 4 for spherical
+          particles only, nphamat = 6 for spherical or non-spherical
+          particles (for spherical: P22=P11, P44=P33). The components
+          complete 4 terms into 6 themselves.
         - 'theta_'+kind: scattering angle (in degrees)
 
-        Coordinates are replaced/renamed such that the rh/reff dimension
-        becomes 'z_phase' with values from pfgrid[1:] or [0.] if pfgrid
-        is None.
+        With `output_sg_ready` = True the coordinates are replaced /
+        renamed such that the rh/reff dimension becomes 'z_phase' with
+        values from pfgrid[1:] or [0.] if pfgrid is None.
 
     Examples
     --------
@@ -734,89 +762,54 @@ def read_phase_nc(
     ...     pfgrid=[100., 50., 10., 0.],
     ...     normalize=True)
     >>> pha.shape
-    (1, 3, 6, 721)  # (wavelength_phase, z_phase, nphamat, theta_atm)
+    (1, 3, 6, 1801)  # (wavelength_phase, z_phase, nphamat, theta_atm)
+
+    Read the table of a water cloud for a 3D cloud:
+
+    >>> pha = read_phase_nc('wc_sol.nc', output_sg_ready=False)
+    >>> pha.dims
+    ('wavelength_phase', 'reff', 'nphamat', 'theta_atm')
     """
-    wavelength_phase = (
-        np.asarray(wavelength_phase, dtype=np.float32)
-        if wavelength_phase is not None else None
-    )
-    pfgrid = (
-        np.atleast_1d(pfgrid).astype(np.float32)
-        if pfgrid is not None
-        else None
-    )
-    z_rh_reff = (
-        np.asarray(z_rh_reff, dtype=np.float32)
-        if z_rh_reff is not None
-        else None
+    if not output_sg_ready:
+        _reject_profile_targets(wavelength_phase, pfgrid, z_rh_reff)
+    wavelength_phase, pfgrid, z_rh_reff = _profile_targets(
+        wavelength_phase, pfgrid, z_rh_reff
     )
 
     ds = xr.open_dataset(fname)
 
-    if "hum" in ds.variables:
-        rh_reff = ds["hum"].data
-        rh_or_reff = "rh"
-    elif "reff" in ds.variables:
-        rh_reff = ds["reff"].data
-        rh_or_reff = "reff"
-    else:
-        raise Exception("Error")
+    rh_reff, rh_or_reff = _phase_cdf_rh_or_reff(ds)
 
-    ntheta = ds.dims["theta"]
     n_rh_reff = rh_reff.size
-    n_wavelength = ds.dims["wav"]
+    n_wavelength = ds.sizes["wav"]
     theta = ds.theta.values
     wavelength = ds.wav.values
 
     # Get nphamat from phase data shape
     nphamat = ds["phase"].shape[2]
 
+    if output_sg_ready:
+        _check_profile_targets(
+            n_wavelength, n_rh_reff, rh_or_reff,
+            wavelength_phase, pfgrid, z_rh_reff,
+        )
+
     da_pha = xr.DataArray(
-        np.zeros((n_wavelength, n_rh_reff, nphamat, ntheta)),
+        ds["phase"].values.swapaxes(0, 1).astype(np.float64),
         coords=[wavelength, rh_reff, np.arange(nphamat), theta],
         dims=["wavelength_phase", rh_or_reff, "nphamat", "theta_" + kind],
         name="phase_" + kind,
     )
-    da_pha.data[:, :, :, :] = ds["phase"].values.swapaxes(0, 1)
 
     if normalize:
-        mu = np.cos(np.deg2rad(theta))
-        idmu = np.argsort(mu)
-        for i_wavelength in range(0, n_wavelength):
-            for irhreff in range(0, n_rh_reff):
-                f = da_pha.data[i_wavelength, irhreff, 0, :]  # P11 term
-                norm = np.trapezoid(f[idmu], mu[idmu])
-                da_pha.data[i_wavelength, irhreff, :, :] *= 2.0 / abs(norm)
+        _normalize_p11(da_pha.data, theta)
 
-    if n_wavelength > 1 and wavelength_phase is not None:
-        da_pha = da_pha.interp(wavelength_phase=wavelength_phase)
-    elif n_wavelength > 1 and wavelength_phase is None:
-        raise ValueError(
-            "wavelength_phase must be provided when n_wavelength > 1"
-        )
+    if not output_sg_ready:
+        return da_pha
 
-    if n_rh_reff > 1 and z_rh_reff is not None:
-        da_pha = da_pha.interp(
-            {rh_or_reff: z_rh_reff}, kwargs={"bounds_error": True}
-        )
-    elif n_rh_reff > 1 and z_rh_reff is None:
-        raise ValueError("z_rh_reff must be provided when n_rh_reff > 1")
-
-    if pfgrid is None:
-        z_phase = np.array([0.0], dtype=float)
-    else:
-        z_phase = np.atleast_1d(pfgrid).astype(np.float32)[1:]
-
-    if da_pha.sizes[rh_or_reff] != z_phase.size:
-        raise ValueError(
-            f"Cannot replace '{rh_or_reff}' with 'z_phase': size mismatch "
-            f"({da_pha.sizes[rh_or_reff]} vs {z_phase.size})."
-        )
-    da_pha = da_pha.assign_coords({rh_or_reff: z_phase}).rename(
-        {rh_or_reff: "z_phase"}
+    return _to_profile_layout(
+        da_pha, rh_or_reff, wavelength_phase, pfgrid, z_rh_reff
     )
-
-    return da_pha
 
 
 def read_phase_dat(
@@ -970,146 +963,165 @@ def _resample_cdf_phase(
     return data
 
 
-def read_phase_cdf(
-    fname: PathType,
-    kind: str = "atm",
-    normalize: bool = True,
-    ntheta_max: int = 18001,
-    wavelength_phase: NumericArrayLike | None = None,
-    pfgrid: NumericArrayLike | None = None,
-    z_rh_reff: NumericArrayLike | None = None,
-) -> xr.DataArray:
-    """
-    Read and process phase function data from libRadtran NetCDF
-    aerosol/cloud files.
+def _reject_profile_targets(
+    wavelength_phase: NumericArrayLike | None,
+    pfgrid: NumericArrayLike | None,
+    z_rh_reff: NumericArrayLike | None,
+) -> None:
+    """Refuse the profile-ready targets with the table output.
 
-    Loads phase matrix data from libRadtran aerosol and cloud phase
-    function files with .cdf suffix (e.g., 'ssam.mie.cdf',
-    'wc.sol.mie.cdf'). Handles non-uniform theta grids from libRadtran
-    by resampling to a uniform scattering angle grid. Supports
-    wavelength and humidity/effective radius interpolation and
-    normalization. Produces phase function data ready for SMART-G's
-    AerOPAC/Cloud phase parameter.
+    ``wavelength_phase``, ``pfgrid`` and ``z_rh_reff`` say where to
+    interpolate the table and how to lay it on the profile altitudes,
+    which only the profile-ready output does.
+    """
+    given = [
+        name
+        for name, value in (
+            ("wavelength_phase", wavelength_phase),
+            ("pfgrid", pfgrid),
+            ("z_rh_reff", z_rh_reff),
+        )
+        if value is not None
+    ]
+    if given:
+        raise ValueError(
+            f"The {', '.join(given)} parameter(s) describe the "
+            "profile-ready output (output_sg_ready=True); leave them to "
+            "None to get the table on the axes of the file "
+            "(output_sg_ready=False)."
+        )
+
+
+def _profile_targets(
+    wavelength_phase: NumericArrayLike | None,
+    pfgrid: NumericArrayLike | None,
+    z_rh_reff: NumericArrayLike | None,
+) -> tuple[
+    NDArray[np.float32] | None,
+    NDArray[np.float32] | None,
+    NDArray[np.float32] | None,
+]:
+    """The interpolation targets of the readers as 1-D float32 arrays.
+
+    A scalar is made 1-D so that the interpolation keeps its
+    dimension and the output stays 4-D.
+    """
+    return (
+        None if wavelength_phase is None
+        else np.atleast_1d(np.asarray(wavelength_phase, dtype=np.float32)),
+        None if pfgrid is None
+        else np.atleast_1d(np.asarray(pfgrid, dtype=np.float32)),
+        None if z_rh_reff is None
+        else np.atleast_1d(np.asarray(z_rh_reff, dtype=np.float32)),
+    )
+
+
+def _cdf_theta_grid(
+    ds: xr.Dataset, n_theta: ThetaLike | None, ntheta_max: int
+) -> NDArray[np.float64]:
+    """The scattering angles a cdf phase file is resampled on.
 
     Parameters
     ----------
-    fname : str or path-like
-        Path to a libRadtran phase function NetCDF file (suffix:
-        .cdf).
-        Examples: 'ssam.mie.cdf', 'wc.sol.mie.cdf', 'cloud.water.cdf'.
-
-        The file must include variables:
-        - 'phase': phase matrix data [wavelength, rh/reff, nphamat,
-          theta]
-        - 'wavelen': wavelength values (in micrometers)
-        - 'theta': scattering angle grids (non-uniform, varies per
-          entry)
-        - 'ntheta': number of valid theta values per entry
-        - 'nphamat': number of Stokes matrix elements (typically 6)
-        - 'hum' or 'reff': relative humidity (%) or effective radius
-          values
-
-    kind : str, optional
-        Medium label used in the theta dimension name ('theta_' +
-        kind). Accepted values are:
-        - 'atm' for atmosphere
-        - 'oc' for ocean
-        Default: 'atm'
-
-    normalize : bool, optional
-        If True, normalize the phase matrix P11 term such that the
-        integral over all angles equals 2.
-
-    ntheta_max : int, optional
-        Maximum number of scattering angle points to use. If the
-        file provides higher resolution, it will be reduced to this
-        limit.
-        Default: 18001
-
-    wavelength_phase : float or array_like, optional
-        Wavelength(s) (in micrometers) to interpolate to. Required
-        if the file contains multiple wavelengths (n_wavelength > 1).
-        This parameter has the same meaning as ``wavelength_phase``
-        in the ``Atm1D`` constructor.
-        Default: None
-
-    pfgrid : array_like, optional
-        Altitude grid [z_top, z_1, z_2, ..., z_bottom] (in km,
-        descending order) for altitude-dependent phase functions. If
-        provided with n_rh_reff > 1, the z_rh_reff values will be
-        interpolated onto this grid. The first element (z_top) is
-        skipped; remaining elements define the z_phase coordinate.
-        This parameter has the same meaning as ``pfgrid`` in the
-        ``Atm1D`` constructor.
-        Default: None
-
-    z_rh_reff : float or array_like, optional
-        Interpolation target for the second phase-function axis:
-        - aerosol files: relative humidity (%)
-        - cloud files: effective radius (reff)
-        Required if the file contains multiple rh/reff values
-        (n_rh_reff > 1). If array-like (1-D), pfgrid must also be
-        provided to map these values to specific altitudes, and
-        ``len(z_rh_reff)`` must equal ``len(pfgrid) - 1``.
-        Default: None
+    ds : Dataset
+        The open file, with the variables 'theta' and 'ntheta'.
+    n_theta : None, int, str or array_like
+        ``None`` for an equally spaced grid fine enough for the finest
+        step of the file, capped at *ntheta_max* angles; a number of
+        equally spaced angles or the angles themselves in degrees; or
+        ``'native'`` for the union of every grid the file carries.
+    ntheta_max : int
+        The cap of the automatic grid.
 
     Returns
     -------
-    da_pha : DataArray
-        Phase matrix as xarray DataArray with dimensions:
-        - 'wavelength_phase': wavelength (in nm)
-        - 'z_phase': altitude (in km) from pfgrid or [0.]
-        - 'nphamat': phase matrix unique terms (0 to nphamat-1)
-          nphamat = 4 for spherical particles only
-          nphamat = 6 for spherical or non-spherical particles (for
-          spherical: P22=P11, P44=P33)
-        - 'theta_'+kind: scattering angle (in degrees)
-
-        Coordinates are replaced/renamed such that the rh/reff
-        dimension becomes 'z_phase' with values from pfgrid[1:] or
-        [0.] if pfgrid is None.
-
-    Examples
-    --------
-    Read phase function for a single wavelength and rh:
-
-    >>> pha = read_phase_cdf(
-    ...     'ssam.mie.cdf', wavelength_phase=550.0,
-    ...     z_rh_reff=[70.0, 60., 58.],
-    ...     pfgrid=[100., 50., 10., 0.],
-    ...     normalize=True)
-    >>> pha.shape
-    (1, 3, 6, 18001)  # (wavelength_phase, z_phase, nphamat, theta_atm)
+    ndarray
+        Strictly increasing angles in degrees, from 0 to 180.
     """
-    wavelength_phase = (
-        np.asarray(wavelength_phase, dtype=np.float32)
-        if wavelength_phase is not None else None
+    if n_theta is None:
+        dtheta_min = np.nanmin(np.abs(np.diff(ds.theta.values, axis=3)))
+        ntheta = np.ceil(180 / dtheta_min).astype(int) + 1
+        ntheta = min(ntheta, ntheta_max)  # be sure to not exceed ntheta_max
+        return np.linspace(0, 180, ntheta)
+
+    if is_native_theta(n_theta):
+        # one grid per (wavelength, rh/reff, term), stored descending
+        # and padded past ntheta; identical grids are merged first
+        theta_all = ds["theta"].values
+        ntheta_all = ds["ntheta"].values
+        grids: list[NDArray[np.float64]] = []
+        for idx in np.ndindex(ntheta_all.shape):
+            grid = np.sort(
+                theta_all[idx][: int(ntheta_all[idx])].astype(np.float64)
+            )
+            if not any(np.array_equal(grid, g) for g in grids):
+                grids.append(grid)
+        return union_theta_grid(grids)
+
+    return as_theta_grid(n_theta)
+
+
+def _normalize_p11(
+    data: NDArray[np.floating[Any]], theta: NDArray[np.floating[Any]]
+) -> None:
+    """Scale the phase matrices in place so that F11 integrates to 2
+    over ``cos(theta)``, for every (wavelength, rh/reff) entry of a
+    ``(wavelength, rh/reff, nphamat, theta)`` array.
+    """
+    mu = np.cos(np.deg2rad(theta))
+    idmu = np.argsort(mu)
+    for i_wavelength in range(0, data.shape[0]):
+        for irhreff in range(0, data.shape[1]):
+            f = data[i_wavelength, irhreff, 0, :]  # P11 term
+            norm = np.trapezoid(f[idmu], mu[idmu])
+            data[i_wavelength, irhreff, :, :] *= 2.0 / abs(norm)
+
+
+def _to_profile_layout(
+    da_pha: xr.DataArray,
+    rh_or_reff: str,
+    wavelength_phase: NDArray[np.float32] | None,
+    pfgrid: NDArray[np.float32] | None,
+    z_rh_reff: NDArray[np.float32] | None,
+) -> xr.DataArray:
+    """Lay a phase table on the profile: interpolate it at the target
+    wavelengths and rh/reff values, and rename the rh/reff axis into
+    the ``z_phase`` altitudes of *pfgrid* (or ``[0.]`` without one).
+    """
+    if da_pha.sizes["wavelength_phase"] > 1:
+        da_pha = da_pha.interp(wavelength_phase=wavelength_phase)
+
+    if da_pha.sizes[rh_or_reff] > 1:
+        da_pha = da_pha.interp(
+            {rh_or_reff: z_rh_reff}, kwargs={"bounds_error": True}
+        )
+
+    if pfgrid is None:
+        z_phase = np.array([0.0], dtype=float)
+    else:
+        z_phase = np.atleast_1d(pfgrid).astype(np.float32)[1:]
+
+    if da_pha.sizes[rh_or_reff] != z_phase.size:
+        raise ValueError(
+            f"Cannot replace '{rh_or_reff}' with 'z_phase': size mismatch "
+            f"({da_pha.sizes[rh_or_reff]} vs {z_phase.size})."
+        )
+    return da_pha.assign_coords({rh_or_reff: z_phase}).rename(
+        {rh_or_reff: "z_phase"}
     )
-    pfgrid = (
-        np.atleast_1d(pfgrid).astype(np.float32)
-        if pfgrid is not None
-        else None
-    )
-    z_rh_reff = (
-        np.asarray(z_rh_reff, dtype=np.float32)
-        if z_rh_reff is not None
-        else None
-    )
 
-    ds = xr.open_dataset(fname)
 
-    rh_reff, rh_or_reff = _phase_cdf_rh_or_reff(ds)
-
-    dtheta_min = np.nanmin(np.abs(np.diff(ds.theta.values, axis=3)))
-    ntheta = np.ceil(180 / dtheta_min).astype(int) + 1
-    ntheta = min(ntheta, ntheta_max)  # be sure to not exceed ntheta_max
-    nphamat = ds.nphamat.size
-    n_rh_reff = rh_reff.size
-    n_wavelength = ds["wavelen"].size
-    theta = np.linspace(0, 180, ntheta)
-    wavelength = ds["wavelen"].data * 1e3
-
-    # checks at the beginning to avoid unnecessary computations
+def _check_profile_targets(
+    n_wavelength: int,
+    n_rh_reff: int,
+    rh_or_reff: str,
+    wavelength_phase: NDArray[np.float32] | None,
+    pfgrid: NDArray[np.float32] | None,
+    z_rh_reff: NDArray[np.float32] | None,
+) -> None:
+    """Check, before any computation, that the targets a file with
+    several wavelengths or rh/reff values needs were given.
+    """
     if n_wavelength > 1 and wavelength_phase is None:
         raise ValueError(
             "Phase function file contains more than 1 wavelength. "
@@ -1135,11 +1147,198 @@ def read_phase_cdf(
                 f"Got len(z_rh_reff)={z_rh_reff.size}"
                 f" and len(pfgrid)={pfgrid.size}."
             )
-    elif n_rh_reff > 1 and (z_rh_reff is None or pfgrid is None):
+
+
+def read_phase_cdf(
+    fname: PathType,
+    kind: str = "atm",
+    normalize: bool = True,
+    n_theta: ThetaLike | None = None,
+    ntheta_max: int = 18001,
+    wavelength_phase: NumericArrayLike | None = None,
+    pfgrid: NumericArrayLike | None = None,
+    z_rh_reff: NumericArrayLike | None = None,
+    output_sg_ready: bool = True,
+) -> xr.DataArray:
+    """
+    Read and process phase function data from libRadtran NetCDF
+    aerosol/cloud files.
+
+    Loads phase matrix data from libRadtran aerosol and cloud phase
+    function files with .cdf suffix (e.g., 'ssam.mie.cdf',
+    'wc.sol.mie.cdf'), the monochromatic IPRT files included. Their
+    theta grids vary with the wavelength, the rh/reff value and the
+    matrix term; every entry is resampled onto one scattering angle
+    grid, chosen with `n_theta`. Supports wavelength and humidity /
+    effective radius interpolation and normalization, and returns
+    either the phase matrix laid on a 1D profile, ready for the
+    `phase` parameter of `AerOPAC` / `Cloud`, or the table on the
+    axes of the file, ready for the 3D components (`output_sg_ready`).
+
+    Parameters
+    ----------
+    fname : str or path-like
+        Path to a libRadtran phase function NetCDF file (suffix:
+        .cdf).
+        Examples: 'ssam.mie.cdf', 'wc.sol.mie.cdf', 'cloud.water.cdf'.
+
+        The file must include variables:
+        - 'phase': phase matrix data [wavelength, rh/reff, nphamat,
+          theta]
+        - 'wavelen': wavelength values (in micrometers)
+        - 'theta': scattering angle grids (non-uniform, varies per
+          entry)
+        - 'ntheta': number of valid theta values per entry
+        - 'nphamat': number of Stokes matrix elements (4 or 6)
+        - 'hum' or 'reff': relative humidity (%) or effective radius
+          values
+
+    kind : str, optional
+        Medium label used in the theta dimension name ('theta_' +
+        kind). Accepted values are:
+        - 'atm' for atmosphere
+        - 'oc' for ocean
+        Default: 'atm'
+
+    normalize : bool, optional
+        If True, normalize the phase matrix P11 term such that the
+        integral over all angles equals 2.
+        Default: True
+
+    n_theta : None, int, str or array_like, optional
+        The scattering angles the phase matrices are resampled on:
+        - None -> equally spaced angles, as many as the finest step of
+          the file needs, at most `ntheta_max` (default)
+        - an int -> that many equally spaced angles
+        - an array -> the angles themselves in degrees, which
+          :func:`theta_grid` can build clustered towards the forward
+          and backward directions
+        - 'native' -> the union of every grid the file carries, on
+          which the file is reproduced exactly, since the kernels
+          sample the piecewise linear interpolant of the table (see
+          :func:`union_theta_grid`). Its size grows with the number of
+          distinct grids of the file (2818 angles for the 25 radii of
+          the IPRT ``watercloud_670.mie.cdf``, 38 for
+          ``waso_670.mie.cdf``), each angle costing 28 bytes per phase
+          function on the device.
+
+    ntheta_max : int, optional
+        Cap of the automatic grid (`n_theta` = None): if the file
+        provides higher resolution, it will be reduced to this limit.
+        Default: 18001
+
+    wavelength_phase : float or array_like, optional
+        Wavelength(s) (in nm) to interpolate to. Required if the file
+        contains multiple wavelengths (n_wavelength > 1). This
+        parameter has the same meaning as ``wavelength_phase`` in the
+        ``Atm1D`` constructor. Only with `output_sg_ready` = True.
+        Default: None
+
+    pfgrid : array_like, optional
+        Altitude grid [z_top, z_1, z_2, ..., z_bottom] (in km,
+        descending order) for altitude-dependent phase functions. If
+        provided with n_rh_reff > 1, the z_rh_reff values will be
+        interpolated onto this grid. The first element (z_top) is
+        skipped; remaining elements define the z_phase coordinate.
+        This parameter has the same meaning as ``pfgrid`` in the
+        ``Atm1D`` constructor. Only with `output_sg_ready` = True.
+        Default: None
+
+    z_rh_reff : float or array_like, optional
+        Interpolation target for the second phase-function axis:
+        - aerosol files: relative humidity (%)
+        - cloud files: effective radius (reff)
+        Required if the file contains multiple rh/reff values
+        (n_rh_reff > 1). If array-like (1-D), pfgrid must also be
+        provided to map these values to specific altitudes, and
+        ``len(z_rh_reff)`` must equal ``len(pfgrid) - 1``. Only with
+        `output_sg_ready` = True.
+        Default: None
+
+    output_sg_ready : bool, optional
+        Which of the two layouts to return.
+        True (default): the phase matrix ready for the ``phase``
+        argument of ``AerOPAC``, ``Cloud`` and ``Hydrosol`` and for
+        ``Atm1D.prof_phases``: interpolated at ``wavelength_phase`` and
+        ``z_rh_reff`` and laid out on the profile altitudes, with the
+        dimensions ('wavelength_phase', 'z_phase', 'nphamat',
+        'theta_' + kind).
+        False: the table as the file carries it, resampled onto the
+        requested angles only, with the dimensions ('wavelength_phase',
+        'hum' or 'reff', 'nphamat', 'theta_' + kind) on every
+        wavelength and humidity/effective radius of the file. This is
+        what the ``phase`` argument of the 3D components ``Cloud3D`` and
+        ``Aer3D`` takes, which interpolate it per cell themselves;
+        ``wavelength_phase``, ``pfgrid`` and ``z_rh_reff`` must then be
+        left to None. The second axis is the file's: an aerosol file
+        tabulated against an effective radius comes back on ``reff``,
+        which ``Aer3D`` (humidity) does not take.
+
+    Returns
+    -------
+    da_pha : DataArray
+        Phase matrix as xarray DataArray with dimensions:
+        - 'wavelength_phase': wavelength (in nm)
+        - 'z_phase': altitude (in km) from pfgrid or [0.], or with
+          `output_sg_ready` = False 'hum' or 'reff' as in the file
+        - 'nphamat': phase matrix unique terms (0 to nphamat-1), as
+          many as the file carries: nphamat = 4 for spherical
+          particles only, nphamat = 6 for spherical or non-spherical
+          particles (for spherical: P22=P11, P44=P33). The components
+          complete 4 terms into 6 themselves.
+        - 'theta_'+kind: scattering angle (in degrees)
+
+        With `output_sg_ready` = True the coordinates are replaced /
+        renamed such that the rh/reff dimension becomes 'z_phase' with
+        values from pfgrid[1:] or [0.] if pfgrid is None.
+
+    Examples
+    --------
+    Read phase function for a single wavelength and rh:
+
+    >>> pha = read_phase_cdf(
+    ...     'ssam.mie.cdf', wavelength_phase=550.0,
+    ...     z_rh_reff=[70.0, 60., 58.],
+    ...     pfgrid=[100., 50., 10., 0.],
+    ...     normalize=True)
+    >>> pha.shape
+    (1, 3, 6, 18001)  # (wavelength_phase, z_phase, nphamat, theta_atm)
+
+    Read the table of an IPRT water cloud for a 3D cloud, on the
+    angles of the file:
+
+    >>> pha = read_phase_cdf(
+    ...     'watercloud_670.mie.cdf', n_theta='native',
+    ...     normalize=False, output_sg_ready=False)
+    >>> pha.dims
+    ('wavelength_phase', 'reff', 'nphamat', 'theta_atm')
+    """
+    if not output_sg_ready:
+        _reject_profile_targets(wavelength_phase, pfgrid, z_rh_reff)
+    wavelength_phase, pfgrid, z_rh_reff = _profile_targets(
+        wavelength_phase, pfgrid, z_rh_reff
+    )
+
+    ds = xr.open_dataset(fname)
+
+    rh_reff, rh_or_reff = _phase_cdf_rh_or_reff(ds)
+
+    nphamat = ds.nphamat.size
+    if nphamat not in (4, 6):
         raise ValueError(
-            "When the phase function file contains more than 1 "
-            f"{rh_or_reff} value, both 'z_rh_reff' and 'pfgrid'"
-            "parameters must be provided."
+            "The number of phase matrix terms in the file must be "
+            f"equal to 4 or 6, got {nphamat}."
+        )
+    n_rh_reff = rh_reff.size
+    n_wavelength = ds["wavelen"].size
+    theta = _cdf_theta_grid(ds, n_theta, ntheta_max)
+    wavelength = ds["wavelen"].data * 1e3
+
+    # checks at the beginning to avoid unnecessary computations
+    if output_sg_ready:
+        _check_profile_targets(
+            n_wavelength, n_rh_reff, rh_or_reff,
+            wavelength_phase, pfgrid, z_rh_reff,
         )
 
     da_pha = xr.DataArray(
@@ -1150,43 +1349,21 @@ def read_phase_cdf(
     )
 
     if normalize:
-        mu = np.cos(np.deg2rad(theta))
-        idmu = np.argsort(mu)
-        for i_wavelength in range(0, n_wavelength):
-            for irhreff in range(0, n_rh_reff):
-                f = da_pha.data[i_wavelength, irhreff, 0, :]  # P11 term
-                norm = np.trapezoid(f[idmu], mu[idmu])
-                da_pha.data[i_wavelength, irhreff, :, :] *= 2.0 / abs(norm)
+        _normalize_p11(da_pha.data, theta)
 
-    if n_wavelength > 1:
-        da_pha = da_pha.interp(wavelength_phase=wavelength_phase)
+    if not output_sg_ready:
+        return da_pha
 
-    if n_rh_reff > 1:
-        da_pha = da_pha.interp(
-            {rh_or_reff: z_rh_reff}, kwargs={"bounds_error": True}
-        )
-
-    if pfgrid is None:
-        z_phase = np.array([0.0], dtype=float)
-    else:
-        z_phase = np.atleast_1d(pfgrid).astype(np.float32)[1:]
-
-    if da_pha.sizes[rh_or_reff] != z_phase.size:
-        raise ValueError(
-            f"Cannot replace '{rh_or_reff}' with 'z_phase': size mismatch "
-            f"({da_pha.sizes[rh_or_reff]} vs {z_phase.size})."
-        )
-    da_pha = da_pha.assign_coords({rh_or_reff: z_phase}).rename(
-        {rh_or_reff: "z_phase"}
+    return _to_profile_layout(
+        da_pha, rh_or_reff, wavelength_phase, pfgrid, z_rh_reff
     )
-
-    return da_pha
 
 
 def read_phase(
     fname: PathType,
     kind: str = "atm",
     normalize: bool = True,
+    output_sg_ready: bool = True,
     **kwargs: Any,
 ) -> xr.DataArray:
     """
@@ -1218,6 +1395,23 @@ def read_phase(
         integral over all angles equals 2.
         Default: True
 
+    output_sg_ready : bool, optional
+        Which of the two layouts to return.
+        True (default): the phase matrix ready for the ``phase``
+        argument of ``AerOPAC``, ``Cloud`` and ``Hydrosol`` and for
+        ``Atm1D.prof_phases``: interpolated at ``wavelength_phase`` and
+        ``z_rh_reff`` and laid out on the profile altitudes, with the
+        dimensions ('wavelength_phase', 'z_phase', 'nphamat',
+        'theta_' + kind).
+        False: the table as the file carries it, with the dimensions
+        ('wavelength_phase', 'hum' or 'reff', 'nphamat', 'theta_' +
+        kind) on every wavelength and humidity/effective radius of the
+        file. This is what the ``phase`` argument of the 3D components
+        ``Cloud3D`` and ``Aer3D`` takes; ``wavelength_phase``,
+        ``pfgrid`` and ``z_rh_reff`` must then be left to None. Only
+        for ``.nc`` and ``.cdf`` files: a ``.dat`` file carries a single
+        matrix, with no wavelength or humidity axis.
+
     **kwargs : dict, optional
         Additional keyword arguments forwarded to the selected backend
         reader:
@@ -1226,8 +1420,8 @@ def read_phase(
         - for ``.cdf``: forwarded to :func:`read_phase_cdf`
 
         Typical arguments include ``wavelength_phase``, ``pfgrid``,
-        ``z_rh_reff``,
-        and ``ntheta_max`` (only for ``.cdf``).
+        ``z_rh_reff``, and ``n_theta`` and ``ntheta_max`` (only for
+        ``.cdf``).
 
     Returns
     -------
@@ -1236,12 +1430,20 @@ def read_phase(
         All backends return a 4-dimensional array with dimensions:
 
         - ``('wavelength_phase', 'z_phase', 'nphamat',
-          'theta_' + kind)``
+          'theta_' + kind)``, or ``('wavelength_phase', 'hum' or
+          'reff', 'nphamat', 'theta_' + kind)`` with
+          ``output_sg_ready=False``
 
         where 'nphamat' has size nphamat:
         - nphamat = 4 for spherical particles only
         - nphamat = 6 for spherical or non-spherical particles
           (for spherical: P22=P11, P44=P33)
+
+    Raises
+    ------
+    ValueError
+        If the file format is not supported, or if ``output_sg_ready``
+        is False for a ``.dat`` file.
 
     Examples
     --------
@@ -1255,6 +1457,7 @@ def read_phase(
     ...                  z_rh_reff=[70.0, 60.0, 58.0],
     ...                  pfgrid=[100.0, 50.0, 10.0, 0.0],
     ...                  ntheta_max=18001)
+    >>> pha = read_phase('wc_sol.nc', output_sg_ready=False)
     """
 
     fname = Path(fname)
@@ -1265,14 +1468,23 @@ def read_phase(
     supported_formats = [".dat", ".nc", ".cdf"]
 
     if fname.suffix == ".dat":
+        if not output_sg_ready:
+            raise ValueError(
+                "A .dat file carries a single phase matrix, with no "
+                "wavelength or humidity/effective radius axis: only "
+                "the profile-ready output (output_sg_ready=True) "
+                "exists for it."
+            )
         return read_phase_dat(fname, kind=kind, normalize=normalize)
     elif fname.suffix == ".nc":
         return read_phase_nc(
-            fname, kind=kind, normalize=normalize, **kwargs
+            fname, kind=kind, normalize=normalize,
+            output_sg_ready=output_sg_ready, **kwargs
         )
     elif fname.suffix == ".cdf":
         return read_phase_cdf(
-            fname, kind=kind, normalize=normalize, **kwargs
+            fname, kind=kind, normalize=normalize,
+            output_sg_ready=output_sg_ready, **kwargs
         )
     else:
         raise ValueError(
@@ -1487,85 +1699,3 @@ def get_prof_phases(
     prof_phases = (ipha_atm, lpha_da)
 
     return prof_phases
-
-
-def read_phase_nth_cte(
-    filename: PathType,
-    nb_theta: int = 721,
-    normalize: bool = False,
-) -> xr.DataArray:
-    """Read an aerosol or cloud file on a constant theta grid.
-
-    Both the libRadtran files (e.g. wc.sol.mie.cdf) and the
-    monochromatic IPRT netCDF files are accepted. Their phase matrix
-    is given on a theta grid whose length varies with the wavelength
-    and the component; it is interpolated here on a single grid of
-    nb_theta angles.
-
-    The matrix keeps the IQUV convention of the file, the conversion
-    into the parallel/perpendicular convention of the kernels being
-    done by the run method.
-
-    Parameters
-    ----------
-    filename : str or path-like
-        Path of the netCDF file to read.
-    nb_theta : int or array_like, optional
-        Number of equally spaced theta values between 0 and 180
-        degrees, or the theta values themselves in degrees, which
-        :func:`theta_grid` can build clustered towards the forward and
-        backward directions.
-        Default: 721
-    normalize : bool, optional
-        If True, normalize the phase matrix so that the integral of
-        the F11 term over all angles equals 2.
-        Default: False
-
-    Returns
-    -------
-    DataArray
-        The phase matrix, of shape (n_wavelength, nrh_or_reff, 6,
-        nb_theta),
-        with the dimensions 'wavelength_phase' (nm), 'hum' or 'reff'
-        (kept from the file), 'nphamat' and 'theta_atm' (degrees).
-    """
-    ds = xr.open_dataset(filename)
-
-    rh_reff, rh_or_reff = _phase_cdf_rh_or_reff(ds)
-
-    n_stk = ds.nphamat.size
-    if n_stk not in (4, 6):
-        raise ValueError(
-            "The number of phase matrix terms in the file must be "
-            f"equal to 4 or 6, got {n_stk}."
-        )
-
-    theta = as_theta_grid(nb_theta)
-    n_theta = len(theta)
-    n_rh_or_reff = rh_reff.size
-    n_wavelength = ds["wavelen"].size
-    wavelength = ds["wavelen"].data * 1e3
-
-    data = np.full((n_wavelength, n_rh_or_reff, 6, n_theta), np.nan,
-                   dtype=np.float32)
-    data[:, :, :n_stk, :] = _resample_cdf_phase(ds, theta)
-
-    if n_stk == 4:  # only spherical particles
-        data[:, :, 4, :] = data[:, :, 0, :].copy()  # F22 = F11
-        data[:, :, 5, :] = data[:, :, 2, :].copy()  # F44 = F33
-
-    if normalize:
-        mu = np.cos(np.deg2rad(theta))
-        idmu = np.argsort(mu)
-        for i_wavelength in range(0, n_wavelength):
-            for irhreff in range(0, n_rh_or_reff):
-                f = data[i_wavelength, irhreff, 0, :]  # F11 term
-                norm = np.trapezoid(f[idmu], mu[idmu])
-                data[i_wavelength, irhreff, :, :] *= 2. / abs(norm)
-
-    return xr.DataArray(
-        data,
-        coords=[wavelength, rh_reff, np.arange(6), theta],
-        dims=["wavelength_phase", rh_or_reff, "nphamat", "theta_atm"],
-        name="phase_atm",
-    )

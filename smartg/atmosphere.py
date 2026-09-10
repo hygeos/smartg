@@ -79,7 +79,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable, Sequence, TYPE_CHECKING
 from smartg.phase import (
-    as_theta_grid, calc_iphase, is_native_theta, union_theta_grid
+    as_theta_grid, calc_iphase, expand_phase_4_to_6, is_native_theta,
+    union_theta_grid,
 )
 from scipy.interpolate import make_interp_spline
 from scipy.integrate import simpson
@@ -1708,7 +1709,10 @@ class _Comp3DFile(Comp3D):
                 f"{self._bulk_axis}, nphamat and theta_atm"
             )
         else:
-            self.phase = phase
+            # the readers keep the terms of the file: complete the 4
+            # of spherical particles into 6, as the bulk file path of
+            # get_phase does
+            self.phase = expand_phase_4_to_6(phase)
 
     def _normalize_param(
         self, param: NDArray[np.float64]
@@ -1987,8 +1991,11 @@ class Cloud3D(_Comp3DFile):
     phase : DataArray or LUT or None, optional
         The cloud phase matrix depending on wavelength_phase, reff,
         nphamat and theta_atm (e.g. from
-        :func:`smartg.phase.read_phase_nth_cte`). If None, the phase
-        matrices are computed from the bulk optical properties file.
+        :func:`smartg.phase.read_phase_cdf` or
+        :func:`smartg.phase.read_phase_nc` with
+        ``output_sg_ready=False``; 4 terms are completed into 6). If
+        None, the phase matrices are computed from the bulk optical
+        properties file.
     ssa_cst : float or None, optional
         Force the cloud single scattering albedo to this constant
         value. If None, the single scattering albedo is interpolated
@@ -2105,8 +2112,9 @@ class Aer3D(_Comp3DFile):
     phase : DataArray or LUT or None, optional
         The aerosol phase matrix depending on wavelength_phase, hum,
         nphamat and theta_atm (the humidity axis is named ``hum`` as
-        in the OPAC
-        files; e.g. from :func:`smartg.phase.read_phase_nth_cte`). If
+        in the OPAC files; e.g. from :func:`smartg.phase.read_phase_nc`
+        or :func:`smartg.phase.read_phase_cdf` with
+        ``output_sg_ready=False``; 4 terms are completed into 6). If
         None, the phase matrices are computed from the bulk optical
         properties file.
     ssa_cst : float or None, optional
