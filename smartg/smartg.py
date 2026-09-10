@@ -919,7 +919,9 @@ class Smartg(object):
 
             - None -> equally spaced (default)
             - 'phase' -> adopt the grid the phase matrices already
-              carry, i.e. their `theta_atm` and `theta_oc` axes
+              carry, i.e. their `theta_atm` and `theta_oc` axes; with
+              a profile computed with `n_theta='native'`, this keeps
+              the union of the angles the components' tables carry
             - 'uniform', 'chebyshev', 'lobatto' or 'peak' -> generate
               `n_icdf` angles of that kind, see `smartg.phase.theta_grid`
             - an array of angles in degrees, from 0 to 180
