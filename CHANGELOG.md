@@ -309,6 +309,27 @@ corrected before the final `v2.0.0` release.
       degree body of the phase function, which is what the IPRT C3
       cases do, is unaffected by the grid: their delta_m against
       MYSTIC is uncorrelated with the discretisation error
+  - A mixture of components tabulated on different scattering angle
+    grids can keep every node of every table: `n_theta='native'` of
+    the `calc` and `phase` methods of `Atm1D` and `Atm3D` (and of the
+    component phase methods) resolves to the union of the grids the
+    components' source tables carry, which is where a sum of the
+    piecewise linear tables the kernel samples is exact. New
+    `smartg.phase.union_theta_grid` builds that union, merging the
+    float32 angles of the OPAC files with the float64 ones of the
+    cloud files, and every component and atmosphere exposes it as
+    `native_theta()`. Pass `theta_grid='phase'` to `Smartg.run` to keep
+    it on the device
+    - Measured on `wc` at 550 nm mixed with `continental_clean`:
+      resampling the cloud (594 angles, 0.01 degree steps in the
+      forward peak) onto the 721 angle default loses 99% of its peak
+      below 2 degrees and 6% of its normalization, onto the 1801
+      angle grid of the aerosol 14% and 1.3%; the 2019 angle union
+      reproduces both tables to 1e-13
+    - A warning names the components whose grids differ and the union
+      they are mixed on, whether the union was asked for with
+      `'native'` or forced by a user phase matrix, which keeps its own
+      grid whatever `n_theta`
   - A random walk now draws its deflection from exactly the phase
     matrix it then reads. `struct Phase` used to interleave a second
     copy of the matrix at equal-probability nodes, and the kernel drew
@@ -458,6 +479,17 @@ corrected before the final `v2.0.0` release.
     discarded the grid the matrix was built on
   - `Component.phase` and `_Comp3DFile.get_phase` no longer treat two
     angle grids of the same length as the same grid
+  - `Atm1D.phase` no longer mixes components tabulated on different
+    scattering angle grids through xarray's inner join, which silently
+    kept only the angles common to both: 175 of them for an OPAC
+    aerosol on the 721 angle default and a cloud carrying its file
+    matrix on 594 angles. The matrices are now resampled onto the
+    union of their grids, with a warning, and the `wavelength_phase`
+    and `z_phase` axes, which have no union, must agree or raise. The
+    3D merge does the same instead of adopting the grid of the first
+    component or the longest one, and `_glob_particles_multi` no
+    longer relabels a 1D aerosol matrix with the component grid when
+    the two merely have the same length
   - Important corrections in the water (ocean) module:
     - Phase matrix always extended to 6 Stokes components (P22=P11, P44=P33 for
       spherical particles)
