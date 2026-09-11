@@ -241,8 +241,9 @@ corrected before the final `v2.0.0` release.
       `FFS` → `ffs`, `DIRECT` → `direct`,
       `OCEAN_INTERACTION` → `ocean_interaction`, `myObjects` → `my_objects`,
       `cusL` → `cus_l`, `IsAtm` → `is_atm`
-    The `le` and `alis_options` dictionary keys and the output variable
-    names are unchanged
+    The output variable names are unchanged; the `le` and `alis_options`
+    dictionaries have since become the `LocalEstimate` and `Alis` classes
+    (see New features)
   - The abbreviated parameters of `Smartg.run` have been given their full
     name: `atm` → `atmosphere`, `surf` → `surface` and `env` → `environment`
   - The `th_v_deg` and `ph_v_deg` angles of `Smartg.run` are now `th_deg` and
@@ -287,6 +288,21 @@ corrected before the final `v2.0.0` release.
     coefficient is scaled by `1 - f`. `None` disables the truncation.
 
 * New features
+  - The `le` and `alis_options` parameters of `Smartg.run` now take the new
+    `LocalEstimate` and `Alis` objects, like every other structured
+    parameter of the method. A dictionary is still accepted, with a
+    deprecation warning, and its keys stay documented
+    - `LocalEstimate(th=, phi=, th_deg=, phi_deg=, zip=, count_level=)`
+      keeps the names of the former keys. It validates the angles once, so
+      `run` no longer writes the radians back into the caller's dictionary,
+      where they shadowed any later change to `th_deg`
+    - `Alis(n_low=, hist=, max_hist=, n_jac=, n_jac_abs=)` spells out the
+      former `nlow`, `njac` and `njac_abs` keys, and `n_low` is now
+      required rather than raising a `KeyError` from inside `run`
+    - Both classes raise a `ValueError` for the inconsistent inputs that
+      used to pass silently: mismatched zipped angles, a `count_level` of
+      the wrong length, `n_jac_abs` without a positive `n_jac`, and an
+      `n_low` of 1, which the kernel divides by
   - New 3D atmosphere user API in `smartg.atmosphere`: a 3D atmosphere is now
     built directly as
     `Atm3D(atm_1d=Atm1D(...), grid_3d=Grid3D(...), comp_3d=[Cloud3D(...)])`
