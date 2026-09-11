@@ -22,7 +22,7 @@ from smartg.histories import get_histories, big_sum, si, si2
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
-from smartg.smartg import Smartg
+from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import LambSurface
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, od2k
@@ -90,7 +90,9 @@ def test_smartg_jax2(
     wavelength_sca = np.linspace(wmin, wmax, num=11)
     wavelength_abs = np.linspace(wmin, wmax, num=n_wavelength_abs)
     alb = alb_snow.get(wavelength_abs)
-    lez = {"th_deg": np.array([0.0]), "phi_deg": np.array([0.0]), "zip": False}
+    lez = LocalEstimate(
+        th_deg=np.array([0.0]), phi_deg=np.array([0.0]), zip=False
+    )
 
     for aod, fmt1 in zip(
         np.linspace(0.1, 0.5, num=2), ["-m", "-c"], strict=True
@@ -112,11 +114,11 @@ def test_smartg_jax2(
                 le=lez,
                 beer=0,
                 atmosphere=atmosphere.calc(wavelength_sca),
-                alis_options={
-                    "nlow": wavelength_sca.size,
-                    "hist": True,
-                    "max_hist": np.int64(max_hist),
-                },
+                alis_options=Alis(
+                    n_low=wavelength_sca.size,
+                    hist=True,
+                    max_hist=np.int64(max_hist),
+                ),
                 nb_photons=nb_photons,
                 nb_loop=nb_photons,
                 n_icdf=1e3,
@@ -132,7 +134,9 @@ def test_smartg_jax2(
                 le=lez,
                 beer=0,
                 atmosphere=atmosphere.calc(wavelength_abs),
-                alis_options={"nlow": wavelength_sca.size, "hist": False},
+                alis_options=Alis(
+                    n_low=wavelength_sca.size, hist=False
+                ),
                 nb_photons=nb_photons,
                 n_icdf=1e3,
             )
@@ -281,11 +285,11 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
     sigma_valid = od2k(atm_valid.calc(w_valid), "OD_abs_atm")[:, 1:]
     ###############
 
-    le = {
-        "th_deg": np.array([20.0]),
-        "phi_deg": np.array([180.0]),
-        "zip": False,
-    }
+    le = LocalEstimate(
+        th_deg=np.array([20.0]),
+        phi_deg=np.array([180.0]),
+        zip=False,
+    )
     nlow = 3
     wavelength_lr = np.linspace(w_valid.min(), w_valid.max(), num=nlow)
 
@@ -300,7 +304,7 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             beer=0,
             atmosphere=atm_valid.calc(w_valid),
             depo=0.0,
-            alis_options={"nlow": nlow, "hist": False},
+            alis_options=Alis(n_low=nlow, hist=False),
             nb_photons=nb_photons,
             nb_loop=nb_photons,
             n_icdf=1e3,
@@ -317,11 +321,11 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             beer=0,
             atmosphere=atm_valid.calc(w_valid),
             depo=0.0,
-            alis_options={
-                "nlow": nlow,
-                "hist": True,
-                "max_hist": np.int64(1e7),
-            },
+            alis_options=Alis(
+                n_low=nlow,
+                hist=True,
+                max_hist=np.int64(1e7),
+            ),
             nb_photons=nb_photons,
             nb_loop=nb_photons,
             n_icdf=1e3,

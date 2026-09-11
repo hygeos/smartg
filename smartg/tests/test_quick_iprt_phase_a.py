@@ -4,7 +4,7 @@
 # Tested with the following GPUs: 3090
 import pytest
 
-from smartg.smartg import Smartg
+from smartg.smartg import LocalEstimate, Smartg
 from smartg.surface import LambSurface
 from smartg.albedo import AlbedoCst
 from smartg.sensor import Sensor
@@ -113,11 +113,11 @@ def test_a1(request, s1df, s1db):
     sza = 0.0
     saa = 65.0
     phi_0 = 180.0 - saa  # To follow MYSTIC convention
-    le = {
-        "th_deg": np.array([sza]),
-        "phi_deg": np.array([phi_0]),
-        "count_level": np.array([0]),
-    }
+    le = LocalEstimate(
+        th_deg=np.array([sza]),
+        phi_deg=np.array([phi_0]),
+        count_level=np.array([0]),
+    )
 
     # BOA radiances
     vza_min = 0.0
@@ -240,7 +240,7 @@ def test_a1(request, s1df, s1db):
     TH = 180.0 - vza
     phi = -vaa
     TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = {"th_deg": TH, "phi_deg": phi}  # , 'zip':True}
+    le = LocalEstimate(th_deg=TH, phi_deg=phi)  # , zip=True
     sza = 30.0
     saa = 0.0
     phi_0 = (
@@ -658,7 +658,7 @@ def test_a2(request, s1df):
     TH = 180.0 - vza
     phi = -vaa
     TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = {"th_deg": TH, "phi_deg": phi}
+    le = LocalEstimate(th_deg=TH, phi_deg=phi)
 
     sza = 50.0
     saa = 0.0
@@ -1029,7 +1029,7 @@ def test_a5_pp(request, s1df):
     TH = 180.0 - vza
     phi = -vaa
     TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = {"th_deg": TH, "phi_deg": phi}  # , 'zip':True}
+    le = LocalEstimate(th_deg=TH, phi_deg=phi)  # , zip=True
 
     # === Simulation
     m_a5_f_pp = s1df.run(
@@ -1337,7 +1337,7 @@ def test_a5_al(request, s1df):
     TH = 180.0 - vza
     phi = -vaa
     TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = {"th_deg": TH, "phi_deg": phi}
+    le = LocalEstimate(th_deg=TH, phi_deg=phi)
 
     # === Simulation
     m_a5_f_al = s1df.run(

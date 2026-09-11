@@ -22,7 +22,7 @@ from smartg.view import satellite_view
 from smartg.phase import read_phase_nth_cte
 from smartg.albedo import AlbedoCst
 from smartg.surface import LambSurface
-from smartg.smartg import Smartg
+from smartg.smartg import LocalEstimate, Smartg
 from smartg.truncation import GT_trunc
 
 # *********************** Global variable(s) ***************************
@@ -699,11 +699,11 @@ def _run_case_backward(
     )
 
     # count_level = 0 -> only COUNT TOA
-    le = {
-        "th_deg": np.array([theta_0]),
-        "phi_deg": np.array([PHI_0]),
-        "count_level": np.array([0]),
-    }
+    le = LocalEstimate(
+        th_deg=np.array([theta_0]),
+        phi_deg=np.array([PHI_0]),
+        count_level=np.array([0]),
+    )
 
     kw = dict(
         wavelength=wavelengths,
@@ -765,12 +765,12 @@ def _run_group_forward(
 
     theta = np.array([CASES[case][1] for case in cases])
     phi = np.array([CASES[case][2] for case in cases])
-    le = {
-        "th_deg": 180.0 - theta if group["inv_th"] else theta,
-        "phi_deg": phi + 180.0,
-        "count_level": np.full(len(cases), group["count_level"]),
-        "zip": True,
-    }
+    le = LocalEstimate(
+        th_deg=180.0 - theta if group["inv_th"] else theta,
+        phi_deg=phi + 180.0,
+        count_level=np.full(len(cases), group["count_level"]),
+        zip=True,
+    )
 
     kw = dict(
         th_deg=theta_0,

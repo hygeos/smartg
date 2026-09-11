@@ -12,7 +12,7 @@ from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
 from smartg.phase import integ_phase, read_phase
-from smartg.smartg import Smartg
+from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import RoughSurface
 from smartg.truncation import DM_trunc, GT_trunc
 from smartg.water import Hydrosol, Water1D, WaterRw
@@ -267,7 +267,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         seed=SEED,
         xblock=64,
         xgrid=1024,
-        alis_options={"nlow": -1, "njac": 0},
+        alis_options=Alis(n_low=-1, n_jac=0),
         output_layers=3,
         flux="planar",
     )
@@ -277,11 +277,11 @@ def _smartg_run(_water_iop, _atm, _surf):
     )
 
     # --- Local estimate run (Lu/Ed) ---
-    local_est = {
-        "th_deg": np.array([0.0]),
-        "phi_deg": np.array([0.0]),
-        "count_level": np.array([4]),
-    }
+    local_est = LocalEstimate(
+        th_deg=np.array([0.0]),
+        phi_deg=np.array([0.0]),
+        count_level=np.array([4]),
+    )
     m_le = sg.run(
         wavelength=WAVELENGTHS,
         th_deg=SZA_DEG,
@@ -293,7 +293,7 @@ def _smartg_run(_water_iop, _atm, _surf):
         seed=SEED,
         xblock=64,
         xgrid=1024,
-        alis_options={"nlow": -1, "njac": 0},
+        alis_options=Alis(n_low=-1, n_jac=0),
         output_layers=4,
         n_icdf=1e3,
         le=local_est,
@@ -492,10 +492,10 @@ def _rw_vs_w1d_run(_atm_rayleigh, _surf):
     """
     sg = Smartg()
     alb = AlbedoCst(RW_ALBEDO)
-    local_est = {
-        "th_deg": np.array([30.0]),
-        "phi_deg": np.array([45.0]),
-    }
+    local_est = LocalEstimate(
+        th_deg=np.array([30.0]),
+        phi_deg=np.array([45.0]),
+    )
     out = []
     for water in (
         WaterRw(alb=alb),

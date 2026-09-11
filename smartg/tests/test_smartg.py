@@ -125,10 +125,10 @@ def test_locale_estimate(sg):
         atmosphere=atmosphere,
         surface=surface,
         th_deg=10.0,
-        le={
-            "th_deg": np.array([40.0], dtype="float32"),
-            "phi_deg": np.array([30.0], dtype="float32"),
-        },
+        le=LocalEstimate(
+            th_deg=np.array([40.0], dtype="float32"),
+            phi_deg=np.array([30.0], dtype="float32"),
+        ),
         nb_photons=NBPHOTONS,
     )
     assert (res["I_up (TOA)"].values > 0).all()
@@ -274,10 +274,10 @@ def test_no_aer_output():
     water = Water1D(grid=[0, -5.0], comp=[HydrosolPR(chl=0.5)])
     surface = RoughSurface(wind=5.0, nh2o=1.34)
     sg = Smartg()
-    le = {
-        "th_deg": np.array([0.0, 45.0, 89.9]),
-        "phi_deg": np.array([0.0, 15.6, 289.0]),
-    }
+    le = LocalEstimate(
+        th_deg=np.array([0.0, 45.0, 89.9]),
+        phi_deg=np.array([0.0, 15.6, 289.0]),
+    )
     m1 = sg.run(
         550.0,
         atmosphere=atm1,
