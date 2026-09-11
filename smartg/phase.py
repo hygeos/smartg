@@ -324,7 +324,9 @@ def as_theta_grid(n_theta: ThetaLike) -> NDArray[np.float64]:
             "union_theta_grid."
         )
     if np.ndim(n_theta) == 0:
-        return theta_grid(int(n_theta))
+        # a Python or NumPy scalar, or a 0-d array: item() gives the
+        # Python scalar in every case
+        return theta_grid(int(np.asarray(n_theta).item()))
 
     theta = np.ascontiguousarray(n_theta, dtype=np.float64)
     if theta.ndim != 1 or theta.size < 2:
