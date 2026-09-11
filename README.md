@@ -159,7 +159,7 @@ from smartg.atmosphere import Atm1D
 from smartg.view import smartg_view
 
 # 1e8 photons at 500 nm, tropical atmosphere, sun at a 30° zenith angle
-res = Smartg().run(wavelength=500., th_deg=30., nb_photons=1e8,
+res = Smartg().run(wavelength=500., th_deg=30., n_photons=1e8,
                    atmosphere=Atm1D('afglt'))
 
 ds = res.to_xarray()  # 'I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)', 'V_up (TOA)', ...

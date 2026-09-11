@@ -34,7 +34,7 @@ offer flexible scaling approaches.
 Examples
 --------
 >>> from smartg.truncation import DM_trunc
->>> trunc = DM_trunc(nb_streams=16, integral_method='lobatto')
+>>> trunc = DM_trunc(n_streams=16, integral_method='lobatto')
 
 Key Classes
 -----------
@@ -54,7 +54,7 @@ class DM_trunc(object):
 
     Parameters
     ----------
-    nb_streams : int
+    n_streams : int
         Number of streams for the truncated phase function.
     integral_method : str, optional
         Integration method to use for computing the moments.
@@ -74,18 +74,18 @@ class DM_trunc(object):
 
     def __init__(
         self,
-        nb_streams: int,
+        n_streams: int,
         integral_method: str = "lobatto",
         pha_scale_method: int = 1,
     ) -> None:
         # check parameter values
         if (
-            isinstance(nb_streams, bool)
-            or not isinstance(nb_streams, (int, np.integer))
-            or nb_streams < 1
+            isinstance(n_streams, bool)
+            or not isinstance(n_streams, (int, np.integer))
+            or n_streams < 1
         ):
             raise ValueError(
-                "The nb_streams parameter must be an integer >= 1."
+                "The n_streams parameter must be an integer >= 1."
             )
         integral_methods_ok = ["lobatto", "trapezoid", "simpson"]
         if integral_method not in integral_methods_ok:
@@ -99,7 +99,7 @@ class DM_trunc(object):
             )
 
         self.tr_method = "DM"
-        self.m_max = nb_streams
+        self.m_max = n_streams
         self.integral_method = integral_method
         self.pha_scale_method = pha_scale_method
 

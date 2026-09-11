@@ -305,7 +305,7 @@ class StdevLim(object):
         <= err_abs_min.
     err_rel_min : float, optional
         The minimum relative error in percentage.
-    nb_loop_min : int, optional
+    n_loop_min : int, optional
         The minimum kernel loop number before allowing to stop the
         simulation.
     stk : int, optional
@@ -340,7 +340,7 @@ class StdevLim(object):
         self,
         err_abs_min: float = 0.0,
         err_rel_min: float = 0.0,
-        nb_loop_min: int = 10,
+        n_loop_min: int = 10,
         stk: int = 0,
         level: int = 0,
         verbose: bool = False,
@@ -350,7 +350,7 @@ class StdevLim(object):
         self.dict = {
             'err_abs_min': err_abs_min,
             'err_rel_min': err_rel_min,
-            'nb_loop_min': nb_loop_min,
+            'n_loop_min': n_loop_min,
             'stk': stk,
             'level': level,
             'verbose': verbose,
@@ -771,7 +771,7 @@ class Smartg(object):
         water=None,
         environment=None,
         alis_options: dict | None = None,
-        nb_photons: float = 1e9,
+        n_photons: float = 1e9,
         depo: float = 0.0279,
         depo_water: float = 0.0906,
         th_deg: float = 0.0,
@@ -781,14 +781,14 @@ class Smartg(object):
         wavelength_proba: np.ndarray | None = None,
         sensor_proba: np.ndarray | None = None,
         cell_proba=None,
-        nb_theta: int = 45,
-        nb_phi: int = 90,
+        n_theta: int = 45,
+        n_phi: int = 90,
         n_icdf: float = 1e6,
         theta_grid: str | NDArray[np.floating] | None = None,
         output_layers: int = 0,
         xblock: int = 256,
         xgrid: int = 256,
-        nb_loop: float | None = None,
+        n_loop: float | None = None,
         progress: bool = True,
         le: dict | None = None,
         flux: str | None = None,
@@ -864,7 +864,7 @@ class Smartg(object):
 
             Note: Optional for the dictionary keys indicate that the key
             is not required to be present.
-        nb_photons : int, optional
+        n_photons : int, optional
             The total number of photons used for the simulation. Default
             1e9.
         depo : float, optional
@@ -899,11 +899,11 @@ class Smartg(object):
             The inversed cumulative distribution function for cell
             selection. It is for example the result of function
             icdf_2d(proba, n).
-        nb_theta : int, optional
+        n_theta : int, optional
             The number of viewing/sun zenith angles in forward/backward
             for the cone sampling. This parameter is ignored if the
             parameter `le` is used.
-        nb_phi : int, optional
+        n_phi : int, optional
             The number of viewing/sun azimuth angles in forward/backward
             for the cone sampling. This parameter is ignored if the
             parameter `le` is used.
@@ -952,7 +952,7 @@ class Smartg(object):
             The number of cuda blocks.
         xgrid : int, optional
             The number of cuda grids.
-        nb_loop : None | float, optional
+        n_loop : None | float, optional
             The number of photons launched in one kernel run.
         progress : bool, optional
             Activate the progress bar. Default True.
@@ -971,14 +971,14 @@ class Smartg(object):
                 provided.
             * 'zip' : bool, optional
                -> If True, then 'th' and 'phi' covary and the output is
-               only one-dimensional nb_theta, but user should verify
-               that nb_phi==nb_theta.
+               only one-dimensional n_theta, but user should verify
+               that n_phi==n_theta.
             * 'count_level' : 1-D ndarray | list, optional
                 -> The level to consider. Possibilities: -2(all),
                 -1(none), 0(UPTOA), 1(DOWN0P), 2(DOWN0M),
                    3(UP0P), 4(UP0M) or 5(DOWNB). The level to consider
                    may change only with th/th_deg. The array must be of
-                   length nb_theta. If the key is not present it will be
+                   length n_theta. If the key is not present it will be
                    the same as count_level = np.full_like(th/th_deg, -2,
                    dtype=np.int32).
 
@@ -1327,13 +1327,13 @@ class Smartg(object):
             n_cos = None
         # END OBJ ===================================================
 
-        if nb_phi % 2 == 1:
+        if n_phi % 2 == 1:
             warn('Odd number of azimuth', stacklevel=2)
 
-        if (nb_loop is None) and (n_obj <= 0):
-            nb_loop = min(nb_photons / 30, 1e6)
-        elif (nb_loop is None) and (n_obj > 0):
-            nb_loop = min(nb_photons / 10, 1e6)
+        if (n_loop is None) and (n_obj <= 0):
+            n_loop = min(n_photons / 30, 1e6)
+        elif (n_loop is None) and (n_obj > 0):
+            n_loop = min(n_photons / 10, 1e6)
 
         n_icdf = int(n_icdf)
 
@@ -1358,7 +1358,7 @@ class Smartg(object):
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[self.pp]})
         attrs.update({'XBLOCK': xblock})
         attrs.update({'XGRID': xgrid})
-        attrs.update({'NPHOTONS': '{:g}'.format(nb_photons)})
+        attrs.update({'NPHOTONS': '{:g}'.format(n_photons)})
 
         if not isinstance(wavelength, BandSet):
             wavelength = BandSet(wavelength)
@@ -1724,20 +1724,20 @@ class Smartg(object):
             else:
                 le['phi'] = np.array(le['phi'], dtype='float32').ravel()
 
-            nb_theta = le['th'].shape[0]
-            nb_phi = le['phi'].shape[0]
+            n_theta = le['th'].shape[0]
+            n_phi = le['phi'].shape[0]
 
             if 'zip' in le:
                 if le['zip']:
-                    assert nb_phi == nb_theta
+                    assert n_phi == n_theta
                     zip_code = 1
-                    nb_phi = 1
+                    n_phi = 1
 
             if 'count_level' in le:
                 le['count_level'] = np.array(
                     le['count_level'], dtype='int32'
                 ).ravel()
-                assert len(le['count_level']) == nb_theta
+                assert len(le['count_level']) == n_theta
 
         flux_code = 0
         if flux is not None:
@@ -1815,7 +1815,7 @@ class Smartg(object):
             n_oce,
             n_oce_abs,
             self.mod,
-            nb_loop,
+            n_loop,
             th_deg,
             xblock,
             xgrid,
@@ -1825,8 +1825,8 @@ class Smartg(object):
             agrid_oc,
             pgrid_atm,
             pgrid_oc,
-            nb_theta,
-            nb_phi,
+            n_theta,
+            n_phi,
             output_layers,
             earth_radius,
             le_code,
@@ -1887,7 +1887,7 @@ class Smartg(object):
         )
 
         # Initialize the progress bar
-        p = make_progress(nb_photons, progress)
+        p = make_progress(n_photons, progress)
 
         # Initialize the RNG
         seed = self.rng.setup(seed, xblock, xgrid)
@@ -1912,7 +1912,7 @@ class Smartg(object):
             w_ph_cats,
             w_ph_cats2,
         ) = _loop_kernel(
-            nb_photons,
+            n_photons,
             faer,
             foce,
             n_lvl,
@@ -1925,8 +1925,8 @@ class Smartg(object):
             n_pstk,
             xblock,
             xgrid,
-            nb_theta,
-            nb_phi,
+            n_theta,
+            n_phi,
             n_lam,
             n_sensor,
             self.double,
@@ -1975,7 +1975,7 @@ class Smartg(object):
                 mat_cats=mat_cats,
                 nb_cx=nb_cx,
                 nb_cy=nb_cy,
-                nb_photons=float(np.sum(n_photons_in_tot)),
+                n_photons=float(np.sum(n_photons_in_tot)),
                 surf_lph=surf_lph,
                 cell_size=tc,
                 cus_l=cus_l,
@@ -2081,7 +2081,7 @@ class Smartg(object):
                     / float(np.sum(n_photons_in_tot)),
                     np.sum(n_photons_in_tot) / float(n_lam),
                     np.sum(n_photons_in_tot)
-                    / float(nb_photons)
+                    / float(n_photons)
                     / float(n_lam),
                 )
             )
@@ -2091,7 +2091,7 @@ class Smartg(object):
                     np.sum(n_photons_out_tot[0, ...])
                     / float(np.sum(n_photons_in_tot)),
                     np.sum(n_photons_in_tot),
-                    np.sum(n_photons_in_tot) / float(nb_photons),
+                    np.sum(n_photons_in_tot) / float(n_photons),
                 )
             )
 
@@ -2363,7 +2363,7 @@ def _finalize(
     if hasattr(prof_oc, 'to_xarray'):
         prof_oc = prof_oc.to_xarray()
 
-    (_, _, n_sensor, n_lam, nb_theta, nb_phi) = tab_photons_tot.shape
+    (_, _, n_sensor, n_lam, n_theta, n_phi) = tab_photons_tot.shape
 
     # normalization in case of radiance
     # (broadcast everything to dimensions
@@ -2381,7 +2381,7 @@ def _finalize(
             norm_geo = 1.0
         else:
             tab_th, tab_phi, tab_omega = _calc_solid_angles(
-                nb_theta, nb_phi, sza_max=sza_max, sun_disc=sun_disc
+                n_theta, n_phi, sza_max=sza_max, sun_disc=sun_disc
             )
             if horiz == 1:
                 norm_geo = (
@@ -2394,7 +2394,7 @@ def _finalize(
     else:
         norm_geo = 1.0
         tab_th, tab_phi, _ = _calc_solid_angles(
-            nb_theta, nb_phi, sza_max=sza_max, sun_disc=sun_disc
+            n_theta, n_phi, sza_max=sza_max, sun_disc=sun_disc
         )
 
     # normalization
@@ -2481,8 +2481,8 @@ def _finalize(
     write_downb = output_layers in (2, 3, 5)
 
     # Build dimension names for cdist variables (ALIS mode)
-    # Shape after swapaxes: (n_lvl, N_LAYERS, n_sensor, nb_phi,
-    # nb_theta, [NSCL,] n_iamf)
+    # Shape after swapaxes: (n_lvl, N_LAYERS, n_sensor, n_phi,
+    # n_theta, [NSCL,] n_iamf)
     # When NSCL=1, squeeze it away for backward compatibility
     if len(tab_dist_final) > 1 and tab_dist_final.shape[-2] == 1:
         tab_dist_final = tab_dist_final[..., 0, :]  # remove trivial NSCL dim
@@ -3418,7 +3418,7 @@ def _init_const(
     n_oce: int,
     n_oce_abs: int | np.integer,
     mod: SourceModule,
-    nb_loop: float | None,
+    n_loop: float | None,
     th_deg: float,
     xblock: int,
     xgrid: int,
@@ -3428,8 +3428,8 @@ def _init_const(
     agrid_oc: tuple,
     pgrid_atm: tuple,
     pgrid_oc: tuple,
-    nb_theta: int,
-    nb_phi: int,
+    n_theta: int,
+    n_phi: int,
     output_layers: int,
     earth_radius: float,
     le: int,
@@ -3519,9 +3519,9 @@ def _init_const(
         Cumulative distribution descriptors ``(n, cdf_gpu)`` of the
         atmosphere and the ocean, see ``_pgrid_struct``. The caller
         keeps *cdf_gpu* alive; only its address reaches the device.
-    nb_loop, xblock, xgrid, n_lam, sim : int
+    n_loop, xblock, xgrid, n_lam, sim : int
         Main Monte Carlo control parameters.
-    nb_theta, nb_phi, output_layers : int
+    n_theta, n_phi, output_layers : int
         Output-grid control parameters.
     th_deg, earth_radius, sza_max, sun_disc, le_fov, z_toa : float
         Angular and physical scalar settings.
@@ -3529,7 +3529,7 @@ def _init_const(
         Spatial scalar settings.
     le, zip_mode, flux, direct, beer : int
         Integer flags controlling radiative-transfer modes.
-    n_lvl, n_pstk, nb_theta, nb_phi, n_lam : int
+    n_lvl, n_pstk, n_theta, n_phi, n_lam : int
         Angular/spectral and Stokes discretization controls.
     n_wavelength_proba, n_sensor_proba, n_cell_proba : int
         Sampling configuration parameters.
@@ -3587,7 +3587,7 @@ def _init_const(
         )
 
     # copy constants to device
-    copy_to_device('NBLOOPd', nb_loop, np.uint32)
+    copy_to_device('NBLOOPd', n_loop, np.uint32)
     copy_to_device('NOCEd', n_oce, np.int32)
     copy_to_device('NOCE_ABSd', n_oce_abs, np.int32)
     copy_to_device('OUTPUT_LAYERSd', output_layers, np.int32)
@@ -3601,8 +3601,8 @@ def _init_const(
     copy_to_device('YBLOCKd', 1, np.int32)
     copy_to_device('XGRIDd', xgrid, np.int32)
     copy_to_device('YGRIDd', 1, np.int32)
-    copy_to_device('NBTHETAd', nb_theta, np.int32)
-    copy_to_device('NBPHId', nb_phi, np.int32)
+    copy_to_device('NBTHETAd', n_theta, np.int32)
+    copy_to_device('NBPHId', n_phi, np.int32)
     copy_to_device('NLAMd', n_lam, np.int32)
     copy_to_device('SIMd', sim, np.int32)
     copy_to_device('LEd', le, np.int32)
@@ -3984,7 +3984,7 @@ def reduce_diff(
 
 
 def _loop_kernel(
-    nb_photons: float,
+    n_photons: float,
     faer: GPUArray | None,
     foce: GPUArray | None,
     n_level: int,
@@ -3997,8 +3997,8 @@ def _loop_kernel(
     n_pstk: int,
     xblock: int,
     xgrid: int,
-    nb_theta: int,
-    nb_phi: int,
+    n_theta: int,
+    n_phi: int,
     n_lam: int,
     n_sensor: int,
     double: bool,
@@ -4041,7 +4041,7 @@ def _loop_kernel(
 
     Parameters
     ----------
-    nb_photons : int
+    n_photons : int
         Target number of launched photons.
     faer, foce : pycuda.gpuarray.GPUArray
         Atmospheric and oceanic phase-function lookup tables (see
@@ -4061,7 +4061,7 @@ def _loop_kernel(
         Number of Stokes components plus one accumulator component.
     xblock, xgrid : int
         CUDA launch dimensions (threads per block and number of blocks).
-    nb_theta, nb_phi : int
+    n_theta, n_phi : int
         Number of angular bins in zenith and azimuth.
     n_lam : int
         Number of wavelengths.
@@ -4182,15 +4182,15 @@ def _loop_kernel(
         mat_loss = None
 
     # Scratch holding the local estimate directions sampled inside
-    # the cone, one slice per thread. Its azimuth part is nb_theta
+    # the cone, one slice per thread. Its azimuth part is n_theta
     # long when the directions are zipped, since the kernel then
     # takes iph from ith; the kernel slices it by the same rule.
     if le_fov > 0:
         nb_phi_le = (
-            nb_theta if (le is not None and le.get('zip', False)) else nb_phi
+            n_theta if (le is not None and le.get('zip', False)) else n_phi
         )
         tab_dir_le = gpuzeros(
-            xblock * xgrid * (nb_theta + nb_phi_le), dtype='float32'
+            xblock * xgrid * (n_theta + nb_phi_le), dtype='float32'
         )
     else:
         tab_dir_le = gpuzeros(1, dtype='float32')
@@ -4212,8 +4212,8 @@ def _loop_kernel(
                 n_level,
                 n_atm_abs + n_oce_abs,
                 n_sensor,
-                nb_theta,
-                nb_phi,
+                n_theta,
+                n_phi,
                 n_scl,
                 n_iamf,
             ),
@@ -4226,10 +4226,10 @@ def _loop_kernel(
 
     # Initialize accumulators
     tab_photons_tot = gpuzeros(
-        (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64
+        (n_level, n_pstk, n_sensor, n_lam, n_theta, n_phi), dtype=np.float64
     )
     tab_photons_tot_no_aer = gpuzeros(
-        (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.float64
+        (n_level, n_pstk, n_sensor, n_lam, n_theta, n_phi), dtype=np.float64
     )
     n_simu = 0
     # Accumulate normalized quantities and their squares to estimate
@@ -4246,25 +4246,25 @@ def _loop_kernel(
 
     # Arrays for counting output photons
     n_photons_out = gpuzeros(
-        (n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64
+        (n_level, n_sensor, n_lam, n_theta, n_phi), dtype=np.uint64
     )
     n_photons_out_no_aer = gpuzeros(
-        (n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64
+        (n_level, n_sensor, n_lam, n_theta, n_phi), dtype=np.uint64
     )
     n_photons_out_tot = gpuzeros(
-        (n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64
+        (n_level, n_sensor, n_lam, n_theta, n_phi), dtype=np.uint64
     )
     n_photons_out_tot_no_aer = gpuzeros(
-        (n_level, n_sensor, n_lam, nb_theta, nb_phi), dtype=np.uint64
+        (n_level, n_sensor, n_lam, n_theta, n_phi), dtype=np.uint64
     )
 
     if double:
         tab_photons = gpuzeros(
-            (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi),
+            (n_level, n_pstk, n_sensor, n_lam, n_theta, n_phi),
             dtype=np.float64,
         )
         tab_photons_no_aer = gpuzeros(
-            (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi),
+            (n_level, n_pstk, n_sensor, n_lam, n_theta, n_phi),
             dtype=np.float64,
         )
         if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
@@ -4273,8 +4273,8 @@ def _loop_kernel(
                     n_level,
                     n_atm_abs + n_oce_abs,
                     n_sensor,
-                    nb_theta,
-                    nb_phi,
+                    n_theta,
+                    n_phi,
                     n_scl,
                     n_iamf,
                 ),
@@ -4284,11 +4284,11 @@ def _loop_kernel(
             tab_dist = gpuzeros((1), dtype=np.float64)
     else:
         tab_photons = gpuzeros(
-            (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi),
+            (n_level, n_pstk, n_sensor, n_lam, n_theta, n_phi),
             dtype=np.float32,
         )
         tab_photons_no_aer = gpuzeros(
-            (n_level, n_pstk, n_sensor, n_lam, nb_theta, nb_phi),
+            (n_level, n_pstk, n_sensor, n_lam, n_theta, n_phi),
             dtype=np.float32,
         )
         if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
@@ -4297,8 +4297,8 @@ def _loop_kernel(
                     n_level,
                     n_atm_abs + n_oce_abs,
                     n_sensor,
-                    nb_theta,
-                    nb_phi,
+                    n_theta,
+                    n_phi,
                     n_scl,
                     n_iamf,
                 ),
@@ -4310,14 +4310,14 @@ def _loop_kernel(
     if hist:
         _n_cols_hist = n_atm_abs + n_oce_abs + n_pstk + n_low + 7
         tab_hist_tot = gpuzeros(
-            (2, max_hist, _n_cols_hist, n_sensor, nb_theta, nb_phi),
+            (2, max_hist, _n_cols_hist, n_sensor, n_theta, n_phi),
             dtype=np.float32,
         )
         _hist_bytes = int(cast('int', tab_hist_tot.nbytes))
         print(
             f"[ALIS hist] tabHist allocated — "
             f"shape: (2, {max_hist:,}, {_n_cols_hist}, {n_sensor}, "
-            f"{nb_theta}, {nb_phi})  "
+            f"{n_theta}, {n_phi})  "
             f"| record: {_n_cols_hist} float32 "
             f"({n_atm_abs + n_oce_abs} path-lengths + {n_pstk} Stokes "
             f"+ {n_low} ALIS weights + 7 scalars)  "
@@ -4334,7 +4334,7 @@ def _loop_kernel(
         if 'count_level' in le:
             tab_level = to_gpu(le['count_level'].astype('int32'))
         else:
-            tab_level = to_gpu(np.full((nb_theta), -2).astype('int32'))
+            tab_level = to_gpu(np.full((n_theta), -2).astype('int32'))
     else:
         tab_thv = gpuzeros(1, dtype='float32')
         tab_phi = gpuzeros(1, dtype='float32')
@@ -4342,7 +4342,7 @@ def _loop_kernel(
 
     secs_cuda_clock = 0.0
     alis_norm = n_lam if n_low != 0 else 1
-    nb_photons_target = nb_photons
+    nb_photons_target = n_photons
     while (np.sum(n_photons_in_tot.get()) / alis_norm) < nb_photons_target:
         tab_photons.fill(0.0)
         tab_photons_no_aer.fill(0.0)
@@ -4474,7 +4474,7 @@ def _loop_kernel(
 
                 abs_min = stdev_lim.dict['err_abs_min']
                 rel_min = stdev_lim.dict['err_rel_min']
-                min_loop = stdev_lim.dict['nb_loop_min']
+                min_loop = stdev_lim.dict['n_loop_min']
                 stk_stdev = stdev_lim.dict['stk']
                 level_stdev = stdev_lim.dict['level']
                 format_std = stdev_lim.dict['format']
@@ -4516,7 +4516,7 @@ def _loop_kernel(
                 num = (n_bis * abs(sum_z2 - sum_2z)) ** 0.5
             den = mat_cats[0, 1]
             err_p_tmp = (num / den) * 100
-            min_loop = stdev_lim.dict['nb_loop_min']
+            min_loop = stdev_lim.dict['n_loop_min']
             rel_min = stdev_lim.dict['err_rel_min']
             format_std = stdev_lim.dict['format']
 
@@ -5401,7 +5401,7 @@ def _normalize_rec(
     mat_cats: np.ndarray,
     nb_cx: int,
     nb_cy: int,
-    nb_photons: float,
+    n_photons: float,
     surf_lph,
     cell_size: float,
     cus_l,
@@ -5427,7 +5427,7 @@ def _normalize_rec(
         Number of receiver cells in the x direction.
     nb_cy : int
         Number of receiver cells in the y direction.
-    nb_photons : float
+    n_photons : float
         Total number of launched photons in the simulation.
     surf_lph : float
         Illuminated surface area (km²) for launching mode "FF" or "RF".
@@ -5455,7 +5455,7 @@ def _normalize_rec(
     # needed to obtain power unit
     if cus_l is None:
         norm_c = 1.0
-        # norm_c = 1./nb_photons
+        # norm_c = 1./n_photons
         # # Weights -> propor to w/m², mult by s_rec_m is needed to get
         # something propor to watt unit
         # norm_c *= s_rec_m
@@ -5467,7 +5467,7 @@ def _normalize_rec(
         # Here results are already propor to watt unit
         norm_c = (
             surf_lph * 1e6
-        ) / nb_photons  # Here multiply by 1e6 to convert km² to m²
+        ) / n_photons  # Here multiply by 1e6 to convert km² to m²
         norm_ff = 1.0
         # lambertian sampling normalization
         if (
@@ -5503,12 +5503,12 @@ def _normalize_rec(
 
         if not le:
             norm_c = norm_br / (
-                nb_photons
+                n_photons
                 * 2
                 * (1 - np.cos(np.radians(cus_l.dict['sun_fov'])))
             )
         else:
-            norm_c = norm_br / nb_photons
+            norm_c = norm_br / n_photons
 
         # Weights -> propor to w/m², mult by s_rec_m is needed to get
         # something propor to watt unit

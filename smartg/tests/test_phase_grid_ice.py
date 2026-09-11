@@ -181,7 +181,7 @@ def atm_on(name):
     ).calc(WAVELENGTH, n_theta=grid_of(name))
 
 
-def run(sg, name, nb_photons=NBPHOTONS, nb_loop=NBLOOP, seed=SEED):
+def run(sg, name, n_photons=NBPHOTONS, n_loop=NBLOOP, seed=SEED):
     """The radiances of REF_18001's keys, each in the order of VZA."""
     m = sg.run(
         wavelength=WAVELENGTH,
@@ -189,8 +189,8 @@ def run(sg, name, nb_photons=NBPHOTONS, nb_loop=NBLOOP, seed=SEED):
         ph_deg=180.0,
         th_deg=SZA,
         le={"th_deg": VZA, "phi_deg": np.array([180.0])},
-        nb_loop=nb_loop,
-        nb_photons=nb_photons,
+        n_loop=n_loop,
+        n_photons=n_photons,
         output_layers=7,
         reflectance=False,
         theta_grid="phase",

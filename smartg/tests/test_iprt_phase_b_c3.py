@@ -508,8 +508,8 @@ def _find_optimal_xb_xg(sg, **run_kwargs):
         for xb in XB:
             m_test = sg.run(
                 **run_kwargs,
-                nb_photons=CHECK_NBPHOTONS,
-                nb_loop=CHECK_NBLOOP,
+                n_photons=CHECK_NBPHOTONS,
+                n_loop=CHECK_NBLOOP,
                 xblock=xb,
                 xgrid=xg,
                 progress=False,
@@ -570,8 +570,8 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
 
     m = s3db.run(
         **kw,
-        nb_photons=nbphotons,
-        nb_loop=NBLOOP,
+        n_photons=nbphotons,
+        n_loop=NBLOOP,
         xblock=xb,
         xgrid=xg,
         seed=SEED,

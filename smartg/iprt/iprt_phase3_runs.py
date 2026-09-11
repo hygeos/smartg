@@ -398,8 +398,8 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
     # BOA
     if (overwrite or not fboa_exist) and not is_e6:
         sensors = get_d1_to_e5_boa_sensors(vza, phi, nvza, nvaa, earth_r)
-        m_boa = sg.run(wavelength=wavelength, nb_photons=nvza*nvaa*nphotons,
-                        nb_loop=nphotons, atmosphere=pro, sensor=sensors,
+        m_boa = sg.run(wavelength=wavelength, n_photons=nvza*nvaa*nphotons,
+                        n_loop=nphotons, atmosphere=pro, sensor=sensors,
                         output_layers=1,
                         le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
                         stdev=True, progress=True, n_icdf=ntheta)#, seed=1e8)
@@ -411,8 +411,8 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
     if overwrite or not ftoa_exist:
         if not is_e6: sensors = get_d1_to_e5_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
         else : sensors = get_e6_toa_sensors(vza, phi, nvza, nvaa, earth_r, z)
-        m_toa = sg.run(wavelength=wavelength, nb_photons=nvza*nvaa*nphotons,
-                        nb_loop=nphotons, atmosphere=pro, sensor=sensors,
+        m_toa = sg.run(wavelength=wavelength, n_photons=nvza*nvaa*nphotons,
+                        n_loop=nphotons, atmosphere=pro, sensor=sensors,
                         output_layers=1,
                         le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
                         stdev=True, progress=True, n_icdf=ntheta)#, seed=1e8)
@@ -421,7 +421,7 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
         m_toa.to_netcdf(str(ftoa_path))
 
 
-def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
+def aer2smartg(filename, n_theta=int(1801), rh_or_reff=None, rh_reff=None):
     """
     
     In progress
@@ -430,7 +430,7 @@ def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
     ----------
     filename : str | pathlib.Path | xr.Dataset
         The path to the file to be converted. It can be directly an xr.Dataset.
-    nb_theta : int
+    n_theta : int
         The number of angles for the phase matrix
     
     Results
@@ -456,9 +456,8 @@ def aer2smartg(filename, nb_theta=int(1801), rh_or_reff=None, rh_reff=None):
     phase = ds["phase"][:, :, :, :].values
 
     NBSTK   = ds.nphamat.size
-    NBTHETA = nb_theta
     NBRH_OR_REFF  = rh_reff.size
-    theta = np.linspace(0., 180., num=NBTHETA)
+    theta = np.linspace(0., 180., num=n_theta)
     NWAV    = max(ds["wavelen"].size, int(2))
     if NWAV > ds["wavelen"].size:
         wavelength = np.concatenate((ds["wavelen"].values*1e3, ds["wavelen"].values*1e3 + 0.1))
@@ -952,7 +951,7 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         nth = 1801
 
         ds_spheroid = aer2smartg(OPT_PROP_PATH_PHASE3 / "sizedistr_spheroid.cdf",
-                                 nb_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
+                                 n_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
 
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'spheroid_d4.nc'
@@ -1328,7 +1327,7 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         nth = 18001
 
         file_aer1_phase = OPT_PROP_PATH_PHASE3 / "desert.cdf"
-        ds_desert = aer2smartg(file_aer1_phase, nb_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
+        ds_desert = aer2smartg(file_aer1_phase, n_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'desert_e3.nc'
             ds_desert.to_netcdf(file_path)
@@ -1396,8 +1395,8 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
 
         file_aer1_phase = OPT_PROP_PATH_PHASE3 / "desert.cdf"
         file_aer2_phase = OPT_PROP_PATH_PHASE3 / "sulfate.cdf"
-        ds_desert = aer2smartg(file_aer1_phase, nb_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
-        ds_sulfate = aer2smartg(file_aer2_phase, nb_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
+        ds_desert = aer2smartg(file_aer1_phase, n_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
+        ds_sulfate = aer2smartg(file_aer2_phase, n_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'desert_e4.nc'
             ds_desert.to_netcdf(file_path)
@@ -1480,7 +1479,7 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
             np.logical_and(wavelength_>=0.4, wavelength_<=0.5)
         ))
         ds_ic_baum_ghm_  = ds_ic_baum_ghm_ .sel(nlam = nlam_)
-        ds_ic_baum_ghm = aer2smartg(ds_ic_baum_ghm_, nb_theta=nth)
+        ds_ic_baum_ghm = aer2smartg(ds_ic_baum_ghm_, n_theta=nth)
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'ic_ghm_baum_e5.nc'
             ds_ic_baum_ghm.to_netcdf(file_path)
@@ -1653,8 +1652,8 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
     if (overwrite      or 
         not ftoa_exist  ):
         sg = S1DB
-        m_toa = sg.run(wavelength=wavelength, nb_photons=nsens*nphotons,
-                    nb_loop=nphotons, atmosphere=pro, sensor=sensors,
+        m_toa = sg.run(wavelength=wavelength, n_photons=nsens*nphotons,
+                    n_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_icdf=ntheta)
@@ -1749,8 +1748,8 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
     if (overwrite      or 
         not ftoa_exist  ):
         sg = Smartg(back=True, double=True, bias=True, pp=False, obj3d=True)
-        m_toa = sg.run(wavelength=wavelength, nb_photons=nsens*nphotons,
-                    nb_loop=nphotons, atmosphere=pro, sensor=sensors,
+        m_toa = sg.run(wavelength=wavelength, n_photons=nsens*nphotons,
+                    n_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_icdf=ntheta)
@@ -1849,8 +1848,8 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
     if (overwrite      or 
         not ftoa_exist  ):
         sg = S1DB
-        m_toa = sg.run(wavelength=wavelength, nb_photons=nsens*nphotons,
-                    nb_loop=nphotons, atmosphere=pro, sensor=sensors,
+        m_toa = sg.run(wavelength=wavelength, n_photons=nsens*nphotons,
+                    n_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
                     stdev=True, progress=True, n_icdf=ntheta)

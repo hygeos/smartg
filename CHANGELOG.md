@@ -230,8 +230,8 @@ corrected before the final `v2.0.0` release.
       string). The `ALDEG` attribute of the output dataset keeps its name
   - The parameters of `Smartg` and `Smartg.run` follow PEP 8. Constructor:
     `obj3D` → `obj3d` and `opt3D` → `opt3d`. `run`:
-    - `NBPHOTONS` → `nb_photons`, `NBLOOP` → `nb_loop`,
-      `NBTHETA` → `nb_theta`, `NBPHI` → `nb_phi`, `NF` → `n_icdf`
+    - `NBPHOTONS` → `n_photons`, `NBLOOP` → `n_loop`,
+      `NBTHETA` → `n_theta`, `NBPHI` → `n_phi`, `NF` → `n_icdf`
     - `THVDEG` → `th_deg`, `PHVDEG` → `ph_deg`, `SEED` → `seed`,
       `RTER` → `earth_radius`, `DEPO` → `depo`, `DEPO_WATER` → `depo_water`
     - `OUTPUT_LAYERS` → `output_layers`, `XBLOCK` → `xblock`,
@@ -244,6 +244,9 @@ corrected before the final `v2.0.0` release.
       `cusL` → `cus_l`, `IsAtm` → `is_atm`
     The `le` and `alis_options` dictionary keys and the output variable
     names are unchanged
+  - Every count is spelled `n_`: the `nb_` prefix of `StdevLim(nb_loop_min)`,
+    `DM_trunc(nb_streams)` and `aer2smartg(nb_theta)` is gone, they are now
+    `n_loop_min`, `n_streams` and `n_theta`
   - The abbreviated parameters of `Smartg.run` have been given their full
     name: `atm` → `atmosphere`, `surf` → `surface` and `env` → `environment`
   - The `th_v_deg` and `ph_v_deg` angles of `Smartg.run` are now `th_deg` and

@@ -279,9 +279,9 @@ def test_the_device_table_adopts_the_union_intact():
 @pytest.mark.parametrize(
     "truncation",
     [
-        DM_trunc(nb_streams=16, integral_method="lobatto"),
-        DM_trunc(nb_streams=16, integral_method="trapezoid"),
-        DM_trunc(nb_streams=16, integral_method="simpson"),
+        DM_trunc(n_streams=16, integral_method="lobatto"),
+        DM_trunc(n_streams=16, integral_method="trapezoid"),
+        DM_trunc(n_streams=16, integral_method="simpson"),
         GT_trunc(trunc_frac=0.9, integral_method="lobatto"),
     ],
     ids=["DM-lobatto", "DM-trapezoid", "DM-simpson", "GT-lobatto"],
@@ -454,7 +454,7 @@ def test_native_mixture_radiance_matches_a_fine_uniform_grid():
             le={"th_deg": _PEAK_ANGLES,
                 "phi_deg": np.array([0.0]),
                 "count_level": np.full(len(_PEAK_ANGLES), 1)},
-            output_layers=3, theta_grid="phase", nb_photons=2e7,
+            output_layers=3, theta_grid="phase", n_photons=2e7,
             seed=1234, xblock=128, xgrid=1024,
         )
         key = [str(k) for k in m if str(k).startswith("I_down")][0]

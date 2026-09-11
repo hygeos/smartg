@@ -83,7 +83,7 @@ def cleanup_after_each_test():
 @pytest.mark.parametrize("wmax", [350.0])
 @pytest.mark.parametrize("wmin", [320.0])
 def test_smartg_jax2(
-    n_wavelength_abs, wmin, wmax, request, nb_photons=5e4, max_hist=1e6
+    n_wavelength_abs, wmin, wmax, request, n_photons=5e4, max_hist=1e6
 ):
     alb_snow = AlbedoCst(0.6)
     alb_hist = AlbedoCst(1.0)
@@ -117,8 +117,8 @@ def test_smartg_jax2(
                     "hist": True,
                     "max_hist": np.int64(max_hist),
                 },
-                nb_photons=nb_photons,
-                nb_loop=nb_photons,
+                n_photons=n_photons,
+                n_loop=n_photons,
                 n_icdf=1e3,
             )
         )
@@ -133,7 +133,7 @@ def test_smartg_jax2(
                 beer=0,
                 atmosphere=atmosphere.calc(wavelength_abs),
                 alis_options={"nlow": wavelength_sca.size, "hist": False},
-                nb_photons=nb_photons,
+                n_photons=n_photons,
                 n_icdf=1e3,
             )
         )
@@ -172,7 +172,7 @@ def test_smartg_jax2(
             stk_i,
             fmt1,
             label="AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}".format(
-                aod, np.int64(nb_photons), np.int64(max_hist)
+                aod, np.int64(n_photons), np.int64(max_hist)
             ),
         )
         col = p[0].get_color()
@@ -192,7 +192,7 @@ def test_smartg_jax2(
             marker="+",
             ls="",
             label="AOD@550: {:.1f}; NBPH={:.0e}; NO HIST".format(
-                aod, np.int64(nb_photons)
+                aod, np.int64(n_photons)
             ),
             color=p[0].get_color(),
         )
@@ -205,7 +205,7 @@ def test_smartg_jax2(
     conftest.savefig(request)
 
 
-def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
+def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
     """
     Validation of SMART-G with ARTDECO validation data
     """
@@ -297,8 +297,8 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
             atmosphere=atm_valid.calc(w_valid),
             depo=0.0,
             alis_options={"nlow": nlow, "hist": False},
-            nb_photons=nb_photons,
-            nb_loop=nb_photons,
+            n_photons=n_photons,
+            n_loop=n_photons,
             n_icdf=1e3,
         )
     )
@@ -318,8 +318,8 @@ def test_validation_artdeco(request, nb_photons=5e5, valpath=DIR_AUXDATA):
                 "hist": True,
                 "max_hist": np.int64(1e7),
             },
-            nb_photons=nb_photons,
-            nb_loop=nb_photons,
+            n_photons=n_photons,
+            n_loop=n_photons,
             n_icdf=1e3,
         )
     )
