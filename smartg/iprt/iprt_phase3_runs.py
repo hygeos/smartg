@@ -5,7 +5,7 @@ import numpy as np
 
 import os 
 
-from smartg.smartg import Smartg
+from smartg.smartg import LocalEstimate, Smartg
 from smartg.surface import LambSurface, RoughSurface
 from smartg.sensor import Sensor
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
@@ -678,7 +678,8 @@ def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -729,7 +730,8 @@ def case_D2(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -818,7 +820,8 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -909,7 +912,8 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -973,7 +977,8 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1062,7 +1067,8 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1116,7 +1122,8 @@ def case_D6(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1171,7 +1178,8 @@ def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1225,7 +1233,8 @@ def case_E1(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1281,7 +1290,8 @@ def case_E2(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1348,7 +1358,8 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1425,7 +1436,8 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1499,7 +1511,8 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
@@ -1550,7 +1563,8 @@ def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
 
         count_lvl = np.zeros_like(sza, dtype=np.int32)
         phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
 
         # run simulations and create intermediate files
         run_sim(overwrite, False, ftoa_exist, 'none.nc', ftoa_path,
@@ -1600,7 +1614,8 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
 
     count_lvl = np.zeros_like(sza, dtype=np.int32)
     phi_0 = -saa # To follow iprt anti-clockwise convention
-    le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+    le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                           count_level=count_lvl)
 
     # run simulations and create intermediate files
     # ==== Get directions
@@ -1703,7 +1718,8 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
 
     count_lvl = np.zeros_like(sza, dtype=np.int32)
     phi_0 = -saa # To follow iprt anti-clockwise convention
-    le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+    le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                           count_level=count_lvl)
 
     # run simulations and create intermediate files
     # ==== Get directions
@@ -1804,7 +1820,8 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
 
     count_lvl = np.zeros_like(sza, dtype=np.int32)
     phi_0 = -saa # To follow iprt anti-clockwise convention
-    le     = {'th_deg':sza, 'phi_deg':phi_0, 'count_level':count_lvl}
+    le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                           count_level=count_lvl)
 
     # run simulations and create intermediate files
     # ==== Get directions

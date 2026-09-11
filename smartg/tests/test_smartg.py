@@ -8,7 +8,7 @@ SMART-G test suite using pytest
 import pytest
 import numpy as np
 import xarray as xr
-from smartg.smartg import Smartg
+from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import RoughSurface, LambSurface
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, Cloud
@@ -125,13 +125,114 @@ def test_locale_estimate(sg):
         atmosphere=atmosphere,
         surface=surface,
         th_deg=10.0,
-        le={
-            "th_deg": np.array([40.0], dtype="float32"),
-            "phi_deg": np.array([30.0], dtype="float32"),
-        },
+        le=LocalEstimate(
+            th_deg=np.array([40.0], dtype="float32"),
+            phi_deg=np.array([30.0], dtype="float32"),
+        ),
         n_photons=NBPHOTONS,
     )
     assert (res["I_up (TOA)"].values > 0).all()
+
+
+def test_local_estimate_angles():
+    """Degrees and radians build the same local estimate"""
+    deg = LocalEstimate(th_deg=[0.0, 30.0], phi_deg=[0.0, 90.0])
+    rad = LocalEstimate(
+        th=np.array([0.0, 30.0]) * np.pi / 180.0,
+        phi=np.array([0.0, 90.0]) * np.pi / 180.0,
+    )
+    np.testing.assert_allclose(deg.th, rad.th, rtol=1e-6)
+    np.testing.assert_allclose(deg.phi, rad.phi, rtol=1e-6)
+    assert deg.th.dtype == np.float32
+    assert deg.zip is False
+    assert deg.count_level is None
+
+
+def test_local_estimate_count_level():
+    """The zenith angles and the levels are ravelled and typed"""
+    le = LocalEstimate(
+        th_deg=[[0.0, 30.0]],
+        phi_deg=[[0.0, 90.0]],
+        zip=True,
+        count_level=[0, 4],
+    )
+    assert le.zip is True
+    assert le.th.shape == (2,)
+    assert le.count_level is not None
+    assert le.count_level.dtype == np.int32
+    np.testing.assert_array_equal(le.count_level, [0, 4])
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"th_deg": [0.0]},
+        {"th": [0.0], "th_deg": [0.0], "phi_deg": [0.0]},
+        {"th_deg": [0.0, 30.0], "phi_deg": [0.0], "zip": True},
+        {"th_deg": [0.0, 30.0], "phi_deg": [0.0, 90.0],
+         "count_level": [0]},
+    ],
+)
+def test_local_estimate_invalid(kwargs):
+    """An incomplete or inconsistent local estimate is rejected"""
+    with pytest.raises(ValueError):
+        LocalEstimate(**kwargs)
+
+
+def test_alis_defaults():
+    """The optional ALIS options keep the documented defaults"""
+    alis = Alis(n_low=10)
+    assert alis.n_low == 10
+    assert alis.hist is False
+    assert alis.max_hist == 8000000
+    assert alis.n_jac == 0
+    assert alis.n_jac_abs is False
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"n_low": 0},
+        {"n_low": 1},
+        {"n_low": 10, "n_jac_abs": True},
+        {"n_low": 10, "n_jac": 0, "n_jac_abs": True},
+    ],
+)
+def test_alis_invalid(kwargs):
+    """The combinations the kernel cannot honour are rejected"""
+    with pytest.raises(ValueError):
+        Alis(**kwargs)
+
+
+def test_le_dict_deprecated(sg):
+    """The legacy le dictionary runs, warns, and is left untouched"""
+    le = {
+        "th_deg": np.array([40.0], dtype="float32"),
+        "phi_deg": np.array([30.0], dtype="float32"),
+    }
+    with pytest.warns(DeprecationWarning, match="LocalEstimate"):
+        res = sg.run(
+            400.0,
+            atmosphere=Atm1D("afglt"),
+            surface=RoughSurface(),
+            le=le,
+            n_photons=NBPHOTONS,
+        )
+    assert (res["I_up (TOA)"].values > 0).all()
+    assert sorted(le) == ["phi_deg", "th_deg"]
+
+
+def test_alis_options_dict_deprecated(sg):
+    """The legacy alis_options keys map to the Alis parameters"""
+    with pytest.warns(DeprecationWarning, match="Alis"):
+        sg.run(
+            np.array([400.0, 600.0]),
+            atmosphere=Atm1D("afglt"),
+            surface=RoughSurface(),
+            alis_options={"nlow": -1, "njac": 0},
+            n_photons=NBPHOTONS,
+        )
 
 
 def test_dataset_to_mlut_roundtrip():
@@ -173,10 +274,10 @@ def test_no_aer_output():
     water = Water1D(grid=[0, -5.0], comp=[HydrosolPR(chl=0.5)])
     surface = RoughSurface(wind=5.0, nh2o=1.34)
     sg = Smartg()
-    le = {
-        "th_deg": np.array([0.0, 45.0, 89.9]),
-        "phi_deg": np.array([0.0, 15.6, 289.0]),
-    }
+    le = LocalEstimate(
+        th_deg=np.array([0.0, 45.0, 89.9]),
+        phi_deg=np.array([0.0, 15.6, 289.0]),
+    )
     m1 = sg.run(
         550.0,
         atmosphere=atm1,

@@ -18,6 +18,12 @@ Smartg
     or backward, ALIS, 3D objects, ...); the run method launches the
     Monte Carlo radiative transfer simulation and returns the results
     as an xarray Dataset.
+Alis
+    The options of the ALIS method, for the alis_options parameter of
+    Smartg.run.
+LocalEstimate
+    The directions of the local estimate method, for the le parameter
+    of Smartg.run.
 StdevLim
     Adaptive stopping criterion for Smartg.run based on the standard
     deviation of the results.
@@ -36,6 +42,7 @@ import os
 import numpy as np
 from datetime import datetime, timezone
 from numpy import pi
+from numpy.typing import NDArray
 from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
 from smartg.sensor import Sensor
 from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
@@ -47,6 +54,7 @@ from smartg.progress import progress as make_progress
 from smartg.cdf import icdf_2d
 from smartg.environ import modified_environ
 from smartg.xarray import drop_axes
+from smartg.typing import NumericArrayLike
 from scipy.interpolate import interp1d
 
 # from scipy.integrate import simpson
@@ -362,6 +370,268 @@ class StdevLim(object):
 
     def __repr__(self) -> str:
         return 'Stdevlim dict: %s' % self.dict.__repr__()
+
+
+# The legacy alis_options dictionary keys, and the Alis constructor
+# parameter each one became.
+_ALIS_LEGACY_KEYS = {
+    'nlow': 'n_low',
+    'njac': 'n_jac',
+    'njac_abs': 'n_jac_abs',
+}
+
+
+class Alis(object):
+    """
+    The options of the ALIS method, for Smartg.run.
+
+    ALIS (Emde et al. 2010) computes the spectrum of a whole band from
+    a single set of photon paths, by weighting each path with the
+    absorption of every wavelength. The Smartg object must have been
+    compiled with alis=True, together with alt_pp=True or pp=False.
+
+    Parameters
+    ----------
+    n_low : int
+        The number of low spectral resolution computations, at least
+        2, or -1 to select every wavelength.
+    hist : bool, optional
+        Activate the recording of the photon histories, which the
+        `smartg.histories` module post-processes. Default False.
+    max_hist : int, optional
+        The maximum number of recorded histories, only used if hist is
+        True. Default 8e6.
+    n_jac : int, optional
+        The number of perturbed profiles. Default 0, no Jacobian.
+    n_jac_abs : bool, optional
+        If True, Jacobians are for absorption only. ``weight_sca`` is
+        computed only for the reference wavelength group (allowing a
+        small ``n_low``), and is then reused (interpolated) for all
+        perturbed groups. The scattering correction for perturbed
+        wavelengths is taken from the reference group, while their
+        absorption is recomputed from the perturbed profile. Requires
+        n_jac > 0. Default False.
+
+    Attributes
+    ----------
+    n_low : int
+        The number of low spectral resolution computations.
+    hist : bool
+        Whether the photon histories are recorded.
+    max_hist : int
+        The maximum number of recorded histories.
+    n_jac : int
+        The number of perturbed profiles.
+    n_jac_abs : bool
+        Whether the Jacobians are for absorption only.
+
+    Raises
+    ------
+    ValueError
+        If n_low is neither -1 nor greater than 1, the kernel dividing
+        the wavelengths by n_low - 1, or if n_jac_abs is True without
+        a positive n_jac.
+
+    Examples
+    --------
+    >>> alis = Alis(n_low=10, n_jac=3, n_jac_abs=True)
+    >>> alis.n_low
+    10
+    """
+
+    def __init__(
+        self,
+        n_low: int,
+        hist: bool = False,
+        max_hist: int = 8000000,
+        n_jac: int = 0,
+        n_jac_abs: bool = False,
+    ) -> None:
+
+        if n_low != -1 and n_low < 2:
+            raise ValueError(
+                'n_low must be -1, to select every wavelength, or at '
+                'least 2, got {}.'.format(n_low)
+            )
+        if n_jac_abs and n_jac < 1:
+            raise ValueError(
+                'n_jac_abs needs a positive n_jac, got {}.'.format(n_jac)
+            )
+
+        self.n_low: int = n_low
+        self.hist: bool = hist
+        self.max_hist: int = max_hist
+        self.n_jac: int = n_jac
+        self.n_jac_abs: bool = n_jac_abs
+
+    def __str__(self) -> str:
+        return 'ALIS=-n_low{}-hist{}-n_jac{}'.format(
+            self.n_low, int(self.hist), self.n_jac
+        )
+
+    def __repr__(self) -> str:
+        return (
+            'Alis(n_low={!r}, hist={!r}, max_hist={!r}, n_jac={!r}, '
+            'n_jac_abs={!r})'.format(
+                self.n_low, self.hist, self.max_hist, self.n_jac,
+                self.n_jac_abs
+            )
+        )
+
+
+def _le_angles(
+    rad: NumericArrayLike | None,
+    deg: NumericArrayLike | None,
+    name: str,
+) -> NDArray[np.float32]:
+    """
+    Return the local estimate angles of one axis, in radians.
+
+    Parameters
+    ----------
+    rad : None | 1-D ndarray | list
+        The angles in radians, or None.
+    deg : None | 1-D ndarray | list
+        The angles in degrees, or None.
+    name : str
+        The name of the axis, for the error message.
+
+    Returns
+    -------
+    out : 1-D ndarray
+        The angles in radians, as float32.
+
+    Raises
+    ------
+    ValueError
+        If none or both of rad and deg are given.
+    """
+    if (rad is None) == (deg is None):
+        raise ValueError(
+            'Exactly one of {} and {}_deg must be given.'.format(
+                name, name
+            )
+        )
+    if rad is None:
+        # numpy keeps the float32 of the array, the stubs do not
+        return cast(
+            'NDArray[np.float32]',
+            np.array(deg, dtype='float32').ravel() * np.pi / 180.0,
+        )
+    return np.array(rad, dtype='float32').ravel()
+
+
+class LocalEstimate(object):
+    """
+    The directions of the local estimate method, for Smartg.run.
+
+    The local estimate method accumulates, at every scattering event,
+    the contribution of the photon to a fixed set of directions,
+    instead of sampling a cone of directions (see the n_theta and
+    n_phi parameters of the run method).
+
+    Parameters
+    ----------
+    th : None | 1-D ndarray | list, optional
+        The zenith angles in radians. Exactly one of th and th_deg
+        must be given.
+    phi : None | 1-D ndarray | list, optional
+        The azimuth angles in radians. Exactly one of phi and phi_deg
+        must be given.
+    th_deg : None | 1-D ndarray | list, optional
+        The zenith angles in degrees.
+    phi_deg : None | 1-D ndarray | list, optional
+        The azimuth angles in degrees.
+    zip : bool, optional
+        If True, th and phi covary: the output keeps a single azimuth
+        and its zenith dimension carries the (th, phi) couples. It
+        requires as many azimuth as zenith angles. Default False.
+    count_level : None | 1-D ndarray | list, optional
+        The level to count at, one value per zenith angle. Choices
+        are:
+
+            * -2 -> every level (Default)
+            * -1 -> no level
+            *  0 -> UPTOA
+            *  1 -> DOWN0P
+            *  2 -> DOWN0M
+            *  3 -> UP0P
+            *  4 -> UP0M
+            *  5 -> DOWNB
+
+    Attributes
+    ----------
+    th : 1-D ndarray
+        The zenith angles in radians, as float32.
+    phi : 1-D ndarray
+        The azimuth angles in radians, as float32.
+    zip : bool
+        Whether th and phi covary.
+    count_level : None | 1-D ndarray
+        The levels to count at, as int32, or None for every level.
+
+    Raises
+    ------
+    ValueError
+        If none or both of th and th_deg are given (same for phi and
+        phi_deg), if zip is True and there are not as many azimuth as
+        zenith angles, or if count_level does not hold one value per
+        zenith angle.
+
+    Examples
+    --------
+    >>> le = LocalEstimate(th_deg=[0., 30.], phi_deg=[0., 90.])
+    >>> le.th
+    array([0.       , 0.5235988], dtype=float32)
+    """
+
+    def __init__(
+        self,
+        th: NumericArrayLike | None = None,
+        phi: NumericArrayLike | None = None,
+        th_deg: NumericArrayLike | None = None,
+        phi_deg: NumericArrayLike | None = None,
+        zip: bool = False,
+        count_level: NumericArrayLike | None = None,
+    ) -> None:
+
+        self.th: NDArray[np.float32] = _le_angles(th, th_deg, 'th')
+        self.phi: NDArray[np.float32] = _le_angles(phi, phi_deg, 'phi')
+        self.zip: bool = zip
+
+        if zip and self.phi.shape[0] != self.th.shape[0]:
+            raise ValueError(
+                'With zip, there must be as many azimuth angles as '
+                'zenith angles, got {} and {}.'.format(
+                    self.phi.shape[0], self.th.shape[0]
+                )
+            )
+
+        self.count_level: NDArray[np.int32] | None = None
+        if count_level is not None:
+            self.count_level = np.array(
+                count_level, dtype='int32'
+            ).ravel()
+            if self.count_level.shape[0] != self.th.shape[0]:
+                raise ValueError(
+                    'count_level must hold one value per zenith '
+                    'angle, got {} for {} angles.'.format(
+                        self.count_level.shape[0], self.th.shape[0]
+                    )
+                )
+
+    def __str__(self) -> str:
+        return 'LE=-n_th{}-n_phi{}-zip{}'.format(
+            self.th.shape[0], self.phi.shape[0], int(self.zip)
+        )
+
+    def __repr__(self) -> str:
+        return (
+            'LocalEstimate(th={!r}, phi={!r}, zip={!r}, '
+            'count_level={!r})'.format(
+                self.th, self.phi, self.zip, self.count_level
+            )
+        )
 
 
 class Smartg(object):
@@ -770,7 +1040,7 @@ class Smartg(object):
         surface=None,
         water=None,
         environment=None,
-        alis_options: dict | None = None,
+        alis_options: Alis | dict | None = None,
         n_photons: float = 1e9,
         depo: float = 0.0279,
         depo_water: float = 0.0906,
@@ -790,7 +1060,7 @@ class Smartg(object):
         xgrid: int = 256,
         n_loop: float | None = None,
         progress: bool = True,
-        le: dict | None = None,
+        le: LocalEstimate | dict | None = None,
         flux: str | None = None,
         stdev: bool = False,
         stdev_lim: StdevLim | None = None,
@@ -835,9 +1105,13 @@ class Smartg(object):
         environment : None | Environment, optional
             The environment (adjacency effect) profile. If None, there
             is no environment.
-        alis_options : None | dict, optional
-            The alis options (the compilation option alis must be set to
-            True). The dictionary keys:
+        alis_options : None | Alis | dict, optional
+            The options of the ALIS method, see `Alis`. The
+            compilation option alis must be set to True.
+
+            Passing a dictionary is deprecated and will be removed in
+            one of the next release. Its keys, spelled out by the
+            constructor parameters of `Alis`, were:
 
             * 'nlow' : int
                 -> The number of low spectral resolution computation. If
@@ -956,8 +1230,15 @@ class Smartg(object):
             The number of photons launched in one kernel run.
         progress : bool, optional
             Activate the progress bar. Default True.
-        le : None | dict, optional
-            Activate the Local Estimate method. The le dictionary keys:
+        le : None | LocalEstimate | dict, optional
+            Activate the Local Estimate method: the directions the
+            photon contributions are accumulated in, see
+            `LocalEstimate`. If None, the directions are sampled on a
+            cone, see n_theta and n_phi.
+
+            Passing a dictionary is deprecated and will be removed in
+            one of the next release. Its keys, which are the
+            constructor parameters of `LocalEstimate`, were:
 
             * 'th' : 1-D ndarray | list, optional
                 -> The zenith angles in radians.
@@ -1119,6 +1400,25 @@ class Smartg(object):
                [0.15648, 0.14717, ..., 0.10935, 0.07744]])
 
         """
+
+        if isinstance(alis_options, dict):
+            warn_message = (
+                "\nPassing a dictionary to the alis_options parameter "
+                "is deprecated, use an Alis object instead."
+            )
+            warn(warn_message, DeprecationWarning, stacklevel=2)
+            alis_options = Alis(**{
+                _ALIS_LEGACY_KEYS.get(key, key): value
+                for key, value in alis_options.items()
+            })
+
+        if isinstance(le, dict):
+            warn_message = (
+                "\nPassing a dictionary to the le parameter is "
+                "deprecated, use a LocalEstimate object instead."
+            )
+            warn(warn_message, DeprecationWarning, stacklevel=2)
+            le = LocalEstimate(**le)
 
         if not self.pp and water is not None:
             raise ValueError(
@@ -1343,7 +1643,7 @@ class Smartg(object):
 
         # warning! values defined in communs.h
         # Maximum number of photons histories (alis=True and
-        # alis_options['hist'] = True), otherwise 0 (no histories)
+        # Alis(hist=True)), otherwise 0 (no histories)
         max_hist = np.int64(1)
         max_nlow = 801
 
@@ -1370,21 +1670,16 @@ class Smartg(object):
         n_jac = 0
         n_jac_abs = 0
         if alis_options is not None:
-            if 'hist' in alis_options.keys():
-                if alis_options['hist']:
-                    hist = True
-                    if 'max_hist' in alis_options.keys():
-                        max_hist = np.int64(alis_options['max_hist'])
-                    else:
-                        max_hist = np.int64(8000000)
-            if 'njac' in alis_options.keys():
-                n_jac = alis_options['njac']
-            if alis_options.get('njac_abs', False):
+            if alis_options.hist:
+                hist = True
+                max_hist = np.int64(alis_options.max_hist)
+            n_jac = alis_options.n_jac
+            if alis_options.n_jac_abs:
                 n_jac_abs = 1
-            if alis_options['nlow'] == -1:
+            if alis_options.n_low == -1:
                 n_low = n_lam
             else:
-                n_low = alis_options['nlow']
+                n_low = alis_options.n_low
             beer = 1
             assert n_low <= max_nlow
 
@@ -1707,37 +2002,11 @@ class Smartg(object):
         zip_code = 0
         if le is not None:
             le_code = 1
-            if 'th' not in le:
-                le['th'] = (
-                    np.array(le['th_deg'], dtype='float32').ravel()
-                    * np.pi
-                    / 180.0
-                )
-            else:
-                le['th'] = np.array(le['th'], dtype='float32').ravel()
-            if 'phi' not in le:
-                le['phi'] = (
-                    np.array(le['phi_deg'], dtype='float32').ravel()
-                    * np.pi
-                    / 180.0
-                )
-            else:
-                le['phi'] = np.array(le['phi'], dtype='float32').ravel()
-
-            n_theta = le['th'].shape[0]
-            n_phi = le['phi'].shape[0]
-
-            if 'zip' in le:
-                if le['zip']:
-                    assert n_phi == n_theta
-                    zip_code = 1
-                    n_phi = 1
-
-            if 'count_level' in le:
-                le['count_level'] = np.array(
-                    le['count_level'], dtype='int32'
-                ).ravel()
-                assert len(le['count_level']) == n_theta
+            n_theta = le.th.shape[0]
+            n_phi = le.phi.shape[0]
+            if le.zip:
+                zip_code = 1
+                n_phi = 1
 
         flux_code = 0
         if flux is not None:
@@ -2276,7 +2545,7 @@ def _finalize(
     prof_oc,
     sigma: np.ndarray | None,
     horiz: int,
-    le: dict | None = None,
+    le: LocalEstimate | None = None,
     flux: str | None = None,
     back: bool = False,
     sza_max: float = 90.0,
@@ -2330,8 +2599,8 @@ def _finalize(
         Standard deviation estimate (stdev mode).
     horiz : int
         Horizontal irradiance normalization flag.
-    le : dict | None, optional
-        The local estimate dictionary of run.
+    le : LocalEstimate | None, optional
+        The local estimate directions of run.
     flux : str | None, optional
         The flux mode of run ('planar', 'spherical', ...).
     back : bool, optional
@@ -2372,12 +2641,9 @@ def _finalize(
     zip_flag = False
     if flux is None:
         if le is not None:
-            tab_th = le['th']
-            tab_phi = le['phi']
-            if 'zip' not in le.keys():
-                zip_flag = False
-            else:
-                zip_flag = le['zip']
+            tab_th = le.th
+            tab_phi = le.phi
+            zip_flag = le.zip
             norm_geo = 1.0
         else:
             tab_th, tab_phi, tab_omega = _calc_solid_angles(
@@ -2441,12 +2707,9 @@ def _finalize(
         ds.attrs['LE'] = int(0)
 
     if le is not None:
-        if 'zip' in le:
-            if le['zip']:
-                ds.attrs['zip'] = 'True'
-                iphi = 0
-            else:
-                axnames.insert(0, 'Azimuth angles')
+        if le.zip:
+            ds.attrs['zip'] = 'True'
+            iphi = 0
         else:
             axnames.insert(0, 'Azimuth angles')
     else:
@@ -4005,7 +4268,7 @@ def _loop_kernel(
     kernel,
     progress,
     x0: GPUArray | None,
-    le: dict | None,
+    le: LocalEstimate | None,
     tab_sensor: GPUArray,
     envmap: GPUArray,
     spectrum: GPUArray,
@@ -4075,8 +4338,8 @@ def _loop_kernel(
         Progress-bar-like object exposing ``update(value, message)``.
     x0 : pycuda.gpuarray.GPUArray
         Initial photon position.
-    le : dict or None
-        Local estimate configuration, or None.
+    le : LocalEstimate or None
+        Local estimate directions, or None.
     tab_sensor, envmap, spectrum : pycuda.gpuarray.GPUArray
         Sensor table, environment map, and spectrum arrays on device.
     prof_atm, prof_oc : pycuda.gpuarray.GPUArray
@@ -4187,7 +4450,7 @@ def _loop_kernel(
     # takes iph from ith; the kernel slices it by the same rule.
     if le_fov > 0:
         n_phi_le = (
-            n_theta if (le is not None and le.get('zip', False)) else n_phi
+            n_theta if (le is not None and le.zip) else n_phi
         )
         tab_dir_le = gpuzeros(
             xblock * xgrid * (n_theta + n_phi_le), dtype='float32'
@@ -4329,10 +4592,10 @@ def _loop_kernel(
 
     # Local estimate angles
     if le is not None:
-        tab_thv = to_gpu(le['th'].astype('float32'))
-        tab_phi = to_gpu(le['phi'].astype('float32'))
-        if 'count_level' in le:
-            tab_level = to_gpu(le['count_level'].astype('int32'))
+        tab_thv = to_gpu(le.th.astype('float32'))
+        tab_phi = to_gpu(le.phi.astype('float32'))
+        if le.count_level is not None:
+            tab_level = to_gpu(le.count_level.astype('int32'))
         else:
             tab_level = to_gpu(np.full((n_theta), -2).astype('int32'))
     else:

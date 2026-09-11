@@ -18,15 +18,15 @@ from gc import collect
 jax = pytest.importorskip(
     "jax", reason="cannot test this since the jax package is not installed."
 )
-from smartg.histories import get_histories, BigSum, Si, Si2
+from smartg.histories import get_histories, big_sum, si, si2
 import numpy as np
+import xarray as xr
 import matplotlib.pyplot as plt
-from smartg.smartg import Smartg
+from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import LambSurface
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import Atm1D, AerOPAC, od2k
 from smartg.diff import diff1
-from luts import LUT
 from smartg.view import mdesc
 from smartg import conftest
 from pathlib import Path
@@ -90,7 +90,9 @@ def test_smartg_jax2(
     wavelength_sca = np.linspace(wmin, wmax, num=11)
     wavelength_abs = np.linspace(wmin, wmax, num=n_wavelength_abs)
     alb = alb_snow.get(wavelength_abs)
-    lez = {"th_deg": np.array([0.0]), "phi_deg": np.array([0.0]), "zip": False}
+    lez = LocalEstimate(
+        th_deg=np.array([0.0]), phi_deg=np.array([0.0]), zip=False
+    )
 
     for aod, fmt1 in zip(
         np.linspace(0.1, 0.5, num=2), ["-m", "-c"], strict=True
@@ -112,11 +114,11 @@ def test_smartg_jax2(
                 le=lez,
                 beer=0,
                 atmosphere=atmosphere.calc(wavelength_sca),
-                alis_options={
-                    "nlow": wavelength_sca.size,
-                    "hist": True,
-                    "max_hist": np.int64(max_hist),
-                },
+                alis_options=Alis(
+                    n_low=wavelength_sca.size,
+                    hist=True,
+                    max_hist=np.int64(max_hist),
+                ),
                 n_photons=n_photons,
                 n_loop=n_photons,
                 n_icdf=1e3,
@@ -132,7 +134,9 @@ def test_smartg_jax2(
                 le=lez,
                 beer=0,
                 atmosphere=atmosphere.calc(wavelength_abs),
-                alis_options={"nlow": wavelength_sca.size, "hist": False},
+                alis_options=Alis(
+                    n_low=wavelength_sca.size, hist=False
+                ),
                 n_photons=n_photons,
                 n_icdf=1e3,
             )
@@ -144,11 +148,11 @@ def test_smartg_jax2(
             jax.devices("cpu")[0]
         ):  # run on CPU to avoid slow GPU XLA compilation
             N, S, D, w, _, nref, _, _, _, _, _ = get_histories(
-                m, LEVEL=level, verbose=False
+                m, level=level, verbose=False
             )
             stk_i = (
                 np.array(
-                    BigSum(Si, only_I=True)(
+                    big_sum(si, only_i=True)(
                         wavelength_abs, sigma, alb, S[:, 0], w, D,
                         nref, wavelength_sca
                     ).sum(axis=0)
@@ -157,7 +161,7 @@ def test_smartg_jax2(
             )
             stk_i2 = (
                 np.array(
-                    BigSum(Si2, only_I=True)(
+                    big_sum(si2, only_i=True)(
                         wavelength_abs, sigma, alb, S[:, 0], w, D,
                         nref, wavelength_sca
                     ).sum(axis=0)
@@ -251,10 +255,14 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
     pha_data[:, :, 0, :] = (data[:, :, 1, :] + data[:, :, 2, :]) * 0.5
     pha_data[:, :, 1, :] = (data[:, :, 1, :] - data[:, :, 2, :]) * 0.5
 
-    phase_valid = LUT(
+    phase_valid = xr.DataArray(
         pha_data,
-        names=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
-        axes=[wavelength_phase, [0], None, data[0, 0, 0, :]],
+        dims=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
+        coords={
+            "wavelength_phase": wavelength_phase,
+            "z_phase": [0],
+            "theta_atm": data[0, 0, 0, :],
+        },
     )
     data_valid = np.loadtxt(
         Path(valpath) / "validation" / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat"
@@ -277,11 +285,11 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
     sigma_valid = od2k(atm_valid.calc(w_valid), "OD_abs_atm")[:, 1:]
     ###############
 
-    le = {
-        "th_deg": np.array([20.0]),
-        "phi_deg": np.array([180.0]),
-        "zip": False,
-    }
+    le = LocalEstimate(
+        th_deg=np.array([20.0]),
+        phi_deg=np.array([180.0]),
+        zip=False,
+    )
     nlow = 3
     wavelength_lr = np.linspace(w_valid.min(), w_valid.max(), num=nlow)
 
@@ -296,7 +304,7 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
             beer=0,
             atmosphere=atm_valid.calc(w_valid),
             depo=0.0,
-            alis_options={"nlow": nlow, "hist": False},
+            alis_options=Alis(n_low=nlow, hist=False),
             n_photons=n_photons,
             n_loop=n_photons,
             n_icdf=1e3,
@@ -313,11 +321,11 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
             beer=0,
             atmosphere=atm_valid.calc(w_valid),
             depo=0.0,
-            alis_options={
-                "nlow": nlow,
-                "hist": True,
-                "max_hist": np.int64(1e7),
-            },
+            alis_options=Alis(
+                n_low=nlow,
+                hist=True,
+                max_hist=np.int64(1e7),
+            ),
             n_photons=n_photons,
             n_loop=n_photons,
             n_icdf=1e3,
@@ -332,11 +340,11 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
         jax.devices("cpu")[0]
     ):  # run on CPU to avoid slow GPU XLA compilation
         N, S, D, w, _, nref, _, _, _, _, _ = get_histories(
-            m2, LEVEL=0, verbose=True
+            m2, level=0, verbose=True
         )
         stk_i = (
             np.array(
-                BigSum(Si, only_I=True)(
+                big_sum(si, only_i=True)(
                     w_valid,
                     sigma_valid,
                     np.zeros_like(w_valid),

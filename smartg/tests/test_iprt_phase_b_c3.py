@@ -31,7 +31,7 @@ from smartg.view import satellite_view
 from smartg.phase import read_phase_cdf
 from smartg.albedo import AlbedoCst
 from smartg.surface import LambSurface
-from smartg.smartg import Smartg
+from smartg.smartg import LocalEstimate, Smartg
 from smartg.truncation import GT_trunc
 
 # *********************** Global variable(s) ***************************
@@ -551,11 +551,11 @@ def _run_case_backward(s3db, atm_c3, sensor_grid, case, nbphotons=NBPHOTONS):
     )
 
     # count_level = 0 -> only COUNT TOA
-    le = {
-        "th_deg": np.array([theta_0]),
-        "phi_deg": np.array([PHI_0]),
-        "count_level": np.array([0]),
-    }
+    le = LocalEstimate(
+        th_deg=np.array([theta_0]),
+        phi_deg=np.array([PHI_0]),
+        count_level=np.array([0]),
+    )
 
     kw = dict(
         wavelength=wavelengths,

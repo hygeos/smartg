@@ -67,6 +67,10 @@ corrected before the final `v2.0.0` release.
       `convert_sgout_to_iprtout`, `compute_deltam_IPRTout` →
       `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`, and
       their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...)
+    - histories: `Si` → `si`, `Si2` → `si2`, `BigSum` → `big_sum`, and
+      their parameters (`Dij` → `dij`, `Ki` → `ki`, `S` → `s`,
+      `only_I` → `only_i`); the `LEVEL` and `IDIR` parameters of
+      `get_histories` are now `level` and `idir`
   - The water module has been restructured for consistency with the
     atmosphere module: the `IOP*` classes (`IOP_base`, `IOP`, `IOP_1`,
     `IOP_Rw`, `IOP_profile`) have been replaced by the new `Water` /
@@ -80,6 +84,10 @@ corrected before the final `v2.0.0` release.
     provides `dataarray_to_lut` / `dataset_to_mlut` converters for
     backward compatibility, and `drop_axes`, the equivalent of the
     `MLUT.dropaxis` method
+  - The tracked notebooks and tests no longer use LUT/MLUT either: the
+    demo notebook selects and plots straight from the run Dataset
+    instead of converting it back with `dataset_to_mlut`, and the phase
+    matrices they build by hand are `xr.DataArray` objects
   - `Smartg.run` returns an `xr.Dataset` instead of an MLUT. The
     variable names, their order, the coordinates and the attributes
     are unchanged, and the dimensions which were anonymous in the
@@ -100,6 +108,9 @@ corrected before the final `v2.0.0` release.
     4-D `xr.DataArray` (dims: `wavelength_phase`, `z_phase`, `nphamat`,
     `theta_atm/oc`). The `nphamat` dimension is no longer squeezed when its
     size is 1.
+  - The `standard` parameter of the phase readers has been removed:
+    files are expected in the standard IQUV convention, `run` doing the
+    conversion into the parallel/perpendicular convention of the kernels
   - The phase-matrix term dimension is now named `nphamat` internally
     (was `stk`; the auxdata files keep `stk`, which is renamed on load),
     and the run output dimensions `stk_atm` / `stk_oc` are now
@@ -242,8 +253,9 @@ corrected before the final `v2.0.0` release.
       `FFS` → `ffs`, `DIRECT` → `direct`,
       `OCEAN_INTERACTION` → `ocean_interaction`, `myObjects` → `my_objects`,
       `cusL` → `cus_l`, `IsAtm` → `is_atm`
-    The `le` and `alis_options` dictionary keys and the output variable
-    names are unchanged
+    The output variable names are unchanged; the `le` and `alis_options`
+    dictionaries have since become the `LocalEstimate` and `Alis` classes
+    (see New features)
   - Every count is spelled `n_`: the `nb_` prefix of `StdevLim(nb_loop_min)`,
     `DM_trunc(nb_streams)` and `aer2smartg(nb_theta)` is gone, they are now
     `n_loop_min`, `n_streams` and `n_theta`
@@ -402,6 +414,21 @@ corrected before the final `v2.0.0` release.
       every grid kind at 451 and 1801 nodes, the file grid and a
       uniform 18001 grid, against saved 1e8 photon values at a fixed
       seed; the 1e10 photon reference of the study is logged
+  - The `le` and `alis_options` parameters of `Smartg.run` now take the new
+    `LocalEstimate` and `Alis` objects, like every other structured
+    parameter of the method. A dictionary is still accepted, with a
+    deprecation warning, and its keys stay documented
+    - `LocalEstimate(th=, phi=, th_deg=, phi_deg=, zip=, count_level=)`
+      keeps the names of the former keys. It validates the angles once, so
+      `run` no longer writes the radians back into the caller's dictionary,
+      where they shadowed any later change to `th_deg`
+    - `Alis(n_low=, hist=, max_hist=, n_jac=, n_jac_abs=)` spells out the
+      former `nlow`, `njac` and `njac_abs` keys, and `n_low` is now
+      required rather than raising a `KeyError` from inside `run`
+    - Both classes raise a `ValueError` for the inconsistent inputs that
+      used to pass silently: mismatched zipped angles, a `count_level` of
+      the wrong length, `n_jac_abs` without a positive `n_jac`, and an
+      `n_low` of 1, which the kernel divides by
   - New 3D atmosphere user API in `smartg.atmosphere`: a 3D atmosphere is now
     built directly as
     `Atm3D(atm_1d=Atm1D(...), grid_3d=Grid3D(...), comp_3d=[Cloud3D(...)])`
