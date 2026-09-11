@@ -11,7 +11,9 @@ solid column ice table, the sharpest phase function of the three ice
 tables in auxdata. The radiance reflected at TOA and transmitted at
 the surface is computed at two viewing angles for every angle grid
 kind and size, and compared with the values saved below, which were
-measured with the same seed and photon count.
+measured with the same seed and photon count, within the Monte Carlo
+noise the run estimates for itself (stdev=True), so that the check
+holds on any GPU model.
 
 The angle grid is what is under test, so the grids are not judged
 against the file grid but against a uniform grid fine enough to hold
@@ -42,12 +44,12 @@ SEED = 1234
 XBLOCK = 128
 XGRID = 1024
 
-# The saved values below were measured with this photon count, in one
-# kernel launch. The single-run noise at 1e8 is 0.3 to 0.5% here,
-# smaller by an order of magnitude than the grid effects the test
-# tells apart, see the study.
+# The saved values below were measured with this photon count. The
+# photons are launched in 10 kernel loops so that Smartg.run estimates
+# the Monte Carlo noise from the spread between loops (stdev=True);
+# the noise of the total is that of a single launch of NBPHOTONS.
 NBPHOTONS = 1e8
-NBLOOP = 1e8
+NBLOOP = 1e7
 
 # Iwabuchi and Suzuki (2009) figure 3: a cloud of optical thickness 5
 # at 500 nm between 0 and 1 km, effective radius 8 um, conservative
@@ -63,14 +65,21 @@ TAU = 5.0
 SZA = 60.0
 VZA = np.array([-60.0, -27.5])
 
-# Two sided fractional band around the saved values. The kernel is not
-# reproducible bit for bit from one process to the next even at fixed
-# seed, the order of the atomic sums varies: two processes at the
-# settings above differ by up to 8e-4 over the 32 values below, 1e-4
-# typically. The band is six times that worst case, and still five
-# times narrower than the smallest grid effect of the study, the
-# +0.6% of uniform-1801 in transmission.
-TOL = 5e-3
+# Band around the saved values, in units of the noise of a difference
+# of two independent realisations, sqrt(2) times the sigma the run
+# estimates for its own value. The saved values are one realisation:
+# the same seed gives another one on another GPU model, since the
+# threads are scheduled differently, so the band must hold whatever
+# the GPU. Measured with stdev=True at the settings above, the
+# relative sigma is 0.1% (transmission at 60 degrees) to 0.5%
+# (reflection); over 96 values from two GPU models and two seeds, the
+# worst deviation from the saved values was 1.04%, 2.4 sigma of the
+# difference. Four sigma keeps a false failure below 1e-4 per value
+# with a sigma estimated from 10 loops, and still tells apart the
+# grid effects of the study: the coarse uniform-451 grid at +3% in
+# reflection and +9% in transmission, and the +1% of uniform-1801 in
+# transmission at 60 degrees, where the band is 0.6%.
+NSIGMA = 4.0
 
 # The angle grids under test: "kind-n" for the generators of
 # smartg.phase.theta_grid, "native" for the grid of the file.
@@ -182,7 +191,10 @@ def atm_on(name):
 
 
 def run(sg, name, n_photons=NBPHOTONS, n_loop=NBLOOP, seed=SEED):
-    """The radiances of REF_18001's keys, each in the order of VZA."""
+    """The radiances of REF_18001's keys and their Monte Carlo sigma.
+
+    Two dicts keyed like REF_18001, each value in the order of VZA.
+    """
     m = sg.run(
         wavelength=WAVELENGTH,
         atmosphere=atm_on(name),
@@ -198,11 +210,16 @@ def run(sg, name, n_photons=NBPHOTONS, n_loop=NBLOOP, seed=SEED):
         xblock=XBLOCK,
         xgrid=XGRID,
         progress=False,
+        stdev=True,
     )
-    return {
-        k: np.squeeze(m[k].values).ravel()[: len(VZA)]
-        for k in REF_18001
-    }
+
+    def values(key):
+        return np.squeeze(m[key].values).ravel()[: len(VZA)]
+
+    return (
+        {k: values(k) for k in REF_18001},
+        {k: values(k.replace("I_", "I_stdev_")) for k in REF_18001},
+    )
 
 
 @pytest.fixture(scope="module")
@@ -213,17 +230,26 @@ def sg():
 # ****************************** tests *********************************
 @pytest.mark.parametrize("name", GRIDS)
 def test_radiance_on_grid(sg, name):
-    got = run(sg, name)
+    got, sigma = run(sg, name)
     logger.info("---- %s (%d angles) ----", name, len(grid_of(name)))
     for k, ref in REF_18001.items():
         saved = np.asarray(SAVED[name][k])
+        band = NSIGMA * np.sqrt(2.0) * sigma[k]
         logger.info(
-            "%s at VZA %s: %s; saved %s; vs 1e10 reference %s %%",
+            "%s at VZA %s: %s; saved %s; sigma %s; vs 1e10 reference %s %%",
             k,
             " / ".join("%g" % v for v in VZA),
             " / ".join("%.6e" % v for v in got[k]),
             " / ".join("%.6e" % v for v in saved),
+            " / ".join("%.2e" % v for v in sigma[k]),
             " / ".join("%+.2f" % (100 * (v / r - 1))
                        for v, r in zip(got[k], ref)),
         )
-        np.testing.assert_allclose(got[k], saved, rtol=TOL)
+        assert np.all(np.isfinite(sigma[k])) and np.all(sigma[k] > 0), (
+            f"{name} {k}: no Monte Carlo sigma, {sigma[k]}"
+        )
+        assert np.all(np.abs(got[k] - saved) <= band), (
+            f"{name} {k}: {got[k]} vs saved {saved}, "
+            f"{(got[k] - saved) / (np.sqrt(2.0) * sigma[k])} sigma of "
+            f"the difference, band {NSIGMA} sigma"
+        )
