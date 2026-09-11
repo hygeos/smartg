@@ -6073,13 +6073,13 @@ def atm_pro_from_aeronet(
     """
 
     pd_date = pd.Timestamp(date + " " + time)
-    nb_sec_day = 24 * 60 * 60  # number of seconds in one day
+    n_sec_day = 24 * 60 * 60  # number of seconds in one day
     day_frac = 1 - (
         (
-            nb_sec_day
+            n_sec_day
             - (pd_date.hour * 60 * 60 + pd_date.minute * 60 + pd_date.second)
         )
-        / nb_sec_day
+        / n_sec_day
     )
     day_year_frac = pd_date.day_of_year + day_frac
     print("day_year_frac =", day_year_frac)

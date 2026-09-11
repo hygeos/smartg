@@ -133,9 +133,9 @@ def test_a1(request, s1df, s1db):
     vaa = np.arange(vaa_min, vaa_max + vaa_inc, vaa_inc)
 
     lsensors = []
-    nb_vza = len(vza)
-    nb_vaa = len(vaa)
-    nb_dir = round(nb_vaa * nb_vza)
+    n_vza = len(vza)
+    n_vaa = len(vaa)
+    n_dir = round(n_vaa * n_vza)
     for _iza, za in enumerate(vza):
         for _iaa, aa in enumerate(vaa):
             phi = -aa + 180
@@ -145,7 +145,7 @@ def test_a1(request, s1df, s1db):
 
     m_a1_b = s1db.run(
         wavelength=550.0,
-        n_photons=1e7 * nb_dir,
+        n_photons=1e7 * n_dir,
         n_loop=1e7,
         atmosphere=atmosphere,
         sensor=lsensors,
@@ -187,9 +187,9 @@ def test_a1(request, s1df, s1db):
     vza = np.arange(vza_min, vza_max + vza_inc, vza_inc)
 
     lsensors = []
-    nb_vza = len(vza)
-    nb_vaa = len(vaa)
-    nb_dir = round(nb_vaa * nb_vza)
+    n_vza = len(vza)
+    n_vaa = len(vaa)
+    n_dir = round(n_vaa * n_vza)
     for _iza, za in enumerate(vza):
         for _iaa, aa in enumerate(vaa):
             phi = -aa + 180
@@ -199,7 +199,7 @@ def test_a1(request, s1df, s1db):
 
     m_a1_b = s1db.run(
         wavelength=550.0,
-        n_photons=1e7 * nb_dir,
+        n_photons=1e7 * n_dir,
         n_loop=1e7,
         atmosphere=atmosphere,
         sensor=lsensors,

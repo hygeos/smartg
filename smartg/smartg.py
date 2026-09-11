@@ -1279,12 +1279,12 @@ class Smartg(object):
                 n_obj,
                 n_robj,
                 surf_lph_rf,
-                nb_h,
+                n_h,
                 z_alt_h,
                 tot_s_h,
                 tc,
-                nb_cx,
-                nb_cy,
+                n_cx,
+                n_cy,
                 my_objects0,
                 my_gobj0,
                 my_robj0,
@@ -1319,9 +1319,9 @@ class Smartg(object):
             p_max_z = None
             is_atm = None
             tc = None
-            nb_cx = 10
-            nb_cy = 10
-            nb_h = 0
+            n_cx = 10
+            n_cy = 10
+            n_h = 0
             z_alt_h = None
             tot_s_h = None
             n_cos = None
@@ -1867,8 +1867,8 @@ class Smartg(object):
             p_max_z,
             is_atm,
             tc,
-            nb_cx,
-            nb_cy,
+            n_cx,
+            n_cy,
             v_sun,
             hist_code,
             z_toa,
@@ -1950,8 +1950,8 @@ class Smartg(object):
             self.alis,
             my_objects0,
             tc,
-            nb_cx,
-            nb_cy,
+            n_cx,
+            n_cy,
             my_gobj0,
             my_robj0,
             my_spect_obj0,
@@ -1973,8 +1973,8 @@ class Smartg(object):
             c_mat_visu_recep, mat_cats, n_cte = _normalize_rec(
                 c_mat_visu_recep=c_mat_visu_recep,
                 mat_cats=mat_cats,
-                nb_cx=nb_cx,
-                nb_cy=nb_cy,
+                n_cx=n_cx,
+                n_cy=n_cy,
                 n_photons=float(np.sum(n_photons_in_tot)),
                 surf_lph=surf_lph,
                 cell_size=tc,
@@ -1982,10 +1982,10 @@ class Smartg(object):
                 le=le_code,
             )
 
-        if nb_h > 0 and tc is not None and cus_l is not None:
+        if n_h > 0 and tc is not None and cus_l is not None:
             assert z_alt_h is not None
-            mz_alt_h = z_alt_h / nb_h
-            s_rec = tc * tc * nb_cx * nb_cy  # ; weight_r=mat_cats[2, 1]
+            mz_alt_h = z_alt_h / n_h
+            s_rec = tc * tc * n_cx * n_cy  # ; weight_r=mat_cats[2, 1]
             # dic_stp : tuple incorporating parameters for Solar Tower
             # Power applications
             if self.back:
@@ -1993,7 +1993,7 @@ class Smartg(object):
             else:
                 receiver_fov = 0.0
             dic_stp = {
-                "nb_H": nb_h,
+                "nb_H": n_h,
                 "n_cos": n_cos,
                 "totS_H": tot_s_h,
                 "surfTOA": surf_lph,
@@ -2010,7 +2010,7 @@ class Smartg(object):
             }
         # If there are no heliostats --> no analyses of optical losses
         elif tc is not None and cus_l is not None:
-            s_rec = tc * tc * nb_cx * nb_cy
+            s_rec = tc * tc * n_cx * n_cy
             mat_loss = None  # ;weight_r=mat_cats[2, 1]
             if self.back:
                 receiver_fov = cus_l.dict['receiver_fov']
@@ -2028,7 +2028,7 @@ class Smartg(object):
                 "receiver_fov": receiver_fov,
             }
         elif tc is not None:
-            s_rec = tc * tc * nb_cx * nb_cy
+            s_rec = tc * tc * n_cx * n_cy
             mat_loss = None
             dic_stp = {"vSun": v_sun, "SREC": s_rec, "TC": tc, "n_cte": n_cte}
         # If there are no heliostats and receiver --> there is no STP
@@ -3470,8 +3470,8 @@ def _init_const(
     p_max_z: float | None,
     is_atm: int | None,
     tc: float | None,
-    nb_cx: int,
-    nb_cy: int,
+    n_cx: int,
+    n_cy: int,
     v_sun,
     hist: int,
     z_toa: float,
@@ -3480,8 +3480,8 @@ def _init_const(
     sx_max: float,
     sy_min: float,
     sy_max: float,
-    nb_sx: int,
-    nb_sy: int,
+    n_sx: int,
+    n_sy: int,
     no_aer_output: bool,
     n_scl: int = 1,
     scl_mode: int = 0,
@@ -3537,7 +3537,7 @@ def _init_const(
         Path-length limits and Russian-roulette configuration.
     n_jac, hist, n_sensor, refrac, horiz : int
         Jacobian/history, sensor, and geometry/refraction control flags.
-    n_obj, n_gobj, n_robj, nb_cx, nb_cy, n_scl, scl_mode, n_orders : int
+    n_obj, n_gobj, n_robj, n_cx, n_cy, n_scl, scl_mode, n_orders : int
         Object-scene and acceleration/grid scaling configuration.
     ffs : bool
         If ``True``, enable forward-flux mode constant.
@@ -3557,7 +3557,7 @@ def _init_const(
         Receiver cell size.
     v_sun : gc.Vector
         Sun-direction vector with ``x``, ``y``, and ``z`` attributes.
-    nb_sx, nb_sy : int
+    n_sx, n_sy : int
         Number of horizontal bins for aerosol-related outputs.
     no_aer_output : bool
         Add output where only photons not scattered by aerosols are
@@ -3615,8 +3615,8 @@ def _init_const(
     copy_to_device('sxmaxd', sx_max, np.float32)
     copy_to_device('symind', sy_min, np.float32)
     copy_to_device('symaxd', sy_max, np.float32)
-    copy_to_device('nbsxd', nb_sx, np.uint32)
-    copy_to_device('nbsyd', nb_sy, np.uint32)
+    copy_to_device('nbsxd', n_sx, np.uint32)
+    copy_to_device('nbsyd', n_sy, np.uint32)
     copy_to_device('no_aer_outd', int(no_aer_output), np.int32)
     if ocean_interaction is None:
         copy_to_device('OCEAN_INTERACTIONd', -1, np.int32)
@@ -3690,8 +3690,8 @@ def _init_const(
         copy_to_device('ZTOAd', z_toa, np.float32)
         if tc is not None:
             copy_to_device('TCd', tc, np.float32)
-            copy_to_device('nbCx', nb_cx, np.int32)
-            copy_to_device('nbCy', nb_cy, np.int32)
+            copy_to_device('nbCx', n_cx, np.int32)
+            copy_to_device('nbCy', n_cy, np.int32)
         if (cus_l is not None) and (cus_l.dict['mode'] == "RF"):
             copy_to_device('LMODEd', 1, np.int32)
         if (cus_l is not None) and (cus_l.dict['mode'] == "FF"):
@@ -4022,8 +4022,8 @@ def _loop_kernel(
     alis: bool,
     lobj_gpu: GPUArray | None,
     receiver_cell_size: float | None,
-    nb_cx: int,
-    nb_cy: int,
+    n_cx: int,
+    n_cy: int,
     lgobj_gpu: GPUArray | None,
     lrobj_gpu: GPUArray | None,
     lobj_spect: GPUArray | None,
@@ -4099,7 +4099,7 @@ def _loop_kernel(
         tables.
     receiver_cell_size : float or None
         Receiver cell size. If None, receiver diagnostics are disabled.
-    nb_cx, nb_cy : int
+    n_cx, n_cy : int
         Receiver grid dimensions in x and y.
     hist : bool, optional
         If True, accumulate photon histories.
@@ -4143,7 +4143,7 @@ def _loop_kernel(
     # If a receiver object is used then: initialize matrix and vectors
     # for gains and losses
     if receiver_cell_size is not None:
-        nb_ph_cat = gpuzeros(
+        n_ph_cat = gpuzeros(
             8, dtype=np.uint64
         )  # number of photons in each category
         w_ph_cat = gpuzeros(
@@ -4154,10 +4154,10 @@ def _loop_kernel(
             (8, n_lam), dtype=fdtype
         )  # squared photon weights per category
         w_ph_cat2_tot = gpuzeros((8, n_lam), dtype=fdtype)
-        tab_obj_info = gpuzeros((9, nb_cx, nb_cy), dtype=fdtype)
+        tab_obj_info = gpuzeros((9, n_cx, n_cy), dtype=fdtype)
         w_ph_loss = gpuzeros(7, dtype=fdtype)
         w_ph_loss2 = gpuzeros(7, dtype=fdtype)
-        tab_mat_recep = np.zeros((9, nb_cx, nb_cy), dtype=np.float64)
+        tab_mat_recep = np.zeros((9, n_cx, n_cy), dtype=np.float64)
 
         # Matrix where lines: l0 = sumCats, l1=cat1, l2=cat2, ...
         # l8=cat8
@@ -4169,7 +4169,7 @@ def _loop_kernel(
         # and: M[0,1]=W_I^2, M[1,1]=W_rhoM^2, ..., M[6,1]=W_SP^2
         mat_loss = np.zeros((7, 2), dtype=np.float64)
     else:
-        nb_ph_cat = gpuzeros((1, 1), dtype=np.uint64)
+        n_ph_cat = gpuzeros((1, 1), dtype=np.uint64)
         w_ph_cat = gpuzeros((1, 1), dtype=fdtype)
         w_ph_cat2 = gpuzeros((1, 1), dtype=fdtype)
         w_ph_cat_tot = gpuzeros((1, 1), dtype=fdtype)
@@ -4186,11 +4186,11 @@ def _loop_kernel(
     # long when the directions are zipped, since the kernel then
     # takes iph from ith; the kernel slices it by the same rule.
     if le_fov > 0:
-        nb_phi_le = (
+        n_phi_le = (
             n_theta if (le is not None and le.get('zip', False)) else n_phi
         )
         tab_dir_le = gpuzeros(
-            xblock * xgrid * (n_theta + nb_phi_le), dtype='float32'
+            xblock * xgrid * (n_theta + n_phi_le), dtype='float32'
         )
     else:
         tab_dir_le = gpuzeros(1, dtype='float32')
@@ -4342,8 +4342,8 @@ def _loop_kernel(
 
     secs_cuda_clock = 0.0
     alis_norm = n_lam if n_low != 0 else 1
-    nb_photons_target = n_photons
-    while (np.sum(n_photons_in_tot.get()) / alis_norm) < nb_photons_target:
+    n_photons_target = n_photons
+    while (np.sum(n_photons_in_tot.get()) / alis_norm) < n_photons_target:
         tab_photons.fill(0.0)
         tab_photons_no_aer.fill(0.0)
         n_photons_out.fill(0)
@@ -4401,7 +4401,7 @@ def _loop_kernel(
             lgobj_gpu,
             lrobj_gpu,
             lobj_spect,
-            nb_ph_cat,
+            n_ph_cat,
             w_ph_cat,
             w_ph_cat2,
             w_ph_loss,
@@ -4506,9 +4506,9 @@ def _loop_kernel(
 
         if receiver_cell_size is not None and stdev_lim is not None:
             assert mat_cats is not None
-            nb_photons_tmp = np.sum(n_photons_in_tot.get())
-            n_bis = nb_photons_tmp / (nb_photons_tmp - 1)
-            sum_2z = (mat_cats[0, 1] * mat_cats[0, 1]) / nb_photons_tmp
+            n_photons_tmp = np.sum(n_photons_in_tot.get())
+            n_bis = n_photons_tmp / (n_photons_tmp - 1)
+            sum_2z = (mat_cats[0, 1] * mat_cats[0, 1]) / n_photons_tmp
             sum_z2 = mat_cats[0, 2]
             if le is None:
                 num = (n_bis * (sum_z2 - sum_2z)) ** 0.5
@@ -4530,7 +4530,7 @@ def _loop_kernel(
             )
 
             if n_simu >= min_loop and err_p_tmp <= rel_min:
-                nb_photons_target = nb_photons_tmp
+                n_photons_target = n_photons_tmp
                 break
         elif stdev and stdev_lim is not None:
             progress.update(
@@ -4547,18 +4547,18 @@ def _loop_kernel(
 
     if receiver_cell_size is not None:
         assert mat_cats is not None
-        n_bis = nb_photons_target / (nb_photons_target - 1)
+        n_bis = n_photons_target / (n_photons_target - 1)
         # Count the total number of received photons and for each
         # category.
-        mat_cats[0, 0] = np.sum(nb_ph_cat[:].get())
+        mat_cats[0, 0] = np.sum(n_ph_cat[:].get())
         for i in range(0, 8):
-            mat_cats[i + 1, 0] = nb_ph_cat[i].get()
+            mat_cats[i + 1, 0] = n_ph_cat[i].get()
 
         # Relative and absolute error for sum of categories and per-
         # category values.
         for i in range(0, 9):
             if mat_cats[i, 0] != 0 and mat_cats[i, 1] != 0:
-                sum_2z = (mat_cats[i, 1] * mat_cats[i, 1]) / nb_photons_target
+                sum_2z = (mat_cats[i, 1] * mat_cats[i, 1]) / n_photons_target
                 sum_z2 = mat_cats[i, 2]
                 if le is None:
                     mat_cats[i, 4] = (n_bis * (sum_z2 - sum_2z)) ** 0.5
@@ -5026,8 +5026,8 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
     Returns
     -------
     tuple
-        ``(n_gobj, n_obj, n_robj, surf_lph, nb_h, z_alt_h, tot_s_h, tc,
-        nb_cx, nb_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect,
+        ``(n_gobj, n_obj, n_robj, surf_lph, n_h, z_alt_h, tot_s_h, tc,
+        n_cx, n_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect,
         n_cos)``.
     """
 
@@ -5093,8 +5093,8 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
             cus_l.dict['receiver'].geo.p4.y,
         )
         size_y = size_y_max - size_y_min
-        nb_cx = int(size_x / tc)
-        nb_cy = int(size_y / tc)
+        n_cx = int(size_x / tc)
+        n_cy = int(size_y / tc)
         lobj_gpu['mvRx'][n_obj] = cus_l.dict['receiver'].transformation.rotx
         lobj_gpu['mvRy'][n_obj] = cus_l.dict['receiver'].transformation.roty
         lobj_gpu['mvRz'][n_obj] = cus_l.dict['receiver'].transformation.rotz
@@ -5120,8 +5120,8 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
     else:
         lobj_gpu = np.zeros(n_obj, dtype=TYPE_IOBJECTS, order='C')
         tc = None
-        nb_cx = int(0)
-        nb_cy = int(0)
+        n_cx = int(0)
+        n_cy = int(0)
 
     # Account for spectral variability of object reflectivity.
     n_obj_total = lobj_gpu.size
@@ -5137,7 +5137,7 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
     pp2 = 0.0
     pp3 = 0.0
     pp4 = 0.0
-    nb_h = 0
+    n_h = 0
     z_alt_h = 0.0
     tot_s_h = 0.0
     ncos = 0.0
@@ -5302,7 +5302,7 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
                 isinstance(lobj[i].material_back, Mirror)
                 or isinstance(lobj[i].material_front, Mirror)
             ):
-                nb_h += 1
+                n_h += 1
                 z_alt_h += lobj[i].transformation.transz
                 tot_s_h += abs(lobj[i].geo.p1.x) * abs(lobj[i].geo.p1.y) * 4
                 ncos += gc.dot(
@@ -5349,8 +5349,8 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
                 lobj[i].geo.p4.y,
             )
             size_y = size_y_max - size_y_min
-            nb_cx = int(size_x / tc)
-            nb_cy = int(size_y / tc)
+            n_cx = int(size_x / tc)
+            n_cy = int(size_y / tc)
             ind_robj.append(i)
         elif lobj[i].name == "environment":
             lobj_gpu['type'][i] = 3
@@ -5372,8 +5372,8 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
     lobj_gpu = to_gpu(lobj_gpu)
     lrobj_gpu = to_gpu(lrobj_gpu)
     lobj_spect = to_gpu(lobj_spect)
-    if nb_h > 0:
-        n_cos = ncos / nb_h
+    if n_h > 0:
+        n_cos = ncos / n_h
     else:
         n_cos = 1
 
@@ -5382,12 +5382,12 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
         n_obj,
         n_robj,
         surf_lph,
-        nb_h,
+        n_h,
         z_alt_h,
         tot_s_h,
         tc,
-        nb_cx,
-        nb_cy,
+        n_cx,
+        n_cy,
         lobj_gpu,
         lgobj_gpu,
         lrobj_gpu,
@@ -5399,8 +5399,8 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
 def _normalize_rec(
     c_mat_visu_recep: np.ndarray,
     mat_cats: np.ndarray,
-    nb_cx: int,
-    nb_cy: int,
+    n_cx: int,
+    n_cy: int,
     n_photons: float,
     surf_lph,
     cell_size: float,
@@ -5423,9 +5423,9 @@ def _normalize_rec(
         2D array containing total signal and per-category breakdowns.
         Rows correspond to categories, columns to the per-category
         weight sums.
-    nb_cx : int
+    n_cx : int
         Number of receiver cells in the x direction.
-    nb_cy : int
+    n_cy : int
         Number of receiver cells in the y direction.
     n_photons : float
         Total number of launched photons in the simulation.
@@ -5448,7 +5448,7 @@ def _normalize_rec(
         - **mat_cats** : normalized category matrix
         - **norm_c** : normalization constant (dimensionless)
     """
-    s_rec = cell_size * cell_size * nb_cx * nb_cy  # receiver surface in km²
+    s_rec = cell_size * cell_size * n_cx * n_cy  # receiver surface in km²
     s_rec_m = s_rec * 1e6  # receiver surface in m²
 
     # Normalize intensities such that only a mult by E_TOA is still

@@ -3822,7 +3822,7 @@ def cat_view(
 
     # Create DataArray for the number of photons as function
     # of Categories
-    nb_ph_da = xr.DataArray(
+    n_ph_da = xr.DataArray(
         ds["cat_PhNb"].values,
         dims=["Categories"],
         coords={"Categories": np.arange(9, dtype=np.float64)},
@@ -3830,7 +3830,7 @@ def cat_view(
 
     # Add descriptions and DataArrays to output Dataset
     mf_n.attrs["description"] = str_print
-    nb_ph_da.attrs["description"] = (
+    n_ph_da.attrs["description"] = (
         "Number of photons as function of Categories"
     )
     abs_err_da_n.attrs["description"] = f"Absolute error of {output_unit}"
@@ -3839,7 +3839,7 @@ def cat_view(
     )
 
     output[output_unit] = mf_n
-    output["NbPhotons"] = nb_ph_da
+    output["NbPhotons"] = n_ph_da
     output["AbsoluteErr"] = abs_err_da_n
     output["RelativeErr"] = rel_err_da_n
 
