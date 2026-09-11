@@ -1,8 +1,8 @@
 """Photon histories post-processing for ALIS simulations.
 
 This module analyses the photon histories recorded by Smartg.run
-when the ALIS option is used with alis_options['hist'] = True: it
-rebuilds high-resolution Stokes vectors from the recorded events
+when the ALIS option is used with alis_options=Alis(hist=True):
+it rebuilds high-resolution Stokes vectors from the recorded events
 (with JAX) and derives air mass factor (AMF) statistics.
 
 Functions

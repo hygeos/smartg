@@ -18,6 +18,9 @@ Smartg
     or backward, ALIS, 3D objects, ...); the run method launches the
     Monte Carlo radiative transfer simulation and returns the results
     as an xarray Dataset.
+Alis
+    The options of the ALIS method, for the alis_options parameter of
+    Smartg.run.
 LocalEstimate
     The directions of the local estimate method, for the le parameter
     of Smartg.run.
@@ -341,6 +344,113 @@ class StdevLim(object):
 
     def __repr__(self) -> str:
         return 'Stdevlim dict: %s' % self.dict.__repr__()
+
+
+# The legacy alis_options dictionary keys, and the Alis constructor
+# parameter each one became.
+_ALIS_LEGACY_KEYS = {
+    'nlow': 'n_low',
+    'njac': 'n_jac',
+    'njac_abs': 'n_jac_abs',
+}
+
+
+class Alis(object):
+    """
+    The options of the ALIS method, for Smartg.run.
+
+    ALIS (Emde et al. 2010) computes the spectrum of a whole band from
+    a single set of photon paths, by weighting each path with the
+    absorption of every wavelength. The Smartg object must have been
+    compiled with alis=True, together with alt_pp=True or pp=False.
+
+    Parameters
+    ----------
+    n_low : int
+        The number of low spectral resolution computations, at least
+        2, or -1 to select every wavelength.
+    hist : bool, optional
+        Activate the recording of the photon histories, which the
+        `smartg.histories` module post-processes. Default False.
+    max_hist : int, optional
+        The maximum number of recorded histories, only used if hist is
+        True. Default 8e6.
+    n_jac : int, optional
+        The number of perturbed profiles. Default 0, no Jacobian.
+    n_jac_abs : bool, optional
+        If True, Jacobians are for absorption only. ``weight_sca`` is
+        computed only for the reference wavelength group (allowing a
+        small ``n_low``), and is then reused (interpolated) for all
+        perturbed groups. The scattering correction for perturbed
+        wavelengths is taken from the reference group, while their
+        absorption is recomputed from the perturbed profile. Requires
+        n_jac > 0. Default False.
+
+    Attributes
+    ----------
+    n_low : int
+        The number of low spectral resolution computations.
+    hist : bool
+        Whether the photon histories are recorded.
+    max_hist : int
+        The maximum number of recorded histories.
+    n_jac : int
+        The number of perturbed profiles.
+    n_jac_abs : bool
+        Whether the Jacobians are for absorption only.
+
+    Raises
+    ------
+    ValueError
+        If n_low is neither -1 nor greater than 1, the kernel dividing
+        the wavelengths by n_low - 1, or if n_jac_abs is True without
+        a positive n_jac.
+
+    Examples
+    --------
+    >>> alis = Alis(n_low=10, n_jac=3, n_jac_abs=True)
+    >>> alis.n_low
+    10
+    """
+
+    def __init__(
+        self,
+        n_low: int,
+        hist: bool = False,
+        max_hist: int = 8000000,
+        n_jac: int = 0,
+        n_jac_abs: bool = False,
+    ) -> None:
+
+        if n_low != -1 and n_low < 2:
+            raise ValueError(
+                'n_low must be -1, to select every wavelength, or at '
+                'least 2, got {}.'.format(n_low)
+            )
+        if n_jac_abs and n_jac < 1:
+            raise ValueError(
+                'n_jac_abs needs a positive n_jac, got {}.'.format(n_jac)
+            )
+
+        self.n_low: int = n_low
+        self.hist: bool = hist
+        self.max_hist: int = max_hist
+        self.n_jac: int = n_jac
+        self.n_jac_abs: bool = n_jac_abs
+
+    def __str__(self) -> str:
+        return 'ALIS=-n_low{}-hist{}-n_jac{}'.format(
+            self.n_low, int(self.hist), self.n_jac
+        )
+
+    def __repr__(self) -> str:
+        return (
+            'Alis(n_low={!r}, hist={!r}, max_hist={!r}, n_jac={!r}, '
+            'n_jac_abs={!r})'.format(
+                self.n_low, self.hist, self.max_hist, self.n_jac,
+                self.n_jac_abs
+            )
+        )
 
 
 def _le_angles(
@@ -904,7 +1014,7 @@ class Smartg(object):
         surface=None,
         water=None,
         environment=None,
-        alis_options: dict | None = None,
+        alis_options: Alis | dict | None = None,
         nb_photons: float = 1e9,
         depo: float = 0.0279,
         depo_water: float = 0.0906,
@@ -968,9 +1078,13 @@ class Smartg(object):
         environment : None | Environment, optional
             The environment (adjacency effect) profile. If None, there
             is no environment.
-        alis_options : None | dict, optional
-            The alis options (the compilation option alis must be set to
-            True). The dictionary keys:
+        alis_options : None | Alis | dict, optional
+            The options of the ALIS method, see `Alis`. The
+            compilation option alis must be set to True.
+
+            Passing a dictionary is deprecated and will be removed in
+            one of the next release. Its keys, spelled out by the
+            constructor parameters of `Alis`, were:
 
             * 'nlow' : int
                 -> The number of low spectral resolution computation. If
@@ -1238,6 +1352,17 @@ class Smartg(object):
 
         """
 
+        if isinstance(alis_options, dict):
+            warn_message = (
+                "\nPassing a dictionary to the alis_options parameter "
+                "is deprecated, use an Alis object instead."
+            )
+            warn(warn_message, DeprecationWarning, stacklevel=2)
+            alis_options = Alis(**{
+                _ALIS_LEGACY_KEYS.get(key, key): value
+                for key, value in alis_options.items()
+            })
+
         if isinstance(le, dict):
             warn_message = (
                 "\nPassing a dictionary to the le parameter is "
@@ -1469,7 +1594,7 @@ class Smartg(object):
 
         # warning! values defined in communs.h
         # Maximum number of photons histories (alis=True and
-        # alis_options['hist'] = True), otherwise 0 (no histories)
+        # Alis(hist=True)), otherwise 0 (no histories)
         max_hist = np.int64(1)
         max_nlow = 801
 
@@ -1496,21 +1621,16 @@ class Smartg(object):
         n_jac = 0
         n_jac_abs = 0
         if alis_options is not None:
-            if 'hist' in alis_options.keys():
-                if alis_options['hist']:
-                    hist = True
-                    if 'max_hist' in alis_options.keys():
-                        max_hist = np.int64(alis_options['max_hist'])
-                    else:
-                        max_hist = np.int64(8000000)
-            if 'njac' in alis_options.keys():
-                n_jac = alis_options['njac']
-            if alis_options.get('njac_abs', False):
+            if alis_options.hist:
+                hist = True
+                max_hist = np.int64(alis_options.max_hist)
+            n_jac = alis_options.n_jac
+            if alis_options.n_jac_abs:
                 n_jac_abs = 1
-            if alis_options['nlow'] == -1:
+            if alis_options.n_low == -1:
                 n_low = n_lam
             else:
-                n_low = alis_options['nlow']
+                n_low = alis_options.n_low
             beer = 1
             assert n_low <= max_nlow
 
