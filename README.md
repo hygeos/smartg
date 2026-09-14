@@ -172,9 +172,26 @@ The first call compiles the CUDA kernel; subsequent runs reuse it.
 
 Sample notebooks are provided in the [notebooks](smartg/notebooks) folder, and [jupyter notebook](http://jupyter.org) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Good entry points are:
 
-* [`demo_notebook.ipynb`](smartg/notebooks/demo_notebook.ipynb) — general usage: atmosphere, ocean, surface, outputs and visualization
-* [`demo_notebook_objects.ipynb`](smartg/notebooks/demo_notebook_objects.ipynb) — 3D objects and concentrated solar flux
-* [`demo_notebook_photons_histories.ipynb`](smartg/notebooks/demo_notebook_photons_histories.ipynb) — tracking the photon paths
+* [`demo_notebook.py`](smartg/notebooks/demo_notebook.py) — general usage: atmosphere, ocean, surface, outputs and visualization
+* [`demo_notebook_objects.py`](smartg/notebooks/demo_notebook_objects.py) — 3D objects and concentrated solar flux
+* [`demo_notebook_photons_histories.py`](smartg/notebooks/demo_notebook_photons_histories.py) — tracking the photon paths (needs the extra dependencies, e.g. `pixi shell --environment extra`)
+
+### 6.1 Notebooks as percent scripts
+
+The notebooks are stored as [jupytext](https://jupytext.readthedocs.io) percent scripts: plain Python files in which `# %%` starts a code cell and `# %% [markdown]` a markdown cell. They hold neither outputs nor editor metadata, so their diffs and merges are readable. Jupyter magics are commented (`# %%time`) so that the scripts stay valid Python, and are restored when a script is opened as a notebook.
+
+jupytext is installed with the other dependencies. Its configuration, in the `[tool.jupytext]` section of `pyproject.toml`, pairs each script with a `.ipynb` notebook of the same name, which keeps the outputs locally and is ignored by git.
+
+* **JupyterLab / Jupyter Notebook** (`pixi run jupyter lab`): right-click a script, then *Open With → Jupytext Notebook*. Saving updates both the script and its paired notebook. Run `pixi run jupytext-config set-default-viewer python` once to open the scripts as notebooks with a double click.
+* **VS Code**: the `# %%` cells of a script run as is in the Interactive Window. To use the notebook editor, open the paired `.ipynb` (created by the task below) and either install the [Jupytext Sync](https://marketplace.visualstudio.com/items?itemName=caenrigen.jupytext-sync) extension, which updates the script on save, or run the task before committing.
+* **Synchronization**: after a `git pull`, or after editing one file of a pair outside Jupyter, run
+
+  ```bash
+  pixi run sync-notebooks
+  ```
+
+  The cells are taken from the most recently modified file of each pair, and the outputs from the notebook. Synchronize before pulling as well, so that edits made in a notebook are not overwritten by a newer script.
+* **New notebook**: save it as `smartg/notebooks/<name>.ipynb` from Jupyter, which creates its script, or run `pixi run jupytext --sync smartg/notebooks/<name>.ipynb`. Only the `.py` script is committed.
 
 ## 7. Tests
 

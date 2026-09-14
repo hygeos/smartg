@@ -513,6 +513,12 @@ corrected before the final `v2.0.0` release.
   - Aeronet read functions (`read_Aeronet_PFN`, etc.) now return `xr.DataArray`
     instead of LUT objects
   - Push to PyPI workflow added
+  - The notebooks are tracked, and shipped in the source distribution, as
+    jupytext percent scripts (`.py`) instead of `.ipynb` files. jupytext
+    is a new dependency: it opens the scripts as notebooks in Jupyter and
+    pairs each one with a local `.ipynb` notebook that keeps the outputs,
+    and the new `sync-notebooks` pixi task synchronizes the pairs (see
+    the README)
 
 * Corrections
   - Fix the nodes of the cumulative distribution a scattering deflection
