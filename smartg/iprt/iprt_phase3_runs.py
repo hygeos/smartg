@@ -20,7 +20,7 @@ import matplotlib
 from pathlib import Path
 from smartg.config import DIR_AUXDATA
 
-from smartg.phase import calc_iphase
+from smartg.phase import calc_iphase, is_native_theta, union_theta_grid
 
 # may be to replace
 from smartg.phase import read_phase_cdf
@@ -386,8 +386,9 @@ def to_iprt_output_e6_v2(case_name, sza, saa, nx, ny, vecs,
 
 def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
             sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wavelength, le,
-            surface, pro, dep, z, ntheta=18001, pp=False, is_e6=False):
-    
+            surface, pro, dep, z, ntheta=18001, pp=False, is_e6=False,
+            theta_grid=None):
+
     if pp :
         sg = S1DB_PP
         earth_radius = 6371.
@@ -402,7 +403,8 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                         n_loop=nphotons, atmosphere=pro, sensor=sensors,
                         output_layers=1,
                         le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
-                        stdev=True, progress=True, n_icdf=ntheta)#, seed=1e8)
+                        stdev=True, progress=True, n_icdf=ntheta,
+                        theta_grid=theta_grid)#, seed=1e8)
 
         m_boa = reshape_sza_vaa_vza(m_boa, sza, vaa, vza)
         m_boa.to_netcdf(str(fboa_path))
@@ -415,13 +417,14 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                         n_loop=nphotons, atmosphere=pro, sensor=sensors,
                         output_layers=1,
                         le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
-                        stdev=True, progress=True, n_icdf=ntheta)#, seed=1e8)
+                        stdev=True, progress=True, n_icdf=ntheta,
+                        theta_grid=theta_grid)#, seed=1e8)
 
         m_toa = reshape_sza_vaa_vza(m_toa, sza, vaa, vza)
         m_toa.to_netcdf(str(ftoa_path))
 
 
-def aer2smartg(filename, n_theta=int(1801), rh_or_reff=None, rh_reff=None):
+def aer2smartg(filename, n_theta: int | str = 1801, rh_or_reff=None, rh_reff=None):
     """
     
     In progress
@@ -430,9 +433,11 @@ def aer2smartg(filename, n_theta=int(1801), rh_or_reff=None, rh_reff=None):
     ----------
     filename : str | pathlib.Path | xr.Dataset
         The path to the file to be converted. It can be directly an xr.Dataset.
-    n_theta : int
-        The number of angles for the phase matrix
-    
+    n_theta : int | str
+        The number of equally spaced angles for the phase matrix, or
+        'native' for the union of the angle grids the file carries, on
+        which the phase matrix is kept without resampling.
+
     Results
     -------
     out : xr.Dataset
@@ -457,7 +462,20 @@ def aer2smartg(filename, n_theta=int(1801), rh_or_reff=None, rh_reff=None):
 
     NBSTK   = ds.nphamat.size
     NBRH_OR_REFF  = rh_reff.size
-    theta = np.linspace(0., 180., num=n_theta)
+    if is_native_theta(n_theta):
+        # one grid per (wavelength, rh/reff, term), stored descending
+        # and padded past ntheta; identical grids are merged first
+        theta_all = ds["theta"].values
+        ntheta_all = ds["ntheta"].values
+        grids = []
+        for idx in np.ndindex(ntheta_all.shape):
+            nth = int(ntheta_all[idx])
+            grid = np.sort(theta_all[idx][:nth].astype(np.float64))
+            if not any(np.array_equal(grid, g) for g in grids):
+                grids.append(grid)
+        theta = union_theta_grid(grids)
+    else:
+        theta = np.linspace(0., 180., num=int(n_theta))
     NWAV    = max(ds["wavelen"].size, int(2))
     if NWAV > ds["wavelen"].size:
         wavelength = np.concatenate((ds["wavelen"].values*1e3, ds["wavelen"].values*1e3 + 0.1))
@@ -466,7 +484,7 @@ def aer2smartg(filename, n_theta=int(1801), rh_or_reff=None, rh_reff=None):
 
     ext_out = np.zeros((NBRH_OR_REFF, NWAV), dtype=np.float64)
     ssa_out = np.zeros_like(ext_out)
-    pha_out = np.zeros((NBRH_OR_REFF, NWAV, NBSTK, n_theta), dtype=np.float64)
+    pha_out = np.zeros((NBRH_OR_REFF, NWAV, NBSTK, len(theta)), dtype=np.float64)
 
     for i_wavelength in range (0, ds["wavelen"].size):
         for irhreff in range(NBRH_OR_REFF):
@@ -1495,6 +1513,100 @@ def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
                    overwrite=overwrite, output_dir=output_dir)
 
 
+def case_E5_bis(nphotons=1e8, overwrite=True, output_dir='./'):
+    """
+    Run the IPRT case E5 on the native scattering angles of the cloud.
+
+    The same ice cloud as case_E5, whose phase matrix is resampled onto
+    18001 equally spaced angles, but kept on the angle grid of the
+    ic.ghm.baum.cdf file (498 angles, 0.01 degree apart in the forward
+    peak), from the conversion of the file to the GPU tables.
+
+    Parameters
+    ----------
+    nphotons : float
+        Number of photons per viewing direction.
+    overwrite : bool
+        Run the simulations even when their intermediate files exist.
+    output_dir : str or Path
+        Folder of the intermediate files and of the IPRT output file
+        iprt_phase3_e5_bis.nc.
+    """
+
+    dir_output = Path(output_dir)
+    Path(dir_output).mkdir(parents=True, exist_ok=True)
+    fboa_name = f'iprt_phase3_e5_bis_boa.nc'
+    ftoa_name = f'iprt_phase3_e5_bis_toa.nc'
+    fboa_path = dir_output / fboa_name
+    ftoa_path = dir_output / ftoa_name
+    fboa_exist = fboa_path.exists()
+    ftoa_exist = ftoa_path.exists()
+
+
+    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
+    saa = np.array([0.])
+    vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
+                        74., 78., 81., 84., 86., 88., 89., 90.])
+    vaa = np.linspace(0., 180., 19)
+    z = None
+
+    if (overwrite      or
+        not fboa_exist or
+        not ftoa_exist  ):
+
+        # atmosphere profil
+        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
+        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
+        wavelength = np.array([450.])
+        z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
+        zs = len(z)
+        sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
+        abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
+
+        file_cld1_phase = OPT_PROP_PATH_PHASE3 / "ic.ghm.baum.cdf"
+        ds_ic_baum_ghm_ = xr.open_dataset(file_cld1_phase)
+        wavelength_ = ds_ic_baum_ghm_.wavelen.values
+        # wavelength in micrometers, here take only between 400
+        # and 500nm
+        nlam_ = np.squeeze(np.argwhere(
+            np.logical_and(wavelength_>=0.4, wavelength_<=0.5)
+        ))
+        ds_ic_baum_ghm_  = ds_ic_baum_ghm_ .sel(nlam = nlam_)
+        # keep the angles of the file instead of resampling them
+        ds_ic_baum_ghm = aer2smartg(ds_ic_baum_ghm_, n_theta='native')
+        with TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir)/'ic_ghm_baum_e5_bis.nc'
+            ds_ic_baum_ghm.to_netcdf(file_path)
+            cld1 = Cloud(str(file_path), reff=50., zmin=10.,
+                         zmax=11., tau_ref=1., w_ref=wavelength[0])
+
+        pro = Atm1D(
+            'afglt', comp=[cld1], grid=z, prof_ray=sca, prof_abs=abs
+        ).calc(wavelength, phase=True, n_theta='native')
+        surface = None
+
+        nvza = len(vza)
+        nvaa = len(vaa)
+        phi = -vaa
+        dep = 0.03
+        earth_r = 6371.
+
+        count_lvl = np.zeros_like(sza, dtype=np.int32)
+        phi_0 = -saa # To follow iprt anti-clockwise convention
+        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
+                               count_level=count_lvl)
+
+        # run simulations and create intermediate files, the GPU tables
+        # adopting the angles of the phase matrices
+        run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
+                sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
+                wavelength, le, surface, pro, dep, z, theta_grid='phase')
+
+    # open intermediate files and convert to iprt phase3 output format
+    to_iprt_output('e5_bis', sza, saa, vza, vaa, z,
+                   overwrite=overwrite, output_dir=output_dir)
+
+
 def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
     
     dir_output = Path(output_dir)
@@ -1868,6 +1980,7 @@ if __name__ == '__main__':
     # case_E3(nphotons=1e8, overwrite=False, output_dir=output_dir)
     # case_E4(nphotons=1e8, overwrite=False, output_dir=output_dir)
     # case_E5(nphotons=1e8, overwrite=False, output_dir=output_dir)
+    # case_E5_bis(nphotons=1e8, overwrite=False, output_dir=output_dir)
     # case_E6_old(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E6_v1(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E6_v2(nphotons=1e8, overwrite=False, output_dir=output_dir)

@@ -520,6 +520,13 @@ corrected before the final `v2.0.0` release.
     parameters of the wrapper, in the same order (`depol` is now its
     third positional parameter). `plot_polar_iprt` of
     `iprt_phase3_runs.py` draws with it too, `min_i` taking its `minI`
+  - New IPRT phase 3 case `case_E5_bis` in `iprt_phase3_runs.py`: the
+    ice cloud of E5 kept on the 498 native angles of `ic.ghm.baum.cdf`
+    instead of 18001 resampled ones, through the new
+    `aer2smartg(n_theta='native')`, `calc(n_theta='native')` and
+    `theta_grid='phase'`, which `run_sim` now passes to `Smartg.run`.
+    The table reproduces the file at every node, and at 1e5 photons the
+    radiances agree with E5 within the Monte Carlo noise
 
 * Corrections
   - Fix the nodes of the cumulative distribution a scattering deflection
