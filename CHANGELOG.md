@@ -518,7 +518,8 @@ corrected before the final `v2.0.0` release.
     with `select_iprt_iquv` and plots with it. `select_iprt_iquv` gains
     the `depol`, `change_q_sign`, `change_v_sign` and `depol_index`
     parameters of the wrapper, in the same order (`depol` is now its
-    third positional parameter)
+    third positional parameter). `plot_polar_iprt` of
+    `iprt_phase3_runs.py` draws with it too, `min_i` taking its `minI`
 
 * Corrections
   - Fix the nodes of the cumulative distribution a scattering deflection
@@ -566,6 +567,15 @@ corrected before the final `v2.0.0` release.
     documented
   - The `Path + str` concatenations of `smartg/iprt/iprt_phase3_runs.py`
     raised a `TypeError` before any run
+  - Seven of the 17 IPRT phase 3 cases of `iprt_phase3_runs.py` did not
+    run. `aer2smartg` still used the removed `NBTHETA` (D4_bis, E3, E4,
+    E5), and D3, D4 and D5 gave `calc_iphase` a LUT named `wavelength`
+    and `z` instead of `wavelength_phase` and `z_phase`. Past that
+    crash, those three returned zero radiances: their files carry a
+    single wavelength, on which `interp` gives NaN phase matrices, so
+    the wavelength is now selected. D4 and D4_bis, the same aerosol
+    built through `prof_phases` and through `AerOPAC`, now agree
+    within the Monte Carlo noise
   - Important corrections in the water (ocean) module:
     - Phase matrix always extended to 6 Stokes components (P22=P11, P44=P33 for
       spherical particles)

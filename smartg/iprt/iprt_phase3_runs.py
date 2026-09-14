@@ -25,7 +25,7 @@ from smartg.phase import calc_iphase
 # may be to replace
 from smartg.phase import read_phase_cdf
 
-from luts.luts import LUT
+from smartg.iprt.iprt import plot_polar_iquv
 from smartg.xarray import drop_axes
 
 from tempfile import TemporaryDirectory
@@ -466,7 +466,7 @@ def aer2smartg(filename, n_theta=int(1801), rh_or_reff=None, rh_reff=None):
 
     ext_out = np.zeros((NBRH_OR_REFF, NWAV), dtype=np.float64)
     ssa_out = np.zeros_like(ext_out)
-    pha_out = np.zeros((NBRH_OR_REFF, NWAV, NBSTK, NBTHETA), dtype=np.float64)
+    pha_out = np.zeros((NBRH_OR_REFF, NWAV, NBSTK, n_theta), dtype=np.float64)
 
     for i_wavelength in range (0, ds["wavelen"].size):
         for irhreff in range(NBRH_OR_REFF):
@@ -517,95 +517,27 @@ def plot_polar_iprt(I, Q, U, V, thetas, phis, change_Q_sign=False, change_U_sign
                     change_V_sign=False, maxI=None, maxQ=None, maxU=None, maxV=None,  cmapI=None, cmapQ=None, cmapU=None, cmapV=None,
                     title=None, save_fig=None, sym=False, minI=None):
     """
-    In progress...
+    Plot phase 3 I, Q, U and V matrices in polar view.
+
+    Wrapper of smartg.iprt.iprt.plot_polar_iquv for the phase 3 layout,
+    where row j holds the viewing zenith angle thetas[j] and is drawn
+    at its own rescaled radius; plot_polar_iquv takes the rows in the
+    reverse order. Q, U and V are multiplied by -1 when their
+    change_*_sign flag is set, and minI overrides the lower bound of
+    the I colour scale. The other parameters are those of
+    plot_polar_iquv.
     """
-
-    
-    if sym: phis = np.concatenate((phis, phis+180))
-    NTH = len(thetas)
-    NPH = len(phis)
-    if sym: NPH_D = round(NPH/2)
-    else: NPH_D = NPH
-
-    valI = np.zeros((NTH, NPH))
-    valQ = np.zeros((NTH, NPH))
-    valU = np.zeros((NTH, NPH))
-    valV = np.zeros((NTH, NPH))
-
-    if change_Q_sign: Q_sign = int(-1)
-    else            : Q_sign = int(1) 
-    if change_U_sign: U_sign = int(-1)
-    else            : U_sign = int(1)
-    if change_V_sign: V_sign = int(-1)
-    else            : V_sign = int(1)
-
-    valI[:,0:NPH_D] = I
-    valQ[:,0:NPH_D] = Q*Q_sign
-    valU[:,0:NPH_D] = U*U_sign
-    valV[:,0:NPH_D] = V*V_sign 
-
-    if sym:
-        for i in range(NTH):
-                for j in range(NPH_D):
-                    valI[i,NPH_D+j] =  valI[i,NPH_D-j-1]
-                    valQ[i,NPH_D+j] =  valQ[i,NPH_D-j-1]
-                    valU[i,NPH_D+j] =  valU[i,NPH_D-j-1]
-                    valV[i,NPH_D+j] =  valV[i,NPH_D-j-1]
-
-    plt.rcParams.update({'font.size':13})
-
-    thetas_scaled = (thetas - np.min(thetas))/(np.max(thetas)- np.min(thetas))*90.
-    if maxI is None:
-        maxI = max(np.abs(np.min(valI)), np.abs(np.max(valI)))
-        if minI is None: minI = 0.
-    else:
-        if minI is None: minI=-maxI
-    
-    if maxQ is None: maxQ = max(np.abs(np.min(valQ)), np.abs(np.max(valQ)))
-    if maxU is None: maxU = max(np.abs(np.min(valU)), np.abs(np.max(valU)))
-    if maxV is None: maxV = max(np.abs(np.min(valV)), np.abs(np.max(valV)))
-
-    if cmapI is None: cmapI = "jet"
-    if cmapQ is None: cmapQ = "RdBu_r"
-    if cmapU is None: cmapU = "RdBu_r"
-    if cmapV is None: cmapV = "RdBu_r"
-
-    fig, ax = plt.subplots(1,4, figsize=(12,4),subplot_kw=dict(projection='polar'))
-    if title is not None: fig.suptitle(title)
-    #csI = ax[0].contourf(np.deg2rad(phis), thetas[::-1], valI, cmap='jet', levels=np.linspace(0., 9.5e-2, 100, endpoint=True))
-    ax[0].grid(False)
-    csI = ax[0].pcolormesh(np.deg2rad(phis), thetas_scaled, valI, cmap=cmapI, vmin=minI, vmax=maxI, shading='gouraud')
-    cbarI = fig.colorbar(csI, ax=ax[0], shrink=0.8, orientation='horizontal', ticks=np.linspace(minI, maxI, 3, endpoint=True), format="%4.1e")
-    cbarI.set_label(r'I')
-    ax[0].set_yticklabels([])
-    ax[0].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
-
-    #csQ = ax[1].contourf(np.deg2rad(phis), thetas[::-1], valQ, cmap='RdBu_r', levels=np.linspace(-1.4e-2, 1.4e-2, 100, endpoint=True))
-    ax[1].grid(False)
-    csQ = ax[1].pcolormesh(np.deg2rad(phis), thetas_scaled, valQ, cmap=cmapQ, vmin=-maxQ, vmax=maxQ, shading='gouraud')
-    cbarQ = fig.colorbar(csQ, ax=ax[1], shrink=0.8, orientation='horizontal', ticks=np.linspace(-maxQ, maxQ, 3, endpoint=True), format="%4.1e")
-    cbarQ.set_label(r'Q')
-    ax[1].set_yticklabels([])
-    ax[1].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
-
-    #csU = ax[2].contourf(np.deg2rad(phis), thetas[::-1], -valU, cmap='RdBu_r', levels=np.linspace(-2.6e-2, 2.6e-2, 100, endpoint=True))
-    ax[2].grid(False)
-    csU = ax[2].pcolormesh(np.deg2rad(phis), thetas_scaled, valU, cmap=cmapU, vmin=-maxU, vmax=maxU, shading='gouraud')
-    cbarU = fig.colorbar(csU, ax=ax[2], shrink=0.8, orientation='horizontal', ticks=np.linspace(-maxU, maxU, 3, endpoint=True), format="%4.1e")
-    cbarU.set_label(r'U')
-    ax[2].set_yticklabels([])
-    ax[2].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
-
-    #csV = ax[3].contourf(np.deg2rad(phis), thetas[::-1], valV, cmap='RdBu_r', levels=np.linspace(-1e-5, 1e-5, 100, endpoint=True))
-    ax[3].grid(False)
-    csV = ax[3].pcolormesh(np.deg2rad(phis), thetas_scaled, valV, cmap=cmapV, vmin=-maxV, vmax=maxV, shading='gouraud')
-    cbarV = fig.colorbar(csV, ax=ax[3], shrink=0.8, orientation='horizontal', ticks=np.linspace(-maxV, maxV, 3, endpoint=True), format="%4.1e")
-    cbarV.set_label(r'V')
-    ax[3].set_yticklabels([])
-    ax[3].grid(axis='both', linewidth=1.5, linestyle=':', color='black', alpha=0.5)
-    
-    fig.tight_layout()
-    if save_fig is not None: plt.savefig(save_fig)
+    Q_sign = -1 if change_Q_sign else 1
+    U_sign = -1 if change_U_sign else 1
+    V_sign = -1 if change_V_sign else 1
+    iquv = (np.asarray(I)[::-1],
+            np.asarray(Q)[::-1] * Q_sign,
+            np.asarray(U)[::-1] * U_sign,
+            np.asarray(V)[::-1] * V_sign)
+    plot_polar_iquv(iquv, np.asarray(thetas), np.asarray(phis),
+                    max_i=maxI, max_q=maxQ, max_u=maxU, max_v=maxV,
+                    min_i=minI, cmap_i=cmapI, cmap_q=cmapQ, cmap_u=cmapU,
+                    cmap_v=cmapV, title=title, save_fig=save_fig, sym=sym)
 
 def plot_camera_iprt(I, Q, U, V,
                      I_min=0., I_max=None, I_cmap='viridis',
@@ -791,24 +723,28 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
         for iz in range (0, nz):
             aer_pha[:,iz,:,:] = (
                 aer_phase.isel({aer_phase.dims[1]: 0})
-                .interp(wavelength_phase=wavelength, theta_atm=theta).data
+                # a single wavelength in the file: interp would give NaN
+                .sel(wavelength_phase=wavelength, method='nearest')
+                .interp(theta_atm=theta).data
             )
-        aer_phase = LUT(
-            aer_pha, axes=[wavelength, z[1:], None, theta],
-            names=['wavelength', 'z', 'nphamat', 'theta'],
+        aer_phase = xr.DataArray(
+            aer_pha,
+            dims=['wavelength_phase', 'z_phase', 'nphamat', 'theta_atm'],
+            coords={'wavelength_phase': wavelength, 'z_phase': z[1:],
+                    'theta_atm': theta},
         )
         pha_atm, ipha_atm = calc_iphase(aer_phase, np.array([wavelength]), z)
-        lpha_lut = []
+        lpha = []
         for i in range (0, pha_atm.shape[0]):
-            lpha_lut.append(LUT(
+            lpha.append(xr.DataArray(
                 pha_atm[i,:,:],
-                axes=[None, np.linspace(0, 180, nth)],
-                names=['nphamat', 'theta_atm'],
+                dims=['nphamat', 'theta_atm'],
+                coords={'theta_atm': np.linspace(0, 180, nth)},
             ))
 
         pro = Atm1D(
             'afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs,
-            prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut),
+            prof_aer=prof_aer, prof_phases=(ipha_atm, lpha),
         ).calc(wavelength, phase=False)
         surface = None
 
@@ -882,25 +818,29 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
         for iz in range (0, nz):
             aer_pha[:,iz,:,:] = (
                 aer_phase.isel({aer_phase.dims[1]: 0})
-                .interp(wavelength_phase=wavelength, theta_atm=theta).data
+                # a single wavelength in the file: interp would give NaN
+                .sel(wavelength_phase=wavelength, method='nearest')
+                .interp(theta_atm=theta).data
             )
-        aer_phase = LUT(
-            aer_pha, axes=[wavelength, z[1:], None, theta],
-            names=['wavelength', 'z', 'nphamat', 'theta'],
+        aer_phase = xr.DataArray(
+            aer_pha,
+            dims=['wavelength_phase', 'z_phase', 'nphamat', 'theta_atm'],
+            coords={'wavelength_phase': wavelength, 'z_phase': z[1:],
+                    'theta_atm': theta},
         )
 
         pha_atm, ipha_atm = calc_iphase(aer_phase, np.array([wavelength]), z)
-        lpha_lut = []
+        lpha = []
         for i in range (0, pha_atm.shape[0]):
-            lpha_lut.append(LUT(
+            lpha.append(xr.DataArray(
                 pha_atm[i,:,:],
-                axes=[None, np.linspace(0, 180, nth)],
-                names=['nphamat', 'theta_atm'],
+                dims=['nphamat', 'theta_atm'],
+                coords={'theta_atm': np.linspace(0, 180, nth)},
             ))
 
         pro = Atm1D(
             'afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs,
-            prof_aer=prof_aer, prof_phases=(ipha_atm, lpha_lut),
+            prof_aer=prof_aer, prof_phases=(ipha_atm, lpha),
         ).calc(wavelength, phase=False)
         surface = None
 
@@ -1038,24 +978,28 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
         for iz in range (0, nz):
             cld_pha[:,iz,:,:] = (
                 cld_phase.isel({cld_phase.dims[1]: 0})
-                .interp(wavelength_phase=wavelength, theta_atm=theta).data
+                # a single wavelength in the file: interp would give NaN
+                .sel(wavelength_phase=wavelength, method='nearest')
+                .interp(theta_atm=theta).data
             )
-        cld_phase = LUT(
-            cld_pha, axes=[wavelength, z[1:], None, theta],
-            names=['wavelength', 'z', 'nphamat', 'theta'],
+        cld_phase = xr.DataArray(
+            cld_pha,
+            dims=['wavelength_phase', 'z_phase', 'nphamat', 'theta_atm'],
+            coords={'wavelength_phase': wavelength, 'z_phase': z[1:],
+                    'theta_atm': theta},
         )
 
         pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([wavelength]), z)
-        lpha_lut = []
+        lpha = []
         for i in range (0, pha_atm.shape[0]):
-            lpha_lut.append(LUT(
-                pha_atm[i,:,:], axes=[None, theta],
-                names=['nphamat', 'theta_atm'],
+            lpha.append(xr.DataArray(
+                pha_atm[i,:,:], dims=['nphamat', 'theta_atm'],
+                coords={'theta_atm': theta},
             ))
 
         # atmosphere profil
         pro = Atm1D('afglt', grid=z, prof_ray=mol_sca, prof_abs=mol_abs, prof_aer=prof_aer,
-                    prof_phases=(ipha_atm, lpha_lut)
+                    prof_phases=(ipha_atm, lpha)
                     ).calc(wavelength, phase=False)
         surface = None
 

@@ -231,6 +231,7 @@ def plot_polar_iquv(
     max_q: float | None = None,
     max_u: float | None = None,
     max_v: float | None = None,
+    min_i: float | None = None,
     cmap_i: str | Colormap | None = None,
     cmap_q: str | Colormap | None = None,
     cmap_u: str | Colormap | None = None,
@@ -263,6 +264,9 @@ def plot_polar_iquv(
         panels are drawn from -max to +max. The I panel is drawn from
         0 to its largest value by default, and from -max_i to +max_i
         when max_i is given, e.g. for a difference.
+    min_i : float, optional
+        Lower bound of the colour scale of the I panel, overriding the
+        0 or -max_i default.
     cmap_i, cmap_q, cmap_u, cmap_v : str or Colormap, optional
         Colour map of each panel, 'jet' for I and 'RdBu_r' for the
         other panels by default.
@@ -297,8 +301,9 @@ def plot_polar_iquv(
         max_i = float(max(
             np.abs(np.min(val_i)), np.abs(np.max(val_i))
         ))
-        min_i = 0.
-    else:
+        if min_i is None:
+            min_i = 0.
+    elif min_i is None:
         min_i = -max_i
     if max_q is None:
         max_q = float(max(
