@@ -522,10 +522,37 @@ def plot_polar_iprt(I, Q, U, V, thetas, phis, change_Q_sign=False, change_U_sign
     Wrapper of smartg.iprt.iprt.plot_polar_iquv for the phase 3 layout,
     where row j holds the viewing zenith angle thetas[j] and is drawn
     at its own rescaled radius; plot_polar_iquv takes the rows in the
-    reverse order. Q, U and V are multiplied by -1 when their
-    change_*_sign flag is set, and minI overrides the lower bound of
-    the I colour scale. The other parameters are those of
-    plot_polar_iquv.
+    reverse order.
+
+    Parameters
+    ----------
+    I, Q, U, V : ndarray
+        Stokes parameters, each of shape (ntheta, nphi).
+    thetas : ndarray
+        Viewing zenith angles of the rows, in degrees. They are
+        rescaled to span the radius from 0 to 90.
+    phis : ndarray
+        Viewing azimuth angles of the columns, in degrees.
+    change_Q_sign, change_U_sign, change_V_sign : bool
+        Multiply Q, U or V by -1.
+    maxI, maxQ, maxU, maxV : float, optional
+        Upper bound of the colour scale of each panel. By default the
+        largest absolute value of the panel is used. The Q, U and V
+        panels are drawn from -max to +max, the I panel from minI.
+    cmapI, cmapQ, cmapU, cmapV : str or Colormap, optional
+        Colour map of each panel, 'jet' for I and 'RdBu_r' for the
+        other panels by default.
+    title : str, optional
+        Title of the whole figure.
+    save_fig : str or Path, optional
+        Save the figure at this path, the extension giving the
+        format, e.g. save_fig='myFigName.png'.
+    sym : bool
+        The IPRT azimuth angles cover 0 to 180 degrees; also plot the
+        symmetrical results from 180 to 360 degrees.
+    minI : float, optional
+        Lower bound of the colour scale of the I panel. By default 0,
+        or -maxI when maxI is given.
     """
     Q_sign = -1 if change_Q_sign else 1
     U_sign = -1 if change_U_sign else 1
