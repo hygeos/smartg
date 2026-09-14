@@ -114,7 +114,7 @@ SCALE = 1  # can be useful for grid with very small cells
 ROOTPATH = Path(__file__).resolve().parent.parent
 
 # GT truncation, as in Iwabuchi and Suzuki (2009), with the parameters
-# of the notebook notebooks/demo_notebook.ipynb: simple GT truncation
+# of the notebook notebooks/demo_notebook.py: simple GT truncation
 # without correction, i.e. scheme S of the paper. Truncating the
 # forward peak of the cloud phase matrix converges much faster, so the
 # truncated tests use fewer photons.
@@ -143,10 +143,10 @@ NBPHOTONS_ATM_B = {1: NBPHOTONS, 5: 1e9}
 # Reference delta_m values (in percent) of I, Q, U and V, measured with
 # the settings above (SEED, XBLOCK, XGRID, NBPHOTONS). They are within
 # a few percent of the values of the notebook
-# notebooks/validation_SMARTG_IPRT_phaseB-C2.ipynb, whose outputs are
-# stripped in the repository. Regenerate them with the same settings
-# from the log if the physics legitimately changes. Each table holds
-# one sub table per tier, the fast one being noisier by construction.
+# notebooks/validation_SMARTG_IPRT_phaseB-C2.py, which holds no output.
+# Regenerate them with the same settings from the log if the physics
+# legitimately changes. Each table holds one sub table per tier, the
+# fast one being noisier by construction.
 DELTAM_REF_NOATM_B = {
     "slow": {
         1: (0.507, 2.126, 65.313, 404.483),

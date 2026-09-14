@@ -5,7 +5,7 @@
 
 test_phase_grid.py checks the host tables and the device lookup where
 they are deterministic. This test runs the kernel: the Iwabuchi and
-Suzuki (2009) figure 3 setup of notebooks/demo_notebook.ipynb, with
+Suzuki (2009) figure 3 setup of notebooks/demo_notebook.py, with
 the truncation off and the water cloud replaced by the Baum aggregated
 solid column ice table, the sharpest phase function of the three ice
 tables in auxdata. The radiance reflected at TOA and transmitted at

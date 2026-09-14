@@ -124,7 +124,7 @@ NCELLS = 100
 NSENSORS = 50
 
 # GT truncation, as in Iwabuchi and Suzuki (2009), with the parameters
-# of the notebook notebooks/demo_notebook.ipynb: simple GT truncation
+# of the notebook notebooks/demo_notebook.py: simple GT truncation
 # without correction, i.e. scheme S of the paper. The photon count is
 # left unchanged, so that the difference between the two tests below is
 # the truncation bias alone and not a difference of MC noise.
