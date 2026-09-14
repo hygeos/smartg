@@ -43,6 +43,7 @@ dependencies = [
     "matplotlib",
     "python-dotenv",
     "notebook",
+    "jupytext>=1.16",
     "ipywidgets",
     "ipympl",
     "pyhdf",
@@ -99,6 +100,17 @@ test-basic = """
 pytest smartg/tests/test_cuda.py smartg/tests/test_profile.py \
 smartg/tests/test_atm3d.py smartg/tests/test_smartg.py -s -v"""
 test-all = "pytest smartg/tests/ -s -v"
+# pixi run sync-notebooks # create or update the paired .ipynb notebooks
+sync-notebooks = "jupytext --sync smartg/notebooks/*.py"
+
+# **** jupytext configuration ****
+[tool.jupytext]
+# The notebooks are tracked as percent scripts (.py), paired with local
+# .ipynb notebooks that keep the outputs and are ignored by git. Only
+# the cell tags are kept in the scripts, not the editor metadata.
+formats = "ipynb,py:percent"
+notebook_metadata_filter = "-all"
+cell_metadata_filter = "tags,-all"
 
 [tool.pyright]
 # Suppress "partially unknown" errors from third-party libraries with incomplete stubs (e.g. xarray)

@@ -20,6 +20,7 @@ dependencies:
   - papermill
   - python-dotenv
   - notebook
+  - jupytext>=1.16
   - ipywidgets
   - ipympl
   - pyhdf
