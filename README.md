@@ -173,7 +173,7 @@ The first call compiles the CUDA kernel; subsequent runs reuse it.
 Sample notebooks are provided in the [notebooks](smartg/notebooks) folder, and [jupyter notebook](http://jupyter.org) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Good entry points are:
 
 * [`demo_notebook.py`](smartg/notebooks/demo_notebook.py) — general usage: atmosphere, ocean, surface, outputs and visualization
-* [`demo_notebook_objects.py`](smartg/notebooks/demo_notebook_objects.py) — 3D objects and concentrated solar flux
+* [`demo_notebook_objects.py`](smartg/notebooks/demo_notebook_objects.py) — simulations involving 3D objects, e.g., solar power towers
 * [`demo_notebook_photons_histories.py`](smartg/notebooks/demo_notebook_photons_histories.py) — tracking the photon paths (needs the extra dependencies, e.g. `pixi shell --environment extra`)
 
 ### 6.1 Notebooks as percent scripts
