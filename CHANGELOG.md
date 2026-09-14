@@ -5,8 +5,8 @@
 Release date: xxx
 
 Note: this changelog entry has been started during the `v2.0.0dev1` stage,
-updated for `v2.0.0dev2` and `v2.0.0dev3`, and will be completed and
-corrected before the final `v2.0.0` release.
+updated for `v2.0.0dev2`, `v2.0.0dev3` and `v2.0.0dev4`, and will be
+completed and corrected before the final `v2.0.0` release.
 
 * Several breaking changes
   - The `AtmAFGL` class has been renamed to `Atm1D`, with PEP 8 constructor
@@ -174,6 +174,36 @@ corrected before the final `v2.0.0` release.
       - The helpers `OOMFormatter`, `find_order`, `find_order_or_none`,
         `get_tv`, `find_id` and `get_sensors_pos_icells_from_3Dgrid` are now
         private
+    - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
+      `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
+      new `smartg.grid3d` module
+    - The constant-theta readers `read_cld_nth_cte` of `smartg.libATM3D`
+      and `read_phase_nth_cte` of `smartg.iprt` have been merged into
+      `read_phase_cdf`: the two were the same, only the iprt one
+      handling the `hum` axis as well as `reff`, and they read the same
+      libRadtran / IPRT files as `read_phase_cdf`, differing only in
+      what they handed back. `read_phase_cdf(fname, n_theta=...,
+      normalize=False, output_sg_ready=False)` is the former call
+      `read_phase_nth_cte(filename=..., nb_theta=...)`: the table on
+      the wavelength and `hum` / `reff` axes of the file, which the
+      `phase` argument of `Cloud3D` / `Aer3D` takes, as an
+      `xr.DataArray`. The `convert_IparIper` parameter is gone, the
+      conversion into the parallel/perpendicular convention being done
+      by `run`. Two further differences: the table keeps the number of
+      terms of the file (4 for spherical particles) instead of
+      completing them into 6, which the components now do themselves,
+      and it is float64 rather than float32, so the device tables of
+      the IPRT C2 and C3 cases move by one float32 rounding on a tenth
+      of their entries
+    - The `cells` parameter and the `"ATM3D"` sentinel filename of `Atm1D`
+      have been removed: a 3D atmosphere is now built with
+      `smartg.atmosphere.Atm3D`
+    - The 3D profile dataset carries its optical properties on a
+      coordinate-bearing `iopt` axis; the `z_atm` axis it also had,
+      holding plain indices labelled as altitudes, is gone. The 1D-only
+      paths (the STP optical efficiencies, `cell_proba='auto'` and
+      `_find_extinction`) raise an informative error in 3D instead of
+      computing garbage from that index axis
   - The `Sensor` class, the `get_sensor` function (formerly `Get_Sensor`)
     and the `LOC_CODE` constant have been moved from `smartg.smartg` to the
     new `smartg.sensor` module; they are still re-exported by
@@ -189,36 +219,6 @@ corrected before the final `v2.0.0` release.
     (`WIND` → `wind`, `ALB` → `alb`, `ENV_SIZE` → `env_size`, ...), and the
     `Environment` attributes `NENV`/`NXENVMAP`/`NYENVMAP` are now
     `nenv`/`nxenvmap`/`nyenvmap`
-    - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
-      `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
-      new `smartg.grid3d` module
-    - `read_cld_nth_cte` has been replaced by `read_phase_nth_cte`,
-      moved from `smartg.iprt` to `smartg.phase`: the two constant-theta
-      readers were the same, only the iprt one handling the `hum` axis
-      as well as `reff`. It returns an `xr.DataArray`, and its
-      `convert_IparIper` parameter has been removed, the conversion into
-      the parallel/perpendicular convention being done by `run`
-    - `read_phase_nth_cte` has in turn been merged into `read_phase_cdf`,
-      which read the same libRadtran / IPRT files and differed only in
-      what it handed back. `read_phase_cdf(fname, n_theta=...,
-      normalize=False, output_sg_ready=False)` is the former call
-      `read_phase_nth_cte(filename=..., nb_theta=...)`: the table on
-      the wavelength and `hum` / `reff` axes of the file, which the
-      `phase` argument of `Cloud3D` / `Aer3D` takes. Two differences:
-      the table keeps the number of terms of the file (4 for spherical
-      particles) instead of completing them into 6, which the
-      components now do themselves, and it is float64 rather than
-      float32, so the device tables of the IPRT C2 and C3 cases move
-      by one float32 rounding on a tenth of their entries
-    - The `cells` parameter and the `"ATM3D"` sentinel filename of `Atm1D`
-      have been removed: a 3D atmosphere is now built with
-      `smartg.atmosphere.Atm3D`
-    - The 3D profile dataset carries its optical properties on a
-      coordinate-bearing `iopt` axis; the `z_atm` axis it also had,
-      holding plain indices labelled as altitudes, is gone. The 1D-only
-      paths (the STP optical efficiencies, `cell_proba='auto'` and
-      `_find_extinction`) raise an informative error in 3D instead of
-      computing garbage from that index axis
   - The `CusForward` and `CusBackward` launching-mode classes have been
     moved from `smartg.smartg` to `smartg.objects3d`; they are NOT
     re-exported by `smartg.smartg`, so imports must be updated. Their
@@ -413,7 +413,9 @@ corrected before the final `v2.0.0` release.
       reflected and transmitted radiance at two viewing angles for
       every grid kind at 451 and 1801 nodes, the file grid and a
       uniform 18001 grid, against saved 1e8 photon values at a fixed
-      seed; the 1e10 photon reference of the study is logged
+      seed, within 4 sigma of the Monte Carlo noise the run estimates
+      for itself, so that the check holds on any GPU model; the 1e10
+      photon reference of the study is logged
   - The `le` and `alis_options` parameters of `Smartg.run` now take the new
     `LocalEstimate` and `Alis` objects, like every other structured
     parameter of the method. A dictionary is still accepted, with a
@@ -485,6 +487,11 @@ corrected before the final `v2.0.0` release.
     - kdis and reptran tests
     - GPU-free tests of the 3D profile construction (`test_atm3d.py`:
       Atm3D multi-component mixing, Cloud3D, Aer3D)
+    - Tests of the scattering angle grids: the host phase tables and
+      the device lookup (`test_phase_grid.py`), the mixing of
+      components on the union of their grids (`test_phase_mix.py`)
+      and the two layouts of the phase file readers
+      (`test_phase_readers.py`), mostly GPU-free
   - New `v_sun` parameter of `CusBackward`: the sun direction of a backward
     object simulation can be given as a vector (for example
     `gc.ang2vec(sza, phi, vec_view='nadir')`) on the launching mode itself,
