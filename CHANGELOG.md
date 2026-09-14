@@ -513,6 +513,12 @@ corrected before the final `v2.0.0` release.
   - Aeronet read functions (`read_Aeronet_PFN`, etc.) now return `xr.DataArray`
     instead of LUT objects
   - Push to PyPI workflow added
+  - New `smartg.iprt.iprt.plot_polar_iquv` drawing I, Q, U and V matrices in
+    polar view, split from `select_and_plot_polar_iprt`, which now selects
+    with `select_iprt_iquv` and plots with it. `select_iprt_iquv` gains
+    the `depol`, `change_q_sign`, `change_v_sign` and `depol_index`
+    parameters of the wrapper, in the same order (`depol` is now its
+    third positional parameter)
 
 * Corrections
   - Fix the nodes of the cumulative distribution a scattering deflection
@@ -624,6 +630,9 @@ corrected before the final `v2.0.0` release.
   - The `ipha` parameter of `phase_view` in `smartg_view` is now flexible:
     accepts an `int`, an `xr.DataArray` scalar, or a 1-D ndarray of indices;
     validation against the correct wavelength slice of `iphase_atm/oc` is performed
+  - `select_iprt_iquv` with `change_u_sign=True` returned the standard
+    deviation of U with a negative sign; only U itself changes sign now,
+    as in `select_and_plot_polar_iprt`
 
 * Deprecation removal
   - All functions and classes deprecated before v1.2.0 have been removed

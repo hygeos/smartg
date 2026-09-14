@@ -10,6 +10,8 @@ convert_sgout_to_iprtout
     Convert SMART-G output into the IPRT ASCII output format.
 select_iprt_iquv
     Select I, Q, U and V results from an IPRT matrix.
+plot_polar_iquv
+    Plot I, Q, U and V matrices in polar coordinates.
 select_and_plot_polar_iprt
     Select I, Q, U and V results from an IPRT matrix and plot
     them in polar coordinates.
@@ -24,6 +26,7 @@ compute_deltam_iprtout
     Compute the IPRT delta_m metric between two IPRT matrices.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 import warnings
 
@@ -36,18 +39,72 @@ import xarray as xr
 
 
 
+def _iprt_records(
+    model_val: np.ndarray,
+    z_alti: float,
+    depol: float | None,
+    thetas: np.ndarray | None,
+    phis: np.ndarray | None,
+    va_index: int,
+    phi_index: int,
+    z_index: int,
+    depol_index: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Flag the kept records of an IPRT matrix and find their angles.
+
+    Parameters
+    ----------
+    model_val : ndarray
+        Model values, as read from an IPRT phase A result file: one
+        row per record, the columns following the IPRT convention.
+    z_alti : float
+        Keep only the records at this altitude, in km.
+    depol : float, optional
+        Also keep only the records with this depolarisation factor.
+    thetas : ndarray, optional
+        Viewing zenith angles, in degrees. By default all the angles
+        of the kept records, sorted in increasing order.
+    phis : ndarray, optional
+        Same as thetas, for the viewing azimuth angles.
+    va_index, phi_index, z_index, depol_index : int
+        Column indices of the viewing zenith angle, the viewing
+        azimuth angle, the altitude and the depolarisation factor.
+
+    Returns
+    -------
+    keep : ndarray of bool
+        True for the records at z_alti, and at depol when it is given.
+    thetas : ndarray
+        The given, or found, viewing zenith angles.
+    phis : ndarray
+        The given, or found, viewing azimuth angles.
+    """
+    keep = model_val[:, z_index] == z_alti
+    if depol is not None:
+        keep &= model_val[:, depol_index] == depol
+    if thetas is None:
+        thetas = np.unique(model_val[keep, va_index])
+    if phis is None:
+        phis = np.unique(model_val[keep, phi_index])
+    return keep, thetas, phis
+
+
 def select_iprt_iquv(
     model_val: np.ndarray,
     z_alti: float,
+    depol: float | None = None,
     thetas: np.ndarray | None = None,
     phis: np.ndarray | None = None,
     inv_thetas: bool = False,
     inv_phis: bool = False,
+    change_q_sign: bool = False,
     change_u_sign: bool = False,
+    change_v_sign: bool = False,
     i_index: int = 6,
     va_index: int = 4,
     phi_index: int = 5,
     z_index: int = 1,
+    depol_index: int = 0,
     stdev: bool = False,
 ) -> tuple[np.ndarray, ...]:
     """Select the I, Q, U and V results from an IPRT result matrix.
@@ -62,6 +119,9 @@ def select_iprt_iquv(
         row per record, the columns following the IPRT convention.
     z_alti : float
         Keep only the records at this altitude, in km.
+    depol : float, optional
+        Keep only the records with this depolarisation factor. By
+        default the factor is not used to filter the records.
     thetas : ndarray, optional
         Keep only the records with these viewing zenith angles, in
         degrees. By default all the angles found at z_alti are kept,
@@ -74,9 +134,13 @@ def select_iprt_iquv(
     inv_phis : bool
         Store the results by decreasing azimuth angle. By default the
         azimuth axis follows the increasing order.
+    change_q_sign : bool
+        Multiply Q by -1.
     change_u_sign : bool
         Multiply U by -1, the convention for U being opposite in the
         backward and in the forward mode.
+    change_v_sign : bool
+        Multiply V by -1.
     i_index : int
         Column index where I is found. Q, U and V must follow it in
         that order, and their standard deviations right after them.
@@ -86,8 +150,11 @@ def select_iprt_iquv(
         Column index of the viewing azimuth angle.
     z_index : int
         Column index of the altitude.
+    depol_index : int
+        Column index of the depolarisation factor.
     stdev : bool
-        Also return the standard deviations of I, Q, U and V.
+        Also return the standard deviations of I, Q, U and V. The sign
+        changes do not apply to them.
 
     Returns
     -------
@@ -97,21 +164,10 @@ def select_iprt_iquv(
         stdev is True.
     """
 
-    n_records = model_val.shape[0]
-    if thetas is None:
-        s_thetas = []
-        for i in range(0, n_records):
-            if model_val[i, z_index] == z_alti:
-                s_thetas.append(model_val[i, va_index])
-        thetas = np.sort(np.unique(np.array(s_thetas)))
-
-    if phis is None:
-        s_phis = []
-        for i in range(0, n_records):
-            if model_val[i, z_index] == z_alti:
-                s_phis.append(model_val[i, phi_index])
-        phis = np.sort(np.unique(np.array(s_phis)))
-
+    keep, thetas, phis = _iprt_records(
+        model_val, z_alti, depol, thetas, phis,
+        va_index, phi_index, z_index, depol_index,
+    )
     n_theta = len(thetas)
     n_phi = len(phis)
 
@@ -125,12 +181,13 @@ def select_iprt_iquv(
     stokes_u_std = np.zeros((n_theta, n_phi))
     stokes_v_std = np.zeros((n_theta, n_phi))
 
+    q_sign = int(-1) if change_q_sign else int(1)
     u_sign = int(-1) if change_u_sign else int(1)
+    v_sign = int(-1) if change_v_sign else int(1)
 
-    for i in range(0, n_records):
+    for i in np.flatnonzero(keep):
         if (
-            model_val[i, z_index] == z_alti
-            and True in (thetas == model_val[i, va_index])
+            True in (thetas == model_val[i, va_index])
             and True in (phis == model_val[i, phi_index])
         ):
             ith = int(np.squeeze(np.argwhere(
@@ -142,15 +199,13 @@ def select_iprt_iquv(
             indi = ith if inv_thetas else n_theta - 1 - ith
             indj = n_phi - 1 - iphi if inv_phis else iphi
             stokes_i[indi, indj] = model_val[i, i_index]
-            stokes_q[indi, indj] = model_val[i, i_index + 1]
+            stokes_q[indi, indj] = model_val[i, i_index + 1] * q_sign
             stokes_u[indi, indj] = model_val[i, i_index + 2] * u_sign
-            stokes_v[indi, indj] = model_val[i, i_index + 3]
+            stokes_v[indi, indj] = model_val[i, i_index + 3] * v_sign
             if stdev:
                 stokes_i_std[indi, indj] = model_val[i, i_index + 4]
                 stokes_q_std[indi, indj] = model_val[i, i_index + 5]
-                stokes_u_std[indi, indj] = (
-                    model_val[i, i_index + 6] * u_sign
-                )
+                stokes_u_std[indi, indj] = model_val[i, i_index + 6]
                 stokes_v_std[indi, indj] = model_val[i, i_index + 7]
 
     if not stdev:
@@ -166,6 +221,152 @@ def select_iprt_iquv(
             stokes_u_std,
             stokes_v_std,
         )
+
+
+def plot_polar_iquv(
+    iquv: Sequence[np.ndarray],
+    thetas: np.ndarray,
+    phis: np.ndarray,
+    max_i: float | None = None,
+    max_q: float | None = None,
+    max_u: float | None = None,
+    max_v: float | None = None,
+    cmap_i: str | Colormap | None = None,
+    cmap_q: str | Colormap | None = None,
+    cmap_u: str | Colormap | None = None,
+    cmap_v: str | Colormap | None = None,
+    title: str | None = None,
+    save_fig: str | Path | None = None,
+    sym: bool = False,
+) -> None:
+    """Plot I, Q, U and V matrices side by side in polar view.
+
+    Each matrix is drawn on its own polar axes, the viewing azimuth
+    angle as the angle and the viewing zenith angle, rescaled from 0
+    to 90, as the radius.
+
+    Parameters
+    ----------
+    iquv : sequence of ndarray
+        The I, Q, U and V matrices, each of shape (ntheta, nphi). The
+        rows are drawn from the outer edge to the centre, row j at the
+        radius of thetas[ntheta - 1 - j], which is the default row
+        order of select_iprt_iquv.
+    thetas : ndarray
+        Viewing zenith angles, in degrees, sorted in increasing order.
+        They are rescaled to span the radius from 0 to 90.
+    phis : ndarray
+        Viewing azimuth angles of the columns, in degrees.
+    max_i, max_q, max_u, max_v : float, optional
+        Upper bound of the colour scale of each panel. By default the
+        largest absolute value of the panel is used. The Q, U and V
+        panels are drawn from -max to +max. The I panel is drawn from
+        0 to its largest value by default, and from -max_i to +max_i
+        when max_i is given, e.g. for a difference.
+    cmap_i, cmap_q, cmap_u, cmap_v : str or Colormap, optional
+        Colour map of each panel, 'jet' for I and 'RdBu_r' for the
+        other panels by default.
+    title : str, optional
+        Title of the whole figure.
+    save_fig : str or Path, optional
+        Save the figure at this path, the extension giving the
+        format, e.g. save_fig='myFigName.png'.
+    sym : bool
+        The IPRT azimuth angles cover 0 to 180 degrees; also plot the
+        symmetrical results from 180 to 360 degrees.
+    """
+
+    val_i, val_q, val_u, val_v = (
+        np.asarray(values, dtype=np.float64) for values in iquv
+    )
+    if sym:
+        phis = np.concatenate((phis, phis + 180))
+        val_i, val_q, val_u, val_v = (
+            np.concatenate((values, values[:, ::-1]), axis=1)
+            for values in (val_i, val_q, val_u, val_v)
+        )
+
+    plt.rcParams.update({'font.size': 13})
+
+    thetas_scaled = (
+        (thetas - np.min(thetas))
+        / (np.max(thetas) - np.min(thetas))
+        * 90.
+    )
+    if max_i is None:
+        max_i = float(max(
+            np.abs(np.min(val_i)), np.abs(np.max(val_i))
+        ))
+        min_i = 0.
+    else:
+        min_i = -max_i
+    if max_q is None:
+        max_q = float(max(
+            np.abs(np.min(val_q)), np.abs(np.max(val_q))
+        ))
+    if max_u is None:
+        max_u = float(max(
+            np.abs(np.min(val_u)), np.abs(np.max(val_u))
+        ))
+    if max_v is None:
+        max_v = float(max(
+            np.abs(np.min(val_v)), np.abs(np.max(val_v))
+        ))
+
+    if cmap_i is None:
+        cmap_i = "jet"
+    if cmap_q is None:
+        cmap_q = "RdBu_r"
+    if cmap_u is None:
+        cmap_u = "RdBu_r"
+    if cmap_v is None:
+        cmap_v = "RdBu_r"
+
+    fig, ax = plt.subplots(
+        1, 4, figsize=(12, 4),
+        subplot_kw=dict(projection='polar'),
+    )
+    if title is not None:
+        fig.suptitle(title)
+
+    panels = (
+        ('I', val_i, cmap_i, min_i, max_i),
+        ('Q', val_q, cmap_q, -max_q, max_q),
+        ('U', val_u, cmap_u, -max_u, max_u),
+        ('V', val_v, cmap_v, -max_v, max_v),
+    )
+    for ipan, (label, values, cmap, vmin, vmax) in enumerate(panels):
+        ax[ipan].grid(False)
+        mesh = ax[ipan].pcolormesh(
+            np.deg2rad(phis),
+            thetas_scaled[::-1],
+            values,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            shading='gouraud',
+        )
+        cbar = fig.colorbar(
+            mesh,
+            ax=ax[ipan],
+            shrink=0.8,
+            orientation='horizontal',
+            ticks=np.linspace(vmin, vmax, 3, endpoint=True),
+            format="%4.1e",
+        )
+        cbar.set_label(label)
+        ax[ipan].set_yticklabels([])
+        ax[ipan].grid(
+            axis='both',
+            linewidth=1.5,
+            linestyle=':',
+            color='black',
+            alpha=0.5,
+        )
+
+    fig.tight_layout()
+    if save_fig is not None:
+        plt.savefig(save_fig)
 
 
 def select_and_plot_polar_iprt(
@@ -202,9 +403,8 @@ def select_and_plot_polar_iprt(
 ) -> tuple[np.ndarray, ...]:
     """Select the I, Q, U and V results and plot them in polar view.
 
-    The selection follows select_iprt_iquv, with the depolarisation
-    factor as an extra filter, and the four Stokes parameters are
-    drawn side by side on polar axes.
+    The values are selected with select_iprt_iquv and the four Stokes
+    parameters are drawn side by side with plot_polar_iquv.
 
     Parameters
     ----------
@@ -237,14 +437,17 @@ def select_and_plot_polar_iprt(
         Multiply V by -1.
     max_i, max_q, max_u, max_v : float, optional
         Upper bound of the colour scale of each panel. By default the
-        largest absolute value of the panel is used. I is drawn from
-        0 to max_i, the other panels from -max to +max.
+        largest absolute value of the panel is used. The Q, U and V
+        panels are drawn from -max to +max. The I panel is drawn from
+        0 to its largest value by default, and from -max_i to +max_i
+        when max_i is given, e.g. for a difference.
     cmap_i, cmap_q, cmap_u, cmap_v : str or Colormap, optional
         Colour map of each panel, 'jet' for I and 'RdBu_r' for the
         other panels by default.
     force_iquv : list of ndarray, optional
-        Plot these I, Q, U and V matrices instead of selecting them
-        from model_val.
+        Plot these I, Q, U and V matrices, as given, instead of
+        selecting them from model_val, which then only provides the
+        angles. The sign changes do not apply to them.
     title : str, optional
         Title of the whole figure.
     save_fig : str or Path, optional
@@ -281,176 +484,56 @@ def select_and_plot_polar_iprt(
         ones requested, and an empty tuple when neither is.
     """
 
-    def keep_record(i: int) -> bool:
-        """Tell whether the record i is at the selected altitude."""
-        return bool(model_val[i, z_index] == z_alti) and (
-            depol is None or model_val[i, depol_index] == depol
-        )
-
-    n_records = model_val.shape[0]
-    if thetas is None:
-        s_thetas = []
-        for i in range(0, n_records):
-            if keep_record(i):
-                s_thetas.append(model_val[i, va_index])
-        thetas = np.sort(np.unique(np.array(s_thetas)))
-
-    if phis is None:
-        s_phis = []
-        for i in range(0, n_records):
-            if keep_record(i):
-                s_phis.append(model_val[i, phi_index])
-        phis = np.sort(np.unique(np.array(s_phis)))
-
-    if sym:
-        phis = np.concatenate((phis, phis + 180))
-    n_theta = len(thetas)
-    n_phi = len(phis)
-    n_phi_data = round(n_phi / 2) if sym else n_phi
-
-    val_i = np.zeros((n_theta, n_phi))
-    val_q = np.zeros((n_theta, n_phi))
-    val_u = np.zeros((n_theta, n_phi))
-    val_v = np.zeros((n_theta, n_phi))
-
-    val_i_std = np.zeros((n_theta, n_phi_data))
-    val_q_std = np.zeros((n_theta, n_phi_data))
-    val_u_std = np.zeros((n_theta, n_phi_data))
-    val_v_std = np.zeros((n_theta, n_phi_data))
-
-    q_sign = int(-1) if change_q_sign else int(1)
-    u_sign = int(-1) if change_u_sign else int(1)
-    v_sign = int(-1) if change_v_sign else int(1)
+    _, thetas, phis = _iprt_records(
+        model_val, z_alti, depol, thetas, phis,
+        va_index, phi_index, z_index, depol_index,
+    )
 
     if force_iquv is not None:
-        val_i[:, 0:n_phi_data] = force_iquv[0]
-        val_q[:, 0:n_phi_data] = force_iquv[1]
-        val_u[:, 0:n_phi_data] = force_iquv[2] * u_sign
-        val_v[:, 0:n_phi_data] = force_iquv[3]
+        iquv = tuple(force_iquv)
+        iquv_std = tuple(
+            np.zeros((len(thetas), len(phis))) for _ in range(4)
+        )
     else:
-        for i in range(0, n_records):
-            if (
-                keep_record(i)
-                and True in (thetas == model_val[i, va_index])
-                and True in (phis == model_val[i, phi_index])
-            ):
-                ith = int(np.squeeze(np.argwhere(
-                    thetas == model_val[i, va_index]
-                )))
-                iphi = int(np.squeeze(np.argwhere(
-                    phis[0:n_phi_data] == model_val[i, phi_index]
-                )))
-                indi = ith if inv_thetas else n_theta - 1 - ith
-                indj = n_phi_data - 1 - iphi if inv_phis else iphi
-                val_i[indi, indj] = model_val[i, i_index]
-                val_q[indi, indj] = model_val[i, i_index + 1] * q_sign
-                val_u[indi, indj] = model_val[i, i_index + 2] * u_sign
-                val_v[indi, indj] = model_val[i, i_index + 3] * v_sign
-                if output_iquv_std:
-                    val_i_std[indi, indj] = model_val[i, i_index + 4]
-                    val_q_std[indi, indj] = model_val[i, i_index + 5]
-                    val_u_std[indi, indj] = model_val[i, i_index + 6]
-                    val_v_std[indi, indj] = model_val[i, i_index + 7]
-
-    if sym:
-        for i in range(n_theta):
-            for j in range(n_phi_data):
-                val_i[i, n_phi_data + j] = val_i[i, n_phi_data - j - 1]
-                val_q[i, n_phi_data + j] = val_q[i, n_phi_data - j - 1]
-                val_u[i, n_phi_data + j] = val_u[i, n_phi_data - j - 1]
-                val_v[i, n_phi_data + j] = val_v[i, n_phi_data - j - 1]
-
+        selected = select_iprt_iquv(
+            model_val,
+            z_alti,
+            depol=depol,
+            thetas=thetas,
+            phis=phis,
+            inv_thetas=inv_thetas,
+            inv_phis=inv_phis,
+            change_q_sign=change_q_sign,
+            change_u_sign=change_u_sign,
+            change_v_sign=change_v_sign,
+            i_index=i_index,
+            va_index=va_index,
+            phi_index=phi_index,
+            z_index=z_index,
+            depol_index=depol_index,
+            stdev=output_iquv_std,
+        )
+        iquv = selected[:4]
+        iquv_std = selected[4:]
 
     if not avoid_plot:
-        plt.rcParams.update({'font.size': 13})
-
-        thetas_scaled = (
-            (thetas - np.min(thetas))
-            / (np.max(thetas) - np.min(thetas))
-            * 90.
+        plot_polar_iquv(
+            iquv,
+            thetas,
+            phis,
+            max_i=max_i,
+            max_q=max_q,
+            max_u=max_u,
+            max_v=max_v,
+            cmap_i=cmap_i,
+            cmap_q=cmap_q,
+            cmap_u=cmap_u,
+            cmap_v=cmap_v,
+            title=title,
+            save_fig=save_fig,
+            sym=sym,
         )
-        if max_i is None:
-            max_i = float(max(
-                np.abs(np.min(val_i)), np.abs(np.max(val_i))
-            ))
-            min_i = 0.
-        else:
-            min_i = -max_i
-        if max_q is None:
-            max_q = float(max(
-                np.abs(np.min(val_q)), np.abs(np.max(val_q))
-            ))
-        if max_u is None:
-            max_u = float(max(
-                np.abs(np.min(val_u)), np.abs(np.max(val_u))
-            ))
-        if max_v is None:
-            max_v = float(max(
-                np.abs(np.min(val_v)), np.abs(np.max(val_v))
-            ))
 
-        if cmap_i is None:
-            cmap_i = "jet"
-        if cmap_q is None:
-            cmap_q = "RdBu_r"
-        if cmap_u is None:
-            cmap_u = "RdBu_r"
-        if cmap_v is None:
-            cmap_v = "RdBu_r"
-
-        fig, ax = plt.subplots(
-            1, 4, figsize=(12, 4),
-            subplot_kw=dict(projection='polar'),
-        )
-        if title is not None:
-            fig.suptitle(title)
-
-        panels = (
-            ('I', val_i, cmap_i, min_i, max_i),
-            ('Q', val_q, cmap_q, -max_q, max_q),
-            ('U', val_u, cmap_u, -max_u, max_u),
-            ('V', val_v, cmap_v, -max_v, max_v),
-        )
-        for ipan, (label, values, cmap, vmin, vmax) in enumerate(panels):
-            ax[ipan].grid(False)
-            mesh = ax[ipan].pcolormesh(
-                np.deg2rad(phis),
-                thetas_scaled[::-1],
-                values,
-                cmap=cmap,
-                vmin=vmin,
-                vmax=vmax,
-                shading='gouraud',
-            )
-            cbar = fig.colorbar(
-                mesh,
-                ax=ax[ipan],
-                shrink=0.8,
-                orientation='horizontal',
-                ticks=np.linspace(vmin, vmax, 3, endpoint=True),
-                format="%4.1e",
-            )
-            cbar.set_label(label)
-            ax[ipan].set_yticklabels([])
-            ax[ipan].grid(
-                axis='both',
-                linewidth=1.5,
-                linestyle=':',
-                color='black',
-                alpha=0.5,
-            )
-
-        fig.tight_layout()
-        if save_fig is not None:
-            plt.savefig(save_fig)
-
-    iquv = (
-        val_i[:, 0:n_phi_data],
-        val_q[:, 0:n_phi_data],
-        val_u[:, 0:n_phi_data],
-        val_v[:, 0:n_phi_data],
-    )
-    iquv_std = (val_i_std, val_q_std, val_u_std, val_v_std)
     if output_iquv and output_iquv_std:
         return iquv + iquv_std
     elif output_iquv:
