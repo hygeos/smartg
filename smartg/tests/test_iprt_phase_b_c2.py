@@ -16,7 +16,7 @@ from smartg.atmosphere import Atm1D, Atm3D, Cloud3D
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.grid3d import Grid3D
-from smartg.iprt.iprt import compute_deltam, group_iquv
+from smartg.iprt.common import compute_deltam, group_iquv
 from smartg.sensor import get_sensors_grid
 from smartg.view import satellite_view
 from smartg.phase import read_phase_cdf

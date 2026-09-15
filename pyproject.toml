@@ -72,7 +72,7 @@ extra = [
 Source = "https://github.com/hygeos/smartg"
 
 [tool.setuptools]
-packages = ["smartg"]
+packages = ["smartg", "smartg.iprt"]
 
 # **** pixi configuration ****
 [tool.pixi.workspace]

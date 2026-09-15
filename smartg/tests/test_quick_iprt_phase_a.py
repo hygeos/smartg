@@ -14,12 +14,11 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-from smartg.iprt.iprt import (
+from smartg.iprt.common import compute_deltam, group_iquv
+from smartg.iprt.phase_a import (
     convert_sgout_to_iprtout,
     select_and_plot_polar_iprt,
-    compute_deltam,
     select_iprt_iquv,
-    group_iquv,
 )
 from smartg.view import plot_iquv_comparison
 from smartg.phase import calc_iphase

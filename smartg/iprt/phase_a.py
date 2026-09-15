@@ -1,32 +1,16 @@
-"""Helpers for the IPRT model intercomparison cases.
+"""IPRT phase A tools.
 
-IPRT (International Polarized Radiative Transfer) compares polarized
-radiative transfer models in three phases, each with its own cases and
-result format:
+Phase A holds the 1D cases A1 to A6 and B1 to B4. Their results are
+ASCII tables, one record per line with the columns
 
-- phase A, the 1D cases A1 to A6 and B1 to B4: ASCII tables, one record
-  per line with the columns depol zout sza saa va phi I Q U V Istd Qstd
-  Ustd Vstd;
-- phase B, the 3D cases (C2 and C3 here): ASCII tables with the columns
-  case theta_0 z theta phi ix iy I Q U V Istd Qstd Ustd Vstd;
-- phase 3, the cases D1 to D6 and E1 to E6: netCDF files.
+    depol zout sza saa va phi I Q U V Istd Qstd Ustd Vstd
 
-This module holds the part common to all the phases and the tools of
-phase A. Phase B has no helper of its own: its C2 and C3 cases are run
-and compared in smartg/tests/test_iprt_phase_b_c2.py and
-test_iprt_phase_b_c3.py. Phase 3 is run by smartg.iprt.iprt_phase3_runs.
-The polar and radiance plots do not depend on the phase and are in
-smartg.view: plot_polar_iquv and plot_iquv_comparison.
+(indices 0 to 13), as in the MYSTIC reference files and as
+convert_sgout_to_iprtout writes them. The delta_m metric on I, Q, U
+and V arrays is in smartg.iprt.common.
 
-Common to all the phases
-------------------------
-group_iquv
-    Gather several IQUV result matrices into a single array.
-compute_deltam
-    Compute the IPRT delta_m metric between two IQUV signal sets.
-
-Phase A only
-------------
+Key Functions
+-------------
 convert_sgout_to_iprtout
     Convert SMART-G output into the IPRT phase A ASCII format.
 select_iprt_iquv
@@ -47,130 +31,6 @@ import numpy as np
 import xarray as xr
 
 from smartg.view import plot_polar_iquv
-
-
-# ----------------------------------------------------------------------
-# Common to all the IPRT phases: the delta_m metric, computed on plain
-# I, Q, U and V arrays whatever result file they were read from.
-# ----------------------------------------------------------------------
-
-
-def group_iquv(
-    i_list: list[np.ndarray],
-    q_list: list[np.ndarray],
-    u_list: list[np.ndarray],
-    v_list: list[np.ndarray],
-) -> np.ndarray:
-    """Gather several IQUV result matrices into a single array.
-
-    Each matrix is flattened and the matrices are concatenated in the
-    given order, so that several viewing configurations can be
-    compared with a single delta_m. The matrices may come from any
-    IPRT phase.
-
-    Parameters
-    ----------
-    i_list : list of ndarray
-        The I matrices to gather.
-    q_list : list of ndarray
-        The Q matrices, in the same order.
-    u_list : list of ndarray
-        The U matrices, in the same order.
-    v_list : list of ndarray
-        The V matrices, in the same order.
-
-    Returns
-    -------
-    ndarray
-        The gathered signals, of shape (4, nvalues).
-    """
-    n_values = int(0)
-    i_tot = i_list[0].flatten()
-    q_tot = q_list[0].flatten()
-    u_tot = u_list[0].flatten()
-    v_tot = v_list[0].flatten()
-
-    for i in range(len(i_list)):
-        n_values += round(i_list[i].shape[0] * i_list[i].shape[1])
-        if i > 0:
-            i_tot = np.concatenate((i_tot, i_list[i].flatten()))
-            q_tot = np.concatenate((q_tot, q_list[i].flatten()))
-            u_tot = np.concatenate((u_tot, u_list[i].flatten()))
-            v_tot = np.concatenate((v_tot, v_list[i].flatten()))
-
-    iquv_tot = np.zeros((4, n_values), dtype=np.float32)
-    iquv_tot[0, :] = i_tot
-    iquv_tot[1, :] = q_tot
-    iquv_tot[2, :] = u_tot
-    iquv_tot[3, :] = v_tot
-
-    return iquv_tot
-
-
-def compute_deltam(
-    obs: np.ndarray | list[np.ndarray],
-    mod: np.ndarray | list[np.ndarray],
-    print_res: bool = True,
-) -> np.ndarray:
-    """Compute the IPRT delta_m metric from two IQUV signal sets.
-
-    delta_m is the root mean square of the difference between the
-    model and the reference, relative to the root mean square of the
-    reference, in percent. It is reported per Stokes parameter, and
-    is set to 0 when the reference is uniformly zero. The signals may
-    come from any IPRT phase.
-
-    Parameters
-    ----------
-    obs : ndarray or list of ndarray
-        Observed, or reference model, I, Q, U and V signals, either
-        as an array of shape (4, nvalues) or as four arrays.
-    mod : ndarray or list of ndarray
-        Modelled I, Q, U and V signals, in the same layout.
-    print_res : bool
-        Print each delta_m next to its Stokes parameter.
-
-    Returns
-    -------
-    ndarray
-        The delta_m of I, Q, U and V, in percent.
-    """
-    if isinstance(obs, np.ndarray):
-        obs_tmp = obs.copy()
-        obs = []
-        for i in range(0, 4):
-            obs.append(obs_tmp[i, :])
-
-    if isinstance(mod, np.ndarray):
-        mod_tmp = mod.copy()
-        mod = []
-        for i in range(0, 4):
-            mod.append(mod_tmp[i, :])
-
-    stk = ['I', 'Q', 'U', 'V']
-    delta_m = np.zeros(4, dtype=np.float32)
-    for i in range(len(stk)):
-        with np.errstate(divide='raise', invalid='raise'):
-            try:
-                delta_m[i] = (
-                    100
-                    * np.sqrt(np.sum((obs[i] - mod[i]) ** 2))
-                    / np.sqrt(np.sum(obs[i] ** 2))
-                )
-            except FloatingPointError:
-                delta_m[i] = 0.
-        if print_res:
-            print(stk[i], f"{delta_m[i]:.3f}")
-    return delta_m
-
-
-# ----------------------------------------------------------------------
-# IPRT phase A only: the ASCII result tables of the cases A1 to A6 and
-# B1 to B4, one record per line with the columns
-#     depol zout sza saa va phi I Q U V Istd Qstd Ustd Vstd
-# (indices 0 to 13), as in the MYSTIC reference files and as
-# convert_sgout_to_iprtout writes them.
-# ----------------------------------------------------------------------
 
 
 def _iprt_records(

@@ -2815,7 +2815,7 @@ def plot_polar_iquv(
         The I, Q, U and V matrices, each of shape (ntheta, nphi). The
         rows are drawn from the outer edge to the centre, row j at the
         radius of thetas[ntheta - 1 - j], which is the default row
-        order of smartg.iprt.iprt.select_iprt_iquv.
+        order of smartg.iprt.phase_a.select_iprt_iquv.
     thetas : ndarray
         Viewing zenith angles, in degrees, sorted in increasing order.
         They are rescaled to span the radius from 0 to 90.

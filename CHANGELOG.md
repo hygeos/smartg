@@ -72,6 +72,13 @@ corrected before the final `v2.0.0` release.
       their parameters (`Dij` → `dij`, `Ki` → `ki`, `S` → `s`,
       `only_I` → `only_i`); the `LEVEL` and `IDIR` parameters of
       `get_histories` are now `level` and `idir`
+  - The IPRT tools are split into one module per phase of the
+    `smartg.iprt` package: `smartg.iprt.iprt` becomes
+    `smartg.iprt.common` (`group_iquv`, `compute_deltam`) and
+    `smartg.iprt.phase_a` (`convert_sgout_to_iprtout`,
+    `select_iprt_iquv`, `select_and_plot_polar_iprt`,
+    `compute_deltam_iprtout`), and `smartg.iprt.iprt_phase3_runs`
+    becomes `smartg.iprt.phase3`
   - The water module has been restructured for consistency with the
     atmosphere module: the `IOP*` classes (`IOP_base`, `IOP`, `IOP_1`,
     `IOP_Rw`, `IOP_profile`) have been replaced by the new `Water` /
@@ -520,8 +527,8 @@ corrected before the final `v2.0.0` release.
     the `depol`, `change_q_sign`, `change_v_sign` and `depol_index`
     parameters of the wrapper, in the same order (`depol` is now its
     third positional parameter). `plot_polar_iprt` of
-    `iprt_phase3_runs.py` draws with it too, `min_i` taking its `minI`
-  - The aerosol and cloud cases of `iprt_phase3_runs.py` (D3, D4,
+    `smartg.iprt.phase3` draws with it too, `min_i` taking its `minI`
+  - The aerosol and cloud cases of `smartg.iprt.phase3` (D3, D4,
     D4_bis, D5, E3, E4, E5) run on the native scattering angles of
     their files instead of 18001 resampled ones, through
     `read_phase_cdf(n_theta='native')`, the new
@@ -581,9 +588,9 @@ corrected before the final `v2.0.0` release.
     `read_phase_cdf` to 3 dimensions: a scalar target now keeps its
     dimension, and a single `z_rh_reff` needs no `pfgrid`, as
     documented
-  - The `Path + str` concatenations of `smartg/iprt/iprt_phase3_runs.py`
+  - The `Path + str` concatenations of `smartg.iprt.phase3`
     raised a `TypeError` before any run
-  - Seven of the 17 IPRT phase 3 cases of `iprt_phase3_runs.py` did not
+  - Seven of the 17 IPRT phase 3 cases of `smartg.iprt.phase3` did not
     run. `aer2smartg` still used the removed `NBTHETA` (D4_bis, E3, E4,
     E5), and D3, D4 and D5 gave `calc_iphase` a LUT named `wavelength`
     and `z` instead of `wavelength_phase` and `z_phase`. Past that

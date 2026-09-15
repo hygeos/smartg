@@ -1,5 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""IPRT phase 3 cases.
+
+Phase 3 holds the fully spherical cases D1 to D6, with one layer, and
+E1 to E6, with a vertically inhomogeneous atmosphere. Each case_*
+function runs its case with SMART-G and writes the results in the IPRT
+phase 3 netCDF format. smartg/tests/test_iprt_phase3.py compares them
+with saved results.
+
+The SMART-G kernels S1DB and S1DB_PP are compiled when the module is
+imported.
+"""
 
 import numpy as np
 

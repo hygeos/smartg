@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Non-regression test of the IPRT phase 3 cases, in spherical geometry,
-# of smartg/iprt/iprt_phase3_runs.py: the one layer cases D1 to D6 and
+# of smartg/iprt/phase3.py: the one layer cases D1 to D6 and
 # the vertically inhomogeneous ones E1 to E5, against saved SMART-G
 # results. E6, the camera at 300 000 km, is not covered yet.
 # Tested with the following GPUs: 5070 Ti
@@ -172,7 +172,7 @@ def phase3():
     It compiles its two kernels when imported, so the import is
     deferred from the collection to the first test.
     """
-    return importlib.import_module("smartg.iprt.iprt_phase3_runs")
+    return importlib.import_module("smartg.iprt.phase3")
 
 
 def _tolerance(table, tier, case):
