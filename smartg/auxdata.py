@@ -336,7 +336,7 @@ class ManifestEntry:
     version_kind: VersionKind
     remote_modified: str | None
     downloaded_at: str
-    files: dict[str, FileRecord] = field(default_factory=dict)
+    files: dict[str, FileRecord] = field(default_factory=dict, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -1103,6 +1103,18 @@ class DatasetStatus:
         return self.status == "modified"
 
 
+class StatusReport(dict[str, DatasetStatus]):
+    """The statuses by dataset key.
+
+    A plain dict whose representation stays short when echoed in a
+    notebook: the details of a dataset are in its ``DatasetStatus``.
+    """
+
+    def __repr__(self) -> str:
+        inner = ", ".join(f"{key}: {st.status}" for key, st in self.items())
+        return f"<StatusReport {inner}>"
+
+
 def _resolve_dir(dname: PathType | None) -> Path:
     if dname is not None:
         return Path(dname).expanduser()
@@ -1218,9 +1230,7 @@ class AuxData:
     def is_present(self, dataset: Dataset) -> bool:
         return self.path(dataset).is_dir()
 
-    def status(
-        self, data_type: DataSelector = "all"
-    ) -> dict[str, DatasetStatus]:
+    def status(self, data_type: DataSelector = "all") -> StatusReport:
         """Compare the datasets with their remote source.
 
         Queries the remote versions (a few small requests) and
@@ -1228,13 +1238,13 @@ class AuxData:
 
         Returns
         -------
-        dict[str, DatasetStatus]
-            By dataset key, in selection order.
+        StatusReport
+            The ``DatasetStatus`` by dataset key, in selection order.
         """
-        return {
-            dataset.key: self._status_of(dataset)
+        return StatusReport(
+            (dataset.key, self._status_of(dataset))
             for dataset in self.select(data_type)
-        }
+        )
 
     def _probe(
         self, dataset: Dataset
@@ -1355,9 +1365,7 @@ class AuxData:
             key, status, entry, remote, source.name, "; ".join(notes), files
         )
 
-    def check_update(
-        self, data_type: DataSelector = "all"
-    ) -> dict[str, DatasetStatus]:
+    def check_update(self, data_type: DataSelector = "all") -> StatusReport:
         """Print the status of the datasets and return it.
 
         Downloads nothing. See ``DatasetStatus`` for the meaning of
@@ -1370,8 +1378,8 @@ class AuxData:
 
         Returns
         -------
-        dict[str, DatasetStatus]
-            By dataset key.
+        StatusReport
+            The ``DatasetStatus`` by dataset key.
         """
         statuses = self.status(data_type)
         print(f"Auxiliary data in {self.dir}")
@@ -1790,8 +1798,8 @@ def download(
 
 def check_update(
     dname: PathType | None = None, data_type: DataSelector = "all"
-) -> dict[str, DatasetStatus]:
-    """Print which auxiliary datasets are missing or outdated.
+) -> StatusReport:
+    """Print which auxiliary datasets are missing, outdated or modified.
 
     Queries the remote versions and downloads nothing.
 
@@ -1806,9 +1814,10 @@ def check_update(
 
     Returns
     -------
-    dict[str, DatasetStatus]
-        The status by dataset key; ``needs_update`` tells whether
-        ``update`` would download it.
+    StatusReport
+        The ``DatasetStatus`` by dataset key; ``needs_update`` tells
+        whether ``update`` would download it, ``needs_restore``
+        whether ``restore`` has files to replace.
 
     Examples
     --------

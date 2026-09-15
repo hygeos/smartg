@@ -372,6 +372,9 @@ def test_check_update_prints_table(aux, sources, tmp_path, capsys):
     aux.manifest.set("a", entry_for(sources["a"]))
     statuses = aux.check_update()
     assert set(statuses) == {"a", "b"}
+    assert isinstance(statuses, auxdata.StatusReport)
+    assert repr(statuses) == "<StatusReport a: up to date, b: missing>"
+    assert "FileRecord" not in repr(statuses["a"])
     out = capsys.readouterr().out
     lines = out.splitlines()
     assert lines[1].split() == [
