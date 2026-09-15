@@ -526,6 +526,30 @@ completed and corrected before the final `v2.0.0` release.
     pairs each one with a local `.ipynb` notebook that keeps the outputs,
     and the new `sync-notebooks` pixi task synchronizes the pairs (see
     the README)
+  - `smartg.auxdata` rewritten around `AuxData`, `Dataset` and source
+    classes (`NextcloudSource`, `HttpArchiveSource`):
+    - `download` skips the datasets already on disk (`force=True` to
+      download them again), accepts a list of keys, and `dname` defaults
+      to `SMARTG_DIR_AUXDATA`
+    - new `check_update`: compares the data on disk with the remote
+      versions (WebDAV ETag of the HYGEOS shares, HTTP ETag of the
+      libRadtran archive) without downloading anything, prints a table
+      and returns the statuses
+    - new `update`: downloads only the missing, outdated or unrecorded
+      datasets; each directory is replaced in one rename once the new
+      content is fully extracted
+    - a `.smartg_auxdata.json` manifest in the auxdata directory records
+      the source, version and date of every downloaded dataset
+    - the failures are collected and raised at the end of a run
+      (`AuxDataDownloadError`) instead of being printed and ignored;
+      the downloads are streamed with a `tqdm` progress bar (new
+      dependency) and retried on transient errors; the archive members
+      are checked against path traversal
+    - the reptran reference moves to the libRadtran 2024 archive
+      (`reptran_2024_all.tar.gz`, the 2017 link is dead), the HYGEOS
+      mirror stays the fallback
+    - `AUXDATA_DICT`, the `*_URL` constants and `safe_download` are
+      removed
 
 * Corrections
   - Fix the nodes of the cumulative distribution a scattering deflection

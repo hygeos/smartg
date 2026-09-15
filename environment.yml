@@ -16,6 +16,7 @@ dependencies:
   - pytest-xdist
   - pytest-html
   - progressbar2
+  - tqdm
   - matplotlib
   - papermill
   - python-dotenv

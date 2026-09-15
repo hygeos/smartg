@@ -1682,6 +1682,7 @@ packages:
   - pyarrow
   - openpyxl
   - progressbar2
+  - tqdm
   - matplotlib
   - python-dotenv
   - notebook

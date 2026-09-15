@@ -128,10 +128,30 @@ conda install nvidia::cuda
 The auxiliary data can be downloaded as follow:
 
 ```python
->>> # Example to download all the data. See the docstring for more details.
+>>> # Example to download all the data. See the docstrings for more details.
 >>> from smartg.auxdata import download
 >>> from pathlib import Path
 >>> download(Path('dir/path/where/to/save/data/'), data_type='all')
+>>> # Only some datasets, in the SMARTG_DIR_AUXDATA directory
+>>> download(data_type=['aer', 'cld'])
+```
+
+The datasets already on disk are skipped. Each download is recorded in
+a `.smartg_auxdata.json` manifest inside the auxdata directory, which
+allows checking and refreshing the data when it changes on the server:
+
+```python
+>>> from smartg.auxdata import check_update, update
+>>> check_update()  # queries the remote versions, downloads nothing
+Auxiliary data in /dir/path/where/to/save/data
+dataset  status      downloaded (UTC)  remote (UTC)      source / note
+aer      up to date  2026-09-15 14:03  2026-04-27 14:37  hygeos
+acs      outdated    2026-09-15 14:03  2026-09-16 09:12  hygeos
+kdis     missing     -                 2024-05-02 14:13  hygeos
+...
+update() would download: acs, kdis
+>>> update()  # downloads only the missing, outdated or unrecorded datasets
+>>> update(data_type='reptran', force=True)  # download again whatever the status
 ```
 
 The environment variable `SMARTG_DIR_AUXDATA` must be defined.
