@@ -387,7 +387,7 @@ def to_iprt_output_e6_v2(case_name, sza, saa, nx, ny, vecs,
 def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
             sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, wavelength, le,
             surface, pro, dep, z, ntheta=18001, pp=False, is_e6=False,
-            theta_grid=None):
+            theta_grid=None, seed=-1):
 
     if pp :
         sg = S1DB_PP
@@ -404,7 +404,7 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                         output_layers=1,
                         le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
                         stdev=True, progress=True, n_icdf=ntheta,
-                        theta_grid=theta_grid)#, seed=1e8)
+                        theta_grid=theta_grid, seed=seed)
 
         m_boa = reshape_sza_vaa_vza(m_boa, sza, vaa, vza)
         m_boa.to_netcdf(str(fboa_path))
@@ -418,7 +418,7 @@ def run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                         output_layers=1,
                         le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_radius,
                         stdev=True, progress=True, n_icdf=ntheta,
-                        theta_grid=theta_grid)#, seed=1e8)
+                        theta_grid=theta_grid, seed=seed)
 
         m_toa = reshape_sza_vaa_vza(m_toa, sza, vaa, vza)
         m_toa.to_netcdf(str(ftoa_path))
@@ -616,7 +616,7 @@ def plot_camera_iprt(I, Q, U, V,
     if save_fig is not None: plt.savefig(save_fig)
 
 
-def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_D1(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -661,14 +661,14 @@ def case_D1(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z)
+                wavelength, le, surface, pro, dep, z, seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d1', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
 
 
-def case_D2(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_D2(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -713,14 +713,14 @@ def case_D2(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z)
+                wavelength, le, surface, pro, dep, z, seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d2', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
     
 
-def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_D3(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -754,13 +754,14 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
         aer_ssa = np.full_like(mol_sca, 0.975683, dtype=np.float32)
         prof_aer = (aer_tau_ext, aer_ssa)
 
-        # aerosol phase matrix
-        nth = 18001
-        theta = np.linspace(0, 180, nth)
+        # aerosol phase matrix, on the scattering angles of the file
         wavelength = np.array([350.])
         n_wavelength = len(wavelength)
         file_aer_phase = OPT_PROP_PATH_PHASE3 / "waso.mie.cdf"
-        aer_phase = read_phase_cdf(file_aer_phase, n_theta=nth, normalize=True, output_sg_ready=False)
+        aer_phase = read_phase_cdf(file_aer_phase, n_theta='native',
+                                   normalize=True, output_sg_ready=False)
+        theta = aer_phase['theta_atm'].values
+        nth = len(theta)
         nstk = aer_phase.shape[2]
 
         aer_pha = np.zeros((n_wavelength, nz, nstk, nth), dtype=np.float32)
@@ -769,8 +770,7 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
             aer_pha[:,iz,:,:] = (
                 aer_phase.isel({aer_phase.dims[1]: 0})
                 # a single wavelength in the file: interp would give NaN
-                .sel(wavelength_phase=wavelength, method='nearest')
-                .interp(theta_atm=theta).data
+                .sel(wavelength_phase=wavelength, method='nearest').data
             )
         aer_phase = xr.DataArray(
             aer_pha,
@@ -784,7 +784,7 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
             lpha.append(xr.DataArray(
                 pha_atm[i,:,:],
                 dims=['nphamat', 'theta_atm'],
-                coords={'theta_atm': np.linspace(0, 180, nth)},
+                coords={'theta_atm': theta},
             ))
 
         pro = Atm1D(
@@ -807,14 +807,15 @@ def case_D3(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z,
+                theta_grid='phase', seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d3', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
 
 
-def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_D4(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -848,14 +849,15 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
         aer_ssa = np.full_like(mol_sca, 0.787581, dtype=np.float32)
         prof_aer = (aer_tau_ext, aer_ssa)
 
-        # aerosol phase matrix
-        nth = 18001
-        theta = np.linspace(0, 180, nth)
+        # aerosol phase matrix, on the scattering angles of the file
         wavelength = np.array([350.])
         n_wavelength = len(wavelength)
 
         file_aer_phase = OPT_PROP_PATH_PHASE3 / "sizedistr_spheroid.cdf"
-        aer_phase = read_phase_cdf(file_aer_phase, n_theta=nth, normalize=True, output_sg_ready=False)
+        aer_phase = read_phase_cdf(file_aer_phase, n_theta='native',
+                                   normalize=True, output_sg_ready=False)
+        theta = aer_phase['theta_atm'].values
+        nth = len(theta)
         nstk = aer_phase.shape[2]
 
         aer_pha = np.zeros((n_wavelength, nz, nstk, nth), dtype=np.float32)
@@ -864,8 +866,7 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
             aer_pha[:,iz,:,:] = (
                 aer_phase.isel({aer_phase.dims[1]: 0})
                 # a single wavelength in the file: interp would give NaN
-                .sel(wavelength_phase=wavelength, method='nearest')
-                .interp(theta_atm=theta).data
+                .sel(wavelength_phase=wavelength, method='nearest').data
             )
         aer_phase = xr.DataArray(
             aer_pha,
@@ -880,7 +881,7 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
             lpha.append(xr.DataArray(
                 pha_atm[i,:,:],
                 dims=['nphamat', 'theta_atm'],
-                coords={'theta_atm': np.linspace(0, 180, nth)},
+                coords={'theta_atm': theta},
             ))
 
         pro = Atm1D(
@@ -903,14 +904,15 @@ def case_D4(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z,
+                theta_grid='phase', seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d4', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
 
 
-def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -937,10 +939,10 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         mol_abs= np.array([0., 0.])[None,:]
         z = np.array([120., 0.])
         wavelength = np.array([350.])
-        nth = 1801
 
         ds_spheroid = aer2smartg(OPT_PROP_PATH_PHASE3 / "sizedistr_spheroid.cdf",
-                                 n_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
+                                 n_theta='native', rh_or_reff='hum',
+                                 rh_reff=np.array([0.]))
 
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'spheroid_d4.nc'
@@ -951,7 +953,7 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         pro = Atm1D(
             'afglt', comp=[aer], grid=z, prof_ray=mol_sca,
             prof_abs=mol_abs,
-        ).calc(wavelength, phase=True, n_theta=nth)
+        ).calc(wavelength, phase=True, n_theta='native')
         surface = None
 
         nvza = len(vza)
@@ -968,14 +970,15 @@ def case_D4_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z,
+                theta_grid='phase', seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d4_bis', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
 
 
-def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_D5(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1009,13 +1012,14 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
         aer_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
         prof_aer = (aer_tau_ext, aer_ssa)
 
-        # cloud phase matrix
-        nth = 18001
+        # cloud phase matrix, on the scattering angles of the file
         wavelength = np.array([800.])
         n_wavelength = len(wavelength)
-        theta = np.linspace(0, 180, nth)
         file_cld_phase = OPT_PROP_PATH_PHASE3 / "watercloud.mie.cdf"
-        cld_phase = read_phase_cdf(file_cld_phase, n_theta=nth, normalize=True, output_sg_ready=False)
+        cld_phase = read_phase_cdf(file_cld_phase, n_theta='native',
+                                   normalize=True, output_sg_ready=False)
+        theta = cld_phase['theta_atm'].values
+        nth = len(theta)
         nstk = cld_phase.shape[2]
 
         cld_pha = np.zeros((n_wavelength, nz, nstk, nth), dtype=np.float32)
@@ -1024,8 +1028,7 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
             cld_pha[:,iz,:,:] = (
                 cld_phase.isel({cld_phase.dims[1]: 0})
                 # a single wavelength in the file: interp would give NaN
-                .sel(wavelength_phase=wavelength, method='nearest')
-                .interp(theta_atm=theta).data
+                .sel(wavelength_phase=wavelength, method='nearest').data
             )
         cld_phase = xr.DataArray(
             cld_pha,
@@ -1062,14 +1065,15 @@ def case_D5(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z,
+                theta_grid='phase', seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d5', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
     
 
-def case_D6(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_D6(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1117,13 +1121,13 @@ def case_D6(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z)
+                wavelength, le, surface, pro, dep, z, seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d6', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
     
-def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1174,13 +1178,13 @@ def case_D6_pp(nphotons=1e8, overwrite=True, output_dir='./'):
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
                 wavelength, le,
-                surface, pro, dep, z, pp=True)
+                surface, pro, dep, z, pp=True, seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('d6_pp', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
     
-def case_E1(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E1(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1228,14 +1232,14 @@ def case_E1(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z)
+                wavelength, le, surface, pro, dep, z, seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e1', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
 
 
-def case_E2(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E2(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1285,14 +1289,14 @@ def case_E2(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z)
+                wavelength, le, surface, pro, dep, z, seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e2', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
     
 
-def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E3(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1323,10 +1327,10 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         zs = len(z)
         sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
         abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
-        nth = 18001
 
         file_aer1_phase = OPT_PROP_PATH_PHASE3 / "desert.cdf"
-        ds_desert = aer2smartg(file_aer1_phase, n_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
+        ds_desert = aer2smartg(file_aer1_phase, n_theta='native',
+                                rh_or_reff='hum', rh_reff=np.array([0.]))
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'desert_e3.nc'
             ds_desert.to_netcdf(file_path)
@@ -1336,7 +1340,7 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
 
         pro = Atm1D(
             'afglt', comp=[aer1], grid=z, prof_ray=sca, prof_abs=abs
-        ).calc(wavelength, phase=True, n_theta=nth)
+        ).calc(wavelength, phase=True, n_theta='native')
         surface = None
         
         nvza = len(vza)
@@ -1353,14 +1357,15 @@ def case_E3(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z,
+                theta_grid='phase', seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e3', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
 
 
-def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E4(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1391,12 +1396,13 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
         zs = len(z)
         sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
         abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
-        nth = 18001
 
         file_aer1_phase = OPT_PROP_PATH_PHASE3 / "desert.cdf"
         file_aer2_phase = OPT_PROP_PATH_PHASE3 / "sulfate.cdf"
-        ds_desert = aer2smartg(file_aer1_phase, n_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
-        ds_sulfate = aer2smartg(file_aer2_phase, n_theta=nth, rh_or_reff='hum', rh_reff=np.array([0.]))
+        ds_desert = aer2smartg(file_aer1_phase, n_theta='native',
+                                rh_or_reff='hum', rh_reff=np.array([0.]))
+        ds_sulfate = aer2smartg(file_aer2_phase, n_theta='native',
+                                 rh_or_reff='hum', rh_reff=np.array([0.]))
         with TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir)/'desert_e4.nc'
             ds_desert.to_netcdf(file_path)
@@ -1414,7 +1420,7 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
 
         pro = Atm1D('afglt', comp=[aer1, aer2], grid=z, prof_ray=sca, 
                       prof_abs=abs, pfgrid=[120., 21., 20., 3., 0.]
-                      ).calc(wavelength, phase=True, n_theta=nth)
+                      ).calc(wavelength, phase=True, n_theta='native')
         surface = None
         
         nvza = len(vza)
@@ -1431,94 +1437,19 @@ def case_E4(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z, ntheta=nth)
+                wavelength, le, surface, pro, dep, z,
+                theta_grid='phase', seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e4', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
     
 
-def case_E5(nphotons=1e8, overwrite=True, output_dir='./'):
-    
-    dir_output = Path(output_dir)
-    Path(dir_output).mkdir(parents=True, exist_ok=True)
-    fboa_name = f'iprt_phase3_e5_boa.nc'
-    ftoa_name = f'iprt_phase3_e5_toa.nc'
-    fboa_path = dir_output / fboa_name
-    ftoa_path = dir_output / ftoa_name
-    fboa_exist = fboa_path.exists()
-    ftoa_exist = ftoa_path.exists()
-
-
-    sza = np.array([30., 60., 80., 87., 90., 93., 96., 99.])
-    saa = np.array([0.])
-    vza = np.array([0., 9., 18., 26., 34., 41., 48., 54., 60., 65., 70.,
-                        74., 78., 81., 84., 86., 88., 89., 90.])
-    vaa = np.linspace(0., 180., 19)
-    z = None
-
-    if (overwrite      or 
-        not fboa_exist or 
-        not ftoa_exist  ):
-
-        # atmosphere profil
-        mol_sca_filename  =  OPT_PROP_PATH_PHASE3 / "tau_rayleigh_450nm_usstd.dat"
-        mol_abs_filename  =  OPT_PROP_PATH_PHASE3 / "tau_absorption_450nm_usstd.dat"
-        wavelength = np.array([450.])
-        z = np.squeeze(pd.read_csv(mol_sca_filename, header=None, usecols=[0], dtype=float, skiprows=1, sep=r'\s+', comment='#').values)
-        zs = len(z)
-        sca = pd.read_csv(mol_sca_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
-        abs = pd.read_csv(mol_abs_filename, header=None, usecols=[1], dtype=float, skiprows=1, sep=r'\s+', comment='#').values.reshape(1,zs)
-        nth = 18001
-
-        file_cld1_phase = OPT_PROP_PATH_PHASE3 / "ic.ghm.baum.cdf"
-        ds_ic_baum_ghm_ = xr.open_dataset(file_cld1_phase)
-        wavelength_ = ds_ic_baum_ghm_.wavelen.values
-        # wavelength in micrometers, here take only between 400
-        # and 500nm
-        nlam_ = np.squeeze(np.argwhere(
-            np.logical_and(wavelength_>=0.4, wavelength_<=0.5)
-        ))
-        ds_ic_baum_ghm_  = ds_ic_baum_ghm_ .sel(nlam = nlam_)
-        ds_ic_baum_ghm = aer2smartg(ds_ic_baum_ghm_, n_theta=nth)
-        with TemporaryDirectory() as tmpdir:
-            file_path = Path(tmpdir)/'ic_ghm_baum_e5.nc'
-            ds_ic_baum_ghm.to_netcdf(file_path)
-            cld1 = Cloud(str(file_path), reff=50., zmin=10.,
-                         zmax=11., tau_ref=1., w_ref=wavelength[0])
-
-        pro = Atm1D(
-            'afglt', comp=[cld1], grid=z, prof_ray=sca, prof_abs=abs
-        ).calc(wavelength, phase=True, n_theta=nth)
-        surface = None
-        
-        nvza = len(vza)
-        nvaa = len(vaa)
-        phi = -vaa
-        dep = 0.03
-        earth_r = 6371.
-
-        count_lvl = np.zeros_like(sza, dtype=np.int32)
-        phi_0 = -saa # To follow iprt anti-clockwise convention
-        le     = LocalEstimate(th_deg=sza, phi_deg=phi_0,
-                               count_level=count_lvl)
-
-        # run simulations and create intermediate files
-        run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
-                sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z, ntheta=nth)
-
-    # open intermediate files and convert to iprt phase3 output format 
-    to_iprt_output('e5', sza, saa, vza, vaa, z,
-                   overwrite=overwrite, output_dir=output_dir)
-
-
-def case_E5_bis(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E5(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     """
-    Run the IPRT case E5 on the native scattering angles of the cloud.
+    Run the IPRT case E5: an ice cloud in a Rayleigh atmosphere.
 
-    The same ice cloud as case_E5, whose phase matrix is resampled onto
-    18001 equally spaced angles, but kept on the angle grid of the
+    The phase matrix of the cloud is kept on the angle grid of the
     ic.ghm.baum.cdf file (498 angles, 0.01 degree apart in the forward
     peak), from the conversion of the file to the GPU tables.
 
@@ -1530,13 +1461,15 @@ def case_E5_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         Run the simulations even when their intermediate files exist.
     output_dir : str or Path
         Folder of the intermediate files and of the IPRT output file
-        iprt_phase3_e5_bis.nc.
+        iprt_phase3_e5.nc.
+    seed : int
+        Seed of the random numbers, -1 for one taken from the clock.
     """
 
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
-    fboa_name = f'iprt_phase3_e5_bis_boa.nc'
-    ftoa_name = f'iprt_phase3_e5_bis_toa.nc'
+    fboa_name = f'iprt_phase3_e5_boa.nc'
+    ftoa_name = f'iprt_phase3_e5_toa.nc'
     fboa_path = dir_output / fboa_name
     ftoa_path = dir_output / ftoa_name
     fboa_exist = fboa_path.exists()
@@ -1575,7 +1508,7 @@ def case_E5_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         # keep the angles of the file instead of resampling them
         ds_ic_baum_ghm = aer2smartg(ds_ic_baum_ghm_, n_theta='native')
         with TemporaryDirectory() as tmpdir:
-            file_path = Path(tmpdir)/'ic_ghm_baum_e5_bis.nc'
+            file_path = Path(tmpdir)/'ic_ghm_baum_e5.nc'
             ds_ic_baum_ghm.to_netcdf(file_path)
             cld1 = Cloud(str(file_path), reff=50., zmin=10.,
                          zmax=11., tau_ref=1., w_ref=wavelength[0])
@@ -1600,14 +1533,15 @@ def case_E5_bis(nphotons=1e8, overwrite=True, output_dir='./'):
         # adopting the angles of the phase matrices
         run_sim(overwrite, fboa_exist, ftoa_exist, fboa_path, ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons,
-                wavelength, le, surface, pro, dep, z, theta_grid='phase')
+                wavelength, le, surface, pro, dep, z,
+                theta_grid='phase', seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format
-    to_iprt_output('e5_bis', sza, saa, vza, vaa, z,
+    to_iprt_output('e5', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
 
 
-def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     
     dir_output = Path(output_dir)
     Path(dir_output).mkdir(parents=True, exist_ok=True)
@@ -1652,14 +1586,15 @@ def case_E6_old(nphotons=1e8, overwrite=True, output_dir='./'):
         # run simulations and create intermediate files
         run_sim(overwrite, False, ftoa_exist, 'none.nc', ftoa_path,
                 sza, vza, vaa, phi, nvza, nvaa, earth_r, nphotons, 
-                wavelength, le, surface, pro, dep, z, is_e6=True)
+                wavelength, le, surface, pro, dep, z, is_e6=True,
+                seed=seed)
 
     # open intermediate files and convert to iprt phase3 output format 
     to_iprt_output('e6', sza, saa, vza, vaa, z,
                    overwrite=overwrite, output_dir=output_dir)
     
     
-def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     """
     In this version 1, we take one direction at each pixel center
     """
@@ -1754,7 +1689,8 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
                     n_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
-                    stdev=True, progress=True, n_icdf=ntheta)
+                    stdev=True, progress=True, n_icdf=ntheta,
+                    seed=seed)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))
         
@@ -1763,7 +1699,7 @@ def case_E6_v1(nphotons=1e8, overwrite=True, output_dir='./'):
     to_iprt_output_e6_v1('e6_v1', sza, saa, nx, ny, is_sens, vecs,
                          overwrite=overwrite, output_dir=output_dir)
 
-def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     """
     In this version 1, we take one direction at each pixel center
     """
@@ -1851,7 +1787,8 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
                     n_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
-                    stdev=True, progress=True, n_icdf=ntheta)
+                    stdev=True, progress=True, n_icdf=ntheta,
+                    seed=seed)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))
         
@@ -1860,7 +1797,7 @@ def case_E6_v2(nphotons=1e8, overwrite=True, output_dir='./'):
     to_iprt_output_e6_v2('e6_v2', sza, saa, nx, ny, vecs,
                          overwrite=overwrite, output_dir=output_dir)
 
-def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
+def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./', seed=-1):
     """
     In this version 1, we take one direction at each pixel center
     """
@@ -1952,7 +1889,8 @@ def case_E6_v3(nphotons=1e8, overwrite=True, output_dir='./'):
                     n_loop=nphotons, atmosphere=pro, sensor=sensors,
                     output_layers=1,
                     le=le, surface=surface, xblock=64, xgrid=1024, beer=1, depo=dep, reflectance=False, earth_radius=earth_r,
-                    stdev=True, progress=True, n_icdf=ntheta)
+                    stdev=True, progress=True, n_icdf=ntheta,
+                    seed=seed)
         if not isinstance(m_toa, xr.Dataset): m_toa = m_toa.to_xarray()
         m_toa.to_netcdf(str(ftoa_path))
         
@@ -1980,7 +1918,6 @@ if __name__ == '__main__':
     # case_E3(nphotons=1e8, overwrite=False, output_dir=output_dir)
     # case_E4(nphotons=1e8, overwrite=False, output_dir=output_dir)
     # case_E5(nphotons=1e8, overwrite=False, output_dir=output_dir)
-    # case_E5_bis(nphotons=1e8, overwrite=False, output_dir=output_dir)
     # case_E6_old(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E6_v1(nphotons=1e8, overwrite=False, output_dir=output_dir)
     case_E6_v2(nphotons=1e8, overwrite=False, output_dir=output_dir)

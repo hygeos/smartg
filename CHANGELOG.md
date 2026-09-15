@@ -520,13 +520,21 @@ corrected before the final `v2.0.0` release.
     parameters of the wrapper, in the same order (`depol` is now its
     third positional parameter). `plot_polar_iprt` of
     `iprt_phase3_runs.py` draws with it too, `min_i` taking its `minI`
-  - New IPRT phase 3 case `case_E5_bis` in `iprt_phase3_runs.py`: the
-    ice cloud of E5 kept on the 498 native angles of `ic.ghm.baum.cdf`
-    instead of 18001 resampled ones, through the new
+  - The aerosol and cloud cases of `iprt_phase3_runs.py` (D3, D4,
+    D4_bis, D5, E3, E4, E5) run on the native scattering angles of
+    their files instead of 18001 resampled ones, through
+    `read_phase_cdf(n_theta='native')`, the new
     `aer2smartg(n_theta='native')`, `calc(n_theta='native')` and
     `theta_grid='phase'`, which `run_sim` now passes to `Smartg.run`.
-    The table reproduces the file at every node, and at 1e5 photons the
-    radiances agree with E5 within the Monte Carlo noise
+    The tables reproduce the files at every node, and the radiances
+    agree with the resampled ones within the Monte Carlo noise. Every
+    case takes a `seed`, -1 (the clock) by default
+  - New `smartg/tests/test_iprt_phase3.py` runs the IPRT phase 3 cases
+    D1 to D6 and E1 to E5 and compares them with saved 1e8 photons per
+    direction results (`IPRT/phase3/smartg_ref_res/` of the auxdata)
+    within the Monte Carlo noise of both, at 1e6 photons per direction
+    by default (about 5 min for the file) and at 1e8 under the `slow`
+    marker
 
 * Corrections
   - Fix the nodes of the cumulative distribution a scattering deflection
