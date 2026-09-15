@@ -24,10 +24,15 @@ satellite_view
     'Satellite' 2D image of SMART-G 3D atmosphere results.
 visualize_entity
     3D visualization of the created scene objects.
+plot_polar_iquv
+    Plot I, Q, U and V matrices side by side in polar view.
+plot_iquv_comparison
+    Plot I, Q, U and V signals and their difference with a reference.
 """
 
 import math
 import warnings
+from pathlib import Path
 from pylab import (
     figure,
     subplot2grid,
@@ -2310,6 +2315,108 @@ def compare(
     return fig
 
 
+def plot_iquv_comparison(
+    iquv_obs: np.ndarray,
+    iquv_mod: np.ndarray,
+    iquv_std_obs: np.ndarray,
+    iquv_std_mod: np.ndarray,
+    xaxis: np.ndarray,
+    xlabel: str,
+    iquv_ymin: np.ndarray | list[float] | None = None,
+    iquv_ymax: np.ndarray | list[float] | None = None,
+    title: str | None = None,
+    save_fig: str | Path | None = None,
+) -> None:
+    """Plot I, Q, U and V signals and their difference with a reference.
+
+    The figure holds two rows of four panels: the observed and the
+    modelled I, Q, U and V on top, and their absolute difference,
+    with error bars, below.
+
+    Parameters
+    ----------
+    iquv_obs : ndarray
+        Observed, or reference model, I, Q, U and V signals, of shape
+        (4, nxaxis).
+    iquv_mod : ndarray
+        Modelled I, Q, U and V signals, of the same shape.
+    iquv_std_obs : ndarray
+        Standard deviations of the observed signals.
+    iquv_std_mod : ndarray
+        Standard deviations of the modelled signals.
+    xaxis : ndarray
+        Abscissa the signals vary along, usually the viewing zenith
+        or the viewing azimuth angle.
+    xlabel : str
+        Label of the abscissa.
+    iquv_ymin : ndarray or list of float, optional
+        Lower bound of the signal panels, one per Stokes parameter.
+        By default it is taken from the drawn values.
+    iquv_ymax : ndarray or list of float, optional
+        Upper bound of the signal panels, one per Stokes parameter.
+    title : str, optional
+        Title of the whole figure.
+    save_fig : str or Path, optional
+        Save the figure at this path, the extension giving the
+        format, e.g. save_fig='myFigName.png'.
+    """
+
+    fig, ax = plt.subplots(2,4, figsize=(13,8))
+    if title: fig.suptitle(title, fontsize=15)
+
+    for istk in range(0, 4):
+        top = ax[0, istk]
+        if istk == 0:
+            top.set_ylabel("normalized radiance", fontsize=13)
+        top.set_xlabel(xlabel, fontsize=13)
+        top.yaxis.set_major_formatter(FormatStrFormatter('%5.1e'))
+        top.plot(xaxis, iquv_obs[istk], color='red')
+        top.plot(xaxis, iquv_mod[istk], color='blue')
+        if iquv_ymin is not None and iquv_ymax is not None:
+            ymin, ymax = iquv_ymin[istk], iquv_ymax[istk]
+        else:
+            yt = top.get_yticks()
+            top.locator_params(axis='y', nbins=6)
+            if iquv_ymin is not None:
+                ymin, ymax = iquv_ymin[istk], np.max(yt)
+            elif iquv_ymax is not None:
+                ymin, ymax = np.min(yt), iquv_ymax[istk]
+            else:
+                ymin, ymax = np.min(yt), np.max(yt)
+        top.set_yticks(np.linspace(ymin, ymax, 6))
+        top.set_ylim(ymin=ymin, ymax=ymax)
+        top.set_xlim(xmin=np.min(xaxis), xmax=np.max(xaxis))
+        top.locator_params(axis='x', nbins=3)
+
+        bottom = ax[1, istk]
+        if istk == 0:
+            bottom.set_ylabel("abs. diff", fontsize=13)
+        bottom.set_xlabel(xlabel, fontsize=13)
+        bottom.yaxis.set_major_formatter(FormatStrFormatter('%5.1e'))
+        _, caps, bars = bottom.errorbar(
+            xaxis,
+            iquv_obs[istk, :] - iquv_mod[istk, :],
+            yerr=iquv_std_obs[istk] + iquv_std_mod[istk],
+            fmt='x',
+            color='blue',
+            ecolor='grey',
+            capsize=2,
+        )
+        for bar in bars:
+            bar.set_alpha(0.25)
+        for cap in caps:
+            cap.set_alpha(0.25)
+        bottom.axhline(0, color='black')
+        bottom.locator_params(axis='x', nbins=3)
+        bottom.locator_params(axis='y', nbins=6)
+        yt = bottom.get_yticks()
+        bottom.set_yticks(np.linspace(np.min(yt), np.max(yt), 6))
+        bottom.set_ylim(ymin=np.min(yt), ymax=np.max(yt))
+    fig.tight_layout()
+    if save_fig is not None:
+        plt.savefig(save_fig)
+
+
 def _bin_edges(
     x: np.ndarray[Any, Any],
     min: float | None = None,
@@ -2677,6 +2784,158 @@ def plot_polar(
         ax_polar.set_title(title, weight="bold", position=(0.05, 0.97))
 
     return fig
+
+
+def plot_polar_iquv(
+    iquv: Sequence[np.ndarray],
+    thetas: np.ndarray,
+    phis: np.ndarray,
+    max_i: float | None = None,
+    max_q: float | None = None,
+    max_u: float | None = None,
+    max_v: float | None = None,
+    min_i: float | None = None,
+    cmap_i: str | mcolors.Colormap | None = None,
+    cmap_q: str | mcolors.Colormap | None = None,
+    cmap_u: str | mcolors.Colormap | None = None,
+    cmap_v: str | mcolors.Colormap | None = None,
+    title: str | None = None,
+    save_fig: str | Path | None = None,
+    sym: bool = False,
+) -> None:
+    """Plot I, Q, U and V matrices side by side in polar view.
+
+    Each matrix is drawn on its own polar axes, the viewing azimuth
+    angle as the angle and the viewing zenith angle, rescaled from 0
+    to 90, as the radius.
+
+    Parameters
+    ----------
+    iquv : sequence of ndarray
+        The I, Q, U and V matrices, each of shape (ntheta, nphi). The
+        rows are drawn from the outer edge to the centre, row j at the
+        radius of thetas[ntheta - 1 - j], which is the default row
+        order of smartg.iprt.iprt.select_iprt_iquv.
+    thetas : ndarray
+        Viewing zenith angles, in degrees, sorted in increasing order.
+        They are rescaled to span the radius from 0 to 90.
+    phis : ndarray
+        Viewing azimuth angles of the columns, in degrees.
+    max_i, max_q, max_u, max_v : float, optional
+        Upper bound of the colour scale of each panel. By default the
+        largest absolute value of the panel is used. The Q, U and V
+        panels are drawn from -max to +max. The I panel is drawn from
+        0 to its largest value by default, and from -max_i to +max_i
+        when max_i is given, e.g. for a difference.
+    min_i : float, optional
+        Lower bound of the colour scale of the I panel, overriding the
+        0 or -max_i default.
+    cmap_i, cmap_q, cmap_u, cmap_v : str or Colormap, optional
+        Colour map of each panel, 'jet' for I and 'RdBu_r' for the
+        other panels by default.
+    title : str, optional
+        Title of the whole figure.
+    save_fig : str or Path, optional
+        Save the figure at this path, the extension giving the
+        format, e.g. save_fig='myFigName.png'.
+    sym : bool
+        The azimuth angles cover 0 to 180 degrees, as in the IPRT
+        cases; also plot the symmetrical results from 180 to 360
+        degrees.
+    """
+
+    val_i, val_q, val_u, val_v = (
+        np.asarray(values, dtype=np.float64) for values in iquv
+    )
+    if sym:
+        phis = np.concatenate((phis, phis + 180))
+        val_i, val_q, val_u, val_v = (
+            np.concatenate((values, values[:, ::-1]), axis=1)
+            for values in (val_i, val_q, val_u, val_v)
+        )
+
+    plt.rcParams.update({'font.size': 13})
+
+    thetas_scaled = (
+        (thetas - np.min(thetas))
+        / (np.max(thetas) - np.min(thetas))
+        * 90.
+    )
+    if max_i is None:
+        max_i = float(max(
+            np.abs(np.min(val_i)), np.abs(np.max(val_i))
+        ))
+        if min_i is None:
+            min_i = 0.
+    elif min_i is None:
+        min_i = -max_i
+    if max_q is None:
+        max_q = float(max(
+            np.abs(np.min(val_q)), np.abs(np.max(val_q))
+        ))
+    if max_u is None:
+        max_u = float(max(
+            np.abs(np.min(val_u)), np.abs(np.max(val_u))
+        ))
+    if max_v is None:
+        max_v = float(max(
+            np.abs(np.min(val_v)), np.abs(np.max(val_v))
+        ))
+
+    if cmap_i is None:
+        cmap_i = "jet"
+    if cmap_q is None:
+        cmap_q = "RdBu_r"
+    if cmap_u is None:
+        cmap_u = "RdBu_r"
+    if cmap_v is None:
+        cmap_v = "RdBu_r"
+
+    fig, ax = plt.subplots(
+        1, 4, figsize=(12, 4),
+        subplot_kw=dict(projection='polar'),
+    )
+    if title is not None:
+        fig.suptitle(title)
+
+    panels = (
+        ('I', val_i, cmap_i, min_i, max_i),
+        ('Q', val_q, cmap_q, -max_q, max_q),
+        ('U', val_u, cmap_u, -max_u, max_u),
+        ('V', val_v, cmap_v, -max_v, max_v),
+    )
+    for ipan, (label, values, cmap, vmin, vmax) in enumerate(panels):
+        ax[ipan].grid(False)
+        mesh = ax[ipan].pcolormesh(
+            np.deg2rad(phis),
+            thetas_scaled[::-1],
+            values,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            shading='gouraud',
+        )
+        cbar = fig.colorbar(
+            mesh,
+            ax=ax[ipan],
+            shrink=0.8,
+            orientation='horizontal',
+            ticks=np.linspace(vmin, vmax, 3, endpoint=True),
+            format="%4.1e",
+        )
+        cbar.set_label(label)
+        ax[ipan].set_yticklabels([])
+        ax[ipan].grid(
+            axis='both',
+            linewidth=1.5,
+            linestyle=':',
+            color='black',
+            alpha=0.5,
+        )
+
+    fig.tight_layout()
+    if save_fig is not None:
+        plt.savefig(save_fig)
 
 
 def transect_2d(

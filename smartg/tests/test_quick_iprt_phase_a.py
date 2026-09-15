@@ -19,9 +19,9 @@ from smartg.iprt.iprt import (
     select_and_plot_polar_iprt,
     compute_deltam,
     select_iprt_iquv,
-    plot_iprt_radiances,
     group_iquv,
 )
+from smartg.view import plot_iquv_comparison
 from smartg.phase import calc_iphase
 from smartg.config import DIR_AUXDATA
 from smartg.xarray import drop_axes
@@ -1126,7 +1126,7 @@ def test_a5_pp(request, s1df):
 
     iquvy_min = [0.0, -2e-2, -1.2e-4, -1e-5]
     iquvy_max = [2.5e-1, 1.5e-2, 6e-5, 1e-5]
-    plot_iprt_radiances(
+    plot_iquv_comparison(
         iquv_obs=iquvm_pp,
         iquv_mod=iquvs_pp,
         iquv_std_obs=iquvstdm_pp,
@@ -1173,7 +1173,7 @@ def test_a5_pp(request, s1df):
     iquvy_min = [0.0, -3e-3, -1.5e-4, -2e-5]
     iquvy_max = [3.5, 4e-3, 2e-4, 3e-5]
 
-    plot_iprt_radiances(
+    plot_iquv_comparison(
         iquv_obs=iquvm_pp,
         iquv_mod=iquvs_pp,
         iquv_std_obs=iquvstdm_pp,
@@ -1426,7 +1426,7 @@ def test_a5_al(request, s1df):
 
     iquvy_min = [6e-2, -1e-2, -2e-3, -5e-5]
     iquvy_max = [1.2e-1, 2e-2, 1.2e-2, 2e-5]
-    plot_iprt_radiances(
+    plot_iquv_comparison(
         iquv_obs=iquvm_al,
         iquv_mod=iquvs_al,
         iquv_std_obs=iquvstdm_al,
@@ -1465,7 +1465,7 @@ def test_a5_al(request, s1df):
     iquvy_min = [0.0, -3.5e-3, -3e-3, -1.5e-5]
     iquvy_max = [3.5, 5e-4, 5e-4, 2.5e-5]
 
-    plot_iprt_radiances(
+    plot_iquv_comparison(
         iquv_obs=iquvm_al,
         iquv_mod=iquvs_al,
         iquv_std_obs=iquvstdm_al,

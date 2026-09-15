@@ -25,7 +25,7 @@ from smartg.phase import calc_iphase, is_native_theta, union_theta_grid
 # may be to replace
 from smartg.phase import read_phase_cdf
 
-from smartg.iprt.iprt import plot_polar_iquv
+from smartg.view import plot_polar_iquv
 from smartg.xarray import drop_axes
 
 from tempfile import TemporaryDirectory
@@ -537,7 +537,7 @@ def plot_polar_iprt(I, Q, U, V, thetas, phis, change_Q_sign=False, change_U_sign
     """
     Plot phase 3 I, Q, U and V matrices in polar view.
 
-    Wrapper of smartg.iprt.iprt.plot_polar_iquv for the phase 3 layout,
+    Wrapper of smartg.view.plot_polar_iquv for the phase 3 layout,
     where row j holds the viewing zenith angle thetas[j] and is drawn
     at its own rescaled radius; plot_polar_iquv takes the rows in the
     reverse order.

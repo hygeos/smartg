@@ -65,7 +65,8 @@ corrected before the final `v2.0.0` release.
     - iprt: `seclect_iprt_IQUV` → `select_iprt_iquv` (the typo
       included), `convert_SGout_to_IPRTout` →
       `convert_sgout_to_iprtout`, `compute_deltam_IPRTout` →
-      `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`, and
+      `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`,
+      `plot_iprt_radiances` → `smartg.view.plot_iquv_comparison`, and
       their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...)
     - histories: `Si` → `si`, `Si2` → `si2`, `BigSum` → `big_sum`, and
       their parameters (`Dij` → `dij`, `Ki` → `ki`, `S` → `s`,
@@ -513,7 +514,7 @@ corrected before the final `v2.0.0` release.
   - Aeronet read functions (`read_Aeronet_PFN`, etc.) now return `xr.DataArray`
     instead of LUT objects
   - Push to PyPI workflow added
-  - New `smartg.iprt.iprt.plot_polar_iquv` drawing I, Q, U and V matrices in
+  - New `smartg.view.plot_polar_iquv` drawing I, Q, U and V matrices in
     polar view, split from `select_and_plot_polar_iprt`, which now selects
     with `select_iprt_iquv` and plots with it. `select_iprt_iquv` gains
     the `depol`, `change_q_sign`, `change_v_sign` and `depol_index`

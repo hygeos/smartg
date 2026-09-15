@@ -1,42 +1,176 @@
 """Helpers for the IPRT model intercomparison cases.
 
-This module provides tools to convert SMART-G outputs to the IPRT
-(International Polarized Radiative Transfer) ASCII format, to read
-the IPRT reference results, and to plot the comparisons.
+IPRT (International Polarized Radiative Transfer) compares polarized
+radiative transfer models in three phases, each with its own cases and
+result format:
 
-Key Functions
--------------
-convert_sgout_to_iprtout
-    Convert SMART-G output into the IPRT ASCII output format.
-select_iprt_iquv
-    Select I, Q, U and V results from an IPRT matrix.
-plot_polar_iquv
-    Plot I, Q, U and V matrices in polar coordinates.
-select_and_plot_polar_iprt
-    Select I, Q, U and V results from an IPRT matrix and plot
-    them in polar coordinates.
-plot_iprt_radiances
-    Plot radiances and the differences between a reference model
-    and the model radiances.
+- phase A, the 1D cases A1 to A6 and B1 to B4: ASCII tables, one record
+  per line with the columns depol zout sza saa va phi I Q U V Istd Qstd
+  Ustd Vstd;
+- phase B, the 3D cases (C2 and C3 here): ASCII tables with the columns
+  case theta_0 z theta phi ix iy I Q U V Istd Qstd Ustd Vstd;
+- phase 3, the cases D1 to D6 and E1 to E6: netCDF files.
+
+This module holds the part common to all the phases and the tools of
+phase A. Phase B has no helper of its own: its C2 and C3 cases are run
+and compared in smartg/tests/test_iprt_phase_b_c2.py and
+test_iprt_phase_b_c3.py. Phase 3 is run by smartg.iprt.iprt_phase3_runs.
+The polar and radiance plots do not depend on the phase and are in
+smartg.view: plot_polar_iquv and plot_iquv_comparison.
+
+Common to all the phases
+------------------------
 group_iquv
     Gather several IQUV result matrices into a single array.
 compute_deltam
     Compute the IPRT delta_m metric between two IQUV signal sets.
+
+Phase A only
+------------
+convert_sgout_to_iprtout
+    Convert SMART-G output into the IPRT phase A ASCII format.
+select_iprt_iquv
+    Select I, Q, U and V results from a phase A matrix.
+select_and_plot_polar_iprt
+    Select I, Q, U and V results from a phase A matrix and plot
+    them in polar coordinates.
 compute_deltam_iprtout
-    Compute the IPRT delta_m metric between two IPRT matrices.
+    Compute the IPRT delta_m metric between two phase A matrices.
 """
 
-from collections.abc import Sequence
 from pathlib import Path
 import warnings
 
 from luts.luts import MLUT
 from matplotlib.colors import Colormap
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
 import numpy as np
 import xarray as xr
 
+from smartg.view import plot_polar_iquv
+
+
+# ----------------------------------------------------------------------
+# Common to all the IPRT phases: the delta_m metric, computed on plain
+# I, Q, U and V arrays whatever result file they were read from.
+# ----------------------------------------------------------------------
+
+
+def group_iquv(
+    i_list: list[np.ndarray],
+    q_list: list[np.ndarray],
+    u_list: list[np.ndarray],
+    v_list: list[np.ndarray],
+) -> np.ndarray:
+    """Gather several IQUV result matrices into a single array.
+
+    Each matrix is flattened and the matrices are concatenated in the
+    given order, so that several viewing configurations can be
+    compared with a single delta_m. The matrices may come from any
+    IPRT phase.
+
+    Parameters
+    ----------
+    i_list : list of ndarray
+        The I matrices to gather.
+    q_list : list of ndarray
+        The Q matrices, in the same order.
+    u_list : list of ndarray
+        The U matrices, in the same order.
+    v_list : list of ndarray
+        The V matrices, in the same order.
+
+    Returns
+    -------
+    ndarray
+        The gathered signals, of shape (4, nvalues).
+    """
+    n_values = int(0)
+    i_tot = i_list[0].flatten()
+    q_tot = q_list[0].flatten()
+    u_tot = u_list[0].flatten()
+    v_tot = v_list[0].flatten()
+
+    for i in range(len(i_list)):
+        n_values += round(i_list[i].shape[0] * i_list[i].shape[1])
+        if i > 0:
+            i_tot = np.concatenate((i_tot, i_list[i].flatten()))
+            q_tot = np.concatenate((q_tot, q_list[i].flatten()))
+            u_tot = np.concatenate((u_tot, u_list[i].flatten()))
+            v_tot = np.concatenate((v_tot, v_list[i].flatten()))
+
+    iquv_tot = np.zeros((4, n_values), dtype=np.float32)
+    iquv_tot[0, :] = i_tot
+    iquv_tot[1, :] = q_tot
+    iquv_tot[2, :] = u_tot
+    iquv_tot[3, :] = v_tot
+
+    return iquv_tot
+
+
+def compute_deltam(
+    obs: np.ndarray | list[np.ndarray],
+    mod: np.ndarray | list[np.ndarray],
+    print_res: bool = True,
+) -> np.ndarray:
+    """Compute the IPRT delta_m metric from two IQUV signal sets.
+
+    delta_m is the root mean square of the difference between the
+    model and the reference, relative to the root mean square of the
+    reference, in percent. It is reported per Stokes parameter, and
+    is set to 0 when the reference is uniformly zero. The signals may
+    come from any IPRT phase.
+
+    Parameters
+    ----------
+    obs : ndarray or list of ndarray
+        Observed, or reference model, I, Q, U and V signals, either
+        as an array of shape (4, nvalues) or as four arrays.
+    mod : ndarray or list of ndarray
+        Modelled I, Q, U and V signals, in the same layout.
+    print_res : bool
+        Print each delta_m next to its Stokes parameter.
+
+    Returns
+    -------
+    ndarray
+        The delta_m of I, Q, U and V, in percent.
+    """
+    if isinstance(obs, np.ndarray):
+        obs_tmp = obs.copy()
+        obs = []
+        for i in range(0, 4):
+            obs.append(obs_tmp[i, :])
+
+    if isinstance(mod, np.ndarray):
+        mod_tmp = mod.copy()
+        mod = []
+        for i in range(0, 4):
+            mod.append(mod_tmp[i, :])
+
+    stk = ['I', 'Q', 'U', 'V']
+    delta_m = np.zeros(4, dtype=np.float32)
+    for i in range(len(stk)):
+        with np.errstate(divide='raise', invalid='raise'):
+            try:
+                delta_m[i] = (
+                    100
+                    * np.sqrt(np.sum((obs[i] - mod[i]) ** 2))
+                    / np.sqrt(np.sum(obs[i] ** 2))
+                )
+            except FloatingPointError:
+                delta_m[i] = 0.
+        if print_res:
+            print(stk[i], f"{delta_m[i]:.3f}")
+    return delta_m
+
+
+# ----------------------------------------------------------------------
+# IPRT phase A only: the ASCII result tables of the cases A1 to A6 and
+# B1 to B4, one record per line with the columns
+#     depol zout sza saa va phi I Q U V Istd Qstd Ustd Vstd
+# (indices 0 to 13), as in the MYSTIC reference files and as
+# convert_sgout_to_iprtout writes them.
+# ----------------------------------------------------------------------
 
 
 def _iprt_records(
@@ -50,7 +184,7 @@ def _iprt_records(
     z_index: int,
     depol_index: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Flag the kept records of an IPRT matrix and find their angles.
+    """Flag the kept records of a phase A matrix and find their angles.
 
     Parameters
     ----------
@@ -107,7 +241,7 @@ def select_iprt_iquv(
     depol_index: int = 0,
     stdev: bool = False,
 ) -> tuple[np.ndarray, ...]:
-    """Select the I, Q, U and V results from an IPRT result matrix.
+    """Select the I, Q, U and V results from an IPRT phase A matrix.
 
     The records of the matrix are scattered over the (theta, phi)
     grid, one Stokes parameter per output array.
@@ -223,157 +357,6 @@ def select_iprt_iquv(
         )
 
 
-def plot_polar_iquv(
-    iquv: Sequence[np.ndarray],
-    thetas: np.ndarray,
-    phis: np.ndarray,
-    max_i: float | None = None,
-    max_q: float | None = None,
-    max_u: float | None = None,
-    max_v: float | None = None,
-    min_i: float | None = None,
-    cmap_i: str | Colormap | None = None,
-    cmap_q: str | Colormap | None = None,
-    cmap_u: str | Colormap | None = None,
-    cmap_v: str | Colormap | None = None,
-    title: str | None = None,
-    save_fig: str | Path | None = None,
-    sym: bool = False,
-) -> None:
-    """Plot I, Q, U and V matrices side by side in polar view.
-
-    Each matrix is drawn on its own polar axes, the viewing azimuth
-    angle as the angle and the viewing zenith angle, rescaled from 0
-    to 90, as the radius.
-
-    Parameters
-    ----------
-    iquv : sequence of ndarray
-        The I, Q, U and V matrices, each of shape (ntheta, nphi). The
-        rows are drawn from the outer edge to the centre, row j at the
-        radius of thetas[ntheta - 1 - j], which is the default row
-        order of select_iprt_iquv.
-    thetas : ndarray
-        Viewing zenith angles, in degrees, sorted in increasing order.
-        They are rescaled to span the radius from 0 to 90.
-    phis : ndarray
-        Viewing azimuth angles of the columns, in degrees.
-    max_i, max_q, max_u, max_v : float, optional
-        Upper bound of the colour scale of each panel. By default the
-        largest absolute value of the panel is used. The Q, U and V
-        panels are drawn from -max to +max. The I panel is drawn from
-        0 to its largest value by default, and from -max_i to +max_i
-        when max_i is given, e.g. for a difference.
-    min_i : float, optional
-        Lower bound of the colour scale of the I panel, overriding the
-        0 or -max_i default.
-    cmap_i, cmap_q, cmap_u, cmap_v : str or Colormap, optional
-        Colour map of each panel, 'jet' for I and 'RdBu_r' for the
-        other panels by default.
-    title : str, optional
-        Title of the whole figure.
-    save_fig : str or Path, optional
-        Save the figure at this path, the extension giving the
-        format, e.g. save_fig='myFigName.png'.
-    sym : bool
-        The IPRT azimuth angles cover 0 to 180 degrees; also plot the
-        symmetrical results from 180 to 360 degrees.
-    """
-
-    val_i, val_q, val_u, val_v = (
-        np.asarray(values, dtype=np.float64) for values in iquv
-    )
-    if sym:
-        phis = np.concatenate((phis, phis + 180))
-        val_i, val_q, val_u, val_v = (
-            np.concatenate((values, values[:, ::-1]), axis=1)
-            for values in (val_i, val_q, val_u, val_v)
-        )
-
-    plt.rcParams.update({'font.size': 13})
-
-    thetas_scaled = (
-        (thetas - np.min(thetas))
-        / (np.max(thetas) - np.min(thetas))
-        * 90.
-    )
-    if max_i is None:
-        max_i = float(max(
-            np.abs(np.min(val_i)), np.abs(np.max(val_i))
-        ))
-        if min_i is None:
-            min_i = 0.
-    elif min_i is None:
-        min_i = -max_i
-    if max_q is None:
-        max_q = float(max(
-            np.abs(np.min(val_q)), np.abs(np.max(val_q))
-        ))
-    if max_u is None:
-        max_u = float(max(
-            np.abs(np.min(val_u)), np.abs(np.max(val_u))
-        ))
-    if max_v is None:
-        max_v = float(max(
-            np.abs(np.min(val_v)), np.abs(np.max(val_v))
-        ))
-
-    if cmap_i is None:
-        cmap_i = "jet"
-    if cmap_q is None:
-        cmap_q = "RdBu_r"
-    if cmap_u is None:
-        cmap_u = "RdBu_r"
-    if cmap_v is None:
-        cmap_v = "RdBu_r"
-
-    fig, ax = plt.subplots(
-        1, 4, figsize=(12, 4),
-        subplot_kw=dict(projection='polar'),
-    )
-    if title is not None:
-        fig.suptitle(title)
-
-    panels = (
-        ('I', val_i, cmap_i, min_i, max_i),
-        ('Q', val_q, cmap_q, -max_q, max_q),
-        ('U', val_u, cmap_u, -max_u, max_u),
-        ('V', val_v, cmap_v, -max_v, max_v),
-    )
-    for ipan, (label, values, cmap, vmin, vmax) in enumerate(panels):
-        ax[ipan].grid(False)
-        mesh = ax[ipan].pcolormesh(
-            np.deg2rad(phis),
-            thetas_scaled[::-1],
-            values,
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            shading='gouraud',
-        )
-        cbar = fig.colorbar(
-            mesh,
-            ax=ax[ipan],
-            shrink=0.8,
-            orientation='horizontal',
-            ticks=np.linspace(vmin, vmax, 3, endpoint=True),
-            format="%4.1e",
-        )
-        cbar.set_label(label)
-        ax[ipan].set_yticklabels([])
-        ax[ipan].grid(
-            axis='both',
-            linewidth=1.5,
-            linestyle=':',
-            color='black',
-            alpha=0.5,
-        )
-
-    fig.tight_layout()
-    if save_fig is not None:
-        plt.savefig(save_fig)
-
-
 def select_and_plot_polar_iprt(
     model_val: np.ndarray,
     z_alti: float,
@@ -406,10 +389,10 @@ def select_and_plot_polar_iprt(
     output_iquv_std: bool = False,
     avoid_plot: bool = False,
 ) -> tuple[np.ndarray, ...]:
-    """Select the I, Q, U and V results and plot them in polar view.
+    """Select phase A I, Q, U and V results and plot them in polar view.
 
     The values are selected with select_iprt_iquv and the four Stokes
-    parameters are drawn side by side with plot_polar_iquv.
+    parameters are drawn side by side with smartg.view.plot_polar_iquv.
 
     Parameters
     ----------
@@ -562,7 +545,7 @@ def convert_sgout_to_iprtout(
     output_layer: list[str] | None = None,
     interp: bool = False,
 ) -> None:
-    """Convert SMART-G outputs into the IPRT ASCII output format.
+    """Convert SMART-G outputs into the IPRT phase A ASCII format.
 
     All the list arguments are parallel to datasets: they hold, for
     each output, the geometry it was computed with. The radiances are
@@ -678,110 +661,6 @@ def convert_sgout_to_iprtout(
         f.write(output)
 
 
-def plot_iprt_radiances(
-    iquv_obs: np.ndarray,
-    iquv_mod: np.ndarray,
-    iquv_std_obs: np.ndarray,
-    iquv_std_mod: np.ndarray,
-    xaxis: np.ndarray,
-    xlabel: str,
-    iquv_ymin: np.ndarray | list[float] | None = None,
-    iquv_ymax: np.ndarray | list[float] | None = None,
-    title: str | None = None,
-    save_fig: str | Path | None = None,
-) -> None:
-    """Plot radiances and their difference with a reference.
-
-    The figure holds two rows of four panels: the observed and the
-    modelled I, Q, U and V on top, and their absolute difference,
-    with error bars, below.
-
-    Parameters
-    ----------
-    iquv_obs : ndarray
-        Observed, or reference model, I, Q, U and V signals, of shape
-        (4, nxaxis).
-    iquv_mod : ndarray
-        Modelled I, Q, U and V signals, of the same shape.
-    iquv_std_obs : ndarray
-        Standard deviations of the observed signals.
-    iquv_std_mod : ndarray
-        Standard deviations of the modelled signals.
-    xaxis : ndarray
-        Abscissa the signals vary along, usually the viewing zenith
-        or the viewing azimuth angle.
-    xlabel : str
-        Label of the abscissa.
-    iquv_ymin : ndarray or list of float, optional
-        Lower bound of the radiance panels, one per Stokes parameter.
-        By default it is taken from the drawn values.
-    iquv_ymax : ndarray or list of float, optional
-        Upper bound of the radiance panels, one per Stokes parameter.
-    title : str, optional
-        Title of the whole figure.
-    save_fig : str or Path, optional
-        Save the figure at this path, the extension giving the
-        format, e.g. save_fig='myFigName.png'.
-    """
-
-    fig, ax = plt.subplots(2,4, figsize=(13,8))
-    if title: fig.suptitle(title, fontsize=15)
-
-    for istk in range(0, 4):
-        top = ax[0, istk]
-        if istk == 0:
-            top.set_ylabel("normalized radiance", fontsize=13)
-        top.set_xlabel(xlabel, fontsize=13)
-        top.yaxis.set_major_formatter(mtick.FormatStrFormatter('%5.1e'))
-        top.plot(xaxis, iquv_obs[istk], color='red')
-        top.plot(xaxis, iquv_mod[istk], color='blue')
-        if iquv_ymin is not None and iquv_ymax is not None:
-            ymin, ymax = iquv_ymin[istk], iquv_ymax[istk]
-        else:
-            yt = top.get_yticks()
-            top.locator_params(axis='y', nbins=6)
-            if iquv_ymin is not None:
-                ymin, ymax = iquv_ymin[istk], np.max(yt)
-            elif iquv_ymax is not None:
-                ymin, ymax = np.min(yt), iquv_ymax[istk]
-            else:
-                ymin, ymax = np.min(yt), np.max(yt)
-        top.set_yticks(np.linspace(ymin, ymax, 6))
-        top.set_ylim(ymin=ymin, ymax=ymax)
-        top.set_xlim(xmin=np.min(xaxis), xmax=np.max(xaxis))
-        top.locator_params(axis='x', nbins=3)
-
-        bottom = ax[1, istk]
-        if istk == 0:
-            bottom.set_ylabel("abs. diff", fontsize=13)
-        bottom.set_xlabel(xlabel, fontsize=13)
-        bottom.yaxis.set_major_formatter(
-            mtick.FormatStrFormatter('%5.1e')
-        )
-        _, caps, bars = bottom.errorbar(
-            xaxis,
-            iquv_obs[istk, :] - iquv_mod[istk, :],
-            yerr=iquv_std_obs[istk] + iquv_std_mod[istk],
-            fmt='x',
-            color='blue',
-            ecolor='grey',
-            capsize=2,
-        )
-        for bar in bars:
-            bar.set_alpha(0.25)
-        for cap in caps:
-            cap.set_alpha(0.25)
-        bottom.axhline(0, color='black')
-        bottom.locator_params(axis='x', nbins=3)
-        bottom.locator_params(axis='y', nbins=6)
-        yt = bottom.get_yticks()
-        bottom.set_yticks(np.linspace(np.min(yt), np.max(yt), 6))
-        bottom.set_ylim(ymin=np.min(yt), ymax=np.max(yt))
-    fig.tight_layout()
-    if save_fig is not None:
-        plt.savefig(save_fig)
-
-
 def compute_deltam_iprtout(
     obs: np.ndarray,
     mod: np.ndarray,
@@ -789,7 +668,7 @@ def compute_deltam_iprtout(
     i_mod_id: int = 6,
     print_res: bool = True,
 ) -> np.ndarray:
-    """Compute the IPRT delta_m metric from two IPRT ASCII matrices.
+    """Compute the IPRT delta_m metric from two phase A matrices.
 
     delta_m is the root mean square of the difference between the
     model and the reference, relative to the root mean square of the
@@ -800,7 +679,7 @@ def compute_deltam_iprtout(
     ----------
     obs : ndarray
         Observed, or reference model, values, as read from an IPRT
-        result file: one row per record.
+        phase A result file: one row per record.
     mod : ndarray
         Modelled values, with the records in the same order.
     i_obs_id : int
@@ -837,111 +716,3 @@ def compute_deltam_iprtout(
         if print_res:
             print(stk[i], f"{delta_m[i]:.3f}")
     return delta_m
-
-
-def compute_deltam(
-    obs: np.ndarray | list[np.ndarray],
-    mod: np.ndarray | list[np.ndarray],
-    print_res: bool = True,
-) -> np.ndarray:
-    """Compute the IPRT delta_m metric from two IQUV signal sets.
-
-    delta_m is the root mean square of the difference between the
-    model and the reference, relative to the root mean square of the
-    reference, in percent. It is reported per Stokes parameter, and
-    is set to 0 when the reference is uniformly zero.
-
-    Parameters
-    ----------
-    obs : ndarray or list of ndarray
-        Observed, or reference model, I, Q, U and V signals, either
-        as an array of shape (4, nvalues) or as four arrays.
-    mod : ndarray or list of ndarray
-        Modelled I, Q, U and V signals, in the same layout.
-    print_res : bool
-        Print each delta_m next to its Stokes parameter.
-
-    Returns
-    -------
-    ndarray
-        The delta_m of I, Q, U and V, in percent.
-    """
-    if isinstance(obs, np.ndarray):
-        obs_tmp = obs.copy()
-        obs = []
-        for i in range(0, 4):
-            obs.append(obs_tmp[i, :])
-
-    if isinstance(mod, np.ndarray):
-        mod_tmp = mod.copy()
-        mod = []
-        for i in range(0, 4):
-            mod.append(mod_tmp[i, :])
-
-    stk = ['I', 'Q', 'U', 'V']
-    delta_m = np.zeros(4, dtype=np.float32)
-    for i in range(len(stk)):
-        with np.errstate(divide='raise', invalid='raise'):
-            try:
-                delta_m[i] = (
-                    100
-                    * np.sqrt(np.sum((obs[i] - mod[i]) ** 2))
-                    / np.sqrt(np.sum(obs[i] ** 2))
-                )
-            except FloatingPointError:
-                delta_m[i] = 0.
-        if print_res:
-            print(stk[i], f"{delta_m[i]:.3f}")
-    return delta_m
-
-
-def group_iquv(
-    i_list: list[np.ndarray],
-    q_list: list[np.ndarray],
-    u_list: list[np.ndarray],
-    v_list: list[np.ndarray],
-) -> np.ndarray:
-    """Gather several IQUV result matrices into a single array.
-
-    Each matrix is flattened and the matrices are concatenated in the
-    given order, so that several viewing configurations can be
-    compared with a single delta_m.
-
-    Parameters
-    ----------
-    i_list : list of ndarray
-        The I matrices to gather.
-    q_list : list of ndarray
-        The Q matrices, in the same order.
-    u_list : list of ndarray
-        The U matrices, in the same order.
-    v_list : list of ndarray
-        The V matrices, in the same order.
-
-    Returns
-    -------
-    ndarray
-        The gathered signals, of shape (4, nvalues).
-    """
-    n_values = int(0)
-    i_tot = i_list[0].flatten()
-    q_tot = q_list[0].flatten()
-    u_tot = u_list[0].flatten()
-    v_tot = v_list[0].flatten()
-
-    for i in range(len(i_list)):
-        n_values += round(i_list[i].shape[0] * i_list[i].shape[1])
-        if i > 0:
-            i_tot = np.concatenate((i_tot, i_list[i].flatten()))
-            q_tot = np.concatenate((q_tot, q_list[i].flatten()))
-            u_tot = np.concatenate((u_tot, u_list[i].flatten()))
-            v_tot = np.concatenate((v_tot, v_list[i].flatten()))
-
-    iquv_tot = np.zeros((4, n_values), dtype=np.float32)
-    iquv_tot[0, :] = i_tot
-    iquv_tot[1, :] = q_tot
-    iquv_tot[2, :] = u_tot
-    iquv_tot[3, :] = v_tot
-
-    return iquv_tot
-
