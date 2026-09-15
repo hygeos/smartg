@@ -154,6 +154,18 @@ update() would download: acs, kdis
 >>> update(data_type='reptran', force=True)  # download again whatever the status
 ```
 
+The manifest also records the checksum of every downloaded file, so
+`check_update()` lists the files modified or deleted locally (status
+`modified`). The remote data is the reference: `restore()` shows these
+files and, after confirmation, replaces them by the remote copies
+without downloading the whole dataset again. Extra files are kept.
+
+```python
+>>> from smartg.auxdata import restore
+>>> restore()  # lists the modified files and asks before replacing them
+>>> restore(data_type='aer', yes=True)  # no question asked
+```
+
 The environment variable `SMARTG_DIR_AUXDATA` must be defined.
 
 For example, in the `.bashrc` / `.zshrc` file the following can be added:

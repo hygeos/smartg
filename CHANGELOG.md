@@ -539,7 +539,11 @@ completed and corrected before the final `v2.0.0` release.
       datasets; each directory is replaced in one rename once the new
       content is fully extracted
     - a `.smartg_auxdata.json` manifest in the auxdata directory records
-      the source, version and date of every downloaded dataset
+      the source, version and date of every downloaded dataset, and the
+      checksum of every file: `check_update` also lists the files
+      modified or deleted locally, and the new `restore` replaces them by
+      the remote copies after confirmation (file by file for the HYGEOS
+      shares); `AuxData.verify` does the local check offline
     - the failures are collected and raised at the end of a run
       (`AuxDataDownloadError`) instead of being printed and ignored;
       the downloads are streamed with a `tqdm` progress bar (new

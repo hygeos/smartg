@@ -7,8 +7,10 @@ remote versions without downloading any data.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
+import os
 import re
 import sys
 import tarfile
@@ -27,6 +29,7 @@ from smartg.auxdata import (
     AuxData,
     AuxDataDownloadError,
     Dataset,
+    FileCheck,
     HttpArchiveSource,
     Manifest,
     ManifestEntry,
@@ -63,7 +66,8 @@ def version(
 
 
 class FakeSource:
-    """A source writing <dirname>/file.txt, counting its calls."""
+    """A source writing the text files of ``files`` under <dirname>,
+    counting its calls."""
 
     def __init__(self, name: str, dirname: str) -> None:
         self.name = name
@@ -71,9 +75,11 @@ class FakeSource:
         self.version = version("v1")
         self.error: Exception | None = None
         self.fetch_error: Exception | None = None
-        self.payload = "v1"
+        self.fetch_files_error: Exception | None = None
+        self.files = {"file.txt": "v1"}
         self.version_calls = 0
         self.fetch_calls = 0
+        self.fetch_files_calls: list[list[str]] = []
 
     @property
     def url(self) -> str:
@@ -97,8 +103,30 @@ class FakeSource:
         if self.fetch_error is not None:
             raise self.fetch_error
         (dest / self.dirname).mkdir()
-        (dest / self.dirname / "file.txt").write_text(self.payload)
+        for name, content in self.files.items():
+            path = dest / self.dirname / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
         return self.version
+
+    def fetch_files(
+        self,
+        dest: Path,
+        dirname: str,
+        names,
+        *,
+        label: str = "",
+        timeout: float = 30.0,
+        progress: bool = True,
+    ) -> None:
+        self.fetch_files_calls.append(list(names))
+        if self.fetch_files_error is not None:
+            raise self.fetch_files_error
+        for name in names:
+            if name in self.files:
+                path = dest / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(self.files[name])
 
 
 class FakeResponse(io.BytesIO):
@@ -389,7 +417,7 @@ def test_update_replaces_directory(aux, sources, tmp_path):
     aux.download("a")
     (tmp_path / "alpha" / "stale.txt").write_text("old")
     one.version = version("v2")
-    one.payload = "v2"
+    one.files = {"file.txt": "v2"}
 
     aux.update("a")
     assert (tmp_path / "alpha" / "file.txt").read_text() == "v2"
@@ -451,6 +479,186 @@ def test_wrong_top_level_dir(aux, sources, tmp_path):
     assert not list(tmp_path.glob(".alpha.*"))
 
 
+# -- local files --------------------------------------------------------
+
+
+def touch(path: Path, content: str, mtime_ns: int | None = None) -> None:
+    """Write a file with a modification time surely different from
+    the recorded one (or the given one)."""
+    path.write_text(content)
+    if mtime_ns is None:
+        mtime_ns = path.stat().st_mtime_ns + 5_000_000_000
+    os.utime(path, ns=(mtime_ns, mtime_ns))
+
+
+def test_manifest_records_files(aux, sources, tmp_path):
+    sources["a"].files = {"file.txt": "v1", "sub/other.txt": "other"}
+    aux.download("a")
+    entry = aux.manifest.get("a")
+    assert entry is not None
+    assert list(entry.files) == ["file.txt", "sub/other.txt"]
+    record = entry.files["file.txt"]
+    assert record.size == 2
+    assert record.sha256 == hashlib.sha256(b"v1").hexdigest()
+    assert record.mtime_ns == (tmp_path / "alpha/file.txt").stat().st_mtime_ns
+    data = json.loads((tmp_path / auxdata.MANIFEST_NAME).read_text())
+    assert data["datasets"]["a"]["files"]["sub/other.txt"]["size"] == 5
+    assert Manifest.load(tmp_path / auxdata.MANIFEST_NAME).get("a") == entry
+
+
+def test_verify(aux, sources, tmp_path):
+    sources["a"].files = {"file.txt": "v1", "sub/other.txt": "other"}
+    unrecorded = FileCheck(recorded=False)
+    assert aux.verify() == {"a": unrecorded, "b": unrecorded}
+    aux.download("a")
+    root = tmp_path / "alpha"
+    check = aux.verify("a")["a"]
+    assert check == FileCheck()
+    assert check.clean and check.recorded
+    assert check.summary() == "files intact"
+
+    # same size and content, new mtime: read again, still clean
+    touch(root / "file.txt", "v1")
+    assert aux.verify("a")["a"].clean
+
+    touch(root / "file.txt", "v2")
+    (root / "sub" / "other.txt").unlink()
+    (root / "extra.txt").write_text("mine")
+    check = aux.verify("a")["a"]
+    assert check.modified == ("file.txt",)
+    assert check.missing == ("sub/other.txt",)
+    assert check.extra == ("extra.txt",)
+    assert check.restorable == ("file.txt", "sub/other.txt")
+    assert not check.clean
+    assert check.summary() == "1 modified, 1 missing, 1 extra file(s)"
+
+    # another size is seen without reading the file
+    (root / "file.txt").write_text("longer")
+    assert aux.verify("a")["a"].modified == ("file.txt",)
+
+    # same size and mtime as recorded: trusted, not read again
+    entry = aux.manifest.get("a")
+    assert entry is not None
+    touch(root / "file.txt", "v3", entry.files["file.txt"].mtime_ns)
+    assert "file.txt" not in aux.verify("a")["a"].modified
+
+
+def test_status_modified_and_listing(aux, sources, tmp_path, capsys):
+    aux.download("a")
+    root = tmp_path / "alpha"
+    touch(root / "file.txt", "v2")
+    (root / "extra.txt").write_text("mine")
+    st = aux.status("a")["a"]
+    assert st.status == "modified"
+    assert (st.needs_update, st.needs_restore) == (False, True)
+    assert st.note.startswith(
+        "1 modified, 1 extra file(s), restore() replaces them"
+    )
+    capsys.readouterr()
+    aux.check_update("a")
+    out = capsys.readouterr().out
+    assert re.search(r"^a +modified ", out, re.M)
+    assert "  modified     file.txt" in out
+    assert "  extra, kept  extra.txt" in out
+    assert "restore() would repair: a" in out
+    assert "Everything is up to date." not in out
+
+    # only extra files: up to date, but reported
+    touch(root / "file.txt", "v1")
+    st = aux.status("a")["a"]
+    assert (st.status, st.note) == ("up to date", "1 extra file(s)")
+
+    # the remote changed as well: outdated, update() takes over
+    touch(root / "file.txt", "v2")
+    sources["a"].version = version("v2")
+    st = aux.status("a")["a"]
+    assert st.status == "outdated"
+    assert "update() replaces the whole dataset" in st.note
+    aux.update("a")
+    assert aux.verify("a")["a"] == FileCheck()
+    assert not (root / "extra.txt").exists()
+
+
+def test_restore(aux, sources, tmp_path, capsys, monkeypatch):
+    one = sources["a"]
+    one.files = {"file.txt": "v1", "sub/other.txt": "other"}
+    aux.download("a")
+    root = tmp_path / "alpha"
+    touch(root / "file.txt", "v2")
+    (root / "sub" / "other.txt").unlink()
+    (root / "extra.txt").write_text("mine")
+
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+    assert aux.restore("a") == {}
+    assert (root / "file.txt").read_text() == "v2"
+    out = capsys.readouterr().out
+    assert "Files to replace by the remote ones:" in out
+    assert "  modified     file.txt" in out
+    assert "  missing      sub/other.txt" in out
+    assert "Nothing restored." in out
+
+    def no_terminal(prompt):
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", no_terminal)
+    assert aux.restore("a") == {}
+    assert one.fetch_files_calls == []
+
+    monkeypatch.setattr("builtins.input", lambda prompt: "y")
+    assert aux.restore("a") == {"a": ["file.txt", "sub/other.txt"]}
+    assert (root / "file.txt").read_text() == "v1"
+    assert (root / "sub" / "other.txt").read_text() == "other"
+    assert (root / "extra.txt").read_text() == "mine"
+    assert one.fetch_files_calls == [["file.txt", "sub/other.txt"]]
+    assert one.fetch_calls == 1
+    assert "2 file(s) restored from one" in capsys.readouterr().out
+    check = aux.verify("a")["a"]
+    assert check.clean and check.extra == ("extra.txt",)
+    assert aux.status("a")["a"].status == "up to date"
+    saved = Manifest.load(tmp_path / auxdata.MANIFEST_NAME).get("a")
+    assert saved is not None
+    assert saved.files["file.txt"].sha256 == hashlib.sha256(b"v1").hexdigest()
+    assert not list(tmp_path.glob(".alpha.*"))
+
+    assert aux.restore("a", yes=True) == {}
+    assert "No file to restore." in capsys.readouterr().out
+
+
+def test_restore_skips_outdated_and_unreachable(aux, sources, tmp_path,
+                                                capsys):
+    one = sources["a"]
+    aux.download("a")
+    touch(tmp_path / "alpha" / "file.txt", "v2")
+    one.version = version("v2")
+    assert aux.restore("a", yes=True) == {}
+    assert "run update() to replace the whole" in capsys.readouterr().out
+    one.version = version("v1")
+    one.error = ConnectionError("down")
+    assert aux.restore("a", yes=True) == {}
+    assert "is unreachable, nothing restored" in capsys.readouterr().out
+    assert (tmp_path / "alpha" / "file.txt").read_text() == "v2"
+    assert one.fetch_files_calls == []
+
+
+def test_restore_failures(aux, sources, tmp_path):
+    one = sources["a"]
+    aux.download("a")
+    touch(tmp_path / "alpha" / "file.txt", "v2")
+    one.fetch_files_error = ConnectionError("boom")
+    with pytest.raises(AuxDataDownloadError) as info:
+        aux.restore("a", yes=True)
+    assert info.value.failures == {"a": "boom"}
+    assert (tmp_path / "alpha" / "file.txt").read_text() == "v2"
+    assert not list(tmp_path.glob(".alpha.*"))
+
+    one.fetch_files_error = None
+    one.files = {}  # the remote no longer has the file
+    with pytest.raises(AuxDataDownloadError) as info:
+        aux.restore("a", yes=True)
+    assert "not in the remote a dataset: file.txt" in info.value.failures["a"]
+    assert (tmp_path / "alpha" / "file.txt").read_text() == "v2"
+
+
 # -- archives -----------------------------------------------------------
 
 
@@ -473,6 +681,12 @@ def test_http_archive_source_targz(tmp_path):
     assert (dest / "reptran" / "sub" / "b.cdf").read_bytes() == b"bbb"
     assert sorted(p.name for p in dest.iterdir()) == ["reptran"]
 
+    single = tmp_path / "single"
+    single.mkdir()
+    source.fetch_files(single, "reptran", ["sub/b.cdf"], progress=False)
+    assert (single / "sub" / "b.cdf").read_bytes() == b"bbb"
+    assert sorted(p.name for p in single.iterdir()) == ["sub"]
+
 
 def test_nextcloud_source_end_to_end(tmp_path, monkeypatch):
     zip_path = tmp_path / "share.zip"
@@ -489,6 +703,8 @@ def test_nextcloud_source_end_to_end(tmp_path, monkeypatch):
         if request.get_method() == "PROPFIND":
             return FakeResponse(PROPFIND_XML)
         assert request.get_method() == "GET"
+        if "/public.php/webdav/" in request.full_url:
+            return FakeResponse(b"netcdf")  # a single file of the share
         return FakeResponse(zip_bytes)  # no Content-Length, as Nextcloud
 
     monkeypatch.setattr(auxdata, "_urlopen", fake_urlopen)
@@ -516,6 +732,18 @@ def test_nextcloud_source_end_to_end(tmp_path, monkeypatch):
     assert propfind.get_header("Authorization") == "Basic dG9rOg=="
     assert get.full_url == source.url
 
+    assert aux.status("aer")["aer"].status == "up to date"
+
+    # a file modified locally is fetched alone through WebDAV
+    touch(tmp_path / "aux" / "aerosols" / "OPAC" / "x.nc", "edited")
+    assert aux.status("aer")["aer"].status == "modified"
+    assert aux.restore("aer", yes=True) == {"aer": ["OPAC/x.nc"]}
+    single = requests[-1]
+    assert single.full_url == (
+        "https://docs.hygeos.com/public.php/webdav/OPAC/x.nc"
+    )
+    assert single.get_header("Authorization") == "Basic dG9rOg=="
+    assert (tmp_path / "aux/aerosols/OPAC/x.nc").read_bytes() == b"netcdf"
     assert aux.status("aer")["aer"].status == "up to date"
 
 

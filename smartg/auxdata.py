@@ -9,16 +9,18 @@ is the libRadtran archive with a HYGEOS mirror as fallback.
 Every download is recorded in a manifest (``.smartg_auxdata.json``)
 inside the auxdata directory: the source used, its version
 fingerprint (the WebDAV ETag of the share or the HTTP ETag of the
-archive) and the download date. ``check_update`` compares the
-manifest with the remote versions without downloading anything and
-``update`` refreshes only the missing or outdated datasets, replacing
-each directory in one rename so that an interrupted run never leaves
-a half-updated dataset.
+archive), the download date and the checksum of every file.
+``check_update`` compares the manifest with the remote versions and
+with the files on disk without downloading anything, ``update``
+refreshes only the missing or outdated datasets, replacing each
+directory in one rename so that an interrupted run never leaves a
+half-updated dataset, and ``restore`` puts back the remote copy of
+the files modified or deleted locally: the remote is the reference.
 
 Key Classes
 -----------
 AuxData
-    The auxiliary data directory: download, status, update.
+    The auxiliary data directory: download, status, update, restore.
 Dataset
     One dataset: key, extracted directory and ordered sources.
 NextcloudSource
@@ -29,6 +31,8 @@ Manifest
     The JSON record of the installed datasets.
 DatasetStatus
     The comparison of one installed dataset with its remote source.
+FileCheck
+    The files of one installed dataset against the manifest records.
 AuxDataDownloadError
     Raised at the end of a run when some datasets could not be
     installed.
@@ -41,6 +45,8 @@ check_update
     Print and return the status of the datasets against the remote.
 update
     Download the missing, outdated or unrecorded datasets.
+restore
+    Replace the locally modified or missing files by the remote ones.
 extract_zip, extract_tar
     Safely extract an archive, optionally keeping one subfolder.
 """
@@ -48,6 +54,7 @@ extract_zip, extract_tar
 from __future__ import annotations
 
 import base64
+import hashlib
 import http.client
 import json
 import os
@@ -61,12 +68,13 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import datetime, timezone
 from email.message import Message
 from email.utils import parsedate_to_datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Protocol
+from urllib.parse import quote
 
 from tqdm.auto import tqdm
 
@@ -95,6 +103,7 @@ _urlopen = urllib.request.urlopen
 Status = Literal[
     "missing",
     "up to date",
+    "modified",
     "outdated",
     "unknown",
     "unversioned",
@@ -247,6 +256,55 @@ def _parse_propfind(xml: bytes) -> RemoteVersion:
 
 
 @dataclass(frozen=True)
+class FileRecord:
+    """The size, modification time and SHA-256 of an installed file."""
+
+    size: int
+    mtime_ns: int
+    sha256: str
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(CHUNK_SIZE):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _record(path: Path) -> FileRecord:
+    stat = path.stat()
+    return FileRecord(stat.st_size, stat.st_mtime_ns, _sha256(path))
+
+
+def _walk_files(root: Path) -> list[str]:
+    """The regular files under root, as sorted POSIX relative paths."""
+    found: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
+        for filename in filenames:
+            path = Path(dirpath) / filename
+            if path.is_file() and not path.is_symlink():
+                found.append(path.relative_to(root).as_posix())
+    return sorted(found)
+
+
+def _scan_files(
+    root: Path, progress: bool = True, label: str = ""
+) -> dict[str, FileRecord]:
+    """Record every file under root."""
+    names = _walk_files(root)
+    bar = tqdm(
+        names,
+        unit="file",
+        desc=f"{label} checksums".strip(),
+        leave=False,
+        disable=not progress,
+    )
+    return {name: _record(root / name) for name in bar}
+
+
+@dataclass(frozen=True)
 class ManifestEntry:
     """The record of one installed dataset.
 
@@ -266,6 +324,9 @@ class ManifestEntry:
         The remote modification time, ISO 8601 UTC.
     downloaded_at : str
         The download time, ISO 8601 UTC.
+    files : dict[str, FileRecord]
+        The installed files by path relative to the dataset
+        directory, as extracted.
     """
 
     dirname: str
@@ -275,13 +336,21 @@ class ManifestEntry:
     version_kind: VersionKind
     remote_modified: str | None
     downloaded_at: str
+    files: dict[str, FileRecord] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> ManifestEntry:
-        return cls(**{f.name: data[f.name] for f in fields(cls)})
+        plain = {
+            f.name: data[f.name] for f in fields(cls) if f.name != "files"
+        }
+        files = {
+            name: FileRecord(**record)
+            for name, record in data.get("files", {}).items()
+        }
+        return cls(**plain, files=files)
 
 
 class Manifest:
@@ -640,6 +709,20 @@ class Source(Protocol):
         """Download and extract the dataset into ``dest``."""
         ...
 
+    def fetch_files(
+        self,
+        dest: Path,
+        dirname: str,
+        names: Sequence[str],
+        *,
+        label: str = "",
+        timeout: float = DEFAULT_TIMEOUT,
+        progress: bool = True,
+    ) -> None:
+        """Download some files of the dataset, given by their path
+        relative to its directory ``dirname``, under ``dest``."""
+        ...
+
 
 @dataclass(frozen=True)
 class NextcloudSource:
@@ -672,15 +755,19 @@ class NextcloudSource:
     def webdav_url(self) -> str:
         return f"{self.base_url}/public.php/webdav/"
 
+    @property
+    def _auth(self) -> str:
+        token = base64.b64encode(f"{self.token}:".encode()).decode("ascii")
+        return f"Basic {token}"
+
     def _propfind(self) -> urllib.request.Request:
-        auth = base64.b64encode(f"{self.token}:".encode()).decode("ascii")
         return urllib.request.Request(
             self.webdav_url,
             data=_PROPFIND_BODY,
             method="PROPFIND",
             headers={
                 "Depth": "0",
-                "Authorization": f"Basic {auth}",
+                "Authorization": self._auth,
                 "Content-Type": "application/xml; charset=utf-8",
             },
         )
@@ -713,6 +800,31 @@ class NextcloudSource:
         _extract_archive(archive, dest, progress=progress)
         archive.unlink()
         return version
+
+    def fetch_files(
+        self,
+        dest: Path,
+        dirname: str,
+        names: Sequence[str],
+        *,
+        label: str = "",
+        timeout: float = DEFAULT_TIMEOUT,
+        progress: bool = True,
+    ) -> None:
+        # The share root is the dataset directory, so a path relative
+        # to the dataset is a WebDAV path of the share.
+        bar = tqdm(names, unit="file", desc=label, leave=False,
+                   disable=not progress)
+        for name in bar:
+            target = dest / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            request = urllib.request.Request(
+                self.webdav_url + quote(name),
+                headers={"Authorization": self._auth},
+            )
+            _download_to_file(
+                request, target, timeout=timeout, progress=False, label=name
+            )
 
 
 @dataclass(frozen=True)
@@ -770,6 +882,30 @@ class HttpArchiveSource:
         _extract_archive(archive, dest, self.member_root, progress)
         archive.unlink()
         return _version_from_headers(headers)
+
+    def fetch_files(
+        self,
+        dest: Path,
+        dirname: str,
+        names: Sequence[str],
+        *,
+        label: str = "",
+        timeout: float = DEFAULT_TIMEOUT,
+        progress: bool = True,
+    ) -> None:
+        # No access to single files: the whole archive is fetched and
+        # only the wanted members are kept.
+        whole = Path(tempfile.mkdtemp(prefix=".whole-", dir=dest))
+        try:
+            self.fetch(whole, label=label, timeout=timeout, progress=progress)
+            for name in names:
+                fetched = whole / dirname / name
+                if fetched.is_file():
+                    target = dest / name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(fetched, target)
+        finally:
+            shutil.rmtree(whole, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------
@@ -876,6 +1012,51 @@ DATASETS: dict[str, Dataset] = {
 
 
 @dataclass(frozen=True)
+class FileCheck:
+    """The files of an installed dataset against the manifest records.
+
+    Attributes
+    ----------
+    modified : tuple[str, ...]
+        The recorded files whose content changed since the download.
+    missing : tuple[str, ...]
+        The recorded files no longer on disk.
+    extra : tuple[str, ...]
+        The files on disk that were not part of the download. They
+        are reported and kept.
+    recorded : bool
+        Whether the manifest has file records to compare with.
+    """
+
+    modified: tuple[str, ...] = ()
+    missing: tuple[str, ...] = ()
+    extra: tuple[str, ...] = ()
+    recorded: bool = True
+
+    @property
+    def clean(self) -> bool:
+        """No recorded file was modified or removed."""
+        return not (self.modified or self.missing)
+
+    @property
+    def restorable(self) -> tuple[str, ...]:
+        """The files ``restore()`` replaces by the remote ones."""
+        return self.modified + self.missing
+
+    def summary(self) -> str:
+        parts = [
+            f"{len(names)} {what}"
+            for what, names in (
+                ("modified", self.modified),
+                ("missing", self.missing),
+                ("extra", self.extra),
+            )
+            if names
+        ]
+        return ", ".join(parts) + " file(s)" if parts else "files intact"
+
+
+@dataclass(frozen=True)
 class DatasetStatus:
     """The state of one dataset on disk against its remote source.
 
@@ -884,11 +1065,13 @@ class DatasetStatus:
     key : str
         The dataset key.
     status : str
-        ``"missing"`` (not on disk), ``"up to date"``, ``"outdated"``
-        (the remote changed since the download), ``"unknown"`` (on
-        disk but not recorded in the manifest), ``"unversioned"``
-        (the source gives no version to compare) or
-        ``"unreachable"`` (the recorded source did not answer).
+        ``"missing"`` (not on disk), ``"up to date"``, ``"modified"``
+        (the remote did not change but some local files did, see
+        ``files``), ``"outdated"`` (the remote changed since the
+        download), ``"unknown"`` (on disk but not recorded in the
+        manifest), ``"unversioned"`` (the source gives no version to
+        compare) or ``"unreachable"`` (the recorded source did not
+        answer).
     local : ManifestEntry or None
         The manifest record, when there is one.
     remote : RemoteVersion or None
@@ -897,6 +1080,8 @@ class DatasetStatus:
         The source the status refers to.
     note : str
         Details worth showing to the user.
+    files : FileCheck or None
+        The local files against the records, for a recorded dataset.
     """
 
     key: str
@@ -905,11 +1090,17 @@ class DatasetStatus:
     remote: RemoteVersion | None = None
     source: str | None = None
     note: str = ""
+    files: FileCheck | None = None
 
     @property
     def needs_update(self) -> bool:
         """Whether ``update()`` downloads this dataset."""
         return self.status in ("missing", "outdated", "unknown")
+
+    @property
+    def needs_restore(self) -> bool:
+        """Whether ``restore()`` has files to replace."""
+        return self.status == "modified"
 
 
 def _resolve_dir(dname: PathType | None) -> Path:
@@ -923,6 +1114,14 @@ def _resolve_dir(dname: PathType | None) -> Path:
             " environment variable"
         ) from err
     return Path(DIR_AUXDATA)
+
+
+def _confirm(prompt: str) -> bool:
+    try:
+        answer = input(prompt)
+    except EOFError:
+        return False
+    return answer.strip().lower() in ("y", "yes")
 
 
 def _fmt_date(moment: datetime | None) -> str:
@@ -1053,6 +1252,48 @@ class AuxData:
                 notes.append(f"{source.name} unreachable: {err}")
         return remote, name, "; ".join(notes)
 
+    def verify(self, data_type: DataSelector = "all") -> dict[str, FileCheck]:
+        """Compare the files on disk with the manifest records.
+
+        Works offline. A file is read again only when its size or
+        modification time changed since the download, so a content
+        change that keeps both is not seen.
+
+        Returns
+        -------
+        dict[str, FileCheck]
+            By dataset key; ``recorded`` is False for the datasets
+            that are missing or not in the manifest.
+        """
+        checks: dict[str, FileCheck] = {}
+        for dataset in self.select(data_type):
+            entry = self.manifest.get(dataset.key)
+            if entry is None or not self.is_present(dataset):
+                checks[dataset.key] = FileCheck(recorded=False)
+            else:
+                checks[dataset.key] = self._verify(dataset, entry)
+        return checks
+
+    def _verify(self, dataset: Dataset, entry: ManifestEntry) -> FileCheck:
+        if not entry.files:
+            return FileCheck(recorded=False)
+        root = self.path(dataset)
+        modified: list[str] = []
+        missing: list[str] = []
+        for name, record in entry.files.items():
+            path = root / name
+            if not path.is_file():
+                missing.append(name)
+                continue
+            stat = path.stat()
+            if stat.st_size != record.size:
+                modified.append(name)
+            elif stat.st_mtime_ns != record.mtime_ns:
+                if _sha256(path) != record.sha256:
+                    modified.append(name)
+        extra = [name for name in _walk_files(root) if name not in entry.files]
+        return FileCheck(tuple(modified), tuple(missing), tuple(extra))
+
     def _status_of(self, dataset: Dataset) -> DatasetStatus:
         key = dataset.key
         entry = self.manifest.get(key)
@@ -1066,6 +1307,7 @@ class AuxData:
                 if n
             )
             return DatasetStatus(key, "unknown", None, remote, source, note)
+        files = self._verify(dataset, entry)
         source = dataset.source_named(entry.source)
         if source is None:
             return DatasetStatus(
@@ -1076,30 +1318,41 @@ class AuxData:
                 entry.source,
                 f"recorded source {entry.source!r} no longer exists,"
                 " update() downloads it again",
-            )
-        try:
-            remote = source.remote_version(self.timeout)
-        except _FETCH_ERRORS as err:
-            return DatasetStatus(
-                key, "unreachable", entry, None, source.name, f"{err}"
+                files,
             )
         notes: list[str] = []
         status: Status
-        if remote.kind == "unknown" or entry.version_kind == "unknown":
-            status = "unversioned"
-            notes.append(f"{source.name} gives no version, update(force=True)"
-                         " to download it again")
-        elif remote.fingerprint == entry.version:
-            status = "up to date"
+        try:
+            remote = source.remote_version(self.timeout)
+        except _FETCH_ERRORS as err:
+            remote = None
+            status = "unreachable"
+            notes.append(str(err))
         else:
-            status = "outdated"
+            if remote.kind == "unknown" or entry.version_kind == "unknown":
+                status = "unversioned"
+                notes.append(
+                    f"{source.name} gives no version, update(force=True) to"
+                    " download it again"
+                )
+            elif remote.fingerprint == entry.version:
+                status = "modified" if not files.clean else "up to date"
+            else:
+                status = "outdated"
+        if not files.clean or files.extra:
+            summary = files.summary()
+            if status == "modified":
+                summary += ", restore() replaces them by the remote ones"
+            elif status == "outdated":
+                summary += ", update() replaces the whole dataset"
+            notes.insert(0, summary)
         if source is not dataset.primary:
             notes.append(
                 f"fallback source, update(force=True) switches to"
                 f" {dataset.primary.name} when it is reachable"
             )
         return DatasetStatus(
-            key, status, entry, remote, source.name, "; ".join(notes)
+            key, status, entry, remote, source.name, "; ".join(notes), files
         )
 
     def check_update(
@@ -1140,17 +1393,45 @@ class AuxData:
                 f"{source}: {st.note}" if st.note else source,
             ))
         _print_table(rows)
+        self._print_files(statuses)
         todo = [key for key, st in statuses.items() if st.needs_update]
         blocked = [
             key for key, st in statuses.items() if st.status == "unreachable"
         ]
+        to_restore = [key for key, st in statuses.items() if st.needs_restore]
         if todo:
             print(f"update() would download: {', '.join(todo)}")
-        elif not blocked:
+        if to_restore:
+            print(f"restore() would repair: {', '.join(to_restore)}")
+        if not (todo or blocked or to_restore):
             print("Everything is up to date.")
         if blocked:
             print(f"Could not be checked: {', '.join(blocked)}")
         return statuses
+
+    @staticmethod
+    def _print_files(
+        statuses: Mapping[str, DatasetStatus], limit: int = 20
+    ) -> None:
+        """List the files that differ from the download."""
+        for key, st in statuses.items():
+            files = st.files
+            if files is None or (files.clean and not files.extra):
+                continue
+            print(f"{key}: files differing from the download")
+            lines = [
+                (what, name)
+                for what, names in (
+                    ("modified", files.modified),
+                    ("missing", files.missing),
+                    ("extra, kept", files.extra),
+                )
+                for name in names
+            ]
+            for what, name in lines[:limit]:
+                print(f"  {what:12} {name}")
+            if len(lines) > limit:
+                print(f"  ... and {len(lines) - limit} more")
 
     # -- installation -----------------------------------------------
 
@@ -1209,14 +1490,131 @@ class AuxData:
         self._cleanup_leftovers()
         queue: list[Dataset] = []
         for key, st in self.status(data_type).items():
+            note = f" ({st.note})" if st.note else ""
             if force or st.needs_update:
                 reason = "forced" if force else st.status
-                print(f"{key}: {reason}, will be downloaded")
+                print(f"{key}: {reason}, will be downloaded{note}")
                 queue.append(self.datasets[key])
             else:
-                note = f" ({st.note})" if st.note else ""
                 print(f"{key}: {st.status}, skipped{note}")
         self._run(queue)
+
+    def restore(
+        self, data_type: DataSelector = "all", yes: bool = False
+    ) -> dict[str, list[str]]:
+        """Replace the locally modified or missing files by the remote
+        ones.
+
+        The files are listed and a confirmation is asked, unless
+        ``yes`` is True. Only the datasets whose remote did not
+        change since the download are repaired (status
+        ``"modified"``); an outdated dataset is left to ``update()``,
+        which replaces it entirely. The extra files are kept.
+
+        Parameters
+        ----------
+        data_type : str or sequence of str, optional
+            ``"all"``, one dataset key, or several keys.
+        yes : bool, optional
+            Do not ask for confirmation.
+
+        Returns
+        -------
+        dict[str, list[str]]
+            The restored files by dataset key.
+
+        Raises
+        ------
+        AuxDataDownloadError
+            At the end of the run, when some files could not be
+            fetched.
+        """
+        statuses = self.status(data_type)
+        todo: dict[str, DatasetStatus] = {}
+        for key, st in statuses.items():
+            if st.files is None or st.files.clean:
+                continue
+            if st.needs_restore:
+                todo[key] = st
+            elif st.status == "outdated":
+                print(
+                    f"{key}: {st.files.summary()} but the remote changed"
+                    " too, run update() to replace the whole dataset"
+                )
+            else:
+                print(
+                    f"{key}: {st.files.summary()} but the dataset is"
+                    f" {st.status}, nothing restored"
+                )
+        if not todo:
+            print("No file to restore.")
+            return {}
+        print("Files to replace by the remote ones:")
+        self._print_files(todo, limit=1000)
+        count = sum(
+            len(st.files.restorable) for st in todo.values() if st.files
+        )
+        if not yes and not _confirm(f"Replace these {count} file(s)? [y/N] "):
+            print("Nothing restored.")
+            return {}
+        restored: dict[str, list[str]] = {}
+        failures: dict[str, str] = {}
+        for key, st in todo.items():
+            dataset = self.datasets[key]
+            assert st.local is not None and st.files is not None
+            source = dataset.source_named(st.local.source)
+            assert source is not None
+            names = list(st.files.restorable)
+            try:
+                self._restore_files(dataset, source, st.local, names)
+            except _FETCH_ERRORS as err:
+                failures[key] = str(err)
+                print(f"{key}: FAILED ({err})")
+                continue
+            restored[key] = names
+            print(f"{key}: {len(names)} file(s) restored from {source.name}")
+        if failures:
+            raise AuxDataDownloadError(failures)
+        return restored
+
+    def _restore_files(
+        self,
+        dataset: Dataset,
+        source: Source,
+        entry: ManifestEntry,
+        names: Sequence[str],
+    ) -> None:
+        for name in names:
+            _check_member_name(name)
+        stage = Path(
+            tempfile.mkdtemp(prefix=f".{dataset.dirname}.tmp-", dir=self.dir)
+        )
+        try:
+            source.fetch_files(
+                stage,
+                dataset.dirname,
+                names,
+                label=dataset.key,
+                timeout=self.timeout,
+                progress=self.progress,
+            )
+            absent = [name for name in names if not (stage / name).is_file()]
+            if absent:
+                raise ValueError(
+                    f"not in the remote {dataset.key} dataset:"
+                    f" {', '.join(absent)}"
+                )
+            root = self.path(dataset)
+            files = dict(entry.files)
+            for name in names:
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(stage / name, target)
+                files[name] = _record(target)
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+        self.manifest.set(dataset.key, replace(entry, files=files))
+        self.manifest.save()
 
     def _run(self, queue: list[Dataset]) -> None:
         if not queue:
@@ -1279,6 +1677,8 @@ class AuxData:
                     f" {found or 'nothing'}, expected a {dataset.dirname!r}"
                     " directory"
                 )
+            # Recorded before the swap: a rename keeps the mtimes.
+            files = _scan_files(produced, self.progress, dataset.key)
             self._swap_in(produced, dataset)
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -1290,6 +1690,7 @@ class AuxData:
             version_kind=version.kind,
             remote_modified=_iso(version.modified),
             downloaded_at=_now_iso(),
+            files=files,
         )
 
     def _swap_in(self, produced: Path, dataset: Dataset) -> None:
@@ -1448,3 +1849,39 @@ def update(
     >>> update(data_type="reptran", force=True)
     """
     AuxData(dname).update(data_type, force=force)
+
+
+def restore(
+    dname: PathType | None = None,
+    data_type: DataSelector = "all",
+    yes: bool = False,
+) -> dict[str, list[str]]:
+    """Replace the locally modified or missing files by the remote ones.
+
+    The files are listed and a confirmation is asked, unless ``yes``
+    is True. The remote is the reference: the datasets whose remote
+    changed too are left to ``update``.
+
+    Parameters
+    ----------
+    dname : str or path-like, optional
+        The auxdata directory. Defaults to the ``SMARTG_DIR_AUXDATA``
+        environment variable.
+    data_type : str or sequence of str, optional
+        ``"all"`` (default), one key, or several keys (see
+        ``download``).
+    yes : bool, optional
+        Do not ask for confirmation.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        The restored files by dataset key.
+
+    Examples
+    --------
+    >>> from smartg.auxdata import check_update, restore
+    >>> check_update()  # lists the modified files
+    >>> restore()  # asks before replacing them
+    """
+    return AuxData(dname).restore(data_type, yes=yes)
