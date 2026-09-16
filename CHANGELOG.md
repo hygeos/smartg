@@ -557,6 +557,16 @@ corrected before the final `v2.0.0` release.
     third positional parameter). `plot_polar_iprt` of
     `smartg.iprt.phase3` draws with it too, passing its `min_i` on.
     `plot_camera_iprt` now returns the created `Figure`
+  - New `read_iprt_output`, `merge_least_noisy`, `PolarView`,
+    `compare_polar_iprt` and `compare_plane_iprt` in
+    `smartg.iprt.phase_a`: read a phase A result file, merge two runs
+    of a case keeping the least noisy values, and compare a model with
+    a reference in polar views or along the principal plane or the
+    almucantar, with the plots and the delta_m of the whole case. The
+    phase A notebook compares its 12 cases with them instead of 12
+    copies of the same cells. Its difference plots now draw the
+    symmetrical azimuths like the others, and its almucantar plots
+    label their axis VAA instead of VZA
   - The aerosol and cloud cases of `smartg.iprt.phase3` (D3, D4,
     D4_bis, D5, E3, E4, E5) run on the native scattering angles of
     their files instead of 18001 resampled ones, through

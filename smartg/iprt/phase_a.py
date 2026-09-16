@@ -20,17 +20,31 @@ select_and_plot_polar_iprt
     them in polar coordinates.
 compute_deltam_iprtout
     Compute the IPRT delta_m metric between two phase A matrices.
+read_iprt_output
+    Read a phase A ASCII result file.
+merge_least_noisy
+    Merge two runs of a case, keeping the least noisy values.
+compare_polar_iprt
+    Compare a model with a reference in polar view, and their delta_m.
+compare_plane_iprt
+    Compare a model with a reference along a plane, and their delta_m.
 """
 
 import warnings
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any, Literal, NamedTuple
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 from luts.luts import MLUT
 from matplotlib.colors import Colormap
 
-from smartg.view import plot_polar_iquv
+from smartg.iprt.common import compute_deltam, group_iquv
+from smartg.view import plot_iquv_comparison, plot_polar_iquv
+
+STOKES = ("I", "Q", "U", "V")
 
 
 def _iprt_records(
@@ -574,3 +588,318 @@ def compute_deltam_iprtout(
         if print_res:
             print(stk[i], f"{delta_m[i]:.3f}")
     return delta_m
+
+
+def read_iprt_output(file_res: str | Path) -> np.ndarray:
+    """Read a phase A ASCII result file.
+
+    Parameters
+    ----------
+    file_res : str or Path
+        The file, e.g. a MYSTIC reference or a file written by
+        convert_sgout_to_iprtout. Its comment lines start with '#'.
+
+    Returns
+    -------
+    ndarray
+        One row per record, the columns following the IPRT convention.
+    """
+    return pd.read_csv(file_res, header=None, sep=r"\s+", dtype=float,
+                       comment="#").values
+
+
+def merge_least_noisy(
+    model_val: np.ndarray,
+    model_val2: np.ndarray,
+    i_index: int = 6,
+) -> np.ndarray:
+    """Merge two runs of a case, keeping the least noisy values.
+
+    For each record and each Stokes parameter, the value and the
+    standard deviation of the run with the smaller standard deviation
+    are kept, the second run winning ties.
+
+    Parameters
+    ----------
+    model_val, model_val2 : ndarray
+        The two runs, as read from phase A result files, with the same
+        records in the same order.
+    i_index : int
+        Column index of I. Q, U and V must follow it in that order, and
+        their standard deviations right after them.
+
+    Returns
+    -------
+    ndarray
+        The merged records.
+
+    Raises
+    ------
+    ValueError
+        If the two runs do not hold the same records.
+    """
+    if (model_val.shape != model_val2.shape
+            or not np.array_equal(model_val[:, :i_index],
+                                  model_val2[:, :i_index])):
+        raise ValueError("The two runs must hold the same records!")
+    merged = model_val.copy()
+    for istk in range(4):
+        value, std = i_index + istk, i_index + 4 + istk
+        second = ~(model_val[:, std] < model_val2[:, std])
+        merged[second, value] = model_val2[second, value]
+        merged[second, std] = model_val2[second, std]
+    return merged
+
+
+class PolarView(NamedTuple):
+    """One set of results of a phase A case, drawn in polar view.
+
+    Attributes
+    ----------
+    altitude : float
+        The altitude of the results, in km.
+    depol : float
+        The depolarisation factor.
+    sza, saa : float
+        The sun zenith and azimuth angles, in degrees, for the titles.
+    inv_thetas : bool
+        Store the results by increasing zenith angle, see
+        select_iprt_iquv.
+    inv_thetas_mod : bool, optional
+        Same as inv_thetas, for the model when it differs from the
+        reference.
+    thetas, phis : ndarray, optional
+        The viewing zenith and azimuth angles to keep, in degrees. By
+        default all the angles of the records.
+    """
+
+    altitude: float
+    depol: float
+    sza: float
+    saa: float
+    inv_thetas: bool = False
+    inv_thetas_mod: bool | None = None
+    thetas: np.ndarray | None = None
+    phis: np.ndarray | None = None
+
+
+def compare_polar_iprt(
+    ref_val: np.ndarray,
+    mod_val: np.ndarray,
+    case_name: str,
+    views: Sequence[PolarView],
+    change_u_sign: bool = False,
+    change_v_sign: bool = False,
+    change_v_sign_mod: bool | None = None,
+    ref_depol: float | None = None,
+    sym: bool = False,
+    ref_name: str = "MYSTIC",
+    mod_name: str = "SMARTG",
+    plot_ref: bool = True,
+    plot_mod: bool = False,
+    plot_diff: bool = True,
+    mod_scales_from_ref: bool = False,
+    print_res: bool = True,
+) -> np.ndarray:
+    """Compare a model with a reference in polar views, with delta_m.
+
+    For each view, the I, Q, U and V values of both matrices are
+    selected, the reference, the model and their difference are
+    plotted in polar view as asked, and the delta_m of all the views
+    together is computed.
+
+    Parameters
+    ----------
+    ref_val, mod_val : ndarray
+        The reference and the model, as read with read_iprt_output.
+    case_name : str
+        The name of the case, e.g. 'A1', for the titles.
+    views : sequence of PolarView
+        The sets of results to compare.
+    change_u_sign, change_v_sign : bool
+        Multiply U or V by -1, see select_iprt_iquv.
+    change_v_sign_mod : bool, optional
+        Same as change_v_sign, for the model when it differs from the
+        reference.
+    ref_depol : float, optional
+        The depolarisation factor of the reference records, when it
+        differs from the one of the views: some MYSTIC files hold 0
+        instead of 0.03.
+    sym : bool
+        Also plot the symmetrical results from 180 to 360 degrees.
+    ref_name, mod_name : str
+        The names of the reference and of the model, for the titles.
+    plot_ref, plot_mod, plot_diff : bool
+        Plot the reference, the model, and the reference minus the
+        model.
+    mod_scales_from_ref : bool
+        Draw the Q, U and V panels of the model on the colour scales of
+        the reference.
+    print_res : bool
+        Print each delta_m next to its Stokes parameter.
+
+    Returns
+    -------
+    ndarray
+        The delta_m of I, Q, U and V over all the views, in percent.
+    """
+    if change_v_sign_mod is None:
+        change_v_sign_mod = change_v_sign
+    ref_all: list[tuple[np.ndarray, ...]] = []
+    mod_all: list[tuple[np.ndarray, ...]] = []
+    for view in views:
+        head = (f"IPRT case {case_name} - depol = {view.depol} - SZA = "
+                f"{view.sza:.0f} - SAA = {view.saa:.0f} - "
+                f"{view.altitude:.0f}km")
+        depol = view.depol if ref_depol is None else ref_depol
+        angles: dict[str, Any] = {"z_alti": view.altitude,
+                                  "thetas": view.thetas, "phis": view.phis,
+                                  "sym": sym}
+
+        iquv_ref = select_and_plot_polar_iprt(
+            ref_val, depol=depol, inv_thetas=view.inv_thetas,
+            change_u_sign=change_u_sign, change_v_sign=change_v_sign,
+            title=f"{head} - {ref_name}", output_iquv=True,
+            avoid_plot=not plot_ref, **angles,
+        )
+        scales: dict[str, Any] = {}
+        if mod_scales_from_ref:
+            scales = {f"max_{stk}": np.max(np.abs(values))
+                      for stk, values in zip("quv", iquv_ref[1:],
+                                             strict=True)}
+        inv_thetas_mod = (view.inv_thetas if view.inv_thetas_mod is None
+                          else view.inv_thetas_mod)
+        iquv_mod = select_and_plot_polar_iprt(
+            mod_val, depol=view.depol, inv_thetas=inv_thetas_mod,
+            change_u_sign=change_u_sign, change_v_sign=change_v_sign_mod,
+            title=f"{head} - {mod_name}", output_iquv=True,
+            avoid_plot=not plot_mod, **scales, **angles,
+        )
+
+        diff = [ref - mod for ref, mod in zip(iquv_ref, iquv_mod,
+                                              strict=True)]
+        maxima: dict[str, Any] = {f"max_{stk}": np.max(np.abs(values))
+                  for stk, values in zip("iquv", diff, strict=True)}
+        select_and_plot_polar_iprt(
+            ref_val, depol=depol, force_iquv=diff, cmap_i="RdBu_r",
+            title=f"{head} - dif ({ref_name}-{mod_name})",
+            avoid_plot=not plot_diff, **maxima, **angles,
+        )
+        ref_all.append(iquv_ref)
+        mod_all.append(iquv_mod)
+
+    iquv_ref_tot = group_iquv(*([iquv[istk] for iquv in ref_all]
+                                for istk in range(4)))
+    iquv_mod_tot = group_iquv(*([iquv[istk] for iquv in mod_all]
+                                for istk in range(4)))
+    return compute_deltam(obs=iquv_ref_tot, mod=iquv_mod_tot,
+                          print_res=print_res)
+
+
+def compare_plane_iprt(
+    ref_val: np.ndarray,
+    mod_val: np.ndarray,
+    case_name: str,
+    altitudes: Sequence[float],
+    plane: Literal["principal", "almucantar"],
+    iquv_ymins: Sequence[Sequence[float]] | None = None,
+    iquv_ymaxs: Sequence[Sequence[float]] | None = None,
+    quantities: Sequence[str] = ("transmittance", "reflectance"),
+    inv_thetas: bool = True,
+    change_u_sign: bool = False,
+    ref_columns: tuple[int, int, int, int] = (6, 4, 5, 1),
+    ref_name: str = "MYSTIC",
+    mod_name: str = "SMARTG",
+    print_res: bool = True,
+) -> np.ndarray:
+    """Compare a model with a reference along a plane, with delta_m.
+
+    For each altitude, the I, Q, U and V values of both matrices and
+    their standard deviations are selected, cut along the principal
+    plane or the almucantar, and plotted with
+    smartg.view.plot_iquv_comparison, the reference in red and the
+    model in blue. The delta_m of all the altitudes together is
+    computed.
+
+    Parameters
+    ----------
+    ref_val, mod_val : ndarray
+        The reference and the model, as read with read_iprt_output,
+        each with a single azimuth plane and its opposite.
+    case_name : str
+        The name of the case, e.g. 'A5', for the titles.
+    altitudes : sequence of float
+        The altitudes of the results, in km.
+    plane : {'principal', 'almucantar'}
+        'principal' joins the two azimuths of the principal plane
+        along the signed viewing zenith angle, 'almucantar' keeps the
+        first zenith angle along the viewing azimuth angle.
+    iquv_ymins, iquv_ymaxs : sequence of sequence of float, optional
+        The lower and upper bounds of the I, Q, U and V panels, one
+        sequence per altitude. By default the bounds of matplotlib.
+    quantities : sequence of str
+        What each altitude holds, for the titles.
+    inv_thetas, change_u_sign : bool
+        See select_iprt_iquv.
+    ref_columns : tuple of 4 int
+        The i_index, va_index, phi_index and z_index arguments of
+        select_iprt_iquv for the reference, whose columns may differ
+        from the ones of the model.
+    ref_name, mod_name : str
+        The names of the reference and of the model, for the titles.
+    print_res : bool
+        Print each delta_m next to its Stokes parameter.
+
+    Returns
+    -------
+    ndarray
+        The delta_m of I, Q, U and V over all the altitudes, in
+        percent.
+    """
+    if plane == "principal":
+        vza = np.unique(mod_val[:, 4])
+        xaxis = np.sort(np.concatenate((vza - 180, 180 - vza)))
+        xlabel = "VZA [deg]"
+
+        def cut(values: np.ndarray) -> np.ndarray:
+            return np.concatenate((values[:, 1], values[::-1, 0]))
+    elif plane == "almucantar":
+        xaxis = np.unique(mod_val[:, 5])
+        xlabel = "VAA [deg]"
+
+        def cut(values: np.ndarray) -> np.ndarray:
+            return values[0, :]
+    else:
+        raise ValueError(f"Unknown plane '{plane}'!")
+
+    ref_all, mod_all = [], []
+    for ialt, altitude in enumerate(altitudes):
+        options: dict[str, Any] = {"change_u_sign": change_u_sign,
+                                   "inv_thetas": inv_thetas, "stdev": True}
+        i_index, va_index, phi_index, z_index = ref_columns
+        ref = select_iprt_iquv(ref_val, altitude, i_index=i_index,
+                               va_index=va_index, phi_index=phi_index,
+                               z_index=z_index, **options)
+        mod = select_iprt_iquv(mod_val, altitude, **options)
+        ref_cut, mod_cut = (
+            np.array([cut(values) for values in selected],
+                     dtype=np.float32)
+            for selected in (ref, mod)
+        )
+        plot_iquv_comparison(
+            iquv_obs=ref_cut[:4], iquv_mod=mod_cut[:4],
+            iquv_std_obs=ref_cut[4:], iquv_std_mod=mod_cut[4:],
+            xaxis=xaxis, xlabel=xlabel,
+            iquv_ymin=(None if iquv_ymins is None
+                       else list(iquv_ymins[ialt])),
+            iquv_ymax=(None if iquv_ymaxs is None
+                       else list(iquv_ymaxs[ialt])),
+            title=(f"IPRT case {case_name} - {quantities[ialt]} - "
+                   f"{ref_name} red, {mod_name} blue"),
+        )
+        ref_all.append(ref_cut[:4])
+        mod_all.append(mod_cut[:4])
+
+    return compute_deltam(obs=np.concatenate(ref_all, axis=1),
+                          mod=np.concatenate(mod_all, axis=1),
+                          print_res=print_res)
