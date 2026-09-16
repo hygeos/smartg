@@ -156,9 +156,13 @@ ignore = ["ANN401"]
     "D414", "D415", "D416", "D417", "D418",
 ]
 
-# False positives of ruff 0.16 on a notebook cell ending with an
-# indented continuation line
-"smartg/notebooks/validation_SMARTG_IPRT_*.py" = ["E111", "E113"]
+# The IPRT notebooks are percent scripts: their markdown cells are
+# comment blocks, whose table rows cannot wrap, an import may open
+# any cell, as ruff allows in .ipynb files, and a script opening on
+# a markdown cell has no module docstring
+"smartg/notebooks/validation_SMARTG_IPRT_*.py" = [
+    "D100", "E402", "E501", "W505",
+]
 
 [tool.ruff.lint.pycodestyle]
 # Comments and docstrings (W505, IPRT tools only)

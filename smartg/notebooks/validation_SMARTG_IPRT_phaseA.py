@@ -1,5 +1,5 @@
 # %% [markdown]
-# # SMART-G validation IPRT phase A 
+# # SMART-G validation IPRT phase A
 # - https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=start
 
 # %% [markdown]
@@ -88,7 +88,7 @@ surf_a1 = None
 
 # %% [markdown]
 # #### Compute radiances depol=0, sza=0, saa=65
-# - Note: In forward there is a bug for sza near to 0 (see Q and U values), then simulation is performed in backward (more comsuming) 
+# - Note: In forward there is a bug for sza near to 0 (see Q and U values), then simulation is performed in backward (more comsuming)
 
 # %%
 sza = 0.
