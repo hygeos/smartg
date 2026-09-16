@@ -78,7 +78,17 @@ corrected before the final `v2.0.0` release.
     `smartg.iprt.phase_a` (`convert_sgout_to_iprtout`,
     `select_iprt_iquv`, `select_and_plot_polar_iprt`,
     `compute_deltam_iprtout`), and `smartg.iprt.iprt_phase3_runs`
-    becomes `smartg.iprt.phase3`
+    becomes `smartg.iprt.phase3`. The new `smartg.iprt.phase_b`
+    gathers the phase B helpers that the C2 and C3 tests and the C2
+    notebook each defined: the C2 and C3 atmospheres and sensor grids,
+    the backward and forward runs of the 9 cases (`CASES`,
+    `FORWARD_GROUPS`), the reading of the phase B ASCII tables
+    (`read_iprt_iquv`, standard deviations included), the extraction
+    of the SMART-G maps (`smartg_iquv`), the camera plots
+    (`plot_camera_iquv`, `plot_camera_difference`) and `compare_case`,
+    which replaces the `print_c2_res_noatm` and `print_c2_res_atm`
+    functions of the notebook for any case, grid, level, direction and
+    reference file, and returns the delta_m values
   - The water module has been restructured for consistency with the
     atmosphere module: the `IOP*` classes (`IOP_base`, `IOP`, `IOP_1`,
     `IOP_Rw`, `IOP_profile`) have been replaced by the new `Water` /

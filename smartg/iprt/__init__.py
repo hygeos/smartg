@@ -19,15 +19,16 @@ common
 phase_a
     Conversion to, selection from and comparison of the phase A ASCII
     tables.
+phase_b
+    Atmospheres, sensors and runs of the C2 and C3 cases, reading of
+    the phase B ASCII tables, camera plots and comparison with a
+    reference. Importing it compiles no SMART-G kernel.
 phase3
     Runs of the phase 3 cases, written in the IPRT netCDF format.
     Importing it compiles the SMART-G kernels.
 
-Phase B has no module of its own: its C2 and C3 cases are run and
-compared in smartg/tests/test_iprt_phase_b_c2.py and
-test_iprt_phase_b_c3.py. The polar and radiance plots do not depend on
-the phase and are in smartg.view: plot_polar_iquv and
-plot_iquv_comparison.
+The polar and radiance plots do not depend on the phase and are in
+smartg.view: plot_polar_iquv, plot_iquv_comparison and camera_view.
 
 The package imports none of its modules, so that the phase shows in
 every import, e.g. ``from smartg.iprt.phase_a import select_iprt_iquv``.
