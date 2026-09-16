@@ -20,14 +20,19 @@ input_view
     Visualization of SMART-G input profile and phase functions.
 receiver_view
     Plot receiver irradiance from a SMART-G simulation output.
-satellite_view
-    'Satellite' 2D image of SMART-G 3D atmosphere results.
+camera_view
+    2D image of SMART-G 3D atmosphere results seen by a camera.
 visualize_entity
     3D visualization of the created scene objects.
+plot_polar_iquv
+    Plot I, Q, U and V matrices side by side in polar view.
+plot_iquv_comparison
+    Plot I, Q, U and V signals and their difference with a reference.
 """
 
 import math
 import warnings
+from pathlib import Path
 from pylab import (
     figure,
     subplot2grid,
@@ -2310,6 +2315,108 @@ def compare(
     return fig
 
 
+def plot_iquv_comparison(
+    iquv_obs: np.ndarray,
+    iquv_mod: np.ndarray,
+    iquv_std_obs: np.ndarray,
+    iquv_std_mod: np.ndarray,
+    xaxis: np.ndarray,
+    xlabel: str,
+    iquv_ymin: np.ndarray | list[float] | None = None,
+    iquv_ymax: np.ndarray | list[float] | None = None,
+    title: str | None = None,
+    save_fig: str | Path | None = None,
+) -> None:
+    """Plot I, Q, U and V signals and their difference with a reference.
+
+    The figure holds two rows of four panels: the observed and the
+    modelled I, Q, U and V on top, and their absolute difference,
+    with error bars, below.
+
+    Parameters
+    ----------
+    iquv_obs : ndarray
+        Observed, or reference model, I, Q, U and V signals, of shape
+        (4, nxaxis).
+    iquv_mod : ndarray
+        Modelled I, Q, U and V signals, of the same shape.
+    iquv_std_obs : ndarray
+        Standard deviations of the observed signals.
+    iquv_std_mod : ndarray
+        Standard deviations of the modelled signals.
+    xaxis : ndarray
+        Abscissa the signals vary along, usually the viewing zenith
+        or the viewing azimuth angle.
+    xlabel : str
+        Label of the abscissa.
+    iquv_ymin : ndarray or list of float, optional
+        Lower bound of the signal panels, one per Stokes parameter.
+        By default it is taken from the drawn values.
+    iquv_ymax : ndarray or list of float, optional
+        Upper bound of the signal panels, one per Stokes parameter.
+    title : str, optional
+        Title of the whole figure.
+    save_fig : str or Path, optional
+        Save the figure at this path, the extension giving the
+        format, e.g. save_fig='myFigName.png'.
+    """
+
+    fig, ax = plt.subplots(2,4, figsize=(13,8))
+    if title: fig.suptitle(title, fontsize=15)
+
+    for istk in range(0, 4):
+        top = ax[0, istk]
+        if istk == 0:
+            top.set_ylabel("normalized radiance", fontsize=13)
+        top.set_xlabel(xlabel, fontsize=13)
+        top.yaxis.set_major_formatter(FormatStrFormatter('%5.1e'))
+        top.plot(xaxis, iquv_obs[istk], color='red')
+        top.plot(xaxis, iquv_mod[istk], color='blue')
+        if iquv_ymin is not None and iquv_ymax is not None:
+            ymin, ymax = iquv_ymin[istk], iquv_ymax[istk]
+        else:
+            yt = top.get_yticks()
+            top.locator_params(axis='y', nbins=6)
+            if iquv_ymin is not None:
+                ymin, ymax = iquv_ymin[istk], np.max(yt)
+            elif iquv_ymax is not None:
+                ymin, ymax = np.min(yt), iquv_ymax[istk]
+            else:
+                ymin, ymax = np.min(yt), np.max(yt)
+        top.set_yticks(np.linspace(ymin, ymax, 6))
+        top.set_ylim(ymin=ymin, ymax=ymax)
+        top.set_xlim(xmin=np.min(xaxis), xmax=np.max(xaxis))
+        top.locator_params(axis='x', nbins=3)
+
+        bottom = ax[1, istk]
+        if istk == 0:
+            bottom.set_ylabel("abs. diff", fontsize=13)
+        bottom.set_xlabel(xlabel, fontsize=13)
+        bottom.yaxis.set_major_formatter(FormatStrFormatter('%5.1e'))
+        _, caps, bars = bottom.errorbar(
+            xaxis,
+            iquv_obs[istk, :] - iquv_mod[istk, :],
+            yerr=iquv_std_obs[istk] + iquv_std_mod[istk],
+            fmt='x',
+            color='blue',
+            ecolor='grey',
+            capsize=2,
+        )
+        for bar in bars:
+            bar.set_alpha(0.25)
+        for cap in caps:
+            cap.set_alpha(0.25)
+        bottom.axhline(0, color='black')
+        bottom.locator_params(axis='x', nbins=3)
+        bottom.locator_params(axis='y', nbins=6)
+        yt = bottom.get_yticks()
+        bottom.set_yticks(np.linspace(np.min(yt), np.max(yt), 6))
+        bottom.set_ylim(ymin=np.min(yt), ymax=np.max(yt))
+    fig.tight_layout()
+    if save_fig is not None:
+        plt.savefig(save_fig)
+
+
 def _bin_edges(
     x: np.ndarray[Any, Any],
     min: float | None = None,
@@ -2677,6 +2784,158 @@ def plot_polar(
         ax_polar.set_title(title, weight="bold", position=(0.05, 0.97))
 
     return fig
+
+
+def plot_polar_iquv(
+    iquv: Sequence[np.ndarray],
+    thetas: np.ndarray,
+    phis: np.ndarray,
+    max_i: float | None = None,
+    max_q: float | None = None,
+    max_u: float | None = None,
+    max_v: float | None = None,
+    min_i: float | None = None,
+    cmap_i: str | mcolors.Colormap | None = None,
+    cmap_q: str | mcolors.Colormap | None = None,
+    cmap_u: str | mcolors.Colormap | None = None,
+    cmap_v: str | mcolors.Colormap | None = None,
+    title: str | None = None,
+    save_fig: str | Path | None = None,
+    sym: bool = False,
+) -> None:
+    """Plot I, Q, U and V matrices side by side in polar view.
+
+    Each matrix is drawn on its own polar axes, the viewing azimuth
+    angle as the angle and the viewing zenith angle, rescaled from 0
+    to 90, as the radius.
+
+    Parameters
+    ----------
+    iquv : sequence of ndarray
+        The I, Q, U and V matrices, each of shape (ntheta, nphi). The
+        rows are drawn from the outer edge to the centre, row j at the
+        radius of thetas[ntheta - 1 - j], which is the default row
+        order of smartg.iprt.phase_a.select_iprt_iquv.
+    thetas : ndarray
+        Viewing zenith angles, in degrees, sorted in increasing order.
+        They are rescaled to span the radius from 0 to 90.
+    phis : ndarray
+        Viewing azimuth angles of the columns, in degrees.
+    max_i, max_q, max_u, max_v : float, optional
+        Upper bound of the colour scale of each panel. By default the
+        largest absolute value of the panel is used. The Q, U and V
+        panels are drawn from -max to +max. The I panel is drawn from
+        0 to its largest value by default, and from -max_i to +max_i
+        when max_i is given, e.g. for a difference.
+    min_i : float, optional
+        Lower bound of the colour scale of the I panel, overriding the
+        0 or -max_i default.
+    cmap_i, cmap_q, cmap_u, cmap_v : str or Colormap, optional
+        Colour map of each panel, 'jet' for I and 'RdBu_r' for the
+        other panels by default.
+    title : str, optional
+        Title of the whole figure.
+    save_fig : str or Path, optional
+        Save the figure at this path, the extension giving the
+        format, e.g. save_fig='myFigName.png'.
+    sym : bool
+        The azimuth angles cover 0 to 180 degrees, as in the IPRT
+        cases; also plot the symmetrical results from 180 to 360
+        degrees.
+    """
+
+    val_i, val_q, val_u, val_v = (
+        np.asarray(values, dtype=np.float64) for values in iquv
+    )
+    if sym:
+        phis = np.concatenate((phis, phis + 180))
+        val_i, val_q, val_u, val_v = (
+            np.concatenate((values, values[:, ::-1]), axis=1)
+            for values in (val_i, val_q, val_u, val_v)
+        )
+
+    plt.rcParams.update({'font.size': 13})
+
+    thetas_scaled = (
+        (thetas - np.min(thetas))
+        / (np.max(thetas) - np.min(thetas))
+        * 90.
+    )
+    if max_i is None:
+        max_i = float(max(
+            np.abs(np.min(val_i)), np.abs(np.max(val_i))
+        ))
+        if min_i is None:
+            min_i = 0.
+    elif min_i is None:
+        min_i = -max_i
+    if max_q is None:
+        max_q = float(max(
+            np.abs(np.min(val_q)), np.abs(np.max(val_q))
+        ))
+    if max_u is None:
+        max_u = float(max(
+            np.abs(np.min(val_u)), np.abs(np.max(val_u))
+        ))
+    if max_v is None:
+        max_v = float(max(
+            np.abs(np.min(val_v)), np.abs(np.max(val_v))
+        ))
+
+    if cmap_i is None:
+        cmap_i = "jet"
+    if cmap_q is None:
+        cmap_q = "RdBu_r"
+    if cmap_u is None:
+        cmap_u = "RdBu_r"
+    if cmap_v is None:
+        cmap_v = "RdBu_r"
+
+    fig, ax = plt.subplots(
+        1, 4, figsize=(12, 4),
+        subplot_kw=dict(projection='polar'),
+    )
+    if title is not None:
+        fig.suptitle(title)
+
+    panels = (
+        ('I', val_i, cmap_i, min_i, max_i),
+        ('Q', val_q, cmap_q, -max_q, max_q),
+        ('U', val_u, cmap_u, -max_u, max_u),
+        ('V', val_v, cmap_v, -max_v, max_v),
+    )
+    for ipan, (label, values, cmap, vmin, vmax) in enumerate(panels):
+        ax[ipan].grid(False)
+        mesh = ax[ipan].pcolormesh(
+            np.deg2rad(phis),
+            thetas_scaled[::-1],
+            values,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            shading='gouraud',
+        )
+        cbar = fig.colorbar(
+            mesh,
+            ax=ax[ipan],
+            shrink=0.8,
+            orientation='horizontal',
+            ticks=np.linspace(vmin, vmax, 3, endpoint=True),
+            format="%4.1e",
+        )
+        cbar.set_label(label)
+        ax[ipan].set_yticklabels([])
+        ax[ipan].grid(
+            axis='both',
+            linewidth=1.5,
+            linestyle=':',
+            color='black',
+            alpha=0.5,
+        )
+
+    fig.tight_layout()
+    if save_fig is not None:
+        plt.savefig(save_fig)
 
 
 def transect_2d(
@@ -3068,16 +3327,24 @@ def _colorbar_formatter(
 
 
 def _colorbar_ticks(
-    vmin: float | None, vmax: float | None, values: np.ndarray
+    vmin: float | None,
+    vmax: float | None,
+    values: np.ndarray,
+    log_scale: bool = False,
 ) -> np.ndarray:
     """
-    Return 9 evenly spaced colorbar tick values.
+    Return 9 colorbar tick values.
 
+    The values are evenly spaced, or geometrically with ``log_scale``.
     The bounds default to the extrema of ``values`` when ``vmin`` or
-    ``vmax`` is None.
+    ``vmax`` is None, of its positive values with ``log_scale``.
     """
+    if log_scale:
+        values = values[values > 0]
     lo = np.min(values) if vmin is None else vmin
     hi = np.max(values) if vmax is None else vmax
+    if log_scale:
+        return np.geomspace(lo, hi, 9, endpoint=True)
     return np.linspace(lo, hi, 9, endpoint=True)
 
 
@@ -3178,20 +3445,27 @@ def _draw_map(
     vmax: float | None,
     cmap: mcolors.Colormap,
     interpolation: str,
+    log_scale: bool = False,
 ) -> ScalarMappable:
     """
     Draw one 2D map on an axes.
 
     Use :func:`matplotlib.pyplot.imshow` when both grids are regular,
-    :func:`matplotlib.pyplot.pcolormesh` otherwise.
+    :func:`matplotlib.pyplot.pcolormesh` otherwise. With ``log_scale``
+    the colors follow a logarithmic scale.
     """
+    norm = None
+    if log_scale:
+        # matplotlib refuses vmin and vmax along with a norm
+        norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
+        vmin = vmax = None
     if is_same_cell_size(xgrid) and is_same_cell_size(ygrid):
         # By default in the imshow function the origin
         # (origin='upper'), i.e. mat[0, 0], is at the upper left, and
         # we want the origin at the bottom left (origin='lower')
         return ax.imshow(
-            mat, vmin=vmin, vmax=vmax, origin="lower", cmap=cmap,
-            interpolation=interpolation,
+            mat, norm=norm, vmin=vmin, vmax=vmax, origin="lower",
+            cmap=cmap, interpolation=interpolation,
             extent=(float(xgrid.min()), float(xgrid.max()),
                     float(ygrid.min()), float(ygrid.max())),
         )
@@ -3201,8 +3475,8 @@ def _draw_map(
             "ignored) when using pcolormesh! i.e. when we have a "
             "cell size varying along the x or y axis."
         )
-    img = ax.pcolormesh(xgrid, ygrid, mat, vmin=vmin, vmax=vmax,
-                        cmap=cmap)
+    img = ax.pcolormesh(xgrid, ygrid, mat, norm=norm, vmin=vmin,
+                        vmax=vmax, cmap=cmap)
     ax.axis("scaled")  # x and y axes with the same scaling
     return img
 
@@ -3217,24 +3491,26 @@ def _add_colorbar(
     cbar_shrink: float,
     cbar_sci_format: bool,
     fontsize: int,
+    log_scale: bool = False,
 ) -> None:
     """
     Add a vertical colorbar next to one panel.
 
     The tick values and format are computed on the non-NaN values of
-    the matrix.
+    the matrix, the tick values geometrically spaced with
+    ``log_scale``.
     """
     fig = cast(Figure, ax.figure)
     values = mat[~np.isnan(mat)]
     cbar = fig.colorbar(
         img, ax=ax, shrink=cbar_shrink, orientation="vertical",
         format=_colorbar_formatter(values, cbar_sci_format),
-        ticks=_colorbar_ticks(vmin, vmax, values),
+        ticks=_colorbar_ticks(vmin, vmax, values, log_scale),
     )
     cbar.set_label(label, fontsize=fontsize)
 
 
-def satellite_view(
+def camera_view(
     ds_sg: xr.Dataset | MLUT | None,
     xgrid: np.ndarray,
     ygrid: np.ndarray,
@@ -3256,12 +3532,18 @@ def satellite_view(
     title: str | None = None,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
+    log_scale: bool | list[bool] = False,
+    xlabel: str = "X (km)",
+    ylabel: str = "Y (km)",
+    layout: Literal["grid", "row"] = "grid",
 ) -> Figure:
     """
-    Give a 'satellite' 2D image of SMART-G 3D atmosphere results.
+    Give a 2D image of SMART-G 3D atmosphere results seen by a camera.
 
-    The image shows one panel per requested Stokes parameter (up to
-    4), each with its own colorbar.
+    The camera is a grid of sensors, one per cell of ``xgrid`` and
+    ``ygrid``, and each sensor gives one pixel. The image shows one
+    panel per requested Stokes parameter (up to 4), each with its own
+    colorbar.
 
     Parameters
     ----------
@@ -3285,7 +3567,7 @@ def satellite_view(
         Whether to reverse the colormap(s). Default: False.
     figsize : tuple of float, optional
         The width and height of the figure in inches. If None, a
-        default depending on the panel number is used.
+        default depending on the panel number and the layout is used.
     fontsize : int, optional
         The font size of the figure. Default: 18.
     vmin : float or list, optional
@@ -3318,6 +3600,19 @@ def satellite_view(
         The x limits of the panels.
     ylim : tuple of float, optional
         The y limits of the panels.
+    log_scale : bool or list of bool, optional
+        Whether to use a logarithmic color scale, for all the panels
+        or per panel. The non-positive values are then shown in white,
+        like the NaN values. Default: False.
+    xlabel : str, optional
+        The x axis label. Default: 'X (km)'.
+    ylabel : str, optional
+        The y axis label. Default: 'Y (km)'.
+    layout : {'grid', 'row'}, optional
+        The arrangement of 3 or 4 panels: 'grid' puts 3 panels in a
+        pyramid and 4 panels in a 2x2 grid, 'row' puts all the panels
+        in one row. 1 or 2 panels are always in one row.
+        Default: 'grid'.
 
     Returns
     -------
@@ -3331,6 +3626,8 @@ def satellite_view(
         if stk not in _STOKES_LABELS:
             raise ValueError(f"Unknown stokes '{stk}'!")
         stokes_labels.append(_STOKES_LABELS[stk])
+    if layout not in ("grid", "row"):
+        raise ValueError(f"Unknown layout '{layout}'!")
 
     # Number of sensors in the x and y axes
     n_x = xgrid.size - 1
@@ -3365,6 +3662,7 @@ def satellite_view(
 
     vmin = _as_list(vmin, n_panel)
     vmax = _as_list(vmax, n_panel)
+    log_scale = _as_list(log_scale, n_panel)
 
     # Deal with all the possibilities where vmin, vmax and scale are
     # used
@@ -3380,10 +3678,17 @@ def satellite_view(
 
     def draw(ax: Axes, idm: int) -> None:
         img = _draw_map(ax, matrix[idm], xgrid, ygrid, vmin[idm],
-                        vmax[idm], cmaps[idm], interpolation)
+                        vmax[idm], cmaps[idm], interpolation,
+                        log_scale[idm])
         _add_colorbar(ax, img, matrix[idm], stokes_labels[idm],
                       vmin[idm], vmax[idm], cbar_shrink,
-                      cbar_sci_format, fontsize)
+                      cbar_sci_format, fontsize, log_scale[idm])
+
+    def set_limits(ax: Axes) -> None:
+        if xlim is not None:
+            ax.set_xlim(xlim[0], xlim[1])
+        if ylim is not None:
+            ax.set_ylim(ylim[0], ylim[1])
 
     if n_panel == 1:
         if figsize is None:
@@ -3392,27 +3697,26 @@ def satellite_view(
         if title is not None:
             plt.title(title)
         draw(plt.gca(), 0)
-        if xlim is not None:
-            plt.xlim(xlim[0], xlim[1])
-        if ylim is not None:
-            plt.ylim(ylim[0], ylim[1])
-        plt.xlabel(r"X (km)")
-        plt.ylabel(r"Y (km)")
+        set_limits(plt.gca())
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
 
-    elif n_panel == 2:
+    elif n_panel == 2 or layout == "row":
         if figsize is None:
-            figsize = (12, 4)
-        fig, axs = plt.subplots(1, 2, figsize=figsize,
+            figsize = (6 * n_panel, 4)
+        fig, axs = plt.subplots(1, n_panel, figsize=figsize,
                                 constrained_layout=True,
                                 sharex=True, sharey=True)
         if title is not None:
             fig.suptitle(title)
-        for idm in range(2):
+        for idm in range(n_panel):
             draw(axs[idm], idm)
+        # The panels share their axes
         axs[0].set_xlim(xgrid[0], xgrid[-1])
-        axs[1].set_ylim(ygrid[0], ygrid[-1])
-        axs[0].set_ylabel(r"Y (km)")
-        fig.supxlabel(r"X (km)")
+        axs[-1].set_ylim(ygrid[0], ygrid[-1])
+        set_limits(axs[0])
+        axs[0].set_ylabel(ylabel)
+        fig.supxlabel(xlabel)
 
     elif n_panel == 3:
         if figsize is None:
@@ -3428,9 +3732,11 @@ def satellite_view(
         for idm, ax in enumerate((ax1, ax2, ax3)):
             draw(ax, idm)
             ax.set_xlim(xgrid[0], xgrid[-1])
-        ax1.set_ylabel(r"Y (km)")
-        ax3.set_ylabel(r"Y (km)")
-        ax3.set_xlabel(r"X (km)")
+        for ax in (ax1, ax2, ax3):
+            set_limits(ax)
+        ax1.set_ylabel(ylabel)
+        ax3.set_ylabel(ylabel)
+        ax3.set_xlabel(xlabel)
         gs.tight_layout(fig)
 
     else:
@@ -3445,12 +3751,9 @@ def satellite_view(
         for idm in range(4):
             ax = axs[idm // 2, idm % 2]
             draw(ax, idm)
-            if xlim is not None:
-                ax.set_xlim(xlim[0], xlim[1])
-            if ylim is not None:
-                ax.set_ylim(ylim[0], ylim[1])
-        fig.supxlabel(r"X (km)")
-        fig.supylabel(r"Y (km)")
+            set_limits(ax)
+        fig.supxlabel(xlabel)
+        fig.supylabel(ylabel)
 
     if save_path is not None:
         # Deal with the case where the extension is not specified

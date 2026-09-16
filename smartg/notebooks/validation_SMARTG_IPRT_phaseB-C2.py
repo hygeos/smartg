@@ -1,2133 +1,578 @@
 # %% [markdown]
-# # SMART-G validation IPRT phase B - Cubic cloud (C2)
-# - https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=start
-
-# %% [markdown]
-# ## Symbols used in this notebook
+# # SMART-G validation: IPRT phase B, cubic cloud (C2)
 #
-# | symbol | meaning |
+# This notebook runs the cubic cloud case C2 of the phase B of IPRT (the
+# International Polarized Radiative Transfer model intercomparison) with
+# the 3D mode of SMART-G, and compares the results with MYSTIC.
+#
+# - IPRT: https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=start
+# - Phase B paper: Emde et al. (2018), *IPRT polarized radiative transfer
+#   model intercomparison project - Three-dimensional test cases (phase
+#   B)*, JQSRT.
+#
+# ## The case
+#
+# | | |
 # |---|---|
-# | `i_smartg`, `q_smartg`, `u_smartg`, `v_smartg` | Stokes matrices simulated by SMART-G |
-# | `i_mystic`, ... | the same, read from the MYSTIC reference |
-# | `iquv_*` | the four components stacked, as `smartg.iprt.group_iquv` returns them |
-# | `theta`, `phi` | sensor viewing zenith and azimuth, in degrees |
-# | `theta_0`, `phi_0` | solar zenith and azimuth |
-# | `tau_r` | Rayleigh optical depth of the column |
-# | `pos_z` | sensor altitude, in km |
-# | `m_3d_c2_<n>_*` | the run output of case `<n>`, with or without atmosphere |
-# | `norm_c2_<n>_*` | the normalisation applied to that case |
+# | domain | 7 x 7 x 5 km, periodic along x and y |
+# | cloud | a 1 km cube between 3 and 4 km along x and y, 2 and 3 km along z |
+# | cloud optics | extinction 10 /km, effective radius 10 µm, single scattering albedo 1, Mie phase matrix at 800 nm |
+# | surface | Lambertian, albedo 0.2 |
+# | sensors | 70 x 70, one per 100 m cell |
+# | atmosphere | none, then a homogeneous Rayleigh layer of optical depth 0.5, without depolarization |
 #
-# `X_BLOCK` and `X_GRID` are the CUDA launch geometry; `xblock_run` and
-# `xgrid_run` are the values a run is actually given, chosen either from
-# those constants or by the tuning loop.
+# The 9 viewing geometries, in degrees, the solar azimuth angle `phi_0`
+# being 180 everywhere:
+#
+# | case | sensors at the | theta | phi | theta_0 |
+# |---|---|---|---|---|
+# | 1 | bottom (0 km) | 40 | 0 | 20 |
+# | 2 | bottom (0 km) | 40 | 60 | 20 |
+# | 3 | bottom (0 km) | 40 | 120 | 20 |
+# | 4 | bottom (0 km) | 40 | 180 | 20 |
+# | 5 | top (5 km) | 180 | 0 | 40 |
+# | 6 | top (5 km) | 140 | 0 | 40 |
+# | 7 | top (5 km) | 140 | 60 | 40 |
+# | 8 | top (5 km) | 140 | 120 | 40 |
+# | 9 | top (5 km) | 140 | 180 | 40 |
+#
+# The cases 1 to 4 give the radiance transmitted below the cloud, the
+# cases 5 to 9 the radiance reflected at the top of the domain. The
+# reference file `smartg.iprt.phase_b.MYSTIC_RES_C2` holds the 9 cases
+# without atmosphere, then the 9 cases with atmosphere
+# (`ATM_CASE_OFFSET` later).
+#
+# Each case is run twice:
+#
+# - in **backward** mode, one run per case: the photons leave the
+#   sensors in their viewing direction, and the local estimate is taken
+#   towards the sun;
+# - in **forward** mode, one run per group of cases sharing the sun
+#   position (`FORWARD_GROUPS`): the photons leave the sensors towards
+#   the sun, and the viewing directions of the cases are zipped in the
+#   local estimate.
+#
+# To follow the IPRT convention, SMART-G's V is multiplied by -1 in
+# backward mode and U by -1 in forward mode.
+#
+# ## The comparison
+#
+# Each case gives two figures, the SMART-G I, Q, U and V maps and their
+# differences with MYSTIC, and the delta_m of each Stokes parameter:
+#
+# delta_m = 100 * sqrt(sum((SMART-G - MYSTIC)^2)) / sqrt(sum(MYSTIC^2))
+#
+# in percent, over the 4900 sensors. Monte Carlo noise dominates the
+# delta_m of the small components: IPRT reports values of several
+# hundred percent on V for every model. The last section gathers the
+# delta_m of all the cases.
+#
+# ## Running it
+#
+# A CUDA GPU and the IPRT data of the auxdata (`IPRT/phaseB`) are
+# needed. With the benchmark photon counts of the settings below, the
+# whole notebook is long to run: lower `N_PHOTONS` for a quick look. The
+# same cases, with fewer photons, are the non-regression tests
+# `smartg/tests/test_iprt_phase_b_c2.py`.
+#
+# Names used in the notebook:
+#
+# | name | meaning |
+# |---|---|
+# | `atm_noatm`, `atm_rayleigh` | the atmospheres without and with the Rayleigh layer |
+# | `sensor_grid` | the 70 x 70 sensor grid |
+# | `ds`, `norm` | the output of the last run, and the factor cos(theta_0) / pi applied to its maps |
+# | `runs` | every `(ds, norm)`, by (atmosphere, mode, case or cases) |
+# | `delta_m_all` | the delta_m of I, Q, U and V, by (atmosphere, mode, case) |
 
 # %%
 # %matplotlib inline
-# next 2 lines allow to automatically reload modules that have been
-# changed externally
+# Reload the modules changed externally
 # %load_ext autoreload
 # %autoreload 2
 
-import sys
-from pathlib import Path
+from typing import Any
 
-# import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-
-try:
-    import subprocess
-    check = subprocess.check_call(['git', 'rev-parse', '--show-toplevel'],
-                                  stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.STDOUT)
-    # Root Git Path
-    ROOTPATH = subprocess.Popen(
-        ['git', 'rev-parse', '--show-toplevel'],
-        stdout=subprocess.PIPE).communicate()[0].rstrip().decode('utf-8')
-    ROOTPATH = Path(ROOTPATH)
-except subprocess.CalledProcessError:
-    ROOTPATH = Path.cwd()
-sys.path.insert(0, ROOTPATH)
-
-from smartg.config import DIR_AUXDATA
-from smartg.sensor import get_sensors_grid
-from smartg.view import satellite_view
-from smartg.grid3d import Grid3D
-from smartg.smartg import LocalEstimate, Smartg
-from smartg.surface import LambSurface
-from smartg.albedo import AlbedoCst
-from smartg.atmosphere import Atm1D, Atm3D, Cloud3D, read_i3rc_cloud
-from smartg.phase import read_phase_cdf
-from smartg.diff import diff1
-import pandas as pd
 import numpy as np
-from smartg.iprt.iprt import compute_deltam, group_iquv
+import pandas as pd
+import xarray as xr
 
-s_3db = Smartg(opt3d=True, alt_pp=True, alis=False, back=True, double=True,
-               bias=True)
-s_3df = Smartg(opt3d=True, alt_pp=True, alis=False, back=False, double=True,
-               bias=True)
-NB_PHOTONS = 49e9
-NB_LOOP    = 1e8
+from smartg.iprt.phase_b import (
+    ATM_CASE_OFFSET,
+    FORWARD_GROUPS,
+    MYSTIC_RES_C2,
+    ForwardGroup,
+    PhaseBAtmosphere,
+    backward_run_kwargs,
+    build_atm_c2,
+    compare_case,
+    find_optimal_xb_xg,
+    forward_run_kwargs,
+    run_case_backward,
+    run_group_forward,
+    sensor_grid_c2,
+)
+from smartg.smartg import Smartg
 
-# In case we want to find the optimal number of block and grid (CUDA)
-# for each sim
-# The values bellow can (have may be to) be modified (depending on the
-# GPU)
-FIND_OPTIMAL_XB_XG = False
-X_BLOCKS = [32, 64, 128]
-X_GRIDS = [512, 1024]
-CHECK_NB_LOOP = 1e8
-CHECK_NB_PHOTONS = 1e8
+# %% [markdown]
+# ## Settings
+#
+# The photon counts are those of the IPRT benchmark. The seed is fixed,
+# so that a rerun gives the same figures; -1 draws a new noise
+# realisation at every run. The CUDA block and grid sizes change the
+# noise realisation too: `FIND_OPTIMAL_XB_XG` times the candidates
+# before every run and keeps the fastest pair, instead of `X_BLOCK` and
+# `X_GRID`.
 
-# Else take the following number of block and grid (values accepted by
-# most of GPUs after 10xx series)
+# %% tags=["parameters"]
+N_PHOTONS = 49e9
+# The backward cases 5 to 9 with atmosphere are the slowest ones
+N_PHOTONS_ATM_TOP = 1e9
+N_LOOP = 1e8
+N_THETA = 18001  # 1801 scattering angles are not enough for the case 6
+SEED = 1234
+TAU_RAYLEIGH = 0.5
+DEPO_ATM = 0.0
+
+# Accepted by most GPUs after the 10xx series
 X_BLOCK = 128
 X_GRID = 1024
 
+FIND_OPTIMAL_XB_XG = False
+X_BLOCKS = [32, 64, 128]
+X_GRIDS = [512, 1024]
+CHECK_N_PHOTONS = 1e8
+CHECK_N_LOOP = 1e8
+
+# %%
+s_3db = Smartg(opt3d=True, alt_pp=True, alis=False, back=True,
+               double=True, bias=True)
+s_3df = Smartg(opt3d=True, alt_pp=True, alis=False, back=False,
+               double=True, bias=True)
+
+sensor_grid = sensor_grid_c2()
+runs: dict[tuple, tuple[xr.Dataset, float]] = {}
+delta_m_all: dict[tuple[str, str, int], np.ndarray] = {}
+
+
+# %% [markdown]
+# ## Helper functions
+#
+# `run_backward` and `run_forward` run a case, or a group of cases, with
+# the settings above, and `compare` and `compare_group` draw the figures
+# and the delta_m with `smartg.iprt.phase_b.compare_case`.
+
+# %%
+def atm_name(with_atm: bool) -> str:
+    """Return the label of an atmosphere, for titles and keys."""
+    return "with atm" if with_atm else "without atm"
+
+
+def run_options(sg: Smartg, geometry: dict[str, Any], with_atm: bool
+                ) -> dict[str, Any]:
+    """Return the Smartg.run options shared by every run.
+
+    Parameters
+    ----------
+    sg : Smartg
+        The compiled SMART-G.
+    geometry : dict
+        The run arguments of the case, from backward_run_kwargs or
+        forward_run_kwargs, to time the CUDA sizes.
+    with_atm : bool
+        Whether the atmosphere has the Rayleigh layer, which is then
+        run without depolarization.
+
+    Returns
+    -------
+    dict
+        The n_icdf, n_loop, seed, xblock, xgrid and depo arguments.
+    """
+    options: dict[str, Any] = {"n_icdf": N_THETA}
+    if with_atm:
+        options["depo"] = DEPO_ATM
+    if FIND_OPTIMAL_XB_XG:
+        xblock, xgrid = find_optimal_xb_xg(
+            sg, X_BLOCKS, X_GRIDS, CHECK_N_PHOTONS, CHECK_N_LOOP,
+            **geometry, **options,
+        )
+    else:
+        xblock, xgrid = X_BLOCK, X_GRID
+    return {**options, "n_loop": N_LOOP, "seed": SEED, "xblock": xblock,
+            "xgrid": xgrid}
+
+
+def run_backward(atm: PhaseBAtmosphere, case: int, with_atm: bool,
+                 n_photons: float = N_PHOTONS) -> tuple[xr.Dataset, float]:
+    """Run one case in backward mode and store it in runs.
+
+    Parameters
+    ----------
+    atm : PhaseBAtmosphere
+        The atmosphere.
+    case : int
+        The case number.
+    with_atm : bool
+        Whether atm has the Rayleigh layer.
+    n_photons : float
+        Number of photons.
+
+    Returns
+    -------
+    ds : xr.Dataset
+        The output of the run.
+    norm : float
+        The normalisation of the maps.
+    """
+    options = run_options(
+        s_3db, backward_run_kwargs(atm, sensor_grid, case), with_atm
+    )
+    ds, norm = run_case_backward(s_3db, atm, sensor_grid, case, n_photons,
+                                 **options)
+    print(f"kernel time (s) = {float(ds.attrs['kernel time (s)']):.2f}")
+    runs[atm_name(with_atm), "backward", case] = ds, norm
+    return ds, norm
+
+
+def run_forward(atm: PhaseBAtmosphere, group: ForwardGroup, with_atm: bool,
+                n_photons: float = N_PHOTONS) -> tuple[xr.Dataset, float]:
+    """Run a group of cases in forward mode and store it in runs.
+
+    Parameters
+    ----------
+    atm : PhaseBAtmosphere
+        The atmosphere.
+    group : ForwardGroup
+        The group of cases, a value of FORWARD_GROUPS.
+    with_atm : bool
+        Whether atm has the Rayleigh layer.
+    n_photons : float
+        Number of photons.
+
+    Returns
+    -------
+    ds : xr.Dataset
+        The output of the run, for all the cases of the group.
+    norm : float
+        The normalisation of the maps.
+    """
+    options = run_options(
+        s_3df, forward_run_kwargs(atm, sensor_grid, group), with_atm
+    )
+    ds, norm = run_group_forward(s_3df, atm, sensor_grid, group, n_photons,
+                                 **options)
+    print(f"kernel time (s) = {float(ds.attrs['kernel time (s)']):.2f}")
+    runs[atm_name(with_atm), "forward", group.cases] = ds, norm
+    return ds, norm
+
+
+def compare(ds: xr.Dataset, norm: float, case: int, with_atm: bool,
+            group: ForwardGroup | None = None) -> None:
+    """Compare a case with MYSTIC, and store its delta_m.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The output of the run.
+    norm : float
+        The normalisation of the maps.
+    case : int
+        The case number.
+    with_atm : bool
+        Whether the run has the Rayleigh layer.
+    group : ForwardGroup, optional
+        The group of the forward run holding the case. By default the
+        run is a backward one.
+    """
+    mode = "backward" if group is None else "forward"
+    print(f"Case {case} - {mode} - {atm_name(with_atm)}")
+    forward: dict[str, Any] = {}
+    if group is not None:
+        forward = {"level": group.level,
+                   "direction": group.cases.index(case),
+                   "u_sign": -1.0, "v_sign": 1.0}
+    delta_m_all[atm_name(with_atm), mode, case] = compare_case(
+        ds, norm, case, sensor_grid.xgrid, sensor_grid.ygrid,
+        MYSTIC_RES_C2,
+        ref_case=case + ATM_CASE_OFFSET if with_atm else case,
+        title_suffix=f"{atm_name(with_atm)} - {mode}",
+        i_vmin=0.0 if with_atm else None,
+        v_diff_frac=0.05 if with_atm else 0.015,
+        **forward,
+    )
+
+
+def compare_group(ds: xr.Dataset, norm: float, group: ForwardGroup,
+                  with_atm: bool) -> None:
+    """Compare every case of a forward run with MYSTIC.
+
+    Parameters
+    ----------
+    ds : xr.Dataset
+        The output of the forward run.
+    norm : float
+        The normalisation of the maps.
+    group : ForwardGroup
+        The group of cases of the run.
+    with_atm : bool
+        Whether the run has the Rayleigh layer.
+    """
+    for case in group.cases:
+        compare(ds, norm, case, with_atm, group)
+
+
 # %% [markdown]
 # ## Without atmosphere
-
-# %% [markdown]
-# ### Commun to all cases
-
-# %% [markdown]
-# #### Atmosphere profil
+#
+# The cloud alone, above the surface.
 
 # %%
-scale = 1 # can be useful for grid with very small cells
-
-# ========= phase matrix
-N_THETA = 18001 # 1801 is not enough for case 6, then we take 18001
-file_cld_phase = (DIR_AUXDATA / 'IPRT' / 'phaseB' / 'opt_prop'
-                  / 'watercloud_800.mie.cdf')
-cld_phase = read_phase_cdf(
-    file_cld_phase, n_theta=N_THETA, normalize=False, output_sg_ready=False
-)
-
-# ========= grid
-# ********* method reduced grid = faster *********
-xgrid = np.array([0., 3., 4., 7.])*scale
-ygrid = np.array([0., 3., 4., 7.])*scale
-zgrid = np.array([0., 2., 3., 5.])*scale
-grid3 = Grid3D(xgrid, ygrid, zgrid, periodic=True)
-# First column x, second y and third z
-# We follow the IPRT convention for indices (start at 1 instead of 0)
-# the cubic cloud is between 3 and 4 km in x and y, and between 2 and 3
-# km in z.
-# Its single scattering albedo is forced to 1 (non absorbing).
-cloud_indices1 = np.zeros((1, 3), dtype=np.int32)
-cloud_indices1[0, :] = np.array([
-    2, 2, 2]) #, x, y and z indices according to x, y and z grids
-cld_ext_coeff1 = np.zeros(1, dtype=np.float64)
-cld_ext_coeff1[0] = 10.*(1/scale)
-reff = np.zeros_like(cld_ext_coeff1, dtype=np.float64)
-reff[0] = 10.
-cloud3 = Cloud3D('wc', w_ref=800., ext_ref=cld_ext_coeff1,
-                 cell_indices=cloud_indices1, reff=reff, phase=cld_phase,
-                 ssa_cst=1.)
-# **********************************************************************
-
-# ********* method complete grid = slower but same grid as in IPRT paper
-# *********
-# cubic_cloud_f= DIR_AUXDATA / 'IPRT' / 'phaseB' / 'grids' /
-# 'C2_cloud_70x70x5.dat'
-# cloud3 = Cloud3D('wc', w_ref=800., ds=read_i3rc_cloud(cubic_cloud_f,
-# loc_xgrid=0, loc_ygrid=0),
-#                  phase=cld_phase, ssa_cst=1.)
-# xgrid, ygrid, zgrid = cloud3.get_xyz_grid()
-# grid3 = Grid3D(xgrid*scale, ygrid*scale, zgrid*scale, periodic=True)
-# **********************************************************************
-
-### profiles computations
-wavelengths = np.array([800.])
-atm3 = Atm3D(atm_1d=Atm1D('afglt', tau_r=0., no2=False, tco3=0., tcwp=0.),
-             grid_3d=grid3, comp_3d=[cloud3], wavelength_phase=[800.])
-pro_3d3_c2_noatm = atm3.calc(wavelengths, n_theta=N_THETA)
-
-surf_c2 = LambSurface(alb=AlbedoCst(0.2))
-
-
-# %% [markdown]
-# #### Function to print results
-
-# %%
-def print_c2_res_noatm(m, norm, tcase, grid3_sensors, u_sign=1, v_sign=-1,
-                       m_i=None, m_q=None, m_u=None, m_v=None):
-
-    if m_i is None:
-        i_smartg = m["I_up (TOA)"].values[
-        :, 0, 0].reshape(70, 70)*norm
-    else:
-        i_smartg = np.asarray(m_i).reshape(70, 70)*norm
-    # I_SMARTG_stdev = m["I_stdev_up
-    # (TOA)"].values[:,0,0].reshape(70,70)*norm
-    if m_q is None:
-        q_smartg = m["Q_up (TOA)"].values[
-        :, 0, 0].reshape(70, 70)*norm
-    else:
-        q_smartg = np.asarray(m_q).reshape(70, 70)*norm
-    # Q_SMARTG_stdev = m["Q_stdev_up
-    # (TOA)"].values[:,0,0].reshape(70,70)*norm
-    if m_u is None:
-        u_smartg = m["U_up (TOA)"].values[
-        :, 0, 0].reshape(70, 70)*norm*u_sign
-    else:
-        u_smartg = np.asarray(m_u).reshape(70, 70)*norm*u_sign
-    # U_SMARTG_stdev = m["U_stdev_up
-    # (TOA)"].values[:,0,0].reshape(70,70)*norm
-    if m_v is None:
-        v_smartg = m["V_up (TOA)"].values[
-        :, 0, 0].reshape(70, 70)*norm*v_sign
-    else:
-        v_smartg = np.asarray(m_v).reshape(70, 70)*norm*v_sign
-    # V_SMARTG_stdev = m["V_stdev_up
-    # (TOA)"].values[:,0,0].reshape(70,70)*norm
-
-
-
-    file_res = (DIR_AUXDATA / 'IPRT' / 'phaseB' / 'mystic_res'
-                / 'iprt_case_C2_mystic.dat')
-    read_res = pd.read_csv(
-        file_res, skiprows=(4900*(tcase-1)) + 3, nrows=4900, header=None,
-        sep='\\s+', dtype=float).values
-    i_mystic = read_res[:, 7].reshape(70, 70).T
-    # I_MYSTIC_stdev = read_res[:,11].reshape(70,70).T
-    q_mystic = read_res[:, 8].reshape(70, 70).T
-    # Q_MYSTIC_stdev = read_res[:,12].reshape(70,70).T
-    u_mystic = read_res[:, 9].reshape(70, 70).T
-    # U_MYSTIC_stdev = read_res[:,13].reshape(70,70).T
-    v_mystic = read_res[:, 10].reshape(70, 70).T
-    # V_MYSTIC_stdev = read_res[:,14].reshape(70,70).T
-
-
-    stk = ['I', 'Q', 'U', 'V']
-    xgrid = grid3_sensors.xgrid
-    ygrid = grid3_sensors.ygrid
-    interp_name = 'none'
-    fig_size = (10.5, 7)
-    font_size=int(16)
-    cb_shrink = 1
-    color_bar = ['jet', 'coolwarm', 'coolwarm', 'coolwarm']
-    vmin = [np.min(np.abs(i_smartg)), -np.max(np.abs(q_smartg)),
-            -np.max(np.abs(u_smartg)), -np.max(np.abs(v_smartg))]
-    vmax = [np.max(i_smartg), np.max(np.abs(q_smartg)),
-            np.max(np.abs(u_smartg)), np.max(np.abs(v_smartg))]
-    color_bar_std = ['coolwarm', 'coolwarm', 'coolwarm', 'coolwarm']
-    vmin_std = [
-        -np.max(i_smartg)*0.05, -np.max(np.abs(q_smartg))*0.05,
-        -np.max(np.abs(u_smartg))*0.05, -np.max(np.abs(v_smartg))*0.015]
-    vmax_std = [np.max(i_smartg)*0.05, np.max(np.abs(q_smartg))*0.05,
-                np.max(np.abs(u_smartg))*0.05, np.max(np.abs(v_smartg))*0.015]
-
-
-    mat_force = [i_smartg, q_smartg, u_smartg, v_smartg]
-    satellite_view(m, xgrid, ygrid, interpolation=interp_name, cmap=color_bar,
-                   figsize=fig_size, fontsize=font_size, vmin=vmin,
-                   vmax=vmax, scale=False, stokes=stk, matrices=mat_force,
-                   cbar_shrink=cb_shrink, cbar_sci_format=True,
-                   title=f"C2 - case {tcase} - SMART-G - without atm")
-
-    mat_force = [i_smartg-i_mystic, q_smartg-q_mystic, u_smartg-u_mystic,
-                 v_smartg-v_mystic]
-    satellite_view(
-        m, xgrid, ygrid, interpolation=interp_name, cmap=color_bar_std,
-        figsize=fig_size, fontsize=font_size, vmin=vmin_std, vmax=vmax_std,
-        scale=False, stokes=stk, matrices=mat_force, cbar_shrink=cb_shrink,
-        cbar_sci_format=True,
-        title=f"C2 - case {tcase} - dif(SMART-G - MYSTIC) - without atm")
-
-
-
-    # print deltam
-    iquv_smartg = group_iquv(i_list=[i_smartg], q_list=[q_smartg],
-                             u_list=[u_smartg], v_list=[v_smartg])
-    iquv_mystic = group_iquv(i_list=[i_mystic], q_list=[q_mystic],
-                             u_list=[u_mystic], v_list=[v_mystic])
-
-    print("SMART-G (delta_m):")
-    delta_m = compute_deltam(obs=iquv_mystic, mod=iquv_smartg, print_res=True)
+atm_noatm = build_atm_c2(n_theta=N_THETA)
 
 # %% [markdown]
 # ### Backward simulations
 
 # %% [markdown]
 # #### Case 1
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[0]
-
-print("pos_z = ", pos_z)
-theta = 40.
-phi = 0.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 20.
-phi_0    = 180.
-# count_level = 0 -> only COUNT TOA (default value = -2, i.e., count
-# everything)
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_1_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_1_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_1_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the bottom, theta = 40, phi = 0,
+# theta_0 = 20.
 
 # %%
-m = m_3d_c2_1_noatm
-norm = norm_c2_1_noatm
-tcase = int(1)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 1, with_atm=False)
+compare(ds, norm, 1, with_atm=False)
 
 # %% [markdown]
 # #### Case 2
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[0]
-
-print("pos_z = ", pos_z)
-theta = 40.
-phi = 60.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 20.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_2_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_2_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_2_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the bottom, theta = 40, phi = 60,
+# theta_0 = 20.
 
 # %%
-m = m_3d_c2_2_noatm
-norm = norm_c2_2_noatm
-tcase = int(2)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 2, with_atm=False)
+compare(ds, norm, 2, with_atm=False)
 
 # %% [markdown]
 # #### Case 3
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[0]
-
-print("pos_z = ", pos_z)
-theta = 40.
-phi = 120.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 20.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_3_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_3_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_3_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the bottom, theta = 40, phi = 120,
+# theta_0 = 20.
 
 # %%
-m = m_3d_c2_3_noatm
-norm = norm_c2_3_noatm
-tcase = int(3)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 3, with_atm=False)
+compare(ds, norm, 3, with_atm=False)
 
 # %% [markdown]
 # #### Case 4
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[0]
-
-print("pos_z = ", pos_z)
-theta = 40.
-phi = 180.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 20.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_4_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_4_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_4_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the bottom, theta = 40, phi = 180,
+# theta_0 = 20.
 
 # %%
-m = m_3d_c2_4_noatm
-norm = norm_c2_4_noatm
-tcase = int(4)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 4, with_atm=False)
+compare(ds, norm, 4, with_atm=False)
 
 # %% [markdown]
 # #### Case 5
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 180.
-phi = 0.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_5_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_5_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_5_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 180, phi = 0,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_5_noatm
-norm = norm_c2_5_noatm
-tcase = int(5)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 5, with_atm=False)
+compare(ds, norm, 5, with_atm=False)
 
 # %% [markdown]
 # #### Case 6
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 140.
-phi = 0.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_6_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_6_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_6_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 140, phi = 0,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_6_noatm
-norm = norm_c2_6_noatm
-tcase = int(6)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 6, with_atm=False)
+compare(ds, norm, 6, with_atm=False)
 
 # %% [markdown]
 # #### Case 7
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 140.
-phi = 60.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_7_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_7_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_7_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 140, phi = 60,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_7_noatm
-norm = norm_c2_7_noatm
-tcase = int(7)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 7, with_atm=False)
+compare(ds, norm, 7, with_atm=False)
 
 # %% [markdown]
 # #### Case 8
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 140.
-phi = 120.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_8_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_8_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_8_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 140, phi = 120,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_8_noatm
-norm = norm_c2_8_noatm
-tcase = int(8)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 8, with_atm=False)
+compare(ds, norm, 8, with_atm=False)
 
 # %% [markdown]
 # #### Case 9
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 140.
-phi = 180.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_9_noatm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                            n_loop=NB_LOOP, atmosphere=pro_3d3_c2_noatm,
-                            sensor=sensors, le=le, surface=surf_c2,
-                            n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                            stdev=True)
-norm_c2_9_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_9_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 140, phi = 180,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_9_noatm
-norm = norm_c2_9_noatm
-tcase = int(9)
-
-print_c2_res_noatm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_noatm, 9, with_atm=False)
+compare(ds, norm, 9, with_atm=False)
 
 # %% [markdown]
 # ### Forward simulations
 
 # %% [markdown]
-# #### Case 1 - 4
-
-# %% [markdown]
-# ##### Run
+# #### Cases 1 to 4
 
 # %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6
-
-print("pos_z = ", pos_z)
-
-# ======= Case 1 - 4
-    # Sun position
-theta_0    = 20.
-phi_0    = 180.
-
-theta_0_bis = 180.- theta_0
-phi_0_bis = 180.- phi_0
-
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta_0_bis,
-    ph_deg=phi_0_bis, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-theta = np.array([40., 40., 40., 40.])
-phi = np.array([0., 60., 120., 180.])
-
-le     = LocalEstimate(th_deg=np.array(theta),
-                       phi_deg=np.array(phi+180.),
-                       count_level=np.array([1, 1, 1, 1]),
-                       zip=True)
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3df.run(th_deg=theta_0, wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, output_layers=3)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_1to4_f_noatm = s_3df.run(th_deg=theta_0, wavelength=wavelengths,
-                                 n_photons=NB_PHOTONS, n_loop=NB_LOOP,
-                                 atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                 le=le, surface=surf_c2, n_icdf=N_THETA,
-                                 xblock=xblock_run, xgrid=xgrid_run,
-                                 output_layers=3)
-norm_c2_1to4_f_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_1to4_f_noatm.attrs['kernel time (s)'])))
+group = FORWARD_GROUPS[1]
+ds, norm = run_forward(atm_noatm, group, with_atm=False)
+compare_group(ds, norm, group, with_atm=False)
 
 # %% [markdown]
-# ##### Results
+# #### Cases 5 to 9
 
 # %%
-m = m_3d_c2_1to4_f_noatm
-norm = norm_c2_1to4_f_noatm
-for i in range (0, 4):
-    tcase = int(i+1)
-    ind_za = round(tcase - 1)
-    print("TESTCASE:", tcase)
-    print_c2_res_noatm(m, norm, tcase, grid3_sensors, u_sign=-1, v_sign=1,
-                       m_i=m['I_down (0+)'][:, ind_za],
-                       m_q=m['Q_down (0+)'][:, ind_za],
-                       m_u=m['U_down (0+)'][:, ind_za],
-                       m_v=m['V_down (0+)'][:, ind_za])
-
-# %% [markdown]
-# #### Case 5 -9
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6
-
-print("pos_z = ", pos_z)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-
-theta_0_bis = 180.- theta_0
-phi_0_bis = 180.- phi_0
-
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta_0_bis,
-    ph_deg=phi_0_bis, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-theta = np.array([180., 140., 140., 140., 140.])
-phi = np.array([0., 0., 60., 120., 180.])
-
-le     = LocalEstimate(th_deg=np.array(180.-theta),
-                       phi_deg=np.array(phi+180.),
-                       count_level=np.array([0, 0, 0, 0, 0]),
-                       zip=True)
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3df.run(th_deg=theta_0, wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, output_layers=1)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_5to9_f_noatm = s_3df.run(th_deg=theta_0, wavelength=wavelengths,
-                                 n_photons=NB_PHOTONS, n_loop=NB_LOOP,
-                                 atmosphere=pro_3d3_c2_noatm, sensor=sensors,
-                                 le=le, surface=surf_c2, n_icdf=N_THETA,
-                                 xblock=xblock_run, xgrid=xgrid_run,
-                                 output_layers=1)
-norm_c2_5to9_f_noatm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_5to9_f_noatm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
-
-# %%
-m = m_3d_c2_5to9_f_noatm
-norm = norm_c2_5to9_f_noatm
-for i in range (0, 5):
-    tcase = int(i+5)
-    ind_za = round(tcase - 5)
-    print("TESTCASE:", tcase)
-    print_c2_res_noatm(m, norm, tcase, grid3_sensors, u_sign=-1, v_sign=1,
-                       m_i=m['I_up (TOA)'][:, ind_za],
-                       m_q=m['Q_up (TOA)'][:, ind_za],
-                       m_u=m['U_up (TOA)'][:, ind_za],
-                       m_v=m['V_up (TOA)'][:, ind_za])
+group = FORWARD_GROUPS[2]
+ds, norm = run_forward(atm_noatm, group, with_atm=False)
+compare_group(ds, norm, group, with_atm=False)
 
 # %% [markdown]
 # ## With atmosphere
-
-# %% [markdown]
-# ### commun to all cases
-
-# %% [markdown]
-# #### Atmosphere profil
+#
+# A homogeneous Rayleigh layer of optical depth `TAU_RAYLEIGH`, without
+# absorption, fills the domain.
 
 # %%
-scale = 1 # can be useful for grid with very small cells
-
-# ========= phase matrix
-N_THETA = 18001 # 1801 is not enough for case 6, then we take 18001
-file_cld_phase = (DIR_AUXDATA / 'IPRT' / 'phaseB' / 'opt_prop'
-                  / 'watercloud_800.mie.cdf')
-cld_phase = read_phase_cdf(
-    file_cld_phase, n_theta=N_THETA, normalize=False, output_sg_ready=False
-)
-
-# ========= grid
-# ********* method reduced grid = faster *********
-xgrid = np.array([0., 3., 4., 7.])*scale
-ygrid = np.array([0., 3., 4., 7.])*scale
-zgrid = np.array([0., 2., 3., 5.])*scale
-grid3 = Grid3D(xgrid, ygrid, zgrid, periodic=True)
-# First column x, second y and third z
-# We follow the IPRT convention for indices (start at 1 instead of 0)
-# the cubic cloud is between 3 and 4 km in x and y, and between 2 and 3
-# km in z.
-# Its single scattering albedo is forced to 1 (non absorbing).
-cloud_indices1 = np.zeros((1, 3), dtype=np.int32)
-cloud_indices1[0, :] = np.array([
-    2, 2, 2]) #, x, y and z indices according to x, y and z grids
-cld_ext_coeff1 = np.zeros(1, dtype=np.float64)
-cld_ext_coeff1[0] = 10.*(1/scale)
-reff = np.zeros_like(cld_ext_coeff1, dtype=np.float64)
-reff[0] = 10.
-cloud3 = Cloud3D('wc', w_ref=800., ext_ref=cld_ext_coeff1,
-                 cell_indices=cloud_indices1, reff=reff, phase=cld_phase,
-                 ssa_cst=1.)
-# **********************************************************************
-
-# ========= homogeneous Rayleigh layer
-tau_r = 0.5 # total optical rayleigh depth
-
-dz = diff1(grid3.zGRID)
-# homogeneous distri
-tau_r_cs = np.cumsum((dz/grid3.zGRID[-1])*tau_r).reshape(1, len(dz))
-ot = diff1(tau_r_cs, axis=1)
-k  = abs(ot/dz)
-k[np.isnan(k)] = 0
-
-sca_ray = k # rayleigh sca coefficient
-abs_gas = np.zeros_like(sca_ray)
-
-### profiles computations
-wavelengths = np.array([800.])
-atm3 = Atm3D(atm_1d=Atm1D('afglt'), grid_3d=grid3, comp_3d=[cloud3],
-             wavelength_phase=[800.], mol_sca_1d=sca_ray, mol_abs_1d=abs_gas)
-pro_3d3_c2_atm = atm3.calc(wavelengths, n_theta=N_THETA)
-
-surf_c2 = LambSurface(alb=AlbedoCst(0.2))
-
-
-# %% [markdown]
-# #### Function to print results
-
-# %%
-def print_c2_res_atm(m, norm, tcase, grid3_sensors, u_sign=1, v_sign=-1,
-                     m_i=None, m_q=None, m_u=None, m_v=None):
-
-    if m_i is None:
-        i_smartg = m["I_up (TOA)"].values[
-        :, 0, 0].reshape(70, 70)*norm
-    else:
-        i_smartg = np.asarray(m_i).reshape(70, 70)*norm
-    # I_SMARTG_stdev = m["I_stdev_up
-    # (TOA)"].values[:,0,0].reshape(70,70)*norm
-    if m_q is None:
-        q_smartg = m["Q_up (TOA)"].values[
-        :, 0, 0].reshape(70, 70)*norm
-    else:
-        q_smartg = np.asarray(m_q).reshape(70, 70)*norm
-    # Q_SMARTG_stdev = m["Q_stdev_up
-    # (TOA)"].values[:,0,0].reshape(70,70)*norm
-    if m_u is None:
-        u_smartg = m["U_up (TOA)"].values[
-        :, 0, 0].reshape(70, 70)*norm*u_sign
-    else:
-        u_smartg = np.asarray(m_u).reshape(70, 70)*norm*u_sign
-    # U_SMARTG_stdev = m["U_stdev_up
-    # (TOA)"].values[:,0,0].reshape(70,70)*norm
-    if m_v is None:
-        v_smartg = m["V_up (TOA)"].values[
-        :, 0, 0].reshape(70, 70)*norm*v_sign
-    else:
-        v_smartg = np.asarray(m_v).reshape(70, 70)*norm*v_sign
-    # V_SMARTG_stdev = m["V_stdev_up
-    # (TOA)"].values[:,0,0].reshape(70,70)*norm
-
-    tcase_bis = tcase + int(9)
-    file_res = (DIR_AUXDATA / 'IPRT' / 'phaseB' / 'mystic_res'
-                / 'iprt_case_C2_mystic.dat')
-    read_res = pd.read_csv(
-        file_res, skiprows=(4900*(tcase_bis-1)) + 3, nrows=4900,
-        header=None, sep='\\s+', dtype=float).values
-    i_mystic = read_res[:, 7].reshape(70, 70).T
-    # I_MYSTIC_stdev = read_res[:,11].reshape(70,70).T
-    q_mystic = read_res[:, 8].reshape(70, 70).T
-    # Q_MYSTIC_stdev = read_res[:,12].reshape(70,70).T
-    u_mystic = read_res[:, 9].reshape(70, 70).T
-    # U_MYSTIC_stdev = read_res[:,13].reshape(70,70).T
-    v_mystic = read_res[:, 10].reshape(70, 70).T
-    # V_MYSTIC_stdev = read_res[:,14].reshape(70,70).T
-
-
-    stk = ['I', 'Q', 'U', 'V']
-    xgrid = grid3_sensors.xgrid
-    ygrid = grid3_sensors.ygrid
-    interp_name = 'none'
-    fig_size = (10.5, 7)
-    font_size=int(16)
-    cb_shrink = 1
-    color_bar = ['jet', 'coolwarm', 'coolwarm', 'coolwarm']
-    vmin = [0., -np.max(np.abs(q_smartg)), -np.max(np.abs(u_smartg)),
-            -np.max(np.abs(v_smartg))]
-    vmax = [np.max(i_smartg), np.max(np.abs(q_smartg)),
-            np.max(np.abs(u_smartg)), np.max(np.abs(v_smartg))]
-    color_bar_std = ['coolwarm', 'coolwarm', 'coolwarm', 'coolwarm']
-    vmin_std = [-np.max(i_smartg)*0.05, -np.max(np.abs(q_smartg))*0.05,
-                -np.max(np.abs(u_smartg))*0.05, -np.max(np.abs(v_smartg))*0.05]
-    vmax_std = [np.max(i_smartg)*0.05, np.max(np.abs(q_smartg))*0.05,
-                np.max(np.abs(u_smartg))*0.05, np.max(np.abs(v_smartg))*0.05]
-
-
-    mat_force = [i_smartg, q_smartg, u_smartg, v_smartg]
-    satellite_view(m, xgrid, ygrid, interpolation=interp_name, cmap=color_bar,
-                   figsize=fig_size, fontsize=font_size, vmin=vmin,
-                   vmax=vmax, scale=False, stokes=stk, matrices=mat_force,
-                   cbar_shrink=cb_shrink, cbar_sci_format=True,
-                   title=f"C2 - case {tcase} - SMART-G - with atm")
-
-    mat_force = [i_smartg-i_mystic, q_smartg-q_mystic, u_smartg-u_mystic,
-                 v_smartg-v_mystic]
-    satellite_view(
-        m, xgrid, ygrid, interpolation=interp_name, cmap=color_bar_std,
-        figsize=fig_size, fontsize=font_size, vmin=vmin_std, vmax=vmax_std,
-        scale=False, stokes=stk, matrices=mat_force, cbar_shrink=cb_shrink,
-        cbar_sci_format=True,
-        title=f"C2 - case {tcase} - dif(SMART-G - MYSTIC) - with atm")
-
-
-    # print deltam
-    iquv_smartg = group_iquv(i_list=[i_smartg], q_list=[q_smartg],
-                             u_list=[u_smartg], v_list=[v_smartg])
-    iquv_mystic = group_iquv(i_list=[i_mystic], q_list=[q_mystic],
-                             u_list=[u_mystic], v_list=[v_mystic])
-
-    print("SMART-G (delta_m):")
-    delta_m = compute_deltam(obs=iquv_mystic, mod=iquv_smartg, print_res=True)
+atm_rayleigh = build_atm_c2(tau_ray=TAU_RAYLEIGH, n_theta=N_THETA)
 
 # %% [markdown]
 # ### Backward simulations
 
 # %% [markdown]
 # #### Case 1
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[0]
-
-print("pos_z = ", pos_z)
-theta = 40.
-phi = 0.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 20.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_1_atm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_1_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_1_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the bottom, theta = 40, phi = 0,
+# theta_0 = 20.
 
 # %%
-m = m_3d_c2_1_atm
-norm = norm_c2_1_atm
-tcase = int(1)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 1, with_atm=True)
+compare(ds, norm, 1, with_atm=True)
 
 # %% [markdown]
 # #### Case 2
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[0]
-
-print("pos_z = ", pos_z)
-theta = 40.
-phi = 60.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 20.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_2_atm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_2_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_2_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the bottom, theta = 40, phi = 60,
+# theta_0 = 20.
 
 # %%
-m = m_3d_c2_2_atm
-norm = norm_c2_2_atm
-tcase = int(2)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 2, with_atm=True)
+compare(ds, norm, 2, with_atm=True)
 
 # %% [markdown]
 # #### Case 3
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[0]
-
-print("pos_z = ", pos_z)
-theta = 40.
-phi = 120.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 20.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_3_atm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_3_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_3_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the bottom, theta = 40, phi = 120,
+# theta_0 = 20.
 
 # %%
-m = m_3d_c2_3_atm
-norm = norm_c2_3_atm
-tcase = int(3)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 3, with_atm=True)
+compare(ds, norm, 3, with_atm=True)
 
 # %% [markdown]
 # #### Case 4
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[0]
-
-print("pos_z = ", pos_z)
-theta = 40.
-phi = 180.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 20.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_4_atm = s_3db.run(wavelength=wavelengths, n_photons=NB_PHOTONS,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_4_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_4_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the bottom, theta = 40, phi = 180,
+# theta_0 = 20.
 
 # %%
-m = m_3d_c2_4_atm
-norm = norm_c2_4_atm
-tcase = int(4)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 4, with_atm=True)
+compare(ds, norm, 4, with_atm=True)
 
 # %% [markdown]
 # #### Case 5
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 180.
-phi = 0.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_5_atm = s_3db.run(wavelength=wavelengths, n_photons=1e9,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_5_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_5_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 180, phi = 0,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_5_atm
-norm = norm_c2_5_atm
-tcase = int(5)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 5, with_atm=True,
+                        n_photons=N_PHOTONS_ATM_TOP)
+compare(ds, norm, 5, with_atm=True)
 
 # %% [markdown]
 # #### Case 6
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 140.
-phi = 0.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_6_atm = s_3db.run(wavelength=wavelengths, n_photons=1e9,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_6_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_6_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 140, phi = 0,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_6_atm
-norm = norm_c2_6_atm
-tcase = int(6)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 6, with_atm=True,
+                        n_photons=N_PHOTONS_ATM_TOP)
+compare(ds, norm, 6, with_atm=True)
 
 # %% [markdown]
 # #### Case 7
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 140.
-phi = 60.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_7_atm = s_3db.run(wavelength=wavelengths, n_photons=1e9,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_7_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_7_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 140, phi = 60,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_7_atm
-norm = norm_c2_7_atm
-tcase = int(7)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 7, with_atm=True,
+                        n_photons=N_PHOTONS_ATM_TOP)
+compare(ds, norm, 7, with_atm=True)
 
 # %% [markdown]
 # #### Case 8
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 140.
-phi = 120.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_8_atm = s_3db.run(wavelength=wavelengths, n_photons=1e9,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_8_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_8_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 140, phi = 120,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_8_atm
-norm = norm_c2_8_atm
-tcase = int(8)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 8, with_atm=True,
+                        n_photons=N_PHOTONS_ATM_TOP)
+compare(ds, norm, 8, with_atm=True)
 
 # %% [markdown]
 # #### Case 9
-
-# %% [markdown]
-# ##### Run
-
-# %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6*scale
-
-print("pos_z = ", pos_z)
-theta = 140.
-phi = 180.
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta,
-    ph_deg=phi, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-le     = LocalEstimate(th_deg=np.array([theta_0]),
-                       phi_deg=np.array([phi_0]),
-                       count_level=np.array([0]))  # , zip=True
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3db.run(wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, stdev=True, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_9_atm = s_3db.run(wavelength=wavelengths, n_photons=1e9,
-                          n_loop=NB_LOOP, atmosphere=pro_3d3_c2_atm,
-                          sensor=sensors, le=le, surface=surf_c2,
-                          n_icdf=N_THETA, xblock=xblock_run, xgrid=xgrid_run,
-                          stdev=True, depo=0)
-norm_c2_9_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_9_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
+#
+# Sensors at the top, theta = 140, phi = 180,
+# theta_0 = 40.
 
 # %%
-m = m_3d_c2_9_atm
-norm = norm_c2_9_atm
-tcase = int(9)
-
-print_c2_res_atm(m, norm, tcase, grid3_sensors)
+ds, norm = run_backward(atm_rayleigh, 9, with_atm=True,
+                        n_photons=N_PHOTONS_ATM_TOP)
+compare(ds, norm, 9, with_atm=True)
 
 # %% [markdown]
 # ### Forward simulations
 
 # %% [markdown]
-# #### Case 1 - 4
-
-# %% [markdown]
-# ##### Run
+# #### Cases 1 to 4
 
 # %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6
-
-print("pos_z = ", pos_z)
-
-# ======= Case 1 - 4
-    # Sun position
-theta_0    = 20.
-phi_0    = 180.
-
-theta_0_bis = 180.- theta_0
-phi_0_bis = 180.- phi_0
-
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta_0_bis,
-    ph_deg=phi_0_bis, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-theta = np.array([40., 40., 40., 40.])
-phi = np.array([0., 60., 120., 180.])
-
-le     = LocalEstimate(th_deg=np.array(theta),
-                       phi_deg=np.array(phi+180.),
-                       count_level=np.array([1, 1, 1, 1]),
-                       zip=True)
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3df.run(th_deg=theta_0, ph_deg=phi_0,
-                                   wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, output_layers=3, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_1to4_f_atm = s_3df.run(th_deg=theta_0, wavelength=wavelengths,
-                               n_photons=NB_PHOTONS, n_loop=NB_LOOP,
-                               atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                               le=le, surface=surf_c2, n_icdf=N_THETA,
-                               xblock=xblock_run, xgrid=xgrid_run,
-                               output_layers=3, depo=0)
-norm_c2_1to4_f_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_1to4_f_atm.attrs['kernel time (s)'])))
+group = FORWARD_GROUPS[1]
+ds, norm = run_forward(atm_rayleigh, group, with_atm=True)
+compare_group(ds, norm, group, with_atm=True)
 
 # %% [markdown]
-# ##### Results
+# #### Cases 5 to 9
 
 # %%
-m = m_3d_c2_1to4_f_atm
-norm = norm_c2_1to4_f_atm
-for i in range (0, 4):
-    tcase = int(i+1)
-    ind_za = round(tcase - 1)
-    print("TESTCASE:", tcase)
-    print_c2_res_atm(m, norm, tcase, grid3_sensors, u_sign=-1, v_sign=1,
-                     m_i=m['I_down (0+)'][:, ind_za],
-                     m_q=m['Q_down (0+)'][:, ind_za],
-                     m_u=m['U_down (0+)'][:, ind_za],
-                     m_v=m['V_down (0+)'][:, ind_za])
+group = FORWARD_GROUPS[2]
+ds, norm = run_forward(atm_rayleigh, group, with_atm=True)
+compare_group(ds, norm, group, with_atm=True)
 
 # %% [markdown]
-# #### Case 5 - 9
-
-# %% [markdown]
-# ##### Run
+# ## Summary
+#
+# The delta_m, in percent, of every case run above.
 
 # %%
-xgrid_sensors = np.linspace(0., 7., 71)*scale
-ygrid_sensors = np.linspace(0., 7., 71)*scale
-zgrid_sensors = np.array([0., 1., 2., 3., 4., 5.])*scale
-grid3_sensors = Grid3D(xgrid_sensors, ygrid_sensors, zgrid_sensors,
-                       periodic=True)
-
-# Placement of sensors
-pos_z = grid3_sensors.zGRID[-1]-1e-6
-
-print("pos_z = ", pos_z)
-
-# Sun position
-theta_0    = 40.
-phi_0    = 180.
-
-theta_0_bis = 180.- theta_0
-phi_0_bis = 180.- phi_0
-
-# !!!! grid3 is different than sensors grid !!!
-sensors = get_sensors_grid(
-    grid3_sensors.xgrid, grid3_sensors.ygrid, pos_z=pos_z, th_deg=theta_0_bis,
-    ph_deg=phi_0_bis, fov=0., loc='ATMOS',
-    cell_size=grid3_sensors.xgrid[1]-grid3_sensors.xgrid[0], grid_3d=grid3)
-
-theta = np.array([180., 140., 140., 140., 140.])
-phi = np.array([0., 0., 60., 120., 180.])
-
-le     = LocalEstimate(th_deg=np.array(180.-theta),
-                       phi_deg=np.array(phi+180.),
-                       count_level=np.array([0, 0, 0, 0, 0]),
-                       zip=True)
-
-if FIND_OPTIMAL_XB_XG:
-    k_time = np.inf
-    for xgrid_try in X_GRIDS:
-        for xblock_try in X_BLOCKS:
-                m_test = s_3df.run(th_deg=theta_0, wavelength=wavelengths,
-                                   n_photons=CHECK_NB_PHOTONS,
-                                   n_loop=CHECK_NB_LOOP,
-                                   atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                                   le=le, surface=surf_c2, n_icdf=N_THETA,
-                                   xblock=xblock_try, xgrid=xgrid_try,
-                                   progress=False, output_layers=1, depo=0)
-                if float(m_test.attrs['kernel time (s)']) < k_time:
-                    k_time = float(m_test.attrs['kernel time (s)'])
-                    best_xb = xblock_try
-                    best_xg = xgrid_try
-                print("time (s) =", m_test.attrs['kernel time (s)'],
-                      "; xblock =", xblock_try, "; xgrid =", xgrid_try)
-    print("\n\nBest xblock =", best_xb, " : best xgrid =", best_xg)
-    xblock_run = best_xb
-    xgrid_run = best_xg
-else:
-    xblock_run = X_BLOCK
-    xgrid_run = X_GRID
-
-m_3d_c2_5to9_f_atm = s_3df.run(th_deg=theta_0, wavelength=wavelengths,
-                               n_photons=NB_PHOTONS, n_loop=NB_LOOP,
-                               atmosphere=pro_3d3_c2_atm, sensor=sensors,
-                               le=le, surface=surf_c2, n_icdf=N_THETA,
-                               xblock=xblock_run, xgrid=xgrid_run,
-                               output_layers=1, depo=0)
-norm_c2_5to9_f_atm = np.cos(np.radians(theta_0))/np.pi
-print("kernel time (s) =",
-      "{:.2f}".format(float(m_3d_c2_5to9_f_atm.attrs['kernel time (s)'])))
-
-# %% [markdown]
-# ##### Results
-
-# %%
-m = m_3d_c2_5to9_f_atm
-norm = norm_c2_5to9_f_atm
-for i in range (0, 5):
-    tcase = int(i+5)
-    ind_za = round(tcase - 5)
-    print("TESTCASE:", tcase)
-    print_c2_res_atm(m, norm, tcase, grid3_sensors, u_sign=-1, v_sign=1,
-                     m_i=m['I_up (TOA)'][:, ind_za],
-                     m_q=m['Q_up (TOA)'][:, ind_za],
-                     m_u=m['U_up (TOA)'][:, ind_za],
-                     m_v=m['V_up (TOA)'][:, ind_za])
+summary = pd.DataFrame(delta_m_all, index=["I", "Q", "U", "V"]).T
+summary.index.names = ["atmosphere", "mode", "case"]
+summary.round(3)

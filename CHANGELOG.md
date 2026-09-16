@@ -65,12 +65,39 @@ completed and corrected before the final `v2.0.0` release.
     - iprt: `seclect_iprt_IQUV` → `select_iprt_iquv` (the typo
       included), `convert_SGout_to_IPRTout` →
       `convert_sgout_to_iprtout`, `compute_deltam_IPRTout` →
-      `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`, and
-      their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...)
+      `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`,
+      `plot_iprt_radiances` → `smartg.view.plot_iquv_comparison`, and
+      their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...);
+      in `smartg.iprt.phase3`, `case_D1` ... `case_E6_v3` →
+      `case_d1` ... `case_e6_v3`, the parameters of `plot_polar_iprt`
+      (`I` → `i`, `change_Q_sign` → `change_q_sign`, `maxI` → `max_i`,
+      `cmapI` → `cmap_i`, `minI` → `min_i`, ...) and of
+      `plot_camera_iprt` (`I` → `i`, `I_min` → `i_min`, `I_max` →
+      `i_max`, `I_cmap` → `i_cmap`). `run_sim` now takes the paths of
+      the BOA and TOA runs, None skipping a run, instead of the
+      overwrite flag and the existence of the files, and it and the
+      `get_*_sensors` helpers no longer take `nvza` and `nvaa`
     - histories: `Si` → `si`, `Si2` → `si2`, `BigSum` → `big_sum`, and
       their parameters (`Dij` → `dij`, `Ki` → `ki`, `S` → `s`,
       `only_I` → `only_i`); the `LEVEL` and `IDIR` parameters of
       `get_histories` are now `level` and `idir`
+  - The IPRT tools are split into one module per phase of the
+    `smartg.iprt` package: `smartg.iprt.iprt` becomes
+    `smartg.iprt.common` (`group_iquv`, `compute_deltam`) and
+    `smartg.iprt.phase_a` (`convert_sgout_to_iprtout`,
+    `select_iprt_iquv`, `select_and_plot_polar_iprt`,
+    `compute_deltam_iprtout`), and `smartg.iprt.iprt_phase3_runs`
+    becomes `smartg.iprt.phase3`. The new `smartg.iprt.phase_b`
+    gathers the phase B helpers that the C2 and C3 tests and the C2
+    notebook each defined: the C2 and C3 atmospheres and sensor grids,
+    the backward and forward runs of the 9 cases (`CASES`,
+    `FORWARD_GROUPS`), the reading of the phase B ASCII tables
+    (`read_iprt_iquv`, standard deviations included), the extraction
+    of the SMART-G maps (`smartg_iquv`), the camera plots
+    (`plot_camera_iquv`, `plot_camera_difference`) and `compare_case`,
+    which replaces the `print_c2_res_noatm` and `print_c2_res_atm`
+    functions of the notebook for any case, grid, level, direction and
+    reference file, and returns the delta_m values
   - The water module has been restructured for consistency with the
     atmosphere module: the `IOP*` classes (`IOP_base`, `IOP`, `IOP_1`,
     `IOP_Rw`, `IOP_profile`) have been replaced by the new `Water` /
@@ -163,14 +190,19 @@ completed and corrected before the final `v2.0.0` release.
         atmosphere `Grid3D` is only needed in 3D (`ICELL` is ignored
         by the kernel in 1D) and the function returns the sensor
         list only
-      - `satellite_view` has been moved to `smartg.view`, with PEP 8
-        parameter names (`interp_name` → `interpolation`,
-        `color_bar` → `cmap`, `color_reverse` → `cmap_reverse`,
-        `fig_size` → `figsize`, `font_size` → `fontsize`,
-        `save_file` → `save_path`, `stk` → `stokes`,
+      - `satellite_view` has been moved to `smartg.view` and renamed
+        `camera_view`, with PEP 8 parameter names (`interp_name` →
+        `interpolation`, `color_bar` → `cmap`, `color_reverse` →
+        `cmap_reverse`, `fig_size` → `figsize`, `font_size` →
+        `fontsize`, `save_file` → `save_path`, `stk` → `stokes`,
         `mat_force` → `matrices`, `cb_shrink` → `cbar_shrink`,
-        `cb_sform` → `cbar_sci_format`, `fig_title` → `title`); it now
-        returns the created `Figure`
+        `cb_sform` → `cbar_sci_format`, `fig_title` → `title`). It now
+        returns the created `Figure` and applies `xlim` and `ylim` in
+        every layout. It also takes the parameters of the
+        `satellite_view_3MI` variant written for the 3MI simulator:
+        `log_scale` (logarithmic color scale, for all the panels or
+        per panel), `xlabel` and `ylabel` (the axis labels), and
+        `layout` (`"row"` puts all the panels in one row)
       - The helpers `OOMFormatter`, `find_order`, `find_order_or_none`,
         `get_tv`, `find_id` and `get_sensors_pos_icells_from_3Dgrid` are now
         private
@@ -554,6 +586,43 @@ completed and corrected before the final `v2.0.0` release.
       mirror stays the fallback
     - `AUXDATA_DICT`, the `*_URL` constants and `safe_download` are
       removed
+  - A ruff configuration in `pyproject.toml`: a line length of 79 and,
+    for the IPRT tools (`smartg.iprt`, their tests and notebooks), the
+    PEP 8, naming, numpy docstring and annotation rules on top of the
+    default ones
+  - New `smartg.view.plot_polar_iquv` drawing I, Q, U and V matrices in
+    polar view, split from `select_and_plot_polar_iprt`, which now selects
+    with `select_iprt_iquv` and plots with it. `select_iprt_iquv` gains
+    the `depol`, `change_q_sign`, `change_v_sign` and `depol_index`
+    parameters of the wrapper, in the same order (`depol` is now its
+    third positional parameter). `plot_polar_iprt` of
+    `smartg.iprt.phase3` draws with it too, passing its `min_i` on.
+    `plot_camera_iprt` now returns the created `Figure`
+  - New `read_iprt_output`, `merge_least_noisy`, `PolarView`,
+    `compare_polar_iprt` and `compare_plane_iprt` in
+    `smartg.iprt.phase_a`: read a phase A result file, merge two runs
+    of a case keeping the least noisy values, and compare a model with
+    a reference in polar views or along the principal plane or the
+    almucantar, with the plots and the delta_m of the whole case. The
+    phase A notebook compares its 12 cases with them instead of 12
+    copies of the same cells. Its difference plots now draw the
+    symmetrical azimuths like the others, and its almucantar plots
+    label their axis VAA instead of VZA
+  - The aerosol and cloud cases of `smartg.iprt.phase3` (D3, D4,
+    D4_bis, D5, E3, E4, E5) run on the native scattering angles of
+    their files instead of 18001 resampled ones, through
+    `read_phase_cdf(n_theta='native')`, the new
+    `aer2smartg(n_theta='native')`, `calc(n_theta='native')` and
+    `theta_grid='phase'`, which `run_sim` now passes to `Smartg.run`.
+    The tables reproduce the files at every node, and the radiances
+    agree with the resampled ones within the Monte Carlo noise. Every
+    case takes a `seed`, -1 (the clock) by default
+  - New `smartg/tests/test_iprt_phase3.py` runs the IPRT phase 3 cases
+    D1 to D6 and E1 to E5 and compares them with saved 1e8 photons per
+    direction results (`IPRT/phase3/smartg_ref_res/` of the auxdata)
+    within the Monte Carlo noise of both, at 1e6 photons per direction
+    by default (about 5 min for the file) and at 1e8 under the `slow`
+    marker
 
 * Corrections
   - Fix the nodes of the cumulative distribution a scattering deflection
@@ -599,8 +668,25 @@ completed and corrected before the final `v2.0.0` release.
     `read_phase_cdf` to 3 dimensions: a scalar target now keeps its
     dimension, and a single `z_rh_reff` needs no `pfgrid`, as
     documented
-  - The `Path + str` concatenations of `smartg/iprt/iprt_phase3_runs.py`
+  - The `Path + str` concatenations of `smartg.iprt.phase3`
     raised a `TypeError` before any run
+  - A phase 3 case run with `overwrite=False`, when its intermediate
+    files existed but not its IPRT output file, wrote a NaN top
+    altitude in the `zout` axis of that file: the altitudes were only
+    read before a run
+  - `aer2smartg` gave the duplicated wavelength of a single wavelength
+    file the properties of the last humidity or radius for every
+    one. The phase 3 cases were not affected, their converted files
+    having a single humidity
+  - Seven of the 17 IPRT phase 3 cases of `smartg.iprt.phase3` did not
+    run. `aer2smartg` still used the removed `NBTHETA` (D4_bis, E3, E4,
+    E5), and D3, D4 and D5 gave `calc_iphase` a LUT named `wavelength`
+    and `z` instead of `wavelength_phase` and `z_phase`. Past that
+    crash, those three returned zero radiances: their files carry a
+    single wavelength, on which `interp` gives NaN phase matrices, so
+    the wavelength is now selected. D4 and D4_bis, the same aerosol
+    built through `prof_phases` and through `AerOPAC`, now agree
+    within the Monte Carlo noise
   - Important corrections in the water (ocean) module:
     - Phase matrix always extended to 6 Stokes components (P22=P11, P44=P33 for
       spherical particles)
@@ -665,6 +751,11 @@ completed and corrected before the final `v2.0.0` release.
   - The `ipha` parameter of `phase_view` in `smartg_view` is now flexible:
     accepts an `int`, an `xr.DataArray` scalar, or a 1-D ndarray of indices;
     validation against the correct wavelength slice of `iphase_atm/oc` is performed
+  - `compute_deltam_iprtout` raises a `TypeError` instead of a
+    `NameError` when its inputs are not arrays
+  - `select_iprt_iquv` with `change_u_sign=True` returned the standard
+    deviation of U with a negative sign; only U itself changes sign now,
+    as in `select_and_plot_polar_iprt`
 
 * Deprecation removal
   - All functions and classes deprecated before v1.2.0 have been removed
