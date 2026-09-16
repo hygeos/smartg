@@ -134,7 +134,7 @@ ignore = ["ANN401"]
 # Everything but the IPRT tools keeps the default rules: the rules
 # added above, and only them (the defaults hold E722, W605, D419,
 # N999 and I001)
-"!{smartg/iprt/**,smartg/tests/test_iprt_*.py,smartg/tests/test_quick_iprt_*.py,smartg/notebooks/validation_SMARTG_IPRT_*.ipynb}" = [
+"!{smartg/iprt/**,smartg/tests/*iprt*.py,smartg/notebooks/validation_SMARTG_IPRT_*.ipynb}" = [
     "E1", "E2", "E3", "E4", "E5", "E701", "E702", "E703", "E711", "E712",
     "E713", "E714", "E721", "E731", "E741", "E742", "E743", "W1", "W2",
     "W5", "ANN", "N8", "I002",
@@ -146,6 +146,10 @@ ignore = ["ANN401"]
 # False positives of ruff 0.16 on a notebook cell ending with an
 # indented continuation line
 "smartg/notebooks/validation_SMARTG_IPRT_*.ipynb" = ["E111", "E113"]
+
+[tool.ruff.lint.pycodestyle]
+# Comments and docstrings (W505, IPRT tools only)
+max-doc-length = 72
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

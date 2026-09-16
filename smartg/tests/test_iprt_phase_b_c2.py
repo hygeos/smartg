@@ -19,7 +19,6 @@ import xarray as xr
 
 from smartg import conftest
 from smartg.grid3d import Grid3D
-from smartg.iprt.common import compute_deltam
 from smartg.iprt.phase_b import (
     ATM_CASE_OFFSET,
     CASES,
@@ -40,6 +39,7 @@ from smartg.iprt.phase_b import (
     smartg_iquv,
 )
 from smartg.smartg import Smartg
+from smartg.tests.iprt_checks import ReferenceChecks
 from smartg.truncation import GT_trunc
 
 # *********************** Global variable(s) ***************************
@@ -443,6 +443,9 @@ for handler, level in (
     logger.addHandler(handler)
 # **********************************************************************
 
+# The delta_m and mean checks against the reference tables above
+CHECKS = ReferenceChecks(logger, SIGNAL_FLOOR, MEAN_TOL)
+
 
 @pytest.fixture(scope="module")
 def s3db() -> Smartg:
@@ -658,191 +661,6 @@ def _plot_case(
     conftest.savefig(request, bbox_inches="tight")
 
 
-def _is_significant(signal_ref: tuple[float, ...] | None, istk: int
-                    ) -> bool:
-    """Tell whether a Stokes component is worth asserting on.
-
-    See SIGNAL_FLOOR.
-
-    Parameters
-    ----------
-    signal_ref : tuple of float, optional
-        The mean absolute values of I, Q, U and V. None, i.e. not yet
-        measured, keeps every component so that a new reference gets
-        fully logged.
-    istk : int
-        The index of the component, 0 for I.
-
-    Returns
-    -------
-    bool
-        True if the component carries enough signal.
-    """
-    if signal_ref is None:
-        return True
-
-    return signal_ref[istk] > SIGNAL_FLOOR * signal_ref[0]
-
-
-def _skipped(signal_ref: tuple[float, ...] | None) -> list[str]:
-    """Return the names of the components left unasserted, for the log.
-
-    Parameters
-    ----------
-    signal_ref : tuple of float, optional
-        The mean absolute values of I, Q, U and V.
-
-    Returns
-    -------
-    list of str
-        The names of the components below SIGNAL_FLOOR.
-    """
-    return [
-        stk
-        for istk, stk in enumerate(["I", "Q", "U", "V"])
-        if not _is_significant(signal_ref, istk)
-    ]
-
-
-def _check_deltam(
-    delta_m_ref: tuple[float, ...] | None,
-    signal_ref: tuple[float, ...] | None,
-    iquv_my: tuple[np.ndarray, ...],
-    iquv_sg: tuple[np.ndarray, ...],
-    label: str,
-    tol: float,
-) -> list[str]:
-    """Compare the delta_m values with the saved validated ones.
-
-    The failure messages are returned instead of asserted, so that a
-    test can report every case of a forward group instead of stopping
-    at the first one.
-
-    Parameters
-    ----------
-    delta_m_ref : tuple of float, optional
-        The reference delta_m of I, Q, U and V. With None the
-        calculated values are logged and the case is reported as a
-        failure, which is how a new reference is measured before being
-        written in the tables above.
-    signal_ref : tuple of float, optional
-        The mean absolute values of I, Q, U and V, see SIGNAL_FLOOR.
-    iquv_my, iquv_sg : tuple of ndarray
-        The MYSTIC and the SMART-G I, Q, U and V maps.
-    label : str
-        The case label, for the log and the messages.
-    tol : float
-        The two sided fractional band around the reference.
-
-    Returns
-    -------
-    list of str
-        The failure messages, empty if the case is ok.
-    """
-    delta_m = compute_deltam(
-        obs=list(iquv_my), mod=list(iquv_sg), print_res=False
-    )
-
-    if delta_m_ref is not None:
-        logger.info(
-            f"{label} - I={delta_m_ref[0]:.3f}; Q={delta_m_ref[1]:.3f}; "
-            + f"U={delta_m_ref[2]:.3f}; V={delta_m_ref[3]:.3f} - ref delta_m:"
-        )
-    logger.info(
-        f"{label} - I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; "
-        + f"U={delta_m[2]:.3f}; V={delta_m[3]:.3f} - calculated delta_m"
-    )
-
-    if delta_m_ref is None:
-        return [f"{label}: no reference delta_m, see the log for the values"]
-
-    # Check if the test is ok by comparing the ref delta_m and the
-    # calculated one
-    skipped = _skipped(signal_ref)
-    if skipped:
-        logger.info(
-            f"{label} - {', '.join(skipped)} below SIGNAL_FLOOR, "
-            + "not asserted"
-        )
-
-    errors = []
-    for istk, stk in enumerate(["I", "Q", "U", "V"]):
-        if not _is_significant(signal_ref, istk):
-            continue
-        ref = delta_m_ref[istk]
-        if abs(delta_m[istk] - ref) > tol * ref:
-            errors.append(
-                f"{label}: problem with {stk} values, get "
-                + f"{delta_m[istk]:.5f}. {stk} must be within "
-                + f"[{(1 - tol) * ref:.5f}, {(1 + tol) * ref:.5f}]"
-            )
-
-    return errors
-
-
-def _check_means(
-    mean_ref: tuple[float, ...] | None,
-    signal_ref: tuple[float, ...] | None,
-    iquv_sg: tuple[np.ndarray, ...],
-    label: str,
-) -> list[str]:
-    """Compare the spatial mean of each component with the saved one.
-
-    Unlike delta_m, the mean averages the Monte Carlo noise out, so it
-    is the observable that keeps the fast tier sensitive to a
-    systematic bias. Same contract as _check_deltam.
-
-    Parameters
-    ----------
-    mean_ref : tuple of float, optional
-        The reference means of I, Q, U and V. With None the calculated
-        values are logged and the case is reported as a failure.
-    signal_ref : tuple of float, optional
-        The mean absolute values of I, Q, U and V, see SIGNAL_FLOOR.
-    iquv_sg : tuple of ndarray
-        The SMART-G I, Q, U and V maps.
-    label : str
-        The case label, for the log and the messages.
-
-    Returns
-    -------
-    list of str
-        The failure messages, empty if the case is ok.
-    """
-    means = tuple(float(np.mean(stk)) for stk in iquv_sg)
-
-    if mean_ref is not None:
-        logger.info(
-            f"{label} - I={mean_ref[0]:.6e}; Q={mean_ref[1]:.6e}; "
-            + f"U={mean_ref[2]:.6e}; V={mean_ref[3]:.6e} - ref mean:"
-        )
-    logger.info(
-        f"{label} - I={means[0]:.6e}; Q={means[1]:.6e}; "
-        + f"U={means[2]:.6e}; V={means[3]:.6e} - calculated mean"
-    )
-
-    if mean_ref is None:
-        return [f"{label}: no reference mean, see the log for the values"]
-
-    # The mean of I sets the scale of the four tolerances, the means
-    # of Q, U and V being free to pass through zero
-    tol = MEAN_TOL * abs(mean_ref[0])
-
-    errors = []
-    for istk, stk in enumerate(["I", "Q", "U", "V"]):
-        if not _is_significant(signal_ref, istk):
-            continue
-        ref = mean_ref[istk]
-        if abs(means[istk] - ref) > tol:
-            errors.append(
-                f"{label}: problem with the mean of {stk}, get "
-                + f"{means[istk]:.6e}. It must be within "
-                + f"[{ref - tol:.6e}, {ref + tol:.6e}]"
-            )
-
-    return errors
-
-
 def _check_group_forward(
     request: pytest.FixtureRequest,
     ds: xr.Dataset,
@@ -910,10 +728,10 @@ def _check_group_forward(
 
         label = f"C2 - case {case} - {label_suffix}"
         signal_ref = signal_refs.get(case)
-        errors += _check_deltam(
+        errors += CHECKS.check_deltam(
             refs.get(case), signal_ref, iquv_my, iquv_sg, label, tol
         )
-        errors += _check_means(
+        errors += CHECKS.check_means(
             mean_refs.get(case), signal_ref, iquv_sg, label
         )
 
@@ -950,7 +768,7 @@ def test_c2_noatm_backward(
 
     label = f"C2 - case {case} - {tier}"
     signal_ref = SIGNAL_REF_NOATM_B[case]
-    errors = _check_deltam(
+    errors = CHECKS.check_deltam(
         DELTAM_REF_NOATM_B[tier][case],
         signal_ref,
         iquv_my,
@@ -958,7 +776,7 @@ def test_c2_noatm_backward(
         label,
         DELTAM_TOL[tier],
     )
-    errors += _check_means(
+    errors += CHECKS.check_means(
         MEAN_REF_NOATM_B[case], signal_ref, iquv_sg, label
     )
     assert not errors, "\n".join(errors)
@@ -1085,7 +903,7 @@ def test_c2_atm_backward(
 
     label = f"C2 - case {case} - atm - {tier}"
     signal_ref = SIGNAL_REF_ATM_B.get(case)
-    errors = _check_deltam(
+    errors = CHECKS.check_deltam(
         DELTAM_REF_ATM_B[tier].get(case),
         signal_ref,
         iquv_my,
@@ -1093,7 +911,7 @@ def test_c2_atm_backward(
         label,
         DELTAM_TOL[tier],
     )
-    errors += _check_means(
+    errors += CHECKS.check_means(
         MEAN_REF_ATM_B.get(case), signal_ref, iquv_sg, label
     )
     assert not errors, "\n".join(errors)
