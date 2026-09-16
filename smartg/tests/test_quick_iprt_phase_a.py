@@ -1,105 +1,86 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""Validation of SMART-G on the 1D cases of the IPRT phase A.
 
-# Tested with the following GPUs: 3090
-import pytest
+The cases A1 (a Rayleigh layer), A2 (a Rayleigh layer on a Lambertian
+surface) and A5 (a water cloud layer, in the principal plane and in
+the almucantar) are run with SMART-G, converted to the IPRT phase A
+ASCII format, and compared with the MYSTIC results.
 
-from smartg.smartg import LocalEstimate, Smartg
-from smartg.surface import LambSurface
-from smartg.albedo import AlbedoCst
-from smartg.sensor import Sensor
-from smartg.atmosphere import Atm1D
-from smartg.phase import read_phase
-import pandas as pd
+Tested with the following GPUs: 3090
+"""
+
+import logging
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import pytest
 import xarray as xr
 
+from smartg import conftest
+from smartg.albedo import AlbedoCst
+from smartg.atmosphere import Atm1D
+from smartg.config import DIR_AUXDATA
 from smartg.iprt.common import compute_deltam, group_iquv
 from smartg.iprt.phase_a import (
     convert_sgout_to_iprtout,
     select_and_plot_polar_iprt,
     select_iprt_iquv,
 )
+from smartg.phase import calc_iphase, read_phase
+from smartg.sensor import Sensor
+from smartg.smartg import LocalEstimate, Smartg
+from smartg.surface import LambSurface
 from smartg.view import plot_iquv_comparison
-from smartg.phase import calc_iphase
-from smartg.config import DIR_AUXDATA
 from smartg.xarray import drop_axes
-
-from smartg import conftest
-
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-
-from tempfile import TemporaryDirectory
-from pathlib import Path
-
-import logging
 
 # *********************** Global variable(s) ***************************
 SEED = -1
 STDFAC = 4
-ROOTPATH = Path(__file__).resolve().parent.parent
+ROOT_PATH = Path(__file__).resolve().parent.parent
 # **********************************************************************
 
 # **************************** logging *********************************
-# Create log file
-log_dir = ROOTPATH / "tests" / "logs"
-log_dir.mkdir(parents=True, exist_ok=True)
+LOG_DIR = ROOT_PATH / "tests" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "iprt_phaseA.log"
+LOG_FORMATTER = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S%p",
+)
 
-# Create a named logger
+# Errors on the console, everything in the log file
 logger = logging.getLogger("test_phaseA")
 logger.setLevel(logging.INFO)
-
-# Create a console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.ERROR)
-
-# Set the formatter for the console handler
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S%p",
-)
-console_handler.setFormatter(formatter)
-
-# Add the console handler to the logger
-logger.addHandler(console_handler)
-
-# Create a file handler
-file_handler = logging.FileHandler(
-    ROOTPATH / "tests" / "logs" / "iprt_phaseA.log", mode="w"
-)
-file_handler.setLevel(logging.INFO)
-
-# Set the formatter for the file handler
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S%p",
-)
-file_handler.setFormatter(formatter)
-
-# Add the file handler to the logger
-logger.addHandler(file_handler)
+for handler, level in (
+    (logging.StreamHandler(), logging.ERROR),
+    (logging.FileHandler(LOG_FILE, mode="w"), logging.INFO),
+):
+    handler.setLevel(level)
+    handler.setFormatter(LOG_FORMATTER)
+    logger.addHandler(handler)
 # **********************************************************************
 
 
 @pytest.fixture(scope="module")
-def s1df():
-    """
-    Forward compilation in 1D
-    """
+def s1df() -> Smartg:
+    """Forward compilation in 1D."""
     return Smartg(alt_pp=True, back=False, double=True, bias=True)
 
 
 @pytest.fixture(scope="module")
-def s1db():
-    """
-    Backward compilation in 1D
-    """
+def s1db() -> Smartg:
+    """Backward compilation in 1D."""
     return Smartg(alt_pp=True, back=True, double=True, bias=True)
 
 
-def test_a1(request, s1df, s1db):
-    print(("=== Test A1"))
+def test_a1(
+    request: pytest.FixtureRequest, s1df: Smartg, s1db: Smartg
+) -> None:
+    """IPRT phase A, case A1: a Rayleigh layer without surface."""
+    print("=== Test A1")
     mol_sca = np.array([0.0, 0.5])[None, :]
     mol_abs = np.array([0.0, 0.0])[None, :]
     z = np.array([1.0, 0.0])
@@ -234,12 +215,12 @@ def test_a1(request, s1df, s1db):
 
     # ************************* DEPOL = 0.03 **************************
     # We use the previous vaa and vza
-    # SMART-G Forward TH and phi using local estimate (anticlockwise)
+    # SMART-G Forward th and phi using local estimate (anticlockwise)
     # conversion with vza and vaa MYSTIC (clockwise)
-    TH = 180.0 - vza
+    th = 180.0 - vza
     phi = -vaa
-    TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = LocalEstimate(th_deg=TH, phi_deg=phi)  # , zip=True
+    th[th == 0] = 1e-6  # avoid problem due to special case of 0
+    le = LocalEstimate(th_deg=th, phi_deg=phi)  # , zip=True
     sza = 30.0
     saa = 0.0
     phi_0 = (
@@ -630,9 +611,10 @@ def test_a1(request, s1df, s1db):
         )
 
 
-def test_a2(request, s1df):
+def test_a2(request: pytest.FixtureRequest, s1df: Smartg) -> None:
+    """IPRT phase A, case A2: Rayleigh layer on a Lambertian surface."""
     print("=== Test A2:")
-    # === Atmosphere profil
+    # === Atmosphere profile
     mol_sca = np.array([0.0, 0.1])[None, :]
     mol_abs = np.array([0.0, 0.0])[None, :]
     z = np.array([1.0, 0.0])
@@ -652,12 +634,12 @@ def test_a2(request, s1df):
     vaa_inc = 5.0
     vaa = np.arange(vaa_min, vaa_max + vaa_inc, vaa_inc)
 
-    # SMART-G Forward TH and phi using local estimate (anticlockwise)
+    # SMART-G Forward th and phi using local estimate (anticlockwise)
     # conversion with vza and vaa MYSTIC (clockwise)
-    TH = 180.0 - vza
+    th = 180.0 - vza
     phi = -vaa
-    TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = LocalEstimate(th_deg=TH, phi_deg=phi)
+    th[th == 0] = 1e-6  # avoid problem due to special case of 0
+    le = LocalEstimate(th_deg=th, phi_deg=phi)
 
     sza = 50.0
     saa = 0.0
@@ -973,9 +955,10 @@ def test_a2(request, s1df):
         )
 
 
-def test_a5_pp(request, s1df):
+def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
+    """IPRT phase A, case A5: a water cloud, in the principal plane."""
     print("=== Test A5 principal plane:")
-    # === Atmosphere profil
+    # === Atmosphere profile
     z = np.array([1.0, 0.0])
     mol_sca = np.array([0.0, 0.0])[None, :]
     mol_abs = np.array([0.0, 0.0])[None, :]
@@ -983,7 +966,9 @@ def test_a5_pp(request, s1df):
     cld_tau_ext[:, 0] = 0.0  # dtau TOA equal to 0
     cld_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
     prof_aer = (cld_tau_ext, cld_ssa)
-    nth = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
+    # The water cloud has a phase function with a non-negligible
+    # peak, hence a fine angular resolution
+    nth = 18001
     file_cld_phase = (
         DIR_AUXDATA / "IPRT" / "phaseA" / "opt_prop" / "watercloud.mie.cdf"
     )
@@ -1023,12 +1008,12 @@ def test_a5_pp(request, s1df):
 
     vaa = np.array([0.0, 180.0])
 
-    # SMART-G Forward TH and phi using local estimate (anticlockwise)
+    # SMART-G Forward th and phi using local estimate (anticlockwise)
     # conversion with vza and vaa MYSTIC (clockwise)
-    TH = 180.0 - vza
+    th = 180.0 - vza
     phi = -vaa
-    TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = LocalEstimate(th_deg=TH, phi_deg=phi)  # , zip=True
+    th[th == 0] = 1e-6  # avoid problem due to special case of 0
+    le = LocalEstimate(th_deg=th, phi_deg=phi)  # , zip=True
 
     # === Simulation
     m_a5_f_pp = s1df.run(
@@ -1281,9 +1266,10 @@ def test_a5_pp(request, s1df):
         )
 
 
-def test_a5_al(request, s1df):
+def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
+    """IPRT phase A, case A5: a water cloud, in the almucantar."""
     print("=== Test A5 almucantar:")
-    # === Atmosphere profil
+    # === Atmosphere profile
     z = np.array([1.0, 0.0])
     mol_sca = np.array([0.0, 0.0])[None, :]
     mol_abs = np.array([0.0, 0.0])[None, :]
@@ -1291,7 +1277,9 @@ def test_a5_al(request, s1df):
     cld_tau_ext[:, 0] = 0.0  # dtau TOA equal to 0
     cld_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
     prof_aer = (cld_tau_ext, cld_ssa)
-    nth = 18001  # The water cloud has a phase function with a non-negligible peak, then a sufficiently fine resolution is required.
+    # The water cloud has a phase function with a non-negligible
+    # peak, hence a fine angular resolution
+    nth = 18001
     file_cld_phase = (
         DIR_AUXDATA / "IPRT" / "phaseA" / "opt_prop" / "watercloud.mie.cdf"
     )
@@ -1331,12 +1319,12 @@ def test_a5_al(request, s1df):
     vaa_inc = 1.0
     vaa = np.arange(vaa_min, vaa_max + vaa_inc, vaa_inc)
 
-    # SMART-G Forward TH and phi using local estimate (anticlockwise)
+    # SMART-G Forward th and phi using local estimate (anticlockwise)
     # conversion with vza and vaa MYSTIC (clockwise)
-    TH = 180.0 - vza
+    th = 180.0 - vza
     phi = -vaa
-    TH[TH == 0] = 1e-6  # avoid problem due to special case of 0
-    le = LocalEstimate(th_deg=TH, phi_deg=phi)
+    th[th == 0] = 1e-6  # avoid problem due to special case of 0
+    le = LocalEstimate(th_deg=th, phi_deg=phi)
 
     # === Simulation
     m_a5_f_al = s1df.run(
