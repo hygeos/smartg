@@ -171,14 +171,19 @@ corrected before the final `v2.0.0` release.
         atmosphere `Grid3D` is only needed in 3D (`ICELL` is ignored
         by the kernel in 1D) and the function returns the sensor
         list only
-      - `satellite_view` has been moved to `smartg.view`, with PEP 8
-        parameter names (`interp_name` → `interpolation`,
-        `color_bar` → `cmap`, `color_reverse` → `cmap_reverse`,
-        `fig_size` → `figsize`, `font_size` → `fontsize`,
-        `save_file` → `save_path`, `stk` → `stokes`,
+      - `satellite_view` has been moved to `smartg.view` and renamed
+        `camera_view`, with PEP 8 parameter names (`interp_name` →
+        `interpolation`, `color_bar` → `cmap`, `color_reverse` →
+        `cmap_reverse`, `fig_size` → `figsize`, `font_size` →
+        `fontsize`, `save_file` → `save_path`, `stk` → `stokes`,
         `mat_force` → `matrices`, `cb_shrink` → `cbar_shrink`,
-        `cb_sform` → `cbar_sci_format`, `fig_title` → `title`); it now
-        returns the created `Figure`
+        `cb_sform` → `cbar_sci_format`, `fig_title` → `title`). It now
+        returns the created `Figure` and applies `xlim` and `ylim` in
+        every layout. It also takes the parameters of the
+        `satellite_view_3MI` variant written for the 3MI simulator:
+        `log_scale` (logarithmic color scale, for all the panels or
+        per panel), `xlabel` and `ylabel` (the axis labels), and
+        `layout` (`"row"` puts all the panels in one row)
       - The helpers `OOMFormatter`, `find_order`, `find_order_or_none`,
         `get_tv`, `find_id` and `get_sensors_pos_icells_from_3Dgrid` are now
         private

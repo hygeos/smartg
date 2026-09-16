@@ -18,7 +18,7 @@ from smartg.diff import diff1
 from smartg.grid3d import Grid3D
 from smartg.iprt.common import compute_deltam, group_iquv
 from smartg.sensor import get_sensors_grid
-from smartg.view import satellite_view
+from smartg.view import camera_view
 from smartg.phase import read_phase_cdf
 from smartg.albedo import AlbedoCst
 from smartg.surface import LambSurface
@@ -880,7 +880,7 @@ def _plot_case(
     max_u = np.max(np.abs(u_sg))
     max_v = np.max(np.abs(v_sg))
 
-    satellite_view(
+    camera_view(
         m,
         xgrid,
         ygrid,
@@ -906,7 +906,7 @@ def _plot_case(
         max_u * 0.05,
         max_v * v_diff_frac,
     ]
-    satellite_view(
+    camera_view(
         m,
         xgrid,
         ygrid,

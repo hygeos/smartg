@@ -20,8 +20,8 @@ input_view
     Visualization of SMART-G input profile and phase functions.
 receiver_view
     Plot receiver irradiance from a SMART-G simulation output.
-satellite_view
-    'Satellite' 2D image of SMART-G 3D atmosphere results.
+camera_view
+    2D image of SMART-G 3D atmosphere results seen by a camera.
 visualize_entity
     3D visualization of the created scene objects.
 plot_polar_iquv
@@ -3327,16 +3327,24 @@ def _colorbar_formatter(
 
 
 def _colorbar_ticks(
-    vmin: float | None, vmax: float | None, values: np.ndarray
+    vmin: float | None,
+    vmax: float | None,
+    values: np.ndarray,
+    log_scale: bool = False,
 ) -> np.ndarray:
     """
-    Return 9 evenly spaced colorbar tick values.
+    Return 9 colorbar tick values.
 
+    The values are evenly spaced, or geometrically with ``log_scale``.
     The bounds default to the extrema of ``values`` when ``vmin`` or
-    ``vmax`` is None.
+    ``vmax`` is None, of its positive values with ``log_scale``.
     """
+    if log_scale:
+        values = values[values > 0]
     lo = np.min(values) if vmin is None else vmin
     hi = np.max(values) if vmax is None else vmax
+    if log_scale:
+        return np.geomspace(lo, hi, 9, endpoint=True)
     return np.linspace(lo, hi, 9, endpoint=True)
 
 
@@ -3437,20 +3445,27 @@ def _draw_map(
     vmax: float | None,
     cmap: mcolors.Colormap,
     interpolation: str,
+    log_scale: bool = False,
 ) -> ScalarMappable:
     """
     Draw one 2D map on an axes.
 
     Use :func:`matplotlib.pyplot.imshow` when both grids are regular,
-    :func:`matplotlib.pyplot.pcolormesh` otherwise.
+    :func:`matplotlib.pyplot.pcolormesh` otherwise. With ``log_scale``
+    the colors follow a logarithmic scale.
     """
+    norm = None
+    if log_scale:
+        # matplotlib refuses vmin and vmax along with a norm
+        norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
+        vmin = vmax = None
     if is_same_cell_size(xgrid) and is_same_cell_size(ygrid):
         # By default in the imshow function the origin
         # (origin='upper'), i.e. mat[0, 0], is at the upper left, and
         # we want the origin at the bottom left (origin='lower')
         return ax.imshow(
-            mat, vmin=vmin, vmax=vmax, origin="lower", cmap=cmap,
-            interpolation=interpolation,
+            mat, norm=norm, vmin=vmin, vmax=vmax, origin="lower",
+            cmap=cmap, interpolation=interpolation,
             extent=(float(xgrid.min()), float(xgrid.max()),
                     float(ygrid.min()), float(ygrid.max())),
         )
@@ -3460,8 +3475,8 @@ def _draw_map(
             "ignored) when using pcolormesh! i.e. when we have a "
             "cell size varying along the x or y axis."
         )
-    img = ax.pcolormesh(xgrid, ygrid, mat, vmin=vmin, vmax=vmax,
-                        cmap=cmap)
+    img = ax.pcolormesh(xgrid, ygrid, mat, norm=norm, vmin=vmin,
+                        vmax=vmax, cmap=cmap)
     ax.axis("scaled")  # x and y axes with the same scaling
     return img
 
@@ -3476,24 +3491,26 @@ def _add_colorbar(
     cbar_shrink: float,
     cbar_sci_format: bool,
     fontsize: int,
+    log_scale: bool = False,
 ) -> None:
     """
     Add a vertical colorbar next to one panel.
 
     The tick values and format are computed on the non-NaN values of
-    the matrix.
+    the matrix, the tick values geometrically spaced with
+    ``log_scale``.
     """
     fig = cast(Figure, ax.figure)
     values = mat[~np.isnan(mat)]
     cbar = fig.colorbar(
         img, ax=ax, shrink=cbar_shrink, orientation="vertical",
         format=_colorbar_formatter(values, cbar_sci_format),
-        ticks=_colorbar_ticks(vmin, vmax, values),
+        ticks=_colorbar_ticks(vmin, vmax, values, log_scale),
     )
     cbar.set_label(label, fontsize=fontsize)
 
 
-def satellite_view(
+def camera_view(
     ds_sg: xr.Dataset | MLUT | None,
     xgrid: np.ndarray,
     ygrid: np.ndarray,
@@ -3515,12 +3532,18 @@ def satellite_view(
     title: str | None = None,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
+    log_scale: bool | list[bool] = False,
+    xlabel: str = "X (km)",
+    ylabel: str = "Y (km)",
+    layout: Literal["grid", "row"] = "grid",
 ) -> Figure:
     """
-    Give a 'satellite' 2D image of SMART-G 3D atmosphere results.
+    Give a 2D image of SMART-G 3D atmosphere results seen by a camera.
 
-    The image shows one panel per requested Stokes parameter (up to
-    4), each with its own colorbar.
+    The camera is a grid of sensors, one per cell of ``xgrid`` and
+    ``ygrid``, and each sensor gives one pixel. The image shows one
+    panel per requested Stokes parameter (up to 4), each with its own
+    colorbar.
 
     Parameters
     ----------
@@ -3544,7 +3567,7 @@ def satellite_view(
         Whether to reverse the colormap(s). Default: False.
     figsize : tuple of float, optional
         The width and height of the figure in inches. If None, a
-        default depending on the panel number is used.
+        default depending on the panel number and the layout is used.
     fontsize : int, optional
         The font size of the figure. Default: 18.
     vmin : float or list, optional
@@ -3577,6 +3600,19 @@ def satellite_view(
         The x limits of the panels.
     ylim : tuple of float, optional
         The y limits of the panels.
+    log_scale : bool or list of bool, optional
+        Whether to use a logarithmic color scale, for all the panels
+        or per panel. The non-positive values are then shown in white,
+        like the NaN values. Default: False.
+    xlabel : str, optional
+        The x axis label. Default: 'X (km)'.
+    ylabel : str, optional
+        The y axis label. Default: 'Y (km)'.
+    layout : {'grid', 'row'}, optional
+        The arrangement of 3 or 4 panels: 'grid' puts 3 panels in a
+        pyramid and 4 panels in a 2x2 grid, 'row' puts all the panels
+        in one row. 1 or 2 panels are always in one row.
+        Default: 'grid'.
 
     Returns
     -------
@@ -3590,6 +3626,8 @@ def satellite_view(
         if stk not in _STOKES_LABELS:
             raise ValueError(f"Unknown stokes '{stk}'!")
         stokes_labels.append(_STOKES_LABELS[stk])
+    if layout not in ("grid", "row"):
+        raise ValueError(f"Unknown layout '{layout}'!")
 
     # Number of sensors in the x and y axes
     n_x = xgrid.size - 1
@@ -3624,6 +3662,7 @@ def satellite_view(
 
     vmin = _as_list(vmin, n_panel)
     vmax = _as_list(vmax, n_panel)
+    log_scale = _as_list(log_scale, n_panel)
 
     # Deal with all the possibilities where vmin, vmax and scale are
     # used
@@ -3639,10 +3678,17 @@ def satellite_view(
 
     def draw(ax: Axes, idm: int) -> None:
         img = _draw_map(ax, matrix[idm], xgrid, ygrid, vmin[idm],
-                        vmax[idm], cmaps[idm], interpolation)
+                        vmax[idm], cmaps[idm], interpolation,
+                        log_scale[idm])
         _add_colorbar(ax, img, matrix[idm], stokes_labels[idm],
                       vmin[idm], vmax[idm], cbar_shrink,
-                      cbar_sci_format, fontsize)
+                      cbar_sci_format, fontsize, log_scale[idm])
+
+    def set_limits(ax: Axes) -> None:
+        if xlim is not None:
+            ax.set_xlim(xlim[0], xlim[1])
+        if ylim is not None:
+            ax.set_ylim(ylim[0], ylim[1])
 
     if n_panel == 1:
         if figsize is None:
@@ -3651,27 +3697,26 @@ def satellite_view(
         if title is not None:
             plt.title(title)
         draw(plt.gca(), 0)
-        if xlim is not None:
-            plt.xlim(xlim[0], xlim[1])
-        if ylim is not None:
-            plt.ylim(ylim[0], ylim[1])
-        plt.xlabel(r"X (km)")
-        plt.ylabel(r"Y (km)")
+        set_limits(plt.gca())
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
 
-    elif n_panel == 2:
+    elif n_panel == 2 or layout == "row":
         if figsize is None:
-            figsize = (12, 4)
-        fig, axs = plt.subplots(1, 2, figsize=figsize,
+            figsize = (6 * n_panel, 4)
+        fig, axs = plt.subplots(1, n_panel, figsize=figsize,
                                 constrained_layout=True,
                                 sharex=True, sharey=True)
         if title is not None:
             fig.suptitle(title)
-        for idm in range(2):
+        for idm in range(n_panel):
             draw(axs[idm], idm)
+        # The panels share their axes
         axs[0].set_xlim(xgrid[0], xgrid[-1])
-        axs[1].set_ylim(ygrid[0], ygrid[-1])
-        axs[0].set_ylabel(r"Y (km)")
-        fig.supxlabel(r"X (km)")
+        axs[-1].set_ylim(ygrid[0], ygrid[-1])
+        set_limits(axs[0])
+        axs[0].set_ylabel(ylabel)
+        fig.supxlabel(xlabel)
 
     elif n_panel == 3:
         if figsize is None:
@@ -3687,9 +3732,11 @@ def satellite_view(
         for idm, ax in enumerate((ax1, ax2, ax3)):
             draw(ax, idm)
             ax.set_xlim(xgrid[0], xgrid[-1])
-        ax1.set_ylabel(r"Y (km)")
-        ax3.set_ylabel(r"Y (km)")
-        ax3.set_xlabel(r"X (km)")
+        for ax in (ax1, ax2, ax3):
+            set_limits(ax)
+        ax1.set_ylabel(ylabel)
+        ax3.set_ylabel(ylabel)
+        ax3.set_xlabel(xlabel)
         gs.tight_layout(fig)
 
     else:
@@ -3704,12 +3751,9 @@ def satellite_view(
         for idm in range(4):
             ax = axs[idm // 2, idm % 2]
             draw(ax, idm)
-            if xlim is not None:
-                ax.set_xlim(xlim[0], xlim[1])
-            if ylim is not None:
-                ax.set_ylim(ylim[0], ylim[1])
-        fig.supxlabel(r"X (km)")
-        fig.supylabel(r"Y (km)")
+            set_limits(ax)
+        fig.supxlabel(xlabel)
+        fig.supylabel(ylabel)
 
     if save_path is not None:
         # Deal with the case where the extension is not specified
