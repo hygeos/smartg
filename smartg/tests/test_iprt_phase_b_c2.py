@@ -1,28 +1,45 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""Non-regression tests of the 3D mode on the IPRT C2 cubic cloud.
 
-# Non-regression test of the 3D atmosphere mode (opt3d=True) using the
-# IPRT phase B cubic cloud case (C2).
-# Tested with the following GPUs: 5070 Ti
+The IPRT phase B cubic cloud case (C2) is run with opt3d=True, in
+backward and in forward mode, without and with a Rayleigh atmosphere,
+with and without the GT truncation, and compared with MYSTIC. The
+atmospheres, the sensors, the runs and the plots come from
+smartg.iprt.phase_b.
+
+Tested with the following GPUs: 5070 Ti
+"""
+
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-import pandas as pd
 import pytest
+import xarray as xr
 
 from smartg import conftest
-from smartg.atmosphere import Atm1D, Atm3D, Cloud3D
-from smartg.config import DIR_AUXDATA
-from smartg.diff import diff1
 from smartg.grid3d import Grid3D
-from smartg.iprt.common import compute_deltam, group_iquv
-from smartg.sensor import get_sensors_grid
-from smartg.view import camera_view
-from smartg.phase import read_phase_cdf
-from smartg.albedo import AlbedoCst
-from smartg.surface import LambSurface
-from smartg.smartg import LocalEstimate, Smartg
+from smartg.iprt.common import compute_deltam
+from smartg.iprt.phase_b import (
+    ATM_CASE_OFFSET,
+    CASES,
+    FORWARD_GROUPS,
+    MYSTIC_RES_C2,
+    ForwardGroup,
+    PhaseBAtmosphere,
+    backward_run_kwargs,
+    build_atm_c2,
+    find_optimal_xb_xg,
+    forward_run_kwargs,
+    plot_camera_difference,
+    plot_camera_iquv,
+    read_iprt_iquv,
+    run_case_backward,
+    run_group_forward,
+    sensor_grid_c2,
+    smartg_iquv,
+)
+from smartg.smartg import Smartg
 from smartg.truncation import GT_trunc
 
 # *********************** Global variable(s) ***************************
@@ -30,9 +47,9 @@ from smartg.truncation import GT_trunc
 # noise realisation at every run. The reference delta_m values below
 # were measured with this seed.
 SEED = 1234
-NBPHOTONS = 49e9  # notebook values: required for the reference
-NBLOOP = 1e8  # delta_m values below to be reproducible
-NTH = 18001  # 1801 is not enough for case 6
+N_PHOTONS = 49e9  # notebook values: required for the reference
+N_LOOP = 1e8  # delta_m values below to be reproducible
+N_THETA = 18001  # 1801 is not enough for case 6
 
 # Every test runs in two tiers. The slow one uses the photon counts of
 # the IPRT benchmark and validates against MYSTIC: it is what the
@@ -103,15 +120,16 @@ SIGNAL_FLOOR = 1e-3
 # pair changes the noise realisation even at fixed SEED. The pair is
 # therefore pinned, and the search is kept for benchmarking only.
 FIND_OPTIMAL_XB_XG = False
-XB = [32, 64, 128]  # candidate XBLOCK values
-XG = [512, 1024]  # candidate XGRID values
-CHECK_NBPHOTONS = 1e8  # short runs used only for timing
-CHECK_NBLOOP = 1e8
+X_BLOCKS = [32, 64, 128]  # candidate XBLOCK values
+X_GRIDS = [512, 1024]  # candidate XGRID values
+CHECK_N_PHOTONS = 1e8  # short runs used only for timing
+CHECK_N_LOOP = 1e8
 XBLOCK = 128  # used when FIND_OPTIMAL_XB_XG is False
 XGRID = 1024  # (values accepted by most GPUs after 10xx)
 
 SCALE = 1  # can be useful for grid with very small cells
-ROOTPATH = Path(__file__).resolve().parent.parent
+N_SENSORS = 70  # along x and along y, as in sensor_grid_c2
+ROOT_PATH = Path(__file__).resolve().parent.parent
 
 # GT truncation, as in Iwabuchi and Suzuki (2009), with the parameters
 # of the notebook notebooks/demo_notebook.ipynb: simple GT truncation
@@ -125,7 +143,7 @@ GT_TRUNC = GT_trunc(
     integral_method="lobatto",
     lobatto_optimization=True,
 )
-NBPHOTONS_TRUNC = NBPHOTONS / 50
+N_PHOTONS_TRUNC = N_PHOTONS / 50
 
 # The with atmosphere cases add a homogeneous Rayleigh layer of total
 # optical depth 0.5, without depolarization. Only a subset of the cases
@@ -138,10 +156,10 @@ ATM_BACKWARD_CASES = (1, 5)
 ATM_FORWARD_GROUP = 1
 # The case 5, in the nadir direction, is the slowest one: the notebook
 # reduces its photon count, which is kept here.
-NBPHOTONS_ATM_B = {1: NBPHOTONS, 5: 1e9}
+N_PHOTONS_ATM_B = {1: N_PHOTONS, 5: 1e9}
 
 # Reference delta_m values (in percent) of I, Q, U and V, measured with
-# the settings above (SEED, XBLOCK, XGRID, NBPHOTONS). They are within
+# the settings above (SEED, XBLOCK, XGRID, N_PHOTONS). They are within
 # a few percent of the values of the notebook
 # notebooks/validation_SMARTG_IPRT_phaseB-C2.ipynb, whose outputs are
 # stripped in the repository. Regenerate them with the same settings
@@ -206,7 +224,7 @@ DELTAM_REF_NOATM_F = {
 # Same, for the forward simulations with the GT truncation. They are
 # expected to differ from the untruncated ones above, by the truncation
 # bias and by the MC noise left by 50 times fewer photons. Measured
-# separately on the cases 5 to 9: at NBPHOTONS_TRUNC the truncated run
+# separately on the cases 5 to 9: at N_PHOTONS_TRUNC the truncated run
 # is 6 to 8 times less noisy than the untruncated one, which is the
 # point of the truncation. Their I rising from ~0.17 to ~0.6 is mostly
 # that residual noise, plus a small bias: at the full photon count the
@@ -249,7 +267,8 @@ DELTAM_REF_NOATM_F_GT = {
 DELTAM_REF_ATM_B = {
     "slow": {
         1: (0.145, 0.181, 15.606, 29.253),
-        # 49 times fewer photons than the case 1, hence the larger values
+        # 49 times fewer photons than the case 1, hence the larger
+        # values
         5: (0.655, 2.749, 198.337, 161.134),
     },
     "fast": {
@@ -400,541 +419,264 @@ SIGNAL_REF_ATM_F_GT = {
     4: (8.406343e-02, 2.323938e-03, 2.153372e-04, 5.325432e-06),
 }
 
-# Viewing and sun geometry of the 9 IPRT C2 cases:
-# (POSZ key, THETA, PHI, THETA_0). PHI_0 is 180. everywhere.
-CASES = {
-    1: ("bottom", 40.0, 0.0, 20.0),
-    2: ("bottom", 40.0, 60.0, 20.0),
-    3: ("bottom", 40.0, 120.0, 20.0),
-    4: ("bottom", 40.0, 180.0, 20.0),
-    5: ("top", 180.0, 0.0, 40.0),
-    6: ("top", 140.0, 0.0, 40.0),
-    7: ("top", 140.0, 60.0, 40.0),
-    8: ("top", 140.0, 120.0, 40.0),
-    9: ("top", 140.0, 180.0, 40.0),
-}
-PHI_0 = 180.0
-
-# In forward, a single kernel run covers a whole group of cases through
-# a zipped local estimate, so the cases are grouped by sun position.
-# The two groups do not only differ by their case list: the first one
-# looks at the downward radiance below the cloud (count_level 1,
-# OUTPUT_LAYERS 3) and the second one at the upward radiance at TOA
-# (count_level 0, OUTPUT_LAYERS 1), and only the second one reverses
-# the zenith angles of the local estimate.
-FORWARD_GROUPS = {
-    1: {
-        "cases": (1, 2, 3, 4),
-        "inv_th": False,
-        "count_level": 1,
-        "output_layers": 3,
-        "layer": "_down (0+)",
-    },
-    2: {
-        "cases": (5, 6, 7, 8, 9),
-        "inv_th": True,
-        "count_level": 0,
-        "output_layers": 1,
-        "layer": "_up (TOA)",
-    },
-}
+# The viewing and sun geometries of the cases are phase_b.CASES
 # **********************************************************************
 
 # **************************** logging *********************************
-# Create log file
-log_dir = ROOTPATH / "tests" / "logs"
-log_dir.mkdir(parents=True, exist_ok=True)
+LOG_DIR = ROOT_PATH / "tests" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "iprt_phase_b_c2.log"
+LOG_FORMATTER = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S%p",
+)
 
-# Create a named logger
+# Errors on the console, everything in the log file
 logger = logging.getLogger("test_phase_b_c2")
 logger.setLevel(logging.INFO)
-
-# Create a console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.ERROR)
-
-# Set the formatter for the console handler
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S%p",
-)
-console_handler.setFormatter(formatter)
-
-# Add the console handler to the logger
-logger.addHandler(console_handler)
-
-# Create a file handler
-file_handler = logging.FileHandler(
-    ROOTPATH / "tests" / "logs" / "iprt_phase_b_c2.log", mode="w"
-)
-file_handler.setLevel(logging.INFO)
-
-# Set the formatter for the file handler
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S%p",
-)
-file_handler.setFormatter(formatter)
-
-# Add the file handler to the logger
-logger.addHandler(file_handler)
+for handler, level in (
+    (logging.StreamHandler(), logging.ERROR),
+    (logging.FileHandler(LOG_FILE, mode="w"), logging.INFO),
+):
+    handler.setLevel(level)
+    handler.setFormatter(LOG_FORMATTER)
+    logger.addHandler(handler)
 # **********************************************************************
 
 
-def _build_atm_c2(truncation=None, tau_ray=None, **atm1d_kwargs):
-    """
-    Build the IPRT C2 cubic cloud atmosphere.
-
-    Only the molecular arguments of Atm1D differ between the with and
-    without atmosphere sections, hence the **atm1d_kwargs. tau_ray, if
-    given, adds a homogeneous Rayleigh layer of that total optical
-    depth. truncation is the scattering phase truncation, applied to
-    the 3D phase matrices by Atm3D.calc.
-
-    Returns
-    -------
-    (pro, grid3, surface, wavelengths)
-    """
-    # ========= phase matrix
-    file_cld_phase = (
-        DIR_AUXDATA / "IPRT" / "phaseB" / "opt_prop" / "watercloud_800.mie.cdf"
-    )
-    cld_phase = read_phase_cdf(
-        file_cld_phase, n_theta=NTH, normalize=False, output_sg_ready=False
-    )
-
-    # ========= grid (reduced grid = faster)
-    xgrid = np.array([0.0, 3.0, 4.0, 7.0]) * SCALE
-    ygrid = np.array([0.0, 3.0, 4.0, 7.0]) * SCALE
-    zgrid = np.array([0.0, 2.0, 3.0, 5.0]) * SCALE
-    grid3 = Grid3D(xgrid, ygrid, zgrid, periodic=True)
-
-    # ========= cloud
-    # First column x, second y and third z. We follow the IPRT
-    # convention for indices (start at 1 instead of 0): the cubic cloud
-    # is between 3 and 4 km in x and y, and between 2 and 3 km in z.
-    # Its single scattering albedo is forced to 1 (non absorbing).
-    cloud_indices = np.zeros((1, 3), dtype=np.int32)
-    cloud_indices[0, :] = np.array([2, 2, 2])
-    cld_ext_coeff = np.zeros(1, dtype=np.float64)
-    cld_ext_coeff[0] = 10.0 * (1 / SCALE)
-    reff = np.zeros_like(cld_ext_coeff, dtype=np.float64)
-    reff[0] = 10.0
-    cloud3 = Cloud3D(
-        "wc",
-        w_ref=800.0,
-        ext_ref=cld_ext_coeff,
-        cell_indices=cloud_indices,
-        reff=reff,
-        phase=cld_phase,
-        ssa_cst=1.0,
-    )
-
-    # ========= homogeneous Rayleigh layer
-    atm3_kwargs = {}
-    if tau_ray is not None:
-        dz = diff1(grid3.zGRID)
-        tau_ray_cs = np.cumsum((dz / grid3.zGRID[-1]) * tau_ray).reshape(
-            1, len(dz)
-        )
-        sca_ray = abs(diff1(tau_ray_cs, axis=1) / dz)
-        sca_ray[np.isnan(sca_ray)] = 0
-        atm3_kwargs["mol_sca_1d"] = sca_ray
-        atm3_kwargs["mol_abs_1d"] = np.zeros_like(sca_ray)
-
-    # ========= profiles computations
-    wavelengths = np.array([800.0])
-    atm3 = Atm3D(
-        atm_1d=Atm1D("afglt", **atm1d_kwargs),
-        grid_3d=grid3,
-        comp_3d=[cloud3],
-        wavelength_phase=[800.0],
-        **atm3_kwargs,
-    )
-    pro = atm3.calc(wavelengths, n_theta=NTH, truncation=truncation)
-
-    surface = LambSurface(alb=AlbedoCst(0.2))
-
-    return pro, grid3, surface, wavelengths
-
-
 @pytest.fixture(scope="module")
-def s3db():
-    """
-    Backward compilation in 3D
-    """
+def s3db() -> Smartg:
+    """Backward compilation in 3D."""
     return Smartg(
         opt3d=True, alt_pp=True, alis=False, back=True, double=True, bias=True
     )
 
 
 @pytest.fixture(scope="module")
-def s3df():
-    """
-    Forward compilation in 3D
-    """
+def s3df() -> Smartg:
+    """Forward compilation in 3D."""
     return Smartg(
         opt3d=True, alt_pp=True, alis=False, back=False, double=True, bias=True
     )
 
 
 @pytest.fixture(scope="module")
-def atm_c2_noatm():
-    """
-    IPRT C2 atmosphere without the molecular contribution
-    """
-    return _build_atm_c2(tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0)
+def atm_c2_noatm() -> PhaseBAtmosphere:
+    """IPRT C2 atmosphere without the molecular contribution."""
+    return build_atm_c2(n_theta=N_THETA, scale=SCALE)
 
 
 @pytest.fixture(scope="module")
-def atm_c2_noatm_gt():
-    """
-    Same as atm_c2_noatm, with the GT truncated phase matrices
-    """
-    return _build_atm_c2(
-        truncation=GT_TRUNC, tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0
+def atm_c2_noatm_gt() -> PhaseBAtmosphere:
+    """Same as atm_c2_noatm, with the GT truncated phase matrices."""
+    return build_atm_c2(truncation=GT_TRUNC, n_theta=N_THETA, scale=SCALE)
+
+
+@pytest.fixture(scope="module")
+def atm_c2_atm() -> PhaseBAtmosphere:
+    """IPRT C2 atmosphere with a homogeneous Rayleigh layer."""
+    return build_atm_c2(tau_ray=TAU_RAYLEIGH, n_theta=N_THETA, scale=SCALE)
+
+
+@pytest.fixture(scope="module")
+def atm_c2_atm_gt() -> PhaseBAtmosphere:
+    """Same as atm_c2_atm, with the GT truncated phase matrices."""
+    return build_atm_c2(
+        tau_ray=TAU_RAYLEIGH, truncation=GT_TRUNC, n_theta=N_THETA,
+        scale=SCALE,
     )
 
 
 @pytest.fixture(scope="module")
-def atm_c2_atm():
-    """
-    IPRT C2 atmosphere with a homogeneous Rayleigh layer
-    """
-    return _build_atm_c2(tau_ray=TAU_RAYLEIGH)
+def sensor_grid() -> Grid3D:
+    """The 70x70 sensor grid, identical for the 9 cases."""
+    return sensor_grid_c2(SCALE)
 
 
-@pytest.fixture(scope="module")
-def atm_c2_atm_gt():
-    """
-    Same as atm_c2_atm, with the GT truncated phase matrices
-    """
-    return _build_atm_c2(truncation=GT_TRUNC, tau_ray=TAU_RAYLEIGH)
+def _xblock_xgrid(sg: Smartg, **run_kwargs: Any) -> tuple[int, int]:
+    """Return the CUDA block and grid sizes of a run.
 
+    They are XBLOCK and XGRID, unless FIND_OPTIMAL_XB_XG asks for the
+    fastest pair, measured with short runs of the same geometry.
 
-@pytest.fixture(scope="module")
-def sensor_grid():
-    """
-    The 70x70 sensor grid, identical for the 9 cases
-    """
-    return Grid3D(
-        np.linspace(0.0, 7.0, 71) * SCALE,
-        np.linspace(0.0, 7.0, 71) * SCALE,
-        np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0]) * SCALE,
-        periodic=True,
-    )
-
-
-def _resolve_posz(sensor_grid, key):
-    """
-    Altitude where the sensors are placed
-    """
-    if key == "bottom":
-        return sensor_grid.zGRID[0]
-    elif key == "top":
-        return sensor_grid.zGRID[-1] - 1e-6 * SCALE
-    raise NameError(f"Unknown POSZ key '{key}'!")
-
-
-def _find_optimal_xb_xg(sg, **run_kwargs):
-    """
-    Find the number of CUDA blocks and grids giving the shortest kernel
-    time, using short runs with the same geometry as the real one.
-    """
-    if not FIND_OPTIMAL_XB_XG:
-        return XBLOCK, XGRID
-
-    k_time = np.inf
-    best_xb = XBLOCK
-    best_xg = XGRID
-    for xg in XG:
-        for xb in XB:
-            m_test = sg.run(
-                **run_kwargs,
-                n_photons=CHECK_NBPHOTONS,
-                n_loop=CHECK_NBLOOP,
-                xblock=xb,
-                xgrid=xg,
-                progress=False,
-            )
-            time_s = float(m_test.attrs["kernel time (s)"])
-            if time_s < k_time:
-                k_time = time_s
-                best_xb = xb
-                best_xg = xg
-            logger.info(
-                f"time (s) = {time_s}; xblock = {xb}; xgrid = {xg}"
-            )
-    logger.info(f"Best xblock = {best_xb}; best xgrid = {best_xg}")
-
-    return best_xb, best_xg
-
-
-def _run_case_backward(
-    s3db, atm_c2, sensor_grid, case, nbphotons=NBPHOTONS, depo=None
-):
-    """
-    Run one backward IPRT C2 case
-
-    depo is the depolarization factor: it is only given when there is a
-    Rayleigh atmosphere, otherwise the SMART-G default is left alone.
+    Parameters
+    ----------
+    sg : Smartg
+        The compiled SMART-G.
+    **run_kwargs
+        The Smartg.run arguments of the run, without n_photons, n_loop,
+        xblock and xgrid.
 
     Returns
     -------
-    (m, norm)
+    xblock, xgrid : int
+        The CUDA block and grid sizes.
     """
-    pro, grid3, surface, wavelengths = atm_c2
-    posz_key, theta, phi, theta_0 = CASES[case]
-    posz = _resolve_posz(sensor_grid, posz_key)
-
-    # !!!! grid3 is different than the sensors grid !!!
-    sensors = get_sensors_grid(
-        sensor_grid.xgrid,
-        sensor_grid.ygrid,
-        pos_z=posz,
-        th_deg=theta,
-        ph_deg=phi,
-        fov=0.0,
-        loc="ATMOS",
-        cell_size=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
-        grid_3d=grid3,
+    if not FIND_OPTIMAL_XB_XG:
+        return XBLOCK, XGRID
+    return find_optimal_xb_xg(
+        sg, X_BLOCKS, X_GRIDS, CHECK_N_PHOTONS, CHECK_N_LOOP, **run_kwargs
     )
 
-    # count_level = 0 -> only COUNT TOA
-    le = LocalEstimate(
-        th_deg=np.array([theta_0]),
-        phi_deg=np.array([PHI_0]),
-        count_level=np.array([0]),
-    )
 
-    kw = dict(
-        wavelength=wavelengths,
-        atmosphere=pro,
-        sensor=sensors,
-        le=le,
-        surface=surface,
-        n_icdf=NTH,
-        stdev=True,
-    )
+def _run_case_backward(
+    s3db: Smartg,
+    atm: PhaseBAtmosphere,
+    sensor_grid: Grid3D,
+    case: int,
+    n_photons: float = N_PHOTONS,
+    depo: float | None = None,
+) -> tuple[xr.Dataset, float]:
+    """Run one backward C2 case with the pinned settings.
+
+    Parameters
+    ----------
+    s3db : Smartg
+        The backward compilation.
+    atm : PhaseBAtmosphere
+        The atmosphere.
+    sensor_grid : Grid3D
+        The sensor grid.
+    case : int
+        The case number.
+    n_photons : float
+        Number of photons.
+    depo : float, optional
+        The depolarization factor. It is only given with a Rayleigh
+        atmosphere, otherwise the SMART-G default is left alone.
+
+    Returns
+    -------
+    ds : xr.Dataset
+        The output of the run.
+    norm : float
+        The normalisation of the maps.
+    """
+    options: dict[str, Any] = {"n_icdf": N_THETA}
     if depo is not None:
-        kw["depo"] = depo
-    xb, xg = _find_optimal_xb_xg(s3db, **kw)
-
-    m = s3db.run(
-        **kw,
-        n_photons=nbphotons,
-        n_loop=NBLOOP,
-        xblock=xb,
-        xgrid=xg,
-        seed=SEED,
+        options["depo"] = depo
+    xblock, xgrid = _xblock_xgrid(
+        s3db, **backward_run_kwargs(atm, sensor_grid, case), **options
     )
-
-    return m, np.cos(np.radians(theta_0)) / np.pi
+    return run_case_backward(
+        s3db, atm, sensor_grid, case, n_photons, n_loop=N_LOOP,
+        xblock=xblock, xgrid=xgrid, seed=SEED, **options,
+    )
 
 
 def _run_group_forward(
-    s3df, atm_c2, sensor_grid, group, nbphotons=NBPHOTONS, depo=None
-):
-    """
-    Run one forward group of IPRT C2 cases
+    s3df: Smartg,
+    atm: PhaseBAtmosphere,
+    sensor_grid: Grid3D,
+    group: ForwardGroup,
+    n_photons: float = N_PHOTONS,
+    depo: float | None = None,
+) -> tuple[xr.Dataset, float]:
+    """Run one forward group of C2 cases with the pinned settings.
 
     A single kernel run covers the whole group: the viewing directions
     of its cases are zipped in the local estimate.
 
+    Parameters
+    ----------
+    s3df : Smartg
+        The forward compilation.
+    atm : PhaseBAtmosphere
+        The atmosphere.
+    sensor_grid : Grid3D
+        The sensor grid.
+    group : ForwardGroup
+        The group of cases.
+    n_photons : float
+        Number of photons.
+    depo : float, optional
+        The depolarization factor, see _run_case_backward.
+
     Returns
     -------
-    (m, norm)
+    ds : xr.Dataset
+        The output of the run.
+    norm : float
+        The normalisation of the maps.
     """
-    pro, grid3, surface, wavelengths = atm_c2
-    cases = group["cases"]
-    # All the cases of a group share the same sun position
-    theta_0 = CASES[cases[0]][3]
-    posz = _resolve_posz(sensor_grid, "top")
-
-    # In forward the sensors are the source: they are aimed at the sun
-    # position instead of at the viewing direction
-    sensors = get_sensors_grid(
-        sensor_grid.xgrid,
-        sensor_grid.ygrid,
-        pos_z=posz,
-        th_deg=180.0 - theta_0,
-        ph_deg=180.0 - PHI_0,
-        fov=0.0,
-        loc="ATMOS",
-        cell_size=sensor_grid.xgrid[1] - sensor_grid.xgrid[0],
-        grid_3d=grid3,
-    )
-
-    theta = np.array([CASES[case][1] for case in cases])
-    phi = np.array([CASES[case][2] for case in cases])
-    le = LocalEstimate(
-        th_deg=180.0 - theta if group["inv_th"] else theta,
-        phi_deg=phi + 180.0,
-        count_level=np.full(len(cases), group["count_level"]),
-        zip=True,
-    )
-
-    kw = dict(
-        th_deg=theta_0,
-        wavelength=wavelengths,
-        atmosphere=pro,
-        sensor=sensors,
-        le=le,
-        surface=surface,
-        n_icdf=NTH,
-        output_layers=group["output_layers"],
-    )
+    options: dict[str, Any] = {"n_icdf": N_THETA}
     if depo is not None:
-        kw["depo"] = depo
-    xb, xg = _find_optimal_xb_xg(s3df, **kw)
-
-    m = s3df.run(
-        **kw,
-        n_photons=nbphotons,
-        n_loop=NBLOOP,
-        xblock=xb,
-        xgrid=xg,
-        seed=SEED,
+        options["depo"] = depo
+    xblock, xgrid = _xblock_xgrid(
+        s3df, **forward_run_kwargs(atm, sensor_grid, group), **options
     )
-
-    return m, np.cos(np.radians(theta_0)) / np.pi
-
-
-def _smartg_iquv(
-    m, norm, U_sign=1, V_sign=-1, mI=None, mQ=None, mU=None, mV=None
-):
-    """
-    Extract the normalized I, Q, U and V (70, 70) matrices
-
-    The mI, mQ, mU and mV arguments allow to force the values, for
-    example when a single forward run holds several cases.
-    """
-    if mI is None:
-        mI = m["I_up (TOA)"].values[:, 0, 0]
-    if mQ is None:
-        mQ = m["Q_up (TOA)"].values[:, 0, 0]
-    if mU is None:
-        mU = m["U_up (TOA)"].values[:, 0, 0]
-    if mV is None:
-        mV = m["V_up (TOA)"].values[:, 0, 0]
-
-    return (
-        mI.reshape(70, 70) * norm,
-        mQ.reshape(70, 70) * norm,
-        mU.reshape(70, 70) * norm * U_sign,
-        mV.reshape(70, 70) * norm * V_sign,
-    )
-
-
-def _mystic_iquv(tcase):
-    """
-    Read the MYSTIC I, Q, U and V (70, 70) matrices of a given case
-
-    tcase is the MYSTIC case number: it is the C2 case number without
-    atmosphere, and the C2 case number + 9 with atmosphere.
-    """
-    file_res = (
-        DIR_AUXDATA / "IPRT" / "phaseB" / "mystic_res" / "iprt_case_C2_mystic.dat"
-    )
-    read_res = pd.read_csv(
-        file_res,
-        skiprows=(4900 * (tcase - 1)) + 3,
-        nrows=4900,
-        header=None,
-        sep=r"\s+",
-        dtype=float,
-    ).values
-
-    return (
-        read_res[:, 7].reshape(70, 70).T,
-        read_res[:, 8].reshape(70, 70).T,
-        read_res[:, 9].reshape(70, 70).T,
-        read_res[:, 10].reshape(70, 70).T,
+    return run_group_forward(
+        s3df, atm, sensor_grid, group, n_photons, n_loop=N_LOOP,
+        xblock=xblock, xgrid=xgrid, seed=SEED, **options,
     )
 
 
 def _plot_case(
-    request,
-    m,
-    iquv_sg,
-    iquv_my,
-    case,
-    sensor_grid,
-    title_suffix,
-    i_vmin,
-    v_diff_frac,
-):
-    """
-    Save the SMART-G maps and the SMART-G - MYSTIC differences in the
-    pytest html report
-    """
-    i_sg, q_sg, u_sg, v_sg = iquv_sg
-    i_my, q_my, u_my, v_my = iquv_my
+    request: pytest.FixtureRequest,
+    iquv_sg: tuple[np.ndarray, ...],
+    iquv_my: tuple[np.ndarray, ...],
+    case: int,
+    sensor_grid: Grid3D,
+    title_suffix: str,
+    i_vmin: float | None = None,
+    v_diff_frac: float = 0.05,
+) -> None:
+    """Save the SMART-G maps and their differences with MYSTIC.
 
-    stk = ["I", "Q", "U", "V"]
-    wavelength = m.coords["wavelength"].values
-    xgrid = sensor_grid.xgrid
-    ygrid = sensor_grid.ygrid
-    max_i = np.max(i_sg)
-    max_q = np.max(np.abs(q_sg))
-    max_u = np.max(np.abs(u_sg))
-    max_v = np.max(np.abs(v_sg))
+    The two figures go to the pytest html report.
 
-    camera_view(
-        m,
-        xgrid,
-        ygrid,
-        wavelength,
-        "none",
-        ["jet", "coolwarm", "coolwarm", "coolwarm"],
-        figsize=(10.5, 7),
-        fontsize=16,
-        vmin=[i_vmin, -max_q, -max_u, -max_v],
-        vmax=[max_i, max_q, max_u, max_v],
-        scale=False,
-        stokes=stk,
-        matrices=[i_sg, q_sg, u_sg, v_sg],
-        cbar_shrink=1,
-        cbar_sci_format=True,
-        title=f"C2 - case {case} - SMART-G - {title_suffix}",
+    Parameters
+    ----------
+    request : pytest.FixtureRequest
+        The request of the test.
+    iquv_sg, iquv_my : tuple of ndarray
+        The SMART-G and the MYSTIC I, Q, U and V maps.
+    case : int
+        The case number, for the titles.
+    sensor_grid : Grid3D
+        The sensor grid.
+    title_suffix : str
+        The end of the titles.
+    i_vmin : float, optional
+        The lower bound of the I colour scale. By default the minimum
+        of abs(I).
+    v_diff_frac : float
+        The bound of the V difference colour scale, as a fraction of
+        the maximum of abs(V).
+    """
+    head = f"C2 - case {case}"
+    plot_camera_iquv(
+        iquv_sg, sensor_grid.xgrid, sensor_grid.ygrid,
+        title=f"{head} - SMART-G - {title_suffix}", i_vmin=i_vmin,
     )
     conftest.savefig(request, bbox_inches="tight")
-
-    lim = [
-        max_i * 0.05,
-        max_q * 0.05,
-        max_u * 0.05,
-        max_v * v_diff_frac,
-    ]
-    camera_view(
-        m,
-        xgrid,
-        ygrid,
-        wavelength,
-        "none",
-        ["coolwarm", "coolwarm", "coolwarm", "coolwarm"],
-        figsize=(10.5, 7),
-        fontsize=16,
-        vmin=[-val for val in lim],
-        vmax=lim,
-        scale=False,
-        stokes=stk,
-        matrices=[i_sg - i_my, q_sg - q_my, u_sg - u_my, v_sg - v_my],
-        cbar_shrink=1,
-        cbar_sci_format=True,
-        title=(
-            f"C2 - case {case} - dif(SMART-G - MYSTIC) - {title_suffix}"
-        ),
+    plot_camera_difference(
+        iquv_sg, iquv_my, sensor_grid.xgrid, sensor_grid.ygrid,
+        title=f"{head} - dif(SMART-G - MYSTIC) - {title_suffix}",
+        v_diff_frac=v_diff_frac,
     )
     conftest.savefig(request, bbox_inches="tight")
 
 
-def _is_significant(signal_ref, istk):
-    """
-    Whether a Stokes component carries enough signal to be asserted on
+def _is_significant(signal_ref: tuple[float, ...] | None, istk: int
+                    ) -> bool:
+    """Tell whether a Stokes component is worth asserting on.
 
-    See SIGNAL_FLOOR. A signal_ref of None, i.e. not yet measured, keeps
-    every component so that a new reference gets fully logged.
+    See SIGNAL_FLOOR.
+
+    Parameters
+    ----------
+    signal_ref : tuple of float, optional
+        The mean absolute values of I, Q, U and V. None, i.e. not yet
+        measured, keeps every component so that a new reference gets
+        fully logged.
+    istk : int
+        The index of the component, 0 for I.
+
+    Returns
+    -------
+    bool
+        True if the component carries enough signal.
     """
     if signal_ref is None:
         return True
@@ -942,9 +684,18 @@ def _is_significant(signal_ref, istk):
     return signal_ref[istk] > SIGNAL_FLOOR * signal_ref[0]
 
 
-def _skipped(signal_ref):
-    """
-    Names of the components left unasserted, for the log
+def _skipped(signal_ref: tuple[float, ...] | None) -> list[str]:
+    """Return the names of the components left unasserted, for the log.
+
+    Parameters
+    ----------
+    signal_ref : tuple of float, optional
+        The mean absolute values of I, Q, U and V.
+
+    Returns
+    -------
+    list of str
+        The names of the components below SIGNAL_FLOOR.
     """
     return [
         stk
@@ -953,34 +704,43 @@ def _skipped(signal_ref):
     ]
 
 
-def _check_deltam(delta_m_ref, signal_ref, iquv_my, iquv_sg, label, tol):
+def _check_deltam(
+    delta_m_ref: tuple[float, ...] | None,
+    signal_ref: tuple[float, ...] | None,
+    iquv_my: tuple[np.ndarray, ...],
+    iquv_sg: tuple[np.ndarray, ...],
+    label: str,
+    tol: float,
+) -> list[str]:
+    """Compare the delta_m values with the saved validated ones.
+
+    The failure messages are returned instead of asserted, so that a
+    test can report every case of a forward group instead of stopping
+    at the first one.
+
+    Parameters
+    ----------
+    delta_m_ref : tuple of float, optional
+        The reference delta_m of I, Q, U and V. With None the
+        calculated values are logged and the case is reported as a
+        failure, which is how a new reference is measured before being
+        written in the tables above.
+    signal_ref : tuple of float, optional
+        The mean absolute values of I, Q, U and V, see SIGNAL_FLOOR.
+    iquv_my, iquv_sg : tuple of ndarray
+        The MYSTIC and the SMART-G I, Q, U and V maps.
+    label : str
+        The case label, for the log and the messages.
+    tol : float
+        The two sided fractional band around the reference.
+
+    Returns
+    -------
+    list of str
+        The failure messages, empty if the case is ok.
     """
-    Compute the delta_m values and compare them with the previous saved
-    validated ones
-
-    Returns the list of the failure messages (empty if the case is ok)
-    instead of asserting, so that a forward test can report every case
-    of its group instead of stopping at the first one.
-
-    delta_m_ref can be None: the calculated values are then logged and
-    the case is reported as a failure, which is how a new reference is
-    measured before being written in the tables above.
-    """
-    iquv_mystic = group_iquv(
-        i_list=[iquv_my[0]],
-        q_list=[iquv_my[1]],
-        u_list=[iquv_my[2]],
-        v_list=[iquv_my[3]],
-    )
-    iquv_smartg = group_iquv(
-        i_list=[iquv_sg[0]],
-        q_list=[iquv_sg[1]],
-        u_list=[iquv_sg[2]],
-        v_list=[iquv_sg[3]],
-    )
-
     delta_m = compute_deltam(
-        obs=iquv_mystic, mod=iquv_smartg, print_res=False
+        obs=list(iquv_my), mod=list(iquv_sg), print_res=False
     )
 
     if delta_m_ref is not None:
@@ -1006,8 +766,7 @@ def _check_deltam(delta_m_ref, signal_ref, iquv_my, iquv_sg, label, tol):
         )
 
     errors = []
-    iquv_name = ["I", "Q", "U", "V"]
-    for istk, stk in enumerate(iquv_name):
+    for istk, stk in enumerate(["I", "Q", "U", "V"]):
         if not _is_significant(signal_ref, istk):
             continue
         ref = delta_m_ref[istk]
@@ -1021,16 +780,34 @@ def _check_deltam(delta_m_ref, signal_ref, iquv_my, iquv_sg, label, tol):
     return errors
 
 
-def _check_means(mean_ref, signal_ref, iquv_sg, label):
-    """
-    Compare the spatial mean of each Stokes component with its previous
-    saved validated one
+def _check_means(
+    mean_ref: tuple[float, ...] | None,
+    signal_ref: tuple[float, ...] | None,
+    iquv_sg: tuple[np.ndarray, ...],
+    label: str,
+) -> list[str]:
+    """Compare the spatial mean of each component with the saved one.
 
-    Unlike delta_m, this averages the Monte Carlo noise out, so it is
-    the observable that keeps the fast tier sensitive to a systematic
-    bias. Same contract as _check_deltam: returns the list of the
-    failure messages, and a mean_ref of None logs the calculated values
-    and reports a failure, which is how a new reference is measured.
+    Unlike delta_m, the mean averages the Monte Carlo noise out, so it
+    is the observable that keeps the fast tier sensitive to a
+    systematic bias. Same contract as _check_deltam.
+
+    Parameters
+    ----------
+    mean_ref : tuple of float, optional
+        The reference means of I, Q, U and V. With None the calculated
+        values are logged and the case is reported as a failure.
+    signal_ref : tuple of float, optional
+        The mean absolute values of I, Q, U and V, see SIGNAL_FLOOR.
+    iquv_sg : tuple of ndarray
+        The SMART-G I, Q, U and V maps.
+    label : str
+        The case label, for the log and the messages.
+
+    Returns
+    -------
+    list of str
+        The failure messages, empty if the case is ok.
     """
     means = tuple(float(np.mean(stk)) for stk in iquv_sg)
 
@@ -1047,8 +824,8 @@ def _check_means(mean_ref, signal_ref, iquv_sg, label):
     if mean_ref is None:
         return [f"{label}: no reference mean, see the log for the values"]
 
-    # The mean of I sets the scale of the four tolerances, the means of
-    # Q, U and V being free to pass through zero
+    # The mean of I sets the scale of the four tolerances, the means
+    # of Q, U and V being free to pass through zero
     tol = MEAN_TOL * abs(mean_ref[0])
 
     errors = []
@@ -1066,39 +843,110 @@ def _check_means(mean_ref, signal_ref, iquv_sg, label):
     return errors
 
 
+def _check_group_forward(
+    request: pytest.FixtureRequest,
+    ds: xr.Dataset,
+    norm: float,
+    group: ForwardGroup,
+    sensor_grid: Grid3D,
+    refs: dict[int, tuple[float, ...]],
+    mean_refs: dict[int, tuple[float, ...]],
+    signal_refs: dict[int, tuple[float, ...]],
+    tol: float,
+    title_suffix: str,
+    label_suffix: str,
+    mystic_offset: int = 0,
+    i_vmin: float | None = None,
+    v_diff_frac: float = 0.015,
+) -> list[str]:
+    """Plot and check every case of a single forward run.
+
+    Parameters
+    ----------
+    request : pytest.FixtureRequest
+        The request of the test.
+    ds : xr.Dataset
+        The output of the forward run.
+    norm : float
+        The normalisation of the maps.
+    group : ForwardGroup
+        The group of cases of the run.
+    sensor_grid : Grid3D
+        The sensor grid.
+    refs, mean_refs, signal_refs : dict
+        The reference delta_m values, means and mean absolute values,
+        by case.
+    tol : float
+        The fractional band around the reference delta_m.
+    title_suffix, label_suffix : str
+        The end of the figure titles and of the case labels.
+    mystic_offset : int
+        Added to the case number to reach the MYSTIC block:
+        ATM_CASE_OFFSET for the cases with atmosphere.
+    i_vmin : float, optional
+        The lower bound of the I colour scale. By default the minimum
+        of abs(I).
+    v_diff_frac : float
+        The bound of the V difference colour scale, see _plot_case.
+
+    Returns
+    -------
+    list of str
+        The failure messages of the whole group, so that one noisy
+        case does not hide the others.
+    """
+    errors = []
+    for direction, case in enumerate(group.cases):
+        # U and V follow the IPRT convention with the forward signs
+        iquv_sg = smartg_iquv(
+            ds, norm, N_SENSORS, level=group.level, direction=direction,
+            u_sign=-1.0, v_sign=1.0,
+        )
+        iquv_my = read_iprt_iquv(MYSTIC_RES_C2, case + mystic_offset,
+                                 N_SENSORS)
+
+        _plot_case(request, iquv_sg, iquv_my, case, sensor_grid,
+                   title_suffix, i_vmin, v_diff_frac)
+
+        label = f"C2 - case {case} - {label_suffix}"
+        signal_ref = signal_refs.get(case)
+        errors += _check_deltam(
+            refs.get(case), signal_ref, iquv_my, iquv_sg, label, tol
+        )
+        errors += _check_means(
+            mean_refs.get(case), signal_ref, iquv_sg, label
+        )
+
+    return errors
+
+
 @pytest.mark.parametrize("tier", TIERS)
 @pytest.mark.parametrize(
     "case", list(CASES), ids=[f"case{i}" for i in CASES]
 )
 def test_c2_noatm_backward(
-    request, s3db, atm_c2_noatm, sensor_grid, case, tier
-):
-    """
-    IPRT phase B, cubic cloud C2, backward, without atmosphere
-    """
+    request: pytest.FixtureRequest,
+    s3db: Smartg,
+    atm_c2_noatm: PhaseBAtmosphere,
+    sensor_grid: Grid3D,
+    case: int,
+    tier: str,
+) -> None:
+    """IPRT phase B, cubic cloud C2, backward, without atmosphere."""
     print(f"=== Test C2 case {case} - backward - without atmosphere - {tier}")
 
-    m, norm = _run_case_backward(
+    ds, norm = _run_case_backward(
         s3db,
         atm_c2_noatm,
         sensor_grid,
         case,
-        nbphotons=NBPHOTONS / PHOTON_DIVIDER[tier],
+        n_photons=N_PHOTONS / PHOTON_DIVIDER[tier],
     )
-    iquv_sg = _smartg_iquv(m, norm)
-    iquv_my = _mystic_iquv(case)
+    iquv_sg = smartg_iquv(ds, norm, N_SENSORS)
+    iquv_my = read_iprt_iquv(MYSTIC_RES_C2, case, N_SENSORS)
 
-    _plot_case(
-        request,
-        m,
-        iquv_sg,
-        iquv_my,
-        case,
-        sensor_grid,
-        title_suffix="without atm",
-        i_vmin=np.min(np.abs(iquv_sg[0])),
-        v_diff_frac=0.015,
-    )
+    _plot_case(request, iquv_sg, iquv_my, case, sensor_grid,
+               title_suffix="without atm", v_diff_frac=0.015)
 
     label = f"C2 - case {case} - {tier}"
     signal_ref = SIGNAL_REF_NOATM_B[case]
@@ -1116,100 +964,36 @@ def test_c2_noatm_backward(
     assert not errors, "\n".join(errors)
 
 
-def _check_group_forward(
-    request,
-    m,
-    norm,
-    group,
-    sensor_grid,
-    refs,
-    mean_refs,
-    signal_refs,
-    tol,
-    title_suffix,
-    label_suffix,
-    mystic_offset=0,
-    i_vmin=None,
-    v_diff_frac=0.015,
-):
-    """
-    Plot and check every case held by a single forward run
-
-    mystic_offset is added to the case number to reach the MYSTIC rows:
-    it is 9 for the with atmosphere cases. i_vmin, if None, is taken
-    from the SMART-G values themselves.
-
-    Returns the failure messages of the whole group, so that one noisy
-    case does not hide the others.
-    """
-    layer = group["layer"]
-    errors = []
-    for iza, case in enumerate(group["cases"]):
-        iquv_sg = _smartg_iquv(
-            m,
-            norm,
-            U_sign=-1,
-            V_sign=1,
-            mI=m[f"I{layer}"].values[:, iza],
-            mQ=m[f"Q{layer}"].values[:, iza],
-            mU=m[f"U{layer}"].values[:, iza],
-            mV=m[f"V{layer}"].values[:, iza],
-        )
-        iquv_my = _mystic_iquv(case + mystic_offset)
-
-        _plot_case(
-            request,
-            m,
-            iquv_sg,
-            iquv_my,
-            case,
-            sensor_grid,
-            title_suffix=title_suffix,
-            i_vmin=(
-                np.min(np.abs(iquv_sg[0])) if i_vmin is None else i_vmin
-            ),
-            v_diff_frac=v_diff_frac,
-        )
-
-        label = f"C2 - case {case} - {label_suffix}"
-        signal_ref = signal_refs.get(case)
-        errors += _check_deltam(
-            refs.get(case), signal_ref, iquv_my, iquv_sg, label, tol
-        )
-        errors += _check_means(
-            mean_refs.get(case), signal_ref, iquv_sg, label
-        )
-
-    return errors
-
-
 @pytest.mark.parametrize("tier", TIERS)
 @pytest.mark.parametrize(
     "group", list(FORWARD_GROUPS), ids=[f"group{i}" for i in FORWARD_GROUPS]
 )
 def test_c2_noatm_forward(
-    request, s3df, atm_c2_noatm, sensor_grid, group, tier
-):
-    """
-    IPRT phase B, cubic cloud C2, forward, without atmosphere
-    """
-    cases = FORWARD_GROUPS[group]["cases"]
+    request: pytest.FixtureRequest,
+    s3df: Smartg,
+    atm_c2_noatm: PhaseBAtmosphere,
+    sensor_grid: Grid3D,
+    group: int,
+    tier: str,
+) -> None:
+    """IPRT phase B, cubic cloud C2, forward, without atmosphere."""
+    cases = FORWARD_GROUPS[group].cases
     print(
         f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
         + f" - without atmosphere - {tier}"
     )
 
-    m, norm = _run_group_forward(
+    ds, norm = _run_group_forward(
         s3df,
         atm_c2_noatm,
         sensor_grid,
         FORWARD_GROUPS[group],
-        nbphotons=NBPHOTONS / PHOTON_DIVIDER[tier],
+        n_photons=N_PHOTONS / PHOTON_DIVIDER[tier],
     )
 
     errors = _check_group_forward(
         request,
-        m,
+        ds,
         norm,
         FORWARD_GROUPS[group],
         sensor_grid,
@@ -1228,29 +1012,34 @@ def test_c2_noatm_forward(
     "group", list(FORWARD_GROUPS), ids=[f"group{i}" for i in FORWARD_GROUPS]
 )
 def test_c2_noatm_forward_gt(
-    request, s3df, atm_c2_noatm_gt, sensor_grid, group, tier
-):
+    request: pytest.FixtureRequest,
+    s3df: Smartg,
+    atm_c2_noatm_gt: PhaseBAtmosphere,
+    sensor_grid: Grid3D,
+    group: int,
+    tier: str,
+) -> None:
+    """IPRT phase B, cubic cloud C2, forward, without atmosphere.
+
+    With the GT truncated cloud phase matrices.
     """
-    IPRT phase B, cubic cloud C2, forward, without atmosphere, with the
-    GT truncated cloud phase matrices
-    """
-    cases = FORWARD_GROUPS[group]["cases"]
+    cases = FORWARD_GROUPS[group].cases
     print(
         f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
         + f" - without atmosphere - GT truncation - {tier}"
     )
 
-    m, norm = _run_group_forward(
+    ds, norm = _run_group_forward(
         s3df,
         atm_c2_noatm_gt,
         sensor_grid,
         FORWARD_GROUPS[group],
-        nbphotons=NBPHOTONS_TRUNC / PHOTON_DIVIDER[tier],
+        n_photons=N_PHOTONS_TRUNC / PHOTON_DIVIDER[tier],
     )
 
     errors = _check_group_forward(
         request,
-        m,
+        ds,
         norm,
         FORWARD_GROUPS[group],
         sensor_grid,
@@ -1268,34 +1057,31 @@ def test_c2_noatm_forward_gt(
 @pytest.mark.parametrize(
     "case", ATM_BACKWARD_CASES, ids=[f"case{i}" for i in ATM_BACKWARD_CASES]
 )
-def test_c2_atm_backward(request, s3db, atm_c2_atm, sensor_grid, case, tier):
-    """
-    IPRT phase B, cubic cloud C2, backward, with atmosphere
-    """
+def test_c2_atm_backward(
+    request: pytest.FixtureRequest,
+    s3db: Smartg,
+    atm_c2_atm: PhaseBAtmosphere,
+    sensor_grid: Grid3D,
+    case: int,
+    tier: str,
+) -> None:
+    """IPRT phase B, cubic cloud C2, backward, with atmosphere."""
     print(f"=== Test C2 case {case} - backward - with atmosphere - {tier}")
 
-    m, norm = _run_case_backward(
+    ds, norm = _run_case_backward(
         s3db,
         atm_c2_atm,
         sensor_grid,
         case,
-        nbphotons=NBPHOTONS_ATM_B[case] / PHOTON_DIVIDER[tier],
+        n_photons=N_PHOTONS_ATM_B[case] / PHOTON_DIVIDER[tier],
         depo=DEPO_ATM,
     )
-    iquv_sg = _smartg_iquv(m, norm)
-    iquv_my = _mystic_iquv(case + 9)
+    iquv_sg = smartg_iquv(ds, norm, N_SENSORS)
+    iquv_my = read_iprt_iquv(MYSTIC_RES_C2, case + ATM_CASE_OFFSET,
+                             N_SENSORS)
 
-    _plot_case(
-        request,
-        m,
-        iquv_sg,
-        iquv_my,
-        case,
-        sensor_grid,
-        title_suffix="with atm",
-        i_vmin=0.0,
-        v_diff_frac=0.05,
-    )
+    _plot_case(request, iquv_sg, iquv_my, case, sensor_grid,
+               title_suffix="with atm", i_vmin=0.0, v_diff_frac=0.05)
 
     label = f"C2 - case {case} - atm - {tier}"
     signal_ref = SIGNAL_REF_ATM_B.get(case)
@@ -1314,29 +1100,33 @@ def test_c2_atm_backward(request, s3db, atm_c2_atm, sensor_grid, case, tier):
 
 
 @pytest.mark.parametrize("tier", TIERS)
-def test_c2_atm_forward(request, s3df, atm_c2_atm, sensor_grid, tier):
-    """
-    IPRT phase B, cubic cloud C2, forward, with atmosphere
-    """
+def test_c2_atm_forward(
+    request: pytest.FixtureRequest,
+    s3df: Smartg,
+    atm_c2_atm: PhaseBAtmosphere,
+    sensor_grid: Grid3D,
+    tier: str,
+) -> None:
+    """IPRT phase B, cubic cloud C2, forward, with atmosphere."""
     group = FORWARD_GROUPS[ATM_FORWARD_GROUP]
-    cases = group["cases"]
+    cases = group.cases
     print(
         f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
         + f" - with atmosphere - {tier}"
     )
 
-    m, norm = _run_group_forward(
+    ds, norm = _run_group_forward(
         s3df,
         atm_c2_atm,
         sensor_grid,
         group,
-        nbphotons=NBPHOTONS / PHOTON_DIVIDER[tier],
+        n_photons=N_PHOTONS / PHOTON_DIVIDER[tier],
         depo=DEPO_ATM,
     )
 
     errors = _check_group_forward(
         request,
-        m,
+        ds,
         norm,
         group,
         sensor_grid,
@@ -1346,7 +1136,7 @@ def test_c2_atm_forward(request, s3df, atm_c2_atm, sensor_grid, tier):
         DELTAM_TOL[tier],
         title_suffix="with atm - forward",
         label_suffix=f"F atm - {tier}",
-        mystic_offset=9,
+        mystic_offset=ATM_CASE_OFFSET,
         i_vmin=0.0,
         v_diff_frac=0.05,
     )
@@ -1354,30 +1144,36 @@ def test_c2_atm_forward(request, s3df, atm_c2_atm, sensor_grid, tier):
 
 
 @pytest.mark.parametrize("tier", TIERS)
-def test_c2_atm_forward_gt(request, s3df, atm_c2_atm_gt, sensor_grid, tier):
-    """
-    IPRT phase B, cubic cloud C2, forward, with atmosphere, with the GT
-    truncated cloud phase matrices
+def test_c2_atm_forward_gt(
+    request: pytest.FixtureRequest,
+    s3df: Smartg,
+    atm_c2_atm_gt: PhaseBAtmosphere,
+    sensor_grid: Grid3D,
+    tier: str,
+) -> None:
+    """IPRT phase B, cubic cloud C2, forward, with atmosphere.
+
+    With the GT truncated cloud phase matrices.
     """
     group = FORWARD_GROUPS[ATM_FORWARD_GROUP]
-    cases = group["cases"]
+    cases = group.cases
     print(
         f"=== Test C2 cases {cases[0]} to {cases[-1]} - forward"
         + f" - with atmosphere - GT truncation - {tier}"
     )
 
-    m, norm = _run_group_forward(
+    ds, norm = _run_group_forward(
         s3df,
         atm_c2_atm_gt,
         sensor_grid,
         group,
-        nbphotons=NBPHOTONS_TRUNC / PHOTON_DIVIDER[tier],
+        n_photons=N_PHOTONS_TRUNC / PHOTON_DIVIDER[tier],
         depo=DEPO_ATM,
     )
 
     errors = _check_group_forward(
         request,
-        m,
+        ds,
         norm,
         group,
         sensor_grid,
@@ -1387,7 +1183,7 @@ def test_c2_atm_forward_gt(request, s3df, atm_c2_atm_gt, sensor_grid, tier):
         DELTAM_TOL[tier],
         title_suffix="with atm - forward - GT trunc",
         label_suffix=f"F atm GT - {tier}",
-        mystic_offset=9,
+        mystic_offset=ATM_CASE_OFFSET,
         i_vmin=0.0,
         v_diff_frac=0.05,
     )
