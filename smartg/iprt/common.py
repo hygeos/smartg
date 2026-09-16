@@ -44,7 +44,7 @@ def group_iquv(
     ndarray
         The gathered signals, of shape (4, nvalues).
     """
-    n_values = int(0)
+    n_values = 0
     i_tot = i_list[0].flatten()
     q_tot = q_list[0].flatten()
     u_tot = u_list[0].flatten()
@@ -98,13 +98,13 @@ def compute_deltam(
     if isinstance(obs, np.ndarray):
         obs_tmp = obs.copy()
         obs = []
-        for i in range(0, 4):
+        for i in range(4):
             obs.append(obs_tmp[i, :])
 
     if isinstance(mod, np.ndarray):
         mod_tmp = mod.copy()
         mod = []
-        for i in range(0, 4):
+        for i in range(4):
             mod.append(mod_tmp[i, :])
 
     stk = ['I', 'Q', 'U', 'V']

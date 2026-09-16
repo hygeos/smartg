@@ -108,3 +108,44 @@ reportUnknownArgumentType = "none"
 reportUnknownParameterType = "none"
 # Suppress call-issue errors caused by incomplete stubs (e.g. missing parameters in xarray stubs)
 reportCallIssue = "none"
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+# PEP 8 and the docstring and annotation rules on top of the default
+# ones, for the IPRT tools only: see per-file-ignores. The whitespace
+# rules E1, E2 and E3 of PEP 8 are still preview rules, hence their
+# explicit codes.
+preview = true
+explicit-preview-rules = true
+extend-select = [
+    "E111", "E112", "E113", "E114", "E115", "E116", "E117",
+    "E201", "E202", "E203", "E204", "E211", "E221", "E222", "E223",
+    "E224", "E225", "E226", "E227", "E228", "E231", "E241", "E242",
+    "E251", "E252", "E261", "E262", "E265", "E266", "E271", "E272",
+    "E273", "E274", "E275", "E301", "E302", "E303", "E304", "E305",
+    "E306", "E4", "E501", "E7", "W", "N", "D", "ANN", "I",
+]
+# Any is the right annotation of **kwargs passed through
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+# Everything but the IPRT tools keeps the default rules: the rules
+# added above, and only them (the defaults hold E722, W605, D419,
+# N999 and I001)
+"!{smartg/iprt/**,smartg/tests/test_iprt_*.py,smartg/tests/test_quick_iprt_*.py,smartg/notebooks/validation_SMARTG_IPRT_*.ipynb}" = [
+    "E1", "E2", "E3", "E4", "E5", "E701", "E702", "E703", "E711", "E712",
+    "E713", "E714", "E721", "E731", "E741", "E742", "E743", "W1", "W2",
+    "W5", "ANN", "N8", "I002",
+    "D1", "D2", "D3", "D400", "D401", "D402", "D403", "D404", "D405",
+    "D406", "D407", "D408", "D409", "D410", "D411", "D412", "D413",
+    "D414", "D415", "D416", "D417", "D418",
+]
+
+# False positives of ruff 0.16 on a notebook cell ending with an
+# indented continuation line
+"smartg/notebooks/validation_SMARTG_IPRT_*.ipynb" = ["E111", "E113"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"

@@ -255,7 +255,7 @@ def s3db() -> Smartg:
 
 @pytest.fixture(scope="module")
 def cloud_c3() -> tuple[Cloud3D, Grid3D]:
-    """The IPRT C3 cumulus field, shared by the two atmospheres."""
+    """Read the IPRT C3 cumulus field, shared by the atmospheres."""
     return build_cloud_c3(n_theta=N_THETA, scale=SCALE)
 
 
@@ -267,13 +267,13 @@ def atm_c3_aer(cloud_c3: tuple[Cloud3D, Grid3D]) -> PhaseBAtmosphere:
 
 @pytest.fixture(scope="module")
 def atm_c3_aer_gt(cloud_c3: tuple[Cloud3D, Grid3D]) -> PhaseBAtmosphere:
-    """Same as atm_c3_aer, with the GT truncated phase matrices."""
+    """Build atm_c3_aer with the GT truncated phase matrices."""
     return build_atm_c3(cloud_c3, truncation=GT_TRUNC, n_theta=N_THETA)
 
 
 @pytest.fixture(scope="module")
 def sensor_grid(cloud_c3: tuple[Cloud3D, Grid3D]) -> Grid3D:
-    """The central N_SENSORS x N_SENSORS sensors of the C3 field."""
+    """Build the central N_SENSORS x N_SENSORS sensors of C3."""
     return sensor_grid_c3(cloud_c3[1], N_SENSORS)
 
 
@@ -527,7 +527,7 @@ def _check_deltam(
             errors.append(
                 f"{label}: problem with {stk} values, get "
                 + f"{delta_m[istk]:.5f}. {stk} must be within "
-                + f"[{(1-tol)*ref:.5f}, {(1+tol)*ref:.5f}]"
+                + f"[{(1 - tol) * ref:.5f}, {(1 + tol) * ref:.5f}]"
             )
 
     return errors
@@ -590,7 +590,7 @@ def _check_means(
             errors.append(
                 f"{label}: problem with the mean of {stk}, get "
                 + f"{means[istk]:.6e}. It must be within "
-                + f"[{ref-tol:.6e}, {ref+tol:.6e}]"
+                + f"[{ref - tol:.6e}, {ref + tol:.6e}]"
             )
 
     return errors

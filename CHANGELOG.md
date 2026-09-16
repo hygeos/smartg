@@ -545,6 +545,10 @@ corrected before the final `v2.0.0` release.
   - Aeronet read functions (`read_Aeronet_PFN`, etc.) now return `xr.DataArray`
     instead of LUT objects
   - Push to PyPI workflow added
+  - A ruff configuration in `pyproject.toml`: a line length of 79 and,
+    for the IPRT tools (`smartg.iprt`, their tests and notebooks), the
+    PEP 8, naming, numpy docstring and annotation rules on top of the
+    default ones
   - New `smartg.view.plot_polar_iquv` drawing I, Q, U and V matrices in
     polar view, split from `select_and_plot_polar_iprt`, which now selects
     with `select_iprt_iquv` and plots with it. `select_iprt_iquv` gains
@@ -696,6 +700,8 @@ corrected before the final `v2.0.0` release.
   - The `ipha` parameter of `phase_view` in `smartg_view` is now flexible:
     accepts an `int`, an `xr.DataArray` scalar, or a 1-D ndarray of indices;
     validation against the correct wavelength slice of `iphase_atm/oc` is performed
+  - `compute_deltam_iprtout` raises a `TypeError` instead of a
+    `NameError` when its inputs are not arrays
   - `select_iprt_iquv` with `change_u_sign=True` returned the standard
     deviation of U with a negative sign; only U itself changes sign now,
     as in `select_and_plot_polar_iprt`

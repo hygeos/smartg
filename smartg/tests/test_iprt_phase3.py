@@ -150,7 +150,7 @@ for handler, level in (
 
 @pytest.fixture(scope="module")
 def phase3() -> ModuleType:
-    """The module of the phase 3 cases.
+    """Import the module of the phase 3 cases.
 
     It compiles its two kernels when imported, so the import is
     deferred from the collection to the first test.

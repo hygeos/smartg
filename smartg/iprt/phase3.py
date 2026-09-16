@@ -154,6 +154,11 @@ def _sensor(
                   ph_deg=ph_deg, **options)
 
 
+def _coords(point: gc.Point) -> tuple[float, float, float]:
+    """Return the x, y and z coordinates of a single point, in km."""
+    return float(point.x), float(point.y), float(point.z)
+
+
 def get_d1_to_e5_boa_sensors(
     vza: np.ndarray,
     phi: np.ndarray,
@@ -238,8 +243,8 @@ def get_d1_to_e5_toa_sensors_old(
             if ivaa == 9:
                 print("vza=", vza[ivza], "; phi=", phi[ivaa], " ; point=",
                       phit)
-            sensors.append(_sensor((phit.x, phit.y, phit.z),
-                                   vza_toa[ivza], phi_toa[ivaa]))
+            sensors.append(_sensor(_coords(phit), vza_toa[ivza],
+                                   phi_toa[ivaa]))
     return sensors
 
 
@@ -321,8 +326,8 @@ def get_e6_toa_sensors(
                     "the input parameters."
                 )
             phit = gc.Point(ds_geo["phit"].values[ivaa, :])
-            sensors.append(_sensor((phit.x, phit.y, phit.z),
-                                   vza_toa[ivza], phi_toa[ivaa]))
+            sensors.append(_sensor(_coords(phit), vza_toa[ivza],
+                                   phi_toa[ivaa]))
     return sensors
 
 
@@ -1627,7 +1632,7 @@ def _direction_angles(vecs: gc.Vector, index: int) -> tuple[float, float]:
                                   np.asarray(vecs.z)[index]))
     if th == 0.0 or th == 180.0:
         ph = 0.0
-    return th, ph
+    return float(th), float(ph)
 
 
 def _run_e6(
@@ -1702,7 +1707,7 @@ def case_e6_v1(nphotons: float = 1e8, overwrite: bool = True,
             is_sens[isens] = True
             phit = gc.Point(ds_toa["phit"].values[isens, :])
             th, ph = _direction_angles(vecs, isens)
-            sensors.append(_sensor((phit.x, phit.y, phit.z), th, ph))
+            sensors.append(_sensor(_coords(phit), th, ph))
 
     if overwrite or not toa_path.exists():
         _run_e6(S1DB, sensors, toa_path, nphotons, pro, surface,

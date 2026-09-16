@@ -468,7 +468,7 @@ def atm_c2_noatm() -> PhaseBAtmosphere:
 
 @pytest.fixture(scope="module")
 def atm_c2_noatm_gt() -> PhaseBAtmosphere:
-    """Same as atm_c2_noatm, with the GT truncated phase matrices."""
+    """Build atm_c2_noatm with the GT truncated phase matrices."""
     return build_atm_c2(truncation=GT_TRUNC, n_theta=N_THETA, scale=SCALE)
 
 
@@ -480,7 +480,7 @@ def atm_c2_atm() -> PhaseBAtmosphere:
 
 @pytest.fixture(scope="module")
 def atm_c2_atm_gt() -> PhaseBAtmosphere:
-    """Same as atm_c2_atm, with the GT truncated phase matrices."""
+    """Build atm_c2_atm with the GT truncated phase matrices."""
     return build_atm_c2(
         tau_ray=TAU_RAYLEIGH, truncation=GT_TRUNC, n_theta=N_THETA,
         scale=SCALE,
@@ -489,7 +489,7 @@ def atm_c2_atm_gt() -> PhaseBAtmosphere:
 
 @pytest.fixture(scope="module")
 def sensor_grid() -> Grid3D:
-    """The 70x70 sensor grid, identical for the 9 cases."""
+    """Build the 70x70 sensor grid, identical for the 9 cases."""
     return sensor_grid_c2(SCALE)
 
 
@@ -774,7 +774,7 @@ def _check_deltam(
             errors.append(
                 f"{label}: problem with {stk} values, get "
                 + f"{delta_m[istk]:.5f}. {stk} must be within "
-                + f"[{(1-tol)*ref:.5f}, {(1+tol)*ref:.5f}]"
+                + f"[{(1 - tol) * ref:.5f}, {(1 + tol) * ref:.5f}]"
             )
 
     return errors
@@ -837,7 +837,7 @@ def _check_means(
             errors.append(
                 f"{label}: problem with the mean of {stk}, get "
                 + f"{means[istk]:.6e}. It must be within "
-                + f"[{ref-tol:.6e}, {ref+tol:.6e}]"
+                + f"[{ref - tol:.6e}, {ref + tol:.6e}]"
             )
 
     return errors

@@ -233,7 +233,7 @@ def test_a1(
         n_photons=1e7,
         n_loop=1e5,
         atmosphere=atmosphere,
-        output_layers=int(7),
+        output_layers=7,
         le=le,
         surface=surface,
         xblock=64,
@@ -257,7 +257,7 @@ def test_a1(
         n_photons=1e7,
         n_loop=1e5,
         atmosphere=atmosphere,
-        output_layers=int(7),
+        output_layers=7,
         le=le,
         surface=surface,
         xblock=64,
@@ -350,9 +350,9 @@ def test_a1(
         # ============ 0km of altitude
         iquv_smartg_tot = None
         iquv_mystic_tot = None
-        for isim in range(0, 3):
+        for isim in range(3):
             imgs = []
-            for ialt in range(0, 2):
+            for ialt in range(2):
                 title = (
                     f"IPRT case A1 - depol = {l_dep[isim]} - "
                     + f"sza = {l_sza[isim]:.0f} - saa = {l_saa[isim]:.0f} - "
@@ -476,7 +476,7 @@ def test_a1(
 
             plt.close("all")
             fig, axs = plt.subplots(6, 1, figsize=(12, 24))
-            for i in range(0, 6):
+            for i in range(6):
                 axs[i].axis("off")
                 axs[i].imshow(imgs[i])
             fig.tight_layout()
@@ -499,8 +499,8 @@ def test_a1(
     ).values
     iquv_smartg_ref_tot = None
     iquv_smartg_std_ref_tot = None
-    for isim in range(0, 3):
-        for ialt in range(0, 2):
+    for isim in range(3):
+        for ialt in range(2):
             (
                 i_smartg_ref,
                 q_smartg_ref,
@@ -655,7 +655,7 @@ def test_a2(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         n_photons=1e7,
         n_loop=1e6,
         atmosphere=atmosphere,
-        output_layers=int(7),
+        output_layers=7,
         le=le,
         surface=surface,
         xblock=64,
@@ -759,7 +759,7 @@ def test_a2(request: pytest.FixtureRequest, s1df: Smartg) -> None:
 
     plt.close("all")
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
-    for i in range(0, 3):
+    for i in range(3):
         axs[i].axis("off")
         axs[i].imshow(imgs[i])
     fig.tight_layout()
@@ -828,7 +828,7 @@ def test_a2(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     plt.close("all")
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))  # 12,8
 
-    for i in range(0, 3):
+    for i in range(3):
         axs[i].axis("off")
         axs[i].imshow(imgs[i])
     fig.tight_layout()
@@ -975,7 +975,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     cld_phase = read_phase(fname=file_cld_phase)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.0]), z)
     lpha = []
-    for i in range(0, pha_atm.shape[0]):
+    for i in range(pha_atm.shape[0]):
         lpha.append(
             xr.DataArray(
                 pha_atm[i, :, :],
@@ -1024,7 +1024,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         n_loop=1e6,
         n_icdf=nth,
         atmosphere=pro,
-        output_layers=int(7),
+        output_layers=7,
         le=le,
         surface=surface,
         xblock=64,
@@ -1091,7 +1091,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     iquvstdm_pp = np.zeros((4, nvza), dtype=np.float32)
     iquvs_pp = np.zeros((4, nvza), dtype=np.float32)
     iquvstds_pp = np.zeros((4, nvza), dtype=np.float32)
-    for i in range(0, 4):
+    for i in range(4):
         iquvm_pp[i, :] = np.concatenate(
             (iquvm_with_std[i][:, 1], iquvm_with_std[i][::-1, 0])
         )
@@ -1140,7 +1140,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     )
 
     # MYSTIC IQUV and stdev IQUV
-    for i in range(0, 4):
+    for i in range(4):
         iquvm_pp[i, :] = np.concatenate(
             (iquvm_with_std[i][:, 1], iquvm_with_std[i][::-1, 0])
         )
@@ -1193,7 +1193,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     )
     iquvs_pp_ref = np.zeros((4, nvza), dtype=np.float32)
     iquvs_pp_std_ref = np.zeros((4, nvza), dtype=np.float32)
-    for i in range(0, 4):
+    for i in range(4):
         iquvs_pp_ref[i, :] = np.concatenate(
             (iquvs_with_std_ref[i][:, 1], iquvs_with_std_ref[i][::-1, 0])
         )
@@ -1208,7 +1208,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     iquvs_with_std_ref = select_iprt_iquv(
         smartg_a5_pp_ref, 0.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
-    for i in range(0, 4):
+    for i in range(4):
         iquvs_pp_ref[i, :] = np.concatenate(
             (iquvs_with_std_ref[i][:, 1], iquvs_with_std_ref[i][::-1, 0])
         )
@@ -1286,7 +1286,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     cld_phase = read_phase(fname=file_cld_phase)
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.0]), z)
     lpha = []
-    for i in range(0, pha_atm.shape[0]):
+    for i in range(pha_atm.shape[0]):
         lpha.append(
             xr.DataArray(
                 pha_atm[i, :, :],
@@ -1335,7 +1335,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         n_loop=1e6,
         n_icdf=nth,
         atmosphere=pro,
-        output_layers=int(7),
+        output_layers=7,
         le=le,
         surface=surface,
         xblock=64,
@@ -1402,7 +1402,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     iquvstdm_al = np.zeros((4, nvaa), dtype=np.float32)
     iquvs_al = np.zeros((4, nvaa), dtype=np.float32)
     iquvstds_al = np.zeros((4, nvaa), dtype=np.float32)
-    for i in range(0, 4):
+    for i in range(4):
         iquvm_al[i, :] = iquvm_with_std[i][0, :]
         iquvstdm_al[i, :] = iquvm_with_std[i + 4][0, :]
         iquvs_al[i, :] = iquvs_with_std[i][0, :]
@@ -1443,7 +1443,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     )
 
     # MYSTIC IQUV and stdev IQUV
-    for i in range(0, 4):
+    for i in range(4):
         iquvm_al[i, :] = iquvm_with_std[i][0, :]
         iquvstdm_al[i, :] = iquvm_with_std[i + 4][0, :]
         iquvs_al[i, :] = iquvs_with_std[i][0, :]
@@ -1488,7 +1488,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     )
     iquvs_al_ref = np.zeros((4, nvaa), dtype=np.float32)
     iquvs_al_std_ref = np.zeros((4, nvaa), dtype=np.float32)
-    for i in range(0, 4):
+    for i in range(4):
         iquvs_al_ref[i, :] = iquvs_with_std_ref[i][0, :]
         iquvs_al_std_ref[i, :] = iquvs_with_std_ref[i + 4][0, :]
     iquvs_al_ref_tot = iquvs_al_ref.copy()
@@ -1496,7 +1496,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     iquvs_with_std_ref = select_iprt_iquv(
         smartg_a5_al_ref, 0.0, change_u_sign=False, inv_thetas=True, stdev=True
     )
-    for i in range(0, 4):
+    for i in range(4):
         iquvs_al_ref[i, :] = iquvs_with_std_ref[i][0, :]
         iquvs_al_std_ref[i, :] = iquvs_with_std_ref[i + 4][0, :]
     iquvs_al_ref_tot = np.concatenate((iquvs_al_ref_tot, iquvs_al_ref), axis=1)

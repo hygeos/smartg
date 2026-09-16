@@ -22,13 +22,13 @@ compute_deltam_iprtout
     Compute the IPRT delta_m metric between two phase A matrices.
 """
 
-from pathlib import Path
 import warnings
+from pathlib import Path
 
-from luts.luts import MLUT
-from matplotlib.colors import Colormap
 import numpy as np
 import xarray as xr
+from luts.luts import MLUT
+from matplotlib.colors import Colormap
 
 from smartg.view import plot_polar_iquv
 
@@ -157,7 +157,6 @@ def select_iprt_iquv(
         followed by their standard deviations in the same order when
         stdev is True.
     """
-
     keep, thetas, phis = _iprt_records(
         model_val, z_alti, depol, thetas, phis,
         va_index, phi_index, z_index, depol_index,
@@ -175,9 +174,9 @@ def select_iprt_iquv(
     stokes_u_std = np.zeros((n_theta, n_phi))
     stokes_v_std = np.zeros((n_theta, n_phi))
 
-    q_sign = int(-1) if change_q_sign else int(1)
-    u_sign = int(-1) if change_u_sign else int(1)
-    v_sign = int(-1) if change_v_sign else int(1)
+    q_sign = -1 if change_q_sign else 1
+    u_sign = -1 if change_u_sign else 1
+    v_sign = -1 if change_v_sign else 1
 
     for i in np.flatnonzero(keep):
         if (
@@ -331,7 +330,6 @@ def select_and_plot_polar_iprt(
         True. The standard deviations alone when they are the only
         ones requested, and an empty tuple when neither is.
     """
-
     _, thetas, phis = _iprt_records(
         model_val, z_alti, depol, thetas, phis,
         va_index, phi_index, z_index, depol_index,
@@ -442,7 +440,7 @@ def convert_sgout_to_iprtout(
         Interpolate the outputs at the requested angles instead of
         reading them at the matching indices.
     """
-    output =  "# IPRT case " + case_name + "\n"
+    output = "# IPRT case " + case_name + "\n"
     output += "# RT model: SMARTG\n"
     output += "# depol altitude sza saa va phi I Q U V Istd Qstd Ustd Vstd\n"
 
@@ -556,7 +554,7 @@ def compute_deltam_iprtout(
         The delta_m of I, Q, U and V, in percent.
     """
     if not isinstance(obs, np.ndarray) or not isinstance(mod, np.ndarray):
-        raise NameError("obs and mod must be np.ndarray!")
+        raise TypeError("obs and mod must be np.ndarray!")
     id_obs = [i_obs_id, i_obs_id + 1, i_obs_id + 2, i_obs_id + 3]
     id_mod = [i_mod_id, i_mod_id + 1, i_mod_id + 2, i_mod_id + 3]
     stk = ['I', 'Q', 'U', 'V']
