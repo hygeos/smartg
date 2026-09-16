@@ -67,7 +67,16 @@ corrected before the final `v2.0.0` release.
       `convert_sgout_to_iprtout`, `compute_deltam_IPRTout` →
       `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`,
       `plot_iprt_radiances` → `smartg.view.plot_iquv_comparison`, and
-      their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...)
+      their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...);
+      in `smartg.iprt.phase3`, `case_D1` ... `case_E6_v3` →
+      `case_d1` ... `case_e6_v3`, the parameters of `plot_polar_iprt`
+      (`I` → `i`, `change_Q_sign` → `change_q_sign`, `maxI` → `max_i`,
+      `cmapI` → `cmap_i`, `minI` → `min_i`, ...) and of
+      `plot_camera_iprt` (`I` → `i`, `I_min` → `i_min`, `I_max` →
+      `i_max`, `I_cmap` → `i_cmap`). `run_sim` now takes the paths of
+      the BOA and TOA runs, None skipping a run, instead of the
+      overwrite flag and the existence of the files, and it and the
+      `get_*_sensors` helpers no longer take `nvza` and `nvaa`
     - histories: `Si` → `si`, `Si2` → `si2`, `BigSum` → `big_sum`, and
       their parameters (`Dij` → `dij`, `Ki` → `ki`, `S` → `s`,
       `only_I` → `only_i`); the `LEVEL` and `IDIR` parameters of
@@ -542,7 +551,8 @@ corrected before the final `v2.0.0` release.
     the `depol`, `change_q_sign`, `change_v_sign` and `depol_index`
     parameters of the wrapper, in the same order (`depol` is now its
     third positional parameter). `plot_polar_iprt` of
-    `smartg.iprt.phase3` draws with it too, `min_i` taking its `minI`
+    `smartg.iprt.phase3` draws with it too, passing its `min_i` on.
+    `plot_camera_iprt` now returns the created `Figure`
   - The aerosol and cloud cases of `smartg.iprt.phase3` (D3, D4,
     D4_bis, D5, E3, E4, E5) run on the native scattering angles of
     their files instead of 18001 resampled ones, through
@@ -605,6 +615,14 @@ corrected before the final `v2.0.0` release.
     documented
   - The `Path + str` concatenations of `smartg.iprt.phase3`
     raised a `TypeError` before any run
+  - A phase 3 case run with `overwrite=False`, when its intermediate
+    files existed but not its IPRT output file, wrote a NaN top
+    altitude in the `zout` axis of that file: the altitudes were only
+    read before a run
+  - `aer2smartg` gave the duplicated wavelength of a single wavelength
+    file the properties of the last humidity or radius for every
+    one. The phase 3 cases were not affected, their converted files
+    having a single humidity
   - Seven of the 17 IPRT phase 3 cases of `smartg.iprt.phase3` did not
     run. `aer2smartg` still used the removed `NBTHETA` (D4_bis, E3, E4,
     E5), and D3, D4 and D5 gave `calc_iphase` a LUT named `wavelength`

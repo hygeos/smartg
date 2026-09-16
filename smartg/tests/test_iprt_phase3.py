@@ -1,14 +1,17 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""Non-regression tests of the IPRT phase 3 cases.
 
-# Non-regression test of the IPRT phase 3 cases, in spherical geometry,
-# of smartg/iprt/phase3.py: the one layer cases D1 to D6 and
-# the vertically inhomogeneous ones E1 to E5, against saved SMART-G
-# results. E6, the camera at 300 000 km, is not covered yet.
-# Tested with the following GPUs: 5070 Ti
+The spherical geometry cases of smartg.iprt.phase3, the one layer
+cases D1 to D6 and the vertically inhomogeneous ones E1 to E5, are
+compared with saved SMART-G results. E6, the camera at 300 000 km, is
+not covered yet.
+
+Tested with the following GPUs: 5070 Ti
+"""
+
 import importlib
 import logging
 from pathlib import Path
+from types import ModuleType
 
 import numpy as np
 import pytest
@@ -29,7 +32,7 @@ SEED = 1234
 # fast one, 1e6 per viewing direction, takes about 5 minutes for the
 # file and is the one that runs routinely.
 TIERS = ["fast", pytest.param("slow", marks=pytest.mark.slow)]
-NPHOTONS = {"fast": 1e6, "slow": 1e8}
+N_PHOTONS = {"fast": 1e6, "slow": 1e8}
 
 # The cases, by the suffix of their case_ function in the module and
 # of their output file iprt_phase3_<case>.nc. The aerosol and cloud
@@ -120,54 +123,34 @@ Z_SCALE = 4.0
 
 ZOUT_NAMES = ["BOA", "TOA"]
 STOKES = ["I", "Q", "U", "V"]
-ROOTPATH = Path(__file__).resolve().parent.parent
+ROOT_PATH = Path(__file__).resolve().parent.parent
 # **********************************************************************
 
 # **************************** logging *********************************
-# Create log file
-log_dir = ROOTPATH / "tests" / "logs"
-log_dir.mkdir(parents=True, exist_ok=True)
+LOG_DIR = ROOT_PATH / "tests" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "iprt_phase3.log"
+LOG_FORMATTER = logging.Formatter(
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S%p",
+)
 
-# Create a named logger
+# Errors on the console, everything in the log file
 logger = logging.getLogger("test_phase3")
 logger.setLevel(logging.INFO)
-
-# Create a console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.ERROR)
-
-# Set the formatter for the console handler
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S%p",
-)
-console_handler.setFormatter(formatter)
-
-# Add the console handler to the logger
-logger.addHandler(console_handler)
-
-# Create a file handler
-file_handler = logging.FileHandler(
-    ROOTPATH / "tests" / "logs" / "iprt_phase3.log", mode="w"
-)
-file_handler.setLevel(logging.INFO)
-
-# Set the formatter for the file handler
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S%p",
-)
-file_handler.setFormatter(formatter)
-
-# Add the file handler to the logger
-logger.addHandler(file_handler)
+for handler, level in (
+    (logging.StreamHandler(), logging.ERROR),
+    (logging.FileHandler(LOG_FILE, mode="w"), logging.INFO),
+):
+    handler.setLevel(level)
+    handler.setFormatter(LOG_FORMATTER)
+    logger.addHandler(handler)
 # **********************************************************************
 
 
 @pytest.fixture(scope="module")
-def phase3():
-    """
-    The module of the phase 3 cases
+def phase3() -> ModuleType:
+    """The module of the phase 3 cases.
 
     It compiles its two kernels when imported, so the import is
     deferred from the collection to the first test.
@@ -175,19 +158,46 @@ def phase3():
     return importlib.import_module("smartg.iprt.phase3")
 
 
-def _tolerance(table, tier, case):
-    """
-    Tolerance of a case at a tier: its own entry, or the default one
+def _tolerance(table: dict[str, dict[str, float]], tier: str, case: str
+               ) -> float:
+    """Return the tolerance of a case at a tier.
+
+    Parameters
+    ----------
+    table : dict
+        MEAN_TOL or FRAC_TOL.
+    tier : str
+        'fast' or 'slow'.
+    case : str
+        The case name, e.g. 'd1'.
+
+    Returns
+    -------
+    float
+        The entry of the case, or the default one, "*".
     """
     return table[tier].get(case, table[tier]["*"])
 
 
-def _open(folder, case):
-    """
-    Radiance and std arrays of a case, as (zout, sza, vza, vaa, stokes)
+def _open(folder: str | Path, case: str
+          ) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray]]:
+    """Return the radiance and std arrays of a case.
 
-    The saa axis, of length 1, is dropped. The coordinates come with
-    them for the checks and the figures.
+    Parameters
+    ----------
+    folder : str or Path
+        The folder of the IPRT output file iprt_phase3_<case>.nc.
+    case : str
+        The case name, e.g. 'd1'.
+
+    Returns
+    -------
+    radiance, std : ndarray
+        The arrays on (zout, sza, vza, vaa, stokes), the saa axis, of
+        length 1, being dropped.
+    coords : dict of ndarray
+        The zout, sza, vza and vaa coordinates, for the checks and the
+        figures.
     """
     ds = xr.open_dataset(Path(folder) / f"iprt_phase3_{case}.nc").load()
     coords = {
@@ -201,15 +211,33 @@ def _open(folder, case):
     )
 
 
-def _compare(test, sig_test, ref, sig_ref, ref_i):
-    """
-    Statistics of one Stokes parameter at one output level
+def _compare(
+    test: np.ndarray,
+    sig_test: np.ndarray,
+    ref: np.ndarray,
+    sig_ref: np.ndarray,
+    ref_i: np.ndarray,
+) -> dict[str, float]:
+    """Return the statistics of one Stokes parameter at one level.
 
-    Returns a dict with the bias of the mean relative to the mean |I|
-    of the saved result, and, over the directions where the combined
-    sigma is not zero: their number, the mean, rms and largest |z|,
-    and the fraction of |z| > Z_OUTLIER. The number of directions
-    with a zero combined sigma is reported as "zero".
+    Parameters
+    ----------
+    test, sig_test : ndarray
+        The values of the test run and their standard deviations.
+    ref, sig_ref : ndarray
+        The values of the saved result and their standard deviations.
+    ref_i : ndarray
+        The I values of the saved result at the same level.
+
+    Returns
+    -------
+    dict
+        The bias of the mean relative to the mean abs(ref_i) ("bias"),
+        and, over the directions where the combined sigma is not zero,
+        their number ("n"), the mean, rms and largest abs(z) ("mean_z",
+        "rms_z", "max_z") and the fraction of abs(z) > Z_OUTLIER
+        ("frac"). The number of directions with a zero combined sigma
+        is "zero".
     """
     sig = np.sqrt(sig_test**2 + sig_ref**2)
     ok = sig > 0
@@ -233,13 +261,39 @@ def _compare(test, sig_test, ref, sig_ref, ref_i):
     return stats
 
 
-def _plot(request, phase3, case, rad, sig, ref, sig_ref, coords, tier):
-    """
-    Save the polar views of the test run and of z in the html report
+def _plot(
+    request: pytest.FixtureRequest,
+    phase3: ModuleType,
+    case: str,
+    rad: np.ndarray,
+    sig: np.ndarray,
+    ref: np.ndarray,
+    sig_ref: np.ndarray,
+    coords: dict[str, np.ndarray],
+    tier: str,
+) -> None:
+    """Save the polar views of the test run and of z in the html report.
 
     One figure of each per output level, at the sun zenith angle
     PLOT_SZA, drawn with plot_polar_iprt as the notebook does: the
     viewing azimuth columns at 360 - vaa.
+
+    Parameters
+    ----------
+    request : pytest.FixtureRequest
+        The request of the test.
+    phase3 : ModuleType
+        The smartg.iprt.phase3 module.
+    case : str
+        The case name, e.g. 'd1'.
+    rad, sig : ndarray
+        The radiances of the test run and their standard deviations.
+    ref, sig_ref : ndarray
+        The same, for the saved result.
+    coords : dict of ndarray
+        The zout, sza, vza and vaa coordinates.
+    tier : str
+        'fast' or 'slow', for the titles.
     """
     isza = int(np.argmin(np.abs(coords["sza"] - PLOT_SZA)))
     sza = coords["sza"][isza]
@@ -263,16 +317,24 @@ def _plot(request, phase3, case, rad, sig, ref, sig_ref, coords, tier):
         stokes = [z[iz, isza, :, :, k] for k in range(4)]
         phase3.plot_polar_iprt(
             *stokes, thetas=vza, phis=phis,
-            minI=-Z_SCALE, maxI=Z_SCALE, maxQ=Z_SCALE, maxU=Z_SCALE,
-            maxV=Z_SCALE, cmapI="RdBu_r",
+            min_i=-Z_SCALE, max_i=Z_SCALE, max_q=Z_SCALE, max_u=Z_SCALE,
+            max_v=Z_SCALE, cmap_i="RdBu_r",
             title=f"{head} - z = (test - ref) / sigma ({zname})",
         )
         conftest.savefig(request, bbox_inches="tight")
 
 
-def _log_times(folder, case, label):
-    """
-    Log the processing times of the BOA and TOA runs
+def _log_times(folder: str | Path, case: str, label: str) -> None:
+    """Log the processing times of the BOA and TOA runs.
+
+    Parameters
+    ----------
+    folder : str or Path
+        The folder of the intermediate files of the case.
+    case : str
+        The case name, e.g. 'd1'.
+    label : str
+        The label of the case in the log.
     """
     for zname in ["boa", "toa"]:
         ds = xr.open_dataset(Path(folder) / f"iprt_phase3_{case}_{zname}.nc")
@@ -286,16 +348,20 @@ def _log_times(folder, case, label):
 
 @pytest.mark.parametrize("tier", TIERS)
 @pytest.mark.parametrize("case", CASE_NAMES)
-def test_phase3(request, phase3, case, tier, tmp_path):
-    """
-    IPRT phase 3, one case against its saved result
-    """
+def test_phase3(
+    request: pytest.FixtureRequest,
+    phase3: ModuleType,
+    case: str,
+    tier: str,
+    tmp_path: Path,
+) -> None:
+    """IPRT phase 3, one case against its saved result."""
     print(f"=== Test phase 3 case {case.upper()} - {tier}")
     label = f"{case.upper()} - {tier}"
 
-    run_case = getattr(phase3, f"case_{case.upper()}")
+    run_case = getattr(phase3, f"case_{case}")
     run_case(
-        nphotons=NPHOTONS[tier], overwrite=True, output_dir=tmp_path,
+        nphotons=N_PHOTONS[tier], overwrite=True, output_dir=tmp_path,
         seed=SEED,
     )
     _log_times(tmp_path, case, label)
