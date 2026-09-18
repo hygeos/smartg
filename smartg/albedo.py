@@ -164,7 +164,8 @@ class AlbedoSpectrum:
         Look-up table of albedo values indexed by wavelength (nm).
     """
 
-    def __init__(self, r: NumericArrayLike, wavelength: NumericArrayLike) -> None:
+    def __init__(self, r: NumericArrayLike,
+                 wavelength: NumericArrayLike) -> None:
         self.data: LUT = LUT(r, axes=[wavelength], names=["wavelength"])
 
     def get(self, wavelength: NumericArrayLike) -> NDArray[np.floating]:

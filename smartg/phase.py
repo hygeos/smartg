@@ -770,7 +770,8 @@ def read_phase_nc(
 
     Read the table of a water cloud for a 3D cloud:
 
-    >>> pha = read_phase_nc('wc_sol.nc', output_sg_ready=False)  # doctest: +SKIP
+    >>> pha = read_phase_nc('wc_sol.nc',  # doctest: +SKIP
+    ...                     output_sg_ready=False)
     >>> pha.dims  # doctest: +SKIP
     ('wavelength_phase', 'reff', 'nphamat', 'theta_atm')
     """
@@ -860,7 +861,8 @@ def read_phase_dat(
 
     Examples
     --------
-    >>> pha = read_phase_dat('phase.dat', kind='atm', normalize=True)  # doctest: +SKIP
+    >>> pha = read_phase_dat('phase.dat', kind='atm',  # doctest: +SKIP
+    ...                      normalize=True)
     >>> pha.dims  # doctest: +SKIP
     ('wavelength_phase', 'z_phase', 'nphamat', 'theta_atm')
     """
@@ -1453,7 +1455,8 @@ def read_phase(
 
     Examples
     --------
-    >>> pha = read_phase('phase.dat', kind='atm', normalize=True)  # doctest: +SKIP
+    >>> pha = read_phase('phase.dat', kind='atm',  # doctest: +SKIP
+    ...                  normalize=True)
     >>> pha = read_phase('desert_sol.nc', kind='atm',  # doctest: +SKIP
     ...                  wavelength_phase=550.0,
     ...                  z_rh_reff=[70.0, 60.0, 58.0],
@@ -1463,7 +1466,8 @@ def read_phase(
     ...                  z_rh_reff=[70.0, 60.0, 58.0],
     ...                  pfgrid=[100.0, 50.0, 10.0, 0.0],
     ...                  ntheta_max=18001)
-    >>> pha = read_phase('wc_sol.nc', output_sg_ready=False)  # doctest: +SKIP
+    >>> pha = read_phase('wc_sol.nc',  # doctest: +SKIP
+    ...                  output_sg_ready=False)
     """
     fname = Path(fname)
 

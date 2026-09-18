@@ -86,7 +86,8 @@ def diff1(a: np.ndarray, axis: int = 0, samesize: bool = True) -> NDArray:
     >>> diff1(a, axis=0, samesize=True)
     array([[ 0,  0,  0,  0],
            [ 9, 18, 36, 72]])
-    >>> diff1(a, axis=0, samesize=False) # equivalent to np.diff(a, axis=0)
+    >>> # equivalent to np.diff(a, axis=0)
+    >>> diff1(a, axis=0, samesize=False)
     array([[ 9, 18, 36, 72]])
     """
     if samesize:

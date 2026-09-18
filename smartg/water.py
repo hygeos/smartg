@@ -215,7 +215,9 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
         np.array(list(aw_pf[ok_pf]) + list(aw_pw[ok_pw])),
         dims=["wavelength"],
         coords={
-            "wavelength": np.array(list(wavelength_pf[ok_pf]) + list(wavelength_pw[ok_pw]))
+            "wavelength": np.array(
+                list(wavelength_pf[ok_pf]) + list(wavelength_pw[ok_pw])
+            )
         },
     )
 
@@ -767,7 +769,8 @@ class Hydrosol:
         if (self._phase is None) and (np.asarray(iop["bp"]) > 0).any():
             if iop["bbp_ratio"] is None:
                 raise ValueError(
-                    "No phase function nor bbp_ratio has been provided, but bp>0"
+                    "No phase function nor bbp_ratio has been "
+                    "provided, but bp>0"
                 )
             if phase:
                 self._resolve_truncation(wavelength, z, use_old_calc_iphase)
@@ -1490,7 +1493,8 @@ class Water1D(Water):
             np.cumsum(tau_w, out=tau_w, axis=1),
             dims=["wavelength", "z_oc"],
             attrs={
-                "description": "Cumulated water optical thickness at each wavelength"
+                "description": "Cumulated water optical thickness "
+                               "at each wavelength"
             },
         )
 
@@ -1498,7 +1502,8 @@ class Water1D(Water):
             np.cumsum(tau_p, out=tau_p, axis=1),
             dims=["wavelength", "z_oc"],
             attrs={
-                "description": "Cumulated oceanic particles optical thickness at each wavelength"
+                "description": "Cumulated oceanic particles optical "
+                               "thickness at each wavelength"
             },
         )
 
@@ -1506,7 +1511,8 @@ class Water1D(Water):
             np.cumsum(tau_y, out=tau_y, axis=1),
             dims=["wavelength", "z_oc"],
             attrs={
-                "description": "Cumulated CDOM optical thickness at each wavelength"
+                "description": "Cumulated CDOM optical thickness at "
+                               "each wavelength"
             },
         )
 

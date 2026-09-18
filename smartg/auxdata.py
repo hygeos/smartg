@@ -1324,8 +1324,9 @@ class AuxData:
                 missing.append(name)
                 continue
             stat = path.stat()
-            if stat.st_size != record.size or (stat.st_mtime_ns != record.mtime_ns
-                  and _sha256(path) != record.sha256):
+            if (stat.st_size != record.size
+                    or (stat.st_mtime_ns != record.mtime_ns
+                        and _sha256(path) != record.sha256)):
                 modified.append(name)
         extra = [name for name in _walk_files(root) if name not in entry.files]
         return FileCheck(tuple(modified), tuple(missing), tuple(extra))

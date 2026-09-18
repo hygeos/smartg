@@ -42,7 +42,9 @@ if TYPE_CHECKING:
 
 RealNumber: TypeAlias = int | float | np.integer | np.floating
 
-NumericArrayLike: TypeAlias = RealNumber | Sequence[int | float] | NDArray[np.number]
+NumericArrayLike: TypeAlias = (
+    RealNumber | Sequence[int | float] | NDArray[np.number]
+)
 
 PathType: TypeAlias = str | Path | PathLike[str]
 

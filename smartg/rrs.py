@@ -102,7 +102,8 @@ def epsilon_n2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     Returns
     -------
     eps : float or ndarray
-        Dimensionless depolarization ratio of N2. Same shape as ``wavelength``.
+        Dimensionless depolarization ratio of N2. Same shape as
+        ``wavelength``.
 
     References
     ----------
@@ -135,8 +136,10 @@ def fk_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     """
     fk_o2 = (
         1.096
-        + 1.385 * 1e-3 / ((np.asarray(wavelength, dtype=np.float64) * 1e-3) ** 2)
-        + 1.448 * 1e-4 / ((np.asarray(wavelength, dtype=np.float64) * 1e-3) ** 4)
+        + 1.385 * 1e-3
+        / ((np.asarray(wavelength, dtype=np.float64) * 1e-3) ** 2)
+        + 1.448 * 1e-4
+        / ((np.asarray(wavelength, dtype=np.float64) * 1e-3) ** 4)
     )
     if np.ndim(fk_o2) == 0:
         fk_o2 = float(fk_o2)
@@ -221,8 +224,8 @@ def f0_air(
     Returns
     -------
     f0 : float or ndarray
-        Dimensionless Cabannes fraction. Same shape as ``wavelength`` and
-        ``theta`` (broadcast).
+        Dimensionless Cabannes fraction. Same shape as ``wavelength``
+        and ``theta`` (broadcast).
 
     References
     ----------
@@ -253,8 +256,8 @@ def f0_n2(
     Returns
     -------
     f0 : float or ndarray
-        Dimensionless Cabannes fraction of N2. Same shape as ``wavelength``
-        and ``theta`` (broadcast).
+        Dimensionless Cabannes fraction of N2. Same shape as
+        ``wavelength`` and ``theta`` (broadcast).
 
     References
     ----------
@@ -285,8 +288,8 @@ def f0_o2(
     Returns
     -------
     f0 : float or ndarray
-        Dimensionless Cabannes fraction of O2. Same shape as ``wavelength``
-        and ``theta`` (broadcast).
+        Dimensionless Cabannes fraction of O2. Same shape as
+        ``wavelength`` and ``theta`` (broadcast).
 
     References
     ----------
@@ -609,7 +612,8 @@ def l_air(
     )
 
     wavelength_out = np.concatenate(
-        [wavelength_astk_n2, wavelength_astk_o2, wavelength_stk_n2, wavelength_stk_o2]
+        [wavelength_astk_n2, wavelength_astk_o2,
+         wavelength_stk_n2, wavelength_stk_o2]
     )
     l_out = (
         np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2])
@@ -627,9 +631,10 @@ def l2d(
     r"""Vectorised air rotational Raman spectrum over many wavelengths.
 
     Same physics as :func:`l_air`, but evaluated simultaneously for
-    every excitation wavelength in ``wavelength``. The N2 and O2 line lists
-    depend only on temperature and are reused across all ``wavelength``; the
-    wavelength-dependent Cabannes ratio :func:`k_ratio` is broadcast
+    every excitation wavelength in ``wavelength``. The N2 and O2 line
+    lists depend only on temperature and are reused across all
+    ``wavelength``; the wavelength-dependent Cabannes ratio
+    :func:`k_ratio` is broadcast
     to weight each line. The output is sorted by increasing wavelength
     along the last axis for each input excitation wavelength.
 
@@ -710,9 +715,10 @@ def l2d_inv(
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Inverse air rotational Raman spectrum (vectorised).
 
-    Given a set of scattered wavelengths ``wavelength`` observed at angle
-    ``theta``, returns the corresponding excitation wavelengths and
-    the Ring-spectrum weights that map to each scattered wavelength.
+    Given a set of scattered wavelengths ``wavelength`` observed at
+    angle ``theta``, returns the corresponding excitation wavelengths
+    and the Ring-spectrum weights that map to each scattered
+    wavelength.
     This is the inverse of :func:`l2d`: instead of computing
     ``output = excitation + Delta nu``, it computes
     ``excitation = output - Delta nu``. Used by callers (e.g.

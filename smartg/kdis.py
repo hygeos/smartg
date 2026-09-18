@@ -554,7 +554,7 @@ class Kdis:
             dir_data = dir_kdis / model
 
         def is_sorted(values: NDArray[np.floating]) -> bool:
-            """Return whether values are monotonically non-decreasing."""
+            """Return whether values are sorted in increasing order."""
             return bool(np.all(values[:-1] <= values[1:]))
 
         if format is None:
@@ -626,7 +626,8 @@ class Kdis:
                     ):
                         print(" kdis_coeff ERROR")
                         print(
-                            "            wavelengths must be sorted in increasing order"
+                            "            wavelengths must be sorted in "
+                            "increasing order"
                         )
                         sys.exit()
                 skip_comment(definition_file)
@@ -642,7 +643,8 @@ class Kdis:
                             < self.p[pressure_index - 1]):
                         print(" kdis_coeff ERROR")
                         print(
-                            "            pressure must be sorted in increasing order"
+                            "            pressure must be sorted in "
+                            "increasing order"
                         )
                         sys.exit()
                 skip_comment(definition_file)
@@ -660,7 +662,8 @@ class Kdis:
                     ):
                         print(" kdis_coeff ERROR")
                         print(
-                            "            temperature must be sorted in increasing order"
+                            "            temperature must be sorted in "
+                            "increasing order"
                         )
                         sys.exit()
                 if self.nsp_c > 0:
@@ -679,7 +682,8 @@ class Kdis:
                         ):
                             print(" kdis_coeff ERROR")
                             print(
-                                "            concentration must be sorted in increasing order"
+                                "            concentration must be sorted in "
+                                "increasing order"
                             )
                             sys.exit()
             if self.nsp > 0:
@@ -732,16 +736,19 @@ class Kdis:
                             for temperature_index in range(self.nt):
                                 for pressure_index in range(self.np):
                                     line = species_file.readline()
-                                    for coefficient_index in range(
-                                        self.nai[species_index, wavelength_index]
-                                    ):
+                                    n_ai = self.nai[
+                                        species_index, wavelength_index
+                                    ]
+                                    for coefficient_index in range(n_ai):
                                         self.ki[
                                             species_index,
                                             wavelength_index,
                                             coefficient_index,
                                             pressure_index,
                                             temperature_index,
-                                        ] = float(line.split()[coefficient_index])
+                                        ] = float(
+                                            line.split()[coefficient_index]
+                                        )
             if self.nsp_c > 0:
                 self.c_desc = "density"
             else:
@@ -885,7 +892,8 @@ class Kdis:
                 if not is_sorted(self.c):
                     print(" kdis_coeff ERROR")
                     print(
-                        "            concentration must be sorted in increasing order"
+                        "            concentration must be sorted in "
+                        "increasing order"
                     )
                     sys.exit()
             else:
@@ -893,7 +901,8 @@ class Kdis:
             if not is_sorted(self.wvlband[0, :]):
                 print(" kdis_coeff ERROR")
                 print(
-                    "            (h5 format) read NOT implemented for concentration dependent species"
+                    "            (h5 format) read NOT implemented for "
+                    "concentration dependent species"
                 )
                 sys.exit()
             if not is_sorted(self.p):
@@ -905,7 +914,8 @@ class Kdis:
             if not is_sorted(self.t):
                 print(" kdis_coeff ERROR")
                 print(
-                    "            temperature must be sorted in increasing order"
+                    "            temperature must be sorted in increasing "
+                    "order"
                 )
                 sys.exit()
             if self.nsp > 0:
@@ -1267,7 +1277,7 @@ class KdisIbandList:
 
 
 def skip_comment(file_handle: TextIO) -> None:
-    """Skip consecutive comment lines and rewind to the first data line."""
+    """Skip the comment lines and rewind to the first data line."""
     while True:
         position = file_handle.tell()
         if not file_handle.readline().strip().startswith("#"):
