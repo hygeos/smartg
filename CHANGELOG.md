@@ -355,6 +355,15 @@ completed and corrected before the final `v2.0.0` release.
     `GT_trunc(trunc_frac=0.3, theta_tr=5.0)`): the water phase functions are
     now truncated with pytrunc like the atmospheric ones, and the scattering
     coefficient is scaled by `1 - f`. `None` disables the truncation.
+  - The declared dependencies have been trimmed and bounded. `pyarrow`,
+    `pyhdf` and `statsmodels` are no longer declared, as no module nor
+    notebook imports them (`pyhdf` still comes in as a dependency of
+    `luts`), and the `ephem` and `docformatter` pixi dependencies have
+    been dropped. The libraries whose API SMART-G calls directly are
+    now capped at their next major version (`numpy>=2,<3`,
+    `jupytext>=1.16,<2`, `geoclide>=4.0.0,<5`, `pytrunc>=2.0.0,<3`,
+    `gatiab>=1.1.2,<2`), and the supported Python versions are
+    `>=3.11,<3.15`, which is what the classifiers already announced
 
 * New features
   - The scattering angles of a phase matrix no longer have to be equally

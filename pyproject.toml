@@ -30,29 +30,30 @@ classifiers = [
     'Programming Language :: Python :: 3.14',
     'Topic :: Scientific/Engineering'
 ]
-requires-python = ">= 3.11"
+requires-python = ">=3.11,<3.15"
 dependencies = [
-    "numpy>=2",
+    "numpy>=2,<3",
     "xarray",
     "pandas",
     "scipy",
     "h5py",
-    "pyarrow",
+    # openpyxl backs the pandas.read_excel of the Sentinel-2 spectral
+    # responses in demo_notebook.py
     "openpyxl",
     "progressbar2",
     "tqdm",
     "matplotlib",
     "python-dotenv",
     "notebook",
-    "jupytext>=1.16",
+    "jupytext>=1.16,<2",
     "ipywidgets",
+    # ipympl backs the "%matplotlib widget" backend of the notebooks
     "ipympl",
-    "pyhdf",
     "pycuda",
-    "geoclide>=4.0.0",
+    "geoclide>=4.0.0,<5",
     "luts",
-    "pytrunc>=2.0.0",
-    "gatiab>=1.1.2",
+    "pytrunc>=2.0.0,<3",
+    "gatiab>=1.1.2,<2",
 ]
 
 [project.optional-dependencies]
@@ -63,7 +64,6 @@ test = [
     "papermill"
 ]
 extra = [
-    "statsmodels",
     "jax[cuda12]>=0.4",
     "radis>=0.17",
     "hitran-api>=1.1"
@@ -86,8 +86,6 @@ smartg = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
 luts = "*"
-ephem = ">=4.2.1,<5"
-docformatter = ">=1.7.8,<2"
 
 [tool.pixi.environments]
 # pixi shell # default environment
