@@ -161,7 +161,7 @@ N_PHOTONS_ATM_B = {1: N_PHOTONS, 5: 1e9}
 # Reference delta_m values (in percent) of I, Q, U and V, measured with
 # the settings above (SEED, XBLOCK, XGRID, N_PHOTONS). They are within
 # a few percent of the values of the notebook
-# notebooks/validation_SMARTG_IPRT_phaseB-C2.py, which holds no output.
+# notebooks/validation_smartg_iprt_phase_b_c2.py, which holds no output.
 # Regenerate them with the same settings from the log if the physics
 # legitimately changes. Each table holds one sub table per tier, the
 # fast one being noisier by construction.

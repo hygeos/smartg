@@ -98,6 +98,12 @@ completed and corrected before the final `v2.0.0` release.
     which replaces the `print_c2_res_noatm` and `print_c2_res_atm`
     functions of the notebook for any case, grid, level, direction and
     reference file, and returns the delta_m values
+  - The IPRT validation notebooks follow PEP 8 module names:
+    `validation_SMARTG_IPRT_phaseA.py` → `validation_smartg_iprt_phase_a.py`,
+    `validation_SMARTG_IPRT_phaseB-C2.py` →
+    `validation_smartg_iprt_phase_b_c2.py` and
+    `validation_SMARTG_IPRT_phase3.py` → `validation_smartg_iprt_phase3.py`,
+    the last one newly tracked
   - The water module has been restructured for consistency with the
     atmosphere module: the `IOP*` classes (`IOP_base`, `IOP`, `IOP_1`,
     `IOP_Rw`, `IOP_profile`) have been replaced by the new `Water` /

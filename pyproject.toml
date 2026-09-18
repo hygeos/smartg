@@ -147,7 +147,7 @@ ignore = ["ANN401"]
 # Everything but the IPRT tools keeps the default rules: the rules
 # added above, and only them (the defaults hold E722, W605, D419,
 # N999 and I001)
-"!{smartg/iprt/**,smartg/tests/*iprt*.py,smartg/notebooks/validation_SMARTG_IPRT_*.py}" = [
+"!{smartg/iprt/**,smartg/tests/*iprt*.py,smartg/notebooks/validation_smartg_iprt_*.py}" = [
     "E1", "E2", "E3", "E4", "E5", "E701", "E702", "E703", "E711", "E712",
     "E713", "E714", "E721", "E731", "E741", "E742", "E743", "W1", "W2",
     "W5", "ANN", "N8", "I002",
@@ -160,7 +160,7 @@ ignore = ["ANN401"]
 # comment blocks, whose table rows cannot wrap, an import may open
 # any cell, as ruff allows in .ipynb files, and a script opening on
 # a markdown cell has no module docstring
-"smartg/notebooks/validation_SMARTG_IPRT_*.py" = [
+"smartg/notebooks/validation_smartg_iprt_*.py" = [
     "D100", "E402", "E501", "W505",
 ]
 
