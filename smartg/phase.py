@@ -308,9 +308,12 @@ def as_theta_grid(n_theta: ThetaLike) -> NDArray[np.float64]:
 
     Raises
     ------
+    TypeError
+        If ``n_theta`` is a string: ``'native'`` is resolved by the
+        phase methods, not here.
     ValueError
         If the angles are not strictly increasing, or do not span the
-        whole scattering range, or if ``n_theta`` is a string.
+        whole scattering range.
 
     Examples
     --------

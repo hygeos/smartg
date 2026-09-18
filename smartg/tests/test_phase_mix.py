@@ -112,7 +112,7 @@ def test_native_is_resolved_by_the_phase_methods_only():
     assert is_native_theta("native")
     assert not is_native_theta(721)
     assert not is_native_theta(theta_grid(5))
-    with pytest.raises(ValueError, match="native"):
+    with pytest.raises(TypeError, match="native"):
         as_theta_grid("native")
 
 
