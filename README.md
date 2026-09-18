@@ -42,7 +42,7 @@ Mathieu Compiègne
 * Spectral integration with the k-distribution and REPTRAN parameterizations
 * Rotational (Ring effect) and vibrational Raman scattering
 * Forward and backward modes, local estimate, and photon-history tracking
-* Results convertible to an `xarray.Dataset`, with built-in visualization helpers
+* Results returned as an `xarray.Dataset`, with built-in visualization helpers
 
 
 ## 2. Installation
@@ -183,7 +183,7 @@ SMARTG_DIR_AUXDATA=dir/path/where/to/save/data/
 
 ## 5. Quick start
 
-Once the auxiliary data are in place, a first simulation takes three lines:
+Once the auxiliary data are in place, a first simulation takes a few lines:
 
 ```python
 from smartg.smartg import Smartg
@@ -191,11 +191,12 @@ from smartg.atmosphere import Atm1D
 from smartg.view import smartg_view
 
 # 1e8 photons at 500 nm, tropical atmosphere, sun at a 30° zenith angle
-res = Smartg().run(wavelength=500., th_deg=30., n_photons=1e8,
-                   atmosphere=Atm1D('afglt'))
+ds = Smartg().run(wavelength=500., th_deg=30., n_photons=1e8,
+                  atmosphere=Atm1D('afglt'))
 
-ds = res.to_xarray()  # 'I_up (TOA)', 'Q_up (TOA)', 'U_up (TOA)', 'V_up (TOA)', ...
-smartg_view(ds)       # polar view of the reflectance and of the polarization
+# ds is an xarray.Dataset holding 'I_up (TOA)', 'Q_up (TOA)',
+# 'U_up (TOA)', 'V_up (TOA)', ...
+smartg_view(ds)  # polar view of the reflectance and of the polarization
 ```
 
 The first call compiles the CUDA kernel; subsequent runs reuse it.
@@ -230,7 +231,8 @@ jupytext is installed with the other dependencies. Its configuration, in the `[t
 To check that SMART-G is running correctly, run the following command at the root of the project:
 
 ```bash
-pytest smartg/tests/test_cuda.py smartg/tests/test_profile.py smartg/tests/test_smartg.py -s -v
+pytest smartg/tests/test_cuda.py smartg/tests/test_profile.py \
+       smartg/tests/test_atm3d.py smartg/tests/test_smartg.py -s -v
 ```
 
 A full testing is recommended in dev:
@@ -242,7 +244,7 @@ pytest smartg/tests/ -s -v
 With Pixi, both are available as tasks:
 
 ```bash
-pixi run test-basic  # the three files above
+pixi run test-basic  # the four files above
 pixi run test-all    # the whole test suite
 ```
 
