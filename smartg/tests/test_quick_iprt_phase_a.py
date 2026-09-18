@@ -315,7 +315,7 @@ def test_a1(
                 vaa_dep01,
                 vaa_dep01,
             ],
-            file_name=tmp_file_a1,
+            fname=tmp_file_a1,
             output_layer=[
                 "_up (TOA)",
                 "_up (TOA)",
@@ -680,7 +680,7 @@ def test_a2(request: pytest.FixtureRequest, s1df: Smartg) -> None:
             saas=[0.0, 0.0],
             vzas=[180.0 - vza, vza],
             vaas=[vaa, vaa],
-            file_name=tmp_file_a2,
+            fname=tmp_file_a2,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
 
@@ -1048,7 +1048,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
             saas=[0.0, 0.0],
             vzas=[vza, vza],
             vaas=[vaa, vaa],
-            file_name=tmp_file_a5_pp,
+            fname=tmp_file_a5_pp,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
 
@@ -1359,7 +1359,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
             saas=[0.0, 0.0],
             vzas=[vza, vza],
             vaas=[vaa, vaa],
-            file_name=tmp_file_a5_al,
+            fname=tmp_file_a5_al,
             output_layer=["_down (0+)", "_up (TOA)"],
         )
 

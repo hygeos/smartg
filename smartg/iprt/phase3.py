@@ -333,9 +333,9 @@ def get_e6_toa_sensors(
 
 def _iprt_output_path(case_name: str, output_dir: str | Path) -> Path:
     """Create output_dir and return the IPRT output path of a case."""
-    dir_output = Path(output_dir)
-    dir_output.mkdir(parents=True, exist_ok=True)
-    return dir_output / f"iprt_phase3_{case_name}.nc"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir / f"iprt_phase3_{case_name}.nc"
 
 
 def to_iprt_output(
@@ -370,8 +370,8 @@ def to_iprt_output(
     output_dir : str or Path
         Folder of the intermediate and output files.
     """
-    dir_output = Path(output_dir)
-    f_path = _iprt_output_path(case_name, dir_output)
+    output_dir = Path(output_dir)
+    f_path = _iprt_output_path(case_name, output_dir)
     if not overwrite and f_path.exists():
         print(f"File {f_path} already exists. Skipping.")
         return
@@ -380,10 +380,10 @@ def to_iprt_output(
     runs = []
     if not is_e6:
         runs.append(xr.open_dataset(
-            dir_output / f"iprt_phase3_{case_name}_boa.nc"
+            output_dir / f"iprt_phase3_{case_name}_boa.nc"
         ))
     runs.append(xr.open_dataset(
-        dir_output / f"iprt_phase3_{case_name}_toa.nc"
+        output_dir / f"iprt_phase3_{case_name}_toa.nc"
     ))
     zout = np.array([CAMERA_E6]) if is_e6 else np.array([0.0, np.max(z)])
     ds = xr.Dataset(coords={f"{case_name}_sza": sza,
@@ -427,13 +427,13 @@ def _to_iprt_output_e6(
 
     See to_iprt_output_e6_v1 and to_iprt_output_e6_v2.
     """
-    dir_output = Path(output_dir)
-    f_path = _iprt_output_path(case_name, dir_output)
+    output_dir = Path(output_dir)
+    f_path = _iprt_output_path(case_name, output_dir)
     if not overwrite and f_path.exists():
         print(f"File {f_path} already exists. Skipping.")
         return
 
-    run = xr.open_dataset(dir_output / f"iprt_phase3_{case_name}_toa.nc")
+    run = xr.open_dataset(output_dir / f"iprt_phase3_{case_name}_toa.nc")
     ds = xr.Dataset(coords={
         f"{case_name}_lat": saa,
         f"{case_name}_lon": sza,
@@ -1004,10 +1004,10 @@ def _run_spherical_case(
     theta_grid : str, optional
         The theta_grid argument of Smartg.run.
     """
-    dir_output = Path(output_dir)
-    dir_output.mkdir(parents=True, exist_ok=True)
-    boa_path = dir_output / f"iprt_phase3_{case_name}_boa.nc"
-    toa_path = dir_output / f"iprt_phase3_{case_name}_toa.nc"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    boa_path = output_dir / f"iprt_phase3_{case_name}_boa.nc"
+    toa_path = output_dir / f"iprt_phase3_{case_name}_toa.nc"
     run_boa = overwrite or not boa_path.exists()
     run_toa = overwrite or not toa_path.exists()
 
@@ -1034,7 +1034,7 @@ def _rayleigh_layer(tau_ray: float, wavelength: float) -> xr.Dataset:
 
 
 def _particle_layer(
-    file_name: str,
+    fname: str,
     tau: float,
     ssa: float,
     wavelength: float,
@@ -1045,7 +1045,7 @@ def _particle_layer(
 
     Parameters
     ----------
-    file_name : str
+    fname : str
         The optical properties file, in OPT_PROP_PATH_PHASE3.
     tau : float
         The optical depth of the layer.
@@ -1069,7 +1069,7 @@ def _particle_layer(
     ssa_ext = np.full_like(mol_sca, ssa, dtype=np.float32)
 
     wavelengths = np.array([wavelength])
-    file_phase = read_phase_cdf(OPT_PROP_PATH_PHASE3 / file_name,
+    file_phase = read_phase_cdf(OPT_PROP_PATH_PHASE3 / fname,
                                 n_theta="native", normalize=True,
                                 output_sg_ready=False)
     theta = file_phase["theta_atm"].values
@@ -1102,7 +1102,7 @@ def _particle_layer(
 
 
 def _opac_from_iprt_file(
-    file_name: str,
+    fname: str,
     tmp_name: str,
     *aer_args: Any,
     **aer_kwargs: Any,
@@ -1115,7 +1115,7 @@ def _opac_from_iprt_file(
 
     Parameters
     ----------
-    file_name : str
+    fname : str
         The IPRT aerosol file, in OPT_PROP_PATH_PHASE3.
     tmp_name : str
         The name of the temporary converted file.
@@ -1127,7 +1127,7 @@ def _opac_from_iprt_file(
     AerOPAC
         The aerosol component.
     """
-    ds = aer2smartg(OPT_PROP_PATH_PHASE3 / file_name, n_theta="native",
+    ds = aer2smartg(OPT_PROP_PATH_PHASE3 / fname, n_theta="native",
                     rh_or_reff="hum", rh_reff=np.array([0.0]))
     with TemporaryDirectory() as tmpdir:
         file_path = Path(tmpdir) / tmp_name
@@ -1135,9 +1135,9 @@ def _opac_from_iprt_file(
         return AerOPAC(str(file_path), *aer_args, **aer_kwargs)
 
 
-def _read_usstd_column(file_name: str, column: int) -> np.ndarray:
+def _read_usstd_column(fname: str, column: int) -> np.ndarray:
     """Return a column of an IPRT US standard profile file."""
-    return pd.read_csv(OPT_PROP_PATH_PHASE3 / file_name, header=None,
+    return pd.read_csv(OPT_PROP_PATH_PHASE3 / fname, header=None,
                        usecols=[column], dtype=float, skiprows=1,
                        sep=r"\s+", comment="#").values
 
@@ -1562,9 +1562,9 @@ def case_e6_old(n_photons: float = 1e8, overwrite: bool = True,
     n_photons, overwrite, output_dir, seed
         See case_d1.
     """
-    dir_output = Path(output_dir)
-    dir_output.mkdir(parents=True, exist_ok=True)
-    toa_path = dir_output / "iprt_phase3_e6_toa.nc"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    toa_path = output_dir / "iprt_phase3_e6_toa.nc"
     vaa = np.arange(0.0, 360.0 + 10, 10)
     z = _usstd_profile(450)[0]
 
@@ -1687,9 +1687,9 @@ def case_e6_v1(n_photons: float = 1e8, overwrite: bool = True,
     overwrite, output_dir, seed
         See case_d1.
     """
-    dir_output = Path(output_dir)
-    dir_output.mkdir(parents=True, exist_ok=True)
-    toa_path = dir_output / "iprt_phase3_e6_v1_toa.nc"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    toa_path = output_dir / "iprt_phase3_e6_v1_toa.nc"
     nx = ny = N_PIXELS_E6
     n_sensors = nx * ny
     pro, surface, wavelength, z = _profile_e6()
@@ -1731,9 +1731,9 @@ def case_e6_v2(n_photons: float = 1e8, overwrite: bool = True,
     overwrite, output_dir, seed
         See case_d1.
     """
-    dir_output = Path(output_dir)
-    dir_output.mkdir(parents=True, exist_ok=True)
-    toa_path = dir_output / "iprt_phase3_e6_v2_toa.nc"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    toa_path = output_dir / "iprt_phase3_e6_v2_toa.nc"
     nx = ny = N_PIXELS_E6
     pro, surface, wavelength, _ = _profile_e6()
     vecs = _pixel_directions_e6(VZA_E6, nx, ny)
@@ -1766,9 +1766,9 @@ def case_e6_v3(n_photons: float = 1e8, overwrite: bool = True,
     overwrite, output_dir, seed
         See case_d1.
     """
-    dir_output = Path(output_dir)
-    dir_output.mkdir(parents=True, exist_ok=True)
-    toa_path = dir_output / "iprt_phase3_e6_v3_toa.nc"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    toa_path = output_dir / "iprt_phase3_e6_v3_toa.nc"
     nx = ny = N_PIXELS_E6
     pro, surface, wavelength, _ = _profile_e6(camera_level=True)
     vecs = _pixel_directions_e6(VZA_E6, nx, ny)

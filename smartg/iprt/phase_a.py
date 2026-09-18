@@ -413,7 +413,7 @@ def convert_sgout_to_iprtout(
     saas: list[float],
     vzas: list[np.ndarray],
     vaas: list[np.ndarray],
-    file_name: str | Path,
+    fname: str | Path,
     output_layer: list[str] | None = None,
     interp: bool = False,
 ) -> None:
@@ -445,7 +445,7 @@ def convert_sgout_to_iprtout(
         Viewing zenith angles of each output, in degrees.
     vaas : list of ndarray
         Viewing azimuth angles of each output, in degrees.
-    file_name : str or Path
+    fname : str or Path
         Path of the ASCII file to write.
     output_layer : list of str, optional
         Output layer of each output, e.g. '_down (0+)'. By default
@@ -529,7 +529,7 @@ def convert_sgout_to_iprtout(
                     f"{stokes_u_std:.5e} {stokes_v_std:.5e}\n"
                 )
 
-    with open(file_name, 'w') as f:
+    with open(fname, 'w') as f:
         f.write(output)
 
 

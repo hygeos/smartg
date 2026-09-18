@@ -288,7 +288,7 @@ convert_sgout_to_iprtout(
                          vaas=[vaa_boa_dep0, vaa_toa_dep0,
                                vaa_dep003, vaa_dep003,
                                vaa_dep01, vaa_dep01],
-                         file_name=fname,
+                         fname=fname,
                          output_layer=['_up (TOA)', '_up (TOA)',
                                        '_down (0+)', '_up (TOA)',
                                        '_down (0+)', '_up (TOA)'])
@@ -377,7 +377,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=fname,
+                         fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -483,7 +483,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
-                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=fname,
+                         vzas=[vza, vza], vaas=[vaa, vaa], fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -593,7 +593,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
-                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=fname,
+                         vzas=[vza, vza], vaas=[vaa, vaa], fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -699,7 +699,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
-                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=fname,
+                         vzas=[vza, vza], vaas=[vaa, vaa], fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -768,7 +768,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
-                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=fname,
+                         vzas=[vza, vza], vaas=[vaa, vaa], fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -850,7 +850,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m_a6f, m_a6f], u_signs=[-1, -1],
                          case_name="A6", depols=depols, altitudes=altitudes,
                          szas=szas, saas=saas, vzas=[180. - vza, vza],
-                         vaas=[vaa, vaa], file_name=fname,
+                         vaas=[vaa, vaa], fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -942,7 +942,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=fname,
+                         fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -1032,7 +1032,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=fname,
+                         fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -1148,7 +1148,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=fname,
+                         fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -1268,14 +1268,14 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=fname,
+                         fname=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 m = m_b4f2
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=filename2,
+                         fname=filename2,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -1480,14 +1480,14 @@ convert_sgout_to_iprtout(datasets=[m_b4b_0km, m_b4b_30km], u_signs=[1, 1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[vza_0km, vza_30km], vaas=[vaa_0km, vaa_30km],
-                         file_name=fname,
+                         fname=fname,
                          output_layer=['_up (TOA)', '_up (TOA)'])
 
 convert_sgout_to_iprtout(datasets=[m_b4b_0km2, m_b4b_30km2], u_signs=[1, 1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[vza_0km, vza_30km], vaas=[vaa_0km, vaa_30km],
-                         file_name=filename2,
+                         fname=filename2,
                          output_layer=['_up (TOA)', '_up (TOA)'])
 
 # %% [markdown]
