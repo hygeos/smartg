@@ -461,22 +461,22 @@ def l_o2(
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    B0 = 1.4378  # cm-1
+    b0 = 1.4378  # cm-1
     j = np.linspace(0, 36, num=37, dtype=np.int32)
     # 1 if j is odd, 0 if even. Faster than j % 2 != 0 (but only int!)
     gj = j & 1
-    # B0 translated in m-1!!!
-    Ej = j * (j + 1) * cst.h * cst.c * B0 * 100
-    Fj = gj * (2 * j + 1) * np.exp(-Ej / (cst.k * t))
+    # b0 translated in m-1!!!
+    e_j = j * (j + 1) * cst.h * cst.c * b0 * 100
+    f_j = gj * (2 * j + 1) * np.exp(-e_j / (cst.k * t))
 
-    lj_stk = Fj * bjm_plus(j)
-    dnu_stk = -(4 * j + 6) * B0
+    lj_stk = f_j * bjm_plus(j)
+    dnu_stk = -(4 * j + 6) * b0
     is_nonzero = lj_stk != 0.0
     lj_stk = lj_stk[is_nonzero]
     dnu_stk = dnu_stk[is_nonzero]
-    lj_astk = Fj * bjm_minus(j)
+    lj_astk = f_j * bjm_minus(j)
     is_nonzero = lj_astk != 0.0
-    dnu_astk = (4 * j - 2) * B0
+    dnu_astk = (4 * j - 2) * b0
     lj_astk = lj_astk[is_nonzero]
     dnu_astk = dnu_astk[is_nonzero]
 
@@ -524,23 +524,23 @@ def l_n2(
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    B0 = 1.9897  # cm-1
+    b0 = 1.9897  # cm-1
     j = np.linspace(0, 36, num=37, dtype=np.int32)
     # Bitwise AND with 1 selects odd j -> gj takes the odd branch
     # value
     gj = np.where(j & 1, 3, 6)
-    # B0 translated in m-1 !!!
-    Ej = j * (j + 1) * cst.h * cst.c * B0 * 100
-    Fj = gj * (2 * j + 1) * np.exp(-Ej / (cst.k * t))
+    # b0 translated in m-1 !!!
+    e_j = j * (j + 1) * cst.h * cst.c * b0 * 100
+    f_j = gj * (2 * j + 1) * np.exp(-e_j / (cst.k * t))
 
-    lj_stk = Fj * bjm_plus(j)
-    dnu_stk = -(4 * j + 6) * B0
+    lj_stk = f_j * bjm_plus(j)
+    dnu_stk = -(4 * j + 6) * b0
     is_nonzero = lj_stk != 0.0
     lj_stk = lj_stk[is_nonzero]
     dnu_stk = dnu_stk[is_nonzero]
-    lj_astk = Fj * bjm_minus(j)
+    lj_astk = f_j * bjm_minus(j)
     is_nonzero = lj_astk != 0.0
-    dnu_astk = (4 * j - 2) * B0
+    dnu_astk = (4 * j - 2) * b0
     lj_astk = lj_astk[is_nonzero]
     dnu_astk = dnu_astk[is_nonzero]
 
