@@ -225,6 +225,7 @@ class RemoteVersion:
     def from_headers(
         cls, etag: str | None, last_modified: str | None
     ) -> RemoteVersion:
+        """Build a version from the ETag and Last-Modified headers."""
         modified = _parse_http_date(last_modified)
         if etag and etag.strip():
             return cls(_clean_etag(etag), "etag", modified)
@@ -278,7 +279,7 @@ def _record(path: Path) -> FileRecord:
 
 
 def _walk_files(root: Path) -> list[str]:
-    """The regular files under root, as sorted POSIX relative paths."""
+    """List the regular files under root as sorted POSIX paths."""
     found: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames.sort()
@@ -339,10 +340,12 @@ class ManifestEntry:
     files: dict[str, FileRecord] = field(default_factory=dict, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the entry as a JSON serializable dict."""
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> ManifestEntry:
+        """Build an entry from its dict representation."""
         plain = {
             f.name: data[f.name] for f in fields(cls) if f.name != "files"
         }
@@ -375,8 +378,11 @@ class Manifest:
 
     @classmethod
     def load(cls, path: PathType) -> Manifest:
-        """Read a manifest; a missing or unreadable file gives an
-        empty one (unreadable files are reported)."""
+        """Read a manifest.
+
+        A missing or unreadable file gives an empty one, and unreadable
+        files are reported.
+        """
         path = Path(path)
         if not path.is_file():
             return cls(path)
@@ -408,12 +414,15 @@ class Manifest:
         os.replace(tmp, self.path)
 
     def get(self, key: str) -> ManifestEntry | None:
+        """Return the entry of a dataset, None when it has none."""
         return self.entries.get(key)
 
     def set(self, key: str, entry: ManifestEntry) -> None:
+        """Record the entry of a dataset."""
         self.entries[key] = entry
 
     def remove(self, key: str) -> None:
+        """Forget the entry of a dataset, if it has one."""
         self.entries.pop(key, None)
 
 
@@ -526,7 +535,7 @@ _DRIVE = re.compile(r"^[A-Za-z]:")
 
 
 def _relocate(name: str, target_folder: str | None) -> str | None:
-    """The path a member is extracted to, None when it is skipped.
+    """Return the path a member is extracted to, None if skipped.
 
     With a ``target_folder``, only the members inside a folder of
     that name are kept, and their path starts at that folder.
@@ -719,8 +728,11 @@ class Source(Protocol):
         timeout: float = DEFAULT_TIMEOUT,
         progress: bool = True,
     ) -> None:
-        """Download some files of the dataset, given by their path
-        relative to its directory ``dirname``, under ``dest``."""
+        """Download some files of the dataset under ``dest``.
+
+        They are given by their path relative to the dataset directory
+        ``dirname``.
+        """
         ...
 
 
@@ -749,10 +761,12 @@ class NextcloudSource:
 
     @property
     def url(self) -> str:
+        """The download URL of the public share."""
         return f"{self.base_url}/s/{self.token}/download"
 
     @property
     def webdav_url(self) -> str:
+        """The WebDAV URL the version query is sent to."""
         return f"{self.base_url}/public.php/webdav/"
 
     @property
@@ -775,6 +789,7 @@ class NextcloudSource:
     def remote_version(
         self, timeout: float = DEFAULT_TIMEOUT
     ) -> RemoteVersion:
+        """Query the remote version with a WebDAV PROPFIND."""
         with _open(self._propfind(), timeout) as response:
             return _parse_propfind(response.read())
 
@@ -786,6 +801,7 @@ class NextcloudSource:
         timeout: float = DEFAULT_TIMEOUT,
         progress: bool = True,
     ) -> RemoteVersion:
+        """Download and extract the dataset into ``dest``."""
         # The version is read before the transfer: the archive itself
         # carries no useful header (it is generated on the fly).
         version = self.remote_version(timeout)
@@ -811,6 +827,7 @@ class NextcloudSource:
         timeout: float = DEFAULT_TIMEOUT,
         progress: bool = True,
     ) -> None:
+        """Download some files of the dataset into ``dest``."""
         # The share root is the dataset directory, so a path relative
         # to the dataset is a WebDAV path of the share.
         bar = tqdm(names, unit="file", desc=label, leave=False,
@@ -852,6 +869,7 @@ class HttpArchiveSource:
     def remote_version(
         self, timeout: float = DEFAULT_TIMEOUT
     ) -> RemoteVersion:
+        """Query the remote version with an HTTP HEAD request."""
         try:
             request = urllib.request.Request(self.url, method="HEAD")
             with _open(request, timeout) as response:
@@ -871,6 +889,7 @@ class HttpArchiveSource:
         timeout: float = DEFAULT_TIMEOUT,
         progress: bool = True,
     ) -> RemoteVersion:
+        """Download and extract the archive into ``dest``."""
         archive = dest / f"{label or 'archive'}.part"
         headers = _download_to_file(
             urllib.request.Request(self.url),
@@ -893,6 +912,7 @@ class HttpArchiveSource:
         timeout: float = DEFAULT_TIMEOUT,
         progress: bool = True,
     ) -> None:
+        """Download some files of the archive into ``dest``."""
         # No access to single files: the whole archive is fetched and
         # only the wanted members are kept.
         whole = Path(tempfile.mkdtemp(prefix=".whole-", dir=dest))
@@ -937,9 +957,11 @@ class Dataset:
 
     @property
     def primary(self) -> Source:
+        """The source tried first."""
         return self.sources[0]
 
     def source_named(self, name: str) -> Source | None:
+        """Return the source of that name, None when there is none."""
         for source in self.sources:
             if source.name == name:
                 return source
@@ -1044,6 +1066,7 @@ class FileCheck:
         return self.modified + self.missing
 
     def summary(self) -> str:
+        """Return a one line count of the files of each status."""
         parts = [
             f"{len(names)} {what}"
             for what, names in (
@@ -1111,6 +1134,7 @@ class StatusReport(dict[str, DatasetStatus]):
     """
 
     def __repr__(self) -> str:
+        """Return the datasets and their status."""
         inner = ", ".join(f"{key}: {st.status}" for key, st in self.items())
         return f"<StatusReport {inner}>"
 
@@ -1199,7 +1223,7 @@ class AuxData:
     # -- selection and state -----------------------------------------
 
     def select(self, data_type: DataSelector = "all") -> list[Dataset]:
-        """The datasets named by ``data_type``.
+        """Return the datasets named by ``data_type``.
 
         Parameters
         ----------
@@ -1224,10 +1248,11 @@ class AuxData:
         return [self.datasets[key] for key in keys]
 
     def path(self, dataset: Dataset) -> Path:
-        """The directory of a dataset."""
+        """Return the directory of a dataset."""
         return self.dir / dataset.dirname
 
     def is_present(self, dataset: Dataset) -> bool:
+        """Whether the directory of a dataset exists."""
         return self.path(dataset).is_dir()
 
     def status(self, data_type: DataSelector = "all") -> StatusReport:
@@ -1249,8 +1274,11 @@ class AuxData:
     def _probe(
         self, dataset: Dataset
     ) -> tuple[RemoteVersion | None, str, str]:
-        """The first remote version that answers, with the source
-        name and the errors of the sources tried before."""
+        """Return the first remote version that answers.
+
+        It comes with the source name and with the errors of the
+        sources tried before it.
+        """
         notes: list[str] = []
         name = dataset.primary.name
         remote: RemoteVersion | None = None
@@ -1510,8 +1538,7 @@ class AuxData:
     def restore(
         self, data_type: DataSelector = "all", yes: bool = False
     ) -> dict[str, list[str]]:
-        """Replace the locally modified or missing files by the remote
-        ones.
+        """Replace the modified or missing files by the remote ones.
 
         The files are listed and a confirmation is asked, unless
         ``yes`` is True. Only the datasets whose remote did not
@@ -1702,8 +1729,10 @@ class AuxData:
         )
 
     def _swap_in(self, produced: Path, dataset: Dataset) -> None:
-        """Move the extracted directory into place, replacing the
-        previous one with two renames."""
+        """Move the extracted directory into place.
+
+        The previous one is replaced with two renames.
+        """
         target = self.path(dataset)
         old: Path | None = None
         if target.exists() or target.is_symlink():
@@ -1725,8 +1754,10 @@ class AuxData:
                 )
 
     def _cleanup_leftovers(self) -> None:
-        """Remove the staging and backup directories of interrupted
-        runs."""
+        """Remove the staging and backup directories.
+
+        They are the ones left behind by interrupted runs.
+        """
         if not self.dir.is_dir():
             return
         for dataset in self.datasets.values():

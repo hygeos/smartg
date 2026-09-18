@@ -157,7 +157,6 @@ class ProgressNotebook(object):
         message : str, optional
             Text displayed next to the widget.
         """
-
         value = min(value, self.vmax)  # don't exceed max
         self.pbar.value = value
         self.label.value = message
@@ -209,7 +208,6 @@ class ProgressProgressbar2(object):
         message : str, optional
             Text rendered by the label widget.
         """
-
         value = min(value, self.max)  # don't exceed max
         self.label.format = message
         self.pbar.update(value)
@@ -271,7 +269,6 @@ class ProgressProgressbar(object):
         message : str, optional
             Text shown before the percentage indicator.
         """
-
         value = min(value, self.max)  # don't exceed max
         self.custom.set(message)
         self.pbar.update(value)

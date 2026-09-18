@@ -151,12 +151,12 @@ def _truncate_f11(
 
 
 class IOPDict(TypedDict):
-    """
-    Inherent optical properties returned by the `iop` and `coeffs`
-    methods of the hydrosols. All entries are coefficients in m-1 with
-    dimensions [n_wavelength, nz], except `bbp_ratio` which is
-    dimensionless and
-    may be None when no backscattering ratio is available.
+    """Inherent optical properties of a hydrosol.
+
+    Returned by the `iop` and `coeffs` methods. All entries are
+    coefficients in m-1 with dimensions [n_wavelength, nz], except
+    `bbp_ratio`, which is dimensionless and may be None when no
+    backscattering ratio is available.
     """
 
     ap: NDArray
@@ -196,7 +196,6 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
        in the near infrared," J. Opt. Soc. Am. 64, 1107-1110 (1974).
        https://doi.org/10.1364/JOSA.64.001107
     """
-
     # Pope&Fry
     with open(Path(dir_aux) / "water" / "pope97.dat", "rb") as fp:
         for _ in range(6):
@@ -322,8 +321,9 @@ class Hydrosol(object):
 
     def iop(self, wavelength: NDArray, z: NDArray) -> IOPDict:
         """
-        Inherent optical properties of the hydrosol at the given
-        wavelengths and depths.
+        Return the inherent optical properties of the hydrosol.
+
+        They are given at the requested wavelengths and depths.
 
         The coefficients supplied at construction time are broadcast
         over the wavelength and depth grids; those left to None are
@@ -365,8 +365,7 @@ class Hydrosol(object):
         zeros = np.zeros(shp, dtype="float")
 
         def as_2d(x: NumericArrayLike | None) -> NDArray:
-            """Broadcast `x` over [len(wavelength), len(z)], None
-            giving 0."""
+            """Broadcast `x` over the wavelength and depth grids."""
             if x is None:
                 return zeros.copy()
             x = np.asarray(x, dtype="float")
@@ -394,8 +393,10 @@ class Hydrosol(object):
 
     def _trunc_scaling(self) -> float:
         """
-        Factor applied to the scattering coefficient to account for the
-        truncation of the phase matrix forward peak.
+        Return the scattering factor of the forward peak truncation.
+
+        It accounts for the truncation of the phase matrix forward
+        peak.
 
         It multiplies the truncation factor `coef_trunc` returned by
         `calc_phase`, and is meant to be overridden by the subclasses
@@ -415,8 +416,9 @@ class Hydrosol(object):
         bbp_ratio: NDArray,
     ) -> tuple[xr.DataArray, xr.DataArray]:
         """
-        Calculate the phase matrices and the associated truncation
-        factor, as a mixture of two Fournier-Forand phase functions
+        Calculate the phase matrices and their truncation factor.
+
+        They are a mixture of two Fournier-Forand phase functions
         weighted by the backscattering ratio.
 
         The forward peak is truncated with pytrunc as configured by
@@ -592,8 +594,10 @@ class Hydrosol(object):
         use_old_calc_iphase: bool = False,
     ) -> None:
         """
-        Compute the phase matrices at the tabulation wavelengths
-        `wavelength_phase`, along with the associated truncation factor.
+        Compute the phase matrices at the tabulation wavelengths.
+
+        They are computed on `wavelength_phase`, along with the
+        associated truncation factor.
 
         The result is memoized in `_pha`, `_coef_trunc` and `_bsca`, so
         that the scattering coefficient and the phase matrices stay
@@ -658,8 +662,10 @@ class Hydrosol(object):
         use_old_calc_iphase: bool = False,
     ) -> NDArray:
         """
-        Truncation factor mapped from the tabulation grid of the phase
-        matrices onto the given wavelength and depth grids.
+        Map the truncation factor onto the given grids.
+
+        It is mapped from the tabulation grid of the phase matrices
+        onto the given wavelength and depth grids.
 
         Must be called after `_resolve_truncation` has filled the cache.
 
@@ -691,8 +697,9 @@ class Hydrosol(object):
 
     def scattering(self, pha: xr.DataArray) -> NDArray | None:
         """
-        Scattering coefficient in m-1 of the hydrosol, on the tabulation
-        grid of the given phase matrices.
+        Return the scattering coefficient of the hydrosol, in m-1.
+
+        It is given on the tabulation grid of the phase matrices.
 
         Used to weight the hydrosols when averaging their phase matrices
         in `Water1D.phase`.
@@ -727,8 +734,10 @@ class Hydrosol(object):
         use_old_calc_iphase: bool = False,
     ) -> IOPDict:
         """
-        Inherent optical properties of the hydrosol, with the scattering
-        coefficient corrected for the phase matrix truncation.
+        Return the inherent optical properties of the hydrosol.
+
+        The scattering coefficient is corrected for the phase matrix
+        truncation.
 
         Parameters
         ----------
@@ -774,8 +783,10 @@ class Hydrosol(object):
 
 class HydrosolPR(Hydrosol):
     """
-    Chlorophyll-driven hydrosol model, using a similar IOP
-    parameterization as Polymer's PR model.
+    Chlorophyll-driven hydrosol model of the Polymer PR type.
+
+    It uses an inherent optical property parameterization similar to
+    the PR model of Polymer.
 
     The absorption, scattering and backscattering ratio are all derived
     from a single chlorophyll concentration, which does not vary with
@@ -853,8 +864,10 @@ class HydrosolPR(Hydrosol):
 
     def _trunc_scaling(self) -> float:
         """
-        Factor applied to the scattering coefficient, on top of the
-        truncation factor (see `Hydrosol._trunc_scaling`).
+        Return the extra factor applied to the scattering coefficient.
+
+        It applies on top of the truncation factor, see
+        `Hydrosol._trunc_scaling`.
 
         Returns
         -------
@@ -866,8 +879,9 @@ class HydrosolPR(Hydrosol):
 
     def iop(self, wavelength: NDArray, z: NDArray) -> IOPDict:
         """
-        Inherent optical properties derived from the chlorophyll
-        concentration.
+        Return the optical properties of the chlorophyll.
+
+        They are derived from the chlorophyll concentration.
 
         The chlorophyll concentration does not vary with depth, so the
         coefficients are computed spectrally and then broadcast over the
@@ -950,8 +964,9 @@ class HydrosolPR(Hydrosol):
 
 class HydrosolZhai(Hydrosol):
     """
-    Chlorophyll-driven hydrosol model described in Zhai et al. (2017),
-    where the chlorophyll concentration varies with depth.
+    Chlorophyll-driven hydrosol model of Zhai et al. (2017).
+
+    The chlorophyll concentration varies with depth.
 
     Parameters
     ----------
@@ -1129,8 +1144,10 @@ class HydrosolZhai(Hydrosol):
 
     def _trunc_scaling(self) -> float:
         """
-        Factor applied to the scattering coefficient, on top of the
-        truncation factor (see `Hydrosol._trunc_scaling`).
+        Return the extra factor applied to the scattering coefficient.
+
+        It applies on top of the truncation factor, see
+        `Hydrosol._trunc_scaling`.
 
         Returns
         -------
@@ -1149,8 +1166,9 @@ class HydrosolZhai(Hydrosol):
         r2: float = 0.5,
     ) -> IOPDict:
         """
-        Inherent optical properties derived from the chlorophyll
-        profile.
+        Return the optical properties of the chlorophyll profile.
+
+        They are derived from the chlorophyll profile.
 
         The chlorophyll concentration is evaluated at each z coordinate
         (see `chl`), and the absorption, scattering and backscattering
@@ -1533,8 +1551,10 @@ class Water1D(Water):
         use_old_calc_iphase: bool = False,
     ) -> xr.DataArray | None:
         """
-        Calculate the phase matrices of the hydrosols, averaged over the
-        hydrosols and weighted by their scattering coefficient.
+        Calculate the phase matrices averaged over the hydrosols.
+
+        They are weighted by the scattering coefficient of each
+        hydrosol.
 
         The depths are those of `grid`. When a single hydrosol scatters,
         its phase matrices are returned unchanged.

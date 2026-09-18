@@ -126,6 +126,7 @@ def fk_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     fk_o2 : float or ndarray
         Dimensionless King correction factor of O2. Same shape as
         ``wavelength``.
+
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.
@@ -159,6 +160,7 @@ def epsilon_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     eps : float or ndarray
         Dimensionless depolarization ratio of O2. Same shape as
         ``wavelength``.
+
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.
@@ -186,6 +188,7 @@ def epsilon_air(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     eps : float or ndarray
         Dimensionless effective depolarization ratio of dry air.
         Same shape as ``wavelength``.
+
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.

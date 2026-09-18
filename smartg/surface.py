@@ -65,6 +65,7 @@ class FlatSurface:
         self.kp: tuple[AlbedoLike, ...] | None = None
 
     def __str__(self) -> str:
+        """Return the identifier of the flat surface."""
         return 'FLATSURF-SUR={SUR}'.format(**self.dict)
 
 
@@ -115,6 +116,7 @@ class RoughSurface:
         self.kp: tuple[AlbedoLike, ...] | None = None
 
     def __str__(self) -> str:
+        """Return the identifier of the rough surface."""
         return ('ROUGHSUR={SUR}-WIND={WINDSPEED}-DI={DIOPTRE}'
                 '-WAVE_SHADOW={WAVE_SHADOW}-BRDF={BRDF}'
                 '-SINGLE={SINGLE}').format(**self.dict)
@@ -153,6 +155,7 @@ class LambSurface:
         self.alb: AlbedoLike = alb
 
     def __str__(self) -> str:
+        """Return the identifier of the lambertian surface."""
         return 'LAMBSUR-ALB={}'.format(_albedo_str(self.alb))
 
 
@@ -233,6 +236,7 @@ class RTLSSurface:
         self.alb: AlbedoLike | None = None
 
     def __str__(self) -> str:
+        """Return the identifier of the RTLS surface."""
         return 'RTLS-K={}'.format(
             '/'.join(_albedo_str(a) for a in self.kp[:3]))
 
@@ -325,14 +329,13 @@ class RPVSurface:
         self.alb: AlbedoLike | None = None
 
     def __str__(self) -> str:
+        """Return the identifier of the RPV surface."""
         return 'RPV-KP={}'.format(
             '/'.join(_albedo_str(a) for a in self.kp))
 
 
 class Environment:
-    """
-    Stores the smartg parameters relative to the environment
-    effect.
+    """Store the SMART-G parameters of the environment effect.
 
     Parameters
     ----------
@@ -411,5 +414,6 @@ class Environment:
         self.nyenvmap = nyenvmap
 
     def __str__(self) -> str:
+        """Return the identifier of the environment effect."""
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(
             **self.dict)

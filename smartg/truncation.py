@@ -50,8 +50,7 @@ import numpy as np
 
 
 class DMTrunc(object):
-    """
-    Delta-M truncation
+    """Delta-M truncation.
 
     Parameters
     ----------
@@ -106,8 +105,7 @@ class DMTrunc(object):
 
 
 class GTTrunc(object):
-    """
-    GT truncation, as in Iwabuchi and Suzuki (2009)
+    """GT truncation, as in Iwabuchi and Suzuki (2009).
 
     Parameters
     ----------

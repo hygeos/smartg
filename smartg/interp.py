@@ -38,8 +38,7 @@ def interp3(
     zi: ArrayLike,
     **kwargs: Any,
 ) -> NDArray[np.float64]:
-    """Sample a 3-D array at arbitrary query points via linear
-    interpolation.
+    """Sample a 3-D array at arbitrary points, linearly.
 
     The array ``v`` has pixel corner locations at coordinates ``x``,
     ``y``, ``z``. Values are interpolated at the points ``(xi, yi, zi)``
@@ -100,8 +99,7 @@ def interp2(
     yi: ArrayLike,
     **kwargs: Any,
 ) -> NDArray[np.float64]:
-    """Sample a 2-D array at arbitrary query points via linear
-    interpolation.
+    """Sample a 2-D array at arbitrary points, linearly.
 
     The array ``v`` has pixel corner locations at coordinates ``x``,
     ``y``. Values are interpolated at the points ``(xi, yi)`` using

@@ -65,7 +65,7 @@ def gaussian_peak(
 
 
 def raman_response(ks: NumericArrayLike) -> NDArray[np.floating]:
-    """Normalized Raman spectral response of liquid water.
+    """Return the Raman spectral response of liquid water.
 
     Builds the O-H stretching band as a sum of four Gaussian peaks
     centered at 3250, 3425, 3530 and 3625 cm-1, with relative

@@ -72,6 +72,5 @@ class BandLike(Protocol):
     w: float
 
     def calc_profile(self, prof: ProfileBase) -> np.ndarray:
-        """Compute the absorption optical depth profile over ``prof.z``.
-        """
+        """Compute the absorption optical depth over ``prof.z``."""
         ...

@@ -410,7 +410,7 @@ def integ_phase(
     ang: NDArray[np.floating[Any]],
     pha: NDArray[np.floating[Any]],
 ) -> NDArray[np.floating[Any]]:
-    """Numerically integrate a phase function weighted by sin(theta).
+    r"""Numerically integrate a phase function weighted by sin(theta).
 
     Compute the integral of ``pha(ang) * sin(ang)`` along the last
     axis of *pha* using a composite rule that blends trapezoidal
@@ -533,10 +533,11 @@ def get_ipha_a(
     z_pf: NumericArrayLike,
     phase: xr.DataArray | None = None,
 ) -> NDArray[np.int32]:
-    """Map the phase-function altitude grid onto the model altitude
-    grid.  For each level in *z_full* find the phase-function layer with
-    the largest vertical overlap, optionally penalising layers whose
-    phase function is identically zero.
+    """Map the phase function altitudes onto the model altitudes.
+
+    For each level in *z_full*, find the phase function layer with the
+    largest vertical overlap, optionally penalising layers whose phase
+    function is identically zero.
 
     Parameters
     ----------
@@ -659,9 +660,7 @@ def read_phase_nc(
     z_rh_reff: NumericArrayLike | None = None,
     output_sg_ready: bool = True,
 ) -> xr.DataArray:
-    """
-    Read and process phase function data from SMART-G NetCDF
-    aerosol/cloud files.
+    """Read phase function data from a SMART-G netCDF file.
 
     Loads phase matrix data from SMART-G aerosol and cloud files with
     .nc suffix. Supports wavelength and humidity/effective radius
@@ -1005,7 +1004,7 @@ def _profile_targets(
     NDArray[np.float32] | None,
     NDArray[np.float32] | None,
 ]:
-    """The interpolation targets of the readers as 1-D float32 arrays.
+    """Return the interpolation targets as 1-D float32 arrays.
 
     A scalar is made 1-D so that the interpolation keeps its
     dimension and the output stays 4-D.
@@ -1023,7 +1022,7 @@ def _profile_targets(
 def _cdf_theta_grid(
     ds: xr.Dataset, n_theta: ThetaLike | None, ntheta_max: int
 ) -> NDArray[np.float64]:
-    """The scattering angles a cdf phase file is resampled on.
+    """Return the scattering angles a cdf file is resampled on.
 
     Parameters
     ----------
@@ -1068,8 +1067,10 @@ def _cdf_theta_grid(
 def _normalize_p11(
     data: NDArray[np.floating[Any]], theta: NDArray[np.floating[Any]]
 ) -> None:
-    """Scale the phase matrices in place so that F11 integrates to 2
-    over ``cos(theta)``, for every (wavelength, rh/reff) entry of a
+    """Scale the phase matrices in place to the F11 normalization.
+
+    F11 is made to integrate to 2 over ``cos(theta)``, for every
+    (wavelength, rh/reff) entry of a
     ``(wavelength, rh/reff, nphamat, theta)`` array.
     """
     mu = np.cos(np.deg2rad(theta))
@@ -1088,9 +1089,11 @@ def _to_profile_layout(
     pfgrid: NDArray[np.float32] | None,
     z_rh_reff: NDArray[np.float32] | None,
 ) -> xr.DataArray:
-    """Lay a phase table on the profile: interpolate it at the target
-    wavelengths and rh/reff values, and rename the rh/reff axis into
-    the ``z_phase`` altitudes of *pfgrid* (or ``[0.]`` without one).
+    """Lay a phase table on the profile.
+
+    The table is interpolated at the target wavelengths and rh/reff
+    values, and its rh/reff axis is renamed into the ``z_phase``
+    altitudes of *pfgrid*, or ``[0.]`` without one.
     """
     if da_pha.sizes["wavelength_phase"] > 1:
         da_pha = da_pha.interp(wavelength_phase=wavelength_phase)
@@ -1123,8 +1126,10 @@ def _check_profile_targets(
     pfgrid: NDArray[np.float32] | None,
     z_rh_reff: NDArray[np.float32] | None,
 ) -> None:
-    """Check, before any computation, that the targets a file with
-    several wavelengths or rh/reff values needs were given.
+    """Check that the targets the file needs were given.
+
+    The check runs before any computation, and concerns the files with
+    several wavelengths or rh/reff values.
     """
     if n_wavelength > 1 and wavelength_phase is None:
         raise ValueError(
@@ -1164,9 +1169,7 @@ def read_phase_cdf(
     z_rh_reff: NumericArrayLike | None = None,
     output_sg_ready: bool = True,
 ) -> xr.DataArray:
-    """
-    Read and process phase function data from libRadtran NetCDF
-    aerosol/cloud files.
+    """Read phase function data from a libRadtran netCDF file.
 
     Loads phase matrix data from libRadtran aerosol and cloud phase
     function files with .cdf suffix (e.g., 'ssam.mie.cdf',
@@ -1370,9 +1373,7 @@ def read_phase(
     output_sg_ready: bool = True,
     **kwargs: Any,
 ) -> xr.DataArray:
-    """
-    Read phase function data from a file and dispatch to the proper
-    reader.
+    """Read phase function data, dispatching to the proper reader.
 
     This convenience function selects the backend according to the
     file suffix:
@@ -1463,7 +1464,6 @@ def read_phase(
     ...                  ntheta_max=18001)
     >>> pha = read_phase('wc_sol.nc', output_sg_ready=False)
     """
-
     fname = Path(fname)
 
     if not fname.is_file():
@@ -1570,11 +1570,9 @@ def expand_phase_4_to_6(
 def convert_phase_to_iparper(
     pha: NDArray[np.floating[Any]],
 ) -> NDArray[np.floating[Any]]:
-    """
-    Convert phase matrix to parallel/perpendicular intensity
-    convention.
+    """Convert a phase matrix to the Ipar/Iper convention.
 
-    Converts the phase matrix from the standard IQUV (Stokes vector)
+    The phase matrix goes from the standard IQUV (Stokes vector)
     convention to the Ipar/Iper (parallel/perpendicular intensity)
     convention used throughout SMART-G. This conversion is necessary
     when using the alternative Stokes representation where polarized
@@ -1611,7 +1609,6 @@ def convert_phase_to_iparper(
     .. [1] Chandrasekhar, S. (2013). Radiative transfer. Courier
            Corporation.
     """
-
     ndim = pha.ndim
     if ndim not in (2, 4):
         raise ValueError("The phase matrix dimension must be 2 or 4!")

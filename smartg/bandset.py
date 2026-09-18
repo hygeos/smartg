@@ -55,6 +55,8 @@ if TYPE_CHECKING:
 
 
 class BandSet(object):
+    """Spectral bands a simulation is run on."""
+
     def __init__(self, wavelength: NumericArrayLike | list[BandLike]) -> None:
         """Initialize a BandSet from wavelength band definitions.
 

@@ -314,7 +314,6 @@ class KdisIband(object):
             Absorption coefficient profile in inverse kilometres,
             with one value for each altitude in ``prof``.
         """
-
         species = [
             "h2o",
             "co2",
@@ -555,9 +554,7 @@ class Kdis(object):
             dir_data = dir_kdis / model
 
         def is_sorted(values: NDArray[np.floating]) -> bool:
-            """Return whether values are monotonically non-
-            decreasing.
-            """
+            """Return whether values are monotonically non-decreasing."""
             return bool(np.all(values[:-1] <= values[1:]))
 
         if format is None:
