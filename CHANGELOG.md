@@ -101,6 +101,12 @@ completed and corrected before the final `v2.0.0` release.
   - `smartg.iprt.phase3`: the `nphotons` parameter of every `case_*`
     function is now `n_photons`, the spelling `Smartg.run` and the rest
     of the package use
+  - The `filename` parameter is now `fname`, as in the spectral modules,
+    in `AerOPAC`, `Cloud`, `read_i3rc_aerosol`, `read_i3rc_cloud`,
+    `AlbedoSpeclib`, `Hydrosol`, `HydrosolPR`, `HydrosolZhai` and
+    `extract_points`; the classes store it as `self.fname`
+  - The `lam` parameter and attribute of `AlbedoSpectrum`, `smartg.rrs`,
+    `smartg.vrs` and `smartg.histories` is now `wavelength`
   - The IPRT validation notebooks follow PEP 8 module names:
     `validation_SMARTG_IPRT_phaseA.py` → `validation_smartg_iprt_phase_a.py`,
     `validation_SMARTG_IPRT_phaseB-C2.py` →

@@ -117,7 +117,7 @@ def _grid_label(comp: object) -> str:
     """Name a component in a message about its scattering angle grid,
     by its class and the stem of the file it was read from, if any.
     """
-    name = getattr(comp, "filename", None) or getattr(comp, "fname", None)
+    name = getattr(comp, "fname", None)
     cls = type(comp).__name__
     if name is None or str(name) == "none":
         return cls
@@ -189,8 +189,8 @@ class AerOPAC(object):
 
     Parameters
     ----------
-    filename : str or path-like
-        Complete path to the aerosol file or filename for aerosols
+    fname : str or path-like
+        Complete path to the aerosol file or fname for aerosols
         located in "auxdata/aerosols/OPAC/mixtures/".
         Available auxdata aerosols: antarctic, antarctic_spheric,
         arctic, continental_average,
@@ -316,7 +316,7 @@ class AerOPAC(object):
 
     def __init__(
         self,
-        filename: str | Path,
+        fname: str | Path,
         tau_ref: float | NumericArrayLike | xr.DataArray | LUT | None,
         w_ref: float,
         h_min_mix: float | None = None,
@@ -378,24 +378,24 @@ class AerOPAC(object):
                     + "dim <= 2, or an xr.DataArray."
                 )
 
-        filename = Path(filename)
-        if filename.parent == Path("."):  # no directory given
-            filename = (
-                DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures" / filename.name
+        fname = Path(fname)
+        if fname.parent == Path("."):  # no directory given
+            fname = (
+                DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures" / fname.name
             )
 
         # Add extension if needed
-        if "_sol" not in filename.name and not filename.suffix == ".nc":
-            filename = filename.with_name(filename.name + "_sol.nc")
-        elif filename.suffix != ".nc":
-            filename = filename.with_name(filename.name + ".nc")
+        if "_sol" not in fname.name and not fname.suffix == ".nc":
+            fname = fname.with_name(fname.name + "_sol.nc")
+        elif fname.suffix != ".nc":
+            fname = fname.with_name(fname.name + ".nc")
 
-        if not filename.exists():
-            raise FileNotFoundError(f"{filename} does not exist")
+        if not fname.exists():
+            raise FileNotFoundError(f"{fname} does not exist")
 
-        self.filename = filename
+        self.fname = fname
 
-        self.ds_mix = xr.open_dataset(self.filename)
+        self.ds_mix = xr.open_dataset(self.fname)
         # check if hum dim size == 1 (to avoid interpolation/indexing
         # crash)
         if self.ds_mix.sizes["hum"] == 1:
@@ -1159,8 +1159,8 @@ class Cloud(AerOPAC):
 
     Parameters
     ----------
-    filename : str,
-        Complete path to the cloud file or filename for clouds located
+    fname : str,
+        Complete path to the cloud file or fname for clouds located
         in "auxdata/clouds/"
         Available auxdata clouds: wc, ic_baum_ghm, ic_baum_asc and
         ic_baum_sc
@@ -1243,7 +1243,7 @@ class Cloud(AerOPAC):
 
     def __init__(
         self,
-        filename: str | Path,
+        fname: str | Path,
         reff: float,
         zmin: float,
         zmax: float,
@@ -1290,22 +1290,22 @@ class Cloud(AerOPAC):
                     + " of dim <= 2, or an xr.DataArray."
                 )
 
-        filename = Path(filename)
-        if filename.parent == Path("."):  # no directory given
+        fname = Path(fname)
+        if fname.parent == Path("."):  # no directory given
             base_dir = Path(DIR_AUXDATA) / "clouds"
-            filename = base_dir / filename.name
+            fname = base_dir / fname.name
 
-        if "_sol" not in filename.name and not filename.suffix == ".nc":
-            filename = filename.with_name(filename.name + "_sol.nc")
-        elif filename.suffix != ".nc":
-            filename = filename.with_name(filename.name + ".nc")
+        if "_sol" not in fname.name and not fname.suffix == ".nc":
+            fname = fname.with_name(fname.name + "_sol.nc")
+        elif fname.suffix != ".nc":
+            fname = fname.with_name(fname.name + ".nc")
 
-        if not filename.exists():
-            raise FileNotFoundError(f"{filename} does not exist")
+        if not fname.exists():
+            raise FileNotFoundError(f"{fname} does not exist")
 
-        self.filename = filename
+        self.fname = fname
 
-        self.ds_mix = xr.open_dataset(self.filename)
+        self.ds_mix = xr.open_dataset(self.fname)
         # check if reff dim size == 1 (to avoid interpolation/indexing
         # crash)
         if self.ds_mix.sizes["reff"] == 1:
@@ -1422,7 +1422,7 @@ class AerUser(AerOPAC):
         z_mix: float = 2,
     ) -> None:
 
-        self.filename = "none"
+        self.fname = "none"
         self.tau_ref = None
         ext = aod / (
             z_mix * (np.exp(-h_mix_min / z_mix) - np.exp(-h_mix_max / z_mix))
@@ -1962,7 +1962,7 @@ class Cloud3D(_Comp3DFile):
     Parameters
     ----------
     fname : PathType
-        Cloud smartg filename with the bulk optical properties, choice
+        Cloud smartg fname with the bulk optical properties, choice
         between: 'wc', 'ic_baum_asc', 'ic_baum_ghm' and 'ic_baum_sc'
         (or the path to a file with the same structure).
     w_ref : float or None, optional
@@ -2078,7 +2078,7 @@ class Aer3D(_Comp3DFile):
     Parameters
     ----------
     fname : PathType
-        Aerosol smartg filename with the bulk optical properties: an
+        Aerosol smartg fname with the bulk optical properties: an
         OPAC mixture name as in :class:`AerOPAC` ('continental_clean',
         'continental_average', 'continental_polluted', 'urban',
         'desert', 'maritime_clean', 'maritime_polluted',
@@ -2179,7 +2179,7 @@ class Aer3D(_Comp3DFile):
 
 
 def read_i3rc_cloud(
-    filename: PathType,
+    fname: PathType,
     loc_xgrid: str | RealNumber = "centered",
     loc_ygrid: str | RealNumber = "centered",
 ) -> xr.Dataset:
@@ -2195,7 +2195,7 @@ def read_i3rc_cloud(
 
     Parameters
     ----------
-    filename : PathType
+    fname : PathType
         File name with path location of the ASCII cloud file.
     loc_xgrid, loc_ygrid : str or scalar, optional
         Location of the x and y grids. By default a str: "centered"
@@ -2209,11 +2209,11 @@ def read_i3rc_cloud(
         variables and the ``x_bounds``, ``y_bounds`` and ``z_bounds``
         cell-boundary coordinates.
     """
-    return _read_i3rc_field(filename, "reff", loc_xgrid, loc_ygrid)
+    return _read_i3rc_field(fname, "reff", loc_xgrid, loc_ygrid)
 
 
 def read_i3rc_aerosol(
-    filename: PathType,
+    fname: PathType,
     loc_xgrid: str | RealNumber = "centered",
     loc_ygrid: str | RealNumber = "centered",
 ) -> xr.Dataset:
@@ -2230,7 +2230,7 @@ def read_i3rc_aerosol(
 
     Parameters
     ----------
-    filename : PathType
+    fname : PathType
         File name with path location of the ASCII aerosol file.
     loc_xgrid, loc_ygrid : str or scalar, optional
         Location of the x and y grids. By default a str: "centered"
@@ -2244,11 +2244,11 @@ def read_i3rc_aerosol(
         variables and the ``x_bounds``, ``y_bounds`` and ``z_bounds``
         cell-boundary coordinates.
     """
-    return _read_i3rc_field(filename, "rh", loc_xgrid, loc_ygrid)
+    return _read_i3rc_field(fname, "rh", loc_xgrid, loc_ygrid)
 
 
 def _read_i3rc_field(
-    filename: PathType,
+    fname: PathType,
     param_name: str,
     loc_xgrid: str | RealNumber = "centered",
     loc_ygrid: str | RealNumber = "centered",
@@ -2262,10 +2262,10 @@ def _read_i3rc_field(
     # Be careful ! The second row have a greater dimension than the
     # first one. Then -> two steps of reading.
     contentA = pd.read_csv(
-        filename, skiprows=1, nrows=1, header=None, sep=r"\s+", dtype=float
+        fname, skiprows=1, nrows=1, header=None, sep=r"\s+", dtype=float
     ).values
     contentB = pd.read_csv(
-        filename, skiprows=2, nrows=1, header=None, sep=r"\s+", dtype=float
+        fname, skiprows=2, nrows=1, header=None, sep=r"\s+", dtype=float
     ).values
 
     # If there are empty dimensions remove them
@@ -2289,7 +2289,7 @@ def _read_i3rc_field(
     Nz = zgrid.size - 1
 
     content = pd.read_csv(
-        filename, skiprows=3, header=None, sep=r"\s+", dtype=float
+        fname, skiprows=3, header=None, sep=r"\s+", dtype=float
     ).values
     cell_indices = content[:, :3].astype(np.int32) - 1  # 1-based indices
     ix, iy, iz = cell_indices[:, 0], cell_indices[:, 1], cell_indices[:, 2]
@@ -2309,7 +2309,7 @@ def _read_i3rc_field(
             "y_bounds": ("y_b", ygrid),
             "z_bounds": ("z_b", zgrid),
         },
-        attrs={"source": str(filename)},
+        attrs={"source": str(fname)},
     )
 
 
@@ -2334,7 +2334,7 @@ class Atm1D(Atmosphere):
     standard atmospheres, but this is not a limitation: any other
     profile can be used. Users can provide their own atmospheric
     profile, either by placing the file in the atmospheric auxdata
-    directory (and referring to it by filename) or by passing the full
+    directory (and referring to it by fname) or by passing the full
     path to the `fname` parameter.
 
     Parameters
@@ -2352,9 +2352,9 @@ class Atm1D(Atmosphere):
 
         Any other profile may be used as well: provide your own file
         either by placing it in the atmospheric auxdata directory (and
-        passing its filename) or by passing its full path.
+        passing its fname) or by passing its full path.
 
-        File format: If a full path is not provided (only filename), the
+        File format: If a full path is not provided (only fname), the
         atmospheric
         auxdata directory is automatically prepended to the path. The
         file extension
@@ -2449,7 +2449,7 @@ class Atm1D(Atmosphere):
     o3_acs : str, optional
         Path to ozone netcdf4 file with absorption coefficient cross
         section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
-        in cm^2, and where T is in degrees Celcius). If only filename is
+        in cm^2, and where T is in degrees Celcius). If only fname is
         given automatically look at "auxdata/acs/".
         By default use Bogumil Version 3.0 data. Available files in
         auxdata:
@@ -2459,7 +2459,7 @@ class Atm1D(Atmosphere):
     no2_acs : str, optional
         Path to NO2 netcdf4 file with absorption coefficient cross
         section (SIGMA = 1E-20 * [C0 + C1*T + C2*T^2],
-        in cm^2, and where T is in degrees Celcius). If only filename is
+        in cm^2, and where T is in degrees Celcius). If only fname is
         given automatically look at "auxdata/acs/".
         By default use Bogumil Version 1.0 data. Available files in
         auxdata:
@@ -4802,7 +4802,7 @@ class ProfileBase(object):
     fname : path-like or None, optional
         Path to atmospheric profile file. Accepts .nc (NetCDF) or .dat
         (libratran) formats.
-        If only filename is provided (no path), the auxdata directory is
+        If only fname is provided (no path), the auxdata directory is
         automatically prepended.
         If no suffix is provided, .nc is assumed by default.
     tco3 : float or None, optional

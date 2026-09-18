@@ -702,7 +702,7 @@ def run_sim(
 
 
 def aer2smartg(
-    filename: str | Path | xr.Dataset,
+    fname: str | Path | xr.Dataset,
     n_theta: int | str = 1801,
     rh_or_reff: str | None = None,
     rh_reff: np.ndarray | None = None,
@@ -716,7 +716,7 @@ def aer2smartg(
 
     Parameters
     ----------
-    filename : str or Path or xr.Dataset
+    fname : str or Path or xr.Dataset
         The file to convert, or its content.
     n_theta : int or str
         The number of equally spaced angles of the phase matrix, or
@@ -733,11 +733,11 @@ def aer2smartg(
     xr.Dataset
         The converted dataset.
     """
-    if isinstance(filename, xr.Dataset):
-        ds = filename
+    if isinstance(fname, xr.Dataset):
+        ds = fname
     else:
-        filename = Path(filename)
-        ds = xr.open_dataset(filename)
+        fname = Path(fname)
+        ds = xr.open_dataset(fname)
 
     if "hum" in ds.variables:
         axis_name = "hum"
@@ -811,7 +811,7 @@ def aer2smartg(
     ds_out["phase"] = xr.DataArray(pha_out,
                                    dims=[rh_or_reff, "wav", "stk", "theta"])
     ds_out["phase"].attrs = {"description": "scattering phase matrix"}
-    name = filename.name if isinstance(filename, Path) else "none"
+    name = fname.name if isinstance(fname, Path) else "none"
     if rh_or_reff == "hum":
         ds_out.attrs = {"name": name,
                         "H_mix_min": "0.",

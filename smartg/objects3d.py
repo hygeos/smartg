@@ -2279,7 +2279,7 @@ def is_comment(line: str) -> bool:
     return line.startswith("#")
 
 
-def extract_points(filename: str | Path) -> list[gc.Point]:
+def extract_points(fname: str | Path) -> list[gc.Point]:
     """Extract heliostat coordinates from a file.
 
     Reads a file and extracts the (x, y, z) coordinates of each
@@ -2294,7 +2294,7 @@ def extract_points(filename: str | Path) -> list[gc.Point]:
 
     Parameters
     ----------
-    filename : str | pathlib.Path
+    fname : str | pathlib.Path
         Path to the file containing the heliostat coordinates.
 
     Returns
@@ -2304,16 +2304,16 @@ def extract_points(filename: str | Path) -> list[gc.Point]:
         coordinates of a heliostat.
     """
 
-    # First check if filename is an str type
+    # First check if fname is an str type
     file_content = ""
     try:
-        with open(filename, "r") as file:
+        with open(fname, "r") as file:
             for _curline in dropwhile(is_comment, file):
                 file_content = file.read()
     except FileNotFoundError:
-        print(str(filename) + " has been not found")
+        print(str(fname) + " has been not found")
     except IOError:
-        print("Enter/Exit error with " + str(filename))
+        print("Enter/Exit error with " + str(fname))
 
     # Looking for a float and fill it in values
     values = re.findall(r"-?[0-9]+\.?[0-9]*", file_content)

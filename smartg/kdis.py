@@ -575,12 +575,12 @@ class Kdis(object):
             warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
 
         if format == "ascii":
-            filename = dir_data / f"kdis_{model}_def.dat"
-            if not filename.is_file():
+            fname = dir_data / f"kdis_{model}_def.dat"
+            if not fname.is_file():
                 print("(kdis_coef) ERROR")
-                print("            Missing file:", filename)
+                print("            Missing file:", fname)
                 sys.exit()
-            definition_file = open(filename, "r")
+            definition_file = open(fname, "r")
             skip_comment(definition_file)
             line = definition_file.readline()
             self.nmaxai = int(line.split()[0])
@@ -705,15 +705,15 @@ class Kdis(object):
                 )
                 self.ai_c = np.zeros((self.nsp_c, self.nwvl, self.nmaxai))
             for species_index in range(self.nsp):
-                filename = (
+                fname = (
                     dir_data
                     / f"kdis_{model}_{self.species[species_index]}.dat"
                 )
-                if not filename.is_file():
+                if not fname.is_file():
                     print("(kdis_coef) ERROR")
-                    print("            Missing file:", filename)
+                    print("            Missing file:", fname)
                     sys.exit()
-                species_file = open(filename, "r")
+                species_file = open(fname, "r")
                 skip_comment(species_file)
                 for wavelength_index in range(self.nwvl):
                     line = species_file.readline()
@@ -751,15 +751,15 @@ class Kdis(object):
             else:
                 self.c_desc = "none"
             for species_index in range(self.nsp_c):
-                filename = (
+                fname = (
                     dir_data
                     / f"kdis_{model}_{self.species_c[species_index]}.dat"
                 )
-                if not filename.is_file():
+                if not fname.is_file():
                     print("(kdis_coef) ERROR")
-                    print("            Missing file:", filename)
+                    print("            Missing file:", fname)
                     sys.exit()
-                species_file = open(filename, "r")
+                species_file = open(fname, "r")
                 skip_comment(species_file)
                 for wavelength_index in range(self.nwvl):
                     line = species_file.readline()
@@ -799,14 +799,14 @@ class Kdis(object):
                                         )
                 species_file.close()
 
-            filename = dir_data / f"kdis_{model}_solarflux.dat"
-            if not filename.is_file():
-                filename = dir_data / f"solrad_kdis_{model}_thuillier2003.dat"
-                if not filename.is_file():
+            fname = dir_data / f"kdis_{model}_solarflux.dat"
+            if not fname.is_file():
+                fname = dir_data / f"solrad_kdis_{model}_thuillier2003.dat"
+                if not fname.is_file():
                     print("(kdis_coef) ERROR")
-                    print("            Missing file:", filename)
+                    print("            Missing file:", fname)
                     sys.exit()
-            solar_file = open(filename, "r")
+            solar_file = open(fname, "r")
             skip_comment(solar_file)
             line = solar_file.readline()
             skip_comment(solar_file)
@@ -824,8 +824,8 @@ class Kdis(object):
             solar_file.close()
 
         elif format in ["h5", "hdf5"]:
-            filename = dir_data / f"kdis_{model}.h5"
-            hdf5_file = h5py.File(filename, "r")
+            fname = dir_data / f"kdis_{model}.h5"
+            hdf5_file = h5py.File(fname, "r")
 
             def h5_dataset(group: h5py.Group, name: str) -> h5py.Dataset:
                 return cast(h5py.Dataset, group[name])

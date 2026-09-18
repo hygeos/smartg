@@ -309,7 +309,7 @@ receiver_view(ds_sg_out=m2_ds, log_color_scale=True)
 # HPOS_STP1.dat as example
 # Points of heliostats are extracted from the given file as a list of
 # class point
-helio_pos = extract_points(filename=DIR_AUXDATA / 'STPs' / 'STP1.dat')
+helio_pos = extract_points(fname=DIR_AUXDATA / 'STPs' / 'STP1.dat')
 
 # Specify the solar zenith angle
 sza = 14.3

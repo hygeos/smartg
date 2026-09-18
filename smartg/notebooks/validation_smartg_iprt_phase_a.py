@@ -267,7 +267,7 @@ vaa_dep003 = -m_a1f_dep003.coords['Azimuth angles'].values
 vza_dep01 = 180. - m_a1f_dep01.coords['Zenith angles'].values
 vaa_dep01 = -m_a1f_dep01.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_a1_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_a1_smartg_ref.dat"
 case_name = "A1"
 depols = [0., 0., 0.03, 0.03, 0.1, 0.1]
 altitudes = [0., 1., 0., 1., 0., 1.]
@@ -288,7 +288,7 @@ convert_sgout_to_iprtout(
                          vaas=[vaa_boa_dep0, vaa_toa_dep0,
                                vaa_dep003, vaa_dep003,
                                vaa_dep01, vaa_dep01],
-                         file_name=filename,
+                         file_name=fname,
                          output_layer=['_up (TOA)', '_up (TOA)',
                                        '_down (0+)', '_up (TOA)',
                                        '_down (0+)', '_up (TOA)'])
@@ -365,7 +365,7 @@ m = m_a2f
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_a2_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_a2_smartg_ref.dat"
 case_name = "A2"
 depols = [0.03, 0.03]
 altitudes = [0., 1.]
@@ -377,7 +377,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=filename,
+                         file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -472,7 +472,7 @@ m = m_a3f
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_a3_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_a3_smartg_ref.dat"
 case_name = "A3"
 depols = [0.0, 0.0]
 altitudes = [0., 1.]
@@ -483,7 +483,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
-                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=filename,
+                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -582,7 +582,7 @@ m = m_a4f
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_a4_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_a4_smartg_ref.dat"
 case_name = "A4"
 depols = [0.0, 0.0]
 altitudes = [0., 1.]
@@ -593,7 +593,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
-                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=filename,
+                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -688,7 +688,7 @@ m = m_a5f_pp
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_a5_smartg_pp_ref.dat"
+fname = output_folder_path / "iprt_case_a5_smartg_pp_ref.dat"
 case_name = "A5_pp"
 depols = [0.03, 0.03]
 altitudes = [0., 1.]
@@ -699,7 +699,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
-                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=filename,
+                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -757,7 +757,7 @@ m = m_a5f_al
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_a5_smartg_al_ref.dat"
+fname = output_folder_path / "iprt_case_a5_smartg_al_ref.dat"
 case_name = "A5_al"
 depols = [0.03, 0.03]
 altitudes = [0., 1.]
@@ -768,7 +768,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
-                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=filename,
+                         vzas=[vza, vza], vaas=[vaa, vaa], file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -839,7 +839,7 @@ m_a6f.to_netcdf(output_folder_path / "iprt_a6_smartg_ref.nc")
 vza = 180. - m_a6f.coords['Zenith angles'].values
 vaa = -m_a6f.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_a6_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_a6_smartg_ref.dat"
 case_name = "A6"
 depols = [0.03, 0.03]
 altitudes = [0., 1.]
@@ -850,7 +850,7 @@ saas = [0., 0.]
 convert_sgout_to_iprtout(datasets=[m_a6f, m_a6f], u_signs=[-1, -1],
                          case_name="A6", depols=depols, altitudes=altitudes,
                          szas=szas, saas=saas, vzas=[180. - vza, vza],
-                         vaas=[vaa, vaa], file_name=filename,
+                         vaas=[vaa, vaa], file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -930,7 +930,7 @@ m = m_b1f
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_b1_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_b1_smartg_ref.dat"
 case_name = "B1"
 depols = [0.03, 0.03]
 altitudes = [0., 30.]
@@ -942,7 +942,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=filename,
+                         file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -1020,7 +1020,7 @@ m = m_b2f
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_b2_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_b2_smartg_ref.dat"
 case_name = "B2"
 depols = [0.03, 0.03]
 altitudes = [0., 30.]
@@ -1032,7 +1032,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=filename,
+                         file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -1136,7 +1136,7 @@ m = m_b3f
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_b3_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_b3_smartg_ref.dat"
 case_name = "B3"
 depols = [0.03, 0.03]
 altitudes = [0., 30.]
@@ -1148,7 +1148,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=filename,
+                         file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 
 # %% [markdown]
@@ -1255,7 +1255,7 @@ m = m_b4f
 vza = 180. - m.coords['Zenith angles'].values
 vaa = -m.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_b4_smartg_ref.dat"
+fname = output_folder_path / "iprt_case_b4_smartg_ref.dat"
 filename2 = output_folder_path / "iprt_case_b4_smartg_ref2.dat"
 case_name = "B4"
 depols = [0.03, 0.03]
@@ -1268,7 +1268,7 @@ convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[180. - vza, vza], vaas=[vaa, vaa],
-                         file_name=filename,
+                         file_name=fname,
                          output_layer=['_down (0+)', '_up (TOA)'])
 m = m_b4f2
 convert_sgout_to_iprtout(datasets=[m, m], u_signs=[-1, -1],
@@ -1467,7 +1467,7 @@ vaa_0km = 180 - m_b4b_0km.coords['Azimuth angles'].values
 vza_30km = m_b4b_30km.coords['Zenith angles'].values
 vaa_30km = 180. - m_b4b_30km.coords['Azimuth angles'].values
 
-filename = output_folder_path / "iprt_case_b4_smartg_BAK_ref.dat"
+fname = output_folder_path / "iprt_case_b4_smartg_BAK_ref.dat"
 filename2 = output_folder_path / "iprt_case_b4_smartg_BAK_ref2.dat"
 case_name = "B4"
 depols = [0.03, 0.03]
@@ -1480,7 +1480,7 @@ convert_sgout_to_iprtout(datasets=[m_b4b_0km, m_b4b_30km], u_signs=[1, 1],
                          case_name=case_name, depols=depols,
                          altitudes=altitudes, szas=szas, saas=saas,
                          vzas=[vza_0km, vza_30km], vaas=[vaa_0km, vaa_30km],
-                         file_name=filename,
+                         file_name=fname,
                          output_layer=['_up (TOA)', '_up (TOA)'])
 
 convert_sgout_to_iprtout(datasets=[m_b4b_0km2, m_b4b_30km2], u_signs=[1, 1],

@@ -282,8 +282,8 @@ def _walk_files(root: Path) -> list[str]:
     found: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames.sort()
-        for filename in filenames:
-            path = Path(dirpath) / filename
+        for fname in filenames:
+            path = Path(dirpath) / fname
             if path.is_file() and not path.is_symlink():
                 found.append(path.relative_to(root).as_posix())
     return sorted(found)
@@ -581,7 +581,7 @@ def extract_zip(
     with zipfile.ZipFile(zfile) as archive:
         members: list[tuple[zipfile.ZipInfo, str]] = []
         for info in archive.infolist():
-            name = _relocate(info.filename, target_folder)
+            name = _relocate(info.fname, target_folder)
             if name is None:
                 continue
             _check_member_name(name)

@@ -104,7 +104,7 @@ class AlbedoSpeclib(object):
 
     Parameters
     ----------
-    filename : str or path-like
+    fname : str or path-like
         Path to the JPL speclib ASCII file.
 
     Attributes
@@ -113,8 +113,8 @@ class AlbedoSpeclib(object):
         Look-up table of albedo values indexed by wavelength (nm).
     """
 
-    def __init__(self, filename: PathType) -> None:
-        data = np.genfromtxt(filename, skip_header=26)
+    def __init__(self, fname: PathType) -> None:
+        data = np.genfromtxt(fname, skip_header=26)
         # convert X axis from micrometers to nm
         # convert Y axis from percent to dimensionless
         self.data: LUT = LUT(

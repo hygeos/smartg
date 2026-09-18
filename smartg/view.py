@@ -3154,7 +3154,7 @@ def receiver_view(
         If ``True``, use a logarithmic color normalization. Default:
         False
     save_path : str, optional
-        Output filename (without extension). If provided, the figure is
+        Output fname (without extension). If provided, the figure is
         saved as ``<save_path>.pdf``. Default: None
     mtoa : float, optional
         Solar flux at TOA (W/m²). Multiplicative factor applied to the
