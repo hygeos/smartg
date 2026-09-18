@@ -160,14 +160,14 @@ def get_histories(
 
 
 def si(
-    lam: float,
+    wavelength: float,
     kabs: NDArray[np.floating],
     alb: float,
     sik: float,
     wi_lr: NDArray[np.floating],
     dij: NDArray[np.floating],
     ki: float,
-    lam_lr_grid: NDArray[np.floating],
+    wavelength_lr_grid: NDArray[np.floating],
 ) -> jax.Array:
     """Beer-Lambert weight of one photon's Stokes component.
 
@@ -176,7 +176,7 @@ def si(
 
     Parameters
     ----------
-    lam : float
+    wavelength : float
         The current high-resolution wavelength (nm).
     kabs : ndarray of shape (NL,)
         The gaseous absorption coefficient for the current
@@ -193,7 +193,7 @@ def si(
         layers.
     ki : int
         The number of reflections on the surface.
-    lam_lr_grid : ndarray of shape (NLR,)
+    wavelength_lr_grid : ndarray of shape (NLR,)
         The LR wavelengths grid.
 
     Returns
@@ -203,20 +203,20 @@ def si(
     """
     # interpolation of scattering weights at low spectral
     # resolution to current lambda
-    wi = jnp.interp(lam, lam_lr_grid, wi_lr)
+    wi = jnp.interp(wavelength, wavelength_lr_grid, wi_lr)
 
     return sik * wi * jnp.exp(- jnp.sum(dij * kabs)) * alb**ki
 
 
 def si2(
-    lam: float,
+    wavelength: float,
     kabs: NDArray[np.floating],
     alb: float,
     sik: float,
     wi_lr: NDArray[np.floating],
     dij: NDArray[np.floating],
     ki: float,
-    lam_lr_grid: NDArray[np.floating],
+    wavelength_lr_grid: NDArray[np.floating],
 ) -> jax.Array:
     """Square of `si`, the Beer-Lambert weighted Stokes component.
 
@@ -227,7 +227,7 @@ def si2(
 
     Parameters
     ----------
-    lam : float
+    wavelength : float
         The current high-resolution wavelength (nm).
     kabs : ndarray of shape (NL,)
         The gaseous absorption coefficient for the current
@@ -244,7 +244,7 @@ def si2(
         layers.
     ki : int
         The number of reflections on the surface.
-    lam_lr_grid : ndarray of shape (NLR,)
+    wavelength_lr_grid : ndarray of shape (NLR,)
         The LR wavelengths grid.
 
     Returns
@@ -252,7 +252,7 @@ def si2(
     float
         The square of `si` for the same arguments.
     """
-    return si(lam, kabs, alb, sik, wi_lr, dij, ki, lam_lr_grid)**2
+    return si(wavelength, kabs, alb, sik, wi_lr, dij, ki, wavelength_lr_grid)**2
 
 
 
@@ -272,7 +272,7 @@ def big_sum(
     ----------
     s : callable
         A function with the signature of `si`:
-        ``s(lam, kabs, alb, sik, wi_lr, dij, ki, lam_lr_grid)``.
+        ``s(wavelength, kabs, alb, sik, wi_lr, dij, ki, wavelength_lr_grid)``.
     grad : int, optional
         If given, `s` is first replaced with its value and
         gradient with respect to its `grad`-th positional argument
@@ -289,7 +289,7 @@ def big_sum(
     callable
         A JIT-compiled, `jax.vmap`-vectorized version of `s`,
         taking the same arguments with an added leading wavelength
-        axis (axis 0 of `lam`, `kabs`, `alb`) and an added photon
+        axis (axis 0 of `wavelength`, `kabs`, `alb`) and an added photon
         axis (axis 0 of `sik`, `wi_lr`, `dij`, `ki`), plus, unless
         `only_i` is True, a Stokes-components axis (axis 1 of
         `sik`).

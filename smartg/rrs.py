@@ -59,19 +59,19 @@ X_O2: float = 0.212
 
 
 # Bates, Planel. Space Sa., Vol.32, No.6, pp. 785-790. 1984
-def fk_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
+def fk_n2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     """King correction factor of N2 as a function of wavelength.
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
 
     Returns
     -------
     float or ndarray
         Dimensionless King correction factor of N2. Same shape as
-        ``lam``.
+        ``wavelength``.
 
     References
     ----------
@@ -80,14 +80,14 @@ def fk_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
        https://doi.org/10.1016/0032-0633(84)90102-8
     """
     fk_n2 = 1.034 + 3.17 * 1e-4 / (
-        (np.asarray(lam, dtype=np.float64) * 1e-3) ** 2
+        (np.asarray(wavelength, dtype=np.float64) * 1e-3) ** 2
     )
     if fk_n2.ndim == 0:
         fk_n2 = float(fk_n2)
     return fk_n2
 
 
-def epsilon_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
+def epsilon_n2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     r"""Depolarization ratio of N2 as a function of wavelength.
 
     Computed from the King correction factor as
@@ -96,13 +96,13 @@ def epsilon_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
 
     Returns
     -------
     eps : float or ndarray
-        Dimensionless depolarization ratio of N2. Same shape as ``lam``.
+        Dimensionless depolarization ratio of N2. Same shape as ``wavelength``.
 
     References
     ----------
@@ -110,22 +110,22 @@ def epsilon_n2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
        *Planetary and Space Science*, 32(6), 785-790.
        https://doi.org/10.1016/0032-0633(84)90102-8
     """
-    return (fk_n2(lam) - 1) * 4.5
+    return (fk_n2(wavelength) - 1) * 4.5
 
 
-def fk_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
+def fk_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     """King correction factor of O2 as a function of wavelength.
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
 
     Returns
     -------
     fk_o2 : float or ndarray
         Dimensionless King correction factor of O2. Same shape as
-        ``lam``.
+        ``wavelength``.
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.
@@ -134,15 +134,15 @@ def fk_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
     """
     fk_o2 = (
         1.096
-        + 1.385 * 1e-3 / ((np.asarray(lam, dtype=np.float64) * 1e-3) ** 2)
-        + 1.448 * 1e-4 / ((np.asarray(lam, dtype=np.float64) * 1e-3) ** 4)
+        + 1.385 * 1e-3 / ((np.asarray(wavelength, dtype=np.float64) * 1e-3) ** 2)
+        + 1.448 * 1e-4 / ((np.asarray(wavelength, dtype=np.float64) * 1e-3) ** 4)
     )
     if np.ndim(fk_o2) == 0:
         fk_o2 = float(fk_o2)
     return fk_o2
 
 
-def epsilon_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
+def epsilon_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     r"""Depolarization ratio of O2 as a function of wavelength.
 
     Computed from the King correction factor as
@@ -151,24 +151,24 @@ def epsilon_o2(lam: NumericArrayLike) -> float | NDArray[np.floating]:
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
 
     Returns
     -------
     eps : float or ndarray
         Dimensionless depolarization ratio of O2. Same shape as
-        ``lam``.
+        ``wavelength``.
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.
        *Planetary and Space Science*, 32(6), 785-790.
        https://doi.org/10.1016/0032-0633(84)90102-8
     """
-    return (fk_o2(lam) - 1) * 4.5
+    return (fk_o2(wavelength) - 1) * 4.5
 
 
-def epsilon_air(lam: NumericArrayLike) -> float | NDArray[np.floating]:
+def epsilon_air(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     r"""Effective depolarization ratio of dry air.
 
     Weighted sum of the N2 and O2 depolarization ratios using the
@@ -178,27 +178,27 @@ def epsilon_air(lam: NumericArrayLike) -> float | NDArray[np.floating]:
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
 
     Returns
     -------
     eps : float or ndarray
         Dimensionless effective depolarization ratio of dry air.
-        Same shape as ``lam``.
+        Same shape as ``wavelength``.
     References
     ----------
     .. [1] Bates, D. R. (1984). Rayleigh scattering by air.
        *Planetary and Space Science*, 32(6), 785-790.
        https://doi.org/10.1016/0032-0633(84)90102-8
     """
-    return epsilon_n2(lam) * X_N2 + epsilon_o2(lam) * X_O2
+    return epsilon_n2(wavelength) * X_N2 + epsilon_o2(wavelength) * X_O2
 
 
 # Kattawar, Astrophysical Journal, Part 1, vol. 243, Feb. 1, 1981,
 # p. 1049-1057.
 def f0_air(
-    lam: NumericArrayLike, theta: float
+    wavelength: NumericArrayLike, theta: float
 ) -> float | NDArray[np.floating]:
     r"""Cabannes fraction of dry air (Kattawar's ``f0``).
 
@@ -210,7 +210,7 @@ def f0_air(
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
     theta : float or array_like
         Scattering angle in degrees (0 = forward, 180 = backward).
@@ -218,7 +218,7 @@ def f0_air(
     Returns
     -------
     f0 : float or ndarray
-        Dimensionless Cabannes fraction. Same shape as ``lam`` and
+        Dimensionless Cabannes fraction. Same shape as ``wavelength`` and
         ``theta`` (broadcast).
 
     References
@@ -228,7 +228,7 @@ def f0_air(
        effect, without aerosols. *Astrophysical Journal, Part 1*,
        243, 1049-1057.
     """
-    eps = epsilon_air(lam)
+    eps = epsilon_air(wavelength)
     c2 = np.cos(np.radians(theta)) ** 2
     num = (180.0 + 13.0 * eps) + (180.0 + eps) * c2
     den = (180.0 + 52.0 * eps) + (180.0 + 4.0 * eps) * c2
@@ -236,13 +236,13 @@ def f0_air(
 
 
 def f0_n2(
-    lam: NumericArrayLike, theta: float
+    wavelength: NumericArrayLike, theta: float
 ) -> float | NDArray[np.floating]:
     r"""Cabannes fraction of N2 (Kattawar's ``f0`` for pure N2).
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
     theta : float or array_like
         Scattering angle in degrees (0 = forward, 180 = backward).
@@ -250,7 +250,7 @@ def f0_n2(
     Returns
     -------
     f0 : float or ndarray
-        Dimensionless Cabannes fraction of N2. Same shape as ``lam``
+        Dimensionless Cabannes fraction of N2. Same shape as ``wavelength``
         and ``theta`` (broadcast).
 
     References
@@ -260,7 +260,7 @@ def f0_n2(
        effect, without aerosols. *Astrophysical Journal, Part 1*,
        243, 1049-1057.
     """
-    eps = epsilon_n2(lam)
+    eps = epsilon_n2(wavelength)
     c2 = np.cos(np.radians(theta)) ** 2
     num = (180.0 + 13.0 * eps) + (180.0 + eps) * c2
     den = (180.0 + 52.0 * eps) + (180.0 + 4.0 * eps) * c2
@@ -268,13 +268,13 @@ def f0_n2(
 
 
 def f0_o2(
-    lam: NumericArrayLike, theta: float
+    wavelength: NumericArrayLike, theta: float
 ) -> float | NDArray[np.floating]:
     r"""Cabannes fraction of O2 (Kattawar's ``f0`` for pure O2).
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
     theta : float or array_like
         Scattering angle in degrees (0 = forward, 180 = backward).
@@ -282,7 +282,7 @@ def f0_o2(
     Returns
     -------
     f0 : float or ndarray
-        Dimensionless Cabannes fraction of O2. Same shape as ``lam``
+        Dimensionless Cabannes fraction of O2. Same shape as ``wavelength``
         and ``theta`` (broadcast).
 
     References
@@ -292,7 +292,7 @@ def f0_o2(
        effect, without aerosols. *Astrophysical Journal, Part 1*,
        243, 1049-1057.
     """
-    eps = epsilon_o2(lam)
+    eps = epsilon_o2(wavelength)
     c2 = np.cos(np.radians(theta)) ** 2
     num = (180.0 + 13.0 * eps) + (180.0 + eps) * c2
     den = (180.0 + 52.0 * eps) + (180.0 + 4.0 * eps) * c2
@@ -308,7 +308,7 @@ def f0_o2(
 
 
 def k_ratio(
-    lam: NumericArrayLike, theta: float
+    wavelength: NumericArrayLike, theta: float
 ) -> float | NDArray[np.floating]:
     r"""Joiner's O2-to-N2 Cabannes ratio.
 
@@ -318,7 +318,7 @@ def k_ratio(
 
     Parameters
     ----------
-    lam : float or array_like
+    wavelength : float or array_like
         Wavelength in nanometers.
     theta : float or array_like
         Scattering angle in degrees (0 = forward, 180 = backward).
@@ -326,7 +326,7 @@ def k_ratio(
     Returns
     -------
     k : float or ndarray
-        Dimensionless ratio. Same shape as ``lam`` and ``theta``
+        Dimensionless ratio. Same shape as ``wavelength`` and ``theta``
         (broadcast).
 
     References
@@ -337,7 +337,7 @@ def k_ratio(
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    return (1.0 - f0_o2(lam, theta)) / (1.0 - f0_n2(lam, theta))
+    return (1.0 - f0_o2(wavelength, theta)) / (1.0 - f0_n2(wavelength, theta))
 
 
 def bjm_plus(j: NumericArrayLike) -> float | NDArray[np.floating]:
@@ -549,7 +549,7 @@ def l_n2(
 
 
 def l_air(
-    lam: float, theta: float, t: float
+    wavelength: float, theta: float, t: float
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Air rotational Raman spectrum at a single excitation wavelength.
 
@@ -563,7 +563,7 @@ def l_air(
 
     Parameters
     ----------
-    lam : float
+    wavelength : float
         Excitation wavelength in nanometers (scalar).
     theta : float
         Scattering angle in degrees (0 = forward, 180 = backward).
@@ -572,10 +572,10 @@ def l_air(
 
     Returns
     -------
-    lam_out : ndarray of float
+    wavelength_out : ndarray of float
         Output wavelengths in nanometers, sorted in increasing order.
     l_out : ndarray of float
-        Normalised line intensities at each ``lam_out`` (spectrum
+        Normalised line intensities at each ``wavelength_out`` (spectrum
         integrates to 1).
 
     References
@@ -590,49 +590,49 @@ def l_air(
     dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(t)
     lj_stk_n2 *= X_N2
     lj_astk_n2 *= X_N2
-    lj_stk_o2 *= X_O2 * k_ratio(lam, theta)
-    lj_astk_o2 *= X_O2 * k_ratio(lam, theta)
+    lj_stk_o2 *= X_O2 * k_ratio(wavelength, theta)
+    lj_astk_o2 *= X_O2 * k_ratio(wavelength, theta)
 
-    nu0 = 1e7 / (lam)  # nu0 in cm-1
+    nu0 = 1e7 / (wavelength)  # nu0 in cm-1
     # compute output lamnda in nm
-    lam_stk_n2 = 1e7 / (nu0 + dnu_stk_n2)
-    lam_astk_n2 = 1e7 / (nu0 + dnu_astk_n2)
-    lam_stk_o2 = 1e7 / (nu0 + dnu_stk_o2)
-    lam_astk_o2 = 1e7 / (nu0 + dnu_astk_o2)
+    wavelength_stk_n2 = 1e7 / (nu0 + dnu_stk_n2)
+    wavelength_astk_n2 = 1e7 / (nu0 + dnu_astk_n2)
+    wavelength_stk_o2 = 1e7 / (nu0 + dnu_stk_o2)
+    wavelength_astk_o2 = 1e7 / (nu0 + dnu_astk_o2)
 
     norm = (
         lj_stk_n2.sum() + lj_astk_n2.sum() + lj_stk_o2.sum()
         + lj_astk_o2.sum()
     )
 
-    lam_out = np.concatenate(
-        [lam_astk_n2, lam_astk_o2, lam_stk_n2, lam_stk_o2]
+    wavelength_out = np.concatenate(
+        [wavelength_astk_n2, wavelength_astk_o2, wavelength_stk_n2, wavelength_stk_o2]
     )
     l_out = (
         np.concatenate([lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2])
         / norm
     )
-    ii = np.argsort(lam_out)
+    ii = np.argsort(wavelength_out)
 
     # return spectrum with increasing wavelengths
-    return lam_out[ii], l_out[ii]
+    return wavelength_out[ii], l_out[ii]
 
 
 def l2d(
-    lam: NumericArrayLike, theta: float, t: float
+    wavelength: NumericArrayLike, theta: float, t: float
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Vectorised air rotational Raman spectrum over many wavelengths.
 
     Same physics as :func:`l_air`, but evaluated simultaneously for
-    every excitation wavelength in ``lam``. The N2 and O2 line lists
-    depend only on temperature and are reused across all ``lam``; the
+    every excitation wavelength in ``wavelength``. The N2 and O2 line lists
+    depend only on temperature and are reused across all ``wavelength``; the
     wavelength-dependent Cabannes ratio :func:`k_ratio` is broadcast
     to weight each line. The output is sorted by increasing wavelength
     along the last axis for each input excitation wavelength.
 
     Parameters
     ----------
-    lam : float or array_like, shape (nlam,)
+    wavelength : float or array_like, shape (nlam,)
         Excitation wavelengths in nanometers.
     theta : float
         Scattering angle in degrees (0 = forward, 180 = backward).
@@ -641,7 +641,7 @@ def l2d(
 
     Returns
     -------
-    lam_out : ndarray of float, shape (nlam, nlines)
+    wavelength_out : ndarray of float, shape (nlam, nlines)
         Output wavelengths in nanometers, sorted in increasing order
         along the last axis.
     l_out : ndarray of float, shape (nlam, nlines)
@@ -655,9 +655,9 @@ def l2d(
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
-    kk = np.atleast_1d(k_ratio(lam, theta), dtype=np.float64)
-    nlam = lam.size
+    wavelength = np.atleast_1d(np.asarray(wavelength, dtype=np.float64))
+    kk = np.atleast_1d(k_ratio(wavelength, theta), dtype=np.float64)
+    nlam = wavelength.size
     dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(t)
     dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(t)
     norm_n2 = lj_stk_n2.sum() + lj_astk_n2.sum()
@@ -693,21 +693,21 @@ def l2d(
     )
 
     # reorganization with lambda instead od Dnu and increasing order
-    nu0 = 1e7 / lam
-    lam_out = 1e7 / (nu0[:, np.newaxis] + dnu_out[np.newaxis, :])
-    ii = np.argsort(lam_out, axis=1)
-    lam_out = np.take_along_axis(lam_out, ii, axis=1)
+    nu0 = 1e7 / wavelength
+    wavelength_out = 1e7 / (nu0[:, np.newaxis] + dnu_out[np.newaxis, :])
+    ii = np.argsort(wavelength_out, axis=1)
+    wavelength_out = np.take_along_axis(wavelength_out, ii, axis=1)
     l_out = np.take_along_axis(l_out, ii, axis=1)
 
-    return lam_out, l_out
+    return wavelength_out, l_out
 
 
 def l2d_inv(
-    lam: NumericArrayLike, theta: float, t: float
+    wavelength: NumericArrayLike, theta: float, t: float
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     r"""Inverse air rotational Raman spectrum (vectorised).
 
-    Given a set of scattered wavelengths ``lam`` observed at angle
+    Given a set of scattered wavelengths ``wavelength`` observed at angle
     ``theta``, returns the corresponding excitation wavelengths and
     the Ring-spectrum weights that map to each scattered wavelength.
     This is the inverse of :func:`l2d`: instead of computing
@@ -718,7 +718,7 @@ def l2d_inv(
 
     Parameters
     ----------
-    lam : float or array_like, shape (nlam,)
+    wavelength : float or array_like, shape (nlam,)
         Scattered (output) wavelengths in nanometers.
     theta : float
         Scattering angle in degrees (0 = forward, 180 = backward).
@@ -727,7 +727,7 @@ def l2d_inv(
 
     Returns
     -------
-    lam_in : ndarray of float, shape (nlam, nlines)
+    wavelength_in : ndarray of float, shape (nlam, nlines)
         Excitation wavelengths in nanometers that contribute to each
         scattered wavelength, sorted in increasing order along the
         last axis.
@@ -742,19 +742,19 @@ def l2d_inv(
        measurements. *Applied Optics*, 34(21), 4513.
        https://doi.org/10.1364/AO.34.004513
     """
-    lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
+    wavelength = np.atleast_1d(np.asarray(wavelength, dtype=np.float64))
     dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(t)
     dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(t)
     # reorganization with lambda instead od Dnu
     dnu_in = np.concatenate(
         [dnu_astk_n2, dnu_astk_o2, dnu_stk_n2, dnu_stk_o2]
     )
-    nu0 = 1e7 / lam
-    lam_in1 = 1e7 / (nu0[:, np.newaxis] - dnu_stk_o2[np.newaxis, :])
-    lam_in2 = 1e7 / (nu0[:, np.newaxis] - dnu_astk_o2[np.newaxis, :])
-    nlam = lam.shape[0]
-    kk1 = k_ratio(lam_in1, theta)
-    kk2 = k_ratio(lam_in2, theta)
+    nu0 = 1e7 / wavelength
+    wavelength_in1 = 1e7 / (nu0[:, np.newaxis] - dnu_stk_o2[np.newaxis, :])
+    wavelength_in2 = 1e7 / (nu0[:, np.newaxis] - dnu_astk_o2[np.newaxis, :])
+    nlam = wavelength.shape[0]
+    kk1 = k_ratio(wavelength_in1, theta)
+    kk2 = k_ratio(wavelength_in2, theta)
     norm_n2 = lj_stk_n2.sum() + lj_astk_n2.sum()
     norm_o2 = lj_stk_o2.sum() + lj_astk_o2.sum()
     lj_stk_n2 /= norm_n2
@@ -779,9 +779,9 @@ def l2d_inv(
         [lj_astk_n2, lj_astk_o2, lj_stk_n2, lj_stk_o2], axis=1
     )
 
-    lam_in = 1e7 / (nu0[:, np.newaxis] - dnu_in[np.newaxis, :])
-    ii = np.argsort(lam_in, axis=1)
-    lam_in = np.take_along_axis(lam_in, ii, axis=1)
+    wavelength_in = 1e7 / (nu0[:, np.newaxis] - dnu_in[np.newaxis, :])
+    ii = np.argsort(wavelength_in, axis=1)
+    wavelength_in = np.take_along_axis(wavelength_in, ii, axis=1)
     l_in = np.take_along_axis(l_in, ii, axis=1)
 
-    return lam_in, l_in
+    return wavelength_in, l_in

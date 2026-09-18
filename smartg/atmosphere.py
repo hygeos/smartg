@@ -890,7 +890,7 @@ class AerOPAC(object):
             else as_theta_grid(n_theta)
         )
         n_theta = len(theta)
-        lam_tabulated = self.ds_mix.coords["wav"].values
+        wavelength_tabulated = self.ds_mix.coords["wav"].values
         n_wavelength = len(wavelength)
 
         P_tot = 0.0
@@ -910,8 +910,8 @@ class AerOPAC(object):
             n_wavelength_orig = len(wavelength_vals)
 
             # Wavelength optimization: subset to bracketing wavelengths
-            if (np.max(wavelength) > np.max(lam_tabulated)) or (
-                np.min(wavelength) < np.min(lam_tabulated)
+            if (np.max(wavelength) > np.max(wavelength_tabulated)) or (
+                np.min(wavelength) < np.min(wavelength_tabulated)
             ):
                 # Out of range: use full axis
                 wavelength_subset = wavelength_vals
@@ -920,14 +920,14 @@ class AerOPAC(object):
                 range_ind = np.array(
                     [
                         np.argwhere(
-                            (lam_tabulated <= np.min(wavelength))
+                            (wavelength_tabulated <= np.min(wavelength))
                         )[-1][0],
                         np.argwhere(
-                            (lam_tabulated >= np.max(wavelength))
+                            (wavelength_tabulated >= np.max(wavelength))
                         )[0][0],
                     ]
                 )
-                ilam_tabulated = np.arange(len(lam_tabulated), dtype=int)
+                ilam_tabulated = np.arange(len(wavelength_tabulated), dtype=int)
                 ilam_opti = np.concatenate(
                     np.argwhere(
                         (ilam_tabulated >= range_ind[0])
@@ -5213,19 +5213,19 @@ def saturation_pressure(t: NumericArrayLike) -> float | NDArray:
     return sat_press
 
 
-def f_n2(lam: NumericArrayLike) -> float | NDArray:
+def f_n2(wavelength: NumericArrayLike) -> float | NDArray:
     """Compute the depolarization factor of N2 as a function of
     wavelength.
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Wavelength in micrometers (μm).
 
     Returns
     -------
     float or ndarray
-        Depolarization factor of N2. Same shape as input `lam`.
+        Depolarization factor of N2. Same shape as input `wavelength`.
 
     References
     ----------
@@ -5235,25 +5235,25 @@ def f_n2(lam: NumericArrayLike) -> float | NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    lam = np.asarray(lam, dtype=np.float64)
-    if lam.ndim == 0:
-        lam = float(lam)
-    return 1.034 + 3.17 * 1e-4 * lam ** (-2)
+    wavelength = np.asarray(wavelength, dtype=np.float64)
+    if wavelength.ndim == 0:
+        wavelength = float(wavelength)
+    return 1.034 + 3.17 * 1e-4 * wavelength ** (-2)
 
 
-def f_o2(lam: NumericArrayLike) -> float | NDArray:
+def f_o2(wavelength: NumericArrayLike) -> float | NDArray:
     """Compute the depolarization factor of O2 as a function of
     wavelength.
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Wavelength in micrometers (μm).
 
     Returns
     -------
     float or ndarray
-        Depolarization factor of O2. Same shape as input `lam`.
+        Depolarization factor of O2. Same shape as input `wavelength`.
 
     References
     ----------
@@ -5263,13 +5263,13 @@ def f_o2(lam: NumericArrayLike) -> float | NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    lam = np.asarray(lam, dtype=np.float64)
-    if lam.ndim == 0:
-        lam = float(lam)
-    return 1.096 + 1.385 * 1e-3 * lam ** (-2) + 1.448 * 1e-4 * lam ** (-4)
+    wavelength = np.asarray(wavelength, dtype=np.float64)
+    if wavelength.ndim == 0:
+        wavelength = float(wavelength)
+    return 1.096 + 1.385 * 1e-3 * wavelength ** (-2) + 1.448 * 1e-4 * wavelength ** (-4)
 
 
-def f_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
+def f_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     """Calculates the depolarization factor for air using a composite
     formula based on the depolarization factors of N2 and O2, and the
     CO2 concentration. Produces a 2-D array with one value per
@@ -5277,7 +5277,7 @@ def f_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Wavelength values in micrometers (μm). Shape: (N,)
     co2 : array_like
         CO2 concentration in parts per million (ppm). Shape: (M,) or scalar.
@@ -5297,8 +5297,8 @@ def f_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    fn2_reshp = np.atleast_1d(f_n2(lam)).reshape((-1, 1))
-    fo2_reshp = np.atleast_1d(f_o2(lam)).reshape((-1, 1))
+    fn2_reshp = np.atleast_1d(f_n2(wavelength)).reshape((-1, 1))
+    fo2_reshp = np.atleast_1d(f_o2(wavelength)).reshape((-1, 1))
     co2_reshp = np.atleast_1d(co2).reshape((1, -1))
 
     return (
@@ -5309,20 +5309,20 @@ def f_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     ) / (78.084 + 20.946 + 0.934 + co2_reshp * 1e-4)
 
 
-def n_air_co2_300(lam: NumericArrayLike) -> float | NDArray:
+def n_air_co2_300(wavelength: NumericArrayLike) -> float | NDArray:
     """Compute the refractive index of dry air at 300 ppm CO2 as a
     function of wavelength.
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Wavelength in micrometers (μm).
 
     Returns
     -------
     float or ndarray
         Refractive index of dry air at 300 ppm CO2. Same shape as input
-        `lam`.
+        `wavelength`.
 
     References
     ----------
@@ -5332,28 +5332,28 @@ def n_air_co2_300(lam: NumericArrayLike) -> float | NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    lam = np.asarray(lam, dtype=np.float64)
+    wavelength = np.asarray(wavelength, dtype=np.float64)
     # ensure scalar input returns scalar output
-    if lam.ndim == 0:
-        lam = float(lam)
+    if wavelength.ndim == 0:
+        wavelength = float(wavelength)
     return (
         1e-8
         * (
             8060.51
-            + 2480990 / (132.274 - lam ** (-2))
-            + 17455.7 / (39.32957 - lam ** (-2))
+            + 2480990 / (132.274 - wavelength ** (-2))
+            + 17455.7 / (39.32957 - wavelength ** (-2))
         )
         + 1.0
     )
 
 
-def n_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
+def n_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     """Calculates the refractive index as function of wavelength and CO2
     concentration.
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Wavelength values in micrometers (μm). Shape: (N,)
     co2 : array_like
         CO2 concentration in parts per million (ppm). Shape: (M,) or scalar.
@@ -5372,7 +5372,7 @@ def n_air_co2(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    n300 = np.atleast_1d(n_air_co2_300(lam)).reshape((-1, 1))
+    n300 = np.atleast_1d(n_air_co2_300(wavelength)).reshape((-1, 1))
     co2_reshp = np.atleast_1d(co2).reshape((1, -1))
     return (n300 - 1) * (1 + 0.54 * (co2_reshp * 1e-6 - 0.0003)) + 1.0
 
@@ -5407,12 +5407,12 @@ def m_dry_air(co2: NumericArrayLike) -> float | NDArray:
     return 15.0556 * co2 * 1e-6 + 28.9595
 
 
-def rayleigh_crs(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
+def rayleigh_crs(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     """Compute the Rayleigh cross section.
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         The wavelength(s) in um
     co2 : array_like
         CO2 concentration(s) in ppm
@@ -5430,25 +5430,25 @@ def rayleigh_crs(lam: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
         and Oceanic
         Technology*, 16, 1854-1861.
     """
-    lam = np.atleast_1d(lam)
+    wavelength = np.atleast_1d(wavelength)
     co2 = np.atleast_1d(co2)
 
     # Ensure float64 due to numpy 2
-    lam = lam.astype(np.float64)
+    wavelength = wavelength.astype(np.float64)
     co2 = co2.astype(np.float64)
 
     avogadro = constants.value("Avogadro constant")
     ns = avogadro / 22.4141 * 273.15 / 288.15 * 1e-3
-    nn2 = n_air_co2(lam, co2) ** 2
+    nn2 = n_air_co2(wavelength, co2) ** 2
 
     return (
         24
         * np.pi**3
         * (nn2 - 1) ** 2
-        / (lam[:, None] * 1e-4) ** 4
+        / (wavelength[:, None] * 1e-4) ** 4
         / ns**2
         / (nn2 + 2) ** 2
-        * f_air_co2(lam, co2)
+        * f_air_co2(wavelength, co2)
     )
 
 
@@ -5530,7 +5530,7 @@ def gravity_z(
 
 
 def rayleigh_od(
-    lam: NumericArrayLike,
+    wavelength: NumericArrayLike,
     co2: NumericArrayLike = 400.0,
     lat: float = 45.0,
     z: NumericArrayLike = 0.0,
@@ -5545,7 +5545,7 @@ def rayleigh_od(
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Wavelength(s) in micrometers. Shape (N,).
     co2 : array_like, optional
         CO2 concentration in parts per million (ppm). May be a scalar or
@@ -5583,7 +5583,7 @@ def rayleigh_od(
     """
     avogadro = constants.value("Avogadro constant")
     z = np.atleast_1d(z)
-    lam = np.atleast_1d(lam)
+    wavelength = np.atleast_1d(wavelength)
     co2 = np.atleast_1d(co2)
     p = np.atleast_1d(p)
 
@@ -5604,11 +5604,11 @@ def rayleigh_od(
     else:
         raise ValueError(f"Invalid pressure type ({pressure})")
 
-    return rayleigh_crs(lam, co2) * p_surf * avogadro / m_dry_air(co2) / g_z
+    return rayleigh_crs(wavelength, co2) * p_surf * avogadro / m_dry_air(co2) / g_z
 
 
 def refractivity(
-    lam: NumericArrayLike,
+    wavelength: NumericArrayLike,
     p: NumericArrayLike,
     t: NumericArrayLike,
     co2: NumericArrayLike,
@@ -5618,7 +5618,7 @@ def refractivity(
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Wavelength in micrometers (um), shape (N,)
     p : array_like
         Atmospheric pressure in hectopascals (hPa), shape (M,)
@@ -5637,7 +5637,7 @@ def refractivity(
     .. [1] Edlén, B. (1966). The refractive index of air. Metrologia,
     2(2), 71-80.
     """
-    lam = np.atleast_1d(lam)
+    wavelength = np.atleast_1d(wavelength)
     p = np.atleast_1d(p)  # input pressure in hPa
     t = np.atleast_1d(t)  # input temperature in Kelvin
     co2 = np.atleast_1d(co2)
@@ -5650,7 +5650,7 @@ def refractivity(
 
     p_pa = p * 100.0
     t_c = t - 273.15
-    ntp = 1 + (n_air_co2(lam[:], co2) - 1) * p * (
+    ntp = 1 + (n_air_co2(wavelength[:], co2) - 1) * p * (
         1.0 + p_pa * (60.1 - 0.972 * t_c) * 1e-10
     ) / (96095.43 * (1 + 0.003661 * t_c))
     return ntp

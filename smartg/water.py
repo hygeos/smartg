@@ -203,22 +203,22 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
             fp.readline()  # skip the first 6 lines
         data_pf = np.genfromtxt(fp)
     aw_pf = data_pf[:, 1] * 100  #  convert from cm-1 to m-1
-    lam_pf = data_pf[:, 0]
-    ok_pf = lam_pf <= 725
+    wavelength_pf = data_pf[:, 0]
+    ok_pf = wavelength_pf <= 725
 
     # Palmer&Williams
     data_pw = np.genfromtxt(
         Path(dir_aux) / "water" / "palmer74.dat", skip_header=5
     )
     aw_pw = data_pw[::-1, 1] * 100  #  convert from cm-1 to m-1
-    lam_pw = data_pw[::-1, 0]
-    ok_pw = lam_pw > 725
+    wavelength_pw = data_pw[::-1, 0]
+    ok_pw = wavelength_pw > 725
 
     aw = xr.DataArray(
         np.array(list(aw_pf[ok_pf]) + list(aw_pw[ok_pw])),
         dims=["wavelength"],
         coords={
-            "wavelength": np.array(list(lam_pf[ok_pf]) + list(lam_pw[ok_pw]))
+            "wavelength": np.array(list(wavelength_pf[ok_pf]) + list(wavelength_pw[ok_pw]))
         },
     )
 

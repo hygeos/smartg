@@ -47,9 +47,9 @@ XGRID = 1024
 # The saved values below were measured with this photon count. The
 # photons are launched in 10 kernel loops so that Smartg.run estimates
 # the Monte Carlo noise from the spread between loops (stdev=True);
-# the noise of the total is that of a single launch of NBPHOTONS.
-NBPHOTONS = 1e8
-NBLOOP = 1e7
+# the noise of the total is that of a single launch of N_PHOTONS.
+N_PHOTONS = 1e8
+N_LOOP = 1e7
 
 # Iwabuchi and Suzuki (2009) figure 3: a cloud of optical thickness 5
 # at 500 nm between 0 and 1 km, effective radius 8 um, conservative
@@ -106,7 +106,7 @@ REF_18001 = {
 }
 
 # Values measured with the settings above (SEED, XBLOCK, XGRID,
-# NBPHOTONS, NBLOOP), in the order of VZA, per grid. Regenerate them
+# N_PHOTONS, N_LOOP), in the order of VZA, per grid. Regenerate them
 # from the log with the same settings if the physics legitimately
 # changes.
 SAVED = {
@@ -190,7 +190,7 @@ def atm_on(name):
     ).calc(WAVELENGTH, n_theta=grid_of(name))
 
 
-def run(sg, name, n_photons=NBPHOTONS, n_loop=NBLOOP, seed=SEED):
+def run(sg, name, n_photons=N_PHOTONS, n_loop=N_LOOP, seed=SEED):
     """The radiances of REF_18001's keys and their Monte Carlo sigma.
 
     Two dicts keyed like REF_18001, each value in the order of VZA.

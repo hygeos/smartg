@@ -497,7 +497,7 @@ plt.tight_layout()
 # %% tags=["Definition"]
 # %%time
 # multispectral simulation
-# computation done independently for each wavelegnth, NBPHOTONS is
+# computation done independently for each wavelegnth, N_PHOTONS is
 # shared equally
 # between all wavelegths (thus Monte Carlo NOISE in the spectrum)
 # wavelengths is a list or numpy array
@@ -1367,13 +1367,13 @@ fig.set_size_inches(12, 4)
 
 for i, (ts, ls) in enumerate(zip(ths, lin)):
     for  j, dp in enumerate(dphis):
-        for k, (lam, c) in enumerate(zip(wavelength[::-1], col)):
+        for k, (wavelength, c) in enumerate(zip(wavelength[::-1], col)):
             i_2d = m1['I_up (TOA)'].isel({'Azimuth angles': 0}).interp(
-                     wavelength=lam, kwargs={'fill_value': 'extrapolate'}
+                     wavelength=wavelength, kwargs={'fill_value': 'extrapolate'}
                  ).interp({'Zenith angles': ts}).values.reshape(n_zt, n_phi)
             if( i==0 and j==0):
                 ax[j].semilogx(i_2d[:, j], zts, ls, color=c,
-                                                label='%.0f nm'%(lam))
+                                                label='%.0f nm'%(wavelength))
             if( k==0 and j==1):
                 ax[j].semilogx(i_2d[:, j], zts, ls, color=c,
                                                 label='%.0f°'%(ts))

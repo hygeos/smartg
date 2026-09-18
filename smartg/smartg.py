@@ -2565,7 +2565,7 @@ def _finalize(
     Parameters
     ----------
     tab_photons_tot : np.ndarray
-        Accumulated photon weights of shape (level, stk, sensor, lam,
+        Accumulated photon weights of shape (level, stk, sensor, wavelength,
         theta, phi).
     tab_photons_tot_no_aer : np.ndarray
         Same as tab_photons_tot but without the aerosol scattering
@@ -4992,7 +4992,7 @@ def _impact_init(
             assert prof_atm is not None and od_atm is not None
             for ilam in range(nlam):
                 if prof_atm['OD_atm'].ndim == 2:
-                    # lam, z
+                    # wavelength, z
                     # tautot[ilam] = prof_atm['OD_atm'][ilam,
                     # natm]/np.cos(thv_deg*pi/180.)
                     tautot[ilam] = od_atm[ilam, -1] / np.cos(

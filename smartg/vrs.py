@@ -96,7 +96,7 @@ def raman_response(ks: NumericArrayLike) -> NDArray[np.floating]:
 
 
 def raman_forward(
-    lam: NumericArrayLike,
+    wavelength: NumericArrayLike,
     nl: int = 16,
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     """Ocean vibrational Raman spectrum (forward).
@@ -108,7 +108,7 @@ def raman_forward(
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Excitation wavelength(s) in nm. Shape ``(N,)``.
     nl : int, optional
         Number of points in the returned Raman-shifted wavelength grid.
@@ -121,20 +121,20 @@ def raman_forward(
     response : ndarray
         Spectral response evaluated on ``wgrid``, shape ``(nl, N)``.
     """
-    lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
-    k = 1e7 / lam  # cm-1
+    wavelength = np.atleast_1d(np.asarray(wavelength, dtype=np.float64))
+    k = 1e7 / wavelength  # cm-1
     k0 = k - 2950.0  # cm-1
     k1 = k - 3850.0  # cm-1
     w0 = 1e7 / k0
     w1 = 1e7 / k1
     wgrid = np.linspace(w0, w1, num=nl, dtype=np.float64)
-    ks = 1e7 * (1.0 / lam[np.newaxis, :] - 1.0 / wgrid)
+    ks = 1e7 * (1.0 / wavelength[np.newaxis, :] - 1.0 / wgrid)
     response = 1e7 / wgrid**2 * raman_response(ks)
     return wgrid, response
 
 
 def raman_inverse(
-    lam: NumericArrayLike,
+    wavelength: NumericArrayLike,
     nl: int = 16,
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
     """Ocean vibrational Raman spectrum (inverse).
@@ -146,7 +146,7 @@ def raman_inverse(
 
     Parameters
     ----------
-    lam : array_like
+    wavelength : array_like
         Detected (Raman-shifted) wavelength(s) in nm. Shape ``(N,)``.
     nl : int, optional
         Number of points in the returned excitation wavelength grid.
@@ -159,14 +159,14 @@ def raman_inverse(
     response : ndarray
         Spectral response evaluated on ``wgrid``, shape ``(N, nl)``.
     """
-    lam = np.atleast_1d(np.asarray(lam, dtype=np.float64))
-    k = 1e7 / lam  # cm-1
+    wavelength = np.atleast_1d(np.asarray(wavelength, dtype=np.float64))
+    k = 1e7 / wavelength  # cm-1
     k0 = k + 3850.0  # cm-1
     k1 = k + 2950.0  # cm-1
     w0 = 1e7 / k0
     w1 = 1e7 / k1
     wgrid = np.linspace(w0, w1, num=nl, dtype=np.float64).T
-    ks = 1e7 * (1.0 / wgrid - 1.0 / lam[:, np.newaxis])
+    ks = 1e7 * (1.0 / wgrid - 1.0 / wavelength[:, np.newaxis])
     response = 1e7 / wgrid**2 * raman_response(ks)
 
     return wgrid, response

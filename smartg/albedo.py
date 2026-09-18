@@ -154,7 +154,7 @@ class AlbedoSpectrum(object):
     ----------
     r : array_like
         Spectral albedo values (dimensionless).
-    lam : array_like
+    wavelength : array_like
         Wavelengths (nm) at which ``r`` is sampled. Must be the same
         length as ``r``.
 
@@ -164,8 +164,8 @@ class AlbedoSpectrum(object):
         Look-up table of albedo values indexed by wavelength (nm).
     """
 
-    def __init__(self, r: NumericArrayLike, lam: NumericArrayLike) -> None:
-        self.data: LUT = LUT(r, axes=[lam], names=["wavelength"])
+    def __init__(self, r: NumericArrayLike, wavelength: NumericArrayLike) -> None:
+        self.data: LUT = LUT(r, axes=[wavelength], names=["wavelength"])
 
     def get(self, wavelength: NumericArrayLike) -> NDArray[np.floating]:
         """
