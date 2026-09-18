@@ -37,6 +37,7 @@ Mathieu Compiègne
 * Coupled ocean-atmosphere system, or atmosphere only / ocean only
 * 1D atmospheric profiles (AFGL standard atmospheres or user-provided), aerosols (OPAC or user-defined) and clouds
 * 3D atmospheres (`opt3d=True`), validated against MYSTIC on the IPRT phase B benchmark
+* Spherical atmosphere (`pp=False`), validated on the IPRT phase 3 benchmark
 * 3D objects and concentrated solar flux geometries (heliostat fields, solar towers)
 * Flat, rough or Lambertian surfaces, and 1D ocean profiles
 * Spectral integration with the k-distribution and REPTRAN parameterizations
@@ -208,6 +209,9 @@ Sample notebooks are provided in the [notebooks](smartg/notebooks) folder, and [
 * [`demo_notebook.py`](smartg/notebooks/demo_notebook.py) — general usage: atmosphere, ocean, surface, outputs and visualization
 * [`demo_notebook_objects.py`](smartg/notebooks/demo_notebook_objects.py) — simulations involving 3D objects, e.g., solar power towers
 * [`demo_notebook_photons_histories.py`](smartg/notebooks/demo_notebook_photons_histories.py) — tracking the photon paths (needs the extra dependencies, e.g. `pixi shell --environment extra`)
+* [`validation_smartg_iprt_phase_a.py`](smartg/notebooks/validation_smartg_iprt_phase_a.py) — the 1D cases of the IPRT phase A, compared with MYSTIC
+* [`validation_smartg_iprt_phase_b_c2.py`](smartg/notebooks/validation_smartg_iprt_phase_b_c2.py) — the cubic cloud (C2) of the IPRT phase B, in 3D mode, compared with MYSTIC
+* [`validation_smartg_iprt_phase3.py`](smartg/notebooks/validation_smartg_iprt_phase3.py) — the spherical cases D1 to E6 of the IPRT phase 3
 
 ### 6.1 Notebooks as percent scripts
 
@@ -248,6 +252,11 @@ pixi run test-basic  # the four files above
 pixi run test-all    # the whole test suite
 ```
 
+`test_smartg_jax.py` needs the jax dependencies of the `extra`
+environment. Without them it skips itself with a message rather than
+failing, so run it with `pixi run -e extra pytest
+smartg/tests/test_smartg_jax.py`.
+
 To avoid repeating some pytest arguments, a `pytest.ini` file can be created at the root of the project. The following is an example of the contents of such a file:
 
 ```
@@ -257,18 +266,31 @@ addopts= --html=test_report.html --self-contained-html -s -v -rs
 
 The arguments `--html=test_report.html --self-contained-html` generate an html report containing the results of the tests (sometimes with more details e.g. plots), named `test_report.html`, and `-rs` lists the reasons why tests have been skipped.
 
-### 7.1 The IPRT phase B tests
+### 7.1 The IPRT tests
 
-`test_iprt_phase_b_c2.py` (cubic cloud) and `test_iprt_phase_b_c3.py` (cumulus cloud with aerosols) check the 3D atmosphere mode (`opt3d=True`) against the MYSTIC reference of the IPRT phase B benchmark. Reproducing the benchmark photon counts takes hours, so each of their tests exists in two tiers: a fast one, run by default, and a slow one selected with `-m slow`.
+Four files compare SMART-G with the [IPRT](https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=start) (International Polarized Radiative Transfer) model intercomparison, one per phase of the benchmark. The durations below were measured on a Ryzen 9 5950X with a GeForce RTX 5070 Ti.
+
+**Phase A** — `test_quick_iprt_phase_a.py` runs the 1D cases A1 (a Rayleigh layer), A2 (a Rayleigh layer over a Lambertian surface) and A5 (a water cloud, in the principal plane and in the almucantar), and compares them with MYSTIC. Four tests, about 2 min 30, no slow tier.
+
+**Phase B** — `test_iprt_phase_b_c2.py` (cubic cloud) and `test_iprt_phase_b_c3.py` (cumulus cloud with aerosols) check the 3D atmosphere mode (`opt3d=True`) against the MYSTIC reference. Reproducing the benchmark photon counts takes hours, so each of their tests exists in two tiers: a fast one, run by default, and a slow one selected with `-m slow`.
 
 ```bash
 pytest smartg/tests/test_iprt_phase_b_c3.py           # fast, ~4 min
 pytest -m slow smartg/tests/test_iprt_phase_b_c3.py   # slow, ~38 min
 ```
 
-Both files together take 7 min in the fast tier and 1 h 23 in the slow one. These durations were measured on a Ryzen 9 5950X with a GeForce RTX 5070 Ti; the CPU counts as much as the GPU for C3, whose atmosphere is built by a single threaded loop over the cloudy cells.
+Both files together take 7 min in the fast tier and 1 h 23 in the slow one; the CPU counts as much as the GPU for C3, whose atmosphere is built by a single threaded loop over the cloudy cells.
 
 The fast tier detects a 5 % error on the cloud optical properties, the slow one 1 %: run it before a release, or after a change to the 3D kernel, to the phase matrices or to the truncation.
+
+**Phase 3** — `test_iprt_phase3.py` checks the spherical geometry (`pp=False`) on the one-layer cases D1 to D6 and the vertically inhomogeneous cases E1 to E5, against saved SMART-G results computed with 1e8 photons per viewing direction. It has the same two tiers: the fast one uses 1e6 photons per direction and takes about 5 min for the file, the slow one reproduces the 1e8 of the references and takes about 3 h 50 for the 11 cases. E6, the camera at 300 000 km, is not covered yet.
+
+```bash
+pytest smartg/tests/test_iprt_phase3.py           # fast, ~5 min
+pytest -m slow smartg/tests/test_iprt_phase3.py   # slow, ~3 h 50
+```
+
+Because a GPU run is not reproducible bit for bit, the phase 3 comparison is statistical: the tolerances on the mean bias and on the fraction of directions beyond three combined standard deviations were measured per tier rather than taken from a normal distribution.
 
 ## 8. Naming conventions
 
@@ -298,13 +320,23 @@ not `P_tot`.
 
 Line length is 79 columns for code and 72 for docstrings and comments. Both
 are checked by ruff, together with PEP 8, the naming rules, the numpy
-docstring convention and the annotations. `smartg/obselete_files` is excluded.
-Lint the tracked files with:
+docstring convention and the annotations, configured in the
+`[tool.ruff]` and `[tool.pyright]` sections of `pyproject.toml`.
+`smartg/obselete_files`, whose unused Python 2 modules no longer parse,
+is excluded from both.
+
+ruff and pyright are not project dependencies, so install them
+separately; the configuration was written for ruff 0.16 and pyright
+1.1.411, and a different ruff may select a different set of rules by
+default. Lint the tracked files with:
 
 ```bash
 ruff check $(git ls-files '*.py')
 pyright
 ```
+
+Passing the tracked files explicitly keeps untracked scratch modules out
+of the report.
 
 ## 9. Hardware tested
 
