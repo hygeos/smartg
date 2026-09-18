@@ -18,19 +18,17 @@ References
 
 Examples
 --------
->>> with modified_environ('HOME', LD_LIBRARY_PATH='/my/path/to/lib'):
+>>> with modified_environ('HOME', SMARTG_EXAMPLE='/my/path/to/lib'):
 ...     home = os.environ.get('HOME')
-...     path = os.environ.get("LD_LIBRARY_PATH")
+...     path = os.environ.get('SMARTG_EXAMPLE')
 >>> home is None
 True
 >>> path
 '/my/path/to/lib'
 
->>> home = os.environ.get('HOME')
->>> path = os.environ.get("LD_LIBRARY_PATH")
->>> home is None
+>>> os.environ.get('HOME') is None
 False
->>> path is None
+>>> os.environ.get('SMARTG_EXAMPLE') is None
 True
 
 Key Functions

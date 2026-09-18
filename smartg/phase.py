@@ -759,18 +759,18 @@ def read_phase_nc(
     --------
     Read phase function for a single wavelength and rh:
 
-    >>> pha = read_phase_nc(
+    >>> pha = read_phase_nc(  # doctest: +SKIP
     ...     'desert_sol.nc', wavelength_phase=550.0,
     ...     z_rh_reff=[70.0, 60., 58.],
     ...     pfgrid=[100., 50., 10., 0.],
     ...     normalize=True)
-    >>> pha.shape
+    >>> pha.shape  # doctest: +SKIP
     (1, 3, 6, 1801)  # (wavelength_phase, z_phase, nphamat, theta_atm)
 
     Read the table of a water cloud for a 3D cloud:
 
-    >>> pha = read_phase_nc('wc_sol.nc', output_sg_ready=False)
-    >>> pha.dims
+    >>> pha = read_phase_nc('wc_sol.nc', output_sg_ready=False)  # doctest: +SKIP
+    >>> pha.dims  # doctest: +SKIP
     ('wavelength_phase', 'reff', 'nphamat', 'theta_atm')
     """
     if not output_sg_ready:
@@ -859,8 +859,8 @@ def read_phase_dat(
 
     Examples
     --------
-    >>> pha = read_phase_dat('phase.dat', kind='atm', normalize=True)
-    >>> pha.dims
+    >>> pha = read_phase_dat('phase.dat', kind='atm', normalize=True)  # doctest: +SKIP
+    >>> pha.dims  # doctest: +SKIP
     ('wavelength_phase', 'z_phase', 'nphamat', 'theta_atm')
     """
     df = pd.read_csv(fname, sep=r"\s+", header=None)
@@ -1303,21 +1303,21 @@ def read_phase_cdf(
     --------
     Read phase function for a single wavelength and rh:
 
-    >>> pha = read_phase_cdf(
+    >>> pha = read_phase_cdf(  # doctest: +SKIP
     ...     'ssam.mie.cdf', wavelength_phase=550.0,
     ...     z_rh_reff=[70.0, 60., 58.],
     ...     pfgrid=[100., 50., 10., 0.],
     ...     normalize=True)
-    >>> pha.shape
+    >>> pha.shape  # doctest: +SKIP
     (1, 3, 6, 18001)  # (wavelength_phase, z_phase, nphamat, theta_atm)
 
     Read the table of an IPRT water cloud for a 3D cloud, on the
     angles of the file:
 
-    >>> pha = read_phase_cdf(
+    >>> pha = read_phase_cdf(  # doctest: +SKIP
     ...     'watercloud_670.mie.cdf', n_theta='native',
     ...     normalize=False, output_sg_ready=False)
-    >>> pha.dims
+    >>> pha.dims  # doctest: +SKIP
     ('wavelength_phase', 'reff', 'nphamat', 'theta_atm')
     """
     if not output_sg_ready:
@@ -1452,17 +1452,17 @@ def read_phase(
 
     Examples
     --------
-    >>> pha = read_phase('phase.dat', kind='atm', normalize=True)
-    >>> pha = read_phase('desert_sol.nc', kind='atm',
+    >>> pha = read_phase('phase.dat', kind='atm', normalize=True)  # doctest: +SKIP
+    >>> pha = read_phase('desert_sol.nc', kind='atm',  # doctest: +SKIP
     ...                  wavelength_phase=550.0,
     ...                  z_rh_reff=[70.0, 60.0, 58.0],
     ...                  pfgrid=[100.0, 50.0, 10.0, 0.0])
-    >>> pha = read_phase('ssam.mie.cdf', kind='atm',
+    >>> pha = read_phase('ssam.mie.cdf', kind='atm',  # doctest: +SKIP
     ...                  wavelength_phase=550.0,
     ...                  z_rh_reff=[70.0, 60.0, 58.0],
     ...                  pfgrid=[100.0, 50.0, 10.0, 0.0],
     ...                  ntheta_max=18001)
-    >>> pha = read_phase('wc_sol.nc', output_sg_ready=False)
+    >>> pha = read_phase('wc_sol.nc', output_sg_ready=False)  # doctest: +SKIP
     """
     fname = Path(fname)
 
