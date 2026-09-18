@@ -98,6 +98,9 @@ completed and corrected before the final `v2.0.0` release.
     which replaces the `print_c2_res_noatm` and `print_c2_res_atm`
     functions of the notebook for any case, grid, level, direction and
     reference file, and returns the delta_m values
+  - `smartg.iprt.phase3`: the `nphotons` parameter of every `case_*`
+    function is now `n_photons`, the spelling `Smartg.run` and the rest
+    of the package use
   - The IPRT validation notebooks follow PEP 8 module names:
     `validation_SMARTG_IPRT_phaseA.py` → `validation_smartg_iprt_phase_a.py`,
     `validation_SMARTG_IPRT_phaseB-C2.py` →

@@ -361,7 +361,7 @@ def test_phase3(
 
     run_case = getattr(phase3, f"case_{case}")
     run_case(
-        nphotons=N_PHOTONS[tier], overwrite=True, output_dir=tmp_path,
+        n_photons=N_PHOTONS[tier], overwrite=True, output_dir=tmp_path,
         seed=SEED,
     )
     _log_times(tmp_path, case, label)
