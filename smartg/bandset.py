@@ -39,14 +39,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
+import scipy.constants as cst
+from luts.luts import LUT
 from numpy.typing import NDArray
 from scipy.interpolate import interp1d
-import scipy.constants as cst
 
-from luts.luts import LUT
 from smartg.rrs import l2d_inv
-from smartg.vrs import raman_inverse
 from smartg.typing import BandLike, NumericArrayLike, RealNumber
+from smartg.vrs import raman_inverse
 
 if TYPE_CHECKING:
     # Imported only for type checking to avoid circular imports

@@ -21,16 +21,17 @@ ThetaLike
 
 from __future__ import annotations
 
+from os import PathLike
 from pathlib import Path
 from typing import (
-    Union,
+    TYPE_CHECKING,
+    Protocol,
     Sequence,
     TypeAlias,
-    Protocol,
+    Union,
     runtime_checkable,
-    TYPE_CHECKING,
 )
-from os import PathLike
+
 import numpy as np
 from numpy.typing import NDArray
 

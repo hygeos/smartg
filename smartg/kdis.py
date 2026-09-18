@@ -34,23 +34,23 @@ kdis_avg_emission
 
 from __future__ import annotations
 
+import glob
+import sys
+import warnings
 from collections.abc import Iterator, Sequence
 from itertools import product
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO, cast
 
+import h5py
 import numpy as np
+import xarray as xr
 from luts.luts import LUT, MLUT
 from numpy.typing import NDArray
-import xarray as xr
 from scipy.integrate import quad, simpson
 from scipy.interpolate import interpn
-import h5py
-import glob
-import sys
-import warnings
 
-from smartg.atmosphere import od2k, blackbody_radiance
+from smartg.atmosphere import blackbody_radiance, od2k
 from smartg.config import DIR_AUXDATA
 from smartg.interp import interp2
 from smartg.typing import NumericArrayLike, PathType

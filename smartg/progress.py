@@ -21,7 +21,9 @@ progress
 """
 
 from __future__ import annotations
+
 from typing import Any
+
 from smartg.typing import RealNumber
 
 FloatProgress: Any | None = None
@@ -42,17 +44,17 @@ try:
     cfg = get_ipython()
     if cfg is None:
         raise NameError("Not running inside an IPython kernel")
-    from ipywidgets import FloatProgress, Label, Box, Layout
     from IPython.display import display
+    from ipywidgets import Box, FloatProgress, Label, Layout
 
     mode = "notebook"
 except (NameError, ImportError):
     try:
-        from progressbar import ProgressBar, ETA, Percentage, Bar, FormatLabel
+        from progressbar import ETA, Bar, FormatLabel, Percentage, ProgressBar
 
         mode = "progressbar2"
     except ImportError:
-        from progressbar import ProgressBar, ETA, Percentage, Bar
+        from progressbar import ETA, Bar, Percentage, ProgressBar
         from progressbar.widgets import WidgetBase
 
         mode = "progressbar"

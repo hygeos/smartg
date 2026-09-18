@@ -18,12 +18,14 @@ interp_1d_coord
     Interpolate a 1-D coordinate with optional extrema clipping.
 """
 
-from __future__ import annotations, print_function, division
-from scipy.ndimage import map_coordinates
+from __future__ import annotations, division, print_function
+
 from typing import Any
+
 import numpy as np
 import xarray as xr
 from numpy.typing import ArrayLike, NDArray
+from scipy.ndimage import map_coordinates
 
 
 def interp3(

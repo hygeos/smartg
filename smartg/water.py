@@ -54,28 +54,30 @@ WaterRw
 """
 
 from __future__ import annotations
+
+from pathlib import Path
+from typing import TypedDict, cast
+
 import numpy as np
 import xarray as xr
-from smartg.diff import diff1
+from luts.luts import LUT
+from numpy.typing import NDArray
+from pytrunc.phase import fournier_forand
+from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
+
 from smartg.albedo import AlbedoCst, AlbedoLike
+from smartg.bandset import BandSet
+from smartg.config import DIR_AUXDATA as dir_aux
+from smartg.diff import diff1
+from smartg.interp import interp_1d_coord
 from smartg.phase import (
-    integ_phase,
     as_theta_grid,
     calc_iphase,
     expand_phase_4_to_6,
+    integ_phase,
 )
 from smartg.truncation import DM_trunc, GT_trunc
-from pytrunc.phase import fournier_forand
-from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
-from smartg.bandset import BandSet
-from smartg.config import DIR_AUXDATA as dir_aux
-from smartg.interp import interp_1d_coord
-from smartg.typing import PathType, NumericArrayLike
-from pathlib import Path
-from typing import TypedDict, cast
-from numpy.typing import NDArray
-from luts.luts import LUT
-
+from smartg.typing import NumericArrayLike, PathType
 
 #: Default truncation of the derived water phase functions: the forward
 #: peak below 5 deg is replaced following Iwabuchi & Suzuki (2009), with

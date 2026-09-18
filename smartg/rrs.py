@@ -46,9 +46,11 @@ epsilon_air
 """
 
 from __future__ import annotations
-import scipy.constants as cst
+
 import numpy as np
+import scipy.constants as cst
 from numpy.typing import NDArray
+
 from smartg.typing import NumericArrayLike
 
 # Atmosphere model: dry-air molar mixing ratios (mol/mol).

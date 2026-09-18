@@ -24,8 +24,8 @@ DIR_AUXDATA : pathlib.Path
 
 from os import environ
 from pathlib import Path
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 
 DIR_ROOT = Path(__file__).resolve().parent.parent
 

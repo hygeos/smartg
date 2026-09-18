@@ -44,8 +44,9 @@ GT_trunc
     GT truncation, as in Iwabuchi and Suzuki (2009).
 """
 
-import numpy as np
 from typing import Optional
+
+import numpy as np
 
 
 class DM_trunc(object):

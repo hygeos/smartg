@@ -80,16 +80,18 @@ convert_phase_to_iparper
 """
 
 from __future__ import annotations
-from typing import Any, Sequence
-import numpy as np
-from numpy.typing import NDArray
+
 from pathlib import Path
-from smartg.typing import PathType, NumericArrayLike, ThetaLike
+from typing import Any, Sequence
+
+import numpy as np
 import pandas as pd
 import xarray as xr
 from luts.luts import LUT
+from numpy.typing import NDArray
 from pytrunc.utils import quadrature_lobatto
 
+from smartg.typing import NumericArrayLike, PathType, ThetaLike
 
 THETA_GRID_KINDS = ('uniform', 'chebyshev', 'lobatto', 'peak')
 

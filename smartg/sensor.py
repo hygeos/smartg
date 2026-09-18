@@ -24,7 +24,6 @@ from numpy.typing import NDArray
 
 from smartg.grid3d import Grid3D, locate_voxel_index
 
-
 # Localization names, at the index of their device code, see
 # communs.h. The empty names are the codes a sensor cannot take.
 LOC_CODE: list[str] = ['', 'ATMOS', 'SURF0P', 'SURF0M', '', '',

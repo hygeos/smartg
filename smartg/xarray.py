@@ -16,9 +16,9 @@ drop_axes
 
 from collections import OrderedDict
 
-from luts.luts import LUT, MLUT
 import numpy as np
 import xarray as xr
+from luts.luts import LUT, MLUT
 
 
 def dataarray_to_lut(data_array: xr.DataArray) -> LUT:

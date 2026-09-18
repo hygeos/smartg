@@ -42,8 +42,8 @@ from __future__ import annotations
 from typing import TypeAlias, cast
 
 import numpy as np
-from numpy.typing import NDArray
 from luts.luts import LUT, Idx
+from numpy.typing import NDArray
 
 from smartg.typing import NumericArrayLike, PathType
 
