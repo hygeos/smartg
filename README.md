@@ -292,51 +292,25 @@ pytest -m slow smartg/tests/test_iprt_phase3.py   # slow, ~3 h 50
 
 Because a GPU run is not reproducible bit for bit, the phase 3 comparison is statistical: the tolerances on the mean bias and on the fraction of directions beyond three combined standard deviations were measured per tier rather than taken from a normal distribution.
 
-## 8. Naming conventions
+## 8. Coding conventions
 
 Identifiers follow PEP 8: `snake_case` for modules, functions, variables and
-parameters, `PascalCase` for classes and `UPPER_SNAKE_CASE` for constants.
-Where several spellings of one concept coexisted, `smartg/smartg.py` is the
-reference and the rest of the package follows it.
+parameters, `PascalCase` for classes, `UPPER_SNAKE_CASE` for constants. Lines
+are at most 79 columns of code and 72 of docstrings and comments, and the
+docstrings follow the numpy convention.
 
-| concept | use | not |
-|---|---|---|
-| number of photons | `n_photons` | `nphotons`, `NBPHOTONS` |
-| photons per kernel loop | `n_loop` | `NBLOOP` |
-| wavelength | `wavelength` | `wav`, `wvl`, `lam` |
-| number of scattering angles | `n_theta` | `NBTHETA` |
-| depolarization factor | `depo` | `depol` |
-| file path or file name | `fname` | `filename`, `file_name` |
-| output folder | `output_dir` | `dir_output` |
-
-File formats keep their own spelling: a variable read from or written to a
-netCDF, an OPAC or an IPRT file stays `wav`, `wavelen` or `wvl` when that is
-what the format calls it. The phase matrix wavelength axis is
-`wavelength_phase`.
-
-The symbols of the equations a module implements stay as the paper writes them
-in docstrings and comments, but the code around them is lower case: `p_tot`,
-not `P_tot`.
-
-Line length is 79 columns for code and 72 for docstrings and comments. Both
-are checked by ruff, together with PEP 8, the naming rules, the numpy
-docstring convention and the annotations, configured in the
-`[tool.ruff]` and `[tool.pyright]` sections of `pyproject.toml`.
-`smartg/obselete_files`, whose unused Python 2 modules no longer parse,
-is excluded from both.
-
-ruff and pyright are not project dependencies, so install them
-separately; the configuration was written for ruff 0.16 and pyright
-1.1.411, and a different ruff may select a different set of rules by
-default. Lint the tracked files with:
+ruff and pyright check all of this, configured in the `[tool.ruff]` and
+`[tool.pyright]` sections of `pyproject.toml`. Neither is a project
+dependency, so install them separately; the configuration was written for
+ruff 0.16 and pyright 1.1.411. Lint the tracked files with:
 
 ```bash
 ruff check $(git ls-files '*.py')
 pyright
 ```
 
-Passing the tracked files explicitly keeps untracked scratch modules out
-of the report.
+Passing the tracked files explicitly keeps untracked scratch modules out of
+the report.
 
 ## 9. Hardware tested
 
