@@ -254,7 +254,7 @@ def get_sensor(
         raise ValueError(
             "The intersection test failed!! Check input parameters.")
     # Computation of the sensor position
-    pos = origin + direction*cast(float, t1)
+    pos = origin + direction * cast(float, t1)
     if verbose:
         print("VZA =", vza_level, "--> pos =", pos)
 
@@ -305,9 +305,9 @@ def _sensor_positions(
         shape (Nx*Ny,).
     """
     x_centers = cast(NDArray[np.floating],
-                     grid_3d.xgrid[:-1] + np.diff(grid_3d.xgrid)/2.)
+                     grid_3d.xgrid[:-1] + np.diff(grid_3d.xgrid) / 2.)
     y_centers = cast(NDArray[np.floating],
-                     grid_3d.ygrid[:-1] + np.diff(grid_3d.ygrid)/2.)
+                     grid_3d.ygrid[:-1] + np.diff(grid_3d.ygrid) / 2.)
 
     xx, yy = cast(
         tuple[NDArray[np.floating], NDArray[np.floating]],
@@ -349,8 +349,8 @@ def _find_cell_index(value: float, grid: NDArray) -> int:
     ValueError
         If the value lies outside the grid.
     """
-    for i in range(0, len(grid)-1):
-        if grid[i] < value <= grid[i+1]:
+    for i in range(len(grid) - 1):
+        if grid[i] < value <= grid[i + 1]:
             return i
     raise ValueError(
         f"the value {value} lies outside the grid [{grid[0]}, {grid[-1]}]!"
@@ -411,8 +411,8 @@ def get_sensors_grid(
     """
     # TODO consider a possible variability between sensors
     # (positions, viewing angles, etc.)
-    x_centers = xgrid[:-1] + np.diff(xgrid)/2.
-    y_centers = ygrid[:-1] + np.diff(ygrid)/2.
+    x_centers = xgrid[:-1] + np.diff(xgrid) / 2.
+    y_centers = ygrid[:-1] + np.diff(ygrid) / 2.
     xx, yy = np.meshgrid(x_centers, y_centers)
 
     sensors = []
@@ -431,6 +431,6 @@ def get_sensors_grid(
         for sensor in sensors:
             idx = _find_cell_index(sensor.dict['pos_x'], grid_3d.xgrid)
             idy = _find_cell_index(sensor.dict['pos_y'], grid_3d.ygrid)
-            sensor.dict['icell'] = int(icells[idx + grid_3d.Nx*idy])
+            sensor.dict['icell'] = int(icells[idx + grid_3d.Nx * idy])
 
     return sensors

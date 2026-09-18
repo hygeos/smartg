@@ -69,7 +69,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, fields, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.message import Message
 from email.utils import parsedate_to_datetime
 from pathlib import Path, PurePosixPath
@@ -161,8 +161,8 @@ def _utc(moment: datetime | None) -> datetime | None:
     if moment is None:
         return None
     if moment.tzinfo is None:
-        return moment.replace(tzinfo=timezone.utc)
-    return moment.astimezone(timezone.utc)
+        return moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC)
 
 
 def _parse_http_date(text: str | None) -> datetime | None:
@@ -181,14 +181,14 @@ def _iso(moment: datetime | None) -> str | None:
 
 
 def _now_iso() -> str:
-    return _iso(datetime.now(timezone.utc)) or ""
+    return _iso(datetime.now(UTC)) or ""
 
 
 def _parse_iso(text: str | None) -> datetime | None:
     if not text:
         return None
     try:
-        return _utc(datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ"))
+        return _utc(datetime.strptime(text, "%Y-%m-%dT%H:%M:%S%z"))
     except ValueError:
         return None
 
@@ -1324,11 +1324,9 @@ class AuxData:
                 missing.append(name)
                 continue
             stat = path.stat()
-            if stat.st_size != record.size:
+            if stat.st_size != record.size or (stat.st_mtime_ns != record.mtime_ns
+                  and _sha256(path) != record.sha256):
                 modified.append(name)
-            elif stat.st_mtime_ns != record.mtime_ns:
-                if _sha256(path) != record.sha256:
-                    modified.append(name)
         extra = [name for name in _walk_files(root) if name not in entry.files]
         return FileCheck(tuple(modified), tuple(missing), tuple(extra))
 

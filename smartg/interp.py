@@ -18,7 +18,7 @@ interp_1d_coord
     Interpolate a 1-D coordinate with optional extrema clipping.
 """
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 from typing import Any
 

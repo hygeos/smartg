@@ -48,7 +48,7 @@ from numpy.typing import NDArray
 from smartg.typing import NumericArrayLike, PathType
 
 
-class AlbedoCst(object):
+class AlbedoCst:
     """
     Constant (wavelength-independent) albedo.
 
@@ -91,7 +91,7 @@ class AlbedoCst(object):
         return alb
 
 
-class AlbedoSpeclib(object):
+class AlbedoSpeclib:
     """
     Spectral albedo read from a JPL spectral library file.
 
@@ -146,7 +146,7 @@ class AlbedoSpeclib(object):
         )
 
 
-class AlbedoSpectrum(object):
+class AlbedoSpectrum:
     """
     Spectral albedo defined by an explicit spectrum ``r(lambda)``.
 
@@ -190,7 +190,7 @@ class AlbedoSpectrum(object):
         )
 
 
-class AlbedoMap(object):
+class AlbedoMap:
     """
     2D horizontal map of spectral albedos.
 

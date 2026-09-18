@@ -265,7 +265,7 @@ def kdis_avg_emission(
     )
 
 
-class KdisIband(object):
+class KdisIband:
     """Represent one internal KDIS absorption band.
 
     Parameters
@@ -427,7 +427,7 @@ class KdisIband(object):
         return data_molecules * 1e5
 
 
-class KdisBand(object):
+class KdisBand:
     """Represent a KDIS sensor channel.
 
     Parameters
@@ -500,7 +500,7 @@ class KdisBand(object):
             yield self.iband(index)
 
 
-class Kdis(object):
+class Kdis:
     """Read and expose a KDIS correlated-k definition.
 
     Parameters
@@ -577,51 +577,51 @@ class Kdis(object):
                 print("(kdis_coef) ERROR")
                 print("            Missing file:", fname)
                 sys.exit()
-            definition_file = open(fname, "r")
-            skip_comment(definition_file)
-            line = definition_file.readline()
-            self.nmaxai = int(line.split()[0])
-            skip_comment(definition_file)
-            line = definition_file.readline()
-            self.nsp_tot = int(line.split()[0])
-            self.nsp = 0
-            self.fcont = []
-            self.species = []
-            self.nsp_c = 0
-            self.fcont_c = []
-            self.species_c = []
-            skip_comment(definition_file)
-            for _species_index in range(self.nsp_tot):
+            with open(fname, "r") as definition_file:
+                skip_comment(definition_file)
                 line = definition_file.readline()
-                if int(line.split()[1]) == 0:
-                    self.nsp = self.nsp + 1
-                    self.species.append(line.split()[0])
-                    self.fcont.append(float(line.split()[2]))
-                elif int(line.split()[1]) == 1:
-                    self.nsp_c = self.nsp_c + 1
-                    self.species_c.append(line.split()[0])
-                    self.fcont_c.append(float(line.split()[2]))
-            self.fcont = np.array(self.fcont)
-            self.fcont_c = np.array(self.fcont_c)
-            skip_comment(definition_file)
-            line = definition_file.readline()
-            self.nwvl = int(line.split()[0])
-            self.wvlband = np.zeros((3, self.nwvl))
-            skip_comment(definition_file)
-            for wavelength_index in range(self.nwvl):
+                self.nmaxai = int(line.split()[0])
+                skip_comment(definition_file)
                 line = definition_file.readline()
-                self.wvlband[0, wavelength_index] = (
-                    float(line.split()[1]) * 1e3
-                )
-                self.wvlband[1, wavelength_index] = (
-                    float(line.split()[2]) * 1e3
-                )
-                self.wvlband[2, wavelength_index] = (
-                    float(line.split()[3]) * 1e3
-                )
-                if wavelength_index > 0:
+                self.nsp_tot = int(line.split()[0])
+                self.nsp = 0
+                self.fcont = []
+                self.species = []
+                self.nsp_c = 0
+                self.fcont_c = []
+                self.species_c = []
+                skip_comment(definition_file)
+                for _species_index in range(self.nsp_tot):
+                    line = definition_file.readline()
+                    if int(line.split()[1]) == 0:
+                        self.nsp = self.nsp + 1
+                        self.species.append(line.split()[0])
+                        self.fcont.append(float(line.split()[2]))
+                    elif int(line.split()[1]) == 1:
+                        self.nsp_c = self.nsp_c + 1
+                        self.species_c.append(line.split()[0])
+                        self.fcont_c.append(float(line.split()[2]))
+                self.fcont = np.array(self.fcont)
+                self.fcont_c = np.array(self.fcont_c)
+                skip_comment(definition_file)
+                line = definition_file.readline()
+                self.nwvl = int(line.split()[0])
+                self.wvlband = np.zeros((3, self.nwvl))
+                skip_comment(definition_file)
+                for wavelength_index in range(self.nwvl):
+                    line = definition_file.readline()
+                    self.wvlband[0, wavelength_index] = (
+                        float(line.split()[1]) * 1e3
+                    )
+                    self.wvlband[1, wavelength_index] = (
+                        float(line.split()[2]) * 1e3
+                    )
+                    self.wvlband[2, wavelength_index] = (
+                        float(line.split()[3]) * 1e3
+                    )
                     if (
-                        self.wvlband[0, wavelength_index]
+                        wavelength_index > 0
+                        and self.wvlband[0, wavelength_index]
                         < self.wvlband[0, wavelength_index - 1]
                     ):
                         print(" kdis_coeff ERROR")
@@ -629,32 +629,33 @@ class Kdis(object):
                             "            wavelengths must be sorted in increasing order"
                         )
                         sys.exit()
-            skip_comment(definition_file)
-            line = definition_file.readline()
-            skip_comment(definition_file)
-            self.np = int(line.split()[0])
-            self.p = np.zeros(self.np)
-            for pressure_index in range(self.np):
+                skip_comment(definition_file)
                 line = definition_file.readline()
-                self.p[pressure_index] = float(line.split()[0])
-                if pressure_index > 0:
-                    if self.p[pressure_index] < self.p[pressure_index - 1]:
+                skip_comment(definition_file)
+                self.np = int(line.split()[0])
+                self.p = np.zeros(self.np)
+                for pressure_index in range(self.np):
+                    line = definition_file.readline()
+                    self.p[pressure_index] = float(line.split()[0])
+                    if (pressure_index > 0
+                            and self.p[pressure_index]
+                            < self.p[pressure_index - 1]):
                         print(" kdis_coeff ERROR")
                         print(
                             "            pressure must be sorted in increasing order"
                         )
                         sys.exit()
-            skip_comment(definition_file)
-            line = definition_file.readline()
-            skip_comment(definition_file)
-            self.nt = int(line.split()[0])
-            self.t = np.zeros(self.nt)
-            for temperature_index in range(self.nt):
+                skip_comment(definition_file)
                 line = definition_file.readline()
-                self.t[temperature_index] = float(line.split()[0])
-                if temperature_index > 0:
+                skip_comment(definition_file)
+                self.nt = int(line.split()[0])
+                self.t = np.zeros(self.nt)
+                for temperature_index in range(self.nt):
+                    line = definition_file.readline()
+                    self.t[temperature_index] = float(line.split()[0])
                     if (
-                        self.t[temperature_index]
+                        temperature_index > 0
+                        and self.t[temperature_index]
                         < self.t[temperature_index - 1]
                     ):
                         print(" kdis_coeff ERROR")
@@ -662,18 +663,18 @@ class Kdis(object):
                             "            temperature must be sorted in increasing order"
                         )
                         sys.exit()
-            if self.nsp_c > 0:
-                skip_comment(definition_file)
-                line = definition_file.readline()
-                skip_comment(definition_file)
-                self.nc = int(line.split()[0])
-                self.c = np.zeros(self.nc)
-                for concentration_index in range(self.nc):
+                if self.nsp_c > 0:
+                    skip_comment(definition_file)
                     line = definition_file.readline()
-                    self.c[concentration_index] = float(line.split()[0])
-                    if concentration_index > 0:
+                    skip_comment(definition_file)
+                    self.nc = int(line.split()[0])
+                    self.c = np.zeros(self.nc)
+                    for concentration_index in range(self.nc):
+                        line = definition_file.readline()
+                        self.c[concentration_index] = float(line.split()[0])
                         if (
-                            self.c[concentration_index]
+                            concentration_index > 0
+                            and self.c[concentration_index]
                             < self.c[concentration_index - 1]
                         ):
                             print(" kdis_coeff ERROR")
@@ -681,7 +682,6 @@ class Kdis(object):
                                 "            concentration must be sorted in increasing order"
                             )
                             sys.exit()
-            definition_file.close()
             if self.nsp > 0:
                 self.nai = np.zeros((self.nsp, self.nwvl), dtype="int")
                 self.ki = np.zeros(
@@ -710,39 +710,38 @@ class Kdis(object):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", fname)
                     sys.exit()
-                species_file = open(fname, "r")
-                skip_comment(species_file)
-                for wavelength_index in range(self.nwvl):
-                    line = species_file.readline()
-                    self.nai[species_index, wavelength_index] = int(
-                        line.split()[1]
-                    )
-                for wavelength_index in range(self.nwvl):
-                    if self.nai[species_index, wavelength_index] > 1:
-                        skip_comment(species_file)
+                with open(fname, "r") as species_file:
+                    skip_comment(species_file)
+                    for wavelength_index in range(self.nwvl):
                         line = species_file.readline()
-                        for coefficient_index in range(
-                            self.nai[species_index, wavelength_index]
-                        ):
-                            self.ai[
-                                species_index,
-                                wavelength_index,
-                                coefficient_index,
-                            ] = float(line.split()[coefficient_index])
-                        for temperature_index in range(self.nt):
-                            for pressure_index in range(self.np):
-                                line = species_file.readline()
-                                for coefficient_index in range(
-                                    self.nai[species_index, wavelength_index]
-                                ):
-                                    self.ki[
-                                        species_index,
-                                        wavelength_index,
-                                        coefficient_index,
-                                        pressure_index,
-                                        temperature_index,
-                                    ] = float(line.split()[coefficient_index])
-                species_file.close()
+                        self.nai[species_index, wavelength_index] = int(
+                            line.split()[1]
+                        )
+                    for wavelength_index in range(self.nwvl):
+                        if self.nai[species_index, wavelength_index] > 1:
+                            skip_comment(species_file)
+                            line = species_file.readline()
+                            for coefficient_index in range(
+                                self.nai[species_index, wavelength_index]
+                            ):
+                                self.ai[
+                                    species_index,
+                                    wavelength_index,
+                                    coefficient_index,
+                                ] = float(line.split()[coefficient_index])
+                            for temperature_index in range(self.nt):
+                                for pressure_index in range(self.np):
+                                    line = species_file.readline()
+                                    for coefficient_index in range(
+                                        self.nai[species_index, wavelength_index]
+                                    ):
+                                        self.ki[
+                                            species_index,
+                                            wavelength_index,
+                                            coefficient_index,
+                                            pressure_index,
+                                            temperature_index,
+                                        ] = float(line.split()[coefficient_index])
             if self.nsp_c > 0:
                 self.c_desc = "density"
             else:
@@ -756,45 +755,44 @@ class Kdis(object):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", fname)
                     sys.exit()
-                species_file = open(fname, "r")
-                skip_comment(species_file)
-                for wavelength_index in range(self.nwvl):
-                    line = species_file.readline()
-                    self.nai_c[species_index, wavelength_index] = int(
-                        line.split()[1]
-                    )
-                for wavelength_index in range(self.nwvl):
-                    if self.nai_c[species_index, wavelength_index] > 1:
-                        skip_comment(species_file)
+                with open(fname, "r") as species_file:
+                    skip_comment(species_file)
+                    for wavelength_index in range(self.nwvl):
                         line = species_file.readline()
-                        for coefficient_index in range(
-                            self.nai_c[species_index, wavelength_index]
-                        ):
-                            self.ai_c[
-                                species_index,
-                                wavelength_index,
-                                coefficient_index,
-                            ] = float(line.split()[coefficient_index])
-                        for concentration_index in range(self.nc):
-                            for temperature_index in range(self.nt):
-                                for pressure_index in range(self.np):
-                                    line = species_file.readline()
-                                    for coefficient_index in range(
-                                        self.nai_c[
-                                            species_index, wavelength_index
-                                        ]
-                                    ):
-                                        self.ki_c[
-                                            species_index,
-                                            wavelength_index,
-                                            coefficient_index,
-                                            pressure_index,
-                                            temperature_index,
-                                            concentration_index,
-                                        ] = float(
-                                            line.split()[coefficient_index]
-                                        )
-                species_file.close()
+                        self.nai_c[species_index, wavelength_index] = int(
+                            line.split()[1]
+                        )
+                    for wavelength_index in range(self.nwvl):
+                        if self.nai_c[species_index, wavelength_index] > 1:
+                            skip_comment(species_file)
+                            line = species_file.readline()
+                            for coefficient_index in range(
+                                self.nai_c[species_index, wavelength_index]
+                            ):
+                                self.ai_c[
+                                    species_index,
+                                    wavelength_index,
+                                    coefficient_index,
+                                ] = float(line.split()[coefficient_index])
+                            for concentration_index in range(self.nc):
+                                for temperature_index in range(self.nt):
+                                    for pressure_index in range(self.np):
+                                        line = species_file.readline()
+                                        for coefficient_index in range(
+                                            self.nai_c[
+                                                species_index, wavelength_index
+                                            ]
+                                        ):
+                                            self.ki_c[
+                                                species_index,
+                                                wavelength_index,
+                                                coefficient_index,
+                                                pressure_index,
+                                                temperature_index,
+                                                concentration_index,
+                                            ] = float(
+                                                line.split()[coefficient_index]
+                                            )
 
             fname = dir_data / f"kdis_{model}_solarflux.dat"
             if not fname.is_file():
@@ -803,22 +801,21 @@ class Kdis(object):
                     print("(kdis_coef) ERROR")
                     print("            Missing file:", fname)
                     sys.exit()
-            solar_file = open(fname, "r")
-            skip_comment(solar_file)
-            line = solar_file.readline()
-            skip_comment(solar_file)
-            line = solar_file.readline()
-            band_count = float(line.split()[0])
-            if band_count != self.nwvl:
-                print(" solar flux and kdis have uncompatible band number")
-                sys.exit()
-            skip_comment(solar_file)
-            self.solarflux = np.zeros(self.nwvl)
-            skip_comment(solar_file)
-            for wavelength_index in range(self.nwvl):
+            with open(fname, "r") as solar_file:
+                skip_comment(solar_file)
                 line = solar_file.readline()
-                self.solarflux[wavelength_index] = float(line.split()[0])
-            solar_file.close()
+                skip_comment(solar_file)
+                line = solar_file.readline()
+                band_count = float(line.split()[0])
+                if band_count != self.nwvl:
+                    print(" solar flux and kdis have uncompatible band number")
+                    sys.exit()
+                skip_comment(solar_file)
+                self.solarflux = np.zeros(self.nwvl)
+                skip_comment(solar_file)
+                for wavelength_index in range(self.nwvl):
+                    line = solar_file.readline()
+                    self.solarflux[wavelength_index] = float(line.split()[0])
 
         elif format in ["h5", "hdf5"]:
             fname = dir_data / f"kdis_{model}.h5"
@@ -995,7 +992,6 @@ class Kdis(object):
                 (self.nsp_c, self.nwvl, self.nmaxai_eff), dtype="int"
             )
         for wavelength_index in range(self.nwvl):
-            effective_index = 0
             coefficient_index_ranges = []
             for species_index in range(self.nsp):
                 coefficient_index_ranges.append(
@@ -1005,7 +1001,8 @@ class Kdis(object):
                 coefficient_index_ranges.append(
                     range(self.nai_c[species_index, wavelength_index])
                 )
-            for coefficient_indices in product(*coefficient_index_ranges):
+            for effective_index, coefficient_indices in enumerate(
+                    product(*coefficient_index_ranges)):
                 if self.nsp > 0:
                     self.iki_eff[:, wavelength_index, effective_index] = (
                         coefficient_indices[0 : self.nsp]
@@ -1051,7 +1048,6 @@ class Kdis(object):
                                 coefficient_index,
                             ]
                         )
-                effective_index += 1
 
     def nbands(self) -> int:
         """Return the number of KDIS channels.
@@ -1140,8 +1136,7 @@ class Kdis(object):
                 if (band.wmin >= lmin_values[interval_index]) and (
                     band.wmax <= lmax_values[interval_index]
                 ):
-                    for internal_band in band.ibands():
-                        internal_bands.append(internal_band)
+                    internal_bands.extend(band.ibands())
 
         assert len(internal_bands) != 0
 
@@ -1177,7 +1172,7 @@ class Kdis(object):
         ).get_weights()
 
 
-class KdisIbandList(object):
+class KdisIbandList:
     """Store a selected list of internal KDIS bands.
 
     Parameters

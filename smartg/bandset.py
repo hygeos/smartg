@@ -54,7 +54,7 @@ if TYPE_CHECKING:
     from smartg.atmosphere import ProfileBase
 
 
-class BandSet(object):
+class BandSet:
     """Spectral bands a simulation is run on."""
 
     def __init__(self, wavelength: NumericArrayLike | list[BandLike]) -> None:
@@ -94,7 +94,7 @@ class BandSet(object):
                 else wavelength
             )
             self.use_reptran_kdis: bool = isinstance(first, BandLike)
-        except Exception:
+        except (IndexError, TypeError):
             self.use_reptran_kdis = False
 
         self.type_wavelength: type | None = None

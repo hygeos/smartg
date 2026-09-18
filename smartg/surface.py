@@ -139,7 +139,7 @@ class LambSurface:
         if alb is None:
             alb = AlbedoCst(0.5)
         if not isinstance(alb, get_args(AlbedoLike)):
-            raise ValueError(
+            raise TypeError(
                 'The parameter alb must be one of the following '
                 'objects: AlbedoCst, AlbedoSpeclib, AlbedoSpectrum '
                 'or AlbedoMap.')
@@ -156,7 +156,7 @@ class LambSurface:
 
     def __str__(self) -> str:
         """Return the identifier of the lambertian surface."""
-        return 'LAMBSUR-ALB={}'.format(_albedo_str(self.alb))
+        return f'LAMBSUR-ALB={_albedo_str(self.alb)}'
 
 
 class RTLSSurface:
@@ -232,7 +232,7 @@ class RTLSSurface:
             'SINGLE': 1,
         }
         self.kp: tuple[AlbedoLike, ...] = (
-            tuple(kp_bis) + (AlbedoCst(0.0),))
+            (*tuple(kp_bis), AlbedoCst(0.0)))
         self.alb: AlbedoLike | None = None
 
     def __str__(self) -> str:

@@ -81,8 +81,9 @@ convert_phase_to_iparper
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -231,8 +232,8 @@ def theta_grid(
             # nodes each one gets. The bounds keep one node for the
             # forward zone, one for the middle, and the two the
             # backward zone needs to reach 180 degrees.
-            m_fwd = min(max(int(round(frac_fwd * n)), 1), n - 3)
-            m_bwd = min(max(int(round(frac_bwd * n)), 2), n - 1 - m_fwd)
+            m_fwd = min(max(round(frac_fwd * n), 1), n - 3)
+            m_bwd = min(max(round(frac_bwd * n), 2), n - 1 - m_fwd)
             m_mid = n - m_fwd - m_bwd
             # theta_fwd and theta_bwd are in degrees whatever unit is
             edge_fwd = theta_fwd * span / 180.0
@@ -319,7 +320,7 @@ def as_theta_grid(n_theta: ThetaLike) -> NDArray[np.float64]:
     array([  0.,  10., 180.])
     """
     if isinstance(n_theta, str):
-        raise ValueError(
+        raise TypeError(
             f"The n_theta argument {n_theta!r} names a grid this "
             "function cannot build: 'native' is resolved by the "
             "phase methods from their source tables, see "
@@ -591,14 +592,14 @@ def get_ipha_a(
     zmax_print = [-1e8]
 
     ida = np.full(nz_full, -1, dtype=np.int32)
-    for i_full in range(0, nz_full):
+    for i_full in range(nz_full):
         idz_full = (nz_full - 1) - i_full
         zmin_full = grid_full[idz_full]
         zmax_full = grid_full[idz_full] + size_layers_full[idz_full]
 
         # First find all the z_pf layers respecting the 2 conditions
         ida_tmp = []
-        for i_pf in range(0, nz_pf):
+        for i_pf in range(nz_pf):
             idz_pf = (nz_pf - 1) - i_pf
             zmin_pf = grid_pf[idz_pf]
             zmax_pf = grid_pf[idz_pf] + size_layers_pf[idz_pf]
@@ -616,7 +617,7 @@ def get_ipha_a(
         # the z_full layer
         elif n_ida_tmp > 1:
             pfs_weight = np.zeros(n_ida_tmp)
-            for k in range(0, n_ida_tmp):
+            for k in range(n_ida_tmp):
                 zmin_pf_k = grid_pf[ida_tmp[k]]
                 zmax_pf_k = grid_pf[ida_tmp[k]] + size_layers_pf[ida_tmp[k]]
                 pf_full_min = max(zmin_pf_k, zmin_full)
@@ -948,7 +949,7 @@ def _resample_cdf_phase(
     n_wavelength, n_rh_reff, n_stk = phase.shape[:3]
 
     data = np.zeros((n_wavelength, n_rh_reff, n_stk, theta.size))
-    for i_wavelength in range(0, n_wavelength):
+    for i_wavelength in range(n_wavelength):
         for irhreff in range(n_rh_reff):
             for istk in range(n_stk):
                 # ntheta (wavelength, rh/reff, nphamat)
@@ -1075,8 +1076,8 @@ def _normalize_p11(
     """
     mu = np.cos(np.deg2rad(theta))
     idmu = np.argsort(mu)
-    for i_wavelength in range(0, data.shape[0]):
-        for irhreff in range(0, data.shape[1]):
+    for i_wavelength in range(data.shape[0]):
+        for irhreff in range(data.shape[1]):
             f = data[i_wavelength, irhreff, 0, :]  # P11 term
             norm = np.trapezoid(f[idmu], mu[idmu])
             data[i_wavelength, irhreff, :, :] *= 2.0 / abs(norm)
@@ -1148,14 +1149,14 @@ def _check_profile_targets(
             "parameter (float or 1-D array) "
             f"to select/interpolate the desired {rh_or_reff} value(s)."
         )
-    if n_rh_reff > 1 and z_rh_reff is not None and pfgrid is not None:
-        if z_rh_reff.size != pfgrid.size - 1:
-            raise ValueError(
-                "Invalid 'z_rh_reff' size: when 'z_rh_reff' is a 1-D array, "
-                "its size must be len(pfgrid) - 1. "
-                f"Got len(z_rh_reff)={z_rh_reff.size}"
-                f" and len(pfgrid)={pfgrid.size}."
-            )
+    if (n_rh_reff > 1 and z_rh_reff is not None and pfgrid is not None
+            and z_rh_reff.size != pfgrid.size - 1):
+        raise ValueError(
+            "Invalid 'z_rh_reff' size: when 'z_rh_reff' is a 1-D array, "
+            "its size must be len(pfgrid) - 1. "
+            f"Got len(z_rh_reff)={z_rh_reff.size}"
+            f" and len(pfgrid)={pfgrid.size}."
+        )
 
 
 def read_phase_cdf(

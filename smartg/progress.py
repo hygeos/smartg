@@ -97,7 +97,7 @@ def progress(
         raise ValueError("Invalid mode " + mode)
 
 
-class ProgressInvisible(object):
+class ProgressInvisible:
     """No-op progress adapter for disabled progress reporting."""
 
     def update(self, value: RealNumber, message: str = "") -> None:
@@ -110,7 +110,6 @@ class ProgressInvisible(object):
         message : str, optional
             Optional status message.
         """
-        pass
 
     def finish(self, message: str = "") -> None:
         """Ignore completion notifications.
@@ -120,10 +119,9 @@ class ProgressInvisible(object):
         message : str, optional
             Optional final status message.
         """
-        pass
 
 
-class ProgressNotebook(object):
+class ProgressNotebook:
     """Notebook progress adapter based on ``ipywidgets`` widgets."""
 
     def __init__(self, vmax: RealNumber) -> None:
@@ -174,7 +172,7 @@ class ProgressNotebook(object):
         self.label.value = message
 
 
-class ProgressProgressbar2(object):
+class ProgressProgressbar2:
     """Terminal progress adapter using the ``progressbar2`` package."""
 
     def __init__(self, max: RealNumber) -> None:
@@ -224,7 +222,7 @@ class ProgressProgressbar2(object):
         self.label.format = message
 
 
-class ProgressProgressbar(object):
+class ProgressProgressbar:
     """Terminal progress adapter using legacy ``progressbar`` API."""
 
     def __init__(self, max: RealNumber) -> None:

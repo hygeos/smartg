@@ -44,12 +44,11 @@ GTTrunc
     GT truncation, as in Iwabuchi and Suzuki (2009).
 """
 
-from typing import Optional
 
 import numpy as np
 
 
-class DMTrunc(object):
+class DMTrunc:
     """Delta-M truncation.
 
     Parameters
@@ -104,7 +103,7 @@ class DMTrunc(object):
         self.pha_scale_method = pha_scale_method
 
 
-class GTTrunc(object):
+class GTTrunc:
     """GT truncation, as in Iwabuchi and Suzuki (2009).
 
     Parameters
@@ -142,8 +141,8 @@ class GTTrunc(object):
         self,
         trunc_frac: float,
         integral_method: str = "lobatto",
-        theta_tol: Optional[float] = None,
-        theta_tr: Optional[float] = None,
+        theta_tol: float | None = None,
+        theta_tr: float | None = None,
         lobatto_optimization: bool = False,
         pha_scale_method: int = 1,
     ) -> None:
@@ -165,20 +164,19 @@ class GTTrunc(object):
                 "Choices for integral_method parameter are: "
                 + f"{integral_methods_ok}."
             )
-        if theta_tol is not None:
-            if (
-                isinstance(theta_tol, bool)
-                or not isinstance(
-                    theta_tol, (int, float, np.integer, np.floating)
-                )
-                or not (0.0 < theta_tol < 180.0)
-            ):
-                raise ValueError(
-                    "The theta_tol parameter must be a scalar in the "
-                    + "interval ]0; 180[."
-                )
-        if not isinstance(lobatto_optimization, bool):
+        if theta_tol is not None and (
+            isinstance(theta_tol, bool)
+            or not isinstance(
+                theta_tol, (int, float, np.integer, np.floating)
+            )
+            or not (0.0 < theta_tol < 180.0)
+        ):
             raise ValueError(
+                "The theta_tol parameter must be a scalar in the "
+                + "interval ]0; 180[."
+            )
+        if not isinstance(lobatto_optimization, bool):
+            raise TypeError(
                 "The lobatto_optimization parameter must be a boolean."
             )
         if pha_scale_method not in [1, 2]:

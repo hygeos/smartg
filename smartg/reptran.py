@@ -275,7 +275,7 @@ def reptran_avg_emission(
     )
 
 
-class ReptranIband(object):
+class ReptranIband:
     """Represent one internal REPTRAN absorption band.
 
     Parameters
@@ -431,7 +431,7 @@ class ReptranIband(object):
         return data_molecules
 
 
-class ReptranBand(object):
+class ReptranBand:
     """Represent a REPTRAN sensor channel.
 
     Parameters
@@ -533,7 +533,7 @@ class ReptranBand(object):
             yield self.iband(i)
 
 
-class Reptran(object):
+class Reptran:
     """Read and expose a REPTRAN correlated-k file.
 
     Parameters
@@ -573,7 +573,7 @@ class Reptran(object):
         else:
             self.fname = fname
 
-        if not fname.suffix == ".cdf":
+        if fname.suffix != ".cdf":
             self.fname = self.fname.with_name(
                 self.fname.name + ".cdf"
             )
@@ -686,15 +686,14 @@ class Reptran(object):
                     if (k.wmin >= lmin_values[ii]) and (
                         k.wmax <= lmax_values[ii]
                     ):
-                        for ik in k.ibands():
-                            ik_l.append(ik)
+                        ik_l.extend(k.ibands())
 
         assert len(ik_l) != 0
 
         return ReptranIbandList(sorted(ik_l, key=lambda x: x.w))
 
 
-class ReptranIbandList(object):
+class ReptranIbandList:
     """Store a selected list of internal REPTRAN bands.
 
     Parameters
@@ -809,7 +808,7 @@ class ReptranIbandList(object):
         return list(set(names))
 
 
-class ReadCrs(object):
+class ReadCrs:
     """Read a REPTRAN molecular cross-section lookup table.
 
     Parameters

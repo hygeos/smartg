@@ -21,14 +21,13 @@ ThetaLike
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from os import PathLike
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Protocol,
-    Sequence,
     TypeAlias,
-    Union,
     runtime_checkable,
 )
 
@@ -43,9 +42,7 @@ if TYPE_CHECKING:
 
 RealNumber: TypeAlias = int | float | np.integer | np.floating
 
-NumericArrayLike: TypeAlias = Union[
-    RealNumber, Sequence[Union[int, float]], NDArray[np.number]
-]
+NumericArrayLike: TypeAlias = RealNumber | Sequence[int | float] | NDArray[np.number]
 
 PathType: TypeAlias = str | Path | PathLike[str]
 

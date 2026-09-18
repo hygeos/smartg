@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """Preprocessing of oceanic optical properties for SMART-G simulations.
 
@@ -56,7 +54,7 @@ WaterRw
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Any, TypedDict, cast
 
 import numpy as np
 import xarray as xr
@@ -145,7 +143,7 @@ def _truncate_f11(
             ),
         )
     else:
-        raise ValueError("truncation method not recognized")
+        raise TypeError("truncation method not recognized")
 
     return ds_pha["phase_tr"].values, float(ds_pha["f"].values)
 
@@ -201,7 +199,7 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
         for _ in range(6):
             fp.readline()  # skip the first 6 lines
         data_pf = np.genfromtxt(fp)
-    aw_pf = data_pf[:, 1] * 100  #  convert from cm-1 to m-1
+    aw_pf = data_pf[:, 1] * 100  # convert from cm-1 to m-1
     wavelength_pf = data_pf[:, 0]
     ok_pf = wavelength_pf <= 725
 
@@ -209,7 +207,7 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
     data_pw = np.genfromtxt(
         Path(dir_aux) / "water" / "palmer74.dat", skip_header=5
     )
-    aw_pw = data_pw[::-1, 1] * 100  #  convert from cm-1 to m-1
+    aw_pw = data_pw[::-1, 1] * 100  # convert from cm-1 to m-1
     wavelength_pw = data_pw[::-1, 0]
     ok_pw = wavelength_pw > 725
 
@@ -224,7 +222,7 @@ def _read_aw(dir_aux: PathType) -> xr.DataArray:
     return aw
 
 
-class Hydrosol(object):
+class Hydrosol:
     """
     User-defined hydrosol model.
 
@@ -580,7 +578,7 @@ class Hydrosol(object):
         if not (np.asarray(iop["bp"]) > 0).any():
             return None
         if iop["bbp_ratio"] is None:
-            raise Exception(
+            raise ValueError(
                 "No phase function nor bbp_ratio has been provided, but bp>0"
             )
 
@@ -634,7 +632,7 @@ class Hydrosol(object):
         iop = self.iop(wavelength_pha, z)
         bbp_ratio, bp = iop["bbp_ratio"], iop["bp"]
         if bbp_ratio is None:
-            raise Exception(
+            raise ValueError(
                 "No phase function nor bbp_ratio has been provided, but bp>0"
             )
 
@@ -768,7 +766,7 @@ class Hydrosol(object):
 
         if (self._phase is None) and (np.asarray(iop["bp"]) > 0).any():
             if iop["bbp_ratio"] is None:
-                raise Exception(
+                raise ValueError(
                     "No phase function nor bbp_ratio has been provided, but bp>0"
                 )
             if phase:
@@ -925,10 +923,8 @@ class HydrosolPR(Hydrosol):
         acdm443 = fa * 0.069 * (chl**1.070)
 
         s_cdom = 0.00262 * (acdm443 ** (-0.448))
-        if s_cdom > 0.025:
-            s_cdom = 0.025
-        if s_cdom < 0.011:
-            s_cdom = 0.011
+        s_cdom = min(s_cdom, 0.025)
+        s_cdom = max(s_cdom, 0.011)
 
         acdm = acdm443 * np.exp(-s_cdom * (wavelength - 443))
 
@@ -1259,10 +1255,11 @@ class HydrosolZhai(Hydrosol):
         }
 
 
-class Water(object):
+class Water:
     """Base class for water."""
 
-    def calc(self, wavelength, *args, **kwargs) -> xr.Dataset:
+    def calc(self, wavelength: NumericArrayLike, *args: Any,
+             **kwargs: Any) -> xr.Dataset:
         """
         Compute the water column profile as an xr.Dataset.
 

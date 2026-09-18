@@ -109,6 +109,11 @@ completed and corrected before the final `v2.0.0` release.
     `smartg.vrs` and `smartg.histories` is now `wavelength`
   - `smartg.truncation`: the `DM_trunc` and `GT_trunc` classes follow the
     CapWords convention as `DMTrunc` and `GTTrunc`
+  - A wrong argument type now raises `TypeError` instead of
+    `ValueError` in `as_theta_grid`, `LambSurface`, `GTTrunc` and the
+    water phase truncation, and the water hydrosols raise `ValueError`
+    instead of a bare `Exception` when neither a phase function nor a
+    backscattering ratio is given
   - The IPRT validation notebooks follow PEP 8 module names:
     `validation_SMARTG_IPRT_phaseA.py` → `validation_smartg_iprt_phase_a.py`,
     `validation_SMARTG_IPRT_phaseB-C2.py` →
