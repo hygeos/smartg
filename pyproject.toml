@@ -121,15 +121,24 @@ reportUnknownArgumentType = "none"
 reportUnknownParameterType = "none"
 # Suppress call-issue errors caused by incomplete stubs (e.g. missing parameters in xarray stubs)
 reportCallIssue = "none"
+# smartg/obselete_files holds unused Python 2 modules (see its README)
+exclude = ["**/__pycache__", "**/node_modules", ".pixi",
+           "smartg/obselete_files"]
 
 [tool.ruff]
 line-length = 79
+# smartg/obselete_files holds unused Python 2 modules that no longer
+# parse (see its README); nothing imports them and they are not packaged.
+# force-exclude applies it to paths passed on the command line too, so
+# that `ruff check $(git ls-files '*.py')` skips them as well
+extend-exclude = ["smartg/obselete_files"]
+force-exclude = true
 
 [tool.ruff.lint]
 # PEP 8 and the docstring and annotation rules on top of the default
-# ones, for the IPRT tools only: see per-file-ignores. The whitespace
-# rules E1, E2 and E3 of PEP 8 are still preview rules, hence their
-# explicit codes.
+# ones of the pinned ruff, for the whole package. The whitespace rules
+# E1, E2 and E3 of PEP 8 are still preview rules, hence their explicit
+# codes.
 preview = true
 explicit-preview-rules = true
 extend-select = [
@@ -144,28 +153,16 @@ extend-select = [
 ignore = ["ANN401"]
 
 [tool.ruff.lint.per-file-ignores]
-# Everything but the IPRT tools keeps the default rules: the rules
-# added above, and only them (the defaults hold E722, W605, D419,
-# N999 and I001)
-"!{smartg/iprt/**,smartg/tests/*iprt*.py,smartg/notebooks/validation_smartg_iprt_*.py}" = [
-    "E1", "E2", "E3", "E4", "E5", "E701", "E702", "E703", "E711", "E712",
-    "E713", "E714", "E721", "E731", "E741", "E742", "E743", "W1", "W2",
-    "W5", "ANN", "N8", "I002",
-    "D1", "D2", "D3", "D400", "D401", "D402", "D403", "D404", "D405",
-    "D406", "D407", "D408", "D409", "D410", "D411", "D412", "D413",
-    "D414", "D415", "D416", "D417", "D418",
-]
-
-# The IPRT notebooks are percent scripts: their markdown cells are
+# The notebooks are percent scripts: their markdown cells are
 # comment blocks, whose table rows cannot wrap, an import may open
 # any cell, as ruff allows in .ipynb files, and a script opening on
 # a markdown cell has no module docstring
-"smartg/notebooks/validation_smartg_iprt_*.py" = [
+"smartg/notebooks/*.py" = [
     "D100", "E402", "E501", "W505",
 ]
 
 [tool.ruff.lint.pycodestyle]
-# Comments and docstrings (W505, IPRT tools only)
+# Comments and docstrings (W505)
 max-doc-length = 72
 
 [tool.ruff.lint.pydocstyle]

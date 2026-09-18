@@ -592,10 +592,11 @@ completed and corrected before the final `v2.0.0` release.
       mirror stays the fallback
     - `AUXDATA_DICT`, the `*_URL` constants and `safe_download` are
       removed
-  - A ruff configuration in `pyproject.toml`: a line length of 79 and,
-    for the IPRT tools (`smartg.iprt`, their tests and notebooks), the
+  - A ruff configuration in `pyproject.toml`: a line length of 79 and the
     PEP 8, naming, numpy docstring and annotation rules on top of the
-    default ones
+    default ones, for the whole package. `smartg/obselete_files`, whose
+    unused Python 2 modules no longer parse, is excluded from ruff and
+    from pyright
   - New `smartg.view.plot_polar_iquv` drawing I, Q, U and V matrices in
     polar view, split from `select_and_plot_polar_iprt`, which now selects
     with `select_iprt_iquv` and plots with it. `select_iprt_iquv` gains
