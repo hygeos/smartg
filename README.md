@@ -268,17 +268,53 @@ Both files together take 7 min in the fast tier and 1 h 23 in the slow one. Thes
 
 The fast tier detects a 5 % error on the cloud optical properties, the slow one 1 %: run it before a release, or after a change to the 3D kernel, to the phase matrices or to the truncation.
 
-## 8. Hardware tested
+## 8. Naming conventions
+
+Identifiers follow PEP 8: `snake_case` for modules, functions, variables and
+parameters, `PascalCase` for classes and `UPPER_SNAKE_CASE` for constants.
+Where several spellings of one concept coexisted, `smartg/smartg.py` is the
+reference and the rest of the package follows it.
+
+| concept | use | not |
+|---|---|---|
+| number of photons | `n_photons` | `nphotons`, `NBPHOTONS` |
+| photons per kernel loop | `n_loop` | `NBLOOP` |
+| wavelength | `wavelength` | `wav`, `wvl`, `lam` |
+| number of scattering angles | `n_theta` | `NBTHETA` |
+| depolarization factor | `depo` | `depol` |
+| file path or file name | `fname` | `filename`, `file_name` |
+| output folder | `output_dir` | `dir_output` |
+
+File formats keep their own spelling: a variable read from or written to a
+netCDF, an OPAC or an IPRT file stays `wav`, `wavelen` or `wvl` when that is
+what the format calls it. The phase matrix wavelength axis is
+`wavelength_phase`.
+
+The symbols of the equations a module implements stay as the paper writes them
+in docstrings and comments, but the code around them is lower case: `p_tot`,
+not `P_tot`.
+
+Line length is 79 columns for code and 72 for docstrings and comments. Both
+are checked by ruff, together with PEP 8, the naming rules, the numpy
+docstring convention and the annotations. `smartg/obselete_files` is excluded.
+Lint the tracked files with:
+
+```bash
+ruff check $(git ls-files '*.py')
+pyright
+```
+
+## 9. Hardware tested
 
 GeForce GTX 1070, GeForce TITAN V, GeForce RTX 2080 Ti, GeForce RTX 3070, GeForce RTX 3090, GeForce RTX 4090, GeForce RTX 5070 Ti, A100, RTX PRO 6000 Blackwell (Workstation Edition)
 
 The use of GPUs before 10xx series (Pascal) is deprecated as of SMART-G 1.0.0
 
-## 9. Licensing information
+## 10. Licensing information
 
 This software is available under the SMART-G license v1.0, available in the [LICENSE.TXT](LICENSE.TXT) file. It can be used for free for non-commercial purposes; for commercial use, please [contact HYGEOS](https://hygeos.com/en/contact/).
 
-## 10. Referencing
+## 11. Referencing
 
 When acknowledging the use of SMART-G for scientific papers, reports etc please cite the following reference(s):
 
@@ -290,7 +326,7 @@ When acknowledging the use of SMART-G for scientific papers, reports etc please 
   modeling in solar power  towers with a 3D objects-atmosphere hybrid system to consider atmospheric and environmental
   gains. Solar Energy, 277, 112675. https://doi.org/10.1016/j.solener.2024.112675
 
-## 11. Getting help
+## 12. Getting help
 
 * Changes between versions: [CHANGELOG.md](CHANGELOG.md)
 * Bug reports and feature requests: [github issues](https://github.com/hygeos/smartg/issues)
