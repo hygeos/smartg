@@ -590,7 +590,7 @@ def extract_zip(
     with zipfile.ZipFile(zfile) as archive:
         members: list[tuple[zipfile.ZipInfo, str]] = []
         for info in archive.infolist():
-            name = _relocate(info.fname, target_folder)
+            name = _relocate(info.filename, target_folder)
             if name is None:
                 continue
             _check_member_name(name)
