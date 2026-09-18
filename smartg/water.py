@@ -67,7 +67,7 @@ from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 
 from smartg.albedo import AlbedoCst, AlbedoLike
 from smartg.bandset import BandSet
-from smartg.config import DIR_AUXDATA as dir_aux
+from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.interp import interp_1d_coord
 from smartg.phase import (
@@ -76,7 +76,7 @@ from smartg.phase import (
     expand_phase_4_to_6,
     integ_phase,
 )
-from smartg.truncation import DM_trunc, GT_trunc
+from smartg.truncation import DMTrunc, GTTrunc
 from smartg.typing import NumericArrayLike, PathType
 
 #: Default truncation of the derived water phase functions: the forward
@@ -84,13 +84,13 @@ from smartg.typing import NumericArrayLike, PathType
 #: a truncation fraction of 0.3 (larger fractions make the truncated
 #: phase function negative for the most forward-peaked Fournier-Forand
 #: mixtures).
-DEFAULT_WATER_TRUNC = GT_trunc(trunc_frac=0.3, theta_tr=5.0)
+DEFAULT_WATER_TRUNC = GTTrunc(trunc_frac=0.3, theta_tr=5.0)
 
 
 def _truncate_f11(
     f11: NDArray,
     theta_deg: NDArray,
-    truncation: DM_trunc | GT_trunc,
+    truncation: DMTrunc | GTTrunc,
 ) -> tuple[NDArray, float]:
     """
     Truncate a single scalar phase function with pytrunc.
@@ -105,7 +105,7 @@ def _truncate_f11(
         1-D phase function, normalized to 2 over `theta_deg`.
     theta_deg : ndarray
         Scattering angles in degrees.
-    truncation : DM_trunc or GT_trunc
+    truncation : DMTrunc or GTTrunc
         Truncation configuration.
 
     Returns
@@ -121,7 +121,7 @@ def _truncate_f11(
     ValueError
         If the truncation configuration is not recognized.
     """
-    if isinstance(truncation, DM_trunc):
+    if isinstance(truncation, DMTrunc):
         ds_pha = cast(
             xr.Dataset,
             delta_m_phase_approx(
@@ -131,7 +131,7 @@ def _truncate_f11(
                 method=truncation.integral_method,
             ),
         )
-    elif isinstance(truncation, GT_trunc):
+    elif isinstance(truncation, GTTrunc):
         ds_pha = cast(
             xr.Dataset,
             gt_phase_approx(
@@ -258,7 +258,7 @@ class Hydrosol(object):
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
         forward and backward directions.
-    truncation : DM_trunc or GT_trunc or None, optional
+    truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices,
         performed with pytrunc (see `smartg.truncation`, and the
         truncation of the atmospheric phase matrices in `Atm1D.calc`).
@@ -301,7 +301,7 @@ class Hydrosol(object):
         acdom: NumericArrayLike | None = None,
         bbp_ratio: NumericArrayLike | None = None,
         n_theta: int = 721,
-        truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
+        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
     ) -> None:
         self.bp = bp
@@ -510,7 +510,7 @@ class Hydrosol(object):
                     "the truncation is inconsistent with the "
                     "Fournier-Forand mixture (e.g. a truncation "
                     "fraction larger than the energy of the truncated "
-                    "peak). Lower trunc_frac, or let GT_trunc search "
+                    "peak). Lower trunc_frac, or let GTTrunc search "
                     "the truncation angle (theta_tr=None)."
                 )
 
@@ -790,7 +790,7 @@ class HydrosolPR(Hydrosol):
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
         forward and backward directions.
-    truncation : DM_trunc or GT_trunc or None, optional
+    truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None disables the truncation. Defaults to
         `DEFAULT_WATER_TRUNC`.
@@ -827,7 +827,7 @@ class HydrosolPR(Hydrosol):
         self,
         chl: float,
         n_theta: int = 72001,
-        truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
+        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
         fqyc: float = 0.0,
     ) -> None:
@@ -840,7 +840,7 @@ class HydrosolPR(Hydrosol):
 
         # Bricaud (98)
         ap_bricaud = np.genfromtxt(
-            dir_aux / "water" / "aph_bricaud_1998.txt",
+            DIR_AUXDATA / "water" / "aph_bricaud_1998.txt",
             delimiter=",",
             skip_header=12,
         )  # header is lambda,Ap,Ep,Aphi,Ephi
@@ -965,7 +965,7 @@ class HydrosolZhai(Hydrosol):
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
         forward and backward directions.
-    truncation : DM_trunc or GT_trunc or None, optional
+    truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None disables the truncation. Defaults to
         `DEFAULT_WATER_TRUNC`.
@@ -1013,7 +1013,7 @@ class HydrosolZhai(Hydrosol):
         self,
         chl_surf: float,
         n_theta: int = 7201,
-        truncation: DM_trunc | GT_trunc | None = DEFAULT_WATER_TRUNC,
+        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
         euphotic_depth: float | None = None,
         mixed: bool = False,
@@ -1029,7 +1029,7 @@ class HydrosolZhai(Hydrosol):
         # Bricaud (98)
         # Absorption of the phytoplankton
         ap_bricaud = np.genfromtxt(
-            dir_aux / "water" / "aph_bricaud_1998.txt",
+            DIR_AUXDATA / "water" / "aph_bricaud_1998.txt",
             delimiter=",",
             skip_header=12,
         )  # header is lambda,Ap,Ep,Aphi,Ephi
@@ -1313,7 +1313,7 @@ class Water1D(Water):
         self.bw = bw
         self.alb = AlbedoCst(0.0) if alb is None else alb
 
-        self.aw_table = _read_aw(dir_aux)
+        self.aw_table = _read_aw(DIR_AUXDATA)
 
     def calc(
         self,

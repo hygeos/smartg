@@ -33,14 +33,14 @@ offer flexible scaling approaches.
 
 Examples
 --------
->>> from smartg.truncation import DM_trunc
->>> trunc = DM_trunc(n_streams=16, integral_method='lobatto')
+>>> from smartg.truncation import DMTrunc
+>>> trunc = DMTrunc(n_streams=16, integral_method='lobatto')
 
 Key Classes
 -----------
-DM_trunc
+DMTrunc
     Delta-M truncation.
-GT_trunc
+GTTrunc
     GT truncation, as in Iwabuchi and Suzuki (2009).
 """
 
@@ -49,7 +49,7 @@ from typing import Optional
 import numpy as np
 
 
-class DM_trunc(object):
+class DMTrunc(object):
     """
     Delta-M truncation
 
@@ -105,7 +105,7 @@ class DM_trunc(object):
         self.pha_scale_method = pha_scale_method
 
 
-class GT_trunc(object):
+class GTTrunc(object):
     """
     GT truncation, as in Iwabuchi and Suzuki (2009)
 

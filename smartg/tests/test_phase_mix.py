@@ -27,7 +27,7 @@ from smartg.phase import (
     as_theta_grid, is_native_theta, theta_grid, union_theta_grid
 )
 from smartg.smartg import _calc_phase_host
-from smartg.truncation import DM_trunc, GT_trunc
+from smartg.truncation import DMTrunc, GTTrunc
 
 WAVELENGTH = 550.0
 WAV = np.array([WAVELENGTH])
@@ -279,10 +279,10 @@ def test_the_device_table_adopts_the_union_intact():
 @pytest.mark.parametrize(
     "truncation",
     [
-        DM_trunc(n_streams=16, integral_method="lobatto"),
-        DM_trunc(n_streams=16, integral_method="trapezoid"),
-        DM_trunc(n_streams=16, integral_method="simpson"),
-        GT_trunc(trunc_frac=0.9, integral_method="lobatto"),
+        DMTrunc(n_streams=16, integral_method="lobatto"),
+        DMTrunc(n_streams=16, integral_method="trapezoid"),
+        DMTrunc(n_streams=16, integral_method="simpson"),
+        GTTrunc(trunc_frac=0.9, integral_method="lobatto"),
     ],
     ids=["DM-lobatto", "DM-trapezoid", "DM-simpson", "GT-lobatto"],
 )

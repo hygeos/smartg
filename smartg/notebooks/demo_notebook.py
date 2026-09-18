@@ -361,7 +361,7 @@ _ = smartg_view(m, ind=[iaz])
 # An example using a water cloud and 2 differents truncation methods, from Iwabuchi et al. 2009
 
 # %%
-from smartg.truncation import GT_trunc
+from smartg.truncation import GTTrunc
 
 sza = np.array([60.])
 saa = np.array([180.])
@@ -435,7 +435,7 @@ plt.tight_layout()
 # %%
 # simple GT trunction (without correction) -> scheme S in Iwabuchi et
 # al. 2009
-trunc = GT_trunc(trunc_frac=0.435, theta_tol=20, theta_tr=None,
+trunc = GTTrunc(trunc_frac=0.435, theta_tol=20, theta_tr=None,
                  integral_method='lobatto', lobatto_optimization=True)
 
 # tau = 1

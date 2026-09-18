@@ -40,7 +40,7 @@ from smartg.iprt.phase_b import (
 )
 from smartg.smartg import Smartg
 from smartg.tests.iprt_checks import ReferenceChecks
-from smartg.truncation import GT_trunc
+from smartg.truncation import GTTrunc
 
 # *********************** Global variable(s) ***************************
 # Fixed seed: seed=-1 would derive it from the clock, giving a new
@@ -153,7 +153,7 @@ N_SENSORS = 50
 # reverses that verdict, but wrongly, its Q and U being noise dominated
 # and a change of truncation drawing a different noise.
 THETA_TR = 8.0
-GT_TRUNC = GT_trunc(
+GT_TRUNC = GTTrunc(
     trunc_frac=0.435,
     theta_tol=20,  # unused, the angle below is imposed
     theta_tr=THETA_TR,

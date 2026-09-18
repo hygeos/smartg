@@ -40,7 +40,7 @@ from smartg.iprt.phase_b import (
 )
 from smartg.smartg import Smartg
 from smartg.tests.iprt_checks import ReferenceChecks
-from smartg.truncation import GT_trunc
+from smartg.truncation import GTTrunc
 
 # *********************** Global variable(s) ***************************
 # Fixed seed: seed=-1 would derive it from the clock, giving a new
@@ -136,7 +136,7 @@ ROOT_PATH = Path(__file__).resolve().parent.parent
 # without correction, i.e. scheme S of the paper. Truncating the
 # forward peak of the cloud phase matrix converges much faster, so the
 # truncated tests use fewer photons.
-GT_TRUNC = GT_trunc(
+GT_TRUNC = GTTrunc(
     trunc_frac=0.435,
     theta_tol=20,
     theta_tr=None,

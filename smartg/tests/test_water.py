@@ -14,7 +14,7 @@ from smartg.config import DIR_AUXDATA
 from smartg.phase import integ_phase, read_phase
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import RoughSurface
-from smartg.truncation import DM_trunc, GT_trunc
+from smartg.truncation import DMTrunc, GTTrunc
 from smartg.water import Hydrosol, Water1D, WaterRw
 
 # -------------------------------------------------
@@ -602,7 +602,7 @@ def test_hydrosol_calc_phase_truncation():
 
     # GT truncation with a searched truncation angle
     coef = calc(
-        truncation=GT_trunc(
+        truncation=GTTrunc(
             trunc_frac=0.5, theta_tol=30.0, lobatto_optimization=True
         )
     )
@@ -616,12 +616,12 @@ def test_hydrosol_calc_phase_truncation():
             bp=0.1,
             bbp_ratio=0.03,
             n_theta=721,
-            truncation=GT_trunc(trunc_frac=0.5, theta_tr=5.0),
+            truncation=GTTrunc(trunc_frac=0.5, theta_tr=5.0),
         ).calc_phase(wavelength, z, np.full((2, 2), 0.03))
     with pytest.raises(ValueError, match="negative"):
         Hydrosol(
             bp=0.1,
             bbp_ratio=0.01,
             n_theta=721,
-            truncation=DM_trunc(n_streams=8),
+            truncation=DMTrunc(n_streams=8),
         ).calc_phase(wavelength, z, bbp)

@@ -107,6 +107,8 @@ completed and corrected before the final `v2.0.0` release.
     `extract_points`; the classes store it as `self.fname`
   - The `lam` parameter and attribute of `AlbedoSpectrum`, `smartg.rrs`,
     `smartg.vrs` and `smartg.histories` is now `wavelength`
+  - `smartg.truncation`: the `DM_trunc` and `GT_trunc` classes follow the
+    CapWords convention as `DMTrunc` and `GTTrunc`
   - The IPRT validation notebooks follow PEP 8 module names:
     `validation_SMARTG_IPRT_phaseA.py` → `validation_smartg_iprt_phase_a.py`,
     `validation_SMARTG_IPRT_phaseB-C2.py` →

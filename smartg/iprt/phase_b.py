@@ -77,7 +77,7 @@ from smartg.phase import read_phase_cdf
 from smartg.sensor import Sensor, get_sensors_grid
 from smartg.smartg import LocalEstimate, Smartg
 from smartg.surface import LambSurface
-from smartg.truncation import DM_trunc, GT_trunc
+from smartg.truncation import DMTrunc, GTTrunc
 from smartg.view import camera_view
 
 logger = logging.getLogger(__name__)
@@ -567,7 +567,7 @@ def compare_case(
 
 def build_atm_c2(
     tau_ray: float | None = None,
-    truncation: DM_trunc | GT_trunc | None = None,
+    truncation: DMTrunc | GTTrunc | None = None,
     n_theta: int = 18001,
     scale: float = 1.0,
 ) -> PhaseBAtmosphere:
@@ -588,7 +588,7 @@ def build_atm_c2(
         Total optical depth of a homogeneous Rayleigh layer filling the
         domain, without absorption. By default there is no molecular
         atmosphere at all.
-    truncation : DM_trunc or GT_trunc, optional
+    truncation : DMTrunc or GTTrunc, optional
         Truncation of the cloud phase matrix, applied by Atm3D.calc.
     n_theta : int
         Number of scattering angles of the phase matrix. 1801 is not
@@ -755,7 +755,7 @@ def build_cloud_c3(
 
 def build_atm_c3(
     cloud_c3: tuple[Cloud3D, Grid3D],
-    truncation: DM_trunc | GT_trunc | None = None,
+    truncation: DMTrunc | GTTrunc | None = None,
     with_aer: bool = True,
     n_theta: int = 1801,
 ) -> PhaseBAtmosphere:
@@ -769,7 +769,7 @@ def build_atm_c3(
     ----------
     cloud_c3 : tuple of Cloud3D and Grid3D
         The cloud field and its grid, from build_cloud_c3.
-    truncation : DM_trunc or GT_trunc, optional
+    truncation : DMTrunc or GTTrunc, optional
         Truncation of the phase matrices, applied by Atm3D.calc.
     with_aer : bool
         Add the 1D aerosol, with its single scattering albedo

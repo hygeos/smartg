@@ -89,7 +89,7 @@ from scipy.constants import speed_of_light, Planck, Boltzmann
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA
 from gatiab import vec_float_indexing
-from smartg.truncation import DM_trunc, GT_trunc
+from smartg.truncation import DMTrunc, GTTrunc
 import pandas as pd
 import xarray as xr
 import re
@@ -2587,7 +2587,7 @@ class Atm1D(Atmosphere):
         phase: bool = True,
         n_theta: ThetaLike = 721,
         use_old_calc_iphase: bool = False,
-        truncation: DM_trunc | GT_trunc | None = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> xr.Dataset:
         """
         Profile and phase matrix calculation at bands / wavelength
@@ -2608,7 +2608,7 @@ class Atm1D(Atmosphere):
             on the device.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (depracated).
-        truncation : None or DM_trunc or GT_trunc, optional
+        truncation : None or DMTrunc or GTTrunc, optional
             The scattering phase truncation to use.
 
         Returns
@@ -2674,9 +2674,9 @@ class Atm1D(Atmosphere):
                     l_opti = False
                     th_f = None
 
-                    if isinstance(truncation, DM_trunc):
+                    if isinstance(truncation, DMTrunc):
                         m_max = truncation.m_max
-                    elif isinstance(truncation, GT_trunc):
+                    elif isinstance(truncation, GTTrunc):
                         f_ = truncation.trunc_frac
                         th_tol = truncation.theta_tol
                         l_opti = truncation.lobatto_optimization
@@ -2686,7 +2686,7 @@ class Atm1D(Atmosphere):
                     method = truncation.integral_method
                     f_pha = np.zeros(nphase, dtype=np.float64)
                     for iph in range(nphase):
-                        if isinstance(truncation, DM_trunc):
+                        if isinstance(truncation, DMTrunc):
                             ds_pha = cast(
                                 xr.Dataset,
                                 delta_m_phase_approx(
@@ -2697,7 +2697,7 @@ class Atm1D(Atmosphere):
                                 ),
                             )
 
-                        elif isinstance(truncation, GT_trunc):
+                        elif isinstance(truncation, GTTrunc):
                             ds_pha = cast(
                                 xr.Dataset,
                                 gt_phase_approx(
@@ -4230,7 +4230,7 @@ class Atm3D(Atmosphere):
         phase: bool = True,
         n_theta: ThetaLike = 721,
         use_old_calc_iphase: bool = False,
-        truncation: DM_trunc | GT_trunc | None = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> xr.Dataset:
         """Compute the 3D atmospheric profile at given wavelengths.
 
@@ -4248,7 +4248,7 @@ class Atm3D(Atmosphere):
             exact, see `native_theta`.
         use_old_calc_iphase : bool, optional
             Use the old (slower) implementation of calc_iphase.
-        truncation : DM_trunc, GT_trunc or None, optional
+        truncation : DMTrunc, GTTrunc or None, optional
             Phase matrix truncation method. See :meth:`Atm1D.calc`.
 
         Returns
