@@ -33,7 +33,7 @@ import pytest
 
 from smartg.atmosphere import Atm1D, Cloud
 from smartg.phase import theta_grid
-from smartg.smartg import Smartg
+from smartg.smartg import LocalEstimate, Smartg
 
 # ************************ Global variable(s) **************************
 # Fixed seed and CUDA block/grid: seed=-1 would derive the seed from
@@ -200,7 +200,7 @@ def run(sg, name, n_photons=N_PHOTONS, n_loop=N_LOOP, seed=SEED):
         atmosphere=atm_on(name),
         ph_deg=180.0,
         th_deg=SZA,
-        le={"th_deg": VZA, "phi_deg": np.array([180.0])},
+        le=LocalEstimate(th_deg=VZA, phi_deg=np.array([180.0])),
         n_loop=n_loop,
         n_photons=n_photons,
         output_layers=7,

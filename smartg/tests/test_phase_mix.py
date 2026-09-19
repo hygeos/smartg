@@ -436,7 +436,7 @@ def test_native_mixture_radiance_matches_a_fine_uniform_grid():
     on the same setup).
     """
     pytest.importorskip("pycuda")
-    from smartg.smartg import Smartg
+    from smartg.smartg import LocalEstimate, Smartg
 
     def radiance(n_theta):
         with warnings.catch_warnings():
@@ -451,9 +451,11 @@ def test_native_mixture_radiance_matches_a_fine_uniform_grid():
             ).calc(WAV, n_theta=n_theta)
         m = Smartg(pp=True, double=True).run(
             WAVELENGTH, atmosphere=profile, th_deg=0.0,
-            le={"th_deg": _PEAK_ANGLES,
-                "phi_deg": np.array([0.0]),
-                "count_level": np.full(len(_PEAK_ANGLES), 1)},
+            le=LocalEstimate(
+                th_deg=_PEAK_ANGLES,
+                phi_deg=np.array([0.0]),
+                count_level=np.full(len(_PEAK_ANGLES), 1),
+            ),
             output_layers=3, theta_grid="phase", n_photons=2e7,
             seed=1234, xblock=128, xgrid=1024,
         )

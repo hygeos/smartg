@@ -385,7 +385,7 @@ def test_clustered_grid_fixes_the_forward_peak_radiance():
     against the 11% error this asserts.
     """
     from smartg.atmosphere import Atm1D, Cloud
-    from smartg.smartg import Smartg
+    from smartg.smartg import LocalEstimate, Smartg
 
     wavelength = 670.0
 
@@ -398,9 +398,11 @@ def test_clustered_grid_fixes_the_forward_peak_radiance():
         ).calc(np.array([wavelength]), n_theta=grid)
         m = Smartg(pp=True, double=True).run(
             wavelength, atmosphere=profile, th_deg=0.0,
-            le={"th_deg": _PEAK_ANGLES,
-                "phi_deg": np.array([0.0]),
-                "count_level": np.full(len(_PEAK_ANGLES), 1)},
+            le=LocalEstimate(
+                th_deg=_PEAK_ANGLES,
+                phi_deg=np.array([0.0]),
+                count_level=np.full(len(_PEAK_ANGLES), 1),
+            ),
             output_layers=3, theta_grid="phase", n_photons=2e7,
             seed=1234, xblock=128, xgrid=1024,
         )
