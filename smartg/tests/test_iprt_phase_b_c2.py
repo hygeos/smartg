@@ -59,20 +59,26 @@ N_THETA = 18001  # 1801 is not enough for case 6
 TIERS = ["fast", pytest.param("slow", marks=pytest.mark.slow)]
 PHOTON_DIVIDER = {"fast": 30, "slow": 1}
 
-# What the two tiers are worth, measured by scaling the cloud extinction
-# coefficient of the backward case 1 and looking at what fires:
+# What the two tiers are worth, measured by scaling the cloud
+# extinction coefficient of the backward case 1 and looking at what
+# fires. Remeasured on 2026-09-19, the mean being the slow tier one,
+# the fast tier having 30 times fewer photons under it:
 #
-#     extinction   mean of I   delta_m of I   fast tier   slow tier
-#         +1%        +0.34%        2.923         pass       fails
-#         +3%        +0.73%        3.094         pass         -
-#         +5%        +1.08%        3.349        fails         -
-#        +10%        +1.89%        4.557        fails         -
+#   extinction  mean of I  delta_m fast  delta_m slow  fast   slow
+#       +0%       -0.01%       2.629        0.500      pass   pass
+#       +1%       +0.23%       2.808        0.669      pass   fails
+#       +3%       +0.74%       3.083        1.423      pass   fails
+#       +5%       +1.21%       3.539        2.203      fails  fails
+#      +10%       +2.21%       4.612        4.122      fails  fails
 #
 # So the slow tier catches a 1% error and the fast tier a 5% one. The
 # gap is the price of 30 times fewer photons, and it is why the slow
-# tier is kept. Note that at +5% it is the mean that fires, delta_m
-# being still inside its band: without the mean check the fast tier
-# would only catch 10%.
+# tier is kept. Note that at +5% it is the mean that fires for the
+# fast tier, delta_m being still inside its band: without the mean
+# check it would only catch 10%. The 1% is bought by the 0.25 band of
+# the slow tier and by nothing else: widened to 0.5, its delta_m of
+# 0.669 at +1% would sit inside the band and the tier would only
+# catch 3%.
 
 # Two sided fractional band around the reference delta_m. The fast tier
 # gets a wider one because dividing the photons by 30 multiplies its MC
