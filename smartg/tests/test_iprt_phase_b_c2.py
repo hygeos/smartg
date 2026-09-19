@@ -81,20 +81,14 @@ PHOTON_DIVIDER = {"fast": 30, "slow": 1}
 # Measured by rerunning the fast tier with another SEED: the worst case
 # then uses 77% of the 0.25 band, hence the margin taken here.
 #
-# The slow tier needs a wider band still, for a different reason.
-# Its delta_m references were transcribed from the validation
-# notebooks, run on another GPU, while the fast ones were measured
-# here when the tiers were split. A pinned SEED does not reproduce a
-# noise realisation from one GPU to the next, so the slow band has to
-# cover the gap between two machines and not only between two seeds
-# on one. The worst case measured here is the case 6, in the exact
-# backscattering direction: its I lands on 0.182 against a reference
-# of 0.255 backward and on 0.169 against 0.271 forward, stable to 1%
-# over four runs. A band of 0.5 leaves a margin of 1.3 on it. Little
-# is lost, delta_m being the loose check of the two: the sensitive
-# one is the mean below, which does not depend on the machine and
-# reproduces the references to 3e-4.
-DELTAM_TOL = {"fast": 0.4, "slow": 0.5}
+# The slow tier keeps 0.25. Rerunning the whole tier on 2026-09-19,
+# on the RTX 4090 that measured the references and on an RTX 5070
+# Ti, put 17 of the 18 comparisons within 4% of their reference on
+# the 4090 and within 8.7% on the other machine, so the band is
+# nowhere near firing. The eighteenth was the case 6 of the tables
+# below, whose I was wrong; see the note there.
+DELTAM_TOL = {"fast": 0.4, "slow": 0.25}
+
 
 # Second observable, and the sensitive one at the fast tier, where
 # delta_m is dominated by the MC noise and a small systematic bias would
@@ -179,6 +173,19 @@ N_PHOTONS_ATM_B = {1: N_PHOTONS, 5: 1e9}
 # Regenerate them with the same settings from the log if the physics
 # legitimately changes. Each table holds one sub table per tier, the
 # fast one being noisier by construction.
+#
+# The I of the case 6 at the slow tier is the exception: the
+# notebook values, 0.255 backward and 0.271 forward, are reproduced
+# by no run of this test. Five runs on 2026-09-19, three on the RTX
+# 4090 that measured the other entries and two on an RTX 5070 Ti,
+# spread over 0.162 to 0.183 backward and 0.169 to 0.176 forward,
+# while the Q, U and V of the same rows reproduce within a few
+# percent and the 8 other cases within 4%. It is not the angle
+# grid, 1801 angles giving 0.178 where 18001 give 0.176, nor the
+# machine. The entries below are the mean of those runs. They move
+# about 10% from one run to the next, this delta_m being 0.17% of
+# a signal dominated by the MC noise of the exact backscattering
+# direction, which is also why the mean check matters more here.
 DELTAM_REF_NOATM_B = {
     "slow": {
         1: (0.507, 2.126, 65.313, 404.483),
@@ -186,7 +193,7 @@ DELTAM_REF_NOATM_B = {
         3: (0.458, 3.689, 2.070, 248.201),
         4: (0.393, 4.605, 32.565, 315.668),
         5: (0.142, 1.081, 24.303, 262.352),
-        6: (0.255, 30.129, 89.739, 981.808),
+        6: (0.176, 30.129, 89.739, 981.808),
         7: (0.177, 1.507, 1.391, 70.308),
         8: (0.157, 17.658, 6.626, 365.500),
         9: (0.176, 11.334, 69.407, 424.826),
@@ -217,7 +224,7 @@ DELTAM_REF_NOATM_F = {
         3: (0.520, 4.393, 2.607, 302.005),
         4: (0.431, 4.849, 41.652, 307.330),
         5: (0.137, 1.108, 25.284, 223.950),
-        6: (0.271, 33.639, 86.133, 908.246),
+        6: (0.173, 33.639, 86.133, 908.246),
         7: (0.179, 1.528, 1.331, 91.253),
         8: (0.175, 18.513, 7.059, 355.751),
         9: (0.157, 10.352, 64.669, 388.765),

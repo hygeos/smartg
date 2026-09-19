@@ -99,27 +99,39 @@ Z_OUTLIER = 3.0
 # on which its normalisation integral differs slightly from the one
 # on the 18001 angles of the saved result.
 #
-# Slow tier, measured on 2026-09-19. The estimate it replaces, that
-# the fractions would fall close to the 2 to 6 % of the Rayleigh
-# cases, assumed that the same photon count on both sides gives the
-# same skew on both sides. It does not: the saved results were
-# produced on another GPU, so the two sides never share a noise
-# realisation, and what D3 carries is not skew but the systematic
+# Slow tier, measured on 2026-09-19 over the whole tier, 6h42. The
+# estimate it replaces assumed that an equal photon count on both
+# sides gives an equal skew, so that the fractions would land close to
+# the 2 to 6 % of the Rayleigh cases at the fast tier. They land far
+# below that, at 0.0024 to 0.0055 everywhere but D3, and the biases at
+# 6e-6 to 7.3e-5: the saved results and the run agree much better than
+# the fast tier can show, and the entries below are tightened to match
+# rather than widened. At this photon count the run is converged
+# enough to be machine independent: D3 rerun on the RTX 4090 that
+# produced the saved results gives the same bias to three digits,
+# -6.48e-4 against -6.47e-4, and the same fraction to 0.004. The
+# margins are taken on top of that.
+#
+# D3 is the exception and takes its own entries. What it carries is
+# neither skew nor a machine difference but the systematic
 # normalisation difference described above, which a higher photon
-# count resolves instead of averaging away. D3 reaches 0.19 of the
-# directions beyond 3 sigma at BOA and 0.20 at TOA, stable to 0.01
-# over three runs, for a bias of -6.5e-4 that stays well inside
-# MEAN_TOL. It gets its own entry, and the others are raised to
-# their fast tier values rather than kept below them, the reasoning
-# that put them there being the one disproved. The biases passed
-# everywhere, so MEAN_TOL is left as it was.
+# count resolves instead of averaging away: its bias stays at
+# -6.6e-4, where the fast tier already saw -7e-4, but its sigma
+# shrinks until 0.1998 of the directions sit beyond 3 sigma. D6
+# keeps a wide bias entry although it measured
+# 7.3e-5, because its glint is what moves most between seeds at the
+# fast tier, by a factor 9.
+#
+# Margins on the worst measured value: 7 on the default bias, 2.4 to
+# 3.5 on the case ones, 9 on the default fraction and 1.5 on D3.
 MEAN_TOL = {
     "fast": {"*": 0.003, "d5": 0.005, "d6": 0.015, "e5": 0.015},
-    "slow": {"*": 0.002, "d5": 0.003, "d6": 0.005, "e5": 0.005},
+    "slow": {"*": 0.0005, "d3": 0.002, "d5": 0.002, "d6": 0.002,
+             "e5": 0.005},
 }
 FRAC_TOL = {
     "fast": {"*": 0.15, "d5": 0.20, "e5": 0.35},
-    "slow": {"*": 0.15, "d3": 0.30, "d5": 0.20, "e5": 0.35},
+    "slow": {"*": 0.05, "d3": 0.30},
 }
 
 # Figures of the html report: the Stokes parameters of the test run at
