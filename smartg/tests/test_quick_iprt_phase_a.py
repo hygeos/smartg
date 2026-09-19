@@ -967,12 +967,18 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     cld_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
     prof_aer = (cld_tau_ext, cld_ssa)
     # The water cloud has a phase function with a non-negligible
-    # peak, hence a fine angular resolution
-    nth = 18001
+    # peak, hence a fine angular resolution there. Its native grid
+    # keeps the 0.01 degree step of the peak and coarsens to 3 degrees
+    # where the function is smooth, 450 angles instead of the 18001
+    # equally spaced ones the automatic grid would build. The n_icdf
+    # of the run below is a different quantity, the number of points
+    # of the inverted phase function the scattering angles are drawn
+    # from, and keeps its value
     file_cld_phase = (
         DIR_AUXDATA / "IPRT" / "phaseA" / "opt_prop" / "watercloud.mie.cdf"
     )
-    cld_phase = read_phase(fname=file_cld_phase)
+    cld_phase = read_phase(fname=file_cld_phase, n_theta="native")
+    theta_cld = cld_phase.coords["theta_atm"].to_numpy()
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.0]), z)
     lpha = []
     for i in range(pha_atm.shape[0]):
@@ -980,7 +986,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
             xr.DataArray(
                 pha_atm[i, :, :],
                 dims=["nphamat", "theta_atm"],
-                coords={"theta_atm": np.linspace(0, 180, nth)},
+                coords={"theta_atm": theta_cld},
             )
         )
     atmosphere = Atm1D(
@@ -1022,7 +1028,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         wavelength=800.0,
         n_photons=1e7,
         n_loop=1e6,
-        n_icdf=nth,
+        n_icdf=18001,
         atmosphere=pro,
         output_layers=7,
         le=le,
@@ -1278,12 +1284,18 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     cld_ssa = np.full_like(mol_sca, 0.999979, dtype=np.float32)
     prof_aer = (cld_tau_ext, cld_ssa)
     # The water cloud has a phase function with a non-negligible
-    # peak, hence a fine angular resolution
-    nth = 18001
+    # peak, hence a fine angular resolution there. Its native grid
+    # keeps the 0.01 degree step of the peak and coarsens to 3 degrees
+    # where the function is smooth, 450 angles instead of the 18001
+    # equally spaced ones the automatic grid would build. The n_icdf
+    # of the run below is a different quantity, the number of points
+    # of the inverted phase function the scattering angles are drawn
+    # from, and keeps its value
     file_cld_phase = (
         DIR_AUXDATA / "IPRT" / "phaseA" / "opt_prop" / "watercloud.mie.cdf"
     )
-    cld_phase = read_phase(fname=file_cld_phase)
+    cld_phase = read_phase(fname=file_cld_phase, n_theta="native")
+    theta_cld = cld_phase.coords["theta_atm"].to_numpy()
     pha_atm, ipha_atm = calc_iphase(cld_phase, np.array([800.0]), z)
     lpha = []
     for i in range(pha_atm.shape[0]):
@@ -1291,7 +1303,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
             xr.DataArray(
                 pha_atm[i, :, :],
                 dims=["nphamat", "theta_atm"],
-                coords={"theta_atm": np.linspace(0, 180, nth)},
+                coords={"theta_atm": theta_cld},
             )
         )
     atmosphere = Atm1D(
@@ -1333,7 +1345,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         wavelength=800.0,
         n_photons=1e7,
         n_loop=1e6,
-        n_icdf=nth,
+        n_icdf=18001,
         atmosphere=pro,
         output_layers=7,
         le=le,
