@@ -71,8 +71,11 @@ PHOTON_DIVIDER = {"fast": 30, "slow": 1}
 
 # Two sided fractional band around the reference delta_m. The fast tier
 # gets a wider one because dividing the photons by 30 multiplies its MC
-# noise by sqrt(30). See the C2 test file for the measurement.
-DELTAM_TOL = {"fast": 0.4, "slow": 0.25}
+# noise by sqrt(30). The slow tier gets a wider one than that
+# because its references, like those of C2, were transcribed from a
+# notebook run on another GPU. See the C2 test file for both
+# measurements.
+DELTAM_TOL = {"fast": 0.4, "slow": 0.5}
 
 # Second observable, and the sensitive one at the fast tier, where
 # delta_m is dominated by the MC noise and a small systematic bias would

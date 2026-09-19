@@ -99,18 +99,27 @@ Z_OUTLIER = 3.0
 # on which its normalisation integral differs slightly from the one
 # on the 18001 angles of the saved result.
 #
-# Slow tier: not measured (about 3.8 hours), the values are estimates.
-# With the same photon count on both sides the skew is the same on
-# both sides too, so the bias should fall to a few 1e-4 (D3 keeping
-# its -7e-4) and the fraction close to the 2 to 6 % of the Rayleigh
-# cases at the fast tier. Measure them from the log if they fire.
+# Slow tier, measured on 2026-09-19. The estimate it replaces, that
+# the fractions would fall close to the 2 to 6 % of the Rayleigh
+# cases, assumed that the same photon count on both sides gives the
+# same skew on both sides. It does not: the saved results were
+# produced on another GPU, so the two sides never share a noise
+# realisation, and what D3 carries is not skew but the systematic
+# normalisation difference described above, which a higher photon
+# count resolves instead of averaging away. D3 reaches 0.19 of the
+# directions beyond 3 sigma at BOA and 0.20 at TOA, stable to 0.01
+# over three runs, for a bias of -6.5e-4 that stays well inside
+# MEAN_TOL. It gets its own entry, and the others are raised to
+# their fast tier values rather than kept below them, the reasoning
+# that put them there being the one disproved. The biases passed
+# everywhere, so MEAN_TOL is left as it was.
 MEAN_TOL = {
     "fast": {"*": 0.003, "d5": 0.005, "d6": 0.015, "e5": 0.015},
     "slow": {"*": 0.002, "d5": 0.003, "d6": 0.005, "e5": 0.005},
 }
 FRAC_TOL = {
     "fast": {"*": 0.15, "d5": 0.20, "e5": 0.35},
-    "slow": {"*": 0.10, "d5": 0.15, "e5": 0.15},
+    "slow": {"*": 0.15, "d3": 0.30, "d5": 0.20, "e5": 0.35},
 }
 
 # Figures of the html report: the Stokes parameters of the test run at
