@@ -7,7 +7,7 @@ import xarray as xr
 from smartg.xarray import dataset_to_mlut, drop_axes
 
 
-def sample_dataset():
+def sample_dataset() -> xr.Dataset:
     """Small Dataset mimicking the run output structure."""
     ds = xr.Dataset()
     ds.coords['wavelength'] = np.array([400.0, 500.0, 600.0])
@@ -24,7 +24,7 @@ def sample_dataset():
     return ds
 
 
-def test_dataset_to_mlut_roundtrip():
+def test_dataset_to_mlut_roundtrip() -> None:
     """Check that a Dataset survives a round trip through MLUT."""
     ds = sample_dataset()
     mlut = dataset_to_mlut(ds)
@@ -46,7 +46,7 @@ def test_dataset_to_mlut_roundtrip():
     assert dict(mlut.attrs) == dict(ds.attrs)
 
 
-def test_drop_axes_dim_and_coord():
+def test_drop_axes_dim_and_coord() -> None:
     """Check that drop_axes removes a dimension and its coordinate."""
     ds = xr.Dataset()
     ds.coords['wavelength'] = np.array([500.0])
@@ -57,7 +57,7 @@ def test_drop_axes_dim_and_coord():
     assert out['I'].dims == ('z',)
 
 
-def test_drop_axes_coord_only():
+def test_drop_axes_coord_only() -> None:
     # a coordinate used by no data variable (LE-zip 'Azimuth angles'
     # case) is removed regardless of its size
     """Check that drop_axes removes a coordinate on its own."""
@@ -69,14 +69,14 @@ def test_drop_axes_coord_only():
     assert 'I' in out
 
 
-def test_drop_axes_absent_name_is_ignored():
+def test_drop_axes_absent_name_is_ignored() -> None:
     """Check that an absent name leaves the Dataset untouched."""
     ds = xr.Dataset({'I': (('z',), np.ones(3))})
     out = drop_axes(ds, 'wavelength')
     assert out.identical(ds)
 
 
-def test_drop_axes_multiple_names():
+def test_drop_axes_multiple_names() -> None:
     """Check that drop_axes takes several names at once."""
     ds = xr.Dataset()
     ds.coords['a'] = np.array([1.0])
@@ -85,7 +85,7 @@ def test_drop_axes_multiple_names():
     assert out['I'].dims == ('z',)
 
 
-def test_drop_axes_size_error():
+def test_drop_axes_size_error() -> None:
     """Check that an axis longer than one point is refused."""
     ds = xr.Dataset({'I': (('z',), np.ones(3))})
     with pytest.raises(ValueError):

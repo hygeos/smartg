@@ -89,7 +89,7 @@ logger.addHandler(file_handler)
 
 
 @pytest.mark.parametrize("mix", MIXTURES)
-def test_aer_mixtures(request, mix):
+def test_aer_mixtures(request: pytest.FixtureRequest, mix: str) -> None:
     """Check one OPAC mixture at 400 and 700 nm."""
     wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC(
@@ -213,7 +213,7 @@ def test_aer_mixtures(request, mix):
 
 
 @pytest.mark.parametrize("spe", SPECIES)
-def test_aer_species(request, spe):
+def test_aer_species(request: pytest.FixtureRequest, spe: str) -> None:
     """Check one OPAC species at 400 and 700 nm."""
     wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC(
@@ -336,7 +336,7 @@ def test_aer_species(request, spe):
     ), f"Problem with {spe} phase function"
 
 
-def test_desert_free_stra(request):
+def test_desert_free_stra(request: pytest.FixtureRequest) -> None:
     """Check the desert mixture with free and stratospheric layers."""
     wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC("desert", 1.0, 550.0)
@@ -455,7 +455,7 @@ def test_desert_free_stra(request):
     ), "Problem with desert free stra phase function"
 
 
-def test_dd_cc_mixture(request):
+def test_dd_cc_mixture(request: pytest.FixtureRequest) -> None:
     """Check a desert and a continental clean aerosol together."""
     wavelengths = np.array([400.0, 700.0])
     pfgrid = [100.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]
@@ -593,7 +593,7 @@ def test_dd_cc_mixture(request):
     ), "Problem with dd + cc phase function"
 
 
-def test_desert_one_wavelength(request):
+def test_desert_one_wavelength(request: pytest.FixtureRequest) -> None:
     """Check the desert mixture at a single wavelength."""
     wavelength = 400.0
     aer = AerOPAC(

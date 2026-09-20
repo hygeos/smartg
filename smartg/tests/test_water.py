@@ -6,11 +6,13 @@ the truncation of the hydrosol phase matrices.
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
+from numpy.typing import NDArray
 
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D
@@ -20,6 +22,9 @@ from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import RoughSurface
 from smartg.truncation import DMTrunc, GTTrunc
 from smartg.water import Hydrosol, Water1D, WaterRw
+
+SmartgRun = tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]
+RwRun = list[tuple[dict[str, NDArray[np.float64]], dict[str, NDArray[np.float64]]]]
 
 # -------------------------------------------------
 # Logging
@@ -227,23 +232,23 @@ def _build_water_iop() -> Water1D:
 
 
 @pytest.fixture(scope="module")
-def _water_iop():
+def _water_iop() -> Water1D:
     return _build_water_iop()
 
 
 @pytest.fixture(scope="module")
-def _atm():
+def _atm() -> Atm1D:
     aer = AerOPAC("maritime_clean", 0.2, 550)
     return Atm1D("afglms", tco3=300.0, no2=True, p0=1024.0, comp=[aer])
 
 
 @pytest.fixture(scope="module")
-def _surf():
+def _surf() -> RoughSurface:
     return RoughSurface(wind=5.0, nh2o=1.34)
 
 
 @pytest.fixture(scope="module")
-def _smartg_run(_water_iop, _atm, _surf):
+def _smartg_run(_water_iop: Water1D, _atm: Atm1D, _surf: RoughSurface) -> SmartgRun:
     """Run SMART-G and return R = Eu/Ed, Lu/Ed and stdev.
 
     Two runs are performed:
@@ -323,7 +328,7 @@ def _smartg_run(_water_iop, _atm, _surf):
 MAX_DIFF_PCT = 1.0  # maximum allowed diff in %
 
 
-def test_hydrolight(hl_pw, hl_pw_rrs, _smartg_run):
+def test_hydrolight(hl_pw: xr.Dataset, hl_pw_rrs: xr.Dataset, _smartg_run: SmartgRun) -> None:
     """SMART-G must agree with HydroLight within criteria.
 
     Eu/Ed: relative difference < 1.0%.
@@ -426,7 +431,7 @@ KERNEL_WATER_VARS = [
 ]
 
 
-def test_waterrw_profile_matches_water1d():
+def test_waterrw_profile_matches_water1d() -> None:
     """WaterRw must match the equivalent Water1D profile.
 
     WaterRw is a fast path for a lambertian reflector placed just
@@ -472,13 +477,13 @@ STOKES_ATOL = 1e-9
 
 
 @pytest.fixture(scope="module")
-def _atm_rayleigh():
+def _atm_rayleigh() -> Atm1D:
     """Rayleigh-only atmosphere: no aerosol, no cloud, no absorption."""
     return Atm1D("afglt", tco3=0.0, tcwp=0.0, no2=False)
 
 
 @pytest.fixture(scope="module")
-def _rw_vs_w1d_run(_atm_rayleigh, _surf):
+def _rw_vs_w1d_run(_atm_rayleigh: Atm1D, _surf: RoughSurface) -> RwRun:
     """Run SMART-G with WaterRw and with the equivalent Water1D.
 
     Both runs use a Rayleigh atmosphere above a rough ocean surface, so
@@ -525,7 +530,7 @@ def _rw_vs_w1d_run(_atm_rayleigh, _surf):
     return out
 
 
-def test_atm_rayleigh_is_purely_scattering(_atm_rayleigh):
+def test_atm_rayleigh_is_purely_scattering(_atm_rayleigh: Atm1D) -> None:
     """The test atmosphere must hold no absorption and no particle."""
     pro = _atm_rayleigh.calc(WAVELENGTHS, phase=False)
     assert np.abs(pro["OD_g"].values).max() == 0.0, "gaseous absorption left"
@@ -534,7 +539,7 @@ def test_atm_rayleigh_is_purely_scattering(_atm_rayleigh):
 
 
 @pytest.mark.parametrize("stokes", STOKES)
-def test_waterrw_simulation_matches_water1d(_rw_vs_w1d_run, stokes):
+def test_waterrw_simulation_matches_water1d(_rw_vs_w1d_run: RwRun, stokes: str) -> None:
     """Both models must give the same Stokes vector within MC noise.
 
     The two runs are independent, so the difference is compared to the
@@ -571,7 +576,7 @@ def test_waterrw_simulation_matches_water1d(_rw_vs_w1d_run, stokes):
     )
 
 
-def test_hydrosol_calc_phase_truncation():
+def test_hydrosol_calc_phase_truncation() -> None:
     """GPU-free checks of the pytrunc truncation of the derived phase.
 
     The phase matrices derived from the backscattering ratio must be
@@ -584,7 +589,7 @@ def test_hydrosol_calc_phase_truncation():
     z = np.array([0.0, -10.0])
     bbp = np.full((2, 2), 0.01)
 
-    def calc(**kwargs):
+    def calc(**kwargs: Any) -> NDArray[np.float64]:
         h = Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=721, **kwargs)
         pha, coef = h.calc_phase(wavelength, z, bbp)
         ang = np.deg2rad(pha["theta_oc"].values)

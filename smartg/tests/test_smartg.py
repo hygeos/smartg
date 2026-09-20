@@ -5,9 +5,12 @@ surface and water in the combinations the code allows, and check
 the outputs and the arguments the run accepts.
 """
 
+from typing import Any
+
 import numpy as np
 import pytest
 import xarray as xr
+from numpy.typing import NDArray
 
 from smartg import conftest
 from smartg.albedo import AlbedoCst
@@ -19,25 +22,27 @@ from smartg.view import smartg_view
 from smartg.water import HydrosolPR, Water1D
 from smartg.xarray import dataset_to_mlut
 
+Wavelength = float | list[float] | NDArray[np.float64]
+
 N_PHOTONS = 1e4
 
 wavelength_list = [500.0, [500.0], np.array([400.0, 600.0])]
 
 
 @pytest.fixture(params=[True, False])
-def sg(request):
+def sg(request: pytest.FixtureRequest) -> Smartg:
     """Build a Smartg, plane parallel and spherical in turn."""
     return Smartg(pp=request.param)
 
 
 @pytest.mark.parametrize("pp", [True, False])
 @pytest.mark.parametrize("back", [True, False])
-def test_compile(pp, back):
+def test_compile(pp: bool, back: bool) -> None:
     """Check that each compilation of the kernel goes through."""
     Smartg(pp=pp, back=back)
 
 
-def test_basic(request):
+def test_basic(request: pytest.FixtureRequest) -> None:
     """Run the simplest case there is."""
     m = Smartg(autoinit=True).run(
         500.0, atmosphere=Atm1D("afglms"), n_photons=N_PHOTONS
@@ -47,7 +52,7 @@ def test_basic(request):
 
 
 @pytest.mark.parametrize("wavelength", wavelength_list)
-def test_atm(sg, wavelength):
+def test_atm(sg: Smartg, wavelength: Wavelength) -> None:
     """Check that a run keeps a wavelength axis only for a list."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     m = sg.run(wavelength, atmosphere=atmosphere, n_photons=N_PHOTONS)
@@ -55,7 +60,7 @@ def test_atm(sg, wavelength):
 
 
 @pytest.mark.parametrize("wavelength", wavelength_list)
-def test_cloud(sg, wavelength):
+def test_cloud(sg: Smartg, wavelength: Wavelength) -> None:
     """Check the same for a run carrying a water cloud."""
     atmosphere = Atm1D(
         "afglt",
@@ -75,7 +80,7 @@ def test_cloud(sg, wavelength):
 @pytest.mark.parametrize(
     "surface", [RoughSurface(wind=2.0), LambSurface(alb=AlbedoCst(0.2))]
 )
-def test_atm_surf(sg, wavelength, surface, thv):
+def test_atm_surf(sg: Smartg, wavelength: Wavelength, surface: LambSurface | RoughSurface, thv: float) -> None:
     """Run an aerosol atmosphere over each kind of surface."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
 
@@ -83,7 +88,7 @@ def test_atm_surf(sg, wavelength, surface, thv):
            th_deg=thv, n_photons=N_PHOTONS)
 
 
-def test_surf_iop1_1():
+def test_surf_iop1_1() -> None:
     """Run a rough surface over water, without atmosphere."""
     surface = RoughSurface(wind=10.0)
     water = Water1D(comp=[HydrosolPR(chl=1.0)])
@@ -91,7 +96,7 @@ def test_surf_iop1_1():
                  n_photons=N_PHOTONS)
 
 
-def test_atm_surf_iop1():
+def test_atm_surf_iop1() -> None:
     """Run an atmosphere, a rough surface and water together."""
     atmosphere = Atm1D(
         "afglt",
@@ -110,7 +115,7 @@ def test_atm_surf_iop1():
                  water=water, n_photons=N_PHOTONS)
 
 
-def test_reptran(sg):
+def test_reptran(sg: Smartg) -> None:
     """Run the REPTRAN bands of an MSG channel."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     surface = RoughSurface(wind=2.0)
@@ -122,7 +127,7 @@ def test_reptran(sg):
     reduce_reptran(res, ibands)
 
 
-def test_locale_estimate(sg):
+def test_locale_estimate(sg: Smartg) -> None:
     """Check that the local estimate gives a positive radiance."""
     atmosphere = Atm1D("afglt")
     surface = RoughSurface()
@@ -141,7 +146,7 @@ def test_locale_estimate(sg):
     assert (res["I_up (TOA)"].values > 0).all()
 
 
-def test_local_estimate_angles():
+def test_local_estimate_angles() -> None:
     """Check that degrees and radians build the same estimate."""
     deg = LocalEstimate(th_deg=[0.0, 30.0], phi_deg=[0.0, 90.0])
     rad = LocalEstimate(
@@ -155,11 +160,11 @@ def test_local_estimate_angles():
     assert deg.count_level is None
 
 
-def test_local_estimate_count_level():
+def test_local_estimate_count_level() -> None:
     """Check that the angles and levels are ravelled and typed."""
     le = LocalEstimate(
-        th_deg=[[0.0, 30.0]],
-        phi_deg=[[0.0, 90.0]],
+        th_deg=np.array([[0.0, 30.0]]),
+        phi_deg=np.array([[0.0, 90.0]]),
         zip=True,
         count_level=[0, 4],
     )
@@ -181,13 +186,13 @@ def test_local_estimate_count_level():
          "count_level": [0]},
     ],
 )
-def test_local_estimate_invalid(kwargs):
+def test_local_estimate_invalid(kwargs: dict[str, Any]) -> None:
     """Check that an inconsistent local estimate is rejected."""
     with pytest.raises(ValueError):
         LocalEstimate(**kwargs)
 
 
-def test_alis_defaults():
+def test_alis_defaults() -> None:
     """Check that the ALIS options keep their documented values."""
     alis = Alis(n_low=10)
     assert alis.n_low == 10
@@ -206,13 +211,13 @@ def test_alis_defaults():
         {"n_low": 10, "n_jac": 0, "n_jac_abs": True},
     ],
 )
-def test_alis_invalid(kwargs):
+def test_alis_invalid(kwargs: dict[str, Any]) -> None:
     """Check that the kernel refuses what it cannot honour."""
     with pytest.raises(ValueError):
         Alis(**kwargs)
 
 
-def test_le_dict_deprecated(sg):
+def test_le_dict_deprecated(sg: Smartg) -> None:
     """Check that the legacy le dict runs, warns and is kept."""
     le = {
         "th_deg": np.array([40.0], dtype="float32"),
@@ -230,7 +235,7 @@ def test_le_dict_deprecated(sg):
     assert sorted(le) == ["phi_deg", "th_deg"]
 
 
-def test_alis_options_dict_deprecated(sg):
+def test_alis_options_dict_deprecated(sg: Smartg) -> None:
     """Check that the legacy alis_options map onto Alis."""
     with pytest.warns(DeprecationWarning, match="Alis"):
         sg.run(
@@ -242,7 +247,7 @@ def test_alis_options_dict_deprecated(sg):
         )
 
 
-def test_dataset_to_mlut_roundtrip():
+def test_dataset_to_mlut_roundtrip() -> None:
     """Check that the output converts to an MLUT losslessly."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     res = Smartg(autoinit=True).run(
@@ -264,7 +269,7 @@ def test_dataset_to_mlut_roundtrip():
 
 
 @pytest.mark.parametrize("rng", ["PHILOX", "CURAND_PHILOX"])
-def test_rng(rng):
+def test_rng(rng: str) -> None:
     """Run each of the random number generators."""
     atmosphere = Atm1D("afglt")
     surface = RoughSurface()
@@ -273,12 +278,12 @@ def test_rng(rng):
                         surface=surface, n_photons=N_PHOTONS)
 
 
-def test_adjacency():
+def test_adjacency() -> None:
     """Skipped, the adjacency effect is still in progress."""
     pytest.skip("Cannot test this, it is still in progress.")
 
 
-def test_no_aer_output():
+def test_no_aer_output() -> None:
     """Check that the no_aer outputs match the ones with aerosols."""
     atm1 = Atm1D("afglt")
     water = Water1D(grid=[0, -5.0], comp=[HydrosolPR(chl=0.5)])

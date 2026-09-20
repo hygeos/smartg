@@ -85,7 +85,7 @@ logger.addHandler(file_handler)
 
 
 @pytest.mark.parametrize("mod", AER_SPHERIC)
-def test_aer_spheric(mod):
+def test_aer_spheric(mod: str) -> None:
     """Check one spherical OPAC model against its published values."""
     wavelength_ref = 550.0
     aer_comp = AerOPAC(

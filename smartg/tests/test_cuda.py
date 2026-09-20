@@ -12,7 +12,7 @@ from pycuda.compiler import SourceModule
 from pycuda.gpuarray import zeros as gpuzeros
 
 
-def test_pycuda():
+def test_pycuda() -> None:
     """Verify that a simple PyCUDA kernel runs on the GPU.
 
     Compiles the ``hello_gpu`` example kernel that multiplies two
@@ -42,7 +42,7 @@ def test_pycuda():
     print('Used', pycuda.autoinit.device.name())
 
 
-def test_atomic_add():
+def test_atomic_add() -> None:
     """Check that atomicAdd counts every thread of the launch.
 
     65536 threads each add one to the same integer, which the

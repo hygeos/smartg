@@ -1,20 +1,26 @@
 """Focused unit tests for KDIS channel utilities."""
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import numpy as np
 import xarray as xr
 
-from smartg.kdis import KdisIbandList, kdis_emission, reduce_kdis
+from smartg.kdis import KdisIband, KdisIbandList, kdis_emission, reduce_kdis
+
+
+def _iband(**fields: Any) -> KdisIband:
+    """Stand in for a KdisIband with only the fields the tests read."""
+    return cast(KdisIband, SimpleNamespace(**fields))
 
 
 def test_reduce_kdis_uses_channel_weights() -> None:
     """Reduce internal KDIS bands to one value per channel."""
     ibands = KdisIbandList(
         [
-            SimpleNamespace(w=450.0, weight=1.0, ex=1.0, dl=100.0),
-            SimpleNamespace(w=450.0, weight=0.5, ex=1.0, dl=100.0),
-            SimpleNamespace(w=650.0, weight=2.0, ex=1.0, dl=200.0),
+            _iband(w=450.0, weight=1.0, ex=1.0, dl=100.0),
+            _iband(w=450.0, weight=0.5, ex=1.0, dl=100.0),
+            _iband(w=650.0, weight=2.0, ex=1.0, dl=200.0),
         ]
     )
     dataset = xr.Dataset(
@@ -57,21 +63,21 @@ def test_kdis_emission_returns_xarray_data_array() -> None:
     """Calculate KDIS emission using xarray coordinates and dimensions."""
     ibands = KdisIbandList(
         [
-            SimpleNamespace(
+            _iband(
                 w=450.0,
                 weight=1.0,
                 ex=1.0,
                 dl=100.0,
                 band=SimpleNamespace(wmin=400.0, wmax=500.0, band=0),
             ),
-            SimpleNamespace(
+            _iband(
                 w=450.0,
                 weight=0.5,
                 ex=1.0,
                 dl=100.0,
                 band=SimpleNamespace(wmin=400.0, wmax=500.0, band=0),
             ),
-            SimpleNamespace(
+            _iband(
                 w=650.0,
                 weight=2.0,
                 ex=1.0,

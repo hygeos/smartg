@@ -21,6 +21,7 @@ import pytest
 jax = pytest.importorskip(
     "jax", reason="cannot test this since the jax package is not installed."
 )
+from collections.abc import Iterator
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -65,7 +66,7 @@ logger.addHandler(file_handler)
 
 # Clean up JAX memory and stale PyCUDA atexit handlers after each test
 @pytest.fixture(scope="function", autouse=True)
-def cleanup_after_each_test():
+def cleanup_after_each_test() -> Iterator[None]:
     """Clear the jax caches and the pycuda exit hook after each test."""
     yield
     jax.clear_caches()
@@ -89,8 +90,8 @@ def cleanup_after_each_test():
 @pytest.mark.parametrize("wmax", [350.0])
 @pytest.mark.parametrize("wmin", [320.0])
 def test_smartg_jax2(
-    n_wavelength_abs, wmin, wmax, request, n_photons=5e4, max_hist=1e6
-):
+    n_wavelength_abs: int, wmin: float, wmax: float, request: pytest.FixtureRequest, n_photons: float = 5e4, max_hist: float = 1e6
+) -> None:
     """Replay the histories of a run with jax, on the CPU."""
     alb_snow = AlbedoCst(0.6)
     alb_hist = AlbedoCst(1.0)
@@ -124,7 +125,7 @@ def test_smartg_jax2(
                 alis_options=Alis(
                     n_low=wavelength_sca.size,
                     hist=True,
-                    max_hist=np.int64(max_hist),
+                    max_hist=int(max_hist),
                 ),
                 n_photons=n_photons,
                 n_loop=n_photons,
@@ -183,7 +184,7 @@ def test_smartg_jax2(
             stk_i,
             fmt1,
             label="AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}".format(
-                aod, np.int64(n_photons), np.int64(max_hist)
+                aod, np.int64(n_photons), int(max_hist)
             ),
         )
         col = p[0].get_color()
@@ -216,7 +217,7 @@ def test_smartg_jax2(
     conftest.savefig(request)
 
 
-def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
+def test_validation_artdeco(request: pytest.FixtureRequest, n_photons: float = 5e5, valpath: Path = DIR_AUXDATA) -> None:
     """Check SMART-G against the ARTDECO validation data."""
     typ = "desert"  # tau=0.25
     ####################""""""
@@ -329,7 +330,7 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
             alis_options=Alis(
                 n_low=nlow,
                 hist=True,
-                max_hist=np.int64(1e7),
+                max_hist=int(1e7),
             ),
             n_photons=n_photons,
             n_loop=n_photons,

@@ -15,7 +15,7 @@ SKIP = find_spec("jax") is None
 ROOTPATH = Path(__file__).resolve().parent.parent.parent
 
 
-def execute_notebook(nb_path, nb_output_path):
+def execute_notebook(nb_path: Path, nb_output_path: Path) -> None:
     """Execute a notebook tracked as a jupytext percent script.
 
     The scripts hold no kernelspec, hence the explicit kernel name.
@@ -28,7 +28,7 @@ def execute_notebook(nb_path, nb_output_path):
     )
 
 
-def test_demo_notebook():
+def test_demo_notebook() -> None:
     """Execute the demo notebook."""
     print("\nTesting demo_notebook.py...")
     nb_path = ROOTPATH / "smartg" / "notebooks" / "demo_notebook.py"
@@ -38,7 +38,7 @@ def test_demo_notebook():
     execute_notebook(nb_path, nb_output_path)
 
 
-def test_demo_notebook_objects():
+def test_demo_notebook_objects() -> None:
     """Execute the 3D objects demo notebook."""
     print("\nTesting demo_notebook_objects.py...")
     nb_path = ROOTPATH / "smartg" / "notebooks" / "demo_notebook_objects.py"
@@ -55,7 +55,7 @@ def test_demo_notebook_objects():
 @pytest.mark.skipif(
     SKIP, reason="cannot test this since the jax package is not installed."
 )
-def test_demo_notebook_photons_histories():
+def test_demo_notebook_photons_histories() -> None:
     """Execute the photon histories demo notebook."""
     print("\nTesting demo_notebook_photons_histories.py...")
     nb_path = (
