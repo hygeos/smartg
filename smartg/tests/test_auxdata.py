@@ -17,6 +17,7 @@ import tarfile
 import urllib.error
 import urllib.request
 import zipfile
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from email.message import Message
 from pathlib import Path
@@ -55,7 +56,7 @@ PROPFIND_XML = (
 
 
 @pytest.fixture(autouse=True)
-def no_retry_delay(monkeypatch):
+def no_retry_delay(monkeypatch: pytest.MonkeyPatch) -> None:
     """Take the wait out of the download retries."""
     monkeypatch.setattr(auxdata, "RETRY_DELAYS", (0, 0))
 
@@ -121,7 +122,7 @@ class FakeSource:
         self,
         dest: Path,
         dirname: str,
-        names,
+        names: Iterable[str],
         *,
         label: str = "",
         timeout: float = 30.0,
@@ -141,7 +142,7 @@ class FakeSource:
 class FakeResponse(io.BytesIO):
     """What the fake urlopen returns."""
 
-    def __init__(self, body: bytes, headers: dict[str, str] | None = None):
+    def __init__(self, body: bytes, headers: dict[str, str] | None = None) -> None:
         super().__init__(body)
         self.headers = Message()
         for key, value in (headers or {}).items():
@@ -159,7 +160,7 @@ def sources() -> dict[str, FakeSource]:
 
 
 @pytest.fixture
-def registry(sources) -> dict[str, Dataset]:
+def registry(sources: dict[str, FakeSource]) -> dict[str, Dataset]:
     """Build two datasets, the second one with a fallback source."""
     return {
         "a": Dataset("a", "alpha", (sources["a"],), "alpha data"),
@@ -173,7 +174,7 @@ def registry(sources) -> dict[str, Dataset]:
 
 
 @pytest.fixture
-def aux(tmp_path, registry) -> AuxData:
+def aux(tmp_path: Path, registry: dict[str, Dataset]) -> AuxData:
     """Build an AuxData over tmp_path holding the test registry."""
     return AuxData(tmp_path, datasets=registry, progress=False)
 
@@ -213,7 +214,7 @@ def make_targz(path: Path, names: dict[str, bytes]) -> None:
 # -- registry, parsing, manifest ----------------------------------------
 
 
-def test_registry_consistency():
+def test_registry_consistency() -> None:
     """Check that the shipped registry names its datasets once each."""
     assert list(DATASETS) == [
         "aer", "acs", "atm", "STP", "valid", "water", "kdis", "cld",
@@ -235,7 +236,7 @@ def test_registry_consistency():
     assert DATASETS["reptran"].primary.url.endswith("reptran_2024_all.tar.gz")
 
 
-def test_parse_propfind():
+def test_parse_propfind() -> None:
     """Check the PROPFIND reply parsing, etag before last-modified."""
     remote = auxdata._parse_propfind(PROPFIND_XML)
     assert remote == RemoteVersion(
@@ -257,7 +258,7 @@ def test_parse_propfind():
         auxdata._parse_propfind(b'<d:multistatus xmlns:d="DAV:"/>')
 
 
-def test_version_from_headers():
+def test_version_from_headers() -> None:
     """Check the version read from the response headers."""
     headers = Message()
     headers["ETag"] = 'W/"abc"'
@@ -273,7 +274,7 @@ def test_version_from_headers():
     assert auxdata._version_from_headers(Message()).kind == "unknown"
 
 
-def test_manifest_roundtrip(tmp_path, capsys):
+def test_manifest_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Check that a manifest survives a save and a load unchanged."""
     path = tmp_path / ".smartg_auxdata.json"
     assert Manifest.load(path).entries == {}
@@ -297,7 +298,7 @@ def test_manifest_roundtrip(tmp_path, capsys):
     assert "schema_version" in capsys.readouterr().out
 
 
-def test_resolve_dir(monkeypatch, tmp_path):
+def test_resolve_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Check how the auxiliary data directory is resolved."""
     assert AuxData(tmp_path).dir == tmp_path
     assert AuxData("~/x").dir == Path.home() / "x"
@@ -311,7 +312,7 @@ def test_resolve_dir(monkeypatch, tmp_path):
     assert AuxData(None).dir == tmp_path
 
 
-def test_select(aux):
+def test_select(aux: AuxData) -> None:
     """Check the dataset selection, by key, by list and by 'all'."""
     assert [d.key for d in aux.select()] == ["a", "b"]
     assert [d.key for d in aux.select("b")] == ["b"]
@@ -323,7 +324,7 @@ def test_select(aux):
 # -- status -------------------------------------------------------------
 
 
-def test_status_logic(aux, sources, tmp_path):
+def test_status_logic(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
     """Check the status each combination of local and remote gives."""
     one, prim, fall = sources["a"], sources["b_primary"], sources["b_fallback"]
 
@@ -388,7 +389,7 @@ def test_status_logic(aux, sources, tmp_path):
     assert one.fetch_calls == prim.fetch_calls == fall.fetch_calls == 0
 
 
-def test_check_update_prints_table(aux, sources, tmp_path, capsys):
+def test_check_update_prints_table(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Check the table and the repr that check_update produces."""
     (tmp_path / "alpha").mkdir()
     aux.manifest.set("a", entry_for(sources["a"]))
@@ -418,7 +419,7 @@ def test_check_update_prints_table(aux, sources, tmp_path, capsys):
 # -- download and update ------------------------------------------------
 
 
-def test_download_skips_existing(aux, sources, tmp_path, capsys):
+def test_download_skips_existing(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Check that an up to date dataset is not downloaded again."""
     one = sources["a"]
     aux.download("a")
@@ -427,7 +428,7 @@ def test_download_skips_existing(aux, sources, tmp_path, capsys):
         json.loads((tmp_path / auxdata.MANIFEST_NAME).read_text())
         ["datasets"]["a"]
     )
-    assert aux.manifest.get("a").version == "v1"
+    assert (got := aux.manifest.get("a")) is not None and got.version == "v1"
     assert one.fetch_calls == 1
 
     aux.download("a")
@@ -438,7 +439,7 @@ def test_download_skips_existing(aux, sources, tmp_path, capsys):
     assert one.fetch_calls == 2
 
 
-def test_update_replaces_directory(aux, sources, tmp_path):
+def test_update_replaces_directory(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
     """Check that an update replaces the directory and its manifest."""
     one = sources["a"]
     aux.download("a")
@@ -450,7 +451,7 @@ def test_update_replaces_directory(aux, sources, tmp_path):
     assert (tmp_path / "alpha" / "file.txt").read_text() == "v2"
     assert not (tmp_path / "alpha" / "stale.txt").exists()
     assert not list(tmp_path.glob(".alpha.*"))
-    assert aux.manifest.get("a").version == "v2"
+    assert (got := aux.manifest.get("a")) is not None and got.version == "v2"
     assert one.fetch_calls == 2
 
     aux.update("a")
@@ -459,7 +460,7 @@ def test_update_replaces_directory(aux, sources, tmp_path):
     assert one.fetch_calls == 3
 
 
-def test_leftovers_cleaned(aux, tmp_path, capsys):
+def test_leftovers_cleaned(aux: AuxData, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Check that a killed run leaves no staging directory."""
     stage = tmp_path / ".alpha.tmp-abc"
     stage.mkdir()
@@ -471,7 +472,7 @@ def test_leftovers_cleaned(aux, tmp_path, capsys):
     assert "interrupted run" in capsys.readouterr().out
 
 
-def test_failures_collected_and_raised(aux, sources, tmp_path):
+def test_failures_collected_and_raised(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
     """Check that one failing dataset does not stop the others."""
     sources["a"].fetch_error = ConnectionError("boom")
     with pytest.raises(AuxDataDownloadError) as info:
@@ -485,18 +486,18 @@ def test_failures_collected_and_raised(aux, sources, tmp_path):
     assert not list(tmp_path.glob(".alpha.*"))
 
 
-def test_fallback_source_used(aux, sources, capsys):
+def test_fallback_source_used(aux: AuxData, sources: dict[str, FakeSource], capsys: pytest.CaptureFixture[str]) -> None:
     """Check that the fallback source is tried when the first fails."""
     sources["b_primary"].fetch_error = urllib.error.HTTPError(
         "http://x", 500, "Internal Server Error", Message(), None
     )
     aux.download("b")
-    assert aux.manifest.get("b").source == "fall"
+    assert (got := aux.manifest.get("b")) is not None and got.source == "fall"
     assert sources["b_fallback"].fetch_calls == 1
     assert "trying the fallback fall" in capsys.readouterr().out
 
 
-def test_wrong_top_level_dir(aux, sources, tmp_path):
+def test_wrong_top_level_dir(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
     """Check that an archive without the expected folder is refused."""
     one = sources["a"]
     aux.download("a")
@@ -506,7 +507,7 @@ def test_wrong_top_level_dir(aux, sources, tmp_path):
         aux.update("a")
     assert "expected a 'alpha' directory" in info.value.failures["a"]
     assert (tmp_path / "alpha" / "file.txt").read_text() == "v1"
-    assert aux.manifest.get("a").version == "v1"
+    assert (got := aux.manifest.get("a")) is not None and got.version == "v1"
     assert not list(tmp_path.glob(".alpha.*"))
 
 
@@ -525,7 +526,7 @@ def touch(path: Path, content: str, mtime_ns: int | None = None) -> None:
     os.utime(path, ns=(mtime_ns, mtime_ns))
 
 
-def test_manifest_records_files(aux, sources, tmp_path):
+def test_manifest_records_files(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
     """Check that the manifest records each file's size and hash."""
     sources["a"].files = {"file.txt": "v1", "sub/other.txt": "other"}
     aux.download("a")
@@ -541,7 +542,7 @@ def test_manifest_records_files(aux, sources, tmp_path):
     assert Manifest.load(tmp_path / auxdata.MANIFEST_NAME).get("a") == entry
 
 
-def test_verify(aux, sources, tmp_path):
+def test_verify(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
     """Check that verify reports modified, missing and extra files."""
     sources["a"].files = {"file.txt": "v1", "sub/other.txt": "other"}
     unrecorded = FileCheck(recorded=False)
@@ -579,7 +580,7 @@ def test_verify(aux, sources, tmp_path):
     assert "file.txt" not in aux.verify("a")["a"].modified
 
 
-def test_status_modified_and_listing(aux, sources, tmp_path, capsys):
+def test_status_modified_and_listing(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Check the modified status and what the listing then prints."""
     aux.download("a")
     root = tmp_path / "alpha"
@@ -616,7 +617,7 @@ def test_status_modified_and_listing(aux, sources, tmp_path, capsys):
     assert not (root / "extra.txt").exists()
 
 
-def test_restore(aux, sources, tmp_path, capsys, monkeypatch):
+def test_restore(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
     """Check that restore fetches back the files that changed."""
     one = sources["a"]
     one.files = {"file.txt": "v1", "sub/other.txt": "other"}
@@ -635,7 +636,7 @@ def test_restore(aux, sources, tmp_path, capsys, monkeypatch):
     assert "  missing      sub/other.txt" in out
     assert "Nothing restored." in out
 
-    def no_terminal(prompt):
+    def no_terminal(prompt: str) -> None:
         raise EOFError
 
     monkeypatch.setattr("builtins.input", no_terminal)
@@ -662,8 +663,8 @@ def test_restore(aux, sources, tmp_path, capsys, monkeypatch):
     assert "No file to restore." in capsys.readouterr().out
 
 
-def test_restore_skips_outdated_and_unreachable(aux, sources, tmp_path,
-                                                capsys):
+def test_restore_skips_outdated_and_unreachable(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path,
+                                                capsys: pytest.CaptureFixture[str]) -> None:
     """Check that restore gives up on an outdated or absent dataset."""
     one = sources["a"]
     aux.download("a")
@@ -679,7 +680,7 @@ def test_restore_skips_outdated_and_unreachable(aux, sources, tmp_path,
     assert one.fetch_files_calls == []
 
 
-def test_restore_failures(aux, sources, tmp_path):
+def test_restore_failures(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
     """Check what restore reports when the fetch itself fails."""
     one = sources["a"]
     aux.download("a")
@@ -702,7 +703,7 @@ def test_restore_failures(aux, sources, tmp_path):
 # -- archives -----------------------------------------------------------
 
 
-def test_http_archive_source_targz(tmp_path):
+def test_http_archive_source_targz(tmp_path: Path) -> None:
     """Check the http source end to end on a .tar.gz archive."""
     archive = tmp_path / "reptran_all.tar.gz"
     make_targz(archive, {
@@ -729,7 +730,7 @@ def test_http_archive_source_targz(tmp_path):
     assert sorted(p.name for p in single.iterdir()) == ["sub"]
 
 
-def test_nextcloud_source_end_to_end(tmp_path, monkeypatch):
+def test_nextcloud_source_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Check the Nextcloud source end to end, from PROPFIND to files."""
     zip_path = tmp_path / "share.zip"
     make_zip(zip_path, {
@@ -740,7 +741,7 @@ def test_nextcloud_source_end_to_end(tmp_path, monkeypatch):
     zip_bytes = zip_path.read_bytes()
     requests: list[urllib.request.Request] = []
 
-    def fake_urlopen(request, timeout):
+    def fake_urlopen(request: urllib.request.Request, timeout: float) -> FakeResponse:
         requests.append(request)
         if request.get_method() == "PROPFIND":
             return FakeResponse(PROPFIND_XML)
@@ -789,7 +790,7 @@ def test_nextcloud_source_end_to_end(tmp_path, monkeypatch):
     assert aux.status("aer")["aer"].status == "up to date"
 
 
-def test_extract_zip_target_folder(tmp_path):
+def test_extract_zip_target_folder(tmp_path: Path) -> None:
     """Check that only the members of the wanted folder are written."""
     archive = tmp_path / "a.zip"
     make_zip(archive, {"x/reptran/f.cdf": b"1", "x/y.txt": b"2"})
@@ -800,7 +801,7 @@ def test_extract_zip_target_folder(tmp_path):
 
 
 @pytest.mark.parametrize("name", ["../evil.txt", "/abs.txt", "C:/x.txt"])
-def test_extract_rejects_traversal(tmp_path, name):
+def test_extract_rejects_traversal(tmp_path: Path, name: str) -> None:
     """Check that a member escaping the destination is refused."""
     dest = tmp_path / "dest"
     dest.mkdir()
@@ -816,7 +817,7 @@ def test_extract_rejects_traversal(tmp_path, name):
     assert not list(dest.iterdir())
 
 
-def test_extract_archive_sniffs_error_page(tmp_path):
+def test_extract_archive_sniffs_error_page(tmp_path: Path) -> None:
     """Check that an html error page is not taken for an archive."""
     page = tmp_path / "archive.part"
     page.write_bytes(b"<html>share expired</html>")
@@ -827,11 +828,11 @@ def test_extract_archive_sniffs_error_page(tmp_path):
 # -- retries --------------------------------------------------------------
 
 
-def test_retry_transient_then_success(monkeypatch):
+def test_retry_transient_then_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Check that a transient http error is retried, a fatal one not."""
     calls = []
 
-    def flaky(request, timeout):
+    def flaky(request: urllib.request.Request, timeout: float) -> FakeResponse:
         calls.append(request.full_url)
         if len(calls) < 3:
             raise urllib.error.URLError("down")
@@ -842,7 +843,7 @@ def test_retry_transient_then_success(monkeypatch):
         assert r.read() == b"ok"
     assert len(calls) == 3
 
-    def always_down(request, timeout):
+    def always_down(request: urllib.request.Request, timeout: float) -> None:
         calls.append(request.full_url)
         raise urllib.error.URLError("down")
 
@@ -852,7 +853,7 @@ def test_retry_transient_then_success(monkeypatch):
         auxdata._open(urllib.request.Request("http://x/"), 1.0)
     assert len(calls) == 3
 
-    def not_found(request, timeout):
+    def not_found(request: urllib.request.Request, timeout: float) -> None:
         calls.append(request.full_url)
         raise urllib.error.HTTPError(
             request.full_url, 404, "Not Found", Message(), None
@@ -865,11 +866,11 @@ def test_retry_transient_then_success(monkeypatch):
     assert len(calls) == 1
 
 
-def test_head_fallback_to_get(monkeypatch):
+def test_head_fallback_to_get(monkeypatch: pytest.MonkeyPatch) -> None:
     """Check that a refused HEAD falls back to a GET."""
     methods = []
 
-    def no_head(request, timeout):
+    def no_head(request: urllib.request.Request, timeout: float) -> FakeResponse:
         methods.append(request.get_method())
         if request.get_method() == "HEAD":
             raise urllib.error.HTTPError(
@@ -887,7 +888,7 @@ def test_head_fallback_to_get(monkeypatch):
 
 
 @pytest.mark.slow
-def test_check_update_live(tmp_path):
+def test_check_update_live(tmp_path: Path) -> None:
     """Query the real remote versions; nothing is downloaded."""
     statuses = check_update(tmp_path)
     assert all(st.status == "missing" for st in statuses.values())
