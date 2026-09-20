@@ -1263,6 +1263,7 @@ le = LocalEstimate(phi=np.array([0.]),
                    th=np.array([60.])*np.pi/180)
 
 def simulate(thvdeg, surface, aerosol_model, aot550):
+    """Run one aerosol case and print its TOA intensity."""
     surface = {True: RoughSurface(), False: None}[surface]
     aer = AerOPAC(aerosol_model, aot550, 550.)
     out = sg.run(th_deg=thvdeg, wavelength=[443.], n_photons=1e5,
@@ -1308,6 +1309,7 @@ atm1  = Atm1D('afglsw', grid=grid)
 alb  = AlbedoCst(0.1)
 surface = LambSurface(alb=alb)
 def zt2thv(zt, r_ter=6371., h_toa=120.):
+    """Convert a tangent height to the viewing zenith angle at TOA."""
     return np.arcsin((r_ter+zt)/(r_ter+h_toa))*180/np.pi
 # For a vertical profile in backward mode, several sensors are needed
 # we make a loop on trigonometric tangent heights and also viewing
@@ -1483,7 +1485,7 @@ m  = s_back.run(wavelength=wavelength, atmosphere=atmosphere, surface=surface,
 raa = 0.
 
 def azimuth_index(saa):
-    # azimuth plane index nearest to the wanted azimuth angle
+    """Return the azimuth plane index nearest to ``saa``."""
     return [int(np.abs(m['Azimuth angles'].values - saa).argmin())]
 
 for i, w in enumerate(wavelength):

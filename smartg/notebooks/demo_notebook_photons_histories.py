@@ -482,8 +482,7 @@ wavelength_hr_j  = jnp.array(wavelength_hr,              dtype=jnp.float32)
 alb_hr_j = jnp.array(GREY_ALB.get(wavelength_hr), dtype=jnp.float32)
 
 def _si_one(sik, wi_lr, dij, ki, wavelength_i, kabs_i, alb_i):
-    """Beer-Lambert weight: one Stokes component, one photon,
-    one wavelength."""
+    """Beer-Lambert weight: one Stokes component, photon, wavelength."""
     wi = jnp.interp(wavelength_i, wavelength_lr_r, wi_lr)
     return sik * wi * jnp.exp(-jnp.sum(dij * kabs_i)) * alb_i**ki
 
