@@ -1,5 +1,8 @@
-"""
-SMART-G test suite using pytest
+"""Tests of the SMART-G runs themselves, from the kernel up.
+
+They compile each variant of the kernel, run an atmosphere, a
+surface and water in the combinations the code allows, and check
+the outputs and the arguments the run accepts.
 """
 
 import numpy as np
@@ -23,20 +26,19 @@ wavelength_list = [500.0, [500.0], np.array([400.0, 600.0])]
 
 @pytest.fixture(params=[True, False])
 def sg(request):
-    """
-    A fixture to create multiple Smartg instances (pp or spherical)
-    """
+    """Build a Smartg, plane parallel and spherical in turn."""
     return Smartg(pp=request.param)
 
 
 @pytest.mark.parametrize("pp", [True, False])
 @pytest.mark.parametrize("back", [True, False])
 def test_compile(pp, back):
+    """Check that each compilation of the kernel goes through."""
     Smartg(pp=pp, back=back)
 
 
 def test_basic(request):
-    """Most basic test"""
+    """Run the simplest case there is."""
     m = Smartg(autoinit=True).run(
         500.0, atmosphere=Atm1D("afglms"), n_photons=N_PHOTONS
     )
@@ -46,6 +48,7 @@ def test_basic(request):
 
 @pytest.mark.parametrize("wavelength", wavelength_list)
 def test_atm(sg, wavelength):
+    """Check that a run keeps a wavelength axis only for a list."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     m = sg.run(wavelength, atmosphere=atmosphere, n_photons=N_PHOTONS)
     assert ("wavelength" in m.coords) == ("__getitem__" in dir(wavelength))
@@ -53,6 +56,7 @@ def test_atm(sg, wavelength):
 
 @pytest.mark.parametrize("wavelength", wavelength_list)
 def test_cloud(sg, wavelength):
+    """Check the same for a run carrying a water cloud."""
     atmosphere = Atm1D(
         "afglt",
         comp=[
@@ -72,6 +76,7 @@ def test_cloud(sg, wavelength):
     "surface", [RoughSurface(wind=2.0), LambSurface(alb=AlbedoCst(0.2))]
 )
 def test_atm_surf(sg, wavelength, surface, thv):
+    """Run an aerosol atmosphere over each kind of surface."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
 
     sg.run(wavelength, atmosphere=atmosphere, surface=surface,
@@ -79,6 +84,7 @@ def test_atm_surf(sg, wavelength, surface, thv):
 
 
 def test_surf_iop1_1():
+    """Run a rough surface over water, without atmosphere."""
     surface = RoughSurface(wind=10.0)
     water = Water1D(comp=[HydrosolPR(chl=1.0)])
     Smartg().run([400.0, 500.0], surface=surface, water=water,
@@ -86,6 +92,7 @@ def test_surf_iop1_1():
 
 
 def test_atm_surf_iop1():
+    """Run an atmosphere, a rough surface and water together."""
     atmosphere = Atm1D(
         "afglt",
         comp=[AerOPAC("desert", 0.1, 550.0)],
@@ -104,6 +111,7 @@ def test_atm_surf_iop1():
 
 
 def test_reptran(sg):
+    """Run the REPTRAN bands of an MSG channel."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     surface = RoughSurface(wind=2.0)
 
@@ -115,6 +123,7 @@ def test_reptran(sg):
 
 
 def test_locale_estimate(sg):
+    """Check that the local estimate gives a positive radiance."""
     atmosphere = Atm1D("afglt")
     surface = RoughSurface()
     wavelength = 400.0
@@ -133,7 +142,7 @@ def test_locale_estimate(sg):
 
 
 def test_local_estimate_angles():
-    """Degrees and radians build the same local estimate"""
+    """Check that degrees and radians build the same estimate."""
     deg = LocalEstimate(th_deg=[0.0, 30.0], phi_deg=[0.0, 90.0])
     rad = LocalEstimate(
         th=np.array([0.0, 30.0]) * np.pi / 180.0,
@@ -147,7 +156,7 @@ def test_local_estimate_angles():
 
 
 def test_local_estimate_count_level():
-    """The zenith angles and the levels are ravelled and typed"""
+    """Check that the angles and levels are ravelled and typed."""
     le = LocalEstimate(
         th_deg=[[0.0, 30.0]],
         phi_deg=[[0.0, 90.0]],
@@ -173,13 +182,13 @@ def test_local_estimate_count_level():
     ],
 )
 def test_local_estimate_invalid(kwargs):
-    """An incomplete or inconsistent local estimate is rejected"""
+    """Check that an inconsistent local estimate is rejected."""
     with pytest.raises(ValueError):
         LocalEstimate(**kwargs)
 
 
 def test_alis_defaults():
-    """The optional ALIS options keep the documented defaults"""
+    """Check that the ALIS options keep their documented values."""
     alis = Alis(n_low=10)
     assert alis.n_low == 10
     assert alis.hist is False
@@ -198,13 +207,13 @@ def test_alis_defaults():
     ],
 )
 def test_alis_invalid(kwargs):
-    """The combinations the kernel cannot honour are rejected"""
+    """Check that the kernel refuses what it cannot honour."""
     with pytest.raises(ValueError):
         Alis(**kwargs)
 
 
 def test_le_dict_deprecated(sg):
-    """The legacy le dictionary runs, warns, and is left untouched"""
+    """Check that the legacy le dict runs, warns and is kept."""
     le = {
         "th_deg": np.array([40.0], dtype="float32"),
         "phi_deg": np.array([30.0], dtype="float32"),
@@ -222,7 +231,7 @@ def test_le_dict_deprecated(sg):
 
 
 def test_alis_options_dict_deprecated(sg):
-    """The legacy alis_options keys map to the Alis parameters"""
+    """Check that the legacy alis_options map onto Alis."""
     with pytest.warns(DeprecationWarning, match="Alis"):
         sg.run(
             np.array([400.0, 600.0]),
@@ -234,7 +243,7 @@ def test_alis_options_dict_deprecated(sg):
 
 
 def test_dataset_to_mlut_roundtrip():
-    """The run output converts losslessly to the legacy MLUT"""
+    """Check that the output converts to an MLUT losslessly."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
     res = Smartg(autoinit=True).run(
         np.array([400.0, 600.0]),
@@ -256,6 +265,7 @@ def test_dataset_to_mlut_roundtrip():
 
 @pytest.mark.parametrize("rng", ["PHILOX", "CURAND_PHILOX"])
 def test_rng(rng):
+    """Run each of the random number generators."""
     atmosphere = Atm1D("afglt")
     surface = RoughSurface()
     wavelength = np.linspace(400, 800, 5)
@@ -264,10 +274,12 @@ def test_rng(rng):
 
 
 def test_adjacency():
+    """Skipped, the adjacency effect is still in progress."""
     pytest.skip("Cannot test this, it is still in progress.")
 
 
 def test_no_aer_output():
+    """Check that the no_aer outputs match the ones with aerosols."""
     atm1 = Atm1D("afglt")
     water = Water1D(grid=[0, -5.0], comp=[HydrosolPR(chl=0.5)])
     surface = RoughSurface(wind=5.0, nh2o=1.34)
