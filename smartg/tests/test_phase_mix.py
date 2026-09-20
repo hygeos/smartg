@@ -38,20 +38,25 @@ MISMATCH = "different phase angle grids"
 
 
 def _aerosol(**kwargs):
+    """Build the OPAC aerosol the 1D tests mix."""
     return AerOPAC("continental_clean", 0.2, WAVELENGTH, **kwargs)
 
 
 def _cloud(**kwargs):
+    """Build the water cloud the 1D tests mix."""
     return Cloud("wc", 12.68, 2.0, 3.0, 5.0, WAVELENGTH, **kwargs)
 
 
 def _atm(comps):
+    """Build the 1D atmosphere holding the given components."""
     return Atm1D("afglms", comp=comps, grid=GRID, pfgrid=PFGRID)
 
 
 def _file_matrix(cloud):
-    """The cloud's own phase matrix at its reff and 550 nm, as the
-    2-D user matrix the ``phase`` argument accepts, on the file grid.
+    """Return the cloud's own phase matrix as a user matrix.
+
+    It is taken at the reff of the cloud and at 550 nm, on the grid
+    of the file, in the 2-D shape the ``phase`` argument accepts.
     """
     ds = cloud.ds_mix
     da = ds["phase"].sel(reff=cloud.reff, method="nearest").sel(
@@ -79,6 +84,7 @@ def _contains(grid, nodes, tol=1e-6):
 
 
 def test_union_keeps_every_node_once():
+    """Check that the union holds each angle once, as float64."""
     union = union_theta_grid([[0.0, 90.0, 180.0], [0.0, 45.0, 90.0, 180.0]])
     assert np.array_equal(union, [0.0, 45.0, 90.0, 180.0])
     assert union.dtype == np.float64
@@ -87,6 +93,7 @@ def test_union_keeps_every_node_once():
 def test_union_merges_float32_with_float64_angles():
     # the OPAC files store 0.1 as a float32, the cloud files as a
     # float64: one node, the smaller of the two kept
+    """Check that a float32 grid merges cleanly with a float64 one."""
     coarse = np.array([0.0, 0.1, 0.2, 180.0], dtype=np.float32)
     fine = np.array([0.0, 0.1, 0.15, 0.2, 180.0])
     union = union_theta_grid([coarse, fine])
@@ -97,6 +104,7 @@ def test_union_merges_float32_with_float64_angles():
 
 
 def test_union_keeps_distinct_nodes_a_hundredth_of_a_degree_apart():
+    """Check that angles 0.01 degree apart stay distinct."""
     union = union_theta_grid([[0.0, 0.01, 180.0], [0.0, 0.02, 180.0]])
     assert np.array_equal(union, [0.0, 0.01, 0.02, 180.0])
 
@@ -105,11 +113,13 @@ def test_union_keeps_distinct_nodes_a_hundredth_of_a_degree_apart():
     "grids", ([], [[0.0, 90.0]], [[0.0, 90.0, 180.0], [10.0, 180.0]])
 )
 def test_union_rejects_bad_input(grids):
+    """Check that a grid outside 0 to 180 degrees is refused."""
     with pytest.raises(ValueError):
         union_theta_grid(grids)
 
 
 def test_native_is_resolved_by_the_phase_methods_only():
+    """Check that 'native' is recognised but not built here."""
     assert is_native_theta("native")
     assert not is_native_theta(721)
     assert not is_native_theta(theta_grid(5))
@@ -123,6 +133,7 @@ def test_native_is_resolved_by_the_phase_methods_only():
 
 
 def test_component_native_grids_are_the_file_grids():
+    """Check that each component reports the grid of its file."""
     aer, cld = _aerosol(), _cloud()
     assert np.array_equal(
         aer.native_theta(),
@@ -139,6 +150,7 @@ def test_component_native_grids_are_the_file_grids():
 
 
 def test_native_mixture_lives_on_the_union_and_says_so():
+    """Check that a native mixture takes the union and warns."""
     aer, cld = _aerosol(), _cloud()
     atm = _atm([aer, cld])
     with pytest.warns(UserWarning, match=MISMATCH):
@@ -181,6 +193,7 @@ def test_native_mixture_reproduces_each_component_exactly():
 
 
 def test_native_mixture_is_the_scattering_weighted_sum():
+    """Check the mixed matrix against the weighted sum by hand."""
     aer, cld = _aerosol(), _cloud()
     atm = _atm([aer, cld])
     with warnings.catch_warnings():
@@ -221,6 +234,7 @@ def test_user_matrix_on_its_own_grid_is_mixed_on_the_union():
 
 
 def test_same_grid_mixture_neither_warns_nor_resamples():
+    """Check that a shared grid is kept as it is, silently."""
     aer, cld = _aerosol(), _cloud()
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -231,6 +245,7 @@ def test_same_grid_mixture_neither_warns_nor_resamples():
 def test_wavelength_axes_cannot_be_merged():
     # a 2-D user matrix is monochromatic, the OPAC aerosol is not:
     # there is no union of wavelengths, so this must not go through
+    """Check that differing wavelength axes are refused."""
     aer = _aerosol()
     cld = _cloud(phase=_file_matrix(_cloud()))
     with pytest.raises(ValueError, match="wavelength_phase"):
@@ -240,6 +255,7 @@ def test_wavelength_axes_cannot_be_merged():
 def test_single_user_matrix_keeps_its_grid():
     # one component, no mixing: the default n_theta does not touch a
     # user matrix, as before
+    """Check that a lone user matrix keeps its own grid."""
     cld = _cloud(phase=_file_matrix(_cloud()))
     pha = _atm([cld]).phase(WAV)
     assert np.array_equal(
@@ -248,6 +264,7 @@ def test_single_user_matrix_keeps_its_grid():
 
 
 def test_calc_carries_the_union_to_the_profile():
+    """Check that the profile takes the union as its angle axis."""
     aer, cld = _aerosol(), _cloud()
     atm = _atm([aer, cld])
     with pytest.warns(UserWarning, match=MISMATCH):
@@ -328,6 +345,7 @@ def test_truncation_accepts_the_union_grid(truncation):
 
 
 def _grid3():
+    """Build the small periodic grid of the 3D tests."""
     return Grid3D(
         np.array([0.0, 1.0, 2.0, 3.0, 4.0]),
         np.array([0.0, 1.0]),
@@ -337,6 +355,7 @@ def _grid3():
 
 
 def _cloud3d():
+    """Build the 3D cloud the 3D tests mix."""
     return Cloud3D(
         "wc", w_ref=WAVELENGTH,
         ext_ref=np.array([5.0, 10.0]), reff=np.array([10.0, 12.0]),
@@ -345,6 +364,7 @@ def _cloud3d():
 
 
 def _aer3d():
+    """Build the 3D aerosol the 3D tests mix."""
     return Aer3D(
         "desert", w_ref=WAVELENGTH,
         ext_ref=np.array([0.1, 0.2]), rh=np.array([70.0, 80.0]),
@@ -353,6 +373,7 @@ def _aer3d():
 
 
 def _voxel(pro, grid3, cell):
+    """Return the phase matrix of one voxel of the profile."""
     icell = np.ravel_multi_index(cell, (grid3.NX, grid3.NY, grid3.NZ))
     k = int(pro["iopt_atm"].values[icell])
     ipha = int(pro["iphase_atm"].values[0, k])
@@ -360,6 +381,7 @@ def _voxel(pro, grid3, cell):
 
 
 def test_3d_native_mixture_lives_on_the_union():
+    """Check the 3D mixture, on the union, voxel by voxel."""
     grid3 = _grid3()
     cld, aer = _cloud3d(), _aer3d()
     atm3 = Atm3D(
