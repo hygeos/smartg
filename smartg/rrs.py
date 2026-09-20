@@ -309,8 +309,8 @@ def f0_o2(
 # R. D., & Park, H. (1995). Rotational Raman scattering (Ring effect)
 # in satellite backscatter ultraviolet measurements. Applied Optics,
 # 34(21), 4513. doi:10.1364/ao.34.004513
-# !!!! Erreur dans le papier original sur les coeffs de
-# Placzek-Teller Anti Stokes !!!
+# !!!! Error in the original paper on the anti-Stokes
+# Placzek-Teller coefficients !!!
 
 
 def k_ratio(

@@ -359,9 +359,9 @@ class ReptranIband:
 
         # for each gas
         for molecule_index in np.arange(n_molecules):
-            # si le gaz est absorbant a cette lambda
+            # if the gas absorbs at this wavelength
             if self.crs_source[molecule_index] == 1:
-                # on recupere la LUT d'absorption
+                # fetch the absorption LUT
                 crs_filename = self.fname.with_suffix(
                     ""
                 )  # supprime l'extension
@@ -371,8 +371,8 @@ class ReptranIband:
                 )
                 crs_mol = ReadCrs(crs_filename, self._iband)
 
-                # interpolation du profil vertical de temperature de
-                # reference dans les LUT
+                # interpolate the reference vertical temperature
+                # profile of the LUT
                 # k=1: linear interpolation; BSpline extrapolates
                 # linearly
                 # beyond the data range by default.
@@ -383,19 +383,17 @@ class ReptranIband:
                     k=1,
                 )
 
-                # ecart en temperature par rapport au profil de
-                # reference (ou P de reference est en Pa et P AFGL en
-                # hPa)
+                # temperature departure from the reference profile
+                # (the reference P is in Pa, the AFGL P in hPa)
                 delta_temperature = temperature - reference_temperature(
                     pressure * 100
                 )
 
                 if molecule_index == 0:  # si h2o
-                    # interpolation dans la LUT d'absorption en
-                    # fonction de pression, ecart en temperature et vmr
-                    # de h2o et mutiplication par la densite,
-                    # calcul de reptran avec LUT en 10^(-20) m2,
-                    # passage en km-1
+                    # interpolate the absorption LUT in pressure,
+                    # temperature departure and H2O vmr, multiply by
+                    # the density; REPTRAN computes with LUT in
+                    # 10^(-20) m2, converted to km-1
                     data_molecules += (
                         interp3(
                             crs_mol.t_pert,
@@ -411,11 +409,10 @@ class ReptranIband:
                     )
                 else:
                     tab = crs_mol.xsec
-                    # interpolation dans la LUT d'absorption en
-                    # fonction de pression, ecart en temperature et
-                    # mutiplication par la densite,
-                    # calcul de reptran avec LUT en 10^(-20) m2,
-                    # passage en km-1
+                    # interpolate the absorption LUT in pressure and
+                    # temperature departure, multiply by the density;
+                    # REPTRAN computes with LUT in 10^(-20) m2,
+                    # converted to km-1
                     data_molecules += (
                         interp2(
                             crs_mol.t_pert,

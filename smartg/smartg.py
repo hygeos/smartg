@@ -3924,7 +3924,7 @@ def _init_const(
     copy_to_device('SZA_MAXd', sza_max, np.float32)
     copy_to_device('SUN_DISCd', sun_disc, np.float32)
     copy_to_device('LE_FOVd', le_fov, np.float32)
-    # copy en rapport avec les objets :
+    # constants of the 3D objects:
     if n_obj != 0:
         copy_to_device('nObj', n_obj, np.int32)
         copy_to_device('nGObj', n_gobj, np.int32)
