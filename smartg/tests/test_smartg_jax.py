@@ -147,28 +147,28 @@ def test_smartg_jax2(
         with jax.default_device(
             jax.devices("cpu")[0]
         ):  # run on CPU to avoid slow GPU XLA compilation
-            N, S, D, w, _, nref, _, _, _, _, _ = get_histories(
+            n, s, d, w, _, nref, _, _, _, _, _ = get_histories(
                 m, level=level, verbose=False
             )
             stk_i = (
                 np.array(
                     big_sum(si, only_i=True)(
-                        wavelength_abs, sigma, alb, S[:, 0], w, D,
+                        wavelength_abs, sigma, alb, s[:, 0], w, d,
                         nref, wavelength_sca
                     ).sum(axis=0)
                 )
-                / N
+                / n
             )
             stk_i2 = (
                 np.array(
                     big_sum(si2, only_i=True)(
-                        wavelength_abs, sigma, alb, S[:, 0], w, D,
+                        wavelength_abs, sigma, alb, s[:, 0], w, d,
                         nref, wavelength_sca
                     ).sum(axis=0)
                 )
-                / N
+                / n
             )
-        std = np.sqrt((stk_i2 - stk_i**2) / N)
+        std = np.sqrt((stk_i2 - stk_i**2) / n)
         upper = stk_i + 1.95 * std
         lower = stk_i - 1.95 * std
         p = plt.plot(
@@ -227,16 +227,16 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
     aer_sca_valid = diff1(np.loadtxt(faer_sca, skiprows=7)[:, 1:].T, axis=1)
     # aerosols phase matrix import
     faer_phase = Path(valpath) / "validation" / f"phasemat_ray_{typ}_O2.dat"
-    n = int(np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int))
+    n_theta = int(np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int))
     wavelength_phase = []
     npf = 3
-    data = np.zeros((npf, 1, n, 5), dtype=np.float32)
+    data = np.zeros((npf, 1, n_theta, 5), dtype=np.float32)
     for k in range(npf):
         wavelength_phase.append(
             np.genfromtxt(
                 faer_phase,
                 usecols=range(1),
-                skip_header=(1 + (2 + n) * k),
+                skip_header=(1 + (2 + n_theta) * k),
                 max_rows=1,
             )
         )
@@ -245,8 +245,8 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
         data[k, 0, :, :] = np.genfromtxt(
             faer_phase,
             usecols=range(5),
-            skip_header=(1 + (2 + n) * k + 2),
-            max_rows=n,
+            skip_header=(1 + (2 + n_theta) * k + 2),
+            max_rows=n_theta,
         )
     data = data.swapaxes(2, 3)
 
@@ -339,7 +339,7 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
     with jax.default_device(
         jax.devices("cpu")[0]
     ):  # run on CPU to avoid slow GPU XLA compilation
-        N, S, D, w, _, nref, _, _, _, _, _ = get_histories(
+        n, s, d, w, _, nref, _, _, _, _, _ = get_histories(
             m2, level=0, verbose=True
         )
         stk_i = (
@@ -348,14 +348,14 @@ def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
                     w_valid,
                     sigma_valid,
                     np.zeros_like(w_valid),
-                    S[:, 0],
+                    s[:, 0],
                     w,
-                    D,
+                    d,
                     nref,
                     wavelength_lr,
                 ).sum(axis=0)
             )
-            / N
+            / n
         )
 
     #####################
