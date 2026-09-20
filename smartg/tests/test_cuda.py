@@ -1,3 +1,10 @@
+"""Tests that CUDA works at all, through pycuda.
+
+They compile and run two small kernels of their own, so a failure
+here points at the driver, the toolkit or pycuda rather than at
+SMART-G.
+"""
+
 import numpy as np
 import pycuda.autoinit
 import pycuda.driver as drv
@@ -36,6 +43,11 @@ def test_pycuda():
 
 
 def test_atomic_add():
+    """Check that atomicAdd counts every thread of the launch.
+
+    65536 threads each add one to the same integer, which the
+    photon counters of the kernel rely on.
+    """
     mod = SourceModule("""
     __global__ void mykernel(int *a)
     {

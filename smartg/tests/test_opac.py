@@ -1,3 +1,9 @@
+"""Tests of the OPAC aerosol models against their published values.
+
+Each model is built with AerOPAC and its optical thickness and
+single scattering albedo at 550 nm are compared with the OPAC
+tables, within a relative tolerance.
+"""
 import logging
 from pathlib import Path
 
@@ -80,6 +86,7 @@ logger.addHandler(file_handler)
 
 @pytest.mark.parametrize("mod", AER_SPHERIC)
 def test_aer_spheric(mod):
+    """Check one spherical OPAC model against its published values."""
     wavelength_ref = 550.0
     aer_comp = AerOPAC(
         mod, tau_ref=None, w_ref=wavelength_ref, rh_mix=80.0,

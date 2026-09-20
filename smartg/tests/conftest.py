@@ -1,9 +1,15 @@
-# Configuration shared by the tests of this directory: the slow marker
-# of the two tiers of the IPRT phase B tests.
+"""Configuration shared by the tests of this directory.
+
+It declares the slow marker that separates the two tiers of the
+IPRT phase B and phase 3 tests, and leaves the slow one out unless
+it is asked for.
+"""
+
 import pytest
 
 
 def pytest_configure(config):
+    """Declare the slow marker so that pytest does not warn."""
     config.addinivalue_line(
         "markers",
         "slow: full photon count IPRT benchmark reproduction against MYSTIC",
@@ -11,8 +17,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """
-    Leave the slow tier out unless it is explicitly asked for
+    """Leave the slow tier out unless it is explicitly asked for.
 
     A '-m "not slow"' in the addopts of pytest.ini would be the natural
     place for this default, but that file is in .gitignore, so it would

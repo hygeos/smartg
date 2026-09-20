@@ -1,3 +1,9 @@
+"""Tests of the ocean side of SMART-G.
+
+They cover the comparison with HydroLight, the water profiles and
+the truncation of the hydrosol phase matrices.
+"""
+
 import logging
 from pathlib import Path
 
