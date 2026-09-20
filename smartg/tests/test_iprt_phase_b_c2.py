@@ -49,21 +49,24 @@ from smartg.truncation import GTTrunc
 SEED = 1234
 N_PHOTONS = 49e9  # notebook values: required for the reference
 N_LOOP = 1e8  # delta_m values below to be reproducible
-# Equally spaced, and not the native grid of
-# watercloud_800.mie.cdf. The native one is 450 angles keeping
-# the 0.01 degree step of the forward peak and coarsening to 3
-# degrees where the function is smooth, and it serves the
-# untruncated cases well: measured on the fast tier, their
-# delta_m moves from -11% to +17% of the values below, both
-# signs, which is the MC noise of that tier. The GT truncated
-# ones are another matter. All 9 of them degrade, from +8% to
-# +70%, because the truncation has to integrate the phase
-# function and the coarse middle of the native grid is not
-# something a quadrature can integrate accurately, whatever
-# integral_method it uses. C3 is the control: its native grid is
-# 2818 angles against the 1801 it replaces, denser rather than
-# coarser, and its GT case passes.
-N_THETA = 18001
+# The native grid of watercloud_800.mie.cdf: 450 angles keeping the
+# 0.01 degree step of the forward peak and coarsening to 3 degrees
+# where the function is smooth, against the 18001 equally spaced ones
+# it replaces. It serves the untruncated cases, whose delta_m moves
+# within the noise of each tier.
+N_THETA = "native"
+
+# The GT truncated cases keep the equally spaced grid. The truncation
+# has to integrate the phase function, and the middle of the native
+# grid, at 3 degrees a step, is not something a quadrature integrates
+# accurately: measured on the fast tier, all 9 of the truncated
+# comparisons degrade on it, from +8% to +70%, where the 22
+# untruncated ones move from -11% to +17% with both signs. The rule
+# does not rescue it, GT_TRUNC below already asking for lobatto with
+# its optimization. C3 is the control that isolates the cause, its
+# native grid being 2818 angles against the 1801 it replaces, denser
+# rather than coarser, and its GT case passing.
+N_THETA_GT = 18001
 
 # Points of the inverted phase function the scattering angles are
 # drawn from. It took the number of angles of the table when both
@@ -519,7 +522,9 @@ def atm_c2_noatm() -> PhaseBAtmosphere:
 @pytest.fixture(scope="module")
 def atm_c2_noatm_gt() -> PhaseBAtmosphere:
     """Build atm_c2_noatm with the GT truncated phase matrices."""
-    return build_atm_c2(truncation=GT_TRUNC, n_theta=N_THETA, scale=SCALE)
+    return build_atm_c2(
+        truncation=GT_TRUNC, n_theta=N_THETA_GT, scale=SCALE
+    )
 
 
 @pytest.fixture(scope="module")
@@ -532,7 +537,7 @@ def atm_c2_atm() -> PhaseBAtmosphere:
 def atm_c2_atm_gt() -> PhaseBAtmosphere:
     """Build atm_c2_atm with the GT truncated phase matrices."""
     return build_atm_c2(
-        tau_ray=TAU_RAYLEIGH, truncation=GT_TRUNC, n_theta=N_THETA,
+        tau_ray=TAU_RAYLEIGH, truncation=GT_TRUNC, n_theta=N_THETA_GT,
         scale=SCALE,
     )
 
