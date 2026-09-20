@@ -109,11 +109,11 @@ warnings.simplefilter('always', DeprecationWarning)
 # rejects non-string object columns.  We coerce branch to str before
 # write.
 #
-from radis.api.hdf5 import DataFileManager as _DFM
+from radis.api.hdf5 import DataFileManager
 
 # ── Patch A: read_metadata
 # ────────────────────────────────────────────────
-_orig_read_meta = _DFM.read_metadata
+_orig_read_meta = DataFileManager.read_metadata
 
 def _patched_read_meta(self, fname, key='df'):
     try:
@@ -125,11 +125,11 @@ def _patched_read_meta(self, fname, key='df'):
         # auto-removal.
         raise AttributeError("Attribute 'metadata' does not exist")
 
-_DFM.read_metadata = _patched_read_meta
+DataFileManager.read_metadata = _patched_read_meta
 
 # ── Patch B: write
 # ────────────────────────────────────────────────────────
-_orig_write = _DFM.write
+_orig_write = DataFileManager.write
 
 def _patched_write(self, file, df, append=False, **kw):
     import pandas as _pd
@@ -142,7 +142,7 @@ def _patched_write(self, file, df, append=False, **kw):
                 df['branch'] = df['branch'].astype(str)
     return _orig_write(self, file, df, append=append, **kw)
 
-_DFM.write = _patched_write
+DataFileManager.write = _patched_write
 
 print("RADIS patches applied (read_metadata + write).")
 
