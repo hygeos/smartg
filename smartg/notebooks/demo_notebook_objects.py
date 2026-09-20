@@ -28,11 +28,11 @@
 # %reload_ext autoreload
 # %autoreload 2
 
+import subprocess
 import sys
 from pathlib import Path
 
 try:
-    import subprocess
     check = subprocess.check_call(
         ['git', 'rev-parse', '--show-toplevel'],
         stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -48,6 +48,7 @@ sys.path.insert(0, str(ROOTPATH))
 import warnings
 
 import numpy as np
+from IPython.display import display
 
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D
@@ -194,13 +195,13 @@ print(m_ds.attrs)
 # print the infomation at the receiver
 output = cat_view(m_ds)
 print("\noutput:")
-output
+display(output)
 
 # %%
 # print the infomation at the receiver
 output = cat_view(m_ds)
 print("\noutput:")
-output
+display(output)
 
 # %%
 # print the total flux distribution at the receiver

@@ -31,6 +31,7 @@
 # %reload_ext autoreload
 # %autoreload 2
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -41,7 +42,6 @@ if _cuda_bin.exists() and str(_cuda_bin) not in os.environ.get('PATH', ''):
     os.environ['PATH'] = str(_cuda_bin) + ':' + os.environ.get('PATH', '')
 
 try:
-    import subprocess
     check = subprocess.check_call(
         ['git', 'rev-parse', '--show-toplevel'],
         stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -290,15 +290,12 @@ ax.scatter(mz['Azimuth angles'].values/180*np.pi, mz['Zenith angles'].values,
 wlref = 550.
 # Aerosols and cloud optical properties using OPAC database as processed
 # by the the libradtran (www.libradtran.org)
-# set AOT at the reference wavelength wavelength to 0.3
+# set the aerosol type to 'desert' and its AOT at the reference
+# wavelength wlref to 0.3
 aer = AerOPAC( 'desert', 0.3, wlref)
-                                # and set aerosol type to 'desert'
-# set cloud to water cloud with reff=11 mic.
+# set cloud to water cloud with reff=11 mic., located between 2. and
+# 3 km, with an optical thickness at the reference wavelength set to 1.
 cld = Cloud('wc', 11., 2, 3., 1., wlref)
-                                # the cloud is located between 2. and 3
-                                # km, with
-                                # Optical thickness at the reference
-                                # wavelength wavelength set to 1.
 
 pro = Atm1D('afglt',    # tropical atmosphere
               # particles in atmosphere are a mix of aerosols and cloud
@@ -510,9 +507,9 @@ n_photons = 1e5 # photons per wavelength
 wavelength_0 = 415.
 # Aerosols and cloud optical properties using OPAC database as processed
 # by the the libradtran (www.libradtran.org)
-# set AOT at the reference wavelength wavelength_0 to 0.5
+# set the aerosol type to 'urban' and its AOT at the reference
+# wavelength wavelength_0 to 0.5
 aer1 = AerOPAC( 'urban',  0.5, wavelength_0)
-                                # and set aerosol type to 'urban'
 pro = Atm1D('afglt',    # tropical atmosphere
               # particles in atmosphere are a mix of aerosols 1 and 2
               comp=[aer1],
@@ -541,9 +538,9 @@ m = Smartg(alt_pp=True, double=True).run(wavelength=wavelength, le=le,
            surface=surface)
 m = drop_axes(m, 'Azimuth angles')
 plt.plot(m['wavelength'], m['I_up (TOA)'][:, 0], '+r',
-         label=r'$\Delta\Phi=${:.0f}°'.format(le.phi[0]*180/np.pi))
+         label=rf'$\Delta\Phi=${le.phi[0]*180/np.pi:.0f}°')
 plt.plot(m['wavelength'], m['I_up (TOA)'][:, 1], '.r',
-         label=r'$\Delta\Phi=${:.0f}°'.format(le.phi[1]*180/np.pi))
+         label=rf'$\Delta\Phi=${le.phi[1]*180/np.pi:.0f}°')
 plt.ylim(0.21, 0.27)
 plt.legend()
 print(' GPU time: ', m.attrs['kernel time (s)'], 's')
@@ -561,9 +558,9 @@ m2 = Smartg(alt_pp=True, double=True).run(wavelength=wavelength, le=le,
            surface=surface)
 m2 = drop_axes(m2, 'Azimuth angles')
 plt.plot(m2['wavelength'], m2['I_up (TOA)'][:, 0], '+c',
-         label=r'$\Delta\Phi=${:.0f}°'.format(le.phi[0]*180/np.pi))
+         label=rf'$\Delta\Phi=${le.phi[0]*180/np.pi:.0f}°')
 plt.plot(m2['wavelength'], m2['I_up (TOA)'][:, 1], '.c',
-         label=r'$\Delta\Phi=${:.0f}°'.format(le.phi[1]*180/np.pi))
+         label=rf'$\Delta\Phi=${le.phi[1]*180/np.pi:.0f}°')
 plt.ylim(0.21, 0.27)
 plt.legend()
 print(' GPU time: ', m2.attrs['kernel time (s)'], 's')
@@ -999,12 +996,12 @@ band_dim = xr.DataArray(wmedian, dims='median wavelength',
 ms2 = xr.concat(datasets, dim=band_dim,
                 combine_attrs='drop_conflicts')
 ms2 = ms2.assign_coords(band=('median wavelength', np.arange(len(wmedian))+1))
-print('')
+print()
 print('--------------------------------------')
 print('S2 CHANNELS OUTPUT')
 print('--------------------------------------')
 print(ms2)
-print('')
+print()
 print('--------------------------------------')
 print('REPTRAN S2 CHANNELS OUTPUT')
 print('--------------------------------------')
@@ -1271,7 +1268,7 @@ def simulate(
     out = sg.run(th_deg=thvdeg, wavelength=[443.], n_photons=1e5,
                  le=le, atmosphere=Atm1D('afglt', comp=[aer]),
                  surface=surface, progress=False)
-    print('TOA Intensity : %.5f' % out['I_up (TOA)'].data)
+    print(f"TOA Intensity : {float(out['I_up (TOA)'].data):.5f}")
 
 interact_manual(simulate, thvdeg=(0, 90), surface=True,
                 aerosol_model=AerOPAC('desert', 0.1, 550.).list(),
@@ -1302,8 +1299,6 @@ sg = Smartg(back=True, pp=False, double=True)
 h_toa = 120.
 r_ter = 6371. # Earth's radius
 wavelength   = [430., 660., 840.]
-#
-#
 grid    = np.linspace(h_toa, 0., num=51)
 atm1  = Atm1D('afglsw', grid=grid)
 
@@ -1382,16 +1377,16 @@ for i, (ts, ls) in enumerate(zip(ths, lin)):
                  ).interp({'Zenith angles': ts}).values.reshape(n_zt, n_phi)
             if( i==0 and j==0):
                 ax[j].semilogx(i_2d[:, j], zts, ls, color=c,
-                                                label='%.0f nm'%(w))
+                                                label=f'{w:.0f} nm')
             if( k==0 and j==1):
                 ax[j].semilogx(i_2d[:, j], zts, ls, color=c,
-                                                label='%.0f°'%(ts))
+                                                label=f'{ts:.0f}°')
             else:
                 ax[j].semilogx(i_2d[:, j], zts, ls, color=c)
         ax[j].grid()
         ax[j].set_xlim([0.0002, 2])
         ax[j].set_xlabel(r'$\pi I$')
-        ax[j].set_title(r'$\Delta\Phi:%.0f$°'%dp)
+        ax[j].set_title(rf'$\Delta\Phi:{dp:.0f}$°')
     ax[0].set_ylabel(r'$z_t (km)$')
     ax[0].legend(title=r'$\lambda$')
     ax[1].legend(title=r'$SZA$')
@@ -1533,7 +1528,7 @@ for i, w in enumerate(wavelength):
     _=transect_view(m.isel({'sensor index': ind}),
                     interp_dict={'wavelength': w}, color='k', fmt='-',
                     ind=azimuth_index(saa), fig=fig, vmin=0, vmax=.4)
-    plt.text(-50., 95, r'$\lambda$=%.0f nm'%w)
+    plt.text(-50., 95, rf'$\lambda$={w:.0f} nm')
     if i==2:
         plt.plot([-50, -25], [90, 90], 'k-')
         plt.text(-23, 90, 'homogeneous ocean')
@@ -1599,9 +1594,9 @@ y0 = np.linspace(-10.1, 10.1, num=n_sensors, endpoint=True)
 # building sensors list
 sensors=[]
 for a in x0:
-        for b in y0:
-                 sensors.append(Sensor(pos_z=120., pos_x=a, pos_y=b,
-                                       loc='ATMOS', th_deg=180.))
+    for b in y0:
+        sensors.append(Sensor(pos_z=120., pos_x=a, pos_y=b,
+                              loc='ATMOS', th_deg=180.))
 
 # defining Sun's output direction
 le = LocalEstimate(th_deg=np.array([60.]),
@@ -1625,10 +1620,10 @@ grid = ImageGrid(fig, 111,  # similar to subplot(111)
                  label_mode="L",
                  )
 # images : loop on wavelength
-for (ax, w, im) in zip(grid, wavelength, res['I_up (TOA)'].data.T):
+for (ax, w, im) in zip(grid, wavelength, res['I_up (TOA)'].data.T):  # pyright: ignore[reportArgumentType]
     img = ax.imshow(im.reshape(n_sensors, n_sensors).T, origin='lower', vmin=0,
-                    vmax=1, cmap=plt.cm.jet)
-    ax.set_title('%.0f nm'%w)
+                    vmax=1, cmap=plt.cm.jet)  # pyright: ignore[reportAttributeAccessIssue]
+    ax.set_title(f'{w:.0f} nm')
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
 #fig.colorbar()

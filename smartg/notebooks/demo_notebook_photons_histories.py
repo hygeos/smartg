@@ -35,6 +35,7 @@
 # %reload_ext autoreload
 # %autoreload 2
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -45,7 +46,6 @@ if _cuda_bin.exists() and str(_cuda_bin) not in os.environ.get('PATH', ''):
     os.environ['PATH'] = str(_cuda_bin) + ':' + os.environ.get('PATH', '')
 
 try:
-    import subprocess
     check = subprocess.check_call(['git', 'rev-parse', '--show-toplevel'],
                                   stdout=subprocess.DEVNULL,
                                   stderr=subprocess.STDOUT)
@@ -65,19 +65,18 @@ import warnings
 from typing import Any
 
 import jax
-import jax.lax as lax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from jax import jit, vmap
+from jax import jit, lax, vmap
 from jax.typing import ArrayLike
 
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D, od2k
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
-from smartg.histories import get_histories, si
+from smartg.histories import get_histories
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import LambSurface
 from smartg.xarray import drop_axes
@@ -143,16 +142,16 @@ def _patched_write(
     **kw: Any,
 ) -> Any:
     import pandas as _pd
-    if isinstance(df, _pd.DataFrame) and 'branch' in df.columns:
-        if df['branch'].dtype == object:
-            import pandas.api.types as _pat
-            sample = df['branch'].dropna()
-            if len(sample) and not _pat.is_string_dtype(sample):
-                df = df.copy()
-                df['branch'] = df['branch'].astype(str)
+    if (isinstance(df, _pd.DataFrame) and 'branch' in df.columns
+            and df['branch'].dtype == object):
+        import pandas.api.types as _pat
+        sample = df['branch'].dropna()
+        if len(sample) and not _pat.is_string_dtype(sample):
+            df = df.copy()
+            df['branch'] = df['branch'].astype(str)
     return _orig_write(self, file, df, append=append, **kw)
 
-DataFileManager.write = _patched_write
+DataFileManager.write = _patched_write  # pyright: ignore[reportAttributeAccessIssue]
 
 print("RADIS patches applied (read_metadata + write).")
 
@@ -234,8 +233,8 @@ with (warnings.catch_warnings(),
     # auto-selects grid step fine enough for narrowest line
     sfac = SpectrumFactory(wavenum_min=wn_min, wavenum_max=wn_max,
                            molecule=MOLECULE, isotope=ISOTOPE,
-                           mole_fraction=1.0, wstep='auto', verbose=False,
-                           warnings={})
+                           mole_fraction=1.0, wstep='auto', verbose=False,  # pyright: ignore[reportArgumentType]
+                           warnings={})  # pyright: ignore[reportArgumentType]
     # downloads once; uses ~/.radis/ cache afterwards
     sfac.fetch_databank('hitran')
     logging.disable(logging.NOTSET)
@@ -276,6 +275,7 @@ with (warnings.catch_warnings(),
     logging.disable(logging.NOTSET)
 
 # (NWL_HR,)
+assert _wl_ref is not None
 wavelength_hr   = _wl_ref
 # (NWL_HR, NL=8)
 kabs_hr = jnp.array(np.stack(sigma_layers, axis=1), dtype=jnp.float32)
@@ -312,10 +312,9 @@ n_photons = 1e5 # photons per wavelength
 wavelength_0 = 765.
 # Aerosols and cloud optical properties using OPAC database as processed
 # by the the libradtran (www.libradtran.org)
-# set AOT at the reference wavelength wavelength_0 to 0.5
+# set the aerosol type to 'desert' and its AOT at the reference
+# wavelength wavelength_0 to 0.25
 aer1 = AerOPAC( 'desert',  0.25, wavelength_0)
-                                # and set aerosol type to
-                                # 'maritime_clean'
 # tropical atmosphere with O2 absorption in the O2-A band
 pro = Atm1D('afglt',
               # particles in atmosphere are a mix of aerosols 1 and 2
@@ -364,7 +363,7 @@ mc = Smartg(alt_pp=True, double=True).run(wavelength=wavelength_hr, le=le,
            surface=surface)
 mc = drop_axes(mc, 'Azimuth angles')
 plt.plot(mc['wavelength'], mc['I_up (TOA)'][:, 0], '-r',
-         label=r'$\Delta\Phi=${:.0f}°'.format(le.phi[0]*180/np.pi))
+         label=rf'$\Delta\Phi=${le.phi[0]*180/np.pi:.0f}°')
 plt.legend()
 print(' GPU time: ', mc.attrs['kernel time (s)'], 's')
 
@@ -428,7 +427,7 @@ s_alis = Smartg(alt_pp=True, double=True, alis=True)
 surf_hist = LambSurface(alb=AlbedoCst(1.))
 # specify the number of
 alis_options = Alis(n_low=wavelength_lr_r.size, hist=True,
-                    max_hist=np.int64(n_photons*20))
+                    max_hist=int(n_photons*20))
 # low spectral resolution
 # computations for the scattering correction terms, phtons histories are
 # recorded and the maximum
@@ -1126,7 +1125,7 @@ std_amf = np.sqrt(np.maximum(var_dist, 0.)) / thick_amf
 print(f"Expected single-scatter AMF = sec({sza:.0f}°) + "
       f"sec({vza_rad*180/np.pi:.0f}°) = {amf_ss:.4f}")
 print(f"nscl = {nscl}")
-print(f"\nTotal moments per layer:")
+print("\nTotal moments per layer:")
 if has_scl:
     print(f"{'lay':>3s}  {'Δz(km)':>8s}  {'<D>':>10s}  {'Var(D)':>12s}  "
           f"{'Var_within':>12s}  {'Var_between':>12s}  {'%between':>9s}  "
@@ -1298,7 +1297,7 @@ n_photons=2e6
 fgas = Path(DIR_AUXDATA) / 'validation' / f"cTauGas_ray_{typ}_O2.dat"
 gas_valid   = diff1(np.loadtxt(fgas, skiprows=7)[:, 1:].T, axis=1)
 z_valid   = np.loadtxt(fgas, skiprows=7)[:, 0]
-w_valid   = np.array(open(fgas).readlines()[5].split()).astype(float)
+w_valid   = np.array(fgas.read_text().splitlines()[5].split()).astype(float)
 fray = Path(DIR_AUXDATA) / 'validation' / f"cTauRay_ray_{typ}_O2.dat"
 ray_valid = diff1(np.loadtxt(fray, skiprows=7)[:, 1:].T, axis=1)
 faer_abs = Path(DIR_AUXDATA) / 'validation' / f"cTauAbs_ptcle_ray_{typ}_O2.dat"
@@ -1307,8 +1306,7 @@ faer_sca = Path(DIR_AUXDATA) / 'validation' / f"cTauSca_ptcle_ray_{typ}_O2.dat"
 aer_sca_valid = diff1(np.loadtxt(faer_sca, skiprows=7)[:, 1:].T, axis=1)
 # aerosols phase matrix import
 faer_phase= Path(DIR_AUXDATA) / 'validation' / f"phasemat_ray_{typ}_O2.dat"
-f=open(faer_phase, 'r')
-N=np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int)
+N=int(np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int))
 wavelength_phase=[]
 n_pf=3
 data=np.zeros((n_pf, 1, N, 5), dtype=np.float32)
@@ -1357,12 +1355,12 @@ m1 = drop_axes(m1, 'Zenith angles', 'Azimuth angles')
 m2 = sg.run(seed=0, th_deg=30., wavelength=w_valid, surface=None, le=le,
             beer=0, atmosphere=atm_valid.calc(w_valid), depo=0.,
             alis_options=Alis(n_low=N_LOW, hist=True,
-                              max_hist=np.int64(n_photons*5)),
+                              max_hist=int(n_photons*5)),
             n_photons=n_photons, n_loop=n_photons, n_icdf=1e3)
 m2 = drop_axes(m2, 'Zenith angles', 'Azimuth angles')
 sg.clear_context()
-print ('GPU time no hist: %.4f'%float(m1.attrs['kernel time (s)']), 's')
-print ('GPU time hist: %.4f'%float(m2.attrs['kernel time (s)']), 's')
+print(f"GPU time no hist: {float(m1.attrs['kernel time (s)']):.4f}", 's')
+print(f"GPU time hist: {float(m2.attrs['kernel time (s)']):.4f}", 's')
 
 # run on CPU to avoid slow GPU XLA compilation
 with jax.default_device(jax.devices("cpu")[0]):
@@ -1420,8 +1418,8 @@ with jax.default_device(jax.devices("cpu")[0]):
     upper   = stokes + 1.96 * std
     lower   = stokes - 1.96 * std
 
-    I  = stokes[0]
-    Q  = stokes[1]
+    stk_i  = stokes[0]
+    stk_q  = stokes[1]
 
 #####################
 # Comparison plots: DA reference vs ALIS (no hist) vs ALIS (hist + JAX)
@@ -1436,7 +1434,7 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
 # ──────────────────────────────────────────────
 ax1.plot(w_valid, i_valid, 'r-', lw=1.2, label='Doubling Adding (32 streams)')
 ax1.plot(w_valid, i_alis,     'c-',  lw=1.2, label='SMART-G ALIS (no hist)')
-ax1.plot(w_valid, I,          'b-',  lw=1.2, label='SMART-G ALIS (hist + JAX)')
+ax1.plot(w_valid, stk_i,          'b-',  lw=1.2, label='SMART-G ALIS (hist + JAX)')
 ax1.fill_between(w_valid, lower[0], upper[0], facecolor='b', alpha=0.2,
                  label='95 % CI (hist)')
 ax1.set_ylabel('I_up (TOA)')
@@ -1448,7 +1446,7 @@ ax1.set_ylim(0, 0.02)
 # ── Bottom: relative difference vs DA reference
 # ───────────────────────────
 diff_alis = (i_alis - i_valid) / i_valid * 100
-diff_hist = (I      - i_valid) / i_valid * 100
+diff_hist = (stk_i      - i_valid) / i_valid * 100
 diff_hist_upper = (upper[0] - i_valid) / i_valid * 100
 diff_hist_lower = (lower[0] - i_valid) / i_valid * 100
 
@@ -1471,7 +1469,7 @@ plt.tight_layout()
 # dolp = |Q|/I (U ≈ 0 for this geometry)
 dolp_valid = np.abs(q_valid) / i_valid
 dolp_alis  = np.abs(q_alis) / i_alis
-dolp_hist  = np.abs(Q) / I
+dolp_hist  = np.abs(stk_q) / stk_i
 
 fig2, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
 
@@ -1480,7 +1478,7 @@ fig2, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
 axes[0].plot(w_valid, q_valid, 'r-', lw=1.2,
              label='Doubling Adding (32 streams)')
 axes[0].plot(w_valid, q_alis,  'c-',  lw=1.2, label='SMART-G ALIS (no hist)')
-axes[0].plot(w_valid, Q, 'b-', lw=1.2, label='SMART-G ALIS (hist + JAX)')
+axes[0].plot(w_valid, stk_q, 'b-', lw=1.2, label='SMART-G ALIS (hist + JAX)')
 axes[0].fill_between(w_valid, lower[1], upper[1], facecolor='b', alpha=0.2,
                      label='95 % CI (hist)')
 axes[0].set_ylabel('Q_up (TOA)')
@@ -1491,7 +1489,7 @@ axes[0].grid(True, alpha=0.3)
 # ── Panel 2: Q relative difference
 # ─────────────────────────────────────────
 diff_q_alis = (q_alis - q_valid) / np.abs(q_valid) * 100
-diff_q_hist = (Q      - q_valid) / np.abs(q_valid) * 100
+diff_q_hist = (stk_q      - q_valid) / np.abs(q_valid) * 100
 diff_q_hist_upper = (upper[1] - q_valid) / np.abs(q_valid) * 100
 diff_q_hist_lower = (lower[1] - q_valid) / np.abs(q_valid) * 100
 
