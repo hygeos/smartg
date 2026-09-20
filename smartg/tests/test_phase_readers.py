@@ -38,7 +38,9 @@ WC_NC = DIR_AUXDATA / "clouds" / "wc_sol.nc"
 PROFILE_DIMS = ("wavelength_phase", "z_phase", "nphamat", "theta_atm")
 
 
-def _file_grids(fname: Path) -> tuple[xr.Dataset, list[tuple[tuple[int, ...], NDArray[np.float64]]]]:
+def _file_grids(
+    fname: Path,
+) -> tuple[xr.Dataset, list[tuple[tuple[int, ...], NDArray[np.float64]]]]:
     """Return the distinct angle grids of a cdf file, sorted."""
     ds = xr.open_dataset(fname)
     theta, ntheta = ds["theta"].values, ds["ntheta"].values
@@ -108,7 +110,9 @@ def test_cdf_scalar_targets_keep_four_dimensions() -> None:
         {"z_rh_reff": 10.0},
     ],
 )
-def test_cdf_table_layout_refuses_the_profile_targets(kwargs: dict[str, Any]) -> None:
+def test_cdf_table_layout_refuses_the_profile_targets(
+    kwargs: dict[str, Any],
+) -> None:
     """Check that the table layout refuses a profile target."""
     with pytest.raises(ValueError, match="output_sg_ready"):
         read_phase_cdf(WC_CDF, output_sg_ready=False, **kwargs)
@@ -143,7 +147,10 @@ def test_cdf_n_theta_count_or_angles() -> None:
 @pytest.mark.parametrize(
     "fname, n_union", [(WC_CDF, 2818), (WASO_CDF, 38)]
 )
-def test_cdf_native_grid_reads_the_file_back_exactly(fname: Path, n_union: int) -> None:
+def test_cdf_native_grid_reads_the_file_back_exactly(
+    fname: Path,
+    n_union: int,
+) -> None:
     """Check that the native grid gives the file values back."""
     ds, grids = _file_grids(fname)
     table = read_phase_cdf(
@@ -274,7 +281,9 @@ def test_dispatcher_forwards_the_layout() -> None:
     assert profile.dims == PROFILE_DIMS
 
 
-def test_dispatcher_refuses_the_table_layout_of_a_dat_file(tmp_path: Path) -> None:
+def test_dispatcher_refuses_the_table_layout_of_a_dat_file(
+    tmp_path: Path,
+) -> None:
     """Check that a .dat file has no table layout to give."""
     theta = np.linspace(0.0, 180.0, 19)
     table = np.column_stack([theta, np.ones(19), np.zeros(19)])

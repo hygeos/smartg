@@ -98,7 +98,10 @@ def _monitor_peak_memory_enabled(config: pytest.Config) -> bool:
     ]
 
 
-def add_image_to_report(request: pytest.FixtureRequest, fp: io.BytesIO) -> None:
+def add_image_to_report(
+    request: pytest.FixtureRequest,
+    fp: io.BytesIO,
+) -> None:
     """Append image data to ``request.node.images``.
 
     Parameters
@@ -132,7 +135,11 @@ def add_extra_to_report(request: pytest.FixtureRequest, *args: Any) -> None:
     request.node.extras.insert(0, args)
 
 
-def add_link_to_report(request: pytest.FixtureRequest, path: str | Path, name: str = "Link") -> None:
+def add_link_to_report(
+    request: pytest.FixtureRequest,
+    path: str | Path,
+    name: str = "Link",
+) -> None:
     """Add a link to the local file ``path``.
 
     The link is made relative to the directory of the html output.
@@ -254,7 +261,10 @@ def pytest_html_results_table_header(cells: list[str]) -> None:
         cells.insert(2, "<th>Mem Peak (MiB)</th>")
 
 
-def pytest_html_results_table_row(report: pytest.TestReport, cells: list[str]) -> None:
+def pytest_html_results_table_row(
+    report: pytest.TestReport,
+    cells: list[str],
+) -> None:
     """Render per-test memory values in pytest-html results table."""
     if _pytest_config is None or not _monitor_peak_memory_enabled(
         _pytest_config
@@ -394,8 +404,8 @@ th, td {
 }
 
 /* Make filter span text white while keeping colored backgrounds */
-.filters .failed, .filters .passed, .filters .skipped, 
-.filters .error, .filters .xfailed, .filters .xpassed, 
+.filters .failed, .filters .passed, .filters .skipped,
+.filters .error, .filters .xfailed, .filters .xpassed,
 .filters .rerun, .filters .retried {
     color: var(--text-color) !important;
 }
@@ -419,7 +429,11 @@ a:hover {
 """
 
 
-def pytest_html_results_summary(prefix: list[str], summary: list[str], postfix: list[str]) -> None:
+def pytest_html_results_summary(
+    prefix: list[str],
+    summary: list[str],
+    postfix: list[str],
+) -> None:
     """Embed the dark theme CSS when dark_mode is enabled."""
     if _pytest_config is not None:
         dark_mode_enabled = {"true": True, "false": False}[

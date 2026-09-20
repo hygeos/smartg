@@ -80,7 +80,12 @@ def test_cloud(sg: Smartg, wavelength: Wavelength) -> None:
 @pytest.mark.parametrize(
     "surface", [RoughSurface(wind=2.0), LambSurface(alb=AlbedoCst(0.2))]
 )
-def test_atm_surf(sg: Smartg, wavelength: Wavelength, surface: LambSurface | RoughSurface, thv: float) -> None:
+def test_atm_surf(
+    sg: Smartg,
+    wavelength: Wavelength,
+    surface: LambSurface | RoughSurface,
+    thv: float,
+) -> None:
     """Run an aerosol atmosphere over each kind of surface."""
     atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)])
 

@@ -72,7 +72,11 @@ def _file_matrix(cloud: Cloud) -> xr.DataArray:
     )
 
 
-def _contains(grid: NDArray[np.floating], nodes: NDArray[np.floating], tol: float = 1e-6) -> np.bool_:
+def _contains(
+    grid: NDArray[np.floating],
+    nodes: NDArray[np.floating],
+    tol: float = 1e-6,
+) -> np.bool_:
     """Whether every node lies within *tol* degrees of a grid node."""
     i = np.clip(np.searchsorted(grid, nodes), 1, len(grid) - 1)
     return np.all(
@@ -312,7 +316,9 @@ def test_the_device_table_adopts_the_union_intact() -> None:
     ],
     ids=["DM-lobatto", "DM-trapezoid", "DM-simpson", "GT-lobatto"],
 )
-def test_truncation_accepts_the_union_grid(truncation: DMTrunc | GTTrunc) -> None:
+def test_truncation_accepts_the_union_grid(
+    truncation: DMTrunc | GTTrunc,
+) -> None:
     """The truncation comes back on the irregular union, unchanged.
 
     The union has 0.01 degree bins in the peak and 1 degree bins in
@@ -380,7 +386,11 @@ def _aer3d() -> Aer3D:
     )
 
 
-def _voxel(pro: xr.Dataset, grid3: Grid3D, cell: tuple[int, int, int]) -> NDArray[np.float64]:
+def _voxel(
+    pro: xr.Dataset,
+    grid3: Grid3D,
+    cell: tuple[int, int, int],
+) -> NDArray[np.float64]:
     """Return the phase matrix of one voxel of the profile."""
     icell = np.ravel_multi_index(cell, (grid3.NX, grid3.NY, grid3.NZ))
     k = int(pro["iopt_atm"].values[icell])

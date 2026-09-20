@@ -17,7 +17,10 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+def pytest_collection_modifyitems(
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
     """Leave the slow tier out unless it is explicitly asked for.
 
     A '-m "not slow"' in the addopts of pytest.ini would be the natural

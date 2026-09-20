@@ -36,7 +36,7 @@ def synthetic_reptran() -> Reptran:
 def test_reptran_band_parses_limits_and_falls_back(
     synthetic_reptran: Reptran,
 ) -> None:
-    """Parse channel limits and derive limits for an unstructured name."""
+    """Parse channel limits and derive them for an unstructured name."""
     parsed = ReptranBand(synthetic_reptran, 0)
     fallback = ReptranBand(synthetic_reptran, 1)
 
@@ -84,7 +84,9 @@ def test_reptran_selection_and_metadata(
         "synthetic channel",
     }
     np.testing.assert_allclose(weights[0].to_numpy(), [1.0, 0.5, 0.25, 0.75])
-    np.testing.assert_allclose(weights[3].to_numpy(), [200.0, 200.0, 200.0, 200.0])
+    np.testing.assert_allclose(
+        weights[3].to_numpy(), [200.0, 200.0, 200.0, 200.0]
+    )
 
 
 def test_reduce_reptran_uses_channel_weights(
@@ -92,7 +94,11 @@ def test_reduce_reptran_uses_channel_weights(
 ) -> None:
     """Reduce a spectral variable to one value per channel."""
     ibands = ReptranIbandList(
-        [internal for band in synthetic_reptran.bands() for internal in band.ibands()]
+        [
+            internal
+            for band in synthetic_reptran.bands()
+            for internal in band.ibands()
+        ]
     )
     dataset = xr.Dataset(
         {
@@ -113,5 +119,9 @@ def test_reduce_reptran_uses_channel_weights(
     reduced = reduce_reptran(dataset, ibands)
 
     assert list(reduced.data_vars) == ["I_test"]
-    np.testing.assert_allclose(reduced["I_test"].to_numpy(), [40.0 / 3.0, 37.5])
-    np.testing.assert_array_equal(reduced.wavelength.to_numpy(), [450.0, 650.0])
+    np.testing.assert_allclose(
+        reduced["I_test"].to_numpy(), [40.0 / 3.0, 37.5]
+    )
+    np.testing.assert_array_equal(
+        reduced.wavelength.to_numpy(), [450.0, 650.0]
+    )

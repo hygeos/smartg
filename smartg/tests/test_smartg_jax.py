@@ -90,7 +90,12 @@ def cleanup_after_each_test() -> Iterator[None]:
 @pytest.mark.parametrize("wmax", [350.0])
 @pytest.mark.parametrize("wmin", [320.0])
 def test_smartg_jax2(
-    n_wavelength_abs: int, wmin: float, wmax: float, request: pytest.FixtureRequest, n_photons: float = 5e4, max_hist: float = 1e6
+    n_wavelength_abs: int,
+    wmin: float,
+    wmax: float,
+    request: pytest.FixtureRequest,
+    n_photons: float = 5e4,
+    max_hist: float = 1e6,
 ) -> None:
     """Replay the histories of a run with jax, on the CPU."""
     alb_snow = AlbedoCst(0.6)
@@ -183,7 +188,8 @@ def test_smartg_jax2(
             wavelength_abs,
             stk_i,
             fmt1,
-            label=f"AOD@550: {aod:.1f}; NBPH={np.int64(n_photons):.0e}; NBHIST={int(max_hist):.0e}",
+            label=f"AOD@550: {aod:.1f}; NBPH={np.int64(n_photons):.0e}; "
+            f"NBHIST={int(max_hist):.0e}",
         )
         col = p[0].get_color()
         print(stk_i2, std)
@@ -201,7 +207,8 @@ def test_smartg_jax2(
             m0["I_up (TOA)"][:],
             marker="+",
             ls="",
-            label=f"AOD@550: {aod:.1f}; NBPH={np.int64(n_photons):.0e}; NO HIST",
+            label=f"AOD@550: {aod:.1f}; NBPH={np.int64(n_photons):.0e}; "
+            "NO HIST",
             color=p[0].get_color(),
         )
         plt.xlabel(r"$\lambda (nm)$")
@@ -213,10 +220,13 @@ def test_smartg_jax2(
     conftest.savefig(request)
 
 
-def test_validation_artdeco(request: pytest.FixtureRequest, n_photons: float = 5e5, valpath: Path = DIR_AUXDATA) -> None:
+def test_validation_artdeco(
+    request: pytest.FixtureRequest,
+    n_photons: float = 5e5,
+    valpath: Path = DIR_AUXDATA,
+) -> None:
     """Check SMART-G against the ARTDECO validation data."""
     typ = "desert"  # tau=0.25
-    ####################""""""
     fgas = Path(valpath) / "validation" / f"cTauGas_ray_{typ}_O2.dat"
     gas_valid = diff1(np.loadtxt(fgas, skiprows=7)[:, 1:].T, axis=1)
     z_valid = np.loadtxt(fgas, skiprows=7)[:, 0]
@@ -229,7 +239,9 @@ def test_validation_artdeco(request: pytest.FixtureRequest, n_photons: float = 5
     aer_sca_valid = diff1(np.loadtxt(faer_sca, skiprows=7)[:, 1:].T, axis=1)
     # aerosols phase matrix import
     faer_phase = Path(valpath) / "validation" / f"phasemat_ray_{typ}_O2.dat"
-    n_theta = int(np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int))
+    n_theta = int(
+        np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int)
+    )
     wavelength_phase = []
     npf = 3
     data = np.zeros((npf, 1, n_theta, 5), dtype=np.float32)
@@ -363,7 +375,8 @@ def test_validation_artdeco(request: pytest.FixtureRequest, n_photons: float = 5
     #####################
     i_valid = data_valid[:, 1]
 
-    # Mask for "significant" reference values where relative error is meaningful
+    # Mask for "significant" reference values, where the relative
+    # error is meaningful
     sig = np.abs(i_valid) > 1e-3
 
     # --- no-hist ---

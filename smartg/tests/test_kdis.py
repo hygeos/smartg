@@ -60,7 +60,7 @@ def test_reduce_kdis_uses_channel_weights() -> None:
 
 
 def test_kdis_emission_returns_xarray_data_array() -> None:
-    """Calculate KDIS emission using xarray coordinates and dimensions."""
+    """Calculate the KDIS emission from xarray coordinates and dims."""
     ibands = KdisIbandList(
         [
             _iband(

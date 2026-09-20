@@ -38,7 +38,7 @@ def test_pycuda() -> None:
             drv.Out(dest), drv.In(a), drv.In(b),
             block=(400, 1, 1))
 
-    np.testing.assert_allclose(dest-a*b, 0)
+    np.testing.assert_allclose(dest - a * b, 0)
     print('Used', pycuda.autoinit.device.name())
 
 
@@ -57,5 +57,5 @@ def test_atomic_add() -> None:
     mykernel = mod.get_function("mykernel")
     a = gpuzeros(1, dtype=np.int32)  # type: ignore[arg-type]
     mykernel(a, block=(256, 1, 1), grid=(256, 1, 1))
-    assert a == 256*256
+    assert a == 256 * 256
     print('Used', a, pycuda.autoinit.device.name())

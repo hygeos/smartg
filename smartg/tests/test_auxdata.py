@@ -140,7 +140,11 @@ class FakeSource:
 class FakeResponse(io.BytesIO):
     """What the fake urlopen returns."""
 
-    def __init__(self, body: bytes, headers: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        body: bytes,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         super().__init__(body)
         self.headers = Message()
         for key, value in (headers or {}).items():
@@ -209,7 +213,7 @@ def make_targz(path: Path, names: dict[str, bytes]) -> None:
             tar.addfile(info, io.BytesIO(content))
 
 
-# -- registry, parsing, manifest ----------------------------------------
+# -- registry, parsing, manifest ---------------------------------------
 
 
 def test_registry_consistency() -> None:
@@ -272,7 +276,10 @@ def test_version_from_headers() -> None:
     assert auxdata._version_from_headers(Message()).kind == "unknown"
 
 
-def test_manifest_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_manifest_roundtrip(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Check that a manifest survives a save and a load unchanged."""
     path = tmp_path / ".smartg_auxdata.json"
     assert Manifest.load(path).entries == {}
@@ -319,10 +326,14 @@ def test_select(aux: AuxData) -> None:
         aux.select("nope")
 
 
-# -- status -------------------------------------------------------------
+# -- status ------------------------------------------------------------
 
 
-def test_status_logic(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
+def test_status_logic(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+) -> None:
     """Check the status each combination of local and remote gives."""
     one, prim, fall = sources["a"], sources["b_primary"], sources["b_fallback"]
 
@@ -387,7 +398,12 @@ def test_status_logic(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Pa
     assert one.fetch_calls == prim.fetch_calls == fall.fetch_calls == 0
 
 
-def test_check_update_prints_table(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_check_update_prints_table(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Check the table and the repr that check_update produces."""
     (tmp_path / "alpha").mkdir()
     aux.manifest.set("a", entry_for(sources["a"]))
@@ -403,9 +419,13 @@ def test_check_update_prints_table(aux: AuxData, sources: dict[str, FakeSource],
         "source", "/", "note",
     ]
     assert re.search(
-        r"^a +up to date +2026-01-03 10:00 +2026-01-02 00:00 +one", out, re.MULTILINE
+        r"^a +up to date +2026-01-03 10:00 +2026-01-02 00:00 +one",
+        out,
+        re.MULTILINE,
     )
-    assert re.search(r"^b +missing +- +2026-01-02 00:00 +prim", out, re.MULTILINE)
+    assert re.search(
+        r"^b +missing +- +2026-01-02 00:00 +prim", out, re.MULTILINE
+    )
     assert "update() would download: b" in out
 
     (tmp_path / "beta").mkdir()
@@ -414,10 +434,15 @@ def test_check_update_prints_table(aux: AuxData, sources: dict[str, FakeSource],
     assert "Everything is up to date." in capsys.readouterr().out
 
 
-# -- download and update ------------------------------------------------
+# -- download and update -----------------------------------------------
 
 
-def test_download_skips_existing(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_download_skips_existing(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Check that an up to date dataset is not downloaded again."""
     one = sources["a"]
     aux.download("a")
@@ -437,7 +462,11 @@ def test_download_skips_existing(aux: AuxData, sources: dict[str, FakeSource], t
     assert one.fetch_calls == 2
 
 
-def test_update_replaces_directory(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
+def test_update_replaces_directory(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+) -> None:
     """Check that an update replaces the directory and its manifest."""
     one = sources["a"]
     aux.download("a")
@@ -458,7 +487,11 @@ def test_update_replaces_directory(aux: AuxData, sources: dict[str, FakeSource],
     assert one.fetch_calls == 3
 
 
-def test_leftovers_cleaned(aux: AuxData, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_leftovers_cleaned(
+    aux: AuxData,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Check that a killed run leaves no staging directory."""
     stage = tmp_path / ".alpha.tmp-abc"
     stage.mkdir()
@@ -470,7 +503,11 @@ def test_leftovers_cleaned(aux: AuxData, tmp_path: Path, capsys: pytest.CaptureF
     assert "interrupted run" in capsys.readouterr().out
 
 
-def test_failures_collected_and_raised(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
+def test_failures_collected_and_raised(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+) -> None:
     """Check that one failing dataset does not stop the others."""
     sources["a"].fetch_error = ConnectionError("boom")
     with pytest.raises(AuxDataDownloadError) as info:
@@ -484,7 +521,11 @@ def test_failures_collected_and_raised(aux: AuxData, sources: dict[str, FakeSour
     assert not list(tmp_path.glob(".alpha.*"))
 
 
-def test_fallback_source_used(aux: AuxData, sources: dict[str, FakeSource], capsys: pytest.CaptureFixture[str]) -> None:
+def test_fallback_source_used(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Check that the fallback source is tried when the first fails."""
     sources["b_primary"].fetch_error = urllib.error.HTTPError(
         "http://x", 500, "Internal Server Error", Message(), None
@@ -495,7 +536,11 @@ def test_fallback_source_used(aux: AuxData, sources: dict[str, FakeSource], caps
     assert "trying the fallback fall" in capsys.readouterr().out
 
 
-def test_wrong_top_level_dir(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
+def test_wrong_top_level_dir(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+) -> None:
     """Check that an archive without the expected folder is refused."""
     one = sources["a"]
     aux.download("a")
@@ -509,7 +554,7 @@ def test_wrong_top_level_dir(aux: AuxData, sources: dict[str, FakeSource], tmp_p
     assert not list(tmp_path.glob(".alpha.*"))
 
 
-# -- local files --------------------------------------------------------
+# -- local files -------------------------------------------------------
 
 
 def touch(path: Path, content: str, mtime_ns: int | None = None) -> None:
@@ -524,7 +569,11 @@ def touch(path: Path, content: str, mtime_ns: int | None = None) -> None:
     os.utime(path, ns=(mtime_ns, mtime_ns))
 
 
-def test_manifest_records_files(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
+def test_manifest_records_files(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+) -> None:
     """Check that the manifest records each file's size and hash."""
     sources["a"].files = {"file.txt": "v1", "sub/other.txt": "other"}
     aux.download("a")
@@ -540,7 +589,11 @@ def test_manifest_records_files(aux: AuxData, sources: dict[str, FakeSource], tm
     assert Manifest.load(tmp_path / auxdata.MANIFEST_NAME).get("a") == entry
 
 
-def test_verify(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
+def test_verify(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+) -> None:
     """Check that verify reports modified, missing and extra files."""
     sources["a"].files = {"file.txt": "v1", "sub/other.txt": "other"}
     unrecorded = FileCheck(recorded=False)
@@ -578,7 +631,12 @@ def test_verify(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) ->
     assert "file.txt" not in aux.verify("a")["a"].modified
 
 
-def test_status_modified_and_listing(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_status_modified_and_listing(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Check the modified status and what the listing then prints."""
     aux.download("a")
     root = tmp_path / "alpha"
@@ -615,7 +673,13 @@ def test_status_modified_and_listing(aux: AuxData, sources: dict[str, FakeSource
     assert not (root / "extra.txt").exists()
 
 
-def test_restore(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+def test_restore(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Check that restore fetches back the files that changed."""
     one = sources["a"]
     one.files = {"file.txt": "v1", "sub/other.txt": "other"}
@@ -661,8 +725,12 @@ def test_restore(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path, c
     assert "No file to restore." in capsys.readouterr().out
 
 
-def test_restore_skips_outdated_and_unreachable(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path,
-                                                capsys: pytest.CaptureFixture[str]) -> None:
+def test_restore_skips_outdated_and_unreachable(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """Check that restore gives up on an outdated or absent dataset."""
     one = sources["a"]
     aux.download("a")
@@ -678,7 +746,11 @@ def test_restore_skips_outdated_and_unreachable(aux: AuxData, sources: dict[str,
     assert one.fetch_files_calls == []
 
 
-def test_restore_failures(aux: AuxData, sources: dict[str, FakeSource], tmp_path: Path) -> None:
+def test_restore_failures(
+    aux: AuxData,
+    sources: dict[str, FakeSource],
+    tmp_path: Path,
+) -> None:
     """Check what restore reports when the fetch itself fails."""
     one = sources["a"]
     aux.download("a")
@@ -698,7 +770,7 @@ def test_restore_failures(aux: AuxData, sources: dict[str, FakeSource], tmp_path
     assert (tmp_path / "alpha" / "file.txt").read_text() == "v2"
 
 
-# -- archives -----------------------------------------------------------
+# -- archives ----------------------------------------------------------
 
 
 def test_http_archive_source_targz(tmp_path: Path) -> None:
@@ -728,7 +800,10 @@ def test_http_archive_source_targz(tmp_path: Path) -> None:
     assert sorted(p.name for p in single.iterdir()) == ["sub"]
 
 
-def test_nextcloud_source_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_nextcloud_source_end_to_end(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Check the Nextcloud source end to end, from PROPFIND to files."""
     zip_path = tmp_path / "share.zip"
     make_zip(zip_path, {
@@ -739,7 +814,10 @@ def test_nextcloud_source_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyP
     zip_bytes = zip_path.read_bytes()
     requests: list[urllib.request.Request] = []
 
-    def fake_urlopen(request: urllib.request.Request, timeout: float) -> FakeResponse:
+    def fake_urlopen(
+        request: urllib.request.Request,
+        timeout: float,
+    ) -> FakeResponse:
         requests.append(request)
         if request.get_method() == "PROPFIND":
             return FakeResponse(PROPFIND_XML)
@@ -823,7 +901,7 @@ def test_extract_archive_sniffs_error_page(tmp_path: Path) -> None:
         auxdata._extract_archive(page, tmp_path)
 
 
-# -- retries --------------------------------------------------------------
+# -- retries -----------------------------------------------------------
 
 
 def test_retry_transient_then_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -868,7 +946,10 @@ def test_head_fallback_to_get(monkeypatch: pytest.MonkeyPatch) -> None:
     """Check that a refused HEAD falls back to a GET."""
     methods = []
 
-    def no_head(request: urllib.request.Request, timeout: float) -> FakeResponse:
+    def no_head(
+        request: urllib.request.Request,
+        timeout: float,
+    ) -> FakeResponse:
         methods.append(request.get_method())
         if request.get_method() == "HEAD":
             raise urllib.error.HTTPError(
@@ -882,7 +963,7 @@ def test_head_fallback_to_get(monkeypatch: pytest.MonkeyPatch) -> None:
     assert methods == ["HEAD", "GET"]
 
 
-# -- live -----------------------------------------------------------------
+# -- live --------------------------------------------------------------
 
 
 @pytest.mark.slow

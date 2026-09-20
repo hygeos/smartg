@@ -18,6 +18,10 @@ from smartg.smartg import _calc_phase_host
 from smartg.typing import NumericArrayLike, ThetaLike
 
 N_TEST = (2, 3, 9, 721, 1801)
+# what _psample returns: angles, bin indices, weights and layout
+PSample = tuple[
+    NDArray[np.float32], NDArray[np.int32], NDArray[np.float32], list[int]
+]
 
 
 def _peaked_phase(theta_deg: NDArray[np.floating]) -> NDArray[np.float64]:
@@ -104,7 +108,12 @@ def test_theta_grid_rejects_bad_input(kwargs: dict[str, Any]) -> None:
 # --------------------------------------------------------------------
 
 
-def _probe(theta: NDArray[np.floating], n: int, mode: int = 0, ang: NDArray[np.floating] | None = None) -> tuple[NDArray[np.int32], NDArray[np.float32]]:
+def _probe(
+    theta: NDArray[np.floating],
+    n: int,
+    mode: int = 0,
+    ang: NDArray[np.floating] | None = None,
+) -> tuple[NDArray[np.int32], NDArray[np.float32]]:
     """Run the device ``aIndex`` over *theta*, return (iang, weight)."""
     import pycuda.autoinit  # noqa: F401
     import pycuda.driver as cuda
@@ -304,7 +313,10 @@ def _intensity(table: NDArray[Any]) -> NDArray[Any]:
     return table["a_P11"] + table["a_P22"] + 2.0 * table["a_P12"]
 
 
-def _built_on(grid_deg: NDArray[np.floating], profile: xr.Dataset) -> tuple[NDArray[Any], NDArray[Any]]:
+def _built_on(
+    grid_deg: NDArray[np.floating],
+    profile: xr.Dataset,
+) -> tuple[NDArray[Any], NDArray[Any]]:
     """Return the particle row of both tables on *grid_deg*."""
     phase, cdf = _calc_phase_host(
         profile, len(grid_deg), 0.0279, "atm",
@@ -313,7 +325,10 @@ def _built_on(grid_deg: NDArray[np.floating], profile: xr.Dataset) -> tuple[NDAr
     return phase[2], cdf[2]
 
 
-def _table_on(grid_deg: NDArray[np.floating], profile: xr.Dataset) -> NDArray[Any]:
+def _table_on(
+    grid_deg: NDArray[np.floating],
+    profile: xr.Dataset,
+) -> NDArray[Any]:
     """Return the particle row of the phase matrix table."""
     return _built_on(grid_deg, profile)[0]
 
@@ -443,7 +458,13 @@ def test_clustered_grid_fixes_the_forward_peak_radiance() -> None:
 # --------------------------------------------------------------------
 
 
-def _psample(u: NumericArrayLike, table: NDArray[Any], cdf: NDArray[Any], grid_rad: NDArray[np.floating], ipha: int = 0) -> tuple[NDArray[np.float32], NDArray[np.int32], NDArray[np.float32], list[int]]:
+def _psample(
+    u: NumericArrayLike,
+    table: NDArray[Any],
+    cdf: NDArray[Any],
+    grid_rad: NDArray[np.floating],
+    ipha: int = 0,
+) -> PSample:
     """Run the device ``pSample`` over *u* on one uploaded table.
 
     Returns the drawn angles, the bin index and weight the sampler

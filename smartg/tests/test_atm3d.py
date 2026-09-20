@@ -31,6 +31,10 @@ from smartg.grid3d import Grid3D
 
 Scene = tuple[Grid3D, Cloud3D, Cloud3D, xr.Dataset]
 AerScene = tuple[Grid3D, Cloud3D, Aer3D, xr.Dataset]
+# per cell ext, ssa and phase matrices, from _expected
+Expected = tuple[
+    NDArray[np.float64], NDArray[np.float64], list[NDArray[np.float64]]
+]
 
 WAV = np.array([550.0])
 NTH = 181
@@ -76,7 +80,10 @@ def _build_clouds() -> tuple[Cloud3D, Cloud3D]:
     return cld1, cld2
 
 
-def _build_profile(grid3: Grid3D, comp_3d: list[Cloud3D | Aer3D]) -> xr.Dataset:
+def _build_profile(
+    grid3: Grid3D,
+    comp_3d: list[Cloud3D | Aer3D],
+) -> xr.Dataset:
     # the IPRT C2 "without atmosphere" configuration: no Rayleigh
     # scattering and no gaseous absorption
     """Build the 3D profile of the given components."""
@@ -99,7 +106,11 @@ def scene() -> Scene:
     return grid3, cld1, cld2, pro
 
 
-def _voxel_props(pro: xr.Dataset, grid3: Grid3D, cell: tuple[int, int, int]) -> tuple[float, float, NDArray[np.float64]]:
+def _voxel_props(
+    pro: xr.Dataset,
+    grid3: Grid3D,
+    cell: tuple[int, int, int],
+) -> tuple[float, float, NDArray[np.float64]]:
     """Return the ext, ssa and phase matrix of one voxel."""
     icell = np.ravel_multi_index(
         cell, (grid3.NX, grid3.NY, grid3.NZ)
@@ -112,7 +123,9 @@ def _voxel_props(pro: xr.Dataset, grid3: Grid3D, cell: tuple[int, int, int]) -> 
     return ext, ssa, pha
 
 
-def _expected(cld: Cloud3D | Aer3D) -> tuple[NDArray[np.float64], NDArray[np.float64], list[NDArray[np.float64]]]:
+def _expected(
+    cld: Cloud3D | Aer3D,
+) -> Expected:
     """Return the per cell ext, ssa and phase matrices."""
     ext = cld.get_ext(WAV)[0]
     ssa = cld.get_ssa(WAV)[0]

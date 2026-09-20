@@ -23,8 +23,12 @@ from smartg.surface import RoughSurface
 from smartg.truncation import DMTrunc, GTTrunc
 from smartg.water import Hydrosol, Water1D, WaterRw
 
-SmartgRun = tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]
-RwRun = list[tuple[dict[str, NDArray[np.float64]], dict[str, NDArray[np.float64]]]]
+SmartgRun = tuple[
+    NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]
+]
+RwRun = list[
+    tuple[dict[str, NDArray[np.float64]], dict[str, NDArray[np.float64]]]
+]
 
 # -------------------------------------------------
 # Logging
@@ -248,7 +252,11 @@ def _surf() -> RoughSurface:
 
 
 @pytest.fixture(scope="module")
-def _smartg_run(_water_iop: Water1D, _atm: Atm1D, _surf: RoughSurface) -> SmartgRun:
+def _smartg_run(
+    _water_iop: Water1D,
+    _atm: Atm1D,
+    _surf: RoughSurface,
+) -> SmartgRun:
     """Run SMART-G and return R = Eu/Ed, Lu/Ed and stdev.
 
     Two runs are performed:
@@ -328,7 +336,11 @@ def _smartg_run(_water_iop: Water1D, _atm: Atm1D, _surf: RoughSurface) -> Smartg
 MAX_DIFF_PCT = 1.0  # maximum allowed diff in %
 
 
-def test_hydrolight(hl_pw: xr.Dataset, hl_pw_rrs: xr.Dataset, _smartg_run: SmartgRun) -> None:
+def test_hydrolight(
+    hl_pw: xr.Dataset,
+    hl_pw_rrs: xr.Dataset,
+    _smartg_run: SmartgRun,
+) -> None:
     """SMART-G must agree with HydroLight within criteria.
 
     Eu/Ed: relative difference < 1.0%.
@@ -539,7 +551,10 @@ def test_atm_rayleigh_is_purely_scattering(_atm_rayleigh: Atm1D) -> None:
 
 
 @pytest.mark.parametrize("stokes", STOKES)
-def test_waterrw_simulation_matches_water1d(_rw_vs_w1d_run: RwRun, stokes: str) -> None:
+def test_waterrw_simulation_matches_water1d(
+    _rw_vs_w1d_run: RwRun,
+    stokes: str,
+) -> None:
     """Both models must give the same Stokes vector within MC noise.
 
     The two runs are independent, so the difference is compared to the

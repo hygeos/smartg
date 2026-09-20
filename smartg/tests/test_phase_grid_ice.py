@@ -190,7 +190,13 @@ def atm_on(name: str) -> xr.Dataset:
     ).calc(WAVELENGTH, n_theta=grid_of(name))
 
 
-def run(sg: Smartg, name: str, n_photons: float = N_PHOTONS, n_loop: float = N_LOOP, seed: int = SEED) -> tuple[dict[str, NDArray[np.float64]], dict[str, NDArray[np.float64]]]:
+def run(
+    sg: Smartg,
+    name: str,
+    n_photons: float = N_PHOTONS,
+    n_loop: float = N_LOOP,
+    seed: int = SEED,
+) -> tuple[dict[str, NDArray[np.float64]], dict[str, NDArray[np.float64]]]:
     """Run the case, return its radiances and their sigma.
 
     Two dicts keyed like REF_18001, each value in the order of VZA.
