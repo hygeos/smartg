@@ -1,3 +1,9 @@
+"""Tests of the OPAC aerosols against reference values.
+
+Each test builds an AerOPAC, computes its profile and compares the
+optical thickness and the single scattering albedo at 400 and 700
+nm with the reference values.
+"""
 import logging
 from pathlib import Path
 
@@ -84,6 +90,7 @@ logger.addHandler(file_handler)
 
 @pytest.mark.parametrize("mix", MIXTURES)
 def test_aer_mixtures(request, mix):
+    """Check one OPAC mixture at 400 and 700 nm."""
     wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC(
         mix,
@@ -207,6 +214,7 @@ def test_aer_mixtures(request, mix):
 
 @pytest.mark.parametrize("spe", SPECIES)
 def test_aer_species(request, spe):
+    """Check one OPAC species at 400 and 700 nm."""
     wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC(
         spe,
@@ -329,6 +337,7 @@ def test_aer_species(request, spe):
 
 
 def test_desert_free_stra(request):
+    """Check the desert mixture with free and stratospheric layers."""
     wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC("desert", 1.0, 550.0)
     pro = Atm1D(
@@ -447,6 +456,7 @@ def test_desert_free_stra(request):
 
 
 def test_dd_cc_mixture(request):
+    """Check a desert and a continental clean aerosol together."""
     wavelengths = np.array([400.0, 700.0])
     pfgrid = [100.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]
     aer1 = AerOPAC(
@@ -584,6 +594,7 @@ def test_dd_cc_mixture(request):
 
 
 def test_desert_one_wavelength(request):
+    """Check the desert mixture at a single wavelength."""
     wavelength = 400.0
     aer = AerOPAC(
         "desert",

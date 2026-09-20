@@ -1,3 +1,8 @@
+"""Execute the demo notebooks through papermill.
+
+They are tracked as jupytext percent scripts, so each one is read
+as a notebook first, and the executed copies land in tests/logs.
+"""
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -11,8 +16,7 @@ ROOTPATH = Path(__file__).resolve().parent.parent.parent
 
 
 def execute_notebook(nb_path, nb_output_path):
-    """
-    Execute a notebook tracked as a jupytext percent script
+    """Execute a notebook tracked as a jupytext percent script.
 
     The scripts hold no kernelspec, hence the explicit kernel name.
     """
@@ -25,9 +29,7 @@ def execute_notebook(nb_path, nb_output_path):
 
 
 def test_demo_notebook():
-    """
-    Execute the demo notebook
-    """
+    """Execute the demo notebook."""
     print("\nTesting demo_notebook.py...")
     nb_path = ROOTPATH / "smartg" / "notebooks" / "demo_notebook.py"
     nb_output_path = (
@@ -37,9 +39,7 @@ def test_demo_notebook():
 
 
 def test_demo_notebook_objects():
-    """
-    Execute the demo notebook objects
-    """
+    """Execute the 3D objects demo notebook."""
     print("\nTesting demo_notebook_objects.py...")
     nb_path = ROOTPATH / "smartg" / "notebooks" / "demo_notebook_objects.py"
     nb_output_path = (
@@ -56,9 +56,7 @@ def test_demo_notebook_objects():
     SKIP, reason="cannot test this since the jax package is not installed."
 )
 def test_demo_notebook_photons_histories():
-    """
-    Execute the photon histories demo notebook
-    """
+    """Execute the photon histories demo notebook."""
     print("\nTesting demo_notebook_photons_histories.py...")
     nb_path = (
         ROOTPATH
