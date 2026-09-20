@@ -895,7 +895,7 @@ class AerOPAC(object):
         wavelength_tabulated = self.ds_mix.coords["wav"].values
         n_wavelength = len(wavelength)
 
-        P_tot = 0.0
+        p_tot = 0.0
         dssa = 0.0
         for icont, cont in enumerate(self.vert_content):
             hor = self.hum_or_reff
@@ -1024,7 +1024,7 @@ class AerOPAC(object):
                 left=0,
                 right=nhor - 1,
             )
-            P_data = cast(
+            p_data = cast(
                 NDArray,
                 vec_float_indexing(
                     np.ascontiguousarray(
@@ -1035,43 +1035,43 @@ class AerOPAC(object):
             )
             # Result: (nz, n_wavelength, stk, n_theta) -> transpose
             # to (n_wavelength, nz, stk, n_theta)
-            P_data = np.ascontiguousarray(P_data.transpose(1, 0, 2, 3)).astype(
+            p_data = np.ascontiguousarray(p_data.transpose(1, 0, 2, 3)).astype(
                 np.float32
             )
             if len(hum_or_reff_val) == 1:
-                P_data = np.broadcast_to(
-                    P_data,
-                    (n_wavelength, nz_phase, P_data.shape[2], P_data.shape[3]),
+                p_data = np.broadcast_to(
+                    p_data,
+                    (n_wavelength, nz_phase, p_data.shape[2], p_data.shape[3]),
                 ).copy()
 
             # Expand 4 stk to 6 if needed
             if nphamat == 4:
-                P_data_6 = np.zeros(
+                p_data_6 = np.zeros(
                     (n_wavelength, nz_phase, nphamat_, n_theta),
                     dtype="float32",
                 )
-                P_data_6[:, :, 0:4, :] = P_data
+                p_data_6[:, :, 0:4, :] = p_data
                 # F22 = F11 ; F44 = F33
-                P_data_6[:, :, 4, :] = P_data[:, :, 0, :].copy()
-                P_data_6[:, :, 5, :] = P_data[:, :, 2, :].copy()
-                P_data = P_data_6
+                p_data_6[:, :, 4, :] = p_data[:, :, 0, :].copy()
+                p_data_6[:, :, 5, :] = p_data[:, :, 2, :].copy()
+                p_data = p_data_6
             elif nphamat == 6:
                 pass
             else:
-                P_data_6 = np.zeros(
+                p_data_6 = np.zeros(
                     (n_wavelength, nz_phase, nphamat_, n_theta),
                     dtype="float32",
                 )
-                P_data_6[:, :, 0:nphamat, :] = P_data
-                P_data = P_data_6
+                p_data_6[:, :, 0:nphamat, :] = p_data
+                p_data = p_data_6
 
-            P = xr.DataArray(
-                P_data,
+            p = xr.DataArray(
+                p_data,
                 dims=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
                 coords={
                     "wavelength_phase": wavelength,
-                    "z_phase": np.arange(P_data.shape[1]),
-                    "nphamat": np.arange(P_data.shape[2]),
+                    "z_phase": np.arange(p_data.shape[1]),
+                    "nphamat": np.arange(p_data.shape[2]),
                     "theta_atm": theta,
                 },
             )
@@ -1124,14 +1124,14 @@ class AerOPAC(object):
             dssa_ = dtau_ * ssa_  # NLAM, ALTITUDE
             dssa_ = dssa_[:, 1:, None, None]
             dssa += dssa_
-            P_tot += P * dssa_
+            p_tot += p * dssa_
 
-        P_tot = cast(xr.DataArray, P_tot)
+        p_tot = cast(xr.DataArray, p_tot)
         with np.errstate(divide="ignore", invalid="ignore"):
-            P_tot.data /= dssa
-        P_tot.data[np.isnan(P_tot.data)] = 0.0
-        P_tot = P_tot.assign_coords(z_phase=z[1:])
-        return P_tot
+            p_tot.data /= dssa
+        p_tot.data[np.isnan(p_tot.data)] = 0.0
+        p_tot = p_tot.assign_coords(z_phase=z[1:])
+        return p_tot
 
     @staticmethod
     def list() -> list[str]:
@@ -2263,32 +2263,32 @@ def _read_i3rc_field(
     # Read only the needed information, the two first rows.
     # Be careful ! The second row have a greater dimension than the
     # first one. Then -> two steps of reading.
-    contentA = pd.read_csv(
+    content_a = pd.read_csv(
         fname, skiprows=1, nrows=1, header=None, sep=r"\s+", dtype=float
     ).values
-    contentB = pd.read_csv(
+    content_b = pd.read_csv(
         fname, skiprows=2, nrows=1, header=None, sep=r"\s+", dtype=float
     ).values
 
     # If there are empty dimensions remove them
-    contentA = np.squeeze(contentA)
-    contentB = np.squeeze(contentB)
+    content_a = np.squeeze(content_a)
+    content_b = np.squeeze(content_b)
 
     # Number of cells in x and y axes
-    Nx = int(contentA[0])
-    Ny = int(contentA[1])
+    nx = int(content_a[0])
+    ny = int(content_a[1])
 
     # Cell sizes in x and y axes
-    Dx = contentB[0]
-    Dy = contentB[1]
+    dx = content_b[0]
+    dy = content_b[1]
 
     # Create x and y grid
-    xgrid = create_1d_grid(Nx, Dx, loc=loc_xgrid)
-    ygrid = create_1d_grid(Ny, Dy, loc=loc_ygrid)
+    xgrid = create_1d_grid(nx, dx, loc=loc_xgrid)
+    ygrid = create_1d_grid(ny, dy, loc=loc_ygrid)
 
     # Grid in the z axis can be directly read from the file
-    zgrid = contentB[2:]
-    Nz = zgrid.size - 1
+    zgrid = content_b[2:]
+    nz = zgrid.size - 1
 
     content = pd.read_csv(
         fname, skiprows=3, header=None, sep=r"\s+", dtype=float
@@ -2296,7 +2296,7 @@ def _read_i3rc_field(
     cell_indices = content[:, :3].astype(np.int32) - 1  # 1-based indices
     ix, iy, iz = cell_indices[:, 0], cell_indices[:, 1], cell_indices[:, 2]
 
-    ext = np.zeros((Nz, Ny, Nx), dtype=np.float64)
+    ext = np.zeros((nz, ny, nx), dtype=np.float64)
     param = np.zeros_like(ext)
     ext[iz, iy, ix] = content[:, 3]
     param[iz, iy, ix] = content[:, 4]
@@ -2550,20 +2550,20 @@ class Atm1D(Atmosphere):
         #
         # read gaseous acs
         #
-        O3_acs_path = Path(o3_acs)
-        if O3_acs_path.parent == Path("."):
-            O3_acs_path = DIR_AUXDATA / "acs" / O3_acs_path.name
-        if not O3_acs_path.exists() and O3_acs_path.suffix != ".nc":
-            O3_acs_path = O3_acs_path.with_name(O3_acs_path.name + ".nc")
-        self.acs_o3 = xr.open_dataset(O3_acs_path)
+        o3_acs_path = Path(o3_acs)
+        if o3_acs_path.parent == Path("."):
+            o3_acs_path = DIR_AUXDATA / "acs" / o3_acs_path.name
+        if not o3_acs_path.exists() and o3_acs_path.suffix != ".nc":
+            o3_acs_path = o3_acs_path.with_name(o3_acs_path.name + ".nc")
+        self.acs_o3 = xr.open_dataset(o3_acs_path)
         self.acs_o3 = self.acs_o3.rename({"wav": "wavelength"})
 
-        NO2_acs_path = Path(no2_acs)
-        if NO2_acs_path.parent == Path("."):
-            NO2_acs_path = DIR_AUXDATA / "acs" / NO2_acs_path.name
-        if not NO2_acs_path.exists() and NO2_acs_path.suffix != ".nc":
-            NO2_acs_path = NO2_acs_path.with_name(NO2_acs_path.name + ".nc")
-        self.acs_no2 = xr.open_dataset(NO2_acs_path)
+        no2_acs_path = Path(no2_acs)
+        if no2_acs_path.parent == Path("."):
+            no2_acs_path = DIR_AUXDATA / "acs" / no2_acs_path.name
+        if not no2_acs_path.exists() and no2_acs_path.suffix != ".nc":
+            no2_acs_path = no2_acs_path.with_name(no2_acs_path.name + ".nc")
+        self.acs_no2 = xr.open_dataset(no2_acs_path)
         self.acs_no2 = self.acs_no2.rename({"wav": "wavelength"})
 
         #
@@ -4009,9 +4009,9 @@ class _Atm3DBackend(Atm1D):
         # dummy zeroed profile over the optical-property index axis
         #
         grid = np.asarray(grid)
-        Nopt = grid.size
+        n_opt = grid.size
         prof = ProfileBase(None)
-        prof.z = np.arange(Nopt, dtype=np.float32)[::-1]
+        prof.z = np.arange(n_opt, dtype=np.float32)[::-1]
         attr_names = [
             "p",
             "t",
@@ -4028,26 +4028,26 @@ class _Atm3DBackend(Atm1D):
             "dens_so2",
         ]
         for attr_name in attr_names:
-            setattr(prof, attr_name, np.zeros(Nopt, dtype=np.float32))
+            setattr(prof, attr_name, np.zeros(n_opt, dtype=np.float32))
         prof.rh_cst = None
 
         #
         # read gaseous acs
         #
-        O3_acs_path = Path(o3_acs)
-        if O3_acs_path.parent == Path("."):
-            O3_acs_path = DIR_AUXDATA / "acs" / O3_acs_path.name
-        if not O3_acs_path.exists() and O3_acs_path.suffix != ".nc":
-            O3_acs_path = O3_acs_path.with_name(O3_acs_path.name + ".nc")
-        self.acs_o3 = xr.open_dataset(O3_acs_path)
+        o3_acs_path = Path(o3_acs)
+        if o3_acs_path.parent == Path("."):
+            o3_acs_path = DIR_AUXDATA / "acs" / o3_acs_path.name
+        if not o3_acs_path.exists() and o3_acs_path.suffix != ".nc":
+            o3_acs_path = o3_acs_path.with_name(o3_acs_path.name + ".nc")
+        self.acs_o3 = xr.open_dataset(o3_acs_path)
         self.acs_o3 = self.acs_o3.rename({"wav": "wavelength"})
 
-        NO2_acs_path = Path(no2_acs)
-        if NO2_acs_path.parent == Path("."):
-            NO2_acs_path = DIR_AUXDATA / "acs" / NO2_acs_path.name
-        if not NO2_acs_path.exists() and NO2_acs_path.suffix != ".nc":
-            NO2_acs_path = NO2_acs_path.with_name(NO2_acs_path.name + ".nc")
-        self.acs_no2 = xr.open_dataset(NO2_acs_path)
+        no2_acs_path = Path(no2_acs)
+        if no2_acs_path.parent == Path("."):
+            no2_acs_path = DIR_AUXDATA / "acs" / no2_acs_path.name
+        if not no2_acs_path.exists() and no2_acs_path.suffix != ".nc":
+            no2_acs_path = no2_acs_path.with_name(no2_acs_path.name + ".nc")
+        self.acs_no2 = xr.open_dataset(no2_acs_path)
         self.acs_no2 = self.acs_no2.rename({"wav": "wavelength"})
 
         self._prof_src = prof
@@ -4395,10 +4395,10 @@ class Atm3D(Atmosphere):
         """The optical-property index axis of the merged profile: the
         1D levels first, then one entry per 3D component cell.
         """
-        Nopt = self.grid_3d.NZ + 1
+        n_opt = self.grid_3d.NZ + 1
         if self._cell_indices is not None:
-            Nopt += self._cell_indices.shape[0]
-        return np.arange(Nopt)
+            n_opt += self._cell_indices.shape[0]
+        return np.arange(n_opt)
 
     def _glob_molecular(
         self, mol_1d: NDArray[np.floating]
@@ -4440,8 +4440,8 @@ class Atm3D(Atmosphere):
         (n_wavelength, Nopt) particle extinction and single scattering albedo
         arrays and the global phase matrix set.
         """
-        NZ = self.grid_3d.NZ
-        nbz = NZ + 1
+        nz = self.grid_3d.NZ
+        nbz = nz + 1
 
         if not self.comp_3d:
             if pha_aer_1d is None:
@@ -4511,11 +4511,11 @@ class Atm3D(Atmosphere):
             # the altitude level of the 1D aerosols co-located with
             # each component cell (kept as-is from the historical
             # implementation; note the inconsistency with the
-            # NZ - idz mapping used for the molecular properties)
+            # nz - idz mapping used for the molecular properties)
             idz_atm = []
             for icell in range(0, n_cell):
                 idz = self._cell_indices[icell, 2]
-                idz_atm.append(NZ + 1 - idz)
+                idz_atm.append(nz + 1 - idz)
 
             # First plan parallel phase
             phases = []
@@ -4622,8 +4622,8 @@ class Atm3D(Atmosphere):
         normalized by the total extinction, following the 1D/3D
         mixing conventions of `_glob_particles`.
         """
-        NZ = self.grid_3d.NZ
-        nbz = NZ + 1
+        nz = self.grid_3d.NZ
+        nbz = nz + 1
         assert self._cell_indices is not None
         assert self._comp_cell_pos is not None
         n_cell = self._cell_indices.shape[0]
@@ -4787,18 +4787,18 @@ class Atm3D(Atmosphere):
         bounding boxes and neighbours, as expected by the `cells`
         parameter of the profile backend.
         """
-        NZ = self.grid_3d.NZ
-        Nopt = self._grid().size
+        nz = self.grid_3d.NZ
+        n_opt = self._grid().size
 
         iopt = np.zeros(self.grid_3d.NCELL, dtype=np.int32)
         iabs = np.zeros_like(iopt)
         # Scattering depending on Z for clear atmosphere (Rayleigh)
-        iopt[:] = np.arange(Nopt)[NZ - self.grid_3d.idz]
+        iopt[:] = np.arange(n_opt)[nz - self.grid_3d.idz]
         # Absorption depending on Z only
-        iabs[:] = np.arange(Nopt)[NZ - self.grid_3d.idz]
+        iabs[:] = np.arange(n_opt)[nz - self.grid_3d.idz]
 
         if self._cell_flat_indices is not None:
-            iopt[self._cell_flat_indices] = NZ + 1 + np.arange(
+            iopt[self._cell_flat_indices] = nz + 1 + np.arange(
                 self._cell_flat_indices.size
             )
 
@@ -5087,8 +5087,8 @@ class ProfileBase(object):
             raise
         # k=1: linear interpolation; BSpline extrapolates linearly
         # beyond the data range by default (replaces fill_value="extrapolate")
-        _tmpT = make_interp_spline(z[_s], self.t[_s], k=1)
-        prof.t = _tmpT(znew)
+        _tmp_t = make_interp_spline(z[_s], self.t[_s], k=1)
+        prof.t = _tmp_t(znew)
 
         prof.dens_air = np.interp(
             znew, z[_s], self.dens_air[_s], left=0.0, right=0.0
@@ -5728,7 +5728,7 @@ def od2k(
 
 
 def blackbody_radiance(
-    wavelength: NumericArrayLike, T: NumericArrayLike
+    wavelength: NumericArrayLike, temperature: NumericArrayLike
 ) -> float | NDArray:
     """
     Calculate the spectral blackbody radiance.
@@ -5741,12 +5741,12 @@ def blackbody_radiance(
     ----------
     wavelength : array_like
         Wavelength in meters.
-    T : array_like
+    temperature : array_like
         Temperature in Kelvin.
 
     Returns
     -------
-    L_b_wavelength : NDArray
+    radiance : NDArray
         Spectral radiance in W·m⁻³·sr⁻¹.
 
     References
@@ -5759,31 +5759,31 @@ def blackbody_radiance(
     >>> import numpy as np
     >>> from scipy.constants import speed_of_light, Planck, Boltzmann
     >>> wavelength = 10e-6  # 10 micrometers (thermal infrared)
-    >>> T = 288.0    # 288 K (room temperature)
-    >>> L_b_wavelength = blackbody_radiance(wavelength, T)
-    >>> print(f"Spectral radiance: {L_b_wavelength:.2e} W·m⁻³·sr⁻¹")
+    >>> temperature = 288.0    # 288 K (room temperature)
+    >>> radiance = blackbody_radiance(wavelength, temperature)
+    >>> print(f"Spectral radiance: {radiance:.2e} W·m⁻³·sr⁻¹")
 
     >>> # Calculate for multiple wavelengths at a fixed temperature
     >>> wavelengths = np.array([0.5e-6, 1e-6, 10e-6]) # UV, NIR, TIR
-    >>> T = 5778  # Sun's surface temperature
-    >>> L_b_wavelength = blackbody_radiance(wavelengths, T)
+    >>> temperature = 5778  # Sun's surface temperature
+    >>> radiance = blackbody_radiance(wavelengths, temperature)
     """
     wavelength = np.asarray(wavelength, dtype=np.float64)
-    T = np.asarray(T, dtype=np.float64)
-    scalar_input = wavelength.ndim == 0 and T.ndim == 0
+    temperature = np.asarray(temperature, dtype=np.float64)
+    scalar_input = wavelength.ndim == 0 and temperature.ndim == 0
     try:
-        np.broadcast_shapes(wavelength.shape, T.shape)
+        np.broadcast_shapes(wavelength.shape, temperature.shape)
     except ValueError as err:
-        raise ValueError("wavelength and T must be broadcastable") from err
+        raise ValueError("wavelength and temperature must be broadcastable") from err
 
     c1 = 2.0 * Planck * speed_of_light**2
     c2 = Planck * speed_of_light / Boltzmann
-    L_b_wavelength = c1 / (
-        (wavelength**5) * (np.exp(c2 / (wavelength * T)) - 1.0)
+    radiance = c1 / (
+        (wavelength**5) * (np.exp(c2 / (wavelength * temperature)) - 1.0)
     )
     if scalar_input:
-        return float(L_b_wavelength)
-    return L_b_wavelength
+        return float(radiance)
+    return radiance
 
 
 def get_aer_dist_integral(
@@ -6032,10 +6032,10 @@ def atm_pro_from_aeronet(
     wavelength_phase: NumericArrayLike | None = None,
     grid: NumericArrayLike | None = None,
     atm_name: str = "afglt",
-    P0: float | None = None,
-    O3: float | None = None,
-    H2O: float | None = None,
-    O3_H2O_alt: float | None = None,
+    p0: float | None = None,
+    o3: float | None = None,
+    h2o: float | None = None,
+    o3_h2o_alt: float | None = None,
     h_mix_min: float = 0.0,
     h_mix_max: float = 2.0,
     z_mix: float = 8,
@@ -6064,14 +6064,14 @@ def atm_pro_from_aeronet(
         Altitude grid profil
     atm_name : str, optional
         The atmAFGL atmosphere used
-    P0 : float, optional
+    p0 : float, optional
         Surface pressure
-    O3 : float, optional
+    o3 : float, optional
         Scale ozone vertical column (Dobson units)
-    H2O : float, optional
+    h2o : float, optional
         Scale Water vertical column
-    O3_H2O_alt : float or None, optional
-        Altitude of H2O and O3 values, by default None and scale from
+    o3_h2o_alt : float or None, optional
+        Altitude of h2o and o3 values, by default None and scale from
         z=0km
     h_mix_min : float, optional
         Force min altitude of the mixture
@@ -6123,10 +6123,10 @@ def atm_pro_from_aeronet(
         pfn_lut = read_aeronet_pfn(pfn_file, year=year)
 
     if not isinstance(b_wavelength, BandSet):
-        b_wavelength_BS = BandSet(b_wavelength)
+        b_wavelength_bs = BandSet(b_wavelength)
     else:
-        b_wavelength_BS = b_wavelength
-    b_wavelength_unique = np.unique(b_wavelength_BS.wavelength)
+        b_wavelength_bs = b_wavelength
+    b_wavelength_unique = np.unique(b_wavelength_bs.wavelength)
 
     if wavelength_phase is None:
         pf_wavelength = b_wavelength_unique
@@ -6200,12 +6200,12 @@ def atm_pro_from_aeronet(
         atm_name,
         comp=[aer],
         grid=grid,
-        p0=P0,
-        tco3=O3,
-        tcwp=H2O,
+        p0=p0,
+        tco3=o3,
+        tcwp=h2o,
         wavelength_phase=pf_wavelength,
-        o3_h2o_alt=O3_H2O_alt,
-    ).calc(b_wavelength_BS)
+        o3_h2o_alt=o3_h2o_alt,
+    ).calc(b_wavelength_bs)
 
     return pro
 

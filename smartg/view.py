@@ -2528,9 +2528,9 @@ def plot_polar(
     sub = _parse_subplot_position(sub)
 
     # Initialization
-    Phimax = 360.0
+    phi_max = 360.0
     if semi:
-        Phimax = 180.0
+        phi_max = 180.0
 
     assert da.ndim == 2, "DataArray must be 2D"
 
@@ -2634,7 +2634,7 @@ def plot_polar(
     # Create grid helper and floating subplot
     grid_helper = floating_axes.GridHelperCurveLinear(
         tr,
-        extremes=(0.0, Phimax, 0.0, 90.0),
+        extremes=(0.0, phi_max, 0.0, 90.0),
         grid_locator1=grid_locator1,
         grid_locator2=grid_locator2,
         tick_formatter1=tick_formatter1,

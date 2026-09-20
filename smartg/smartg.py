@@ -1219,10 +1219,10 @@ class Smartg(object):
                 - -1 -> consider no layer (for development purposes)
                 -  0 -> up (TOA)
                 -  1 -> up (TOA), down (0+) and up (0-)
-                -  2 -> up (TOA), down (0-), up (0+) and down (B)
+                -  2 -> up (TOA), down (0-), up (0+) and down (b_planck)
                 -  3 -> consider all output layers.
                 -  4 -> down (0+) and up (0-)
-                -  5 -> down (0-), up (0+) and down (B)
+                -  5 -> down (0-), up (0+) and down (b_planck)
                 -  6 -> down (0-) and up (0+)
                 -  7 -> up (TOA) and down (0+)
 
@@ -1296,7 +1296,7 @@ class Smartg(object):
             grid and cone sampling.
         sun_disc : float, optional
             The angular size of the Sun disc in degrees, 0 (default
-            means no angular size). In the B and BR modes the angular
+            means no angular size). In the b_planck and BR modes the angular
             size of the Sun is given by the sun_fov parameter of
             CusBackward instead, or by le_fov under local estimate,
             and sun_disc has no effect on the signal collected by the
@@ -1332,7 +1332,7 @@ class Smartg(object):
             If is_atm=0 provide more robust test with 3d objects in case
             the atmosphere we remove the atmosphere.
         cus_l : None | CusForward | CusBackward, optional
-            Use the RF, FF (CusForward) or B, BR (CusBackward) launching
+            Use the RF, FF (CusForward) or b_planck, BR (CusBackward) launching
             modes. The compilation option `obj3d` must be set to True.
             A CusBackward can also carry the sun direction as a vector
             in its v_sun parameter (see th_deg) and the angular size
@@ -1513,7 +1513,7 @@ class Smartg(object):
 
         surf_lph = 0
         if cus_l is not None:
-            if cus_l.dict['mode'] == "B":
+            if cus_l.dict['mode'] == "b_planck":
                 sensor = Sensor(
                     pos_x=cus_l.dict['position'].x,
                     pos_y=cus_l.dict['position'].y,
@@ -2051,12 +2051,12 @@ class Smartg(object):
                     )
                 kabs = od2k(prof_atm, 'OD_abs_atm')
                 z = -prof_atm.coords['z_atm'].to_numpy()
-                B = blackbody_radiance(
+                b_planck = blackbody_radiance(
                     wavelength[:][:, None],
                     prof_atm['T_atm'].to_numpy()[None, :],
                 )
                 emission = xr.DataArray(
-                    kabs * B,
+                    kabs * b_planck,
                     dims=['wavelength', 'z_atm'],
                     coords={'wavelength': wavelength[:], 'z_atm': z},
                 )
@@ -3176,7 +3176,7 @@ def _isotropic(
     --------
     This function has not been validated yet.
     """
-    phase_H = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
+    phase_host = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
     angles = np.linspace(
         0.0, pi, int(n_theta), endpoint=True, dtype=np.float64
     )
@@ -3187,21 +3187,21 @@ def _isotropic(
     phase[2, :] = 0.5 / norm
     phase[3, :] = 0.5 / norm
 
-    angN = _uniform_angles(n_theta) if ang_a is None else ang_a
+    ang = _uniform_angles(n_theta) if ang_a is None else ang_a
     f1 = interp1d(angles, phase[0, :])
     f2 = interp1d(angles, phase[1, :])
     f3 = interp1d(angles, phase[2, :])
     f4 = interp1d(angles, phase[3, :])
 
     # parameters equally spaced in scattering angle [0, 180]
-    phase_H['a_P11'][:] = f1(angN)  # I par P11
-    phase_H['a_P22'][:] = f2(angN)  # I per P22
-    phase_H['a_P33'][:] = f3(angN)  # U P33
-    phase_H['a_P43'][:] = f4(angN)  # V P43
-    phase_H['a_P44'][:] = f3(angN)  # V P44=P33
+    phase_host['a_P11'][:] = f1(ang)  # I par P11
+    phase_host['a_P22'][:] = f2(ang)  # I per P22
+    phase_host['a_P33'][:] = f3(ang)  # U P33
+    phase_host['a_P43'][:] = f4(ang)  # V P43
+    phase_host['a_P44'][:] = f3(ang)  # V P44=P33
 
-    return phase_H
-    return phase_H, cdf
+    return phase_host
+    return phase_host, cdf
 
 
 def _rayleigh(
@@ -3456,7 +3456,7 @@ def _calc_phase_host(
     - the ``a_*`` fields of the phase matrix, which every reader of
       a phase matrix goes through,
     - its cumulative distribution at those very nodes, integrated
-      exactly for the tabulated matrix (F11 linear in theta between
+      exactly for the tabulated matrix (f11 linear in theta between
       nodes, times the true sin(theta)), which a random walk draws
       its deflection from by inverting one bin in closed form. The
       drawn deflection is therefore distributed exactly as the
@@ -3522,18 +3522,18 @@ def _calc_phase_host(
     # nphases += 1   # include Rayleigh phase function
 
     nrows = nphases if nphases > 0 else 1
-    phase_H = np.zeros((nrows, n_theta), dtype=TYPE_PHASE, order='C')
-    angN = _uniform_angles(n_theta) if ang_a is None else ang_a
+    phase_host = np.zeros((nrows, n_theta), dtype=TYPE_PHASE, order='C')
+    ang = _uniform_angles(n_theta) if ang_a is None else ang_a
 
     # Set Rayleigh phase function or isotropic if depo <0
     if depo >= 0:
-        phase_H[0, :] = _rayleigh(
+        phase_host[0, :] = _rayleigh(
             n_theta, depo, polarization=polarization, ang_a=ang_a
         )
     # no polarization switch in isotropic because the function needs
     # first to be corrected
     else:
-        phase_H[0, :] = _isotropic(n_theta, ang_a=ang_a)
+        phase_host[0, :] = _isotropic(n_theta, ang_a=ang_a)
     if 'theta_' + kind in profile.coords:
         angles = profile.coords['theta_' + kind].to_numpy() * pi / 180.0
         assert angles[-1] < 3.15  # assert that angles are in radians
@@ -3541,7 +3541,7 @@ def _calc_phase_host(
         angles = None
 
     # Set VRS phase function
-    phase_H[1, :] = _rayleigh(n_theta, 0.17, ang_a=ang_a)
+    phase_host[1, :] = _rayleigh(n_theta, 0.17, ang_a=ang_a)
 
     idx = 2
     # idx = 1
@@ -3561,13 +3561,13 @@ def _calc_phase_host(
                     "supported without polarization"
                 )
             # back to IQUV convention to obtain F11
-            F11 = 0.5 * (phase[0, :] + 2 * phase[1, :] + phase[4, :])
+            f11 = 0.5 * (phase[0, :] + 2 * phase[1, :] + phase[4, :])
             # reset all values to 0
             phase[:, :] = 0.0
             # reconvert to Iperpar but without considering polarization
-            phase[0, :] = 0.5 * F11
-            phase[1, :] = 0.5 * F11
-            phase[4, :] = 0.5 * F11
+            phase[0, :] = 0.5 * f11
+            phase[1, :] = 0.5 * f11
+            phase[4, :] = 0.5 * f11
 
         # f1 = interp1d(angles, phase[1,:])
         # f2 = interp1d(angles, phase[0,:])
@@ -3578,30 +3578,30 @@ def _calc_phase_host(
 
         if len(phase[:, 0]) == 4:  # spherical particle
             # parameters equally spaced in scattering angle [0, 180]
-            phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
-            phase_H['a_P22'][idx, :] = f2(angN)  # I per P22
-            phase_H['a_P33'][idx, :] = f3(angN)  # U P33
-            phase_H['a_P43'][idx, :] = f4(angN)  # V P43
-            phase_H['a_P44'][idx, :] = f3(angN)  # V P44=P33
+            phase_host['a_P11'][idx, :] = f1(ang)  # I par P11
+            phase_host['a_P22'][idx, :] = f2(ang)  # I per P22
+            phase_host['a_P33'][idx, :] = f3(ang)  # U P33
+            phase_host['a_P43'][idx, :] = f4(ang)  # V P43
+            phase_host['a_P44'][idx, :] = f3(ang)  # V P44=P33
         else:  # non spherical particle
             f5 = interp1d(angles, phase[4, :])
             f6 = interp1d(angles, phase[5, :])
 
-            phase_H['a_P11'][idx, :] = f1(angN)  # I par P11
-            phase_H['a_P22'][idx, :] = f5(angN)  # I per P22
-            phase_H['a_P12'][idx, :] = f2(angN)  # I per P22
-            phase_H['a_P33'][idx, :] = f3(angN)  # U P33
-            phase_H['a_P43'][idx, :] = f4(angN)  # V P43
-            phase_H['a_P44'][idx, :] = f6(angN)  # V P44=P33
-            # phase_H['a_P33'][idx, :] = f6(angN)  # V P44=P33
+            phase_host['a_P11'][idx, :] = f1(ang)  # I par P11
+            phase_host['a_P22'][idx, :] = f5(ang)  # I per P22
+            phase_host['a_P12'][idx, :] = f2(ang)  # I per P22
+            phase_host['a_P33'][idx, :] = f3(ang)  # U P33
+            phase_host['a_P43'][idx, :] = f4(ang)  # V P43
+            phase_host['a_P44'][idx, :] = f6(ang)  # V P44=P33
+            # phase_host['a_P33'][idx, :] = f6(ang)  # V P44=P33
 
         idx += 1
 
-    return phase_H, _cdf_of_table(phase_H, angN)
+    return phase_host, _cdf_of_table(phase_host, ang)
 
 
 def _cdf_of_table(
-    phase_H: np.ndarray, ang: NDArray[np.float64]
+    phase_host: np.ndarray, ang: NDArray[np.float64]
 ) -> np.ndarray:
     """
     Cumulative distribution of every row of a phase table, at the
@@ -3615,7 +3615,7 @@ def _cdf_of_table(
 
     Parameters
     ----------
-    phase_H : ndarray
+    phase_host : ndarray
         Table of dtype ``TYPE_PHASE`` and shape ``(nrows, n)``.
     ang : ndarray
         The ``n`` angles in radians, from 0 to pi.
@@ -3626,9 +3626,9 @@ def _cdf_of_table(
         ``(nrows, n)`` of dtype ``TYPE_PCDF``, each row from 0 to 1.
     """
     f11 = 0.5 * (
-        phase_H['a_P11'].astype(np.float64)
-        + phase_H['a_P22'].astype(np.float64)
-        + 2.0 * phase_H['a_P12'].astype(np.float64)
+        phase_host['a_P11'].astype(np.float64)
+        + phase_host['a_P22'].astype(np.float64)
+        + 2.0 * phase_host['a_P12'].astype(np.float64)
     )
     th0 = ang[:-1]
     th1 = ang[1:]
@@ -3640,7 +3640,7 @@ def _cdf_of_table(
         f0 * (np.cos(th0) - np.cos(th1))
         + df * ((np.sin(th1) - np.sin(th0)) / dth - np.cos(th1))
     )
-    cdf = np.zeros(phase_H.shape, dtype=np.float64)
+    cdf = np.zeros(phase_host.shape, dtype=np.float64)
     cdf[:, 1:] = np.cumsum(mass, axis=1)
     total = cdf[:, -1:]
     # a row of zeros, e.g. a VRS entry of a profile that has none,
@@ -3672,11 +3672,11 @@ def _calc_phase_gpu(
         n_theta)`` and dtype ``TYPE_PHASE``, and the cumulative
         distribution, of the same shape and dtype ``TYPE_PCDF``.
     """
-    phase_H, cdf_H = _calc_phase_host(
+    phase_host, cdf_host = _calc_phase_host(
         profile, n_theta, depo, kind, polarization=polarization, ang_a=ang_a,
     )
 
-    return to_gpu(phase_H), to_gpu(cdf_H)
+    return to_gpu(phase_host), to_gpu(cdf_host)
 
 
 def _init_const(
@@ -4022,10 +4022,10 @@ def _init_profile(wavelength, prof, kind: str) -> tuple:
     # NREF = len(prof.axis('z_'+kind))
     # reformat to smartg format
     if 'iopt_' + kind in prof.data_vars:
-        NLAY = len(prof['OD_' + kind].to_numpy()[0, :])
+        n_lay = len(prof['OD_' + kind].to_numpy()[0, :])
     else:
-        NLAY = len(prof.coords['z_' + kind])
-    shp = (len(wavelength), NLAY)
+        n_lay = len(prof.coords['z_' + kind])
+    shp = (len(wavelength), n_lay)
     prof_gpu = np.zeros(shp, dtype=TYPE_PROFILE, order='C')
 
     if kind == "oc":
@@ -4129,17 +4129,17 @@ def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
         if 'iphase' in d:
             imax = 0
             chunks = []
-            for M in xprofs:
-                da = M[d]
+            for m in xprofs:
+                da = m[d]
                 chunks.append(da + imax)
                 imax += np.unique(da.data).max() + 1
             pro[d] = xr.concat(chunks, dim=chunks[0].dims[0])
         elif d == ('phase_' + kind):
-            pro[d] = xr.concat([M[d] for M in xprofs], dim=first[d].dims[0])
+            pro[d] = xr.concat([m[d] for m in xprofs], dim=first[d].dims[0])
         elif d == ('T_' + kind):
             pro[d] = first[d]
         else:
-            pro[d] = xr.concat([M[d] for M in xprofs], dim=first[d].dims[0])
+            pro[d] = xr.concat([m[d] for m in xprofs], dim=first[d].dims[0])
 
     return pro
 

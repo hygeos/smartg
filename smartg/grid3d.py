@@ -123,9 +123,9 @@ def extend_1d_grid(
     array([ 0., 10., 20.])
     """
     if type == "length":
-        N = len(grid)
-        N_extended = N+2
-        extended_grid = np.zeros((N_extended), dtype=np.float32)
+        n = len(grid)
+        n_extended = n+2
+        extended_grid = np.zeros((n_extended), dtype=np.float32)
         extended_grid[0] = grid[0]-extend_value
         extended_grid[-1] = grid[-1]+extend_value
         extended_grid[1:-1] = grid[:]
@@ -145,8 +145,8 @@ def extend_1d_grid(
     return extended_grid
 
 
-def Get_3Dcells_indices(
-    NX: int, NY: int, NZ: int
+def get_3d_cells_indices(
+    nx: int, ny: int, nz: int
 ) -> tuple[NDArray[np.integer], NDArray[np.integer], NDArray[np.integer]]:
     '''
     set up a rectangular regular 3D grid indices
@@ -157,20 +157,20 @@ def Get_3Dcells_indices(
     Ouputs:
         triplet of 3D indices
     '''
-    Ncell = NX*NY*NZ
+    n_cell = nx*ny*nz
     # from cell number to x,y and z indices
     return cast(
         "tuple[NDArray[np.integer], NDArray[np.integer], NDArray[np.integer]]",
-        np.unravel_index(np.arange(Ncell, dtype=np.int32), (NX, NY, NZ), order='C'),
+        np.unravel_index(np.arange(n_cell, dtype=np.int32), (nx, ny, nz), order='C'),
     )
 
 
-def Get_3Dcells_neighbours(
-    NX: int, NY: int, NZ: int,
-    BOUNDARY_ABS: int = -5,
+def get_3d_cells_neighbours(
+    nx: int, ny: int, nz: int,
+    boundary_abs: int = -5,
     periodic: bool = False,
-    BOUNDARY_BOA: int = -2,
-    BOUNDARY_TOA: int = -1,
+    boundary_boa: int = -2,
+    boundary_toa: int = -1,
 ) -> NDArray[np.int32]:
     '''
     Computes the 3D neighbouring cells indices, one for each of the 6 cube faces
@@ -186,7 +186,7 @@ def Get_3Dcells_neighbours(
             with the convention order, +X,-X,+Y,-Y,+Z,-Z
 
     '''
-    idx, idy, idz  = Get_3Dcells_indices(NX, NY, NZ)
+    idx, idy, idz  = get_3d_cells_indices(nx, ny, nz)
     # indices of neighbouring cells in rectangular grid
     neigh_idx      = np.vstack((idx+1, idx-1, idx  , idx  , idx  , idx  )) # by convention POSITIVE first
     neigh_idy      = np.vstack((idy  , idy  , idy+1, idy-1, idy  , idy  ))
@@ -194,32 +194,32 @@ def Get_3Dcells_neighbours(
 
     if periodic:
         neigh = np.ravel_multi_index((neigh_idx, neigh_idy, neigh_idz),
-                                       dims=(NX, NY, NZ), mode=('wrap','wrap','clip'))
+                                       dims=(nx, ny, nz), mode=('wrap','wrap','clip'))
     else:
         neigh = np.ravel_multi_index((neigh_idx, neigh_idy, neigh_idz),
-                                       dims=(NX, NY, NZ), mode=('clip','clip','clip'))
+                                       dims=(nx, ny, nz), mode=('clip','clip','clip'))
     ## boundaries neighbouring
     # with 'clip' mode, if outside the domain then the neighbour index is the same as the cell index
-    neigh[np.equal(neigh , np.arange(NX*NY*NZ, dtype=np.int32))] = BOUNDARY_ABS
+    neigh[np.equal(neigh , np.arange(nx*ny*nz, dtype=np.int32))] = boundary_abs
     # by definition -Z neighbour at the domain boundary is BOA
-    neigh[5, np.where(neigh[5,:]==BOUNDARY_ABS)] = BOUNDARY_BOA
+    neigh[5, np.where(neigh[5,:]==boundary_abs)] = boundary_boa
     # by definition +Z neighbour at the domain boundary is TOA
-    neigh[4, np.where(neigh[4,:]==BOUNDARY_ABS)] = BOUNDARY_TOA
+    neigh[4, np.where(neigh[4,:]==boundary_abs)] = boundary_toa
     # by convention +Z neighbour at the domain boundary -1 is also TOA
-    neigh[4, np.where(neigh[4,:]%NZ==        0)] = BOUNDARY_TOA
+    neigh[4, np.where(neigh[4,:]%nz==        0)] = boundary_toa
 
     return neigh.astype(np.int32)
 
 
-def Get_3Dcells(
-    Nx: int = 1, Ny: int = 1, Nz: int = 50,
-    Dx: float = 1., Dy: float = 1., Dz: float = 1.,
+def get_3d_cells(
+    nx: int = 1, ny: int = 1, nz: int = 50,
+    dx: float = 1., dy: float = 1., dz: float = 1.,
     x: NDArray[np.number] | None = None,
     y: NDArray[np.number] | None = None,
     z: NDArray[np.number] | None = None,
     periodic: bool = False,
-    HORIZ_EXTENT_LENGTH: float = 0,
-    SAT_ALTITUDE: float = 1e3,
+    horiz_extent_length: float = 0,
+    sat_altitude: float = 1e3,
 ) -> tuple[
     tuple[NDArray[np.integer], NDArray[np.integer], NDArray[np.integer]],
     tuple[int, int, int],
@@ -232,59 +232,59 @@ def Get_3Dcells(
     return the cells geometrical properties for use in 3D atmospheric profile object
 
     Keywords:
-        - Nx, Ny and Nz are the number of cells in each dimension
-        - Dx, Dy and Dz are the cells dimensions in km (default 1.)
-        - x(Nx), y(Ny), z(Nz), coordinates can be provided instead, it erase Ni and Di
-        - HORIZ_EXTENT_LENGTH: in km, is not 0, then one cell before and one after in X and Y
-            are added with a specific length of HORIZ_EXTENT_LENGTH. it results in a total
-            number of cells being NX = Nx+2 and NY = Ny+2
-        - SAT_ALTITUDE: Max altitude in km for sensors location within the 3D grid
+        - nx, ny and nz are the number of cells in each dimension
+        - dx, dy and dz are the cells dimensions in km (default 1.)
+        - x(nx), y(ny), z(nz), coordinates can be provided instead, it erase Ni and Di
+        - horiz_extent_length: in km, is not 0, then one cell before and one after in X and Y
+            are added with a specific length of horiz_extent_length. it results in a total
+            number of cells being nx_tot = nx+2 and ny_tot = ny+2
+        - sat_altitude: Max altitude in km for sensors location within the 3D grid
         - periodic : the neighbours are horizontally periodic, otherwise it is an absorbing boundary
     '''
     # CELLS INDEXING
-    DN             = 2 if HORIZ_EXTENT_LENGTH !=0 else 0
-    sl             = slice(DN//2, -DN//2) if DN==2 else slice(None, None)
+    dn             = 2 if horiz_extent_length !=0 else 0
+    sl             = slice(dn//2, -dn//2) if dn==2 else slice(None, None)
 
     if x is None:
-        NX   = Nx + DN  # Number of cells in x
+        nx_tot   = nx + dn  # Number of cells in x
         # cells boundaries coordinates
         # horizontal
-        Hx   = Nx*Dx/2.  # x central domain half length (km)
-        x    = np.zeros((NX+1), dtype=np.float32)
-        x[0] = -(Hx + HORIZ_EXTENT_LENGTH)
-        x[-1]= (Hx  + HORIZ_EXTENT_LENGTH)
-        x[sl]= np.linspace(-Hx, Hx, num=Nx+1)
+        hx   = nx*dx/2.  # x central domain half length (km)
+        x    = np.zeros((nx_tot+1), dtype=np.float32)
+        x[0] = -(hx + horiz_extent_length)
+        x[-1]= (hx  + horiz_extent_length)
+        x[sl]= np.linspace(-hx, hx, num=nx+1)
     else:
-        NX   = x.size-1
+        nx_tot   = x.size-1
 
     if y is None:
-        NY   = Ny + DN  # Number of cells in x
+        ny_tot   = ny + dn  # Number of cells in x
         # cells boundaries coordinates
         # horizontal
-        Hy   = Ny*Dy/2.  # y central domain half length (km)
-        y    = np.zeros((NY+1), dtype=np.float32)
-        y[0] = -(Hy + HORIZ_EXTENT_LENGTH)
-        y[-1]= (Hy  + HORIZ_EXTENT_LENGTH)
-        y[sl]= np.linspace(-Hy, Hy, num=Ny+1)
+        hy   = ny*dy/2.  # y central domain half length (km)
+        y    = np.zeros((ny_tot+1), dtype=np.float32)
+        y[0] = -(hy + horiz_extent_length)
+        y[-1]= (hy  + horiz_extent_length)
+        y[sl]= np.linspace(-hy, hy, num=ny+1)
     else:
-        NY   = y.size-1
+        ny_tot   = y.size-1
 
     # vertical boundaries
     if z is None :
         # we add a empty very thin cell above TOA (just for interfacing purposes)
-        NZ    = Nz + 1
-        z     = np.zeros((NZ+1), dtype=np.float32)
-        z[:-1]= np.linspace(0, Nz*Dz, num=NZ)
-        z[-1] = SAT_ALTITUDE # above TOA , sensor max level
+        nz_tot    = nz + 1
+        z     = np.zeros((nz_tot+1), dtype=np.float32)
+        z[:-1]= np.linspace(0, nz*dz, num=nz_tot)
+        z[-1] = sat_altitude # above TOA , sensor max level
     else:
-        NZ    = z.size-1
+        nz_tot    = z.size-1
 
     # from cell number to x,y and z indices
-    idx, idy, idz  = Get_3Dcells_indices(NX, NY, NZ)
+    idx, idy, idz  = get_3d_cells_indices(nx_tot, ny_tot, nz_tot)
     # indices of neighbouring cells in rectangular grid
-    neigh          = Get_3Dcells_neighbours(NX, NY, NZ, periodic=periodic)
+    neigh          = get_3d_cells_neighbours(nx_tot, ny_tot, nz_tot, periodic=periodic)
     # Bounding boxes, lower left and upper right corners
-    pmin           = np.zeros((3, NX*NY*NZ), dtype=np.float32)
+    pmin           = np.zeros((3, nx_tot*ny_tot*nz_tot), dtype=np.float32)
     pmax           = np.zeros_like(pmin)
     pmin[0,:]      = x[idx]
     pmax[0,:]      = x[idx+1]
@@ -293,10 +293,10 @@ def Get_3Dcells(
     pmin[2,:]      = z[idz] # ! from bottom to top
     pmax[2,:]      = z[idz+1]
 
-    return (idx,idy,idz), (NX,NY,NZ), (x,y,z), neigh, pmin, pmax
+    return (idx,idy,idz), (nx_tot,ny_tot,nz_tot), (x,y,z), neigh, pmin, pmax
 
 
-def locate_3Dregular_cells(
+def locate_3d_regular_cells(
     xgrid: NDArray, ygrid: NDArray, zgrid: NDArray,
     x: NumericArrayLike, y: NumericArrayLike, z: NumericArrayLike,
 ) -> NDArray[np.integer]:
@@ -459,9 +459,9 @@ class Grid3D(object):
         else:
             zgrid_with_boundary = zgrid
 
-        (idx,idy,idz), (NX,NY,NZ), (xGRID, yGRID, zGRID), neigh, pmin, pmax = \
-            Get_3Dcells(x=xgrid_with_boundary, y=ygrid_with_boundary, z=zgrid_with_boundary,
-             SAT_ALTITUDE=zgrid_with_boundary[-1], periodic=periodic)
+        (idx,idy,idz), (nx_tot,ny_tot,nz_tot), (x_grid, y_grid, z_grid), neigh, pmin, pmax = \
+            get_3d_cells(x=xgrid_with_boundary, y=ygrid_with_boundary, z=zgrid_with_boundary,
+             sat_altitude=zgrid_with_boundary[-1], periodic=periodic)
         # =====
 
         self.Nx = len(xgrid)-1
@@ -470,19 +470,19 @@ class Grid3D(object):
         self.periodic = periodic
         self.horiz_extend_length = horiz_extend_length
         self.vert_extend_limit = vert_extend_limit
-        self.NX = NX
-        self.NY = NY
-        self.NZ = NZ
-        self.NCELL = NX*NY*NZ
+        self.NX = nx_tot
+        self.NY = ny_tot
+        self.NZ = nz_tot
+        self.NCELL = nx_tot*ny_tot*nz_tot
         self.idx = idx
         self.idy = idy
         self.idz = idz
         self.xgrid = xgrid
         self.ygrid = ygrid
         self.zgrid = zgrid
-        self.xGRID = xGRID
-        self.yGRID = yGRID
-        self.zGRID = zGRID
+        self.xGRID = x_grid
+        self.yGRID = y_grid
+        self.zGRID = z_grid
         self.neigh = neigh
         self.pmin = pmin
         self.pmax = pmax
