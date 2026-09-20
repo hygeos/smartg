@@ -1289,7 +1289,7 @@ class Smartg:
             grid and cone sampling.
         sun_disc : float, optional
             The angular size of the Sun disc in degrees, 0 (default
-            means no angular size). In the b_planck and BR modes the angular
+            means no angular size). In the B and BR modes the angular
             size of the Sun is given by the sun_fov parameter of
             CusBackward instead, or by le_fov under local estimate,
             and sun_disc has no effect on the signal collected by the
@@ -1325,7 +1325,7 @@ class Smartg:
             If is_atm=0 provide more robust test with 3d objects in case
             the atmosphere we remove the atmosphere.
         cus_l : None | CusForward | CusBackward, optional
-            Use the RF, FF (CusForward) or b_planck, BR (CusBackward) launching
+            Use the RF, FF (CusForward) or B, BR (CusBackward) launching
             modes. The compilation option `obj3d` must be set to True.
             A CusBackward can also carry the sun direction as a vector
             in its v_sun parameter (see th_deg) and the angular size
@@ -1503,7 +1503,7 @@ class Smartg:
 
         surf_lph = 0
         if cus_l is not None:
-            if cus_l.dict['mode'] == "b_planck":
+            if cus_l.dict['mode'] == "B":
                 sensor = Sensor(
                     pos_x=cus_l.dict['position'].x,
                     pos_y=cus_l.dict['position'].y,
