@@ -75,7 +75,9 @@ monitor_peak_memory
 import base64
 import io
 import resource
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -83,20 +85,20 @@ import pytest
 _pytest_config = None
 
 
-def _get_peak_rss_mb():
+def _get_peak_rss_mb() -> float:
     """Return the peak RSS of the process, in MiB."""
     peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak_rss / 1024
 
 
-def _monitor_peak_memory_enabled(config):
+def _monitor_peak_memory_enabled(config: pytest.Config) -> bool:
     """Return whether peak memory monitoring/reporting is enabled."""
     return {"true": True, "false": False}[
         (config.getini("monitor_peak_memory") or "false").lower()
     ]
 
 
-def add_image_to_report(request, fp):
+def add_image_to_report(request: pytest.FixtureRequest, fp: io.BytesIO) -> None:
     """Append image data to ``request.node.images``.
 
     Parameters
@@ -113,7 +115,7 @@ def add_image_to_report(request, fp):
     request.node.images.insert(0, data)
 
 
-def add_extra_to_report(request, *args):
+def add_extra_to_report(request: pytest.FixtureRequest, *args: Any) -> None:
     """Add extra content to the pytest-html report.
 
     It goes through ``request.node.extras``.
@@ -130,7 +132,7 @@ def add_extra_to_report(request, *args):
     request.node.extras.insert(0, args)
 
 
-def add_link_to_report(request, path, name="Link"):
+def add_link_to_report(request: pytest.FixtureRequest, path: str | Path, name: str = "Link") -> None:
     """Add a link to the local file ``path``.
 
     The link is made relative to the directory of the html output.
@@ -149,7 +151,7 @@ def add_link_to_report(request, path, name="Link"):
     add_extra_to_report(request, str(url), "url", name)
 
 
-def savefig(request, **kwargs):
+def savefig(request: pytest.FixtureRequest, **kwargs: Any) -> None:
     """Wrap savefig so that the figure lands in the report.
 
     The image is added to ``request.node.images``, and ``kwargs``
@@ -163,7 +165,7 @@ def savefig(request, **kwargs):
     plt.close("all")
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     """Declare the ini options this plugin reads."""
     parser.addini(
         "img_collapsible",
@@ -186,16 +188,16 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     """Store config for later use in hooks."""
     global _pytest_config
     _pytest_config = config
 
 
 @pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_makereport(item):
+def pytest_runtest_makereport(item: pytest.Function) -> Iterator[None]:
     """Attach the images, the extras and the peak memory to a report."""
-    pytest_html = item.config.pluginmanager.getplugin("html")
+    pytest_html: Any = item.config.pluginmanager.getplugin("html")
     outcome = yield
     report = outcome.get_result()
     if report.when == "call" and _monitor_peak_memory_enabled(item.config):
@@ -244,7 +246,7 @@ def pytest_runtest_makereport(item):
         report.extras = extra
 
 
-def pytest_html_results_table_header(cells):
+def pytest_html_results_table_header(cells: list[str]) -> None:
     """Insert per-test memory columns in pytest-html results table."""
     if _pytest_config is not None and _monitor_peak_memory_enabled(
         _pytest_config
@@ -252,7 +254,7 @@ def pytest_html_results_table_header(cells):
         cells.insert(2, "<th>Mem Peak (MiB)</th>")
 
 
-def pytest_html_results_table_row(report, cells):
+def pytest_html_results_table_row(report: pytest.TestReport, cells: list[str]) -> None:
     """Render per-test memory values in pytest-html results table."""
     if _pytest_config is None or not _monitor_peak_memory_enabled(
         _pytest_config
@@ -417,7 +419,7 @@ a:hover {
 """
 
 
-def pytest_html_results_summary(prefix, summary, postfix):
+def pytest_html_results_summary(prefix: list[str], summary: list[str], postfix: list[str]) -> None:
     """Embed the dark theme CSS when dark_mode is enabled."""
     if _pytest_config is not None:
         dark_mode_enabled = {"true": True, "false": False}[

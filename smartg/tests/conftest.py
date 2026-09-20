@@ -5,10 +5,11 @@ IPRT phase B and phase 3 tests, and leaves the slow one out unless
 it is asked for.
 """
 
+
 import pytest
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     """Declare the slow marker so that pytest does not warn."""
     config.addinivalue_line(
         "markers",
@@ -16,7 +17,7 @@ def pytest_configure(config):
     )
 
 
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Leave the slow tier out unless it is explicitly asked for.
 
     A '-m "not slow"' in the addopts of pytest.ini would be the natural
