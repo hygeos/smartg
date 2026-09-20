@@ -6,17 +6,21 @@ tables built by ``_calc_phase_host``, and the device lookup ``aIndex``
 driven by a small probe kernel.
 """
 
+from typing import Any
+
 import numpy as np
 import pytest
 import xarray as xr
+from numpy.typing import NDArray
 
 from smartg.phase import THETA_GRID_KINDS, as_theta_grid, theta_grid
 from smartg.smartg import _calc_phase_host
+from smartg.typing import NumericArrayLike, ThetaLike
 
 N_TEST = (2, 3, 9, 721, 1801)
 
 
-def _peaked_phase(theta_deg):
+def _peaked_phase(theta_deg: NDArray[np.floating]) -> NDArray[np.float64]:
     """Build a phase function with a 0.2 degree wide forward peak.
 
     Stands in for a cloud droplet or a coarse desert aerosol: a
@@ -36,7 +40,7 @@ def _peaked_phase(theta_deg):
 
 @pytest.mark.parametrize("kind", THETA_GRID_KINDS)
 @pytest.mark.parametrize("n", N_TEST)
-def test_theta_grid_shape_and_bounds(kind, n):
+def test_theta_grid_shape_and_bounds(kind: str, n: int) -> None:
     """Every kind spans [0, 180] exactly and is strictly increasing."""
     theta = theta_grid(n, kind)
 
@@ -48,7 +52,7 @@ def test_theta_grid_shape_and_bounds(kind, n):
 
 @pytest.mark.parametrize("kind", THETA_GRID_KINDS)
 @pytest.mark.parametrize("n", N_TEST)
-def test_theta_grid_radians(kind, n):
+def test_theta_grid_radians(kind: str, n: int) -> None:
     """The radian grid is the degree grid, converted."""
     theta = theta_grid(n, kind, unit="rad")
 
@@ -58,12 +62,12 @@ def test_theta_grid_radians(kind, n):
 
 
 @pytest.mark.parametrize("n", N_TEST)
-def test_theta_grid_uniform_is_linspace(n):
+def test_theta_grid_uniform_is_linspace(n: int) -> None:
     """The default kind must stay the historical grid, exactly."""
     assert np.array_equal(theta_grid(n), np.linspace(0.0, 180.0, n))
 
 
-def test_theta_grid_clusters_towards_the_peak():
+def test_theta_grid_clusters_towards_the_peak() -> None:
     """Both non-uniform kinds resolve the forward peak far better.
 
     They are also interchangeable in practice, which is what lets the
@@ -89,7 +93,7 @@ def test_theta_grid_clusters_towards_the_peak():
         {"n": 10, "unit": "grad"},
     ],
 )
-def test_theta_grid_rejects_bad_input(kwargs):
+def test_theta_grid_rejects_bad_input(kwargs: dict[str, Any]) -> None:
     """Check that a bad count or kind is refused."""
     with pytest.raises(ValueError):
         theta_grid(**kwargs)
@@ -100,7 +104,7 @@ def test_theta_grid_rejects_bad_input(kwargs):
 # --------------------------------------------------------------------
 
 
-def _probe(theta, n, mode=0, ang=None):
+def _probe(theta: NDArray[np.floating], n: int, mode: int = 0, ang: NDArray[np.floating] | None = None) -> tuple[NDArray[np.int32], NDArray[np.float32]]:
     """Run the device ``aIndex`` over *theta*, return (iang, weight)."""
     import pycuda.autoinit  # noqa: F401
     import pycuda.driver as cuda
@@ -139,8 +143,13 @@ def _probe(theta, n, mode=0, ang=None):
     rec["n"] = n
     rec["mode"] = mode
     rec["log2n"] = int(np.floor(np.log2(n - 2))) if n > 2 else 0
-    rec["ang"] = 0 if ang_gpu is None else int(ang_gpu.gpudata)
-    cuda.memcpy_htod(mod.get_global("Gd")[0], rec)
+    rec["ang"] = (
+        0 if ang_gpu is None
+        else int(ang_gpu.gpudata)  # pyright: ignore[reportArgumentType]
+    )
+    cuda.memcpy_htod(  # pyright: ignore[reportAttributeAccessIssue]
+        mod.get_global("Gd")[0], rec
+    )
 
     size = theta.size
     iang = gpuempty(size, np.int32)
@@ -152,7 +161,7 @@ def _probe(theta, n, mode=0, ang=None):
     return iang.get(), weight.get()
 
 
-def _sample_angles(n, seed=0):
+def _sample_angles(n: int, seed: int = 0) -> NDArray[np.float32]:
     """Node values, random angles and both end points."""
     rng = np.random.default_rng(seed)
     return np.concatenate(
@@ -165,7 +174,7 @@ def _sample_angles(n, seed=0):
     ).astype(np.float32)
 
 
-def test_aindex_uniform_matches_the_historical_expression():
+def test_aindex_uniform_matches_the_historical_expression() -> None:
     """Mode 0 must reproduce ``theta*(NF-1)/PI`` bit for bit.
 
     This is what guarantees that a run left on the default grid is
@@ -189,7 +198,7 @@ def test_aindex_uniform_matches_the_historical_expression():
 
 
 @pytest.mark.parametrize("n", (3, 721, 10001))
-def test_aindex_never_leaves_the_table(n):
+def test_aindex_never_leaves_the_table(n: int) -> None:
     """The index must address an existing interval, for any angle.
 
     Both ``iang`` and ``iang + 1`` are read, so an index of ``n - 1``
@@ -207,7 +216,7 @@ def test_aindex_never_leaves_the_table(n):
     assert np.all(weight <= 1.0)
 
 
-def test_aindex_backscattering_hits_the_last_node():
+def test_aindex_backscattering_hits_the_last_node() -> None:
     """Check that 180 degrees interpolates onto the last entry."""
     n = 10001
     iang, weight = _probe(np.array([np.pi]), n, mode=0)
@@ -218,7 +227,7 @@ def test_aindex_backscattering_hits_the_last_node():
 
 @pytest.mark.parametrize("n", (721, 1801, 10001))
 @pytest.mark.parametrize("kind", ("chebyshev", "lobatto"))
-def test_aindex_brackets_the_angle(n, kind):
+def test_aindex_brackets_the_angle(n: int, kind: str) -> None:
     """The interval returned must contain the angle asked for.
 
     This is the property the interpolation relies on, and the only one
@@ -239,7 +248,7 @@ def test_aindex_brackets_the_angle(n, kind):
 
 @pytest.mark.parametrize("n", (721, 1801, 10001))
 @pytest.mark.parametrize("kind", ("chebyshev", "lobatto"))
-def test_aindex_reconstructs_the_angle(n, kind):
+def test_aindex_reconstructs_the_angle(n: int, kind: str) -> None:
     """The index and weight together must give the angle back.
 
     Interpolating a phase matrix is only as good as this, so it is
@@ -258,7 +267,7 @@ def test_aindex_reconstructs_the_angle(n, kind):
 
 
 @pytest.mark.parametrize("kind", ("chebyshev", "lobatto"))
-def test_aindex_recovers_the_nodes(kind):
+def test_aindex_recovers_the_nodes(kind: str) -> None:
     """Interpolating at a node must land on that node."""
     n = 1801
     nodes = theta_grid(n, kind, unit="rad")
@@ -277,7 +286,7 @@ def test_aindex_recovers_the_nodes(kind):
 # --------------------------------------------------------------------
 
 
-def _profile(theta_deg):
+def _profile(theta_deg: NDArray[np.floating]) -> xr.Dataset:
     """Build a one layer profile carrying a peaked phase matrix."""
     theta_deg = np.asarray(theta_deg, dtype=np.float64)
     f11 = _peaked_phase(theta_deg)
@@ -290,12 +299,12 @@ def _profile(theta_deg):
     )
 
 
-def _intensity(table):
+def _intensity(table: NDArray[Any]) -> NDArray[Any]:
     """Return the intensity the kernel rebuilds from a row."""
     return table["a_P11"] + table["a_P22"] + 2.0 * table["a_P12"]
 
 
-def _built_on(grid_deg, profile):
+def _built_on(grid_deg: NDArray[np.floating], profile: xr.Dataset) -> tuple[NDArray[Any], NDArray[Any]]:
     """Return the particle row of both tables on *grid_deg*."""
     phase, cdf = _calc_phase_host(
         profile, len(grid_deg), 0.0279, "atm",
@@ -304,13 +313,13 @@ def _built_on(grid_deg, profile):
     return phase[2], cdf[2]
 
 
-def _table_on(grid_deg, profile):
+def _table_on(grid_deg: NDArray[np.floating], profile: xr.Dataset) -> NDArray[Any]:
     """Return the particle row of the phase matrix table."""
     return _built_on(grid_deg, profile)[0]
 
 
 @pytest.mark.parametrize("n", (901, 1801))
-def test_clustered_table_resolves_the_peak_better(n):
+def test_clustered_table_resolves_the_peak_better(n: int) -> None:
     """At equal size, a clustered table is the more accurate one.
 
     Same number of entries, same memory: the only difference is where
@@ -335,7 +344,7 @@ def test_clustered_table_resolves_the_peak_better(n):
     assert error["lobatto"] < error["uniform"] / 5.0
 
 
-def test_adopting_the_matrix_grid_loses_nothing():
+def test_adopting_the_matrix_grid_loses_nothing() -> None:
     """On its own grid, the table is the phase matrix, not a resample.
 
     This is what makes ``theta_grid='phase'`` worth having: the
@@ -352,7 +361,7 @@ def test_adopting_the_matrix_grid_loses_nothing():
     )
 
 
-def test_as_theta_grid_accepts_a_grid_or_a_count():
+def test_as_theta_grid_accepts_a_grid_or_a_count() -> None:
     """Check that as_theta_grid takes a count or the angles."""
     assert np.array_equal(as_theta_grid(5), theta_grid(5))
     lobatto = theta_grid(101, "lobatto")
@@ -371,7 +380,7 @@ def test_as_theta_grid_accepts_a_grid_or_a_count():
 _PEAK_ANGLES = np.array([0.2, 1.0, 20.0, 60.0])
 
 
-def test_clustered_grid_fixes_the_forward_peak_radiance():
+def test_clustered_grid_fixes_the_forward_peak_radiance() -> None:
     """The grid must change the radiance where the peak is, only there.
 
     This is the property the whole feature exists for, checked on a
@@ -388,7 +397,7 @@ def test_clustered_grid_fixes_the_forward_peak_radiance():
 
     wavelength = 670.0
 
-    def radiance(grid):
+    def radiance(grid: ThetaLike) -> NDArray[np.float64]:
         profile = Atm1D(
             "afglms",
             comp=[Cloud("wc", 12.68, 2.0, 3.0, 0.05, wavelength)],
@@ -434,7 +443,7 @@ def test_clustered_grid_fixes_the_forward_peak_radiance():
 # --------------------------------------------------------------------
 
 
-def _psample(u, table, cdf, grid_rad, ipha=0):
+def _psample(u: NumericArrayLike, table: NDArray[Any], cdf: NDArray[Any], grid_rad: NDArray[np.floating], ipha: int = 0) -> tuple[NDArray[np.float32], NDArray[np.int32], NDArray[np.float32], list[int]]:
     """Run the device ``pSample`` over *u* on one uploaded table.
 
     Returns the drawn angles, the bin index and weight the sampler
@@ -488,13 +497,17 @@ def _psample(u, table, cdf, grid_rad, ipha=0):
     g["n"] = n
     g["mode"] = 1
     g["log2n"] = log2n
-    g["ang"] = int(ang_gpu.gpudata)
-    cuda.memcpy_htod(mod.get_global("Gd")[0], g)
+    g["ang"] = int(ang_gpu.gpudata)  # pyright: ignore[reportArgumentType]
+    cuda.memcpy_htod(  # pyright: ignore[reportAttributeAccessIssue]
+        mod.get_global("Gd")[0], g
+    )
     p = np.zeros(1, dtype=TYPE_PGRID)
     p["n"] = n
     p["log2n"] = log2n
-    p["cdf"] = int(cdf_gpu.gpudata)
-    cuda.memcpy_htod(mod.get_global("Pd")[0], p)
+    p["cdf"] = int(cdf_gpu.gpudata)  # pyright: ignore[reportArgumentType]
+    cuda.memcpy_htod(  # pyright: ignore[reportAttributeAccessIssue]
+        mod.get_global("Pd")[0], p
+    )
 
     out = gpuempty(3, np.int32)
     mod.get_function("layout")(out, block=(1, 1, 1), grid=(1, 1))
@@ -512,14 +525,14 @@ def _psample(u, table, cdf, grid_rad, ipha=0):
     return theta.get(), iang.get(), zang.get(), layout
 
 
-def test_the_phase_entry_is_24_bytes():
+def test_the_phase_entry_is_24_bytes() -> None:
     """The struct carries the matrix only, not a copy per CDF node."""
     from smartg.smartg import TYPE_PHASE
 
     assert np.dtype(TYPE_PHASE).itemsize == 24
 
 
-def test_the_device_structs_match_their_numpy_mirrors():
+def test_the_device_structs_match_their_numpy_mirrors() -> None:
     """A mismatched pointer offset would read garbage, silently."""
     from smartg.smartg import TYPE_PGRID, TYPE_PHASE
 
@@ -528,12 +541,13 @@ def test_the_device_structs_match_their_numpy_mirrors():
     _, _, _, layout = _psample([0.5], table[None], cdf[None],
                                np.deg2rad(grid))
     assert layout[0] == TYPE_PGRID.itemsize
+    assert TYPE_PGRID.fields is not None
     assert layout[1] == TYPE_PGRID.fields["cdf"][1]
     assert layout[2] == np.dtype(TYPE_PHASE).itemsize
 
 
 @pytest.mark.parametrize("kind", THETA_GRID_KINDS)
-def test_cdf_spans_the_closed_probability_range(kind):
+def test_cdf_spans_the_closed_probability_range(kind: str) -> None:
     """Every row runs from 0 to 1 on its own grid and never goes back.
 
     The sampler bisects it for the bin a uniform deviate falls in, so
@@ -553,7 +567,7 @@ def test_cdf_spans_the_closed_probability_range(kind):
         assert np.all(np.diff(cdf[row]) >= 0.0)
 
 
-def test_the_cdf_is_the_exact_integral_of_the_table():
+def test_the_cdf_is_the_exact_integral_of_the_table() -> None:
     """For a constant F11 the mass below theta is (1 - cos theta)/2.
 
     The bins are integrated with the true sin(theta), not a quadrature
@@ -572,7 +586,7 @@ def test_the_cdf_is_the_exact_integral_of_the_table():
                                        abs=1e-6)
 
 
-def test_sampling_reproduces_the_tabulated_distribution():
+def test_sampling_reproduces_the_tabulated_distribution() -> None:
     """Drawing from the table must follow the table, bin by bin.
 
     This is what the sampler exists for: push uniform deviates through

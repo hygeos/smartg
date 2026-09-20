@@ -27,6 +27,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import xarray as xr
+from numpy.typing import NDArray
 
 from smartg.atmosphere import Atm1D, Cloud
 from smartg.phase import theta_grid
@@ -162,12 +164,12 @@ if not logger.handlers:
 
 
 # ***************************** helpers ********************************
-def _cloud():
+def _cloud() -> Cloud:
     """Build the ice cloud of the tests."""
     return Cloud(CLOUD, REFF, Z_BOTTOM, Z_TOP, TAU, WAVELENGTH, ssa=1.0)
 
 
-def grid_of(name):
+def grid_of(name: str) -> str | NDArray[np.float64]:
     """Return the angles of a GRIDS entry, in degrees."""
     if name == "native":
         return np.unique(_cloud().ds_mix["theta"].values.astype(float))
@@ -175,7 +177,7 @@ def grid_of(name):
     return theta_grid(int(n), kind)
 
 
-def atm_on(name):
+def atm_on(name: str) -> xr.Dataset:
     """Build the Iwabuchi atmosphere with its matrix on a grid."""
     return Atm1D(
         "afglt",
@@ -188,7 +190,7 @@ def atm_on(name):
     ).calc(WAVELENGTH, n_theta=grid_of(name))
 
 
-def run(sg, name, n_photons=N_PHOTONS, n_loop=N_LOOP, seed=SEED):
+def run(sg: Smartg, name: str, n_photons: float = N_PHOTONS, n_loop: float = N_LOOP, seed: int = SEED) -> tuple[dict[str, NDArray[np.float64]], dict[str, NDArray[np.float64]]]:
     """Run the case, return its radiances and their sigma.
 
     Two dicts keyed like REF_18001, each value in the order of VZA.
@@ -211,7 +213,7 @@ def run(sg, name, n_photons=N_PHOTONS, n_loop=N_LOOP, seed=SEED):
         stdev=True,
     )
 
-    def values(key):
+    def values(key: str) -> NDArray[np.float64]:
         return np.squeeze(m[key].values).ravel()[: len(VZA)]
 
     return (
@@ -221,14 +223,14 @@ def run(sg, name, n_photons=N_PHOTONS, n_loop=N_LOOP, seed=SEED):
 
 
 @pytest.fixture(scope="module")
-def sg():
+def sg() -> Smartg:
     """Build the plane parallel, double precision Smartg."""
     return Smartg(pp=True, double=True)
 
 
 # ****************************** tests *********************************
 @pytest.mark.parametrize("name", GRIDS)
-def test_radiance_on_grid(sg, name):
+def test_radiance_on_grid(sg: Smartg, name: str) -> None:
     """Check the radiances on one grid against the saved ones."""
     got, sigma = run(sg, name)
     logger.info("---- %s (%d angles) ----", name, len(grid_of(name)))
