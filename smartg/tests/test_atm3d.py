@@ -497,11 +497,11 @@ def test_aer3d_phase_stk_signature() -> None:
     # differs from F11; continental_clean is spherical (4-term): its
     # F22 (row 4) is a copy of F11, populated by the 4 -> 6 expansion
     """Check that the aerosol phase matrix has its polarised terms."""
-    one_cell = dict(
-        ext_ref=AER_EXT[:1],
-        rh=AER_RH[:1],
-        cell_indices=AER_CELL_INDICES[:1],
-    )
+    one_cell = {
+        "ext_ref": AER_EXT[:1],
+        "rh": AER_RH[:1],
+        "cell_indices": AER_CELL_INDICES[:1],
+    }
     luts, idx, _ = _build_aerosol("desert", **one_cell).get_phase_set(
         WAV, n_theta=NTH
     )

@@ -158,7 +158,7 @@ def test_native_mixture_lives_on_the_union_and_says_so() -> None:
     atm = _atm([aer, cld])
     with pytest.warns(UserWarning, match=MISMATCH):
         pha = atm.phase(WAV, n_theta="native")
-        assert pha is not None
+    assert pha is not None
     theta = pha.coords["theta_atm"].values
 
     union = union_theta_grid([aer.native_theta(), cld.native_theta()])
@@ -230,7 +230,7 @@ def test_user_matrix_on_its_own_grid_is_mixed_on_the_union() -> None:
     cld = _cloud(phase=_file_matrix(_cloud()))
     with pytest.warns(UserWarning, match=MISMATCH):
         pha = _atm([aer, cld]).phase(WAV)
-        assert pha is not None
+    assert pha is not None
     theta = pha.coords["theta_atm"].values
 
     expected = union_theta_grid([theta_grid(721), cld.native_theta()])
@@ -490,7 +490,7 @@ def test_native_mixture_radiance_matches_a_fine_uniform_grid() -> None:
             output_layers=3, theta_grid="phase", n_photons=2e7,
             seed=1234, xblock=128, xgrid=1024,
         )
-        key = [str(k) for k in m if str(k).startswith("I_down")][0]
+        key = next(str(k) for k in m if str(k).startswith("I_down"))
         return np.atleast_1d(np.squeeze(m[key].values)).ravel()[
             :len(_PEAK_ANGLES)]
 

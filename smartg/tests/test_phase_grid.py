@@ -414,7 +414,7 @@ def test_clustered_grid_fixes_the_forward_peak_radiance() -> None:
             output_layers=3, theta_grid="phase", n_photons=2e7,
             seed=1234, xblock=128, xgrid=1024,
         )
-        key = [str(k) for k in m if str(k).startswith("I_down")][0]
+        key = next(str(k) for k in m if str(k).startswith("I_down"))
         return np.atleast_1d(np.squeeze(m[key].values)).ravel()[
             :len(_PEAK_ANGLES)]
 

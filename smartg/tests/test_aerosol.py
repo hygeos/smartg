@@ -104,7 +104,7 @@ def test_aer_mixtures(request: pytest.FixtureRequest, mix: str) -> None:
     pro = Atm1D("afglt", comp=[aer]).calc(wavelengths)
 
     ref_fname = (
-        DIR_AUXDATA / "aerosols" / "test_ref" / "atm_afglt_{}.nc".format(mix)
+        DIR_AUXDATA / "aerosols" / "test_ref" / f"atm_afglt_{mix}.nc"
     )
     pro_ref = xr.open_dataset(ref_fname)
 
@@ -228,7 +228,7 @@ def test_aer_species(request: pytest.FixtureRequest, spe: str) -> None:
     pro = Atm1D("afglt", comp=[aer]).calc(wavelengths)
 
     ref_fname = (
-        DIR_AUXDATA / "aerosols" / "test_ref" / "atm_afglt_{}.nc".format(spe)
+        DIR_AUXDATA / "aerosols" / "test_ref" / f"atm_afglt_{spe}.nc"
     )
     pro_ref = xr.open_dataset(ref_fname)
 

@@ -145,7 +145,7 @@ def add_link_to_report(request: pytest.FixtureRequest, path: str | Path, name: s
     try:
         url = Path(path).resolve().relative_to(html_output.parent)
     except ValueError as err:
-        raise Exception(
+        raise ValueError(
             f"path ({path}) must be a subfolder of output html ({html_output})"
         ) from err
     add_extra_to_report(request, str(url), "url", name)

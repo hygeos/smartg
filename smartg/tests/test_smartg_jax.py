@@ -14,6 +14,7 @@ os.environ["JAX_PLATFORMS"] = "cpu"
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 import logging
+from contextlib import suppress
 from gc import collect
 
 import pytest
@@ -75,15 +76,14 @@ def cleanup_after_each_test() -> Iterator[None]:
     # _finish_up atexit callback. After sg.clear_context() the
     # context is already gone, so the callback
     # raises "context::pop failed". Unregister it here while we
-    # still have control, so the error is never printed.
-    try:
+    # still have control, so the error is never printed. The
+    # suppress covers a pycuda without autoinit or _finish_up.
+    with suppress(ImportError, AttributeError):
         import atexit
 
         import pycuda.autoinit as _pai
 
         atexit.unregister(_pai._finish_up)
-    except Exception:
-        pass
 
 
 @pytest.mark.parametrize("n_wavelength_abs", [301])
@@ -183,9 +183,7 @@ def test_smartg_jax2(
             wavelength_abs,
             stk_i,
             fmt1,
-            label="AOD@550: {:.1f}; NBPH={:.0e}; NBHIST={:.0e}".format(
-                aod, np.int64(n_photons), int(max_hist)
-            ),
+            label=f"AOD@550: {aod:.1f}; NBPH={np.int64(n_photons):.0e}; NBHIST={int(max_hist):.0e}",
         )
         col = p[0].get_color()
         print(stk_i2, std)
@@ -203,9 +201,7 @@ def test_smartg_jax2(
             m0["I_up (TOA)"][:],
             marker="+",
             ls="",
-            label="AOD@550: {:.1f}; NBPH={:.0e}; NO HIST".format(
-                aod, np.int64(n_photons)
-            ),
+            label=f"AOD@550: {aod:.1f}; NBPH={np.int64(n_photons):.0e}; NO HIST",
             color=p[0].get_color(),
         )
         plt.xlabel(r"$\lambda (nm)$")
@@ -224,7 +220,7 @@ def test_validation_artdeco(request: pytest.FixtureRequest, n_photons: float = 5
     fgas = Path(valpath) / "validation" / f"cTauGas_ray_{typ}_O2.dat"
     gas_valid = diff1(np.loadtxt(fgas, skiprows=7)[:, 1:].T, axis=1)
     z_valid = np.loadtxt(fgas, skiprows=7)[:, 0]
-    w_valid = np.array(open(fgas).readlines()[5].split()).astype(float)
+    w_valid = np.array(fgas.read_text().splitlines()[5].split()).astype(float)
     fray = Path(valpath) / "validation" / f"cTauRay_ray_{typ}_O2.dat"
     ray_valid = diff1(np.loadtxt(fray, skiprows=7)[:, 1:].T, axis=1)
     faer_abs = Path(valpath) / "validation" / f"cTauAbs_ptcle_ray_{typ}_O2.dat"
@@ -339,8 +335,8 @@ def test_validation_artdeco(request: pytest.FixtureRequest, n_photons: float = 5
     )
     m2 = drop_axes(m2, "Zenith angles", "Azimuth angles")
     sg.clear_context()
-    print("GPU time no hist: %.4f" % float(m1.attrs["kernel time (s)"]), "s")
-    print("GPU time hist: %.4f" % float(m2.attrs["kernel time (s)"]), "s")
+    print(f"GPU time no hist: {float(m1.attrs['kernel time (s)']):.4f}", "s")
+    print(f"GPU time hist: {float(m2.attrs['kernel time (s)']):.4f}", "s")
 
     with jax.default_device(
         jax.devices("cpu")[0]

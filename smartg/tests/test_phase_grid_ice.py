@@ -240,11 +240,11 @@ def test_radiance_on_grid(sg: Smartg, name: str) -> None:
         logger.info(
             "%s at VZA %s: %s; saved %s; sigma %s; vs 1e10 reference %s %%",
             k,
-            " / ".join("%g" % v for v in VZA),
-            " / ".join("%.6e" % v for v in got[k]),
-            " / ".join("%.6e" % v for v in saved),
-            " / ".join("%.2e" % v for v in sigma[k]),
-            " / ".join("%+.2f" % (100 * (v / r - 1))
+            " / ".join(f"{v:g}" for v in VZA),
+            " / ".join(f"{v:.6e}" for v in got[k]),
+            " / ".join(f"{v:.6e}" for v in saved),
+            " / ".join(f"{v:.2e}" for v in sigma[k]),
+            " / ".join(f"{100 * (v / r - 1):+.2f}"
                        for v, r in zip(got[k], ref)),
         )
         assert np.all(np.isfinite(sigma[k])) and np.all(sigma[k] > 0), (

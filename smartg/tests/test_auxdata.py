@@ -18,13 +18,13 @@ import urllib.error
 import urllib.request
 import zipfile
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.message import Message
 from pathlib import Path
 
 import pytest
 
-import smartg.auxdata as auxdata
+from smartg import auxdata
 from smartg.auxdata import (
     DATASETS,
     AuxData,
@@ -40,8 +40,6 @@ from smartg.auxdata import (
     extract_tar,
     extract_zip,
 )
-
-UTC = timezone.utc
 
 PROPFIND_XML = (
     b'<?xml version="1.0"?>'
@@ -405,9 +403,9 @@ def test_check_update_prints_table(aux: AuxData, sources: dict[str, FakeSource],
         "source", "/", "note",
     ]
     assert re.search(
-        r"^a +up to date +2026-01-03 10:00 +2026-01-02 00:00 +one", out, re.M
+        r"^a +up to date +2026-01-03 10:00 +2026-01-02 00:00 +one", out, re.MULTILINE
     )
-    assert re.search(r"^b +missing +- +2026-01-02 00:00 +prim", out, re.M)
+    assert re.search(r"^b +missing +- +2026-01-02 00:00 +prim", out, re.MULTILINE)
     assert "update() would download: b" in out
 
     (tmp_path / "beta").mkdir()
@@ -595,7 +593,7 @@ def test_status_modified_and_listing(aux: AuxData, sources: dict[str, FakeSource
     capsys.readouterr()
     aux.check_update("a")
     out = capsys.readouterr().out
-    assert re.search(r"^a +modified ", out, re.M)
+    assert re.search(r"^a +modified ", out, re.MULTILINE)
     assert "  modified     file.txt" in out
     assert "  extra, kept  extra.txt" in out
     assert "restore() would repair: a" in out
