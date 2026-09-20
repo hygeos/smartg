@@ -1,3 +1,8 @@
+"""Tests of the photon histories, replayed with jax.
+
+JAX runs on the CPU here, see the environment set above the
+imports.
+"""
 import os
 
 # Must be set before importing JAX so only the CPU backend
@@ -61,6 +66,7 @@ logger.addHandler(file_handler)
 # Clean up JAX memory and stale PyCUDA atexit handlers after each test
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_after_each_test():
+    """Clear the jax caches and the pycuda exit hook after each test."""
     yield
     jax.clear_caches()
     collect()
@@ -85,6 +91,7 @@ def cleanup_after_each_test():
 def test_smartg_jax2(
     n_wavelength_abs, wmin, wmax, request, n_photons=5e4, max_hist=1e6
 ):
+    """Replay the histories of a run with jax, on the CPU."""
     alb_snow = AlbedoCst(0.6)
     alb_hist = AlbedoCst(1.0)
     wavelength_sca = np.linspace(wmin, wmax, num=11)
@@ -210,9 +217,7 @@ def test_smartg_jax2(
 
 
 def test_validation_artdeco(request, n_photons=5e5, valpath=DIR_AUXDATA):
-    """
-    Validation of SMART-G with ARTDECO validation data
-    """
+    """Check SMART-G against the ARTDECO validation data."""
     typ = "desert"  # tau=0.25
     ####################""""""
     fgas = Path(valpath) / "validation" / f"cTauGas_ray_{typ}_O2.dat"

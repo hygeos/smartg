@@ -1,3 +1,9 @@
+"""Tests of the 1D atmosphere profiles.
+
+Each one builds an Atm1D, with or without components, on the
+default grid or on a given one, and computes it at one or several
+wavelengths.
+"""
 import numpy as np
 import pytest
 
@@ -25,15 +31,18 @@ aerosol or aerosol+cloud components, and with overridden ``tau_r`` or
     ]
 )
 def wavelength(request):
+    """Give a wavelength as a float, a 0-d array, a list, an array."""
     return request.param
 
 
 def test_profile1(wavelength):
+    """Compute the default atmosphere."""
     atmosphere = Atm1D("afglt")
     atmosphere.calc(wavelength)
 
 
 def test_profile2(wavelength):
+    """Compute an atmosphere on given altitude and phase grids."""
     atmosphere = Atm1D(
         "afglms",
         grid=[100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0],
@@ -43,6 +52,7 @@ def test_profile2(wavelength):
 
 
 def test_profile3(wavelength):
+    """Compute an atmosphere holding an aerosol, on a string grid."""
     atmosphere = Atm1D(
         "afglms",
         comp=[AerOPAC("desert", 0.1, 550.0)],
@@ -53,6 +63,7 @@ def test_profile3(wavelength):
 
 
 def test_profile4(wavelength):
+    """Compute an atmosphere holding an aerosol and a cloud."""
     atmosphere = Atm1D(
         "afglms",
         comp=[
@@ -67,6 +78,7 @@ def test_profile4(wavelength):
 
 def test_profile5():
     # set tauray
+    """Check that tau_r sets the Rayleigh optical depth."""
     pro = Atm1D("afglms", grid=[100, 20, 0.0], tau_r=0.14).calc(500.0)
     assert np.isclose(pro["OD_r"][0, -1], 0.14)
 
@@ -78,6 +90,7 @@ def test_profile5():
 
 def test_profile6():
     # set ssa
+    """Compute an aerosol with its albedo overridden."""
     Atm1D(
         "afglms",
         grid=[100, 20, 0.0],

@@ -25,6 +25,7 @@ def sample_dataset():
 
 
 def test_dataset_to_mlut_roundtrip():
+    """Check that a Dataset survives a round trip through MLUT."""
     ds = sample_dataset()
     mlut = dataset_to_mlut(ds)
 
@@ -46,6 +47,7 @@ def test_dataset_to_mlut_roundtrip():
 
 
 def test_drop_axes_dim_and_coord():
+    """Check that drop_axes removes a dimension and its coordinate."""
     ds = xr.Dataset()
     ds.coords['wavelength'] = np.array([500.0])
     ds['I'] = xr.Variable(('wavelength', 'z'), np.ones((1, 3)))
@@ -58,6 +60,7 @@ def test_drop_axes_dim_and_coord():
 def test_drop_axes_coord_only():
     # a coordinate used by no data variable (LE-zip 'Azimuth angles'
     # case) is removed regardless of its size
+    """Check that drop_axes removes a coordinate on its own."""
     ds = xr.Dataset()
     ds.coords['Azimuth angles'] = np.array([0.0, 90.0, 180.0])
     ds['I'] = xr.Variable(('Zenith angles',), np.ones(4))
@@ -67,12 +70,14 @@ def test_drop_axes_coord_only():
 
 
 def test_drop_axes_absent_name_is_ignored():
+    """Check that an absent name leaves the Dataset untouched."""
     ds = xr.Dataset({'I': (('z',), np.ones(3))})
     out = drop_axes(ds, 'wavelength')
     assert out.identical(ds)
 
 
 def test_drop_axes_multiple_names():
+    """Check that drop_axes takes several names at once."""
     ds = xr.Dataset()
     ds.coords['a'] = np.array([1.0])
     ds['I'] = xr.Variable(('a', 'b', 'z'), np.ones((1, 1, 3)))
@@ -81,6 +86,7 @@ def test_drop_axes_multiple_names():
 
 
 def test_drop_axes_size_error():
+    """Check that an axis longer than one point is refused."""
     ds = xr.Dataset({'I': (('z',), np.ones(3))})
     with pytest.raises(ValueError):
         drop_axes(ds, 'z')

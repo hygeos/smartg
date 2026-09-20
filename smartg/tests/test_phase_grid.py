@@ -17,7 +17,7 @@ N_TEST = (2, 3, 9, 721, 1801)
 
 
 def _peaked_phase(theta_deg):
-    """A phase function with a 0.2 degree wide forward peak.
+    """Build a phase function with a 0.2 degree wide forward peak.
 
     Stands in for a cloud droplet or a coarse desert aerosol: a
     diffraction peak far narrower than the grid step of any reasonable
@@ -90,6 +90,7 @@ def test_theta_grid_clusters_towards_the_peak():
     ],
 )
 def test_theta_grid_rejects_bad_input(kwargs):
+    """Check that a bad count or kind is refused."""
     with pytest.raises(ValueError):
         theta_grid(**kwargs)
 
@@ -207,7 +208,7 @@ def test_aindex_never_leaves_the_table(n):
 
 
 def test_aindex_backscattering_hits_the_last_node():
-    """theta = 180 degrees must interpolate onto the last entry."""
+    """Check that 180 degrees interpolates onto the last entry."""
     n = 10001
     iang, weight = _probe(np.array([np.pi]), n, mode=0)
 
@@ -277,7 +278,7 @@ def test_aindex_recovers_the_nodes(kind):
 
 
 def _profile(theta_deg):
-    """A one-entry atmospheric profile carrying a peaked phase matrix."""
+    """Build a one layer profile carrying a peaked phase matrix."""
     theta_deg = np.asarray(theta_deg, dtype=np.float64)
     f11 = _peaked_phase(theta_deg)
     pha = np.zeros((1, 6, len(theta_deg)))
@@ -290,12 +291,12 @@ def _profile(theta_deg):
 
 
 def _intensity(table):
-    """The intensity the kernel reconstructs from an equal-angle row."""
+    """Return the intensity the kernel rebuilds from a row."""
     return table["a_P11"] + table["a_P22"] + 2.0 * table["a_P12"]
 
 
 def _built_on(grid_deg, profile):
-    """The particle row of both tables built on *grid_deg*."""
+    """Return the particle row of both tables on *grid_deg*."""
     phase, cdf = _calc_phase_host(
         profile, len(grid_deg), 0.0279, "atm",
         ang_a=np.deg2rad(grid_deg),
@@ -304,7 +305,7 @@ def _built_on(grid_deg, profile):
 
 
 def _table_on(grid_deg, profile):
-    """The particle row of the phase matrix table."""
+    """Return the particle row of the phase matrix table."""
     return _built_on(grid_deg, profile)[0]
 
 
@@ -352,6 +353,7 @@ def test_adopting_the_matrix_grid_loses_nothing():
 
 
 def test_as_theta_grid_accepts_a_grid_or_a_count():
+    """Check that as_theta_grid takes a count or the angles."""
     assert np.array_equal(as_theta_grid(5), theta_grid(5))
     lobatto = theta_grid(101, "lobatto")
     assert np.array_equal(as_theta_grid(lobatto), lobatto)

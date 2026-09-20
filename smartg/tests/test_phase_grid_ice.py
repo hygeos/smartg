@@ -163,11 +163,12 @@ if not logger.handlers:
 
 # ***************************** helpers ********************************
 def _cloud():
+    """Build the ice cloud of the tests."""
     return Cloud(CLOUD, REFF, Z_BOTTOM, Z_TOP, TAU, WAVELENGTH, ssa=1.0)
 
 
 def grid_of(name):
-    """The scattering angles of a GRIDS entry, in degrees."""
+    """Return the angles of a GRIDS entry, in degrees."""
     if name == "native":
         return np.unique(_cloud().ds_mix["theta"].values.astype(float))
     kind, n = name.rsplit("-", 1)
@@ -175,7 +176,7 @@ def grid_of(name):
 
 
 def atm_on(name):
-    """The Iwabuchi atmosphere with its phase matrix on a grid."""
+    """Build the Iwabuchi atmosphere with its matrix on a grid."""
     return Atm1D(
         "afglt",
         comp=[_cloud()],
@@ -188,7 +189,7 @@ def atm_on(name):
 
 
 def run(sg, name, n_photons=N_PHOTONS, n_loop=N_LOOP, seed=SEED):
-    """The radiances of REF_18001's keys and their Monte Carlo sigma.
+    """Run the case, return its radiances and their sigma.
 
     Two dicts keyed like REF_18001, each value in the order of VZA.
     """
@@ -221,12 +222,14 @@ def run(sg, name, n_photons=N_PHOTONS, n_loop=N_LOOP, seed=SEED):
 
 @pytest.fixture(scope="module")
 def sg():
+    """Build the plane parallel, double precision Smartg."""
     return Smartg(pp=True, double=True)
 
 
 # ****************************** tests *********************************
 @pytest.mark.parametrize("name", GRIDS)
 def test_radiance_on_grid(sg, name):
+    """Check the radiances on one grid against the saved ones."""
     got, sigma = run(sg, name)
     logger.info("---- %s (%d angles) ----", name, len(grid_of(name)))
     for k, ref in REF_18001.items():
