@@ -35,7 +35,7 @@ PROFILE_DIMS = ("wavelength_phase", "z_phase", "nphamat", "theta_atm")
 
 
 def _file_grids(fname):
-    """The distinct scattering angle grids a cdf file carries, sorted."""
+    """Return the distinct angle grids of a cdf file, sorted."""
     ds = xr.open_dataset(fname)
     theta, ntheta = ds["theta"].values, ds["ntheta"].values
     grids = []
@@ -52,6 +52,7 @@ def _file_grids(fname):
 
 
 def test_cdf_table_layout():
+    """Check the axes, the shape and the type of a cdf table."""
     table = read_phase_cdf(WC_CDF, output_sg_ready=False, normalize=False)
     assert table.dims == ("wavelength_phase", "reff", "nphamat", "theta_atm")
     assert table.shape == (1, 25, 4, 18001)
@@ -63,12 +64,14 @@ def test_cdf_table_layout():
 
 
 def test_cdf_kind_names_the_angle_axis():
+    """Check that kind='oc' names the axis theta_oc."""
     table = read_phase_cdf(WASO_CDF, kind="oc", output_sg_ready=False)
     assert table.dims[-1] == "theta_oc"
     assert table.name == "phase_oc"
 
 
 def test_cdf_profile_layout_is_the_table_interpolated():
+    """Check that the profile is the table read at the targets."""
     table = read_phase_cdf(WC_CDF, output_sg_ready=False, normalize=False)
     profile = read_phase_cdf(
         WC_CDF, z_rh_reff=[10.0, 12.0], pfgrid=[5.0, 2.0, 0.0],
@@ -83,6 +86,7 @@ def test_cdf_profile_layout_is_the_table_interpolated():
 def test_cdf_scalar_targets_keep_four_dimensions():
     # a scalar wavelength or humidity used to drop its dimension, and
     # a single humidity without pfgrid used to be refused
+    """Check that a scalar target still gives four axes."""
     profile = read_phase_cdf(WC_CDF, z_rh_reff=10.0, normalize=False)
     assert profile.dims == PROFILE_DIMS
     assert profile.shape == (1, 1, 4, 18001)
@@ -101,11 +105,13 @@ def test_cdf_scalar_targets_keep_four_dimensions():
     ],
 )
 def test_cdf_table_layout_refuses_the_profile_targets(kwargs):
+    """Check that the table layout refuses a profile target."""
     with pytest.raises(ValueError, match="output_sg_ready"):
         read_phase_cdf(WC_CDF, output_sg_ready=False, **kwargs)
 
 
 def test_cdf_multi_reff_file_needs_a_target():
+    """Check that a file of several radii demands a target."""
     with pytest.raises(ValueError, match="z_rh_reff"):
         read_phase_cdf(WC_CDF)
 
@@ -113,11 +119,13 @@ def test_cdf_multi_reff_file_needs_a_target():
 def test_cdf_automatic_grid_is_the_finest_step_of_the_file():
     # 0.01 degree steps in the water cloud peak give the 18001 cap;
     # the float32 step of waso, 0.19999695, gives 902 rather than 901
+    """Check the automatic grid against two files of its own."""
     assert read_phase_cdf(WC_CDF, output_sg_ready=False).shape[-1] == 18001
     assert read_phase_cdf(WASO_CDF, output_sg_ready=False).shape[-1] == 902
 
 
 def test_cdf_n_theta_count_or_angles():
+    """Check that n_theta takes a count or the angles themselves."""
     count = read_phase_cdf(WASO_CDF, n_theta=901, output_sg_ready=False)
     np.testing.assert_allclose(
         count.coords["theta_atm"], np.linspace(0.0, 180.0, 901)
@@ -132,6 +140,7 @@ def test_cdf_n_theta_count_or_angles():
     "fname, n_union", [(WC_CDF, 2818), (WASO_CDF, 38)]
 )
 def test_cdf_native_grid_reads_the_file_back_exactly(fname, n_union):
+    """Check that the native grid gives the file values back."""
     ds, grids = _file_grids(fname)
     table = read_phase_cdf(
         fname, n_theta="native", output_sg_ready=False, normalize=False
@@ -151,6 +160,7 @@ def test_cdf_native_grid_reads_the_file_back_exactly(fname, n_union):
 
 
 def test_cdf_normalize():
+    """Check that normalising brings the integral of f11 to 2."""
     raw = read_phase_cdf(WC_CDF, output_sg_ready=False, normalize=False)
     normed = read_phase_cdf(WC_CDF, output_sg_ready=False, normalize=True)
     theta = normed.coords["theta_atm"].values
@@ -170,6 +180,7 @@ def test_cdf_normalize():
 
 
 def test_cdf_keeps_the_terms_of_the_file():
+    """Check that the four terms of the file are all kept."""
     for output_sg_ready in (True, False):
         table = read_phase_cdf(
             WASO_CDF, output_sg_ready=output_sg_ready
@@ -178,6 +189,7 @@ def test_cdf_keeps_the_terms_of_the_file():
 
 
 def test_cloud3d_completes_a_four_term_table():
+    """Check that Cloud3D fills a four term table up to six."""
     table = read_phase_cdf(
         WC_CDF, n_theta=901, output_sg_ready=False, normalize=False
     )
@@ -204,6 +216,7 @@ def test_cloud3d_completes_a_four_term_table():
 
 
 def test_nc_table_layout():
+    """Check the axes and the shape of a netCDF table."""
     table = read_phase_nc(DESERT_NC, output_sg_ready=False)
     assert table.dims == ("wavelength_phase", "hum", "nphamat", "theta_atm")
     assert table.shape == (26, 8, 6, 1801)
@@ -214,6 +227,7 @@ def test_nc_table_layout():
 
 
 def test_nc_profile_layout_is_the_table_interpolated():
+    """Check that the netCDF profile is the table at the targets."""
     table = read_phase_nc(DESERT_NC, output_sg_ready=False)
     profile = read_phase_nc(DESERT_NC, wavelength_phase=550.0, z_rh_reff=70.0)
     assert profile.dims == PROFILE_DIMS
@@ -223,11 +237,13 @@ def test_nc_profile_layout_is_the_table_interpolated():
 
 
 def test_nc_table_layout_refuses_the_profile_targets():
+    """Check that the netCDF table layout refuses a target."""
     with pytest.raises(ValueError, match="output_sg_ready"):
         read_phase_nc(DESERT_NC, output_sg_ready=False, wavelength_phase=550.0)
 
 
 def test_aer3d_takes_the_nc_table():
+    """Check that Aer3D keeps the axes of the netCDF table."""
     table = read_phase_nc(DESERT_NC, output_sg_ready=False)
     aer = Aer3D(
         "desert", w_ref=550.0, ext_ref=np.array([0.1]),
@@ -243,6 +259,7 @@ def test_aer3d_takes_the_nc_table():
 
 
 def test_dispatcher_forwards_the_layout():
+    """Check that read_phase forwards the layout to each reader."""
     cdf = read_phase(WASO_CDF, output_sg_ready=False)
     assert cdf.dims[1] == "reff"
     nc = read_phase(WC_NC, output_sg_ready=False)
@@ -252,6 +269,7 @@ def test_dispatcher_forwards_the_layout():
 
 
 def test_dispatcher_refuses_the_table_layout_of_a_dat_file(tmp_path):
+    """Check that a .dat file has no table layout to give."""
     theta = np.linspace(0.0, 180.0, 19)
     table = np.column_stack([theta, np.ones(19), np.zeros(19)])
     fname = tmp_path / "phase.dat"
@@ -262,4 +280,5 @@ def test_dispatcher_refuses_the_table_layout_of_a_dat_file(tmp_path):
 
 
 def test_the_constant_theta_reader_is_gone():
+    """Check that read_phase_nth_cte is no longer exported."""
     assert not hasattr(smartg.phase, "read_phase_nth_cte")
