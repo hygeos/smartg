@@ -1,5 +1,4 @@
-"""
-This module facilitates the inclusion of images in pytest-html reports.
+"""Put the figures of the tests into the pytest-html report.
 
 Generate images with matplotlib and use conftest.savefig(request)
 instead of matplotlib's savefig.
@@ -53,9 +52,7 @@ Other features
 
 Parameters
 ----------
-
-By using this conftest, the following parameters are being supported
-in pytest.ini
+The ini options this conftest adds to pytest.ini:
 
 img_collapsible
     Whether to use a collapsible section to embed the images
@@ -87,8 +84,7 @@ _pytest_config = None
 
 
 def _get_peak_rss_mb():
-    """Return process peak RSS in MiB with cross-platform unit
-    handling."""
+    """Return the peak RSS of the process, in MiB."""
     peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak_rss / 1024
 
@@ -101,12 +97,14 @@ def _monitor_peak_memory_enabled(config):
 
 
 def add_image_to_report(request, fp):
-    """
-    Appends image data to request.node.images
+    """Append image data to ``request.node.images``.
 
-    request: pytest `request` fixture
-
-    fp: BytesIO
+    Parameters
+    ----------
+    request : pytest.FixtureRequest
+        The request fixture of the test.
+    fp : io.BytesIO
+        The image, already encoded.
     """
     if not hasattr(request.node, "images"):
         request.node.images = []
@@ -116,15 +114,16 @@ def add_image_to_report(request, fp):
 
 
 def add_extra_to_report(request, *args):
-    """
-    Add extra content to pytest-html report (through
-    request.node.extras)
+    """Add extra content to the pytest-html report.
 
-    Examples:
-        add_extra_to_report(request, 'sample text', 'text')
-        add_extra_to_report(request, 'sample html', 'html')
-        add_extra_to_report(request, 'https://www.wikipedia.org/',
-                            'url', 'Link text')
+    It goes through ``request.node.extras``.
+
+    Examples
+    --------
+    >>> add_extra_to_report(request, 'sample text', 'text')
+    >>> add_extra_to_report(request, 'sample html', 'html')
+    >>> add_extra_to_report(request, 'https://www.wikipedia.org/',
+    ...                     'url', 'Link text')
     """
     if not hasattr(request.node, "extras"):
         request.node.extras = []
@@ -132,10 +131,9 @@ def add_extra_to_report(request, *args):
 
 
 def add_link_to_report(request, path, name="Link"):
-    """
-    Add a link to a local file `path`
+    """Add a link to the local file ``path``.
 
-    Makes the link relative to the directory of html output
+    The link is made relative to the directory of the html output.
     """
     assert Path(path).exists()
     htmlo = request.config.getoption("--html")
@@ -152,10 +150,10 @@ def add_link_to_report(request, path, name="Link"):
 
 
 def savefig(request, **kwargs):
-    """
-    Wraps matplotlib's savefig to add image data to request.node.images
+    """Wrap savefig so that the figure lands in the report.
 
-    `kwargs` are passed to `plt.savefig`
+    The image is added to ``request.node.images``, and ``kwargs``
+    are passed on to ``plt.savefig``.
     """
     from matplotlib import pyplot as plt
 
@@ -166,6 +164,7 @@ def savefig(request, **kwargs):
 
 
 def pytest_addoption(parser):
+    """Declare the ini options this plugin reads."""
     parser.addini(
         "img_collapsible",
         "Whether to use a collapsible section to embed the images (default "
@@ -195,6 +194,7 @@ def pytest_configure(config):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item):
+    """Attach the images, the extras and the peak memory to a report."""
     pytest_html = item.config.pluginmanager.getplugin("html")
     outcome = yield
     report = outcome.get_result()
@@ -418,8 +418,7 @@ a:hover {
 
 
 def pytest_html_results_summary(prefix, summary, postfix):
-    """Add embedded dark theme CSS to the HTML report if dark_mode is
-    enabled."""
+    """Embed the dark theme CSS when dark_mode is enabled."""
     if _pytest_config is not None:
         dark_mode_enabled = {"true": True, "false": False}[
             (_pytest_config.getini("dark_mode") or "false").lower()
