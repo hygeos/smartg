@@ -1264,11 +1264,11 @@ def simulate(
     thvdeg: float, surface: bool, aerosol_model: str, aot550: float
 ) -> None:
     """Run one aerosol case and print its TOA intensity."""
-    surface = {True: RoughSurface(), False: None}[surface]
+    surf = {True: RoughSurface(), False: None}[surface]
     aer = AerOPAC(aerosol_model, aot550, 550.)
     out = sg.run(th_deg=thvdeg, wavelength=[443.], n_photons=1e5,
                  le=le, atmosphere=Atm1D('afglt', comp=[aer]),
-                 surface=surface, progress=False)
+                 surface=surf, progress=False)
     print(f"TOA Intensity : {float(out['I_up (TOA)'].data):.5f}")
 
 
