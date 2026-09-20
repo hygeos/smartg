@@ -2713,14 +2713,36 @@ class Atm1D(Atmosphere):
                         f11_tr = ds_pha["phase_tr"].values
                         f = ds_pha["f"].values
                         f_pha[iph] = f
-                        # Ensure for the moment only 1 unique truncation
-                        # factor
+                        # One truncation factor for the whole medium.
+                        # Every phase matrix of the profile is truncated
+                        # here, and the optical depth and the single
+                        # scattering albedo are rescaled further down
+                        # with this one scalar f over every cell at
+                        # once, so a second factor would have nothing to
+                        # rescale with.
+                        #
+                        # Two things are missing to truncate one layer
+                        # or one voxel alone. Indexing f_pha by
+                        # iphase_atm would give one f per cell and lift
+                        # this guard, unchanged wherever a single factor
+                        # is used today. That alone is not enough: a
+                        # cell mixing a peaked component with a smooth
+                        # one carries a single mixed phase matrix, so
+                        # truncating it truncates both. Truncating only
+                        # the peaked one asks for the truncation to be
+                        # carried by the component, applied before the
+                        # mixing, with the scattering coefficient of
+                        # that component alone scaled by 1 - f.
                         if iph > 0 and not np.isclose(
                             f_pha[iph], f_pha[0], atol=1e-6
                         ):
                             raise ValueError(
-                                "Several truncation factors f is not yet "
-                                + "authorized"
+                                f"Only one truncation factor is "
+                                f"supported: the phase matrix {iph} "
+                                f"truncates at f={float(f_pha[iph]):.4g} "
+                                f"against {float(f_pha[0]):.4g} for the "
+                                "first one. Truncate components that "
+                                "truncate alike, or a single one."
                             )
 
                         pha_tr[iph, 0, :] = f11_tr
