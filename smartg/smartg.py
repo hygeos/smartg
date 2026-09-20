@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-# encoding: utf-8
-
-
 """SMART-G: Speed-up Monte carlo Advanced Radiative Transfer on GPU.
 
 This module hosts the Smartg class, whose constructor compiles the CUDA
@@ -41,7 +37,7 @@ import subprocess
 import tempfile
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 from warnings import warn
 
@@ -49,6 +45,7 @@ import geoclide as gc
 import numpy as np
 import pycuda.driver as cuda
 import xarray as xr
+from luts.luts import MLUT
 from numpy import pi
 from numpy.typing import DTypeLike, NDArray
 from pycuda import gpuarray
@@ -56,6 +53,7 @@ from pycuda.compiler import SourceModule
 from pycuda.gpuarray import GPUArray, to_gpu
 from scipy.interpolate import interp1d
 
+from smartg.albedo import AlbedoMap
 from smartg.atmosphere import Atmosphere, blackbody_radiance, od2k
 from smartg.bandset import BandSet
 from smartg.cdf import icdf_2d
@@ -122,7 +120,6 @@ UP0P = 3
 UP0M = 4
 DOWNB = 5
 
-#
 MAX_NREF = 100
 
 #
@@ -314,7 +311,7 @@ TYPE_GOBJ = [
 ]
 
 
-class StdevLim(object):
+class StdevLim:
     """Adaptive stopping criterion for Smartg.run.
 
     Based on the standard deviation of the results.
@@ -384,7 +381,7 @@ class StdevLim(object):
 
     def __repr__(self) -> str:
         """Return the representation of the StdevLim."""
-        return 'Stdevlim dict: %s' % self.dict.__repr__()
+        return f'Stdevlim dict: {self.dict!r}'
 
 
 # The legacy alis_options dictionary keys, and the Alis constructor
@@ -396,7 +393,7 @@ _ALIS_LEGACY_KEYS = {
 }
 
 
-class Alis(object):
+class Alis:
     """
     The options of the ALIS method, for Smartg.run.
 
@@ -466,11 +463,11 @@ class Alis(object):
         if n_low != -1 and n_low < 2:
             raise ValueError(
                 'n_low must be -1, to select every wavelength, or at '
-                'least 2, got {}.'.format(n_low)
+                f'least 2, got {n_low}.'
             )
         if n_jac_abs and n_jac < 1:
             raise ValueError(
-                'n_jac_abs needs a positive n_jac, got {}.'.format(n_jac)
+                f'n_jac_abs needs a positive n_jac, got {n_jac}.'
             )
 
         self.n_low: int = n_low
@@ -481,18 +478,13 @@ class Alis(object):
 
     def __str__(self) -> str:
         """Return a readable description of the Alis."""
-        return 'ALIS=-n_low{}-hist{}-n_jac{}'.format(
-            self.n_low, int(self.hist), self.n_jac
-        )
+        return f'ALIS=-n_low{self.n_low}-hist{int(self.hist)}-n_jac{self.n_jac}'
 
     def __repr__(self) -> str:
         """Return the representation of the Alis."""
         return (
-            'Alis(n_low={!r}, hist={!r}, max_hist={!r}, n_jac={!r}, '
-            'n_jac_abs={!r})'.format(
-                self.n_low, self.hist, self.max_hist, self.n_jac,
-                self.n_jac_abs
-            )
+            f'Alis(n_low={self.n_low!r}, hist={self.hist!r}, max_hist={self.max_hist!r}, n_jac={self.n_jac!r}, '
+            f'n_jac_abs={self.n_jac_abs!r})'
         )
 
 
@@ -525,9 +517,7 @@ def _le_angles(
     """
     if (rad is None) == (deg is None):
         raise ValueError(
-            'Exactly one of {} and {}_deg must be given.'.format(
-                name, name
-            )
+            f'Exactly one of {name} and {name}_deg must be given.'
         )
     if rad is None:
         # numpy keeps the float32 of the array, the stubs do not
@@ -538,7 +528,7 @@ def _le_angles(
     return np.array(rad, dtype='float32').ravel()
 
 
-class LocalEstimate(object):
+class LocalEstimate:
     """
     The directions of the local estimate method, for Smartg.run.
 
@@ -619,9 +609,7 @@ class LocalEstimate(object):
         if zip and self.phi.shape[0] != self.th.shape[0]:
             raise ValueError(
                 'With zip, there must be as many azimuth angles as '
-                'zenith angles, got {} and {}.'.format(
-                    self.phi.shape[0], self.th.shape[0]
-                )
+                f'zenith angles, got {self.phi.shape[0]} and {self.th.shape[0]}.'
             )
 
         self.count_level: NDArray[np.int32] | None = None
@@ -632,28 +620,22 @@ class LocalEstimate(object):
             if self.count_level.shape[0] != self.th.shape[0]:
                 raise ValueError(
                     'count_level must hold one value per zenith '
-                    'angle, got {} for {} angles.'.format(
-                        self.count_level.shape[0], self.th.shape[0]
-                    )
+                    f'angle, got {self.count_level.shape[0]} for {self.th.shape[0]} angles.'
                 )
 
     def __str__(self) -> str:
         """Return a readable description of the LocalEstimate."""
-        return 'LE=-n_th{}-n_phi{}-zip{}'.format(
-            self.th.shape[0], self.phi.shape[0], int(self.zip)
-        )
+        return f'LE=-n_th{self.th.shape[0]}-n_phi{self.phi.shape[0]}-zip{int(self.zip)}'
 
     def __repr__(self) -> str:
         """Return the representation of the LocalEstimate."""
         return (
-            'LocalEstimate(th={!r}, phi={!r}, zip={!r}, '
-            'count_level={!r})'.format(
-                self.th, self.phi, self.zip, self.count_level
-            )
+            f'LocalEstimate(th={self.th!r}, phi={self.phi!r}, zip={self.zip!r}, '
+            f'count_level={self.count_level!r})'
         )
 
 
-class Smartg(object):
+class Smartg:
     """Initialize the Smartg object.
 
     Performs the compilation and loading of the kernel. This class is
@@ -828,8 +810,9 @@ class Smartg(object):
                     import pycuda.autoinit
 
                     self.ctx = pycuda.autoinit.context
-                except Exception:
-                    # In case cuda context has been manually popped
+                # pycuda raises its own error classes when the context
+                # has been popped by hand: recover from any of them
+                except Exception:  # noqa: BLE001
                     from importlib import import_module, reload
 
                     pycuda.autoinit = import_module('pycuda.autoinit')
@@ -870,12 +853,11 @@ class Smartg(object):
             )
         if scatter_classes == 'none':
             nscl = 1
-        if scatter_classes == 'scattering_order_per_layer':
-            if norders < 1:
-                raise ValueError(
-                    f'norders must be >= 1 for scattering_order_per_layer '
-                    f'mode, got {norders}'
-                )
+        if scatter_classes == 'scattering_order_per_layer' and norders < 1:
+            raise ValueError(
+                f'norders must be >= 1 for scattering_order_per_layer '
+                f'mode, got {norders}'
+            )
         if nscl > 1 and not alis:
             raise ValueError(
                 'nscl>1 requires alis=True '
@@ -954,12 +936,11 @@ class Smartg(object):
         #
         # compile the kernel or load binary
         #
-        time_before_compilation = datetime.now()
+        time_before_compilation = datetime.now(UTC)
 
         # load device.cu
-        src_device_content = open(
-            SRC_DEVICE, encoding='ascii', errors='ignore'
-        ).read()
+        with open(SRC_DEVICE, encoding='ascii', errors='ignore') as f:
+            src_device_content = f.read()
 
         # kernel compilation
         self.mod = SourceModule(
@@ -984,7 +965,7 @@ class Smartg(object):
         #
         self.common_attrs = OrderedDict()
         self.common_attrs['compilation_time'] = (
-            datetime.now() - time_before_compilation
+            datetime.now(UTC) - time_before_compilation
         ).total_seconds()
         if autoinit:
             self.common_attrs['device'] = pycuda.autoinit.device.name()
@@ -1015,7 +996,7 @@ class Smartg(object):
                         attr.MULTI_GPU_BOARD_GROUP_ID
                     ]
                 )
-            except Exception:
+            except (AttributeError, KeyError):
                 self.common_attrs['device_number'] = 'undefined'
         self.common_attrs['pycuda_version'] = pycuda.VERSION_TEXT
         cuda_version = (
@@ -1048,7 +1029,8 @@ class Smartg(object):
                 import pycuda.autoinit
 
                 del pycuda.autoinit
-        except Exception:
+        # pycuda's own error classes again, nothing else to do here
+        except Exception:  # noqa: BLE001
             print("There is no current context to clear.")
 
     def run(
@@ -1664,7 +1646,8 @@ class Smartg(object):
         # number of Stokes parameters of the radiation field
         n_pstk = 4
 
-        t0 = datetime.now()
+        # local wall-clock time, stored as-is in the attributes
+        t0 = datetime.now()  # noqa: DTZ005
 
         attrs = OrderedDict()
         attrs.update({'processing started at': t0})
@@ -1672,7 +1655,7 @@ class Smartg(object):
         attrs.update({'MODE': {True: 'PPA', False: 'SSA'}[self.pp]})
         attrs.update({'XBLOCK': xblock})
         attrs.update({'XGRID': xgrid})
-        attrs.update({'NPHOTONS': '{:g}'.format(n_photons)})
+        attrs.update({'NPHOTONS': f'{n_photons:g}'})
 
         if not isinstance(wavelength, BandSet):
             wavelength = BandSet(wavelength)
@@ -1700,9 +1683,8 @@ class Smartg(object):
         if hist:
             hist_code = 1
 
-        if surface is not None:
-            if surface.dict['BRDF'] != 0:
-                water = None  # special case BRDF, water is shortcut
+        if surface is not None and surface.dict['BRDF'] != 0:
+            water = None  # special case BRDF, water is shortcut
 
         # determine sim
         if (atmosphere is not None) and (surface is None) and (water is None):
@@ -1867,7 +1849,7 @@ class Smartg(object):
 
         tab_sensor = np.zeros(n_sensor, dtype=TYPE_SENSOR, order='C')
         for i, s in enumerate(sensor2):
-            for k in s.dict.keys():
+            for k in s.dict:
                 tab_sensor[i][k] = s.dict[k]
         tab_sensor = to_gpu(tab_sensor)
 
@@ -1985,6 +1967,7 @@ class Smartg(object):
                 spectrum['k3p_surface'] = surface.kp[3].get(wavelength[:])
             albenv = environment.alb.get(wavelength[:])
             if albenv.ndim == 2:
+                assert isinstance(environment.alb, AlbedoMap)
                 environment.nenv = albenv.shape[1]
                 spectrum['alb_envs'][:, : environment.nenv] = albenv
                 shp = environment.alb.map.data.shape
@@ -1992,8 +1975,8 @@ class Smartg(object):
                 environment.nyenvmap = shp[1]
                 envmap = np.zeros(shp, dtype=TYPE_ENV_MAP)
                 x_map, y_map = np.meshgrid(
-                    environment.alb.map.axis('X'),
-                    environment.alb.map.axis('Y'),
+                    np.asarray(environment.alb.map.axis('X')),
+                    np.asarray(environment.alb.map.axis('Y')),
                     indexing='ij',
                 )
                 envmap['x'] = x_map
@@ -2354,7 +2337,7 @@ class Smartg(object):
         )
 
         output.attrs['processing time (s)'] = (
-            datetime.now() - t0
+            datetime.now() - t0  # noqa: DTZ005
         ).total_seconds()
 
         if self.alis:
@@ -2558,8 +2541,8 @@ def _finalize(
     tab_trans_dir: np.ndarray,
     tab_trans_dir_analytic: np.ndarray | None,
     attrs: dict,
-    prof_atm: xr.Dataset | None,
-    prof_oc: xr.Dataset | None,
+    prof_atm: xr.Dataset | MLUT | None,
+    prof_oc: xr.Dataset | MLUT | None,
     sigma: np.ndarray | None,
     horiz: int,
     le: LocalEstimate | None = None,
@@ -2644,9 +2627,9 @@ def _finalize(
     xr.Dataset
         The simulation results.
     """
-    if hasattr(prof_atm, 'to_xarray'):
+    if isinstance(prof_atm, MLUT):
         prof_atm = prof_atm.to_xarray()
-    if hasattr(prof_oc, 'to_xarray'):
+    if isinstance(prof_oc, MLUT):
         prof_oc = prof_oc.to_xarray()
 
     (_, _, n_sensor, n_lam, n_theta, n_phi) = tab_photons_tot.shape
@@ -2694,6 +2677,7 @@ def _finalize(
     if len(tab_dist_final) > 1:
         tab_dist_final = tab_dist_final.swapaxes(3, 4)
     if hist:
+        assert tab_hist_tot is not None
         tab_hist_tot = tab_hist_tot.swapaxes(3, 4)
     n_photons_out_tot = n_photons_out_tot.swapaxes(3, 4)
     n_photons_out_tot_no_aer = n_photons_out_tot_no_aer.swapaxes(3, 4)
@@ -2719,9 +2703,9 @@ def _finalize(
     ds.attrs['NPhotonIn_sum'] = np.sum(n_photons_in_tot)
 
     if le is not None:
-        ds.attrs['LE'] = int(1)
+        ds.attrs['LE'] = 1
     else:
-        ds.attrs['LE'] = int(0)
+        ds.attrs['LE'] = 0
 
     if le is not None:
         if le.zip:
@@ -2810,6 +2794,7 @@ def _finalize(
         _add_level_output(ds, 'up (TOA)', UPTOA, **level_kwargs)
 
     if hist:
+        assert tab_hist_tot is not None
         _add_variable(
             ds,
             'histories',
@@ -2997,12 +2982,10 @@ def _finalize(
         for d in list(map(str, ds.data_vars)):
             if (
                 ('_stdev_' in d)
-                or (d.startswith('Q_'))
-                or (d.startswith('U_'))
-                or (d.startswith('V_'))
+                or d.startswith(('Q_', 'U_', 'V_'))
             ):
                 ds = ds.drop_vars([d])
-            elif d.startswith('I_') or d.startswith('N_'):
+            elif d.startswith(('I_', 'N_')):
                 flux_var = (
                     ds[d]
                     .sum(dim='Azimuth angles', keep_attrs=True)
@@ -3107,7 +3090,7 @@ def _finalize(
         while zatm[ci] > dic_stp["MZAlt_H"]:
             ci += 1
 
-        for i in range(0, n_wavelength):
+        for i in range(n_wavelength):
             tau_ext[i] = (od_atm[i, ci] - od_atm[i, ci - 1]) * (
                 dic_stp["MZAlt_H"] / zatm[ci - 1]
             )
@@ -3133,13 +3116,11 @@ def _finalize(
         ):
             naatm = np.zeros(n_wavelength, dtype=np.float64)
             p = make_progress(n_wavelength - 1, dic_stp["prog"])
-            for j in range(0, n_wavelength):
+            for j in range(n_wavelength):
                 sum_naatm = 0
                 p.update(
                     j + 1,
-                    'n_aatm computed : {:.3g} / {:.3g}'.format(
-                        j + 1, n_wavelength
-                    ),
+                    f'n_aatm computed : {j + 1:.3g} / {n_wavelength:.3g}',
                 )
                 for i in range(len(dic_stp["LPH"])):
                     sum_naatm += _find_extinction(
@@ -3148,9 +3129,7 @@ def _finalize(
                 naatm[j] = sum_naatm / len(dic_stp["LPH"])
             p.finish(
                 'Done! | Analytic approx of n_atm computed for '
-                '{:.3g} wavelengths'.format(
-                    n_wavelength
-                )
+                f'{n_wavelength:.3g} wavelengths'
             )
             _add_variable(ds, 'n_aatm', naatm, ['wavelength'])
         # ===
@@ -3212,7 +3191,6 @@ def _isotropic(
     phase_host['a_P44'][:] = f3(ang)  # V P44=P33
 
     return phase_host
-    return phase_host, cdf
 
 
 def _rayleigh(
@@ -3256,9 +3234,6 @@ def _rayleigh(
     gama = depo / (2 - depo)
     delta = np.float32((1.0 - gama) / (1.0 + 2.0 * gama))
     delta_prim = np.float32(gama / (1.0 + 2.0 * gama))
-    beta = np.float32(3.0 / 2.0 * delta_prim)
-    alpha = np.float32(1.0 / 8.0 * delta)
-    a_coeff = np.float32(1.0 + beta / (3.0 * alpha))
 
     theta_le = (
         np.linspace(0.0, pi, int(n_theta), endpoint=True, dtype=np.float64)
@@ -3525,7 +3500,7 @@ def _calc_phase_host(
     if hasattr(profile, 'to_xarray'):
         profile = profile.to_xarray()
 
-    name_phase = 'phase_{}'.format(kind)
+    name_phase = f'phase_{kind}'
     if name_phase in profile.data_vars:
         nphases = profile[name_phase].shape[0]
     else:
@@ -3556,9 +3531,7 @@ def _calc_phase_host(
     # Set VRS phase function
     phase_host[1, :] = _rayleigh(n_theta, 0.17, ang_a=ang_a)
 
-    idx = 2
-    # idx = 1
-    for ipha in range(nphases - 2):
+    for idx, ipha in enumerate(range(nphases - 2), start=2):
         # for ipha in range(nphases-1):
         assert angles is not None
 
@@ -3608,7 +3581,6 @@ def _calc_phase_host(
             phase_host['a_P44'][idx, :] = f6(ang)  # V P44=P33
             # phase_host['a_P33'][idx, :] = f6(ang)  # V P44=P33
 
-        idx += 1
 
     return phase_host, _cdf_of_table(phase_host, ang)
 
@@ -4718,7 +4690,7 @@ def _loop_kernel(
             mat_cats[0, 2] += np.sum(w_ph_cat2[:, :].get())
             w_ph_cat_tot += w_ph_cat
             w_ph_cat2_tot += w_ph_cat2
-            for i in range(0, 8):
+            for i in range(8):
                 mat_cats[i + 1, 1] += np.sum(w_ph_cat[i, :].get())
                 mat_cats[i + 1, 2] += np.sum(w_ph_cat2[i, :].get())
 
@@ -4822,7 +4794,7 @@ def _loop_kernel(
                 f"err[rel] = {max_rerr:{format_std}};",
             )
         else:
-            progress.update(sphot, 'Launched {:.3g} photons'.format(sphot))
+            progress.update(sphot, f'Launched {sphot:.3g} photons')
 
     # END WHILE LOOP
     secs_cuda_clock *= 1e-3
@@ -4833,12 +4805,12 @@ def _loop_kernel(
         # Count the total number of received photons and for each
         # category.
         mat_cats[0, 0] = np.sum(n_ph_cat[:].get())
-        for i in range(0, 8):
+        for i in range(8):
             mat_cats[i + 1, 0] = n_ph_cat[i].get()
 
         # Relative and absolute error for sum of categories and per-
         # category values.
-        for i in range(0, 9):
+        for i in range(9):
             if mat_cats[i, 0] != 0 and mat_cats[i, 1] != 0:
                 sum_2z = (mat_cats[i, 1] * mat_cats[i, 1]) / n_photons_target
                 sum_z2 = mat_cats[i, 2]
@@ -4937,7 +4909,7 @@ def _get_git_attrs() -> dict:
 
 
 def _impact_init(
-    prof_atm: xr.Dataset | None,
+    prof_atm: xr.Dataset | MLUT | None,
     nlam: int,
     thv_deg: float,
     earth_radius: float,
@@ -4981,7 +4953,7 @@ def _impact_init(
         z_atm = None
         od_atm = None
     else:
-        if hasattr(prof_atm, 'to_xarray'):
+        if isinstance(prof_atm, MLUT):
             prof_atm = prof_atm.to_xarray()
         if 'z_atm' in prof_atm.coords:
             z_atm = prof_atm.coords['z_atm'].to_numpy()
@@ -5129,10 +5101,10 @@ def _init_rng(rng: str) -> '_RngPhilox | _RngCurandPhilox':
     elif rng == 'CURAND_PHILOX':
         return _RngCurandPhilox()
     else:
-        raise ValueError('Invalid RNG "{}"'.format(rng))
+        raise ValueError(f'Invalid RNG "{rng}"')
 
 
-class _RngPhilox(object):
+class _RngPhilox:
     """Philox random-number generator backend.
 
     This helper manages the RNG seed and state buffer for Philox-based
@@ -5175,8 +5147,8 @@ class _RngPhilox(object):
             seed = int(
                 np.uint32(
                     (
-                        datetime.now(tz=timezone.utc)
-                        - datetime(1970, 1, 1, tzinfo=timezone.utc)
+                        datetime.now(tz=UTC)
+                        - datetime(1970, 1, 1, tzinfo=UTC)
                     ).total_seconds()
                 )
             )
@@ -5188,7 +5160,7 @@ class _RngPhilox(object):
         return seed
 
 
-class _RngCurandPhilox(object):
+class _RngCurandPhilox:
     """CURAND Philox random-number generator backend.
 
     This helper wraps a tiny CUDA module that initializes
@@ -5263,8 +5235,8 @@ class _RngCurandPhilox(object):
             seed = int(
                 np.uint32(
                     (
-                        datetime.now(tz=timezone.utc)
-                        - datetime(1970, 1, 1, tzinfo=timezone.utc)
+                        datetime.now(tz=UTC)
+                        - datetime(1970, 1, 1, tzinfo=UTC)
                     ).total_seconds()
                 )
             )
@@ -5325,7 +5297,7 @@ def _init_obj(
 
     # Build a flat list of entities and a GPU table of object-group
     # parameters.
-    for i in range(0, n_gobj):
+    for i in range(n_gobj):
         lgobj_gpu['index'][i] = index_offset
         lgobj_gpu['bPminx'][i] = lgobj[i].bbox_pmin.x
         lgobj_gpu['bPminy'][i] = lgobj[i].bbox_pmin.y
@@ -5333,16 +5305,17 @@ def _init_obj(
         lgobj_gpu['bPmaxx'][i] = lgobj[i].bbox_pmax.x
         lgobj_gpu['bPmaxy'][i] = lgobj[i].bbox_pmax.y
         lgobj_gpu['bPmaxz'][i] = lgobj[i].bbox_pmax.z
-        if lgobj[i].check == "GroupE":
-            lgobj_gpu['nObj'][i] = lgobj[i].nob
-            index_offset += lgobj[i].nob
-            lobj.extend(lgobj[i].le)
-        elif lgobj[i].check == "Entity":
+        obj = lgobj[i]
+        if isinstance(obj, GroupE):
+            lgobj_gpu['nObj'][i] = obj.nob
+            index_offset += obj.nob
+            lobj.extend(obj.le)
+        elif isinstance(obj, Entity):
             lgobj_gpu['nObj'][i] = 1
             index_offset += 1
             lobj.append(lgobj[i])
         else:
-            raise ValueError(
+            raise TypeError(
                 'In the my_objects list, only Entity and GroupE '
                 'classes are authorized!'
             )
@@ -5406,8 +5379,8 @@ def _init_obj(
     else:
         lobj_gpu = np.zeros(n_obj, dtype=TYPE_IOBJECTS, order='C')
         tc = None
-        n_cx = int(0)
-        n_cy = int(0)
+        n_cx = 0
+        n_cy = 0
 
     # Account for spectral variability of object reflectivity.
     n_obj_total = lobj_gpu.size
@@ -5433,7 +5406,7 @@ def _init_obj(
         surf_lph = None
 
     # Iterate over all objects.
-    for i in range(0, n_obj):
+    for i in range(n_obj):
         normal_base = gc.Vector(0.0, 0.0, 1.0)
         if isinstance(lobj[i].geo, Spheric):
             lobj_gpu['geo'][i] = 1
@@ -5483,7 +5456,7 @@ def _init_obj(
             lobj_gpu['nBy'][i] = normal_base.y
             lobj_gpu['nBz'][i] = normal_base.z
         else:
-            raise ValueError(
+            raise TypeError(
                 "Your geometry can be only spheric or plane, please "
                 "choose between Spheric or Plane classes!"
             )
@@ -5543,7 +5516,7 @@ def _init_obj(
             lobj_gpu['distAV'][i] = lobj[i].material_front.distribution
             lobj_gpu['roughAV'][i] = lobj[i].material_front.roughness
         else:
-            raise ValueError('Unknown material AV')
+            raise TypeError('Unknown material AV')
 
         # Back material (AR).
         lobj_gpu['materialAR'][i] = 0
@@ -5578,7 +5551,7 @@ def _init_obj(
             lobj_gpu['distAR'][i] = lobj[i].material_back.distribution
             lobj_gpu['roughAR'][i] = lobj[i].material_back.roughness
         else:
-            raise ValueError('Unknown material AR')
+            raise TypeError('Unknown material AR')
 
         # Object role: reflector, receiver, or environment.
         if lobj[i].name == "reflector":
@@ -5650,7 +5623,7 @@ def _init_obj(
     n_robj = len(ind_robj)
     if n_robj > 0:
         lrobj_gpu = np.zeros(n_robj, dtype=TYPE_IOBJECTS, order='C')
-        for i in range(0, n_robj):
+        for i in range(n_robj):
             lrobj_gpu[:][i] = lobj_gpu[:][ind_robj[i]]
     else:
         lrobj_gpu = np.zeros(1, dtype=TYPE_IOBJECTS, order='C')
@@ -5772,7 +5745,7 @@ def _normalize_rec(
         ):
             norm_ff = 1.0
         norm_c *= norm_ff
-        for i in range(0, 9):
+        for i in range(9):
             c_mat_visu_recep[i][:][:] = c_mat_visu_recep[i][:][:] * norm_c
             mat_cats[i, 3] = mat_cats[i, 1] * norm_c
             mat_cats[i, 4] *= norm_c
@@ -5800,7 +5773,7 @@ def _normalize_rec(
         # something propor to watt unit
         norm_c *= s_rec_m
         c_mat_visu_recep[:][:][:] = c_mat_visu_recep[:][:][:] * norm_c
-        for i in range(0, 9):
+        for i in range(9):
             mat_cats[i, 3] = mat_cats[i, 1] * norm_c
             mat_cats[i, 4] *= norm_c
     else:
@@ -5810,7 +5783,10 @@ def _normalize_rec(
 
 
 def _find_extinction(
-    ip: gc.Point, fp: gc.Point, prof_atm: xr.Dataset | None, w_ind: int = 0
+    ip: gc.Point,
+    fp: gc.Point,
+    prof_atm: xr.Dataset | MLUT | None,
+    w_ind: int = 0,
 ) -> float:
     r"""Compute the atmospheric extinction along a segment.
 
@@ -5852,7 +5828,7 @@ def _find_extinction(
         n_ext = 1
         return n_ext
 
-    if hasattr(prof_atm, 'to_xarray'):
+    if isinstance(prof_atm, MLUT):
         prof_atm = prof_atm.to_xarray()
 
     if 'z_atm' not in prof_atm.coords:
@@ -5867,9 +5843,9 @@ def _find_extinction(
     vec = fp - ip
 
     # Find the atm layer of the initial location
-    lay = int(0)
+    lay = 0
     while zatm[lay] > ip.z:
-        lay += int(1)
+        lay += 1
 
     # Initialization
     tau_hit = 0.0  # Optical depth distance (from ip to fp)
@@ -5881,13 +5857,13 @@ def _find_extinction(
         delta_i = abs(od_atm[w_ind, ilayer2 - 1] - od_atm[w_ind, ilayer2])
         # tau_hit = (Delta(D1)/Delta(Z1))*delta_i
         tau_hit += (
-            (ip - fp).Length() / abs(zatm[ilayer2 - 1] - zatm[ilayer2])
+            (ip - fp).length() / abs(zatm[ilayer2 - 1] - zatm[ilayer2])
         ) * delta_i
     else:  # Case with several layers: n >= 2
         # Find the layer where there is intersection
-        ilayer2 = int(1)
+        ilayer2 = 1
         while zatm[ilayer2] > fp.z and zatm[ilayer2] > 0.0:
-            ilayer2 += int(1)
+            ilayer2 += 1
 
         higher = False
         ilayer = lay
@@ -5905,20 +5881,20 @@ def _find_extinction(
             new_p = old_p + (vec * time_t)
             delta_i = abs(od_atm[w_ind, ilayer] - od_atm[w_ind, ilayer - 1])
             tau_hit += (
-                (new_p - old_p).Length() / abs(zatm[ilayer - 1] - zatm[ilayer])
+                (new_p - old_p).length() / abs(zatm[ilayer - 1] - zatm[ilayer])
             ) * delta_i
 
             if higher:  # the photon come from higher layer
-                ilayer += int(1)
+                ilayer += 1
             else:  # the photon come from lower layer
-                ilayer -= int(1)
+                ilayer -= 1
             old_p = new_p  # Update the position of the photon
 
         # Calculate and add the last tau distance when ilayer is equal
         # to ilayer2
         delta_i = abs(od_atm[w_ind, ilayer2] - od_atm[w_ind, ilayer2 - 1])
         tau_hit += (
-            (fp - old_p).Length() / abs(zatm[ilayer2 - 1] - zatm[ilayer2])
+            (fp - old_p).length() / abs(zatm[ilayer2 - 1] - zatm[ilayer2])
         ) * delta_i
 
     n_ext = np.exp(-abs(tau_hit))

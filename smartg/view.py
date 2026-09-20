@@ -32,24 +32,24 @@ plot_iquv_comparison
 
 import math
 import warnings
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal, Sequence, cast
+from typing import Any, Literal, cast
 
 import geoclide as gc
-import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-import mpl_toolkits.axisartist.angle_helper as angle_helper
 import numpy as np
 import xarray as xr
 from luts.luts import LUT, MLUT, Idx_base
 from matplotlib import colors as mcolors
+from matplotlib import gridspec
 from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.figure import Figure
 from matplotlib.projections import PolarAxes
 from matplotlib.ticker import ScalarFormatter
 from matplotlib.transforms import Affine2D
-from mpl_toolkits.axisartist import floating_axes
+from mpl_toolkits.axisartist import angle_helper, floating_axes
 from mpl_toolkits.mplot3d import Axes3D, art3d
 from pylab import (
     FormatStrFormatter,
@@ -1353,7 +1353,7 @@ def phase_view(
         # Find wavelength dimension index
         if "wavelength" in od_data.dims:
             wavelength = ds_sg.coords["wavelength"].values
-            labw = r" at $%.1f nm$" % wavelength[iw]
+            labw = rf" at ${wavelength[iw]:.1f} nm$"
         else:
             labw = ""
     else:
@@ -1443,7 +1443,7 @@ def phase_view(
             p_43 = phase[i, 3, :]
 
             if np.max(p_11[:]) > 0.0:
-                axarr[0, 0].semilogy(ang, p_11, label="%3i" % i)
+                axarr[0, 0].semilogy(ang, p_11, label=f"{i:3d}")
                 if show_trunc and phase_tr is not None:
                     axarr[0, 0].semilogy(ang, phase_tr[i, 0, :], "k--")
             axarr[0, 0].set_title(r"$P_{11}$" + labw)
@@ -1488,7 +1488,7 @@ def phase_view(
             p_44 = phase[i, 5, :]  # P44
 
             if np.max(p_11[:]) > 0.0:
-                axarr[0, 0].semilogy(ang, p_11, label="%3i" % i)
+                axarr[0, 0].semilogy(ang, p_11, label=f"{i:3d}")
                 if show_trunc and phase_tr is not None:
                     axarr[0, 0].semilogy(ang, phase_tr[i, 0, :], "k--")
             axarr[0, 0].set_title(r"$P_{11}$" + labw)
@@ -1620,7 +1620,7 @@ def profile_view(
     labw = ""
     if nd > 1 and "wavelength" in od_data.dims:
         wavelength = ds_sg.coords["wavelength"].values
-        labw = r" at $%.1f nm$" % wavelength[iw]
+        labw = rf" at ${wavelength[iw]:.1f} nm$"
 
     z = ds_sg.coords[z_key].values
     if kind == "oc":
@@ -1742,7 +1742,10 @@ def profile_view(
         ax2.xaxis.set_major_formatter(FormatStrFormatter("%i"))
         return fig, ax
 
-    except Exception:
+    # no phase index variable, or a phase index that does not line
+    # up with the profile levels (the ocean profile of the histories
+    # notebook): the figure is returned without the index axis
+    except (KeyError, ValueError):
         return fig, ax
 
 
@@ -1958,7 +1961,7 @@ def compare(
         nparam,
         sharey=False,
         sharex=True,
-        gridspec_kw=dict(hspace=0.2, wspace=0.3),
+        gridspec_kw={"hspace": 0.2, "wspace": 0.3},
     )
     fig.set_size_inches(nparam * 3, 8)
     fig.set_dpi(600)
@@ -1984,10 +1987,10 @@ def compare(
                 if az_idx == 0:
                     th = s.coords[list(s.dims)[1]].values
                 else:
-                    th = s.coords[list(s.dims)[0]].values
+                    th = s.coords[next(iter(s.dims))].values
             else:
                 # Fallback: use first dimension coordinate
-                th = s.coords[list(s.dims)[0]].values
+                th = s.coords[next(iter(s.dims))].values
 
             # Extract description from attributes
             desc = s.attrs.get("latex_name", stokes[i])
@@ -2030,9 +2033,9 @@ def compare(
                 if az_idx == 0:
                     th = s.coords[list(s.dims)[1]].values
                 else:
-                    th = s.coords[list(s.dims)[0]].values
+                    th = s.coords[next(iter(s.dims))].values
             else:
-                th = s.coords[list(s.dims)[0]].values
+                th = s.coords[next(iter(s.dims))].values
 
             if errb:
                 d_i = ds_sg["I" + "_" + "stdev" + "_" + field]
@@ -2164,7 +2167,7 @@ def compare(
                 -th,
                 sm,
                 fmt=sym1 + "",
-                label=r"$\Phi=%.0f-%.0f$" % (phi0, 180.0 - phi0),
+                label=rf"$\Phi={phi0:.0f}-{180.0 - phi0:.0f}$",
             )
             ax[0, i].set_ylim([vmi, vma])
             ax[0, i].set_xlim([-sza_max, sza_max])
@@ -2177,7 +2180,7 @@ def compare(
                         10**sp - 10**refp,
                         yerr=dsp,
                         fmt=sym1 + sym2,
-                        label=r"$\Phi=%.0f-%.0f$" % (phi0, 180.0 - phi0),
+                        label=rf"$\Phi={phi0:.0f}-{180.0 - phi0:.0f}$",
                         ecolor="k",
                         capsize=2,
                     )
@@ -2194,7 +2197,7 @@ def compare(
                         th,
                         10**sp - 10**refp,
                         fmt=sym1 + sym2,
-                        label=r"$\Phi=%.0f-%.0f$" % (phi0, 180.0 - phi0),
+                        label=rf"$\Phi={phi0:.0f}-{180.0 - phi0:.0f}$",
                         ecolor="k",
                         capsize=2,
                     )
@@ -2213,7 +2216,7 @@ def compare(
                         sp - refp,
                         yerr=dsp,
                         fmt=sym1 + sym2,
-                        label=r"$\Phi=%.0f-%.0f$" % (phi0, 180.0 - phi0),
+                        label=rf"$\Phi={phi0:.0f}-{180.0 - phi0:.0f}$",
                         ecolor=sym1,
                         capsize=2,
                     )
@@ -2230,7 +2233,7 @@ def compare(
                         th,
                         sp - refp,
                         fmt=sym1 + sym2,
-                        label=r"$\Phi=%.0f-%.0f$" % (phi0, 180.0 - phi0),
+                        label=rf"$\Phi={phi0:.0f}-{180.0 - phi0:.0f}$",
                         ecolor=sym1,
                         capsize=2,
                     )
@@ -2246,7 +2249,7 @@ def compare(
                     (sp - refp) / refp * 100,
                     yerr=dsp / abs(refp) * 100,
                     fmt=sym1 + sym2,
-                    label=r"$\Phi=%.0f-%.0f$" % (phi0, 180.0 - phi0),
+                    label=rf"$\Phi={phi0:.0f}-{180.0 - phi0:.0f}$",
                     ecolor=sym1,
                     capsize=2,
                 )
@@ -2269,7 +2272,7 @@ def compare(
                     th,
                     (sp - refp) / refp * 100,
                     fmt=sym1 + sym2,
-                    label=r"$\Phi=%.0f-%.0f$" % (phi0, 180.0 - phi0),
+                    label=rf"$\Phi={phi0:.0f}-{180.0 - phi0:.0f}$",
                     ecolor="k",
                     capsize=2,
                 )
@@ -2351,9 +2354,10 @@ def plot_iquv_comparison(
         format, e.g. save_fig='myFigName.png'.
     """
     fig, ax = plt.subplots(2,4, figsize=(13,8))
-    if title: fig.suptitle(title, fontsize=15)
+    if title:
+        fig.suptitle(title, fontsize=15)
 
-    for istk in range(0, 4):
+    for istk in range(4):
         top = ax[0, istk]
         if istk == 0:
             top.set_ylabel("normalized radiance", fontsize=13)
@@ -2583,18 +2587,13 @@ def plot_polar(
     )
     tick_formatter1 = angle_helper.FormatterDMS()
 
-    class Locator(object):
+    class Locator:
         def __call__(self, *args: Any) -> list[Any]:
             return [np.array([0, 30, 60, 90]), 4, 1.0]
 
-    class Formatter(object):
+    class Formatter:
         def __call__(self, *args: Any) -> list[str]:
-            return list(
-                map(
-                    lambda x: "{:.3g}".format(x),
-                    np.linspace(ax2_min, ax2_max, 4),
-                )
-            )
+            return [f"{x:.3g}" for x in np.linspace(ax2_min, ax2_max, 4)]
 
     # Radius axis locator/formatter
     if (
@@ -2880,7 +2879,7 @@ def plot_polar_iquv(
 
     fig, ax = plt.subplots(
         1, 4, figsize=(12, 4),
-        subplot_kw=dict(projection='polar'),
+        subplot_kw={'projection': 'polar'},
     )
     if title is not None:
         fig.suptitle(title)
@@ -3229,7 +3228,7 @@ def receiver_view(
             extent=extent,
         )
     else:
-        log_vmin = 0.00001 if np.amin(m) < 0.00001 else np.amin(m)
+        log_vmin = max(np.amin(m), 1e-05)
         im = plt.imshow(
             (unit_scale * m * mtoa) / cell_area,
             cmap=plt.get_cmap("jet"),
@@ -3290,12 +3289,12 @@ class _FixedOrderFormatter(ScalarFormatter):
     def _set_format(self) -> None:
         self.format = self._fixed_format
         if self.get_useMathText():
-            self.format = r"$\mathdefault{%s}$" % self.format
+            self.format = rf"$\mathdefault{{{self.format}}}$"
 
 
 def _order_of_magnitude(values: np.ndarray) -> int:
     """Return the order of magnitude of the largest absolute value."""
-    return math.floor(math.log(np.max(np.abs(values)), 10))
+    return math.floor(math.log10(np.max(np.abs(values))))
 
 
 def _colorbar_formatter(
@@ -4182,7 +4181,7 @@ def cat_view(
             " err(%)=",
             str_acc % (mat[0, 3] * ld),
         )
-        for i in range(0, 8):
+        for i in range(8):
             print(
                 "CAT",
                 i + 1,
@@ -4288,7 +4287,7 @@ def nopt_view(
         powc_h = float(powc_h_values.reshape(-1)[0])
     else:
         powc_h = 0.0
-        for i in range(0, len(mtoa)):
+        for i in range(len(mtoa)):
             powc_h += ds["powc_H"].values[i] * mtoa[i]
         powc_h /= np.sum(mtoa)
         powc_h = float(powc_h)
@@ -4348,7 +4347,7 @@ def nopt_view(
         # Sum of (weights²)
         sum_z2_bar = [w0_2, w1_2, w2_2, w3_2, w4_2, w5_2, w6_2, w7_2]
         dw = []
-        for i in range(0, len(sum_z_bar2)):
+        for i in range(len(sum_z_bar2)):
             dw_temp = ld * nbis * (sum_z2_bar[i] - sum_z_bar2[i]) ** 0.5
             dw.append(dw_temp)
 
@@ -4440,7 +4439,7 @@ def nopt_view(
         # Sum of (weights²)
         sum_z2_bar = [w0_2, w1_2, w2_2]
         dw = []
-        for i in range(0, len(sum_z_bar2)):
+        for i in range(len(sum_z_bar2)):
             dw_temp = ld * nbis * (sum_z2_bar[i] - sum_z_bar2[i]) ** 0.5
             dw.append(dw_temp)
         nopt = gc.clamp(k * w2, 0, 1)
@@ -4498,7 +4497,7 @@ def nopt_view(
                 naatm = ds["n_aatm"].values
             else:
                 naatm = 0.0
-                for i in range(0, len(mtoa)):
+                for i in range(len(mtoa)):
                     naatm += ds["n_aatm"].values[i] * mtoa[i]
                 naatm /= np.sum(mtoa)
             print("naatm =", str_acc % naatm, " -> analytic approx of natm")
@@ -4562,10 +4561,10 @@ def visualize_entity(
     entity_list: list[Entity] = convert_lg_to_le(entities)
     entity_tfs = []
     box = gc.BBox()
-    for i in range(0, len(entity_list)):
+    for i in range(len(entity_list)):
         entity_tfs.append(entity_list[i].get_transformation())
-        box = box.union((entity_list[i].bbox_pmin))
-        box = box.union((entity_list[i].bbox_pmax))
+        box = box.union(entity_list[i].bbox_pmin)
+        box = box.union(entity_list[i].bbox_pmax)
 
     box_center = box.pmin + 0.5 * (box.pmax - box.pmin)
     box_max_size = gc.vmax(box.pmax - box.pmin)
@@ -4588,12 +4587,12 @@ def visualize_entity(
     wsz = -sun_dir.z
 
     ltmesh = []
-    n_mirror_hits = int(0)
+    n_mirror_hits = 0
     rec_entities = []
     ref_entities = []
     rec_tfs = []
     ref_tfs = []
-    for i in range(0, len(entity_list)):
+    for i in range(len(entity_list)):
         if entity_list[i].name == "reflector":
             ref_entities.append(entity_list[i])
             ref_tfs.append(entity_tfs[i])
@@ -4608,7 +4607,7 @@ def visualize_entity(
     has_intersection = [False] * n_ref
     reflected_photons: list[gc.Ray] = []
 
-    for k in range(0, len(ref_entities)):
+    for k in range(len(ref_entities)):
         # Get the transformation
         tt = ref_tfs[k]
 
@@ -4674,7 +4673,7 @@ def visualize_entity(
             )
             tmesh = sphere.to_trianglemesh()
         else:
-            raise NameError("This geometry is unknown or not yet accepted!")
+            raise TypeError("This geometry is unknown or not yet accepted!")
 
         tmesh.apply_tf(tt)
         ltmesh.append(tmesh)
@@ -4684,7 +4683,7 @@ def visualize_entity(
         ds = cast(Dataset, gc.calc_intersection(tmesh, photon))
         if ds["is_intersection"].values and ds["thit"].values < float("inf"):
             has_intersection[k] = True
-            n_mirror_hits += int(1)
+            n_mirror_hits += 1
             p_hit = gc.Point(ds["phit"].values)
             t_hit = ds["thit"].values
             tr = np.linspace(t_hit * 0.98 * (1 / rs_fac), t_hit, 100)
@@ -4701,7 +4700,7 @@ def visualize_entity(
     zr2: list[np.ndarray | None] = [None] * n_mirror_hits
     rec_has_intersection = [False] * n_mirror_hits
 
-    for k in range(0, len(rec_entities)):
+    for k in range(len(rec_entities)):
         # Get the transformation
         tt = rec_entities[k].get_transformation()
 
@@ -4760,11 +4759,11 @@ def visualize_entity(
             )
             tmesh = sphere.to_trianglemesh()
         else:
-            raise NameError("This geometry is unknown or not yet accepted!")
+            raise TypeError("This geometry is unknown or not yet accepted!")
         tmesh.apply_tf(tt)
         ltmesh.append(tmesh)
 
-        for i in range(0, n_mirror_hits):
+        for i in range(n_mirror_hits):
             ds = cast(
                 Dataset, gc.calc_intersection(tmesh, reflected_photons[i])
             )
@@ -4805,7 +4804,7 @@ def visualize_entity(
         # useful for debug):
         # ----------------------------->
         if draw_method == "FM":
-            for itri in range(0, tmesh.ntriangles):
+            for itri in range(tmesh.ntriangles):
                 p0 = gc.Point(tmesh.vertices[tmesh.faces[itri, 0], :])
                 p1 = gc.Point(tmesh.vertices[tmesh.faces[itri, 1], :])
                 p2 = gc.Point(tmesh.vertices[tmesh.faces[itri, 2], :])
@@ -4896,13 +4895,13 @@ def visualize_entity(
     # ==============================================
     # plot all the geometries
     if show_rays:
-        for i in range(0, n_ref):
+        for i in range(n_ref):
             if has_intersection[i] and i % sr_view == 0:
                 ax.plot(
                     xr[i], yr[i], zr[i], color=ray_color, linewidth=1 * rs_fac
                 )
 
-        for i in range(0, n_mirror_hits):
+        for i in range(n_mirror_hits):
             if rec_has_intersection[i] and i % sr_view == 0:
                 ax.plot(
                     xr2[i],

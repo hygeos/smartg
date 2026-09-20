@@ -57,7 +57,7 @@ import numpy as np
 from scipy import interpolate
 
 
-class Mirror(object):
+class Mirror:
     """
     Glossy/specular mirror material surface model.
 
@@ -115,7 +115,7 @@ class Mirror(object):
         elif distribution == "GGX":
             self.distribution = 2
         else:
-            NameError(
+            raise ValueError(
                 "Please choose a distribution between str(Beckmann) or "
                 "str(GGX)"
             )
@@ -137,7 +137,7 @@ class Mirror(object):
         )
 
 
-class LambMirror(object):
+class LambMirror:
     """
     Lambertian mirror material surface model.
 
@@ -163,7 +163,7 @@ class LambMirror(object):
         )
 
 
-class Matte(object):
+class Matte:
     """
     Matte material surface model.
 
@@ -204,7 +204,7 @@ class Matte(object):
         )
 
 
-class Plane(object):
+class Plane:
     """
     Planar surface defined by four corner points.
 
@@ -285,9 +285,9 @@ class Plane(object):
                     "Your plane geometry must be at leat a rectangle!"
                 )
             else:
-                NameError("Unknown error in Plane class!")
+                raise ValueError("Unknown error in Plane class!")
         else:
-            raise NameError("All arguments must be Point type!")
+            raise TypeError("All arguments must be Point type!")
 
     def __str__(self) -> str:
         """Return a readable description of the Plane."""
@@ -324,7 +324,7 @@ class Plane(object):
         )
 
 
-class Spheric(object):
+class Spheric:
     """
     Spherical surface model.
 
@@ -467,7 +467,7 @@ MaterialType = Mirror | LambMirror | Matte
 GeometryType = Plane | Spheric
 
 
-class Entity(object):
+class Entity:
     """
     3D object representation with geometry and material properties.
 
@@ -555,7 +555,7 @@ class Entity(object):
             self.alpha_color = alpha_color
         else:
             if not isinstance(geo, (Plane, Spheric)):
-                raise NameError(
+                raise TypeError(
                     "For the moment only Plane or a Spheric geo are accepted."
                 )
 
@@ -732,7 +732,7 @@ class Entity(object):
             self.bbox_pmax = box.pmax
 
 
-class Heliostat(object):
+class Heliostat:
     """
     Composite heliostat assembly consisting of multiple facets.
 
@@ -778,8 +778,8 @@ class Heliostat(object):
     def __init__(
         self,
         pos: gc.Point | None = None,
-        n_facets_x: int = int(2),
-        n_facets_y: int = int(2),
+        n_facets_x: int = 2,
+        n_facets_y: int = 2,
         helio_size_x: float = 0.02,
         helio_size_y: float = 0.02,
         curve_focal_length: float | None = None,
@@ -790,10 +790,10 @@ class Heliostat(object):
             pos = gc.Point(0.0, 0.0, 0.0)
         # Be sure that we split a heliostat by at least 2
         if n_facets_x * n_facets_y < 2:
-            raise Exception("The number of facets must be >= 2!")
+            raise ValueError("The number of facets must be >= 2!")
         # Be sure that n_facets_x and n_facets_y are integer values
         if not (isinstance(n_facets_x, int) and isinstance(n_facets_y, int)):
-            raise Exception("n_facets_x and n_facets_y must be integers")
+            raise TypeError("n_facets_x and n_facets_y must be integers")
         self.pos = pos
         self.n_facets_x = n_facets_x
         self.n_facets_y = n_facets_y
@@ -832,7 +832,7 @@ class Heliostat(object):
         )
 
 
-class GroupE(object):
+class GroupE:
     """Container for grouping multiple Entity objects.
 
     A GroupE instance represents a collection of Entity objects with
@@ -951,7 +951,7 @@ def find_rots(
     # 2) Apply the inverse rotation operations to find the necessary
     # angles
     # 2.a) Initialisation
-    loop = int(0)
+    loop = 0
     rot_y = 0
     rot_z = 0
     ope_z = 0
@@ -975,7 +975,7 @@ def find_rots(
         or abs(initial_normal.y - facet_normal.y) > 1e-4
         or abs(initial_normal.z - facet_normal.z) > 1e-4
     ):
-        loop += int(1)
+        loop += 1
         if loop > 4:
             raise NameError("No rotation has been found!")
 
@@ -1074,8 +1074,8 @@ def generate_mtf(
     facet_points = np.zeros(
         (n_facets_x, n_facets_y), dtype="object"
     )  # Matrix of Point object of each facets
-    for i in range(0, n_facets_x):
-        for j in range(0, n_facets_y):
+    for i in range(n_facets_x):
+        for j in range(n_facets_y):
             facet_points[i][j] = gc.Point(
                 -(heliostat.helio_size_x / 2.0)
                 + (i * facet_size_x)
@@ -1090,8 +1090,8 @@ def generate_mtf(
     facet_transforms = np.zeros(
         (n_facets_x, n_facets_y), dtype="object"
     )  # Matrix of Transform object of each facets
-    for i in range(0, n_facets_x):
-        for j in range(0, n_facets_y):
+    for i in range(n_facets_x):
+        for j in range(n_facets_y):
             dir_in = gc.Point(0.0, 0.0, 0.0) - assumed_receiver_pos
             dir_in = gc.normalize(dir_in)
             dir_out = facet_points[i][j] - assumed_receiver_pos
@@ -1184,9 +1184,9 @@ def generate_le_h(
         heliostat = Heliostat()
     # Be sure that the correct agrs have been given
     if not isinstance(heliostat, Heliostat):
-        raise Exception("heliostat must be a Heliostat class!")
+        raise TypeError("heliostat must be a Heliostat class!")
     if not isinstance(receiver_pos, gc.Point):
-        raise Exception(
+        raise TypeError(
             "The receiver position 'receiver_pos' must be a Point class!"
         )
 
@@ -1249,8 +1249,8 @@ def generate_le_h(
     facet_points = np.zeros(
         (n_facets_x, n_facets_y), dtype="object"
     )  # Matrix of Point object of each facets
-    for i in range(0, n_facets_x):
-        for j in range(0, n_facets_y):
+    for i in range(n_facets_x):
+        for j in range(n_facets_y):
             facet_points[i][j] = gc.Point(
                 -(heliostat.helio_size_x / 2.0)
                 + (i * facet_size_x)
@@ -1266,8 +1266,8 @@ def generate_le_h(
         facet_transforms = np.zeros(
             (n_facets_x, n_facets_y), dtype="object"
         )  # Matrix of Transform object of each facets
-        for i in range(0, n_facets_x):
-            for j in range(0, n_facets_y):
+        for i in range(n_facets_x):
+            for j in range(n_facets_y):
                 dir_in = gc.Point(0.0, 0.0, 0.0) - assumed_receiver_pos
                 dir_in = gc.normalize(dir_in)
                 dir_out = facet_points[i][j] - assumed_receiver_pos
@@ -1291,8 +1291,8 @@ def generate_le_h(
     transformed_facet_points = np.zeros(
         (n_facets_x, n_facets_y), dtype="object"
     )  # equals to facet_points after application of transform
-    for i in range(0, n_facets_x):
-        for j in range(0, n_facets_y):
+    for i in range(n_facets_x):
+        for j in range(n_facets_y):
             tmp_point = gc.Point(facet_points[i][j])
             tmp_point = heliostat_tf(tmp_point)
             tmp_point.x += heliostat_pos.x
@@ -1353,8 +1353,8 @@ def generate_le_h(
     heliostat_normal = gc.Vector(
         vec_z
     )  # stored as a vector for transformation purposes
-    for i in range(0, n_facets_x):
-        for j in range(0, n_facets_y):
+    for i in range(n_facets_x):
+        for j in range(n_facets_y):
             # come back to the initial coordinate system
             facet_normal = obj_to_world(heliostat_normal)
             # apply the transform of the facet to consider the curve
@@ -1501,12 +1501,12 @@ def generate_box(
     # as matte (totally absorbant)
     material_front_list: list[MaterialType] = []
     if material_front == "Mirror":
-        for i in range(0, 6):
+        for i in range(6):
             material_front_list.append(
                 Mirror(reflectivity=reflectivity[i], roughness=roughness[i])
             )
     elif material_front == "LambMirror":
-        for i in range(0, 6):
+        for i in range(6):
             material_front_list.append(
                 LambMirror(reflectivity=reflectivity[i])
             )
@@ -1630,7 +1630,7 @@ def generate_box(
 
     # Create the faces and incorporate them in a list
     faces = []
-    for i in range(0, 6):
+    for i in range(6):
         face = Entity(
             name=obj_type,
             color=colors[i],
@@ -1692,11 +1692,11 @@ def ref_fresnel(dir_in: gc.Vector, geo_transform: gc.Transform) -> gc.Vector:
     if isinstance(dir_in, gc.Vector):
         incident_dir = dir_in
     else:
-        raise Exception("the dir_in argument must be a Vector class")
+        raise TypeError("the dir_in argument must be a Vector class")
     if isinstance(geo_transform, gc.Transform):
         surf_tf = geo_transform
     else:
-        raise Exception("the geo_transform argument must be a Transform class")
+        raise TypeError("the geo_transform argument must be a Transform class")
 
     # Default value of the surface plane normal
     normal_vec = gc.Vector(0.0, 0.0, 1)
@@ -1806,7 +1806,7 @@ def generate_h_p(
             ),
         )
 
-        for i in range(0, len(heliostat_pos_list)):
+        for i in range(len(heliostat_pos_list)):
             # 1) Find the normalized vector colinear (and same dir) to
             # the normal of heliostat surface
             dir_to_receiver = pos_list_copy[i] - receiver_pos
@@ -1855,7 +1855,7 @@ def generate_h_p(
 
         # Generate all the facets and store them as entity object in
         # a list
-        for i in range(0, len(heliostat_pos_list)):
+        for i in range(len(heliostat_pos_list)):
             heliostat_obj = Heliostat(
                 n_facets_x=n_facets_x,
                 n_facets_y=n_facets_y,
@@ -2051,9 +2051,9 @@ def generate_h_a(
     current_ang_deg = min_ang_deg
 
     if min_ang_deg != max_ang_deg:
-        for _i in range(0, n_rings):
+        for _i in range(n_rings):
             radial_dist = first_dist
-            for _j in range(0, n_heliostats):
+            for _j in range(n_heliostats):
                 tmp_pos = gc.Point(radial_dist, 0.0, 0.0)
                 rot_z_tf = gc.get_rotate_z_tf(current_ang_deg)
                 tmp_pos = rot_z_tf(tmp_pos)
@@ -2065,7 +2065,7 @@ def generate_h_a(
     else:
         radial_dist = first_dist
         rot_z_tf = gc.get_rotate_z_tf(current_ang_deg)
-        for _j in range(0, n_heliostats):
+        for _j in range(n_heliostats):
             tmp_pos = gc.Point(radial_dist, 0.0, 0.0)
             tmp_pos = rot_z_tf(tmp_pos)
             heliostat_positions.append(
@@ -2105,7 +2105,7 @@ def generate_h_a(
             ),
         )
 
-        for i in range(0, len(heliostat_positions)):
+        for i in range(len(heliostat_positions)):
             # 1) The vector of the photon after a reflection (here the
             # opposite direction)
             dir_to_receiver = heliostat_positions[i] - receiver_pos
@@ -2156,7 +2156,7 @@ def generate_h_a(
 
         # Generate all the facets and store them as entity object in
         # a list
-        for i in range(0, len(heliostat_positions)):
+        for i in range(len(heliostat_positions)):
             heliostat_obj = Heliostat(
                 n_facets_x=n_facets_x,
                 n_facets_y=n_facets_y,
@@ -2212,14 +2212,14 @@ def convert_lg_to_le(obj_list: list[Entity | GroupE]) -> list[Entity]:
     n_objs = len(obj_list)
     flat_list: list[Entity] = []
 
-    for i in range(0, n_objs):
+    for i in range(n_objs):
         obj = obj_list[i]
         if isinstance(obj, GroupE):
             flat_list.extend(obj.le)
         elif isinstance(obj, Entity):
             flat_list.append(obj)
         else:
-            raise NameError(
+            raise TypeError(
                 "In the list, only Entity and GroupE classes are autorised!"
             )
 
@@ -2371,7 +2371,7 @@ def extract_points(fname: str | Path) -> list[gc.Point]:
                 file_content = file.read()
     except FileNotFoundError:
         print(str(fname) + " has been not found")
-    except IOError:
+    except OSError:
         print("Enter/Exit error with " + str(fname))
 
     # Looking for a float and fill it in values
@@ -2383,7 +2383,7 @@ def extract_points(fname: str | Path) -> list[gc.Point]:
 
     # # Fill the x, y and z coordinates into a list of Point classes
     points = []
-    for i in range(0, n_heliostats):
+    for i in range(n_heliostats):
         points.append(
             gc.Point(
                 float(values[i * n_dims]),

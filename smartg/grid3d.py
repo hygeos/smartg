@@ -138,7 +138,7 @@ def extend_1d_grid(
         else:
             limit = np.array([float(extend_value)])
             extended_grid = np.concatenate([grid, limit])
-            extended_grid = np.sort(extended_grid)
+            extended_grid = cast("NDArray[np.floating]", np.sort(extended_grid))
     else:
         raise NameError("Unkown extend type!")
 
@@ -390,7 +390,7 @@ def locate_voxel_index(
         raise TypeError("Coordinates must be scalars or 1D arrays")
 
     if not (x_arr.size == y_arr.size == z_arr.size):
-        raise TypeError(f"Coordinate arrays must have same size")
+        raise TypeError("Coordinate arrays must have same size")
 
     # check if coordinates are within grid boundaries
     if np.any(x_arr < xgrid[0]) or np.any(x_arr > xgrid[-1]):
@@ -420,7 +420,7 @@ def locate_voxel_index(
     return cast(int, result[0]) if is_x_scalar else result
 
 
-class Grid3D(object):
+class Grid3D:
     """The 3D grid of cells a 3D atmosphere is described on.
 
     Parameters
@@ -471,7 +471,7 @@ class Grid3D(object):
         if (   (not isinstance(xgrid, np. ndarray))
             or (not isinstance(ygrid, np. ndarray))
             or (not isinstance(zgrid, np. ndarray))  ):
-            raise NameError('xgrid, ygrid and zgrid must be numpy arrays!')
+            raise TypeError('xgrid, ygrid and zgrid must be numpy arrays!')
         elif (xgrid.ndim > 1 or ygrid.ndim > 1 or zgrid.ndim > 1):
             raise NameError('xgrid, ygrid and zgrid must be 1D numpy arrays!')
 

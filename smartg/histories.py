@@ -115,7 +115,8 @@ def get_histories(
         nl = m.axis('z_atm').size - 1  # type: ignore
     tab_hist_ = np.squeeze(m['histories'].data)
     tab_hist = tab_hist_[level, :,:]
-    if verbose : print (tab_hist.shape)
+    if verbose:
+        print(tab_hist.shape)
     w0      = tab_hist[:, nl+4:-7]
     #d0      = tab_hist[:,0]
     good    = w0[:,0]!=0
@@ -146,7 +147,6 @@ def get_histories(
     nenv    = tab_hist[good,      -3  ]
     nint    = tab_hist[good,      -2  ]
     nlscl   = tab_hist[good,      -1  ]
-    #
     if verbose:
         print(
             'Number of photons in : {}\n'
@@ -295,7 +295,8 @@ def big_sum(
         `only_i` is True, a Stokes-components axis (axis 1 of
         `sik`).
     """
-    if grad is not None : s = value_and_grad(s, argnums=grad)
+    if grad is not None:
+        s = value_and_grad(s, argnums=grad)
     # co-varying wavelength inputs
     f1m = vmap(s, in_axes=(0, 0, 0, None, None, None, None, None))
     # co-varying LE photon inputs
@@ -303,8 +304,9 @@ def big_sum(
     # co-varying Stokes-component inputs
     f3m = vmap(f2m, in_axes=(None, None, None, 1, None, None, None, None))
 
-    if only_i : return jit(f2m)
-    else : return jit(f3m)
+    if only_i:
+        return jit(f2m)
+    return jit(f3m)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -533,9 +535,10 @@ def amf_from_cdist(
         mean_dist     = cdist[:, :, 1].sum(axis=1) / np.where(w > 0, w, 1.)
         amf           = mean_dist / thick
         amf_cls       = mean_dist_cls / thick[:, None]
-        result = dict(
-            AMF=amf, W=w, mean_dist=mean_dist, W_cls=w_cls, AMF_cls=amf_cls
-        )
+        result = {
+            "AMF": amf, "W": w, "mean_dist": mean_dist, "W_cls": w_cls,
+            "AMF_cls": amf_cls,
+        }
         if niamf >= 3:
             mean_dist2_cls = cdist[:, :, 2] / np.where(w_cls > 0, w_cls, 1.)
             var_cls        = mean_dist2_cls - mean_dist_cls ** 2
@@ -557,7 +560,7 @@ def amf_from_cdist(
         w         = cdist[:, 0]
         mean_dist = cdist[:, 1] / np.where(w > 0, w, 1.)
         amf       = mean_dist / thick
-        result    = dict(AMF=amf, W=w, mean_dist=mean_dist)
+        result = {"AMF": amf, "W": w, "mean_dist": mean_dist}
         if niamf >= 3:
             mean_dist2    = cdist[:, 2] / np.where(w > 0, w, 1.)
             result['std_AMF'] = (
@@ -675,7 +678,7 @@ def compute_amf(
     has_hist = True
     try:
         m['histories']
-    except Exception:
+    except KeyError:
         has_hist = False
 
     if has_hist:
