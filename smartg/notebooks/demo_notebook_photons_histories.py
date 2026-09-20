@@ -34,7 +34,8 @@
 # changed externally
 # %reload_ext autoreload
 # %autoreload 2
-import sys, os
+import os
+import sys
 from pathlib import Path
 
 # ── Make sure nvcc is on PATH (required by pycuda/smartg kernel
@@ -57,23 +58,28 @@ except subprocess.CalledProcessError:
     ROOTPATH = Path.cwd()
 sys.path.insert(0, str(ROOTPATH))
 
-from smartg.config import DIR_AUXDATA
-from smartg.smartg import Alis, LocalEstimate, Smartg
-from smartg.surface import LambSurface
-from smartg.atmosphere import Atm1D, AerOPAC, od2k
-from smartg.diff import diff1
-from smartg.albedo import AlbedoCst
-from smartg.histories import get_histories, si
-from smartg.xarray import drop_axes
+import contextlib
+import io
+import logging
+import warnings
 
+import jax
+import jax.lax as lax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-import matplotlib.pyplot as plt
-import jax
 from jax import jit, vmap
-import jax.lax as lax
-import warnings, logging, io, contextlib
-import jax.numpy as jnp
+
+from smartg.albedo import AlbedoCst
+from smartg.atmosphere import AerOPAC, Atm1D, od2k
+from smartg.config import DIR_AUXDATA
+from smartg.diff import diff1
+from smartg.histories import get_histories, si
+from smartg.smartg import Alis, LocalEstimate, Smartg
+from smartg.surface import LambSurface
+from smartg.xarray import drop_axes
+
 warnings.filterwarnings("ignore")
 warnings.simplefilter('always', DeprecationWarning)
 
@@ -682,7 +688,11 @@ plt.tight_layout()
 # ∂ρ/∂T_k(ν)     — temperature Jacobian   (forward-difference ΔT = 1 K)
 #   ∂ρ/∂VMR_k(ν)   — concentration Jacobian (analytical, linear in VMR)
 
-import warnings, logging, io, contextlib
+import contextlib
+import io
+import logging
+import warnings
+
 import jax.numpy as jnp
 
 delta_t = 1.0    # K  (forward-difference step for T-Jacobian)
@@ -798,7 +808,11 @@ plt.show()
 # ΔP = 1 hPa forward difference on RADIS pressure broadening
 # n_mid kept fixed (pure spectroscopic sensitivity, not hydrostatic)
 
-import warnings, logging, io, contextlib
+import contextlib
+import io
+import logging
+import warnings
+
 import jax.numpy as jnp
 
 delta_p = 1.0   # hPa

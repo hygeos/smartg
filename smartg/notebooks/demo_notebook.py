@@ -30,7 +30,8 @@
 # been changed externally
 # %reload_ext autoreload
 # %autoreload 2
-import sys, os
+import os
+import sys
 from pathlib import Path
 
 # ── Make sure nvcc is on PATH (required by pycuda/smartg kernel
@@ -53,25 +54,26 @@ except subprocess.CalledProcessError:
     ROOTPATH = Path.cwd()
 sys.path.insert(0, str(ROOTPATH))
 
-from smartg.config import DIR_AUXDATA
-from smartg.smartg import Alis, LocalEstimate, Smartg
-from smartg.sensor import Sensor
-from smartg.surface import RoughSurface, LambSurface, Environment, RTLSSurface
-from smartg.atmosphere import Atm1D, Cloud, AerOPAC
-from smartg.phase import read_phase
-from smartg.water import Water1D, Hydrosol, HydrosolPR
-from smartg.albedo import AlbedoSpeclib, AlbedoCst, AlbedoSpectrum, AlbedoMap
-from smartg.reptran import Reptran, reduce_reptran
-from smartg.postprocess import irradiance_ds
-from smartg.xarray import drop_axes
-from smartg.view import spectrum_view, transect_view, smartg_view, input_view
-from mpl_toolkits.axes_grid1 import ImageGrid
+import warnings
 
+import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import ImageGrid
 
-import warnings
+from smartg.albedo import AlbedoCst, AlbedoMap, AlbedoSpeclib, AlbedoSpectrum
+from smartg.atmosphere import AerOPAC, Atm1D, Cloud
+from smartg.config import DIR_AUXDATA
+from smartg.phase import read_phase
+from smartg.postprocess import irradiance_ds
+from smartg.reptran import Reptran, reduce_reptran
+from smartg.sensor import Sensor
+from smartg.smartg import Alis, LocalEstimate, Smartg
+from smartg.surface import Environment, LambSurface, RoughSurface, RTLSSurface
+from smartg.view import input_view, smartg_view, spectrum_view, transect_view
+from smartg.water import Hydrosol, HydrosolPR, Water1D
+from smartg.xarray import drop_axes
+
 warnings.filterwarnings("ignore")
 warnings.simplefilter('always', DeprecationWarning)
 
@@ -899,6 +901,7 @@ _=spectrum_view(m_wsa.isel({'Zenith angles': 0, 'Azimuth angles': 0}),
 # %%
 import pandas as pd
 from scipy.interpolate import InterpolatedUnivariateSpline
+
 srf_file = (DIR_AUXDATA / 'validation'
             / 'Sentinel-2A MSI Spectral Responses.xlsx')
 SRF = pd.read_excel(srf_file, sheet_name='Spectral Responses')
@@ -1156,6 +1159,7 @@ plt.legend(loc='best')
 # %%
 #REPTRAN k distribution file here MSG/SEVIRI1 thermal channels
 from smartg.reptran import reptran_avg_emission
+
 SEVIRI_THERMAL = Reptran('reptran_thermal_msg')
 
 # %%
@@ -1311,6 +1315,7 @@ def zt2thv(zt, r_ter=6371., h_toa=120.):
 # and make a LIST of sensors
 
 from itertools import product
+
 sensors= []
 n_zt = 16 # number of tangent heights
 n_phi = 4 # relative azimuths to the sun

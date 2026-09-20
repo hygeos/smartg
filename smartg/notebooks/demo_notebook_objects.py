@@ -45,21 +45,32 @@ except subprocess.CalledProcessError:
     ROOTPATH = Path.cwd()
 sys.path.insert(0, str(ROOTPATH))
 
-from smartg.config import DIR_AUXDATA
-from smartg.smartg import LocalEstimate, Smartg
-from smartg.objects3d import CusForward, CusBackward
-from smartg.surface import LambSurface
-from smartg.sensor import Sensor
-from smartg.atmosphere import Atm1D, AerOPAC
-from smartg.albedo import AlbedoCst
-from smartg.objects3d import (Mirror, Plane, Transformation, Entity, Matte,
-                              generate_h_p, generate_h_a, extract_points,
-                              Heliostat)
-from smartg.view import smartg_view, receiver_view, cat_view, visualize_entity
-from smartg.xarray import drop_axes
+import warnings
+
 import numpy as np
 
-import warnings
+from smartg.albedo import AlbedoCst
+from smartg.atmosphere import AerOPAC, Atm1D
+from smartg.config import DIR_AUXDATA
+from smartg.objects3d import (
+    CusBackward,
+    CusForward,
+    Entity,
+    Heliostat,
+    Matte,
+    Mirror,
+    Plane,
+    Transformation,
+    extract_points,
+    generate_h_a,
+    generate_h_p,
+)
+from smartg.sensor import Sensor
+from smartg.smartg import LocalEstimate, Smartg
+from smartg.surface import LambSurface
+from smartg.view import cat_view, receiver_view, smartg_view, visualize_entity
+from smartg.xarray import drop_axes
+
 warnings.simplefilter('always', DeprecationWarning)
 import geoclide as gc
 
@@ -650,9 +661,10 @@ receiver_view(ds_sg_out=m6_ds, vmin=0, flux_unit='kW')
 # %%
 # Additional imports needed for this section
 import matplotlib.pyplot as plt
-from smartg.surface import RoughSurface, Environment
+
 from smartg.albedo import AlbedoMap
-from smartg.water import Water1D, HydrosolPR
+from smartg.surface import Environment, RoughSurface
+from smartg.water import HydrosolPR, Water1D
 
 # %%
 # ── Scene parameters ────────────────────────────────────────────────
