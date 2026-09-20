@@ -158,6 +158,10 @@ ignore = ["ANN401"]
 "smartg/notebooks/*.py" = [
     "D100", "E402", "E501", "W505",
 ]
+# test_smartg_jax sets JAX_PLATFORMS in the environment before it
+# imports jax, so that jax does not open a CUDA context of its own and
+# collide with the pycuda one when the process exits
+"smartg/tests/test_smartg_jax.py" = ["E402"]
 
 [tool.ruff.lint.pycodestyle]
 # Comments and docstrings (W505)

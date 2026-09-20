@@ -1,12 +1,10 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
-import logging
-from pathlib import Path
 
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D

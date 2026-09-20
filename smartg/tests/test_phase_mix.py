@@ -19,12 +19,13 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from smartg.atmosphere import (
-    Aer3D, AerOPAC, Atm1D, Atm3D, Cloud, Cloud3D
-)
+from smartg.atmosphere import Aer3D, AerOPAC, Atm1D, Atm3D, Cloud, Cloud3D
 from smartg.grid3d import Grid3D
 from smartg.phase import (
-    as_theta_grid, is_native_theta, theta_grid, union_theta_grid
+    as_theta_grid,
+    is_native_theta,
+    theta_grid,
+    union_theta_grid,
 )
 from smartg.smartg import _calc_phase_host
 from smartg.truncation import DMTrunc, GTTrunc

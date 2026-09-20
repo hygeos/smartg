@@ -75,10 +75,11 @@ monitor_peak_memory
     Ex: true, false (default)
 """
 
-from pathlib import Path
 import base64
 import io
 import resource
+from pathlib import Path
+
 import pytest
 
 # Module-level variable to store config

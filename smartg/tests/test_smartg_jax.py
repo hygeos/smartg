@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
 
 # Must be set before importing JAX so only the CPU backend
@@ -11,28 +8,30 @@ os.environ["JAX_PLATFORMS"] = "cpu"
 # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
-import pytest
 import logging
 from gc import collect
+
+import pytest
 
 jax = pytest.importorskip(
     "jax", reason="cannot test this since the jax package is not installed."
 )
-from smartg.histories import get_histories, big_sum, si, si2
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-import matplotlib.pyplot as plt
+
+from smartg import conftest
+from smartg.albedo import AlbedoCst
+from smartg.atmosphere import AerOPAC, Atm1D, od2k
+from smartg.config import DIR_AUXDATA
+from smartg.diff import diff1
+from smartg.histories import big_sum, get_histories, si, si2
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import LambSurface
-from smartg.albedo import AlbedoCst
-from smartg.atmosphere import Atm1D, AerOPAC, od2k
-from smartg.diff import diff1
 from smartg.view import mdesc
-from smartg import conftest
-from pathlib import Path
-from smartg.config import DIR_AUXDATA
 from smartg.xarray import drop_axes
-
 
 # ***************************** logging ********************************
 ROOTPATH = Path(__file__).resolve().parent.parent.parent
@@ -72,6 +71,7 @@ def cleanup_after_each_test():
     # still have control, so the error is never printed.
     try:
         import atexit
+
         import pycuda.autoinit as _pai
 
         atexit.unregister(_pai._finish_up)

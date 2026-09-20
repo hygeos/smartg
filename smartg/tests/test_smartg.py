@@ -1,22 +1,20 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 SMART-G test suite using pytest
 """
 
-import pytest
 import numpy as np
+import pytest
 import xarray as xr
-from smartg.smartg import Alis, LocalEstimate, Smartg
-from smartg.surface import RoughSurface, LambSurface
-from smartg.albedo import AlbedoCst
-from smartg.atmosphere import Atm1D, AerOPAC, Cloud
-from smartg.water import HydrosolPR, Water1D
-from smartg.reptran import Reptran, reduce_reptran
-from smartg.view import smartg_view
-from smartg.xarray import dataset_to_mlut
+
 from smartg import conftest
+from smartg.albedo import AlbedoCst
+from smartg.atmosphere import AerOPAC, Atm1D, Cloud
+from smartg.reptran import Reptran, reduce_reptran
+from smartg.smartg import Alis, LocalEstimate, Smartg
+from smartg.surface import LambSurface, RoughSurface
+from smartg.view import smartg_view
+from smartg.water import HydrosolPR, Water1D
+from smartg.xarray import dataset_to_mlut
 
 N_PHOTONS = 1e4
 

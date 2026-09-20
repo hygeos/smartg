@@ -1,9 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import pycuda.driver as drv
-import pycuda.autoinit
 import numpy as np
+import pycuda.autoinit
+import pycuda.driver as drv
 from pycuda.compiler import SourceModule
 from pycuda.gpuarray import zeros as gpuzeros
 

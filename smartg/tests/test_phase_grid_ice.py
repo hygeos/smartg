@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """Angular grid of the phase matrix on a 1D ice cloud, end to end.
 
 test_phase_grid.py checks the host tables and the device lookup where

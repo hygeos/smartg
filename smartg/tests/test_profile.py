@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import pytest
-from smartg.atmosphere import Atm1D, AerOPAC, Cloud
 import numpy as np
+import pytest
 
+from smartg.atmosphere import AerOPAC, Atm1D, Cloud
 
 """Tests for the ``Atm1D`` profile calculation.
 

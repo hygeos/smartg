@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """Tests for the angular grid of the phase tables.
 
 The Monte Carlo kernel is not reproducible from one run to the next,

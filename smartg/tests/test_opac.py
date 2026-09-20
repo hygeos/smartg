@@ -1,10 +1,9 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+import logging
+from pathlib import Path
 
 import pytest
-from smartg.atmosphere import Atm1D, AerOPAC
-from pathlib import Path
-import logging
+
+from smartg.atmosphere import AerOPAC, Atm1D
 
 # ************************ Global variable(s) **************************
 ROOTPATH = Path(__file__).resolve().parent.parent.parent

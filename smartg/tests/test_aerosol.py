@@ -1,16 +1,14 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-import pytest
-from smartg.atmosphere import Atm1D, AerOPAC
-from pathlib import Path
 import logging
-import numpy as np
-import xarray as xr
-from smartg import conftest
-import matplotlib.pyplot as plt
-from smartg.config import DIR_AUXDATA, DIR_ROOT
+from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+import xarray as xr
+
+from smartg import conftest
+from smartg.atmosphere import AerOPAC, Atm1D
+from smartg.config import DIR_AUXDATA, DIR_ROOT
 
 # ************************ Global variable(s) **************************
 MIXTURES = [

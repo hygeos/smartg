@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # Configuration shared by the tests of this directory: the slow marker
 # of the two tiers of the IPRT phase B tests.
 import pytest
