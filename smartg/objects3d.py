@@ -697,14 +697,14 @@ class Entity:
         --------
         >>> entity = Entity(
         ...     geo=Plane(...), transformation=Transformation()
-        ... )
+        ... )  # doctest: +SKIP
         >>> new_tf = Transformation(translation=np.array([1., 2., 3.]))
         >>> entity.set_transformation(
         ...     new_tf
-        ... )  # Update position and recompute bbox
+        ... )  # Update position and recompute bbox  # doctest: +SKIP
         >>> entity.set_transformation(
         ...     new_tf, recompute_bbox=False
-        ... )  # Update without bbox update
+        ... )  # Update without bbox update  # doctest: +SKIP
         """
         self.transformation = transformation
 

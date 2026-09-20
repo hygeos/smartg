@@ -294,35 +294,10 @@ class AerOPAC:
     --------
     >>> from smartg.atmosphere import AerOPAC
     >>> aer_mc = AerOPAC('maritime_clean', 0.1, 550.)
-    >>> print(aer_mc.ds_mix)
-    <xarray.Dataset> Size: 6MB
-    Dimensions:  (hum: 8, wav: 26, stk: 4, theta: 1801)
-    Coordinates:
-    * hum      (hum) float32 32B 0.0 50.0 70.0 80.0 90.0 95.0 98.0 99.0
-    * wav      (wav) float32 104B 250.0 300.0 350.0 ... 3.75e+03 4e+03
-                                  4.5e+03
-    * theta    (theta) float32 7kB 0.0 0.1 0.2 0.3 0.4 ... 179.7 179.8
-                                   179.9 180.0
-    Dimensions without coordinates: stk
-    Data variables:
-        ext      (hum, wav) float32 832B ...
-        ssa      (hum, wav) float32 832B ...
-        phase    (hum, wav, stk, theta) float32 6MB ...
-
-    Attributes
-    ----------
-        name:        maritime_clean
-        H_min_mix:   0
-        H_mix_max:   2
-        H_free_min:  2
-        H_free_max:  12
-        H_stra_min:  12
-        H_stra_max:  35
-        Z_mix:       1
-        Z_free:      8
-        Z_stra:      99
-        date:        2025-06-03
-        source:      Created by HYGEOS using MOPSMAP v1.0.
+    >>> list(aer_mc.ds_mix.data_vars)
+    ['ext', 'ssa', 'phase']
+    >>> dict(aer_mc.ds_mix.sizes)
+    {'hum': 8, 'wav': 26, 'stk': 4, 'theta': 1801}
     """
 
     def __init__(
@@ -1154,9 +1129,8 @@ class AerOPAC:
         Examples
         --------
         >>> from smartg.atmosphere import AerOPAC
-        >>> AerOPAC.list()
-        ['antarctic', 'antarctic_spheric', 'arctic',
-        'continental_average', ...]
+        >>> AerOPAC.list()[:3]
+        ['antarctic', 'antarctic_spheric', 'arctic']
         """
         base_dir = DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures"
         files = list(base_dir.glob("*.nc"))
@@ -1226,28 +1200,12 @@ class Cloud(AerOPAC):
 
     Examples
     --------
-    >>> from smartg.atmophere import Cloud
+    >>> from smartg.atmosphere import Cloud
     >>> cld_wc = Cloud('wc', 12.68, 2, 3, 10., 550.)
-    >>> print(cld_wc.ds_mix)
-    <xarray.Dataset> Size: 52MB
-    Dimensions:  (reff: 26, wav: 209, stk: 4, theta: 594)
-    Coordinates:
-    * reff     (reff) float32 104B 5.0 6.0 7.0 8.0 9.0 ... 27.0 28.0
-                                   29.0 30.0
-    * wav      (wav) float32 836B 253.1 256.6 260.2 ... 4.38e+03
-                                  4.441e+03
-    * stk      (stk) int16 8B 0 1 2 3
-    * theta    (theta) float64 5kB 0.0 0.01 0.02 0.03 ... 179.2 179.5
-                                   179.8 180.0
-    Data variables:
-        phase    (reff, wav, stk, theta) float32 52MB 8.765e+03
-                                                      8.759e+03 ... 0.0
-        ext      (reff, wav) float64 43kB 123.1 123.1 123.2 ...
-                                          4.619e+03 4.622e+03
-        ssa      (reff, wav) float64 43kB 1.0 1.0 1.0 1.0 ... 0.6522
-                                          0.636 0.6203
-    Attributes:
-        veff:     0.1
+    >>> sorted(cld_wc.ds_mix.data_vars)
+    ['ext', 'phase', 'ssa']
+    >>> sorted(cld_wc.ds_mix.dims)
+    ['reff', 'stk', 'theta', 'wav']
     """
 
     def __init__(
@@ -3953,8 +3911,9 @@ class Atm1D(Atmosphere):
 
         Examples
         --------
-        >>> atm = Atm1D('afglus')
-        >>> (prof_abs, prof_ray, (prof_aer, ssa_aer)
+        >>> from smartg.atmosphere import AerOPAC
+        >>> atm = Atm1D('afglus', comp=[AerOPAC('desert', 0.1, 550.)])
+        >>> (prof_abs, prof_ray, (prof_aer, ssa_aer),
         ...  (pro_iphase, pro_phases)) = atm.calc_split(wavelength=500.)
         """
         if not isinstance(wavelength, BandSet):
@@ -4078,14 +4037,14 @@ class Atm3D(Atmosphere):
     occupied by a 3D component get their own optical properties, mixing
     the component with the co-located 1D background particles.
 
-    Example
-    -------
-    >>> atm3d = Atm3D(
+    Examples
+    --------
+    >>> atm3d = Atm3D(  # doctest: +SKIP
     ...     atm_1d=Atm1D("afglt"),
     ...     grid_3d=Grid3D(xgrid, ygrid, zgrid, periodic=True),
     ...     comp_3d=[Cloud3D("wc", w_ref=800., ds=cloud_field)],
     ... )
-    >>> pro = atm3d.calc(wavelength)
+    >>> pro = atm3d.calc(wavelength)  # doctest: +SKIP
 
     Parameters
     ----------
@@ -5779,6 +5738,7 @@ def blackbody_radiance(
     >>> temperature = 288.0    # 288 K (room temperature)
     >>> radiance = blackbody_radiance(wavelength, temperature)
     >>> print(f"Spectral radiance: {radiance:.2e} W·m⁻³·sr⁻¹")
+    Spectral radiance: 8.11e+06 W·m⁻³·sr⁻¹
 
     >>> # Calculate for multiple wavelengths at a fixed temperature
     >>> wavelengths = np.array([0.5e-6, 1e-6, 10e-6]) # UV, NIR, TIR
@@ -6556,9 +6516,10 @@ def extract_split(
     Examples
     --------
     >>> from smartg.atmosphere import extract_split, Atm1D
-    >>> prof_abs, prof_ray, prof_aer, \
-    ...     prof_phases = extract_split(mlut_result)
-    >>> new_atm = Atm1D('afglt', prof_abs=prof_abs, prof_ray=prof_ray,
+    >>> prof_abs, prof_ray, prof_aer, prof_phases = extract_split(
+    ...     ds_run)  # doctest: +SKIP
+    >>> new_atm = Atm1D(  # doctest: +SKIP
+    ...     'afglt', prof_abs=prof_abs, prof_ray=prof_ray,
     ...     prof_aer=prof_aer, prof_phases=prof_phases)
     """
     if hasattr(ds_sg, "to_xarray"):
@@ -6631,8 +6592,8 @@ def strgrid_to_numpy(str_grid: str) -> np.ndarray:
     Simple grid from TOA to ground (100 km to 0 km with step 1 km):
 
     >>> grid = strgrid_to_numpy('100[1]0')
-    >>> grid
-    array([100.,  99.,  98., ...,   2.,   1.,   0.])
+    >>> grid[:3], grid[-3:]
+    (array([100.,  99.,  98.]), array([2., 1., 0.]))
     >>> len(grid)
     101
 
@@ -6647,7 +6608,7 @@ def strgrid_to_numpy(str_grid: str) -> np.ndarray:
     Grid with scientific notation:
 
     >>> grid = strgrid_to_numpy('1[1e-1]1e-1[1e-2]0')
-    >>> grid
+    >>> grid  # doctest: +NORMALIZE_WHITESPACE
     array([1.  , 0.9 , 0.8 , 0.7 , 0.6 , 0.5 , 0.4 , 0.3 , 0.2 , 0.1 ,
            0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01, 0.  ])
     >>> len(grid)

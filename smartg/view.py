@@ -102,11 +102,11 @@ def mdesc(desc: str, log_i: bool = False) -> str:
 
     Examples
     --------
-    >>> mdesc('I_up(TOA)')
+    >>> mdesc('I_up (TOA)')
     '$I^{\\uparrow}_{TOA}$'
-    >>> mdesc('I_up(TOA)', log_i=True)
+    >>> mdesc('I_up (TOA)', log_i=True)
     '$log_{10} I^{\\uparrow}_{TOA}$'
-    >>> mdesc('Q_down(0+)')
+    >>> mdesc('Q_down (0+)')
     '$Q^{\\downarrow}_{0+}$'
     """
     sep1 = desc.find("_")
@@ -120,7 +120,7 @@ def mdesc(desc: str, log_i: bool = False) -> str:
         stokes = desc[sep1 - 4 : sep1]
     else:
         stokes = desc[0:sep1]
-    direction = desc[sep1 + 1 : sep2 - 1]
+    direction = desc[sep1 + 1 : sep2].strip()
 
     if log_i and stokes == "I":
         pref = r"$log_{10} "
