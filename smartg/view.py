@@ -33,38 +33,36 @@ plot_iquv_comparison
 import math
 import warnings
 from pathlib import Path
-from pylab import (
-    figure,
-    subplot2grid,
-    tight_layout,
-    setp,
-    subplots,
-    xlabel,
-    ylabel,
-    FormatStrFormatter,
-)
-import numpy as np
+from typing import Any, Literal, Sequence, cast
 
-# ignore division by zero errors
-np.seterr(invalid="ignore", divide="ignore")
-import xarray as xr
-from xarray import Dataset
+import geoclide as gc
+import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
 import mpl_toolkits.axisartist.angle_helper as angle_helper
-from matplotlib.transforms import Affine2D
-from mpl_toolkits.axisartist import floating_axes
-from matplotlib.projections import PolarAxes
+import numpy as np
+import xarray as xr
+from luts.luts import LUT, MLUT, Idx_base
 from matplotlib import colors as mcolors
 from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-from matplotlib.ticker import ScalarFormatter
 from matplotlib.cm import ScalarMappable
-from mpl_toolkits.mplot3d import Axes3D
-from mpl_toolkits.mplot3d import art3d
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from typing import Any, Literal, Sequence, cast
-import geoclide as gc
-from luts.luts import Idx_base, MLUT, LUT
+from matplotlib.figure import Figure
+from matplotlib.projections import PolarAxes
+from matplotlib.ticker import ScalarFormatter
+from matplotlib.transforms import Affine2D
+from mpl_toolkits.axisartist import floating_axes
+from mpl_toolkits.mplot3d import Axes3D, art3d
+from pylab import (
+    FormatStrFormatter,
+    figure,
+    setp,
+    subplot2grid,
+    subplots,
+    tight_layout,
+    xlabel,
+    ylabel,
+)
+from xarray import Dataset
+
 from smartg.diff import diff1, diff1_end
 from smartg.grid3d import is_same_cell_size
 from smartg.objects3d import (
@@ -75,6 +73,9 @@ from smartg.objects3d import (
     convert_lg_to_le,
     ref_fresnel,
 )
+
+# ignore division by zero errors
+np.seterr(invalid="ignore", divide="ignore")
 
 
 def mdesc(desc: str, log_i: bool = False) -> str:

@@ -73,35 +73,37 @@ AerUser
 from __future__ import annotations
 
 import copy
+import re
 import warnings
-import numpy as np
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterable, Sequence, TYPE_CHECKING
-from smartg.phase import (
-    as_theta_grid, calc_iphase, expand_phase_4_to_6, is_native_theta,
-    union_theta_grid,
-)
-from scipy.interpolate import make_interp_spline
-from scipy.integrate import simpson
-from scipy import constants
-from scipy.constants import speed_of_light, Planck, Boltzmann
-from smartg.bandset import BandSet
-from smartg.config import DIR_AUXDATA
-from gatiab import vec_float_indexing
-from smartg.truncation import DMTrunc, GTTrunc
+from typing import TYPE_CHECKING, Any, Iterable, Sequence, cast
+
+import numpy as np
 import pandas as pd
 import xarray as xr
-import re
-from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
-from smartg.typing import (
-    NumericArrayLike, PathType, RealNumber, ThetaLike
-)
-from smartg.diff import diff1
-from numpy.typing import NDArray
-from typing import Any, cast
+from gatiab import vec_float_indexing
 from luts.luts import LUT
+from numpy.typing import NDArray
+from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
+from scipy import constants
+from scipy.constants import Boltzmann, Planck, speed_of_light
+from scipy.integrate import simpson
+from scipy.interpolate import make_interp_spline
+
+from smartg.bandset import BandSet
+from smartg.config import DIR_AUXDATA
+from smartg.diff import diff1
 from smartg.grid3d import Grid3D, create_1d_grid
+from smartg.phase import (
+    as_theta_grid,
+    calc_iphase,
+    expand_phase_4_to_6,
+    is_native_theta,
+    union_theta_grid,
+)
+from smartg.truncation import DMTrunc, GTTrunc
+from smartg.typing import NumericArrayLike, PathType, RealNumber, ThetaLike
 
 if TYPE_CHECKING:
     # Imported only for type checking to avoid a circular import

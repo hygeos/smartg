@@ -39,42 +39,49 @@ reduce_diff
 """
 
 import os
-import numpy as np
+import subprocess
+import tempfile
+from collections import OrderedDict
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
+from typing import cast
+from warnings import warn
+
+import geoclide as gc
+import numpy as np
+import pycuda.driver as cuda
+import xarray as xr
 from numpy import pi
 from numpy.typing import NDArray
-from smartg.atmosphere import Atmosphere, od2k, blackbody_radiance
-from smartg.sensor import Sensor
-from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
-from smartg.phase import theta_grid as _make_theta_grid
-from smartg.water import Water
-from warnings import warn
-from smartg.surface import Environment
-from smartg.progress import progress as make_progress
-from smartg.cdf import icdf_2d
-from smartg.environ import modified_environ
-from smartg.xarray import drop_axes
-from smartg.typing import NumericArrayLike
+from pycuda import gpuarray
+from pycuda.compiler import SourceModule
+from pycuda.gpuarray import GPUArray, to_gpu
 from scipy.interpolate import interp1d
 
-# from scipy.integrate import simpson
-import subprocess
-from collections import OrderedDict
-from pycuda import gpuarray
-from pycuda.gpuarray import GPUArray, to_gpu
-import pycuda.driver as cuda
+from smartg.atmosphere import Atmosphere, blackbody_radiance, od2k
 from smartg.bandset import BandSet
-from pycuda.compiler import SourceModule
+from smartg.cdf import icdf_2d
+from smartg.config import DIR_ROOT
+from smartg.environ import modified_environ
 
 # bellow necessary for object incorporation
 from smartg.objects3d import (
-    Mirror, Plane, Spheric, LambMirror, Matte, CusForward, CusBackward,
+    CusBackward,
+    CusForward,
+    LambMirror,
+    Matte,
+    Mirror,
+    Plane,
+    Spheric,
 )
-import xarray as xr
-import geoclide as gc
-import tempfile
-from collections.abc import Callable, Sequence
-from typing import cast
+from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
+from smartg.phase import theta_grid as _make_theta_grid
+from smartg.progress import progress as make_progress
+from smartg.sensor import Sensor
+from smartg.surface import Environment
+from smartg.typing import NumericArrayLike
+from smartg.water import Water
+from smartg.xarray import drop_axes
 
 # pycuda ships no type stubs: gpuarray.zeros infers its dtype
 # parameter as type[float64] from the default value, which flags
@@ -84,7 +91,6 @@ gpuzeros = cast('Callable[..., GPUArray]', gpuarray.zeros)
 
 
 # set up directories
-from smartg.config import DIR_ROOT
 
 DIR_SRC = DIR_ROOT / 'smartg' / 'src'
 SRC_DEVICE = DIR_SRC / 'device.cu'
@@ -812,7 +818,7 @@ class Smartg(object):
                     self.ctx = pycuda.autoinit.context
                 except Exception:
                     # In case cuda context has been manually popped
-                    from importlib import reload, import_module
+                    from importlib import import_module, reload
 
                     pycuda.autoinit = import_module('pycuda.autoinit')
                     reload(pycuda.autoinit)

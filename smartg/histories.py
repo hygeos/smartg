@@ -32,13 +32,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import numpy as np
-import jax.numpy as jnp
-from jax import value_and_grad, vmap, jit
-import xarray as xr
 import jax
+import jax.numpy as jnp
+import numpy as np
+import xarray as xr
+from jax import jit, value_and_grad, vmap
 from luts.luts import MLUT
 from numpy.typing import NDArray
+
 
 def get_histories(
     m: MLUT | xr.Dataset,

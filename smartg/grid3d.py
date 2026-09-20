@@ -14,10 +14,11 @@ Grid3D
 
 from __future__ import annotations
 
-import numpy as np
-from numpy.typing import NDArray
 from typing import cast
 from warnings import warn
+
+import numpy as np
+from numpy.typing import NDArray
 from scipy.interpolate import interp1d
 
 from smartg.typing import NumericArrayLike, RealNumber

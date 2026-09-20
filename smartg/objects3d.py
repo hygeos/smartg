@@ -46,13 +46,14 @@ extract_points
 
 from __future__ import annotations
 
-import geoclide as gc
-import numpy as np
 import re
 from itertools import dropwhile
 from pathlib import Path
-from scipy import interpolate
 from warnings import warn
+
+import geoclide as gc
+import numpy as np
+from scipy import interpolate
 
 
 class Mirror(object):
