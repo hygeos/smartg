@@ -62,6 +62,7 @@ import contextlib
 import io
 import logging
 import warnings
+from typing import Any
 
 import jax
 import jax.lax as lax
@@ -70,6 +71,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 from jax import jit, vmap
+from jax.typing import ArrayLike
 
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D, od2k
@@ -115,7 +117,9 @@ from radis.api.hdf5 import DataFileManager
 # ────────────────────────────────────────────────
 _orig_read_meta = DataFileManager.read_metadata
 
-def _patched_read_meta(self, fname, key='df'):
+def _patched_read_meta(
+    self: DataFileManager, fname: str, key: str = 'df'
+) -> Any:
     try:
         return _orig_read_meta(self, fname, key)
     except TypeError:
@@ -131,7 +135,13 @@ DataFileManager.read_metadata = _patched_read_meta
 # ────────────────────────────────────────────────────────
 _orig_write = DataFileManager.write
 
-def _patched_write(self, file, df, append=False, **kw):
+def _patched_write(
+    self: DataFileManager,
+    file: str | Path,
+    df: Any,
+    append: bool = False,
+    **kw: Any,
+) -> Any:
     import pandas as _pd
     if isinstance(df, _pd.DataFrame) and 'branch' in df.columns:
         if df['branch'].dtype == object:
@@ -481,10 +491,18 @@ wavelength_hr_j  = jnp.array(wavelength_hr,              dtype=jnp.float32)
 # (NWL_HR,)
 alb_hr_j = jnp.array(GREY_ALB.get(wavelength_hr), dtype=jnp.float32)
 
-def _si_one(sik, wi_lr, dij, ki, wavelength_i, kabs_i, alb_i):
+def _si_one(
+    sik: ArrayLike,
+    wi_lr: ArrayLike,
+    dij: ArrayLike,
+    ki: ArrayLike,
+    wavelength_i: jax.Array,
+    kabs_i: jax.Array,
+    alb_i: jax.Array,
+) -> jax.Array:
     """Beer-Lambert weight: one Stokes component, photon, wavelength."""
     wi = jnp.interp(wavelength_i, wavelength_lr_r, wi_lr)
-    return sik * wi * jnp.exp(-jnp.sum(dij * kabs_i)) * alb_i**ki
+    return wi * sik * jnp.exp(-jnp.sum(dij * kabs_i)) * alb_i**ki
 
 # over NLE photons
 _si_photons = vmap(_si_one, in_axes=(0, 0, 0, 0, None, None, None))
@@ -504,7 +522,7 @@ n_stokes = int(s_h.shape[1])
 # fori_loop → XLA while_loop; XLA does NOT pre-allocate backward
 # checkpoints
 # → no rematerialization warning
-def _body_fw(i, carry):
+def _body_fw(i: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
     s_sum, s2_sum = carry
     si = _si_stokes(s_h, w_h, d_h, nref_h, wavelength_hr_j[i], kabs_j[i],
                     alb_hr_j[i])  # (NStokes, NLE)
@@ -621,7 +639,7 @@ plt.tight_layout()
 # Analytic: ∂Si/∂kabs[l] = -D_i[l]·Si  →  ∂ρ_I/∂kabs[l] = -Σᵢ
 # d_h[i,l]·si_I[i] / N
 
-def _body_i(i, carry):
+def _body_i(i: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
     rho_arr, jac_arr = carry
     si = _si_stokes(s_h, w_h, d_h, nref_h, wavelength_hr_j[i], kabs_j[i],
                     alb_hr_j[i])  # (NStokes, NLE)
@@ -907,7 +925,9 @@ plt.show()
 # fori_loop → XLA while_loop; no backward-pass checkpoint budget.
 #   dolp(ν) = √(ρ_Q² + ρ_U²) / ρ_I
 
-def _body_pol(i, carry):
+def _body_pol(
+    i: jax.Array, carry: tuple[jax.Array, ...]
+) -> tuple[jax.Array, ...]:
     r_q, r_i, r_u, dq_k, dq_a, di_a = carry
     kabs_i = kabs_j[i]
     wavelength_i   = wavelength_hr_j[i]
@@ -1243,7 +1263,9 @@ _VALIDATION_MAX_HIST = 2_000_000
 _original_validation_run = Smartg.run
 
 
-def _memory_safe_validation_run(self, *args, **kwargs):
+def _memory_safe_validation_run(
+    self: Smartg, *args: Any, **kwargs: Any
+) -> xr.Dataset:
     global n_photons
     n_photons = min(int(n_photons), _VALIDATION_MAX_PHOTONS)
     kwargs["n_photons"] = min(
@@ -1361,9 +1383,17 @@ with jax.default_device(jax.devices("cpu")[0]):
     alb_hr_j = jnp.zeros(len(w_valid),         dtype=jnp.float32)
     wavelength_lr_j  = jnp.array(wavelength_lr, dtype=jnp.float32)  # (NLR,)
 
-    def _si_one(sik, wi_lr, dij, ki, wavelength_i, kabs_i, alb_i):
+    def _si_one(
+        sik: ArrayLike,
+        wi_lr: ArrayLike,
+        dij: ArrayLike,
+        ki: ArrayLike,
+        wavelength_i: jax.Array,
+        kabs_i: jax.Array,
+        alb_i: jax.Array,
+    ) -> jax.Array:
         wi = jnp.interp(wavelength_i, wavelength_lr_j, wi_lr)
-        return sik * wi * jnp.exp(-jnp.sum(dij * kabs_i)) * alb_i**ki
+        return wi * sik * jnp.exp(-jnp.sum(dij * kabs_i)) * alb_i**ki
 
     _si_photons = vmap(_si_one, in_axes=(0, 0, 0, 0, None, None, None))
     _si_stokes  = vmap(_si_photons, in_axes=(1, None, None, None, None, None,
@@ -1373,7 +1403,7 @@ with jax.default_device(jax.devices("cpu")[0]):
     n_wl      = int(kabs_j.shape[0])
     n_stokes = int(s_h.shape[1])
 
-    def _body_fw(i, carry):
+    def _body_fw(i: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
         s_sum, s2_sum = carry
         si = _si_stokes(s_h, w_h, d_h, nref_h, wavelength_hr_j[i], kabs_j[i],
                         alb_hr_j[i])

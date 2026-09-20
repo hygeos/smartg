@@ -1262,7 +1262,9 @@ sg=Smartg()
 le = LocalEstimate(phi=np.array([0.]),
                    th=np.array([60.])*np.pi/180)
 
-def simulate(thvdeg, surface, aerosol_model, aot550):
+def simulate(
+    thvdeg: float, surface: bool, aerosol_model: str, aot550: float
+) -> None:
     """Run one aerosol case and print its TOA intensity."""
     surface = {True: RoughSurface(), False: None}[surface]
     aer = AerOPAC(aerosol_model, aot550, 550.)
@@ -1308,7 +1310,7 @@ atm1  = Atm1D('afglsw', grid=grid)
 # lambertian surface
 alb  = AlbedoCst(0.1)
 surface = LambSurface(alb=alb)
-def zt2thv(zt, r_ter=6371., h_toa=120.):
+def zt2thv(zt: float, r_ter: float = 6371., h_toa: float = 120.) -> float:
     """Convert a tangent height to the viewing zenith angle at TOA."""
     return np.arcsin((r_ter+zt)/(r_ter+h_toa))*180/np.pi
 # For a vertical profile in backward mode, several sensors are needed
@@ -1484,7 +1486,7 @@ m  = s_back.run(wavelength=wavelength, atmosphere=atmosphere, surface=surface,
 # the transects are plotted for raa=0, (principal plane)
 raa = 0.
 
-def azimuth_index(saa):
+def azimuth_index(saa: float) -> list[int]:
     """Return the azimuth plane index nearest to ``saa``."""
     return [int(np.abs(m['Azimuth angles'].values - saa).argmin())]
 
