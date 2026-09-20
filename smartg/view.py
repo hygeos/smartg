@@ -79,8 +79,7 @@ np.seterr(invalid="ignore", divide="ignore")
 
 
 def mdesc(desc: str, log_i: bool = False) -> str:
-    """
-    Format Stokes parameter description for display with LaTeX notation.
+    r"""Format a Stokes parameter description in LaTeX notation.
 
     Parses a description string to extract Stokes parameter, direction,
     and other components, then formats them with proper LaTeX notation
@@ -655,7 +654,6 @@ def transect_view(
         Stokes parameters. If full is True: tuple of (fig1, fig2) with
         raw and processed Stokes parameters.
     """
-
     if ind is None:
         ind = [0]
 
@@ -1051,9 +1049,7 @@ def spectrum_view(
     interp_dict: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> Figure | tuple[Figure, Figure]:
-    """
-    Visualization of SMART-G spectrum (wavelength-dependent Stokes
-    parameters).
+    """Plot the wavelength-dependent Stokes parameters of a run.
 
     Parameters
     ----------
@@ -1106,7 +1102,6 @@ def spectrum_view(
         full is True: tuple of (fig1, fig2) with raw Stokes parameters
         and processed metrics.
     """
-
     if isinstance(ds_sg, MLUT):
         warn_message = (
             "\nUsing an MLUT for ds_sg is deprecated, use an "
@@ -1338,7 +1333,6 @@ def phase_view(
     axarr : numpy.ndarray
         Array of matplotlib axes.
     """
-
     if isinstance(ds_sg, MLUT):
         warn_message = (
             "\nUsing an MLUT for ds_sg is deprecated, use an "
@@ -1601,7 +1595,6 @@ def profile_view(
     ax : matplotlib.axes.Axes
         Axes object containing the profile plot.
     """
-
     if isinstance(ds_sg, MLUT):
         warn_message = (
             "\nUsing an MLUT for ds_sg is deprecated, use an "
@@ -1785,7 +1778,6 @@ def input_view(
         Absolute index of the phase function coming from Profile. If
         None, uses all unique indices.
     """
-
     if isinstance(ds_sg, MLUT):
         warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
         warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
@@ -1852,9 +1844,7 @@ def compare(
     zenith_title: str = r"$SZA (°)$",
     errref: np.ndarray[Any, Any] | Sequence[float] | None = None,
 ) -> Figure:
-    """
-    Compare results of two SMART-G simulations in two different azimuth
-    planes.
+    """Compare two SMART-G simulations in two different azimuth planes.
 
     Parameters
     ----------
@@ -1909,7 +1899,6 @@ def compare(
     fig : matplotlib.figure.Figure
         Figure object containing the comparison plots.
     """
-
     if isinstance(ds_sg, MLUT):
         warn_message = (
             "\nUsing an MLUT for ds_sg is deprecated, "
@@ -2361,7 +2350,6 @@ def plot_iquv_comparison(
         Save the figure at this path, the extension giving the
         format, e.g. save_fig='myFigName.png'.
     """
-
     fig, ax = plt.subplots(2,4, figsize=(13,8))
     if title: fig.suptitle(title, fontsize=15)
 
@@ -2423,7 +2411,7 @@ def _bin_edges(
     min: float | None = None,
     max: float | None = None,
 ) -> np.ndarray[Any, Any]:
-    """Helper function to compute bin edges from bin centers"""
+    """Compute the bin edges from the bin centers."""
     edges = np.zeros(len(x) + 1)
     edges[1:-1] = (x[1:] + x[:-1]) / 2.0
     edges[0] = 2 * x[0] - edges[1]
@@ -2480,9 +2468,9 @@ def plot_polar(
     cmap: str | mcolors.Colormap | None = None,
     semi: bool = False,
 ) -> Figure:
-    """
-    Contour and optionally transect of 2D DataArray on a semi-polar
-    plot.
+    """Contour a 2D DataArray on a semi-polar plot.
+
+    With an optional transect.
 
     xarray version of luts.plot_polar, compatible with DataArray
     objects.
@@ -2522,7 +2510,6 @@ def plot_polar(
     fig : Figure
         The figure containing the plot.
     """
-
     # Convert subplot positions
     rect = _parse_subplot_position(rect)
     sub = _parse_subplot_position(sub)
@@ -2844,7 +2831,6 @@ def plot_polar_iquv(
         cases; also plot the symmetrical results from 180 to 360
         degrees.
     """
-
     val_i, val_q, val_u, val_v = (
         np.asarray(values, dtype=np.float64) for values in iquv
     )
@@ -2988,7 +2974,6 @@ def transect_2d(
     fig : Figure
         Figure containing the transect plot.
     """
-
     assert da.ndim == 2, "DataArray must be 2D"
 
     if fig is None:
@@ -3189,7 +3174,6 @@ def receiver_view(
            International Conference on Concentrating Solar Power and
            Chemical Energy Systems*. https://doi.org/10.1063/1.5117709
     """
-
     if np.isscalar(cat):
         cat_index = int(cast(Any, cat))
         m = ds_sg_out["C_Receiver"].isel(Categories=cat_index).values
@@ -3310,18 +3294,14 @@ class _FixedOrderFormatter(ScalarFormatter):
 
 
 def _order_of_magnitude(values: np.ndarray) -> int:
-    """
-    Return the order of magnitude of the largest absolute value.
-    """
+    """Return the order of magnitude of the largest absolute value."""
     return math.floor(math.log(np.max(np.abs(values)), 10))
 
 
 def _colorbar_formatter(
     values: np.ndarray, sci_format: bool
 ) -> ScalarFormatter | None:
-    """
-    Return the colorbar tick formatter, or None for the default one.
-    """
+    """Return the colorbar tick formatter, None for the default."""
     if sci_format:
         return _FixedOrderFormatter(_order_of_magnitude(values))
     return None
@@ -3350,9 +3330,7 @@ def _colorbar_ticks(
 
 
 def _as_list(value: Any, size: int) -> list:
-    """
-    Broadcast a scalar or a 1-element list to a list of given size.
-    """
+    """Broadcast a scalar or a 1-element list to a given size."""
     if not isinstance(value, list):
         value = [value]
     if len(value) == 1:
@@ -3365,9 +3343,7 @@ def _get_cmaps(
     cmap_reverse: bool | list[bool],
     size: int,
 ) -> list[mcolors.Colormap]:
-    """
-    Build one colormap per panel, with NaN values shown in white.
-    """
+    """Build one colormap per panel, with NaN values shown in white."""
     cmaps = []
     for cm, reverse in zip(_as_list(cmap, size),
                            _as_list(cmap_reverse, size)):
@@ -3388,9 +3364,7 @@ def _extract_matrices(
     n_x: int,
     n_y: int,
 ) -> list[np.ndarray]:
-    """
-    Extract the (n_y, n_x) Stokes matrices from a SMART-G Dataset.
-    """
+    """Extract the (n_y, n_x) Stokes matrices from a SMART-G Dataset."""
     dims = ds_sg[stokes_labels[0]].dims
     if not all(d in dims for d in ("Azimuth angles", "Zenith angles")):
         raise ValueError(
@@ -3777,9 +3751,9 @@ def cat_view(
     accuracy: int = 6,
     kdis_rep_bands: object | None = None,
 ) -> xr.Dataset:
-    """
-    Normalize photon weights from a SMART-G simulation output to flux,
-    flux density, or radiance with error estimates.
+    """Normalize the photon weights of a run to flux or radiance.
+
+    To flux, flux density, or radiance, with error estimates.
 
     Processes receiver weights from ``ds['wPhCats']`` and
     ``ds['wPhCats2']``, applies the specified ``output_unit``,
@@ -3830,7 +3804,6 @@ def cat_view(
         Dataset containing intensity (flux, flux density, or radiance)
         with associated error estimates for each category.
     """
-
     if isinstance(ds, MLUT):
         warn_message = (
             "\nUsing an MLUT for ds is deprecated, use an "
@@ -4234,10 +4207,9 @@ def nopt_view(
     mtoa: None | np.ndarray | xr.DataArray | LUT = None,
     natm_approx: bool = False,
 ) -> None:
-    """
-    Calculate and display the detailed optical efficiencies with
-    associated error estimates of a Solar Tower Power simulated with
-    SMART-G.
+    """Display the optical efficiencies of a Solar Tower Power run.
+
+    With their error estimates, as simulated with SMART-G.
 
     Parameters
     ----------
@@ -4576,7 +4548,6 @@ def visualize_entity(
     out : matplotlib.figure.Figure
         A matplotlib figure object containing the 3D visualization.
     """
-
     if not isinstance(entities, (list)):
         entities = [entities]
 

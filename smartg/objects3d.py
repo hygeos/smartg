@@ -120,6 +120,7 @@ class Mirror(object):
             )
 
     def __str__(self) -> str:
+        """Return a readable description of the Mirror."""
         return (
             "Material -> Mirror : "
             "reflectivity="
@@ -155,6 +156,7 @@ class LambMirror(object):
         self.reflectivity = reflectivity
 
     def __str__(self) -> str:
+        """Return a readable description of the LambMirror."""
         return "Material -> Lambertian Mirror : reflectivity=" + str(
             self.reflectivity
         )
@@ -191,6 +193,7 @@ class Matte(object):
         self.roughness = roughness
 
     def __str__(self) -> str:
+        """Return a readable description of the Matte."""
         return (
             "Material -> Matte : "
             "reflectivity="
@@ -286,6 +289,7 @@ class Plane(object):
             raise NameError("All arguments must be Point type!")
 
     def __str__(self) -> str:
+        """Return a readable description of the Plane."""
         return (
             "Coordinates of the Plane :\n"
             "-> p1=("
@@ -372,6 +376,7 @@ class Spheric(object):
             self.z1 = z1
 
     def __str__(self) -> str:
+        """Return a readable description of the Spheric."""
         return (
             "Sphere with the following caracteristics :\n"
             + "-> radius = "
@@ -439,6 +444,7 @@ class Transformation:
         self.transz = translation[2]
 
     def __str__(self) -> str:
+        """Return a readable description of the Transformation."""
         return (
             "Transformation : rotation=("
             + str(self.rotx)
@@ -592,6 +598,7 @@ class Entity(object):
         self.check = "Entity"
 
     def __str__(self) -> str:
+        """Return a readable description of the Entity."""
         return (
             "The entity is a "
             + str(self.name)
@@ -662,9 +669,9 @@ class Entity(object):
     def set_transformation(
         self, transformation: Transformation, recompute_bbox: bool = True
     ) -> None:
-        """
-        Update the entity's transformation and optionally recompute
-        bounding box.
+        """Update the entity's transformation.
+
+        Optionally recompute the bounding box.
 
         Parameters
         ----------
@@ -796,6 +803,7 @@ class Heliostat(object):
         self.rough = roughness
 
     def __str__(self) -> str:
+        """Return a readable description of the Heliostat."""
         return (
             "POS="
             + str(self.pos)
@@ -868,7 +876,9 @@ def find_rots(
     dir_out: gc.Vector | gc.Normal | None = None,
     normal: gc.Vector | gc.Normal | None = None,
 ) -> list:
-    """Compute rotation angles to reflect an incoming ray toward an
+    """Compute the rotation angles reflecting a ray to a direction.
+
+    Compute rotation angles to reflect an incoming ray toward an
     outgoing direction.
 
     Determines the Y and Z rotation angles necessary to orient a surface
@@ -1098,8 +1108,9 @@ def generate_le_h(
     phi_deg: float = 0.0,
     facet_transforms: np.ndarray | None = None,
 ) -> list[Entity]:
-    """Convert a heliostat to well-oriented plane facets for receiver
-    reflection.
+    """Convert a heliostat into well-oriented plane facets.
+
+    For the reflection towards the receiver.
 
     Generates a list of properly oriented planar entity/facets from a
     heliostat object. Each facet is independently oriented to reflect
@@ -1655,8 +1666,9 @@ def generate_box(
 
 
 def ref_fresnel(dir_in: gc.Vector, geo_transform: gc.Transform) -> gc.Vector:
-    """Calculate Fresnel reflection direction for a ray on a
-    transformed surface.
+    """Calculate the Fresnel reflection direction of a ray.
+
+    On a transformed surface.
 
     Computes the direction of a reflected ray using simple Fresnel
     reflection based on the incident ray direction and the surface
@@ -1893,8 +1905,9 @@ def generate_h_a(
     facet_transforms_list: list[np.ndarray] | None = None,
     return_positions: bool = False,
 ) -> list[Entity | GroupE] | tuple[list[Entity | GroupE], list[gc.Point]]:
-    """Generate well-oriented Heliostats arranged in an angular sector
-    around receiver.
+    """Generate well-oriented heliostats in an angular sector.
+
+    Around the receiver.
 
     Generates heliostats positioned between min_ang_deg and max_ang_deg
     angles, properly oriented to reflect sun rays toward a central
@@ -2133,8 +2146,7 @@ def generate_h_a(
 
 
 def convert_lg_to_le(obj_list: list[Entity | GroupE]) -> list[Entity]:
-    """Convert a mixed list of Entity and GroupE objects to Entity
-    objects only.
+    """Flatten a mixed list of Entity and GroupE objects to entities.
 
     Flattens groups by expanding all GroupE objects into their
     constituent Entity objects, resulting in a list containing only
@@ -2175,28 +2187,28 @@ def rotate_vector(
     rot_z: float,
     rotation_order: str = "xyz",
 ) -> gc.Vector:
-    """
-    Definition of the function rotate_vector
+    """Rotate a vector by angles about the x, y and z axes.
 
-    coordinate system convention:
+    Coordinate system convention::
 
-      y
-      ^   x : right; y : front; z : top
-      |
-    z X -- > x
+          y
+          ^   x : right; y : front; z : top
+          |
+        z X -- > x
 
-    Given a vector and rotations to perform to this vector in degrees
-    in the x,y,z axes, with in option the rotation order
+    Parameters
+    ----------
+    vector : gc.Vector
+        The direction to rotate.
+    rot_x, rot_y, rot_z : float
+        Rotations about x, y and z, in degrees.
+    rotation_order : str, optional
+        Order of the rotations, e.g. 'xyz' or 'zxy'.
 
-    Arg:
-    v              : A direction described by Vector class object
-    rotx,y,z       : Rotations in x,y and z in degrees
-    rotation_order : str with the order of rotations i.g. 'xyz', zxy',
-                     ...
-
-    Return:
-    rotated_vector : The rotated (normalized) direction (also
-                     a Vector class)
+    Returns
+    -------
+    gc.Vector
+        The rotated, normalized direction.
     """
     tt = gc.Transform()
     tr_x = gc.get_rotate_x_tf(rot_x)
@@ -2228,23 +2240,24 @@ def interpolate_refls_from_wls(
     new_wavelengths: np.ndarray | list[float],
     extrapolate: bool = False,
 ) -> np.ndarray:
+    """Interpolate reflectivities onto a new set of wavelengths.
+
+    Parameters
+    ----------
+    wavelengths : array_like
+        The wavelengths of the known reflectivities.
+    reflectivities : array_like
+        The reflectivity at each of ``wavelengths``.
+    new_wavelengths : array_like
+        The wavelengths to interpolate at.
+    extrapolate : bool, optional
+        Whether to extrapolate outside ``wavelengths``.
+
+    Returns
+    -------
+    ndarray
+        The interpolated reflectivities.
     """
-        Definition: Giving a set of wavelengths (wavelengths) and
-                    reflectivities (reflectivities), get the
-                    interpolated reflectivities folowing the new set of
-                    wavelengths (new_wavelengths)
-
-    ==== ARGS:
-    wavelengths     : List/array of wavelengths
-    reflectivities  : List/array with reflectivities at each wavelength
-                      of wavelengths
-    new_wavelengths : List/array of the new wavelengths where we want
-                      to interpolate
-
-    ==== RETURN:
-    refls_new : numpy array with the interpolated reflectivities
-    """
-
     # type: ignore -> fill_value is documented as accepting an
     # array-like, a 2 element tuple or "extrapolate", but its stub only
     # allows a float
@@ -2272,9 +2285,9 @@ def interpolate_refls_from_wls(
 
 
 def is_comment(line: str) -> bool:
-    """
-    function to check if a line starts with some character. Here #
-    for comment
+    """Check whether a line starts with a given character.
+
+    Here ``#``, the comment marker.
     """
     # return true if a line starts with #
     return line.startswith("#")
@@ -2304,7 +2317,6 @@ def extract_points(fname: str | Path) -> list[gc.Point]:
         List of geoclide.Point objects, each containing the x, y, and z
         coordinates of a heliostat.
     """
-
     # First check if fname is an str type
     file_content = ""
     try:
@@ -2374,10 +2386,11 @@ class CusForward:
               rectangle from TOA where the beams at the center
               target the origin point (0, 0, 0).
     lph : object, optional
-        In progress...
+        Forwarded unchanged to the kernel as its LPH parameter.
     lpr : object, optional
-        In progress...
+        Forwarded unchanged to the kernel as its LPR parameter.
     """
+
     def __init__(
         self,
         cfx: float = 0.,
@@ -2418,6 +2431,7 @@ class CusForward:
         }
 
     def __str__(self) -> str:
+        """Return a readable description of the CusForward."""
         return (
             'CusForward=-cfx{cfx}-cfy{cfy}-cftx{cftx}-cfty{cfty}'
             '-cftz{cftz}-fov{fov}-sampling_code{sampling_code}'
@@ -2478,15 +2492,16 @@ class CusBackward:
               direction with a field of view receiver_fov.
               Default value.
     lph : object, optional
-        In progress...
+        Forwarded unchanged to the kernel as its LPH parameter.
     lpr : object, optional
-        In progress...
+        Forwarded unchanged to the kernel as its LPR parameter.
 
     Notes
     -----
     The 'B' mode is deprecated and may lead to wrong results. Use
     instead the Sensor class.
     """
+
     def __init__(
         self,
         position: gc.Point | None = None,
@@ -2556,6 +2571,7 @@ class CusBackward:
         }
 
     def __str__(self) -> str:
+        """Return a readable description of the CusBackward."""
         return (
             'CusBackward:-position={position}-th_deg={th_deg}'
             '-ph_deg={ph_deg}-v_sun={v_sun}-sun_fov={sun_fov}'

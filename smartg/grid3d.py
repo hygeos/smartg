@@ -148,15 +148,18 @@ def extend_1d_grid(
 def get_3d_cells_indices(
     nx: int, ny: int, nz: int
 ) -> tuple[NDArray[np.integer], NDArray[np.integer], NDArray[np.integer]]:
-    '''
-    set up a rectangular regular 3D grid indices
+    """Set up the indices of a rectangular regular 3D grid.
 
-    Inputs:
-        Number of grid cells in each dimension
+    Parameters
+    ----------
+    nx, ny, nz : int
+        Number of grid cells in each dimension.
 
-    Ouputs:
-        triplet of 3D indices
-    '''
+    Returns
+    -------
+    tuple of ndarray
+        The (idx, idy, idz) triplet of 3D indices, one entry per cell.
+    """
     n_cell = nx*ny*nz
     # from cell number to x,y and z indices
     return cast(
@@ -172,20 +175,27 @@ def get_3d_cells_neighbours(
     boundary_boa: int = -2,
     boundary_toa: int = -1,
 ) -> NDArray[np.int32]:
-    '''
-    Computes the 3D neighbouring cells indices, one for each of the 6 cube faces
+    """Compute the indices of the six neighbouring cells of every cell.
 
-    Inputs:
-        Number of grid cells in each dimension
+    Parameters
+    ----------
+    nx, ny, nz : int
+        Number of grid cells in each dimension.
+    boundary_abs : int, optional
+        Index standing for the absorbing boundary (default -5).
+    periodic : bool, optional
+        Whether the neighbours are horizontally periodic; otherwise the
+        horizontal boundary is absorbing.
+    boundary_boa, boundary_toa : int, optional
+        Indices standing for the bottom and the top of the atmosphere
+        (default -2 and -1).
 
-    Keyword:
-        - periodic : the neighbours are horizontally periodic, otherwise it is an absorbing boundary
-
-    Outputs:
-        2D array (6, Ncell) containing the neighbouring cell indices for each of the 6 cuboid faces,
-            with the convention order, +X,-X,+Y,-Y,+Z,-Z
-
-    '''
+    Returns
+    -------
+    ndarray
+        The (6, n_cell) int32 array of neighbouring cell indices, in
+        the order +X, -X, +Y, -Y, +Z, -Z.
+    """
     idx, idy, idz  = get_3d_cells_indices(nx, ny, nz)
     # indices of neighbouring cells in rectangular grid
     neigh_idx      = np.vstack((idx+1, idx-1, idx  , idx  , idx  , idx  )) # by convention POSITIVE first
@@ -228,19 +238,34 @@ def get_3d_cells(
     NDArray[np.float32],
     NDArray[np.float32],
 ]:
-    '''
-    return the cells geometrical properties for use in 3D atmospheric profile object
+    """Return the cell geometry used by the 3D atmospheric profile.
 
-    Keywords:
-        - nx, ny and nz are the number of cells in each dimension
-        - dx, dy and dz are the cells dimensions in km (default 1.)
-        - x(nx), y(ny), z(nz), coordinates can be provided instead, it erase Ni and Di
-        - horiz_extent_length: in km, is not 0, then one cell before and one after in X and Y
-            are added with a specific length of horiz_extent_length. it results in a total
-            number of cells being nx_tot = nx+2 and ny_tot = ny+2
-        - sat_altitude: Max altitude in km for sensors location within the 3D grid
-        - periodic : the neighbours are horizontally periodic, otherwise it is an absorbing boundary
-    '''
+    Parameters
+    ----------
+    nx, ny, nz : int, optional
+        Number of cells in each dimension.
+    dx, dy, dz : float, optional
+        Cell dimensions in km (default 1.).
+    x, y, z : ndarray, optional
+        Cell boundary coordinates, given instead of the counts and the
+        dimensions above.
+    periodic : bool, optional
+        Whether the neighbours are horizontally periodic; otherwise the
+        horizontal boundary is absorbing.
+    horiz_extent_length : float, optional
+        If not 0, one cell of that length in km is added before and
+        after the domain in x and y, so that nx_tot = nx + 2 and
+        ny_tot = ny + 2.
+    sat_altitude : float, optional
+        Maximum altitude in km for the sensors within the 3D grid.
+
+    Returns
+    -------
+    tuple
+        ``(idx, idy, idz), (nx_tot, ny_tot, nz_tot), (x, y, z), neigh,
+        pmin, pmax``: the cell indices, the cell counts, the boundary
+        coordinates, the neighbours and the bounding box corners.
+    """
     # CELLS INDEXING
     dn             = 2 if horiz_extent_length !=0 else 0
     sl             = slice(dn//2, -dn//2) if dn==2 else slice(None, None)
@@ -300,10 +325,11 @@ def locate_3d_regular_cells(
     xgrid: NDArray, ygrid: NDArray, zgrid: NDArray,
     x: NumericArrayLike, y: NumericArrayLike, z: NumericArrayLike,
 ) -> NDArray[np.integer]:
-    '''
-    return the cells indices corresponding the the coordinates x,y,z
-    in a regular grid whose limits are defined by xgrid,ygrid and zgrid
-    '''
+    """Return the cell indices of coordinates in a regular grid.
+
+    The grid limits are defined by xgrid, ygrid and zgrid. Deprecated
+    since SMART-G 1.3.0, use :func:`locate_voxel_index` instead.
+    """
     warn_message = "\nlocate_3Dregular_cells is deprecated as of SMART-G 1.3.0 " + \
                    "and will be removed in one of the next release.\n" + \
                    "Please use locate_voxel_index instead (more robust and faster)."
@@ -323,7 +349,7 @@ def locate_voxel_index(
     xgrid: NDArray, ygrid: NDArray, zgrid: NDArray,
     x: NumericArrayLike, y: NumericArrayLike, z: NumericArrayLike,
 ) -> int | NDArray[np.integer]:
-    '''
+    """
     Locate voxel index for given coordinates.
 
     Parameters
@@ -343,7 +369,7 @@ def locate_voxel_index(
     out : int | 1D ndarray
         Flat index of the voxel(s) containing the given coordinates.
         Returns int if input coordinates are scalars, ndarray if arrays.
-    '''
+    """
     # check input types and shapes
     is_x_scalar = np.isscalar(x)
     is_y_scalar = np.isscalar(y)
@@ -395,25 +421,42 @@ def locate_voxel_index(
 
 
 class Grid3D(object):
+    """The 3D grid of cells a 3D atmosphere is described on.
+
+    Parameters
+    ----------
+    xgrid, ygrid, zgrid : ndarray
+        1D sorted arrays of the cell boundaries along x, y and z.
+    periodic : bool, optional
+        Whether the x and y boundaries are periodic.
+    horiz_extend_length : float, optional
+        Length in km of the extra boundary cell added on each side in x
+        and y; not allowed together with ``periodic``.
+    vert_extend_limit : float, optional
+        Altitude in km of the extra top cell, which must exceed the last
+        zgrid value.
+
+    Attributes
+    ----------
+    Nx, Ny, Nz : int
+        Number of cells along x, y and z without the boundary cells.
+    NX, NY, NZ : int
+        Number of cells along x, y and z including the boundary cells.
+    NCELL : int
+        Total number of cells, NX * NY * NZ.
+    xgrid, ygrid, zgrid : ndarray
+        The cell boundaries as given.
+    xGRID, yGRID, zGRID : ndarray
+        The cell boundaries including the boundary cells.
+    idx, idy, idz : ndarray
+        x, y and z indices of every cell.
+    neigh : ndarray
+        (6, NCELL) indices of the neighbouring cells, see
+        :func:`get_3d_cells_neighbours`.
+    pmin, pmax : ndarray
+        (3, NCELL) lower-left and upper-right corners of the cells.
     """
-    The class Grid3D represent the 3D grid necessary to represent the 3D atmosphere
 
-
-    === Attributs:
-    xgrid, ygrid, zgrid : Numpy array with grid profil in the x, y and z axes.
-    periodic            : Boolean to know if the periodic condition for the x and y axes will be used.
-    horiz_extend_length : Set x, y boundaries (only if periodic is true) with a given extend length.
-    vert_extend_limit   : In progress...
-
-    === Other attributs calculated:
-    Nx, Ny, Nz          : The number of cells in the x, y and z axes without boundaries.
-    NX, NY, NZ          : The number of cells in the x, y and z axes considering the boundaries.
-    NCELL               : Total number of cells, equal to NX*NY*NZ.
-    xGRID, yGRID, zGRID : Numpy array with grid profil in the x, y and z axes considering the boundaries.
-    idx, idy, idz       : x, y and z indices of the 3D grid matrix.
-    neigh               : In progress...
-    pmin, pmax          : In progress...
-    """
     def __init__(
         self,
         xgrid: NDArray[np.number],
@@ -489,5 +532,6 @@ class Grid3D(object):
 
     # Print all the attributs using the function Print()
     def __str__(self) -> str:
+        """Return a readable description of the Grid3D."""
         attributs = {attr: getattr(self, attr) for attr in dir(self) if not attr.startswith("__") and not callable(getattr(self, attr))}
         return str(attributs)

@@ -1,5 +1,4 @@
-"""Preprocessing of atmospheric optical properties for SMART-G
-simulations.
+"""Preprocess the atmospheric optical properties for SMART-G.
 
 This module provides tools to build and preprocess atmospheric profiles
 for use
@@ -116,8 +115,9 @@ M_H2O = 18.015  # g/mol
 
 
 def _grid_label(comp: object) -> str:
-    """Name a component in a message about its scattering angle grid,
-    by its class and the stem of the file it was read from, if any.
+    """Name a component in a message about its scattering angle grid.
+
+    By its class and the stem of the file it was read from, if any.
     """
     name = getattr(comp, "fname", None)
     cls = type(comp).__name__
@@ -129,7 +129,7 @@ def _grid_label(comp: object) -> str:
 def _common_theta_grid(
     grids: Sequence[NDArray[np.floating]], labels: Sequence[str]
 ) -> tuple[NDArray[np.float64], bool]:
-    """The scattering angle grid a set of phase matrices is mixed on.
+    """Return the angle grid a set of phase matrices is mixed on.
 
     When every matrix carries the same grid, that grid. Otherwise the
     union of the grids, on which mixing the matrices is exact (see
@@ -177,8 +177,9 @@ def _common_theta_grid(
 def _on_theta_grid(
     pha: xr.DataArray, theta: NDArray[np.float64], dim: str = "theta_atm"
 ) -> xr.DataArray:
-    """A phase matrix on the scattering angle grid *theta*, resampled
-    linearly unless it is already there.
+    """Resample a phase matrix linearly onto the angle grid *theta*.
+
+    It is returned unchanged when it is already on that grid.
     """
     if np.array_equal(pha.coords[dim].values, theta):
         return pha
@@ -186,8 +187,7 @@ def _on_theta_grid(
 
 
 class AerOPAC(object):
-    """
-    Initialize the Aerosol OPAC model
+    """Initialize the Aerosol OPAC model.
 
     Parameters
     ----------
@@ -301,7 +301,9 @@ class AerOPAC(object):
         ext      (hum, wav) float32 832B ...
         ssa      (hum, wav) float32 832B ...
         phase    (hum, wav, stk, theta) float32 6MB ...
-    Attributes:
+
+    Attributes
+    ----------
         name:        maritime_clean
         H_min_mix:   0
         H_mix_max:   2
@@ -734,7 +736,7 @@ class AerOPAC(object):
         return dtau, ssa
 
     def native_theta(self) -> NDArray[np.float64]:
-        """The scattering angles the component's tables carry.
+        """Return the scattering angles the component's tables carry.
 
         The grid of a user-supplied phase matrix when there is one,
         which is then the only table in use, else the union of the
@@ -825,7 +827,6 @@ class AerOPAC(object):
               (additional phase matrix unique terms P22, P44)
             - theta_atm: scattering angles from 0° to 180°
         """
-
         if self._phase is not None:
             if self._phase.ndim == 2:
                 # convert to 4-dim by inserting empty dimensions
@@ -1156,8 +1157,7 @@ class AerOPAC(object):
 
 
 class Cloud(AerOPAC):
-    """
-    Initialize the cloud model
+    """Initialize the cloud model.
 
     Parameters
     ----------
@@ -1366,8 +1366,7 @@ class Cloud(AerOPAC):
 
 
 class AerUser(AerOPAC):
-    """
-    Initialize the user-defined aerosol model
+    """Initialize the user-defined aerosol model.
 
     Parameters
     ----------
@@ -1408,7 +1407,6 @@ class AerUser(AerOPAC):
     - :math:`N(h) = N(0)exp(-h/Z)`
 
     with N the number density and h the altitude
-
     """
 
     def __init__(
@@ -1482,7 +1480,7 @@ class AerUser(AerOPAC):
 
     @staticmethod
     def list() -> list[str]:
-        """"""
+        """Raise NotImplementedError, user aerosols have no list."""
         raise NotImplementedError(
             "The list() method is not available for user-defined aerosols. "
             "User-defined aerosols are custom configurations and do not have "
@@ -1502,27 +1500,30 @@ class Comp3D(ABC):
 
     @abstractmethod
     def get_cell_indices(self) -> NDArray[np.int32]:
-        """Return the (N, 3) 0-based (ix, iy, iz) indices of the cells
-        occupied by the component, on the inner 3D grid (without
-        boundary cells).
+        """Return the (N, 3) 0-based cell indices of the component.
+
+        On the inner 3D grid, without the boundary cells.
         """
 
     @abstractmethod
     def get_ext(self, wavelength: NDArray[np.floating]) -> NDArray[np.float64]:
-        """Return the (n_wavelength, N) extinction coefficients in
-        km-1 of the component cells at the given wavelengths in nm.
+        """Return the (n_wavelength, N) cell extinctions in km-1.
+
+        At the given wavelengths in nm.
         """
 
     @abstractmethod
     def get_ssa(self, wavelength: NDArray[np.floating]) -> NDArray[np.float64]:
-        """Return the (n_wavelength, N) single scattering albedos of the
-        component cells at the given wavelengths in nm.
+        """Return the (n_wavelength, N) cell single scattering albedos.
+
+        At the given wavelengths in nm.
         """
 
     @abstractmethod
     def native_theta(self) -> NDArray[np.float64]:
-        """The scattering angles the component's tables carry, in
-        degrees, which ``n_theta='native'`` resolves to.
+        """Return the component's native scattering angles in degrees.
+
+        These are what ``n_theta='native'`` resolves to.
         """
 
     @abstractmethod
@@ -1719,9 +1720,10 @@ class _Comp3DFile(Comp3D):
     def _normalize_param(
         self, param: NDArray[np.float64]
     ) -> NDArray[np.float64]:
-        """Hook adjusting the per-cell parameter values at init, after
-        the accuracy/clipping options. The base implementation returns
-        them unchanged.
+        """Adjust the per-cell parameter values at init.
+
+        Called after the accuracy and clipping options. The base
+        implementation returns them unchanged.
         """
         return param
 
@@ -1770,9 +1772,10 @@ class _Comp3DFile(Comp3D):
     ) -> tuple[
         NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]
     ]:
-        """Return the x, y and z cell-boundary arrays of the component
-        field, from which the :class:`smartg.grid3d.Grid3D` can be
-        built. Only available with the dataset input route.
+        """Return the x, y and z cell-boundary arrays of the component.
+
+        The :class:`smartg.grid3d.Grid3D` can be built from them. Only
+        available with the dataset input route.
         """
         if self.ds_dist is None:
             raise ValueError(
@@ -1789,14 +1792,16 @@ class _Comp3DFile(Comp3D):
         return self._cell_indices
 
     def get_ext_ref(self) -> NDArray[np.float64]:
-        """Return the (N,) component extinction coefficients in km-1
-        at the reference wavelength `w_ref`.
+        """Return the (N,) cell extinctions at the reference wavelength.
+
+        In km-1, at `w_ref`.
         """
         return self._ext_ref
 
     def _interp_bulk_cells(self, var: str) -> xr.DataArray:
-        """The 'ext' or 'ssa' bulk variable interpolated at the
-        per-cell parameter values, over ('cell', 'wav').
+        """Interpolate the 'ext' or 'ssa' bulk variable per cell.
+
+        At the per-cell parameter values, over ('cell', 'wav').
         """
         return self._interp_axis(
             self.ds_mix[var],
@@ -1834,7 +1839,7 @@ class _Comp3DFile(Comp3D):
         return ssa
 
     def native_theta(self) -> NDArray[np.float64]:
-        """The scattering angles the component's tables carry.
+        """Return the scattering angles the component's tables carry.
 
         The grid of a user-supplied phase matrix when there is one,
         else the grid of the bulk file, in degrees.
@@ -1846,10 +1851,11 @@ class _Comp3DFile(Comp3D):
         return union_theta_grid([theta.astype(np.float64)])
 
     def get_phase(self, n_theta: ThetaLike = 721) -> xr.DataArray:
-        """Return the component phase matrix DataArray with the
-        dimensions ``('wavelength_phase', <parameter>, 'nphamat',
-        'theta_atm')``, the parameter axis being ``'reff'`` or
-        ``'hum'``.
+        """Return the component phase matrix DataArray.
+
+        Its dimensions are ``('wavelength_phase', <parameter>,
+        'nphamat', 'theta_atm')``, the parameter axis being ``'reff'``
+        or ``'hum'``.
 
         The matrices keep the IQUV convention of the source file, the
         conversion into the parallel/perpendicular convention of the
@@ -2185,9 +2191,10 @@ def read_i3rc_cloud(
     loc_xgrid: str | RealNumber = "centered",
     loc_ygrid: str | RealNumber = "centered",
 ) -> xr.Dataset:
-    """Read an I3RC/IPRT ASCII 3D cloud file (e.g. cumulus.dat) and
-    convert it to the dense SMART-G 3D cloud dataset expected by
-    :class:`Cloud3D`.
+    """Read an I3RC/IPRT ASCII 3D cloud file into a 3D cloud dataset.
+
+    For example cumulus.dat, converted to the dense dataset
+    :class:`Cloud3D` expects.
 
     The ASCII format is: one comment row, a row with the number of
     cells ``Nx Ny Nz`` and a flag, a row with the cell sizes ``Dx Dy``
@@ -2219,8 +2226,9 @@ def read_i3rc_aerosol(
     loc_xgrid: str | RealNumber = "centered",
     loc_ygrid: str | RealNumber = "centered",
 ) -> xr.Dataset:
-    """Read an I3RC/IPRT-style ASCII 3D aerosol file and convert it to
-    the dense SMART-G 3D aerosol dataset expected by :class:`Aer3D`.
+    """Read an I3RC/IPRT ASCII 3D aerosol file into a 3D dataset.
+
+    Converted to the dense dataset :class:`Aer3D` expects.
 
     The ASCII format is the one of :func:`read_i3rc_cloud`, with the
     fifth column holding the relative humidity in percent instead of
@@ -2255,10 +2263,12 @@ def _read_i3rc_field(
     loc_xgrid: str | RealNumber = "centered",
     loc_ygrid: str | RealNumber = "centered",
 ) -> xr.Dataset:
-    """Read an I3RC/IPRT-style ASCII 3D field (rows of 1-based
-    ``ix iy iz`` indices, extinction coefficient and per-cell
-    parameter) into the dense SMART-G 3D dataset, with the fifth
-    column stored as the `param_name` variable.
+    """Read an I3RC/IPRT-style ASCII 3D field into a dense 3D dataset.
+
+    Read an I3RC/IPRT-style ASCII 3D field (rows of 1-based ``ix iy iz``
+    indices, extinction coefficient and per-cell parameter) into the
+    dense SMART-G 3D dataset, with the fifth column stored as the
+    `param_name` variable.
     """
     # Read only the needed information, the two first rows.
     # Be careful ! The second row have a greater dimension than the
@@ -2328,8 +2338,7 @@ class Atmosphere(object):
 
 
 class Atm1D(Atmosphere):
-    """
-    1D atmospheric profile definition
+    """A 1D atmospheric profile.
 
     The atmospheric profile is read from an auxiliary data file. The
     profiles currently shipped with the auxiliary data are the AFGL
@@ -2341,7 +2350,6 @@ class Atm1D(Atmosphere):
 
     Parameters
     ----------
-
     fname : str
         The atmospheric profile to use. The AFGL standard
         atmospheres are provided in the auxiliary data:
@@ -2591,8 +2599,7 @@ class Atm1D(Atmosphere):
         use_old_calc_iphase: bool = False,
         truncation: DMTrunc | GTTrunc | None = None,
     ) -> xr.Dataset:
-        """
-        Profile and phase matrix calculation at bands / wavelength
+        """Calculate the profile and phase matrices at wavelengths.
 
         Parameters
         ----------
@@ -2619,7 +2626,6 @@ class Atm1D(Atmosphere):
             An xarray Dataset object with the profile and (if phase =
             True) the phase matrices.
         """
-
         if not isinstance(wavelength, BandSet):
             wavelength = BandSet(wavelength)
 
@@ -2999,8 +3005,7 @@ class Atm1D(Atmosphere):
         wavelength: NumericArrayLike | BandSet,
         prof: ProfileBase | None = None,
     ) -> xr.Dataset:
-        """Calculate the profile of optical properties at given
-        wavelengths.
+        """Calculate the optical property profile at given wavelengths.
 
         Computes atmospheric optical properties (extinction, scattering,
         absorption)
@@ -3690,7 +3695,7 @@ class Atm1D(Atmosphere):
         return pro
 
     def native_theta(self) -> NDArray[np.float64]:
-        """The union of the scattering angles the components carry.
+        """Return the union of the components' scattering angles.
 
         The grid ``n_theta='native'`` resolves to: every component is
         resampled onto it, which is exact since it holds every node
@@ -3721,9 +3726,7 @@ class Atm1D(Atmosphere):
     def phase(
         self, wavelength: NumericArrayLike, n_theta: ThetaLike = 721
     ) -> xr.DataArray | None:
-        """
-        Calculate phase matrix of aerosols and clouds at specified
-        wavelengths.
+        """Calculate aerosol and cloud phase matrices at wavelengths.
 
         Computes weighted average phase functions for all aerosol
         components
@@ -3871,14 +3874,13 @@ class Atm1D(Atmosphere):
         tuple[np.ndarray, np.ndarray],
         tuple[np.ndarray, list[xr.DataArray]],
     ]:
-        """
+        """Compute the atmospheric optical properties at wavelengths.
+
         Computes atmospheric optical properties at specified wavelengths
-        and
-        separates them into decomposed components (absorption, Rayleigh
-        scattering,
-        aerosols, and phase functions). These returned profiles can be
-        used as
-        alternative inputs to initialize a new Atm1D instance.
+        and separates them into decomposed components (absorption,
+        Rayleigh scattering, aerosols, and phase functions). These
+        returned profiles can be used as alternative inputs to
+        initialize a new Atm1D instance.
 
         Parameters
         ----------
@@ -4226,9 +4228,10 @@ class Atm3D(Atmosphere):
             self._comp_cell_pos = None
 
     def native_theta(self) -> NDArray[np.float64]:
-        """The union of the scattering angles the 1D and the 3D
-        components carry, in degrees, which ``n_theta='native'``
-        resolves to, see :func:`smartg.phase.union_theta_grid`.
+        """Return the union of the 1D and 3D native scattering angles.
+
+        In degrees, what ``n_theta='native'`` resolves to, see
+        :func:`smartg.phase.union_theta_grid`.
 
         Raises
         ------
@@ -4392,8 +4395,9 @@ class Atm3D(Atmosphere):
         )
 
     def _grid(self) -> NDArray[np.integer]:
-        """The optical-property index axis of the merged profile: the
-        1D levels first, then one entry per 3D component cell.
+        """Return the optical-property index axis of the merged profile.
+
+        The 1D levels first, then one entry per 3D component cell.
         """
         n_opt = self.grid_3d.NZ + 1
         if self._cell_indices is not None:
@@ -4403,10 +4407,10 @@ class Atm3D(Atmosphere):
     def _glob_molecular(
         self, mol_1d: NDArray[np.floating]
     ) -> NDArray[np.floating]:
-        """Merge the (n_wavelength, NZ + 1) 1D molecular
-        coefficients into the global (n_wavelength, Nopt) array: the
-        component cells replicate the 1D
-        value at the same altitude.
+        """Merge the 1D molecular coefficients into the global array.
+
+        From (n_wavelength, NZ + 1) to (n_wavelength, n_opt): the
+        component cells replicate the 1D value at the same altitude.
         """
         if self._cell_flat_indices is None:
             return mol_1d
@@ -4436,9 +4440,10 @@ class Atm3D(Atmosphere):
         NDArray[np.floating],
         tuple[NDArray[np.int32], list[Any]] | None,
     ]:
-        """Merge the 1D aerosols and the 3D component into the global
-        (n_wavelength, Nopt) particle extinction and single scattering albedo
-        arrays and the global phase matrix set.
+        """Merge the 1D aerosols and a 3D component into global arrays.
+
+        The (n_wavelength, n_opt) particle extinction and single
+        scattering albedo arrays, and the global phase matrix set.
         """
         nz = self.grid_3d.NZ
         nbz = nz + 1
@@ -4612,9 +4617,10 @@ class Atm3D(Atmosphere):
         NDArray[np.floating],
         tuple[NDArray[np.int32], list[Any]] | None,
     ]:
-        """Merge the 1D aerosols and several 3D components into the
-        global (n_wavelength, Nopt) particle extinction and single scattering
-        albedo arrays and the global phase matrix set.
+        """Merge the 1D aerosols and several 3D components globally.
+
+        Into the (n_wavelength, n_opt) particle extinction and single
+        scattering albedo arrays, and the global phase matrix set.
 
         In each cell the extinctions are summed, the single
         scattering albedos are extinction-weighted and the phase
@@ -4783,9 +4789,11 @@ class Atm3D(Atmosphere):
         NDArray[np.float32],
         NDArray[np.int32],
     ]:
-        """The per-cell optical and absorption property indices, cell
-        bounding boxes and neighbours, as expected by the `cells`
-        parameter of the profile backend.
+        """Return the per-cell property indices, boxes and neighbours.
+
+        The optical and absorption property indices, the cell bounding
+        boxes and the neighbours, as the `cells` parameter of the
+        profile backend expects.
         """
         nz = self.grid_3d.NZ
         n_opt = self._grid().size
@@ -5238,8 +5246,7 @@ def saturation_pressure(t: NumericArrayLike) -> float | NDArray:
 
 
 def f_n2(wavelength: NumericArrayLike) -> float | NDArray:
-    """Compute the depolarization factor of N2 as a function of
-    wavelength.
+    """Compute the depolarization factor of N2 versus wavelength.
 
     Parameters
     ----------
@@ -5266,8 +5273,7 @@ def f_n2(wavelength: NumericArrayLike) -> float | NDArray:
 
 
 def f_o2(wavelength: NumericArrayLike) -> float | NDArray:
-    """Compute the depolarization factor of O2 as a function of
-    wavelength.
+    """Compute the depolarization factor of O2 versus wavelength.
 
     Parameters
     ----------
@@ -5294,10 +5300,10 @@ def f_o2(wavelength: NumericArrayLike) -> float | NDArray:
 
 
 def f_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
-    """Calculates the depolarization factor for air using a composite
-    formula based on the depolarization factors of N2 and O2, and the
-    CO2 concentration. Produces a 2-D array with one value per
-    wavelength-layer combination.
+    """Compute the depolarization factor of air from N2, O2 and CO2.
+
+    Produces a 2-D array with one value per wavelength-layer
+    combination.
 
     Parameters
     ----------
@@ -5334,8 +5340,9 @@ def f_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
 
 
 def n_air_co2_300(wavelength: NumericArrayLike) -> float | NDArray:
-    """Compute the refractive index of dry air at 300 ppm CO2 as a
-    function of wavelength.
+    """Compute the refractive index of dry air at 300 ppm CO2.
+
+    As a function of wavelength.
 
     Parameters
     ----------
@@ -5372,8 +5379,9 @@ def n_air_co2_300(wavelength: NumericArrayLike) -> float | NDArray:
 
 
 def n_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
-    """Calculates the refractive index as function of wavelength and CO2
-    concentration.
+    """Compute the refractive index at a given CO2 concentration.
+
+    As a function of wavelength.
 
     Parameters
     ----------
@@ -5402,8 +5410,7 @@ def n_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
 
 
 def m_dry_air(co2: NumericArrayLike) -> float | NDArray:
-    """Compute the mean molecular weight of dry air as a function of CO2
-    concentration.
+    """Compute the mean molecular weight of dry air for a CO2 level.
 
     Parameters
     ----------
@@ -5477,8 +5484,9 @@ def rayleigh_crs(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray
 
 
 def gravity_z0(lat: NumericArrayLike) -> float | NDArray:
-    """Compute gravitational acceleration at Earth's surface as a
-    function of latitude.
+    """Compute the gravitational acceleration at Earth's surface.
+
+    As a function of latitude.
 
     Parameters
     ----------
@@ -5512,8 +5520,7 @@ def gravity_z(
     lat: RealNumber,
     z: NumericArrayLike,
 ) -> float | NDArray:
-    """Compute gravitational acceleration at a given altitude and
-    latitude.
+    """Compute the gravitational acceleration at altitude and latitude.
 
     Parameters
     ----------
@@ -5637,8 +5644,10 @@ def refractivity(
     t: NumericArrayLike,
     co2: NumericArrayLike,
 ) -> NDArray:
-    """Calculate the refractive index of air as a function of
-    wavelength, pressure, temperature, and CO2 concentration.
+    """Calculate the refractive index of air.
+
+    As a function of wavelength, pressure, temperature and CO2
+    concentration.
 
     Parameters
     ----------
@@ -5686,8 +5695,7 @@ def od2k(
     axis: int = 1,
     zreverse: bool = False,
 ) -> NDArray:
-    """Convert cumulated optical depth to a vertical coefficient
-    profile.
+    """Convert a cumulated optical depth to a coefficient profile.
 
     Parameters
     ----------
@@ -5791,9 +5799,7 @@ def get_aer_dist_integral(
     h_min: NumericArrayLike,
     h_max: NumericArrayLike,
 ) -> NDArray:
-    """
-    Compute the integral of exponential vertical distribution between
-    two altitudes.
+    """Integrate an exponential vertical distribution between altitudes.
 
     Calculates the integral of an exponential distribution function
     over a vertical layer, used for computing the optical depth
@@ -5823,8 +5829,7 @@ def get_aer_dist_integral(
 
 
 def check_date(dates: Iterable[str] | NDArray[np.str_], year: int) -> None:
-    """Validate that all dates are from a single year and match the
-    provided year.
+    """Validate that all dates share the provided year.
 
     Parameters
     ----------
@@ -6040,8 +6045,7 @@ def atm_pro_from_aeronet(
     h_mix_max: float = 2.0,
     z_mix: float = 8,
 ) -> xr.Dataset:
-    """
-    Create an atmosphere profil from aeronet files
+    """Create an atmosphere profile from AERONET files.
 
     Parameters
     ----------
@@ -6095,7 +6099,6 @@ def atm_pro_from_aeronet(
 
     with N the number density and h the altitude
     """
-
     pd_date = pd.Timestamp(date + " " + time)
     n_sec_day = 24 * 60 * 60  # number of seconds in one day
     day_frac = 1 - (
@@ -6215,8 +6218,10 @@ def _open_lut_datatree_as_xarray(
     group: str | None = None,
     datasets: Iterable[str] | None = None,
 ) -> xr.Dataset:
-    """Read a LUT-style HDF5 group into an xarray.Dataset using
-    xarray.open_datatree."""
+    """Read a LUT-style HDF5 group into an xarray.Dataset.
+
+    Through xarray.open_datatree.
+    """
     data_vars = {}
 
     tree = xr.open_datatree(input_path)
@@ -6499,15 +6504,13 @@ def extract_split(
     tuple[np.ndarray, np.ndarray],
     tuple[np.ndarray, list[xr.DataArray]],
 ]:
-    """
-    Use SMART-G run results to compute atmospheric optical
-    properties at specified wavelengths and separates them into
-    decomposed
-    components (absorption, Rayleigh scattering, aerosols, and phase
-    functions).
+    r"""Compute the optical properties from SMART-G run results.
+
+    Use SMART-G run results to compute atmospheric optical properties at
+    specified wavelengths and separates them into decomposed components
+    (absorption, Rayleigh scattering, aerosols, and phase functions).
     These returned profiles can be used as alternative inputs to
-    initialize a
-    new Atm1D instance.
+    initialize a new Atm1D instance.
 
     Parameters
     ----------
@@ -6641,7 +6644,6 @@ def strgrid_to_numpy(str_grid: str) -> np.ndarray:
     >>> len(grid)
     20
     """
-
     # Split by bracketed steps to extract numbers and steps separately
     # re.split with capturing group keeps the steps
     # Result: [start, step1, stop1, step2, stop2, ...]

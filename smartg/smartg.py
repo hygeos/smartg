@@ -2,9 +2,7 @@
 # encoding: utf-8
 
 
-"""
-SMART-G: Speed-up Monte carlo Advanced Radiative Transfer code using
-GPU.
+"""SMART-G: Speed-up Monte carlo Advanced Radiative Transfer on GPU.
 
 This module hosts the Smartg class, whose constructor compiles the CUDA
 kernel with the requested options and whose run method performs the
@@ -308,9 +306,9 @@ TYPE_GOBJ = [
 
 
 class StdevLim(object):
-    """
-    Adaptive stopping criterion for Smartg.run based on the standard
-    deviation of the results.
+    """Adaptive stopping criterion for Smartg.run.
+
+    Based on the standard deviation of the results.
 
     Parameters
     ----------
@@ -372,9 +370,11 @@ class StdevLim(object):
         }
 
     def __str__(self) -> str:
+        """Return a readable description of the StdevLim."""
         return self.dict.__str__()
 
     def __repr__(self) -> str:
+        """Return the representation of the StdevLim."""
         return 'Stdevlim dict: %s' % self.dict.__repr__()
 
 
@@ -471,11 +471,13 @@ class Alis(object):
         self.n_jac_abs: bool = n_jac_abs
 
     def __str__(self) -> str:
+        """Return a readable description of the Alis."""
         return 'ALIS=-n_low{}-hist{}-n_jac{}'.format(
             self.n_low, int(self.hist), self.n_jac
         )
 
     def __repr__(self) -> str:
+        """Return the representation of the Alis."""
         return (
             'Alis(n_low={!r}, hist={!r}, max_hist={!r}, n_jac={!r}, '
             'n_jac_abs={!r})'.format(
@@ -627,11 +629,13 @@ class LocalEstimate(object):
                 )
 
     def __str__(self) -> str:
+        """Return a readable description of the LocalEstimate."""
         return 'LE=-n_th{}-n_phi{}-zip{}'.format(
             self.th.shape[0], self.phi.shape[0], int(self.zip)
         )
 
     def __repr__(self) -> str:
+        """Return the representation of the LocalEstimate."""
         return (
             'LocalEstimate(th={!r}, phi={!r}, zip={!r}, '
             'count_level={!r})'.format(
@@ -641,8 +645,7 @@ class LocalEstimate(object):
 
 
 class Smartg(object):
-    """
-    Initialization of the Smartg object
+    """Initialize the Smartg object.
 
     Performs the compilation and loading of the kernel. This class is
     designed so split compilation and kernel loading from the code
@@ -1093,8 +1096,7 @@ class Smartg(object):
         polarization: bool = True,
         no_aer_output: bool = False,
     ) -> xr.Dataset:
-        """
-        Run a SMART-G simulation
+        """Run a SMART-G simulation.
 
         Parameters
         ----------
@@ -1381,7 +1383,6 @@ class Smartg(object):
 
         Notes
         -----
-
         In cone sampling, the sun/sensor is targeting the origin (0,0,0)
         in forward/backward.
 
@@ -1404,9 +1405,7 @@ class Smartg(object):
         array([[0.15751, 0.14705, ..., 0.11015, 0.07649],
                ...,
                [0.15648, 0.14717, ..., 0.10935, 0.07744]])
-
         """
-
         if isinstance(alis_options, dict):
             warn_message = (
                 "\nPassing a dictionary to the alis_options parameter "
@@ -2392,9 +2391,7 @@ def _calc_solid_angles(
     sza_max: float = 90.0,
     sun_disc: float = 0,
 ) -> tuple:
-    """
-    Compute zenith angles, azimuth angles, and solid angles for the
-    sensor grid.
+    """Compute the zenith, azimuth and solid angles of the sensor grid.
 
     Parameters
     ----------
@@ -2422,7 +2419,6 @@ def _calc_solid_angles(
         angles. When ``sun_disc != 0``, all elements are set to the
         solid angle of the solar disc ``2π(1 - cos(sun_disc))``.
     """
-
     # zenith angles
     dth = (sza_max / 180.0 * np.pi) / n_theta
     tab_th = np.linspace(
@@ -3508,7 +3504,6 @@ def _calc_phase_host(
     probability is obtained by integrating the phase terms over solid
     angle before interpolation.
     """
-
     if hasattr(profile, 'to_xarray'):
         profile = profile.to_xarray()
 
@@ -3603,9 +3598,9 @@ def _calc_phase_host(
 def _cdf_of_table(
     phase_host: np.ndarray, ang: NDArray[np.float64]
 ) -> np.ndarray:
-    """
-    Cumulative distribution of every row of a phase table, at the
-    nodes of its angle grid.
+    """Return the cumulative distribution of each row of a phase table.
+
+    At the nodes of its angle grid.
 
     The mass of a bin is the exact integral of the tabulated phase
     function over it, F11 linear in theta between the two nodes times
@@ -3657,9 +3652,9 @@ def _calc_phase_gpu(
     polarization: bool = True,
     ang_a: NDArray[np.float64] | None = None,
 ) -> tuple[GPUArray, GPUArray]:
-    """
-    Upload the phase matrix table and the cumulative distribution
-    built by :func:`_calc_phase_host` to the GPU.
+    """Upload the phase table and its distribution to the GPU.
+
+    Both built by :func:`_calc_phase_host`.
 
     They are built on the host so that they can be checked without a
     GPU; see :func:`_calc_phase_host` for the parameters and for the
@@ -3836,7 +3831,6 @@ def _init_const(
     -------
     None
     """
-
     # compute some needed constants
     th_v = th_deg * np.pi / 180.0
     s_th_v = np.sin(th_v)
@@ -4012,7 +4006,6 @@ def _init_profile(wavelength, prof, kind: str) -> tuple:
         - ``prof_gpu`` contains the profile 1-D optical properties,
         - ``cell_gpu`` contains the profile 3-D optical properties.
     """
-
     if kind not in ('atm', 'oc'):
         raise ValueError("kind must be either 'atm' or 'oc'.")
 
@@ -4113,7 +4106,6 @@ def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
         input profiles are concatenated, with phase-function indexing
         adjusted to remain unique across concatenated blocks.
     """
-
     xprofs = []
     for prof in profs:
         if hasattr(prof, 'to_xarray'):
@@ -4186,7 +4178,6 @@ def reduce_diff(
     Only variables whose names contain one of ``'I_'``, ``'Q_'``,
     ``'U_'``, ``'V_'``, ``'transmission'``, or ``'flux'`` are processed.
     """
-
     if hasattr(ds_sg, 'to_xarray'):
         ds_sg = ds_sg.to_xarray()
 
@@ -5299,7 +5290,6 @@ def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
         n_cx, n_cy, lobj_gpu, lgobj_gpu, lrobj_gpu, lobj_spect,
         n_cos)``.
     """
-
     index_offset = 0
     lobj = []
     n_gobj = len(lgobj)
@@ -5793,9 +5783,9 @@ def _normalize_rec(
 
 
 def _find_extinction(ip, fp, prof_atm, w_ind: int = 0):
-    """
-    Compute the atmospheric extinction along a segment between two
-    points.
+    r"""Compute the atmospheric extinction along a segment.
+
+    Between two points.
 
     The extinction is computed as :math:`e^{-|\\Delta\\tau|}`, where
     :math:`\\Delta\\tau` is the cumulated optical depth along the path
