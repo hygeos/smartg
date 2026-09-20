@@ -2584,11 +2584,11 @@ def plot_polar(
     tick_formatter1 = angle_helper.FormatterDMS()
 
     class Locator(object):
-        def __call__(self, *args):
+        def __call__(self, *args: Any) -> list[Any]:
             return [np.array([0, 30, 60, 90]), 4, 1.0]
 
     class Formatter(object):
-        def __call__(self, *args):
+        def __call__(self, *args: Any) -> list[str]:
             return list(
                 map(
                     lambda x: "{:.3g}".format(x),
@@ -3279,7 +3279,7 @@ class _FixedOrderFormatter(ScalarFormatter):
         fformat: str = "%2.2f",
         offset: bool = True,
         math_text: bool = True,
-    ):
+    ) -> None:
         self._fixed_order = order
         self._fixed_format = fformat
         super().__init__(useOffset=offset, useMathText=math_text)

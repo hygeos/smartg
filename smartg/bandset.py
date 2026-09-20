@@ -36,6 +36,7 @@ spectral_grids
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
@@ -57,7 +58,9 @@ if TYPE_CHECKING:
 class BandSet:
     """Spectral bands a simulation is run on."""
 
-    def __init__(self, wavelength: NumericArrayLike | list[BandLike]) -> None:
+    def __init__(
+        self, wavelength: NumericArrayLike | Sequence[BandLike]
+    ) -> None:
         """Initialize a BandSet from wavelength band definitions.
 
         Common object for formatting input band definitions. Accepts a

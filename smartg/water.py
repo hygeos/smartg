@@ -1261,7 +1261,7 @@ class HydrosolZhai(Hydrosol):
 class Water:
     """Base class for water."""
 
-    def calc(self, wavelength: NumericArrayLike, *args: Any,
+    def calc(self, wavelength: NumericArrayLike | BandSet, *args: Any,
              **kwargs: Any) -> xr.Dataset:
         """
         Compute the water column profile as an xr.Dataset.

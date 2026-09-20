@@ -49,6 +49,7 @@ from __future__ import annotations
 import re
 from itertools import dropwhile
 from pathlib import Path
+from typing import Literal, overload
 from warnings import warn
 
 import geoclide as gc
@@ -1884,6 +1885,51 @@ def generate_h_p(
             obj_list.append(facet_group)
 
     return obj_list
+
+
+@overload
+def generate_h_a(
+    theta_deg: float = ...,
+    phi_deg: float = ...,
+    receiver_pos: gc.Point | None = ...,
+    min_ang_deg: float = ...,
+    max_ang_deg: float = ...,
+    gap_ang_deg: float = ...,
+    first_dist: float = ...,
+    n_heliostats: int = ...,
+    gap_dist: float = ...,
+    helio_size_x: float = ...,
+    helio_size_y: float = ...,
+    pillar_height: float = ...,
+    reflectivity: float = ...,
+    roughness: float = ...,
+    heliostat_type: Heliostat | None = ...,
+    facet_transforms_list: list[np.ndarray] | None = ...,
+    return_positions: Literal[False] = ...,
+) -> list[Entity | GroupE]: ...
+
+
+@overload
+def generate_h_a(
+    theta_deg: float = ...,
+    phi_deg: float = ...,
+    receiver_pos: gc.Point | None = ...,
+    min_ang_deg: float = ...,
+    max_ang_deg: float = ...,
+    gap_ang_deg: float = ...,
+    first_dist: float = ...,
+    n_heliostats: int = ...,
+    gap_dist: float = ...,
+    helio_size_x: float = ...,
+    helio_size_y: float = ...,
+    pillar_height: float = ...,
+    reflectivity: float = ...,
+    roughness: float = ...,
+    heliostat_type: Heliostat | None = ...,
+    facet_transforms_list: list[np.ndarray] | None = ...,
+    *,
+    return_positions: Literal[True],
+) -> tuple[list[Entity | GroupE], list[gc.Point]]: ...
 
 
 def generate_h_a(

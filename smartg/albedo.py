@@ -39,6 +39,7 @@ AlbedoMap
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TypeAlias, cast
 
 import numpy as np
@@ -245,10 +246,10 @@ class AlbedoMap:
         ai: NDArray[np.integer],
         x: NDArray[np.floating],
         y: NDArray[np.floating],
-        alist: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum],
+        alist: Sequence[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum],
     ) -> None:
         self.map: LUT = LUT(ai, axes=[x, y], names=["X", "Y"])
-        self.list: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum] = alist
+        self.list: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum] = list(alist)
         self.nalb: int = len(alist)
 
     def get(self, wavelength: NumericArrayLike) -> NDArray[np.floating]:

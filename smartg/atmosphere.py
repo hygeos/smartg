@@ -102,7 +102,13 @@ from smartg.phase import (
     union_theta_grid,
 )
 from smartg.truncation import DMTrunc, GTTrunc
-from smartg.typing import NumericArrayLike, PathType, RealNumber, ThetaLike
+from smartg.typing import (
+    BandLike,
+    NumericArrayLike,
+    PathType,
+    RealNumber,
+    ThetaLike,
+)
 
 if TYPE_CHECKING:
     # Imported only for type checking to avoid a circular import
@@ -2328,7 +2334,12 @@ def _read_i3rc_field(
 class Atmosphere(object):
     """Base class for atmosphere."""
 
-    def calc(self, wavelength, *args, **kwargs) -> xr.Dataset:
+    def calc(
+        self,
+        wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
+        *args: Any,
+        **kwargs: Any,
+    ) -> xr.Dataset:
         """
         Compute the atmospheric profile as an xr.Dataset.
 
@@ -2593,7 +2604,7 @@ class Atm1D(Atmosphere):
 
     def calc(
         self,
-        wavelength: NumericArrayLike | BandSet,
+        wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
         phase: bool = True,
         n_theta: ThetaLike = 721,
         use_old_calc_iphase: bool = False,
@@ -3002,7 +3013,7 @@ class Atm1D(Atmosphere):
 
     def profile(
         self,
-        wavelength: NumericArrayLike | BandSet,
+        wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
         prof: ProfileBase | None = None,
     ) -> xr.Dataset:
         """Calculate the optical property profile at given wavelengths.
@@ -4253,7 +4264,7 @@ class Atm3D(Atmosphere):
 
     def calc(
         self,
-        wavelength: NumericArrayLike | BandSet,
+        wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
         phase: bool = True,
         n_theta: ThetaLike = 721,
         use_old_calc_iphase: bool = False,

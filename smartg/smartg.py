@@ -40,9 +40,9 @@ import os
 import subprocess
 import tempfile
 from collections import OrderedDict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 from datetime import datetime, timezone
-from typing import cast
+from typing import Any, Literal, cast
 from warnings import warn
 
 import geoclide as gc
@@ -50,7 +50,7 @@ import numpy as np
 import pycuda.driver as cuda
 import xarray as xr
 from numpy import pi
-from numpy.typing import NDArray
+from numpy.typing import DTypeLike, NDArray
 from pycuda import gpuarray
 from pycuda.compiler import SourceModule
 from pycuda.gpuarray import GPUArray, to_gpu
@@ -66,6 +66,8 @@ from smartg.environ import modified_environ
 from smartg.objects3d import (
     CusBackward,
     CusForward,
+    Entity,
+    GroupE,
     LambMirror,
     Matte,
     Mirror,
@@ -76,8 +78,15 @@ from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
 from smartg.phase import theta_grid as _make_theta_grid
 from smartg.progress import progress as make_progress
 from smartg.sensor import Sensor
-from smartg.surface import Environment
-from smartg.typing import NumericArrayLike
+from smartg.surface import (
+    Environment,
+    FlatSurface,
+    LambSurface,
+    RoughSurface,
+    RPVSurface,
+    RTLSSurface,
+)
+from smartg.typing import BandLike, NumericArrayLike
 from smartg.water import Water
 from smartg.xarray import drop_axes
 
@@ -1044,11 +1053,11 @@ class Smartg(object):
 
     def run(
         self,
-        wavelength,
-        atmosphere=None,
-        surface=None,
-        water=None,
-        environment=None,
+        wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
+        atmosphere: Atmosphere | xr.Dataset | None = None,
+        surface: FlatSurface | RoughSurface | LambSurface | RTLSSurface | RPVSurface | None = None,
+        water: Water | xr.Dataset | None = None,
+        environment: Environment | None = None,
         alis_options: Alis | dict | None = None,
         n_photons: float = 1e9,
         depo: float = 0.0279,
@@ -1059,7 +1068,7 @@ class Smartg(object):
         earth_radius: float = 6371.0,
         wavelength_proba: np.ndarray | None = None,
         sensor_proba: np.ndarray | None = None,
-        cell_proba=None,
+        cell_proba: NDArray[np.floating] | Literal['auto'] | None = None,
         n_theta: int = 45,
         n_phi: int = 90,
         n_icdf: float = 1e6,
@@ -1079,13 +1088,13 @@ class Smartg(object):
         sza_max: float = 90.0,
         sun_disc: float = 0.0,
         le_fov: float = 0.0,
-        sensor=None,
+        sensor: Sensor | Sequence[Sensor] | None = None,
         refraction: bool = False,
         reflectance: bool = True,
-        my_objects=None,
-        interval=None,
+        my_objects: Sequence[Entity | GroupE] | None = None,
+        interval: Sequence[Sequence[float]] | None = None,
         is_atm: int | None = 1,
-        cus_l=None,
+        cus_l: CusForward | CusBackward | None = None,
         s_min: float = 0,
         s_max: float = 1e6,
         r_min: float = 0,
@@ -2440,7 +2449,13 @@ def _calc_solid_angles(
     return tab_th, tab_phi, tab_omega
 
 
-def _add_variable(ds, name, data, dims, attrs=None):
+def _add_variable(
+    ds: xr.Dataset,
+    name: str,
+    data: np.ndarray,
+    dims: Sequence[Hashable],
+    attrs: dict | None = None,
+) -> None:
     """
     Attach an array to the Dataset under explicit dimension names.
 
@@ -2452,24 +2467,24 @@ def _add_variable(ds, name, data, dims, attrs=None):
 
 
 def _add_level_output(
-    ds,
-    direction,
-    lvl,
-    axnames,
-    tab_final,
-    tab_final_no_aer,
-    n_photons_out_tot,
-    n_photons_out_tot_no_aer,
-    sigma,
-    tab_dist_final,
-    zip_flag,
-    cdist_axnames_zip,
-    cdist_axnames_full,
-    isen,
-    ilam,
-    iphi,
-    no_aer_output,
-):
+    ds: xr.Dataset,
+    direction: str,
+    lvl: int,
+    axnames: Sequence[Hashable],
+    tab_final: np.ndarray,
+    tab_final_no_aer: np.ndarray,
+    n_photons_out_tot: np.ndarray,
+    n_photons_out_tot_no_aer: np.ndarray,
+    sigma: np.ndarray | None,
+    tab_dist_final: np.ndarray,
+    zip_flag: bool,
+    cdist_axnames_zip: Sequence[Hashable],
+    cdist_axnames_full: Sequence[Hashable],
+    isen: int | slice,
+    ilam: int | slice,
+    iphi: int | slice,
+    no_aer_output: bool,
+) -> None:
     """
     Add the radiometric variables of one output level to the Dataset.
 
@@ -2533,7 +2548,7 @@ def _finalize(
     tab_photons_tot: np.ndarray,
     tab_photons_tot_no_aer: np.ndarray,
     tab_dist_tot: np.ndarray,
-    tab_hist_tot,
+    tab_hist_tot: np.ndarray | None,
     wavelength: np.ndarray,
     n_photons_in_tot: np.ndarray,
     errorcount: GPUArray,
@@ -2543,8 +2558,8 @@ def _finalize(
     tab_trans_dir: np.ndarray,
     tab_trans_dir_analytic: np.ndarray | None,
     attrs: dict,
-    prof_atm,
-    prof_oc,
+    prof_atm: xr.Dataset | None,
+    prof_oc: xr.Dataset | None,
     sigma: np.ndarray | None,
     horiz: int,
     le: LocalEstimate | None = None,
@@ -3289,7 +3304,10 @@ def _uniform_angles(n: int) -> NDArray[np.float64]:
 
 
 def _resolve_agrid(
-    theta_grid, n_icdf: int, profile, kind: str
+    theta_grid: str | NDArray[np.floating] | None,
+    n_icdf: int,
+    profile: xr.Dataset | None,
+    kind: str,
 ) -> tuple[NDArray[np.float64], tuple]:
     """
     Pick the angular grid of the equal-angle half of a phase table.
@@ -3365,7 +3383,7 @@ def _resolve_agrid(
     return ang, (n, 1, to_gpu(ang.astype('float32')))
 
 
-def _agrid_struct(agrid) -> np.void:
+def _agrid_struct(agrid: tuple) -> np.void:
     """
     Pack a phase-table angle grid into its ``TYPE_AGRID`` record.
 
@@ -3392,7 +3410,7 @@ def _agrid_struct(agrid) -> np.void:
     return rec[0]
 
 
-def _pgrid_struct(pgrid) -> np.void:
+def _pgrid_struct(pgrid: tuple) -> np.void:
     """
     Pack a cumulative distribution into its ``TYPE_PGRID`` record.
 
@@ -3424,7 +3442,7 @@ def _pgrid_struct(pgrid) -> np.void:
 
 
 def _calc_phase_host(
-    profile,
+    profile: xr.Dataset,
     n_theta: int,
     depo: float,
     kind: str,
@@ -3645,7 +3663,7 @@ def _cdf_of_table(
 
 
 def _calc_phase_gpu(
-    profile,
+    profile: xr.Dataset,
     n_theta: int,
     depo: float,
     kind: str,
@@ -3675,8 +3693,8 @@ def _calc_phase_gpu(
 
 
 def _init_const(
-    surface,
-    environment,
+    surface: FlatSurface | RoughSurface | LambSurface | RTLSSurface | RPVSurface | None,
+    environment: Environment | None,
     n_atm: int,
     n_atm_abs: int | np.integer,
     n_oce: int,
@@ -3722,7 +3740,7 @@ def _init_const(
     sza_max: float,
     sun_disc: float,
     le_fov: float,
-    cus_l,
+    cus_l: CusForward | CusBackward | None,
     n_obj: int,
     n_gobj: int,
     n_robj: int,
@@ -3736,10 +3754,10 @@ def _init_const(
     tc: float | None,
     n_cx: int,
     n_cy: int,
-    v_sun,
+    v_sun: gc.Vector,
     hist: int,
     z_toa: float,
-    cell_size,
+    cell_size: float,
     sx_min: float,
     sx_max: float,
     sy_min: float,
@@ -3844,7 +3862,9 @@ def _init_const(
     px_d = -v_sun.x * t_temp
     py_d = -v_sun.y * t_temp
 
-    def copy_to_device(name: str, scalar, dtype) -> None:
+    def copy_to_device(
+        name: str, scalar: Any, dtype: DTypeLike
+    ) -> None:
         cuda.memcpy_htod(  # pyright: ignore[reportAttributeAccessIssue]
             mod.get_global(name)[0], np.array([scalar], dtype=dtype)
         )
@@ -3981,7 +4001,9 @@ def _init_const(
             copy_to_device('LMODEd', 0, np.int32)
 
 
-def _init_profile(wavelength, prof, kind: str) -> tuple:
+def _init_profile(
+    wavelength: BandSet, prof: xr.Dataset, kind: str
+) -> tuple:
     """Prepare profile and cell arrays on the GPU.
 
     Convert an atmospheric or oceanic profile into the internal SMART-G
@@ -4138,7 +4160,7 @@ def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
 
 def reduce_diff(
     ds_sg: xr.Dataset,
-    varnames,
+    varnames: Sequence[str],
     delta: float | Sequence[float] | np.ndarray | None = None,
 ) -> xr.Dataset:
     """Post-process ALIS finite-difference runs into sensitivities.
@@ -4262,8 +4284,8 @@ def _loop_kernel(
     n_lam: int,
     n_sensor: int,
     double: bool,
-    kernel,
-    progress,
+    kernel: Callable[..., Any],
+    progress: Any,
     x0: GPUArray | None,
     le: LocalEstimate | None,
     tab_sensor: GPUArray,
@@ -4278,7 +4300,7 @@ def _loop_kernel(
     cell_proba_icdf: GPUArray | None,
     stdev: bool,
     stdev_lim: StdevLim | None,
-    rng,
+    rng: '_RngPhilox | _RngCurandPhilox',
     alis: bool,
     lobj_gpu: GPUArray | None,
     receiver_cell_size: float | None,
@@ -4915,7 +4937,7 @@ def _get_git_attrs() -> dict:
 
 
 def _impact_init(
-    prof_atm,
+    prof_atm: xr.Dataset | None,
     nlam: int,
     thv_deg: float,
     earth_radius: float,
@@ -5266,7 +5288,12 @@ class _RngCurandPhilox(object):
         return seed
 
 
-def _init_obj(lgobj, v_sun, wavelength, cus_l=None) -> tuple:
+def _init_obj(
+    lgobj: Sequence[Entity | GroupE],
+    v_sun: gc.Vector,
+    wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
+    cus_l: CusForward | CusBackward | None = None,
+) -> tuple:
     """Initialize object-related GPU buffers and receiver metadata.
 
     Parameters
@@ -5661,9 +5688,9 @@ def _normalize_rec(
     n_cx: int,
     n_cy: int,
     n_photons: float,
-    surf_lph,
+    surf_lph: float | NDArray[np.float64],
     cell_size: float,
-    cus_l,
+    cus_l: CusForward | CusBackward | None,
     le: int,
 ) -> tuple:
     """
@@ -5782,7 +5809,9 @@ def _normalize_rec(
     return c_mat_visu_recep, mat_cats, norm_c
 
 
-def _find_extinction(ip, fp, prof_atm, w_ind: int = 0):
+def _find_extinction(
+    ip: gc.Point, fp: gc.Point, prof_atm: xr.Dataset | None, w_ind: int = 0
+) -> float:
     r"""Compute the atmospheric extinction along a segment.
 
     Between two points.
