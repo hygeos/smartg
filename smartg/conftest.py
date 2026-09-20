@@ -217,7 +217,7 @@ def pytest_runtest_makereport(item: pytest.Function) -> Iterator[None]:
     ]
     if (report.when == "call") and (pytest_html is not None):
         # add docstring
-        doc = item.function.__doc__
+        doc = getattr(getattr(item, "function", None), "__doc__", None)
         if doc is not None:
             extra.append(pytest_html.extras.html(f"<pre>{doc}</pre>"))
 
