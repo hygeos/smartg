@@ -105,7 +105,14 @@ SIGNAL_FLOOR = 1e-3
 # cells, so one phase matrix per cell is built: 18001 angles would need
 # about 18 GB of host memory per atmosphere, and half of that on the
 # GPU, against 1.8 GB here.
-N_THETA = 1801
+# The native grid of watercloud_670.mie.cdf and waso_670.mie.cdf,
+# 2818 angles against the 1801 equally spaced ones used before:
+# here the native grid is the finer of the two
+N_THETA = "native"
+
+# Points of the inverted phase function the scattering angles are
+# drawn from, independent of the grid of the table above
+N_ICDF = 1801
 
 # CUDA block/grid: the optimal pair is GPU-dependent and could be
 # measured at runtime, but the RNG is seeded per thread index over a
@@ -338,7 +345,7 @@ def _run_case_backward(
     norm : float
         The normalisation of the maps.
     """
-    options: dict[str, Any] = {"n_icdf": N_THETA}
+    options: dict[str, Any] = {"n_icdf": N_ICDF}
     xblock, xgrid = _xblock_xgrid(
         s3db, **backward_run_kwargs(atm, sensor_grid, case), **options
     )

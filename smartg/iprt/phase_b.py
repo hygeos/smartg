@@ -78,6 +78,7 @@ from smartg.sensor import Sensor, get_sensors_grid
 from smartg.smartg import LocalEstimate, Smartg
 from smartg.surface import LambSurface
 from smartg.truncation import DMTrunc, GTTrunc
+from smartg.typing import ThetaLike
 from smartg.view import camera_view
 
 logger = logging.getLogger(__name__)
@@ -568,7 +569,7 @@ def compare_case(
 def build_atm_c2(
     tau_ray: float | None = None,
     truncation: DMTrunc | GTTrunc | None = None,
-    n_theta: int = 18001,
+    n_theta: ThetaLike = 18001,
     scale: float = 1.0,
 ) -> PhaseBAtmosphere:
     """Build the atmosphere of the C2 cubic cloud case.
@@ -590,9 +591,10 @@ def build_atm_c2(
         atmosphere at all.
     truncation : DMTrunc or GTTrunc, optional
         Truncation of the cloud phase matrix, applied by Atm3D.calc.
-    n_theta : int
-        Number of scattering angles of the phase matrix. 1801 is not
-        enough for the case 6.
+    n_theta : int, str or array_like
+        Scattering angles of the phase matrix: a number of equally
+        spaced ones, the angles themselves, or 'native' for the grid
+        the file carries.
     scale : float
         Factor applied to the grid, e.g. to test cells of a very small
         size. The extinction coefficient is divided by it.
@@ -709,7 +711,7 @@ def _coef_from_layer_od(od_layers: np.ndarray, zgrid_desc: np.ndarray
 
 
 def build_cloud_c3(
-    n_theta: int = 1801,
+    n_theta: ThetaLike = 1801,
     scale: float = 1.0,
 ) -> tuple[Cloud3D, Grid3D]:
     """Read the cumulus cloud field of the C3 case.
@@ -757,7 +759,7 @@ def build_atm_c3(
     cloud_c3: tuple[Cloud3D, Grid3D],
     truncation: DMTrunc | GTTrunc | None = None,
     with_aer: bool = True,
-    n_theta: int = 1801,
+    n_theta: ThetaLike = 1801,
 ) -> PhaseBAtmosphere:
     """Build the atmosphere of the C3 cumulus cloud case.
 

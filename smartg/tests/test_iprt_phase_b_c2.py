@@ -49,7 +49,27 @@ from smartg.truncation import GTTrunc
 SEED = 1234
 N_PHOTONS = 49e9  # notebook values: required for the reference
 N_LOOP = 1e8  # delta_m values below to be reproducible
-N_THETA = 18001  # 1801 is not enough for case 6
+# Equally spaced, and not the native grid of
+# watercloud_800.mie.cdf. The native one is 450 angles keeping
+# the 0.01 degree step of the forward peak and coarsening to 3
+# degrees where the function is smooth, and it serves the
+# untruncated cases well: measured on the fast tier, their
+# delta_m moves from -11% to +17% of the values below, both
+# signs, which is the MC noise of that tier. The GT truncated
+# ones are another matter. All 9 of them degrade, from +8% to
+# +70%, because the truncation has to integrate the phase
+# function and the coarse middle of the native grid is not
+# something a quadrature can integrate accurately, whatever
+# integral_method it uses. C3 is the control: its native grid is
+# 2818 angles against the 1801 it replaces, denser rather than
+# coarser, and its GT case passes.
+N_THETA = 18001
+
+# Points of the inverted phase function the scattering angles are
+# drawn from. It took the number of angles of the table when both
+# were N_THETA, and keeps that value now that the grid is native:
+# the two quantities are independent.
+N_ICDF = 18001
 
 # Every test runs in two tiers. The slow one uses the photon counts of
 # the IPRT benchmark and validates against MYSTIC: it is what the
@@ -582,7 +602,7 @@ def _run_case_backward(
     norm : float
         The normalisation of the maps.
     """
-    options: dict[str, Any] = {"n_icdf": N_THETA}
+    options: dict[str, Any] = {"n_icdf": N_ICDF}
     if depo is not None:
         options["depo"] = depo
     xblock, xgrid = _xblock_xgrid(
@@ -629,7 +649,7 @@ def _run_group_forward(
     norm : float
         The normalisation of the maps.
     """
-    options: dict[str, Any] = {"n_icdf": N_THETA}
+    options: dict[str, Any] = {"n_icdf": N_ICDF}
     if depo is not None:
         options["depo"] = depo
     xblock, xgrid = _xblock_xgrid(
