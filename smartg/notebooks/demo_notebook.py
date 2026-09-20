@@ -111,7 +111,7 @@ print(stk_i.interp({'Azimuth angles': 90., 'Zenith angles': 45.}).values)
 # calculate polarized light
 # use operations between DataArrays, and apply sqrt
 stk_q, stk_u = m['Q_up (TOA)'], m['U_up (TOA)']
-lp = np.sqrt(stk_q*stk_q + stk_u*stk_u).rename('Lp_up (TOA)')
+lp = np.sqrt(stk_q * stk_q + stk_u * stk_u).rename('Lp_up (TOA)')
 
 # %%
 # 2D visualization (azimuth vs zenith map)
@@ -156,13 +156,13 @@ fig = smartg_view(Smartg().run(wavelength=322., th_deg=60.,
 
 # %%
 # atmosphere + surface
-wavelength= 490.
+wavelength = 490.
 azimuth_transect = 10.
 m_as = Smartg().run(wavelength, n_photons=1e8, th_deg=45.,
         atmosphere=pro,
         surface=LambSurface(alb=AlbedoCst(0.1)))
 iaz = int(np.abs(m_as['Azimuth angles'].values - azimuth_transect).argmin())
-fig= smartg_view(m_as, ind=[iaz], qu=True)
+fig = smartg_view(m_as, ind=[iaz], qu=True)
 
 # %%
 print(m)
@@ -232,14 +232,14 @@ le = LocalEstimate(th_deg=np.linspace(0, 89., num=8),
 # the number of photons should be dramatically reduces since
 # each photon participates to the computation of all directions
 wavelength = 500.
-th0= 60.
+th0 = 60.
 m = Smartg().run(wavelength=wavelength, n_photons=1e6, th_deg=th0,
                  output_layers=3, le=le,
                  atmosphere=Atm1D('afglms', tco3=0., no2=False),
                  surface=RoughSurface(wind=5., nh2o=1.34),
                  water=Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)]))
 
-fig= smartg_view(m, field='up (0-)', log_i=True, i_min=-2.5, i_max=-1.)
+fig = smartg_view(m, field='up (0-)', log_i=True, i_min=-2.5, i_max=-1.)
 
 # %%
 # you can also speficy only couples of zenith and azimuth angles,
@@ -247,7 +247,7 @@ fig= smartg_view(m, field='up (0-)', log_i=True, i_min=-2.5, i_max=-1.)
 # using the keyword 'zip':True in the le dictionary. in that case
 # Nphi=Ntheta=Ncouple.
 # You can also specify angles in degree
-n_dir  = 12
+n_dir = 12
 le = LocalEstimate(th_deg=np.linspace(0, 89., num=n_dir),
                    phi_deg=np.linspace(360., 0., num=n_dir),
                    zip=True)
@@ -263,20 +263,20 @@ print(mz)
 # %%
 # Comparison of outputs
 # polar scatter plot, with color proportional to I and size to DoLP
-fig  = plt.figure()
+fig = plt.figure()
 ax = fig.add_subplot(111, projection='polar')
 stk_i, stk_q, stk_u = m['I_up (0-)'], m['Q_up (0-)'], m['U_up (0-)']
-dolp = np.sqrt((stk_q*stk_q + stk_u*stk_u)/(stk_i*stk_i)*100)
+dolp = np.sqrt((stk_q * stk_q + stk_u * stk_u) / (stk_i * stk_i) * 100)
 rad, theta = np.meshgrid(m['Zenith angles'].values,
-                         m['Azimuth angles'].values/180*np.pi)
+                         m['Azimuth angles'].values / 180 * np.pi)
 ax.scatter(theta.ravel(), rad.ravel(), c=np.log10(stk_i.data.ravel()),
-           s=dolp.data.ravel()*50, cmap='jet', alpha=0.5, vmin=-2.5, vmax=-1.)
+           s=dolp.data.ravel() * 50, cmap='jet', alpha=0.5, vmin=-2.5, vmax=-1.)
 
 stk_i, stk_q, stk_u = mz['I_up (0-)'], mz['Q_up (0-)'], mz['U_up (0-)']
-dolp = np.sqrt((stk_q*stk_q + stk_u*stk_u)/(stk_i*stk_i)*100)
+dolp = np.sqrt((stk_q * stk_q + stk_u * stk_u) / (stk_i * stk_i) * 100)
 ax.set_ylim([0, 90])
-ax.scatter(mz['Azimuth angles'].values/180*np.pi, mz['Zenith angles'].values,
-           c=np.log10(stk_i.data), s=dolp.data*50, cmap='jet', alpha=0.5,
+ax.scatter(mz['Azimuth angles'].values / 180 * np.pi, mz['Zenith angles'].values,
+           c=np.log10(stk_i.data), s=dolp.data * 50, cmap='jet', alpha=0.5,
            vmin=-2.5, vmax=-1., marker='s', edgecolors='k')
 
 # %% [markdown]
@@ -292,7 +292,7 @@ wlref = 550.
 # by the the libradtran (www.libradtran.org)
 # set the aerosol type to 'desert' and its AOT at the reference
 # wavelength wlref to 0.3
-aer = AerOPAC( 'desert', 0.3, wlref)
+aer = AerOPAC('desert', 0.3, wlref)
 # set cloud to water cloud with reff=11 mic., located between 2. and
 # 3 km, with an optical thickness at the reference wavelength set to 1.
 cld = Cloud('wc', 11., 2, 3., 1., wlref)
@@ -303,11 +303,11 @@ pro = Atm1D('afglt',    # tropical atmosphere
               # scale ozone vertical column to 0 Dobson units (here no
               # absoprtion by ozone)
               tco3=0.,
-              no2=False, # disable absorption by NO2
+              no2=False,  # disable absorption by NO2
               # scale water vapour column to 2 g/cm-2, but no H2O
               # absoprtion, just hygroscopic computation for aerosols
               tcwp=2.,
-              p0=980., # set sea level pressure to 980 hPa
+              p0=980.,  # set sea level pressure to 980 hPa
               tau_r=0.1,   # force Rayleigh optical thickness
               # set vertical grid, surface altitude at 1.15 km
               grid=[100., 75., 50., 25., 15., 10., 5., 3., 2., 1.15],
@@ -333,19 +333,19 @@ input_view(m, kind='atm', zmax=50)
 # '/validation/opt_kokha_aer_standard.dat')
 # OR angle, F11 = (P11+P12)/2, F22=(P11-P12)/2, F33=P33, F43=P43 (Smartg
 # Iparper convention)
-pha=read_phase(DIR_AUXDATA / 'validation' / 'opt_kokha_aer_nostandard.dat')
+pha = read_phase(DIR_AUXDATA / 'validation' / 'opt_kokha_aer_nostandard.dat')
 # the conversion into the smartg Iparper convention is done by run
-pha=read_phase(DIR_AUXDATA / 'validation' / 'opt_kokha_aer_standard.dat')
+pha = read_phase(DIR_AUXDATA / 'validation' / 'opt_kokha_aer_standard.dat')
 
 # 2) Set single scattering albedo of aerosols to 0.80 for each layer and
 # set the aerosol phase function
-aer=AerOPAC('maritime_clean', 0.3262, wlref, ssa=0.80, phase=pha)
+aer = AerOPAC('maritime_clean', 0.3262, wlref, ssa=0.80, phase=pha)
 
-#3) build profile
+# 3) build profile
 atm_custom = Atm1D('afglmw', comp=[aer]
                     # 4) Could also import aerosol profiles (extinction
                     # and ssa) from external files
-                    #,prof_aer= (aer_ext_valid,aer_ssa_valid)
+                    # ,prof_aer= (aer_ext_valid,aer_ssa_valid)
                     )
 
 azimuth_transect = 5.
@@ -380,7 +380,7 @@ nph = 1e6
 nbloop = 1e5
 
 # %% [markdown]
-# ### Reference radiances (without truncation) 
+# ### Reference radiances (without truncation)
 
 # %%
 # tau = 1
@@ -410,17 +410,17 @@ m20 = stg.run(wavelength=500., atmosphere=atmosphere, ph_deg=saa[0],
 # plot iwabuchi Fig. 3a anb 3c
 fig, axs = plt.subplots(1, 2, figsize=(12, 4))
 axs = axs.ravel()
-axs[0].plot(vza, m1['I_up (TOA)'][0, :][::-1] , 'b-', label=r'$\tau$ = 1')
-axs[0].plot(vza, m5['I_up (TOA)'][0, :][::-1] , 'g-', label=r'$\tau$ = 5')
-axs[0].plot(vza, m20['I_up (TOA)'][0, :][::-1] , 'r-', label=r'$\tau$ = 20')
+axs[0].plot(vza, m1['I_up (TOA)'][0, :][::-1], 'b-', label=r'$\tau$ = 1')
+axs[0].plot(vza, m5['I_up (TOA)'][0, :][::-1], 'g-', label=r'$\tau$ = 5')
+axs[0].plot(vza, m20['I_up (TOA)'][0, :][::-1], 'r-', label=r'$\tau$ = 20')
 axs[0].set_yscale('log')
 axs[0].legend()
 axs[0].set_ylim(1e-2, 1e1)
 axs[0].set_xlim(-89, 89)
 axs[0].set_title('I (reflection)')
-axs[1].plot(vza, m1['I_down (0+)'][0, :] , 'b-', label=r'$\tau$ = 1')
-axs[1].plot(vza, m5['I_down (0+)'][0, :] , 'g-', label=r'$\tau$ = 5')
-axs[1].plot(vza, m20['I_down (0+)'][0, :] , 'r-', label=r'$\tau$ = 20')
+axs[1].plot(vza, m1['I_down (0+)'][0, :], 'b-', label=r'$\tau$ = 1')
+axs[1].plot(vza, m5['I_down (0+)'][0, :], 'g-', label=r'$\tau$ = 5')
+axs[1].plot(vza, m20['I_down (0+)'][0, :], 'r-', label=r'$\tau$ = 20')
 axs[1].set_yscale('log')
 axs[1].legend()
 axs[1].set_ylim(1e-2, 1e3)
@@ -469,17 +469,17 @@ m20_gt = stg.run(wavelength=500., atmosphere=atmosphere, ph_deg=saa[0],
 
 fig, axs = plt.subplots(1, 2, figsize=(12, 4))
 axs = axs.ravel()
-axs[0].plot(vza, m1_gt['I_up (TOA)'][0, :][::-1] , 'b-', label=r'$\tau$ = 1')
-axs[0].plot(vza, m5_gt['I_up (TOA)'][0, :][::-1] , 'g-', label=r'$\tau$ = 5')
-axs[0].plot(vza, m20_gt['I_up (TOA)'][0, :][::-1] , 'r-', label=r'$\tau$ = 20')
+axs[0].plot(vza, m1_gt['I_up (TOA)'][0, :][::-1], 'b-', label=r'$\tau$ = 1')
+axs[0].plot(vza, m5_gt['I_up (TOA)'][0, :][::-1], 'g-', label=r'$\tau$ = 5')
+axs[0].plot(vza, m20_gt['I_up (TOA)'][0, :][::-1], 'r-', label=r'$\tau$ = 20')
 axs[0].set_yscale('log')
 axs[0].legend()
 axs[0].set_ylim(1e-2, 1e1)
 axs[0].set_xlim(-89, 89)
 axs[0].set_title('I (reflection)')
-axs[1].plot(vza, m1_gt['I_down (0+)'][0, :] , 'b-', label=r'$\tau$ = 1')
-axs[1].plot(vza, m5_gt['I_down (0+)'][0, :] , 'g-', label=r'$\tau$ = 5')
-axs[1].plot(vza, m20_gt['I_down (0+)'][0, :] , 'r-', label=r'$\tau$ = 20')
+axs[1].plot(vza, m1_gt['I_down (0+)'][0, :], 'b-', label=r'$\tau$ = 1')
+axs[1].plot(vza, m5_gt['I_down (0+)'][0, :], 'g-', label=r'$\tau$ = 5')
+axs[1].plot(vza, m20_gt['I_down (0+)'][0, :], 'r-', label=r'$\tau$ = 20')
 axs[1].set_yscale('log')
 axs[1].legend()
 axs[1].set_ylim(1e-2, 1e3)
@@ -500,16 +500,16 @@ plt.tight_layout()
 # shared equally
 # between all wavelegths (thus Monte Carlo NOISE in the spectrum)
 # wavelengths is a list or numpy array
-n_wl= 301
+n_wl = 301
 wavelength = np.linspace(400., 430., num=n_wl)
-n_photons = 1e5 # photons per wavelength
+n_photons = 1e5  # photons per wavelength
 # monochromatic computation for custom aerosols and cloud
 wavelength_0 = 415.
 # Aerosols and cloud optical properties using OPAC database as processed
 # by the the libradtran (www.libradtran.org)
 # set the aerosol type to 'urban' and its AOT at the reference
 # wavelength wavelength_0 to 0.5
-aer1 = AerOPAC( 'urban',  0.5, wavelength_0)
+aer1 = AerOPAC('urban', 0.5, wavelength_0)
 pro = Atm1D('afglt',    # tropical atmosphere
               # particles in atmosphere are a mix of aerosols 1 and 2
               comp=[aer1],
@@ -523,24 +523,24 @@ pro = Atm1D('afglt',    # tropical atmosphere
                                      # bands
                                      # nearest neighbour is then used
                                      # during the RT computation
-              no2=True, # NO2 included
-              tco3=0. # no ozone
+              no2=True,  # NO2 included
+              tco3=0.  # no ozone
              )
 
 GREY_ALB = AlbedoCst(0.1)
 surface = LambSurface(alb=GREY_ALB)
-le = LocalEstimate(th=np.array([30., 30.]) * np.pi/180,
-                   phi=np.array([45., 60.]) * np.pi/180,
+le = LocalEstimate(th=np.array([30., 30.]) * np.pi / 180,
+                   phi=np.array([45., 60.]) * np.pi / 180,
                    zip=True)
 m = Smartg(alt_pp=True, double=True).run(wavelength=wavelength, le=le,
-           th_deg=60., n_photons=n_photons*n_wl,
+           th_deg=60., n_photons=n_photons * n_wl,
            atmosphere=pro, output_layers=1,
            surface=surface)
 m = drop_axes(m, 'Azimuth angles')
 plt.plot(m['wavelength'], m['I_up (TOA)'][:, 0], '+r',
-         label=rf'$\Delta\Phi=${le.phi[0]*180/np.pi:.0f}°')
+         label=rf'$\Delta\Phi=${le.phi[0] * 180 / np.pi:.0f}°')
 plt.plot(m['wavelength'], m['I_up (TOA)'][:, 1], '.r',
-         label=rf'$\Delta\Phi=${le.phi[1]*180/np.pi:.0f}°')
+         label=rf'$\Delta\Phi=${le.phi[1] * 180 / np.pi:.0f}°')
 plt.ylim(0.21, 0.27)
 plt.legend()
 print(' GPU time: ', m.attrs['kernel time (s)'], 's')
@@ -553,20 +553,20 @@ print(' GPU time: ', m.attrs['kernel time (s)'], 's')
 # once computed, profiles may be re-used
 # it could save a lot of time for multi spectral computation
 m2 = Smartg(alt_pp=True, double=True).run(wavelength=wavelength, le=le,
-           th_deg=60., n_photons=n_photons*n_wl,
+           th_deg=60., n_photons=n_photons * n_wl,
            atmosphere=m, output_layers=1,
            surface=surface)
 m2 = drop_axes(m2, 'Azimuth angles')
 plt.plot(m2['wavelength'], m2['I_up (TOA)'][:, 0], '+c',
-         label=rf'$\Delta\Phi=${le.phi[0]*180/np.pi:.0f}°')
+         label=rf'$\Delta\Phi=${le.phi[0] * 180 / np.pi:.0f}°')
 plt.plot(m2['wavelength'], m2['I_up (TOA)'][:, 1], '.c',
-         label=rf'$\Delta\Phi=${le.phi[1]*180/np.pi:.0f}°')
+         label=rf'$\Delta\Phi=${le.phi[1] * 180 / np.pi:.0f}°')
 plt.ylim(0.21, 0.27)
 plt.legend()
 print(' GPU time: ', m2.attrs['kernel time (s)'], 's')
 
 # %% [markdown]
-# ### Correlated spectral computations: ALIS method 
+# ### Correlated spectral computations: ALIS method
 # The ALIS method is described in <br>
 # Emde, C., Buras, R., and Mayer, B.: ALIS: An efficient method to
 # compute high spectral resolution polarized solar radiances using the Monte Carlo approach, J. Quant. Spectrosc. Ra., 112, 1622–1631, 2011.
@@ -598,12 +598,12 @@ m3 = drop_axes(m3, 'Azimuth angles')
 # for the same number of photons, the spectrum is much less noisy
 plt.plot(m['wavelength'], m['I_up (TOA)'][:, 0], '+r',
          label='no alis 1 : {:.0e} phot.; {:.5f} (s)'.format(
-             n_photons*n_wl,
+             n_photons * n_wl,
              float(m.attrs['kernel time (s)'])))
-plt.plot(m['wavelength'],  m['I_up (TOA)'][:, 1], '.r')
+plt.plot(m['wavelength'], m['I_up (TOA)'][:, 1], '.r')
 plt.plot(m2['wavelength'], m2['I_up (TOA)'][:, 0], '+c',
          label='no alis 2 : {:.0e} phot.; {:.5f} (s)'.format(
-             n_photons*n_wl,
+             n_photons * n_wl,
              float(m2.attrs['kernel time (s)'])))
 plt.plot(m2['wavelength'], m2['I_up (TOA)'][:, 1], '.c')
 plt.plot(m3['wavelength'], m3['I_up (TOA)'][:, 0], '-k',
@@ -636,19 +636,19 @@ print(' GPU time: ', m0.attrs['kernel time (s)'], 's')
 
 # %%
 # Differential absorption
-diff_abs = (m3['I_up (TOA)']/m0['I_up (TOA)'])[:, 0]
+diff_abs = (m3['I_up (TOA)'] / m0['I_up (TOA)'])[:, 0]
 plt.plot(diff_abs['wavelength'], diff_abs, '+b-')
-diff_abs = (m3['I_up (TOA)']/m0['I_up (TOA)'])[:, 1]
+diff_abs = (m3['I_up (TOA)'] / m0['I_up (TOA)'])[:, 1]
 plt.plot(diff_abs['wavelength'], diff_abs, '.b-')
 # Overplot NO2 direct transmission
-t_down = np.exp(m3['OD_g'][:, -1]*(-1)/np.cos(np.radians(60.)))
-t_up   = np.exp(m3['OD_g'][:, -1]*(-1)/np.cos(np.radians(30.)))
-t_direct = t_up*t_down
+t_down = np.exp(m3['OD_g'][:, -1] * (-1) / np.cos(np.radians(60.)))
+t_up = np.exp(m3['OD_g'][:, -1] * (-1) / np.cos(np.radians(30.)))
+t_direct = t_up * t_down
 plt.plot(t_direct['wavelength'], t_direct, 'r.-')
 plt.ylim(0.97, 1.)
 doas = r'DOAS at the TOA; $\Delta\Phi=${:.0f}°'
-plt.legend([doas.format(le.phi[0]*180/np.pi),
-            doas.format(le.phi[1]*180/np.pi),
+plt.legend([doas.format(le.phi[0] * 180 / np.pi),
+            doas.format(le.phi[1] * 180 / np.pi),
             'Direct gaseous transmission Sun-ground-sensor'])
 
 # %% [markdown]
@@ -656,13 +656,13 @@ plt.legend([doas.format(le.phi[0]*180/np.pi),
 # Full profile customization
 
 # %%
-wavelength  = np.array([450., 550.]) # N=2
-grid= [0., -2.5, -5., -7.5, -10.]
+wavelength = np.array([450., 550.])  # N=2
+grid = [0., -2.5, -5., -7.5, -10.]
 # Seafloor albedo, here grey lambertian reflection with albedo of 0.05
-alb=AlbedoCst(0.05)
+alb = AlbedoCst(0.05)
 
-#1) Read one phase matrix for particles
-pha=read_phase(DIR_AUXDATA / 'validation' / 'opt_hydrosols.dat', kind='oc')
+# 1) Read one phase matrix for particles
+pha = read_phase(DIR_AUXDATA / 'validation' / 'opt_hydrosols.dat', kind='oc')
 # 2) import vertical profiles of pure water absorption and scattering
 # coefficient,
 # particle absorption and scattering coefficient profiles (in m-1)
@@ -673,15 +673,15 @@ pha=read_phase(DIR_AUXDATA / 'validation' / 'opt_hydrosols.dat', kind='oc')
 
 atot = np.array([[0., 0.21841, 0.05465, 0.00924, 0.00924],
               [0., 0.09881, 0.06415, 0.05650, 0.05650]])
-ap   = np.array([[0., 1.25744e-01, 1.34828e-02, 4.79320e-10, 4.79320e-10],
+ap = np.array([[0., 1.25744e-01, 1.34828e-02, 4.79320e-10, 4.79320e-10],
               [0., 3.10215e-02, 3.32626e-03, 1.18250e-10, 1.18250e-10]])
-acdom= np.array([[0., 8.34474e-02, 3.19477e-02, 2.00125e-05, 2.00125e-05],
+acdom = np.array([[0., 8.34474e-02, 3.19477e-02, 2.00125e-05, 2.00125e-05],
               [0., 1.12934e-02, 4.32364e-03, 2.70840e-06, 2.70840e-06]])
-aw   = np.array([[0., 0.00922, 0.00922, 0.00922, 0.00922],
+aw = np.array([[0., 0.00922, 0.00922, 0.00922, 0.00922],
               [0., 0.05650, 0.05650, 0.05650, 0.05650]])
-bw   = np.array([[0., 0.00459, 0.00459, 0.00459, 0.00459],
+bw = np.array([[0., 0.00459, 0.00459, 0.00459, 0.00459],
               [0., 0.00193, 0.00193, 0.00193, 0.00193]])
-bp   = np.array([[0., 2.83546e-01, 3.04030e-02, 1.08084e-09, 1.08084e-09],
+bp = np.array([[0., 2.83546e-01, 3.04030e-02, 1.08084e-09, 1.08084e-09],
               [0., 2.31992e-01, 2.48752e-02, 8.84323e-10, 8.84323e-10]])
 
 water_custom = Water1D(grid=grid, aw=aw, bw=bw, alb=alb,
@@ -697,7 +697,7 @@ _ = smartg_view(m1, ind=[iaz], interp_dict={'wavelength': 550.}, i_min=0,
                 i_max=0.015)
 
 # %%
-fig = input_view(m1,  kind='oc', iw=0, zmax=-10)
+fig = input_view(m1, kind='oc', iw=0, zmax=-10)
 
 # %% [markdown]
 # ## Absorption
@@ -712,7 +712,7 @@ fig = input_view(m1,  kind='oc', iw=0, zmax=-10)
 # this is the default method
 atmosphere = Atm1D('afglms', tco3=300., no2=True
              # optionally import gaseous absorption vertical profile
-             #,prof_abs= gas_profile
+             # ,prof_abs= gas_profile
               )
 _ = smartg_view(Smartg().run(th_deg=60., wavelength=550., n_photons=1e9,
                              atmosphere=atmosphere, beer=0))
@@ -750,11 +750,11 @@ ibands = SEVIRI_SOLAR.to_smartg(include='msg1', lmin=600., lmax=1000.)
 ibands = SEVIRI_SOLAR.to_smartg(include='msg1', lmin=[600., 1400.],
                                 lmax=[700., 2000.])
 
-surface= RoughSurface(sur=1, wind=5., nh2o=1.34)
+surface = RoughSurface(sur=1, wind=5., nh2o=1.34)
 atmosphere = Atm1D('afglms', tcwp=4.)
 
 # Run Smart-g for Reptran list of ibands
-m1  = Smartg(double=True).run(th_deg=30, wavelength=ibands.l, n_photons=1e9,
+m1 = Smartg(double=True).run(th_deg=30, wavelength=ibands.l, n_photons=1e9,
                               atmosphere=atmosphere, surface=surface, beer=1,
                               progress=False)
 
@@ -776,24 +776,24 @@ for i, w in enumerate(m1r['wavelength'].values):
 # %%time
 # k distribution file, here full solar channels at coarse resolution
 SOLAR_COARSE = Reptran('reptran_solar_coarse')
-ibands = SOLAR_COARSE.to_smartg(lmin=757., lmax=770.) # within O2A bands
-surface=RoughSurface(sur=1, wind=5., nh2o=1.34)
-atmosphere=Atm1D('afglms', p0=900.,
+ibands = SOLAR_COARSE.to_smartg(lmin=757., lmax=770.)  # within O2A bands
+surface = RoughSurface(sur=1, wind=5., nh2o=1.34)
+atmosphere = Atm1D('afglms', p0=900.,
                  comp=[AerOPAC('continental_average', 1., 764.)],
                  wavelength_phase=[764.])
 # Evaluate reflectance in specific direction Ths=[60.] and raa=[180.]
 # using LE
 # the directions, in radians and coded as float32
 le = LocalEstimate(
-    th=np.array([60.], dtype=np.float32)*np.pi/180,
-    phi=np.array([180.], dtype=np.float32)*np.pi/180)
-spp_mult=Smartg(double=True)
+    th=np.array([60.], dtype=np.float32) * np.pi / 180,
+    phi=np.array([180.], dtype=np.float32) * np.pi / 180)
+spp_mult = Smartg(double=True)
 
 # %%
 # %%time
 # Compute first atmosphere profiles at all wavelengths and phase
 # functions for re-use
-atmbase=atmosphere.calc(ibands.l)
+atmbase = atmosphere.calc(ibands.l)
 
 # %%
 # %%time
@@ -808,11 +808,11 @@ for col, th0 in zip(['r', 'g', 'b', 'k'], [0., 30., 60., 75.]):
     # the local estimate grid holds a single direction, squeeze it
     m2r_ssa = drop_axes(reduce_reptran(m2_ssa, ibands), 'Azimuth angles',
                         'Zenith angles')
-    stk_q=m2r_ssa['Q_up (TOA)']
-    stk_u=m2r_ssa['U_up (TOA)']
+    stk_q = m2r_ssa['Q_up (TOA)']
+    stk_u = m2r_ssa['U_up (TOA)']
 
-    lp = np.sqrt(stk_q*stk_q + stk_u*stk_u).rename('LP')
-    lp.plot.line('.-'+col, label=str(th0))
+    lp = np.sqrt(stk_q * stk_q + stk_u * stk_u).rename('LP')
+    lp.plot.line('.-' + col, label=str(th0))
 plt.ylim(0, 0.15)
 plt.legend(loc='best')
 
@@ -820,26 +820,26 @@ plt.legend(loc='best')
 # #### Example 3: Computation of Sentinel3/OLCI spectrum
 
 # %%
-spp=Smartg()
+spp = Smartg()
 
 # REPTRAN k distribution file here Sentinel 3 solar channels
 SENTINEL_SOLAR = Reptran('reptran_solar_sentinel')
-ibands = SENTINEL_SOLAR.to_smartg(include='olci') # select OLCI bands
+ibands = SENTINEL_SOLAR.to_smartg(include='olci')  # select OLCI bands
 
-th0=50.
+th0 = 50.
 le = LocalEstimate(
-    th=np.array([th0], dtype=np.float32)*np.pi/180,
-    phi=np.array([150.], dtype=np.float32)*np.pi/180)
-atmosphere=Atm1D('afglms', wavelength_phase=[400., 700., 1000., 1300., 1600,
+    th=np.array([th0], dtype=np.float32) * np.pi / 180,
+    phi=np.array([150.], dtype=np.float32) * np.pi / 180)
+atmosphere = Atm1D('afglms', wavelength_phase=[400., 700., 1000., 1300., 1600,
                                              1900., 2200.])
 
-water=Water1D(grid=[0., -50.],
+water = Water1D(grid=[0., -50.],
               comp=[HydrosolPR(1., wavelength_phase=[400., 700.])])
 
-surface=RoughSurface()
+surface = RoughSurface()
 
 # full simulation
-m_wsa=reduce_reptran(spp.run(th_deg=th0, wavelength=ibands.l, le=le,
+m_wsa = reduce_reptran(spp.run(th_deg=th0, wavelength=ibands.l, le=le,
                              atmosphere=atmosphere, surface=surface,
                              water=water, beer=1, progress=True,
                              output_layers=3, n_photons=1e8), ibands)
@@ -852,13 +852,13 @@ m_w = reduce_reptran(
     ibands)
 
 # just surface
-m_s= reduce_reptran(spp.run(th_deg=th0, wavelength=ibands.l, le=le,
+m_s = reduce_reptran(spp.run(th_deg=th0, wavelength=ibands.l, le=le,
                             atmosphere=None, surface=surface, water=None,
                             beer=1, progress=True, output_layers=3,
                             n_photons=1e8), ibands)
 
 # no atmosphere
-m_ws=reduce_reptran(spp.run(th_deg=th0, wavelength=ibands.l, le=le,
+m_ws = reduce_reptran(spp.run(th_deg=th0, wavelength=ibands.l, le=le,
                             atmosphere=None, surface=surface, water=water,
                             beer=1, progress=True, output_layers=3,
                             n_photons=1e8), ibands)
@@ -884,11 +884,11 @@ plt.ylim(0, 0.2)
 plt.legend(loc='best')
 
 # %%
-fig=spectrum_view(m_w.isel({'Zenith angles': 0, 'Azimuth angles': 0}),
+fig = spectrum_view(m_w.isel({'Zenith angles': 0, 'Azimuth angles': 0}),
                   field='up (0-)', color='r', fmt='.-', log_i=True)
-_=spectrum_view(m_ws.isel({'Zenith angles': 0, 'Azimuth angles': 0}),
+_ = spectrum_view(m_ws.isel({'Zenith angles': 0, 'Azimuth angles': 0}),
                 field='up (0-)', color='b', fmt='.-', log_i=True, fig=fig)
-_=spectrum_view(m_wsa.isel({'Zenith angles': 0, 'Azimuth angles': 0}),
+_ = spectrum_view(m_wsa.isel({'Zenith angles': 0, 'Azimuth angles': 0}),
                 field='up (0-)', color='k', fmt='.-', log_i=True, fig=fig,
                 vmax=-1, vmin=-5)
 
@@ -902,62 +902,62 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 srf_file = (DIR_AUXDATA / 'validation'
             / 'Sentinel-2A MSI Spectral Responses.xlsx')
 SRF = pd.read_excel(srf_file, sheet_name='Spectral Responses')
-w_srf=np.array(SRF['SR_WL'])
-winf=[]
-wsup=[]
-wmedian=[]
-w_l=np.array([])
-srf_l=np.array([])
+w_srf = np.array(SRF['SR_WL'])
+winf = []
+wsup = []
+wmedian = []
+w_l = np.array([])
+srf_l = np.array([])
 
 for b, srf in enumerate(SRF):
-    srf_band=np.array(SRF[srf])
-    if b!=0 :
+    srf_band = np.array(SRF[srf])
+    if b != 0:
         # edge detection for Filter wavelength boundaries
         # Get a function that evaluates the linear spline at any x
         spline = InterpolatedUnivariateSpline(w_srf, srf_band, k=1)
         # Get a function that evaluates the derivative of the linear
         # spline at any x
-        dfdw =  spline.derivative()
-        dydw =  dfdw(w_srf)
+        dfdw = spline.derivative()
+        dydw = dfdw(w_srf)
 
         # detect edges for SRFs with a threshold on first derivative
-        ok=np.where(abs(dydw)>0.0001)
+        ok = np.where(abs(dydw) > 0.0001)
         plt.plot(w_srf[ok], srf_band[ok])
         # store boundaries of filter for further reptran, add a 2 nm
         # margin
-        w0=w_srf[ok[0][0]]-2
-        w1=w_srf[ok[0][-1]]+2
+        w0 = w_srf[ok[0][0]] - 2
+        w1 = w_srf[ok[0][-1]] + 2
         winf.append(w0)
         wsup.append(w1)
-        wmedian.append((w0+w1)/2.)
+        wmedian.append((w0 + w1) / 2.)
 print(SRF.columns.tolist()[1:])
 print(winf, wsup)
 
 # %%
-#1) use reptran with solar regular wavelength grid
+# 1) use reptran with solar regular wavelength grid
 SOLAR_COARSE = Reptran('reptran_solar_coarse')
 ibands = SOLAR_COARSE.to_smartg(lmin=winf, lmax=wsup)
 
-#2) use reprtran parametrization for S2/MSI channels directly
+# 2) use reprtran parametrization for S2/MSI channels directly
 SENTINEL_SOLAR = Reptran('reptran_solar_sentinel')
-ibands2 = SENTINEL_SOLAR.to_smartg(include='sentinel2a') # select S2/MSI bands
-atmosphere=Atm1D('afglms', wavelength_phase=[400., 800., 1200., 1600., 2200.])
-surface=RoughSurface()
-th = np.linspace(0., 60.,  num=6, dtype=np.float32)
-phi= np.linspace(0., 180., num=9, dtype=np.float32)
-le = LocalEstimate(th=th *np.pi/180, phi=phi*np.pi/180)
-spp_mult=Smartg()
+ibands2 = SENTINEL_SOLAR.to_smartg(include='sentinel2a')  # select S2/MSI bands
+atmosphere = Atm1D('afglms', wavelength_phase=[400., 800., 1200., 1600., 2200.])
+surface = RoughSurface()
+th = np.linspace(0., 60., num=6, dtype=np.float32)
+phi = np.linspace(0., 180., num=9, dtype=np.float32)
+le = LocalEstimate(th=th * np.pi / 180, phi=phi * np.pi / 180)
+spp_mult = Smartg()
 
 # %%
 # %%time
 # Compute first atmospheric profiles at all wavelengths and phase
 # functions for re-use
-atmbase=atmosphere.calc(ibands.l)
+atmbase = atmosphere.calc(ibands.l)
 
 # %%
 # %%time
 # Run Smart-g for Reptran list of ibands and reduce
-m  = reduce_reptran(spp_mult.run(th_deg=60, wavelength=ibands.l,
+m = reduce_reptran(spp_mult.run(th_deg=60, wavelength=ibands.l,
                                  n_photons=1e6, le=le, surface=surface,
                                  beer=1, atmosphere=atmbase), ibands)
 
@@ -965,7 +965,7 @@ m  = reduce_reptran(spp_mult.run(th_deg=60, wavelength=ibands.l,
 # %%time
 # Run directly smart-g without atmospheric pre computations
 # Run Smart-g for Reptran list of ibands2 and reduce
-m2  = reduce_reptran(spp_mult.run(th_deg=60, wavelength=ibands2.l,
+m2 = reduce_reptran(spp_mult.run(th_deg=60, wavelength=ibands2.l,
                                   n_photons=1e6, le=le, surface=surface,
                                   beer=1, atmosphere=atmosphere), ibands2)
 
@@ -975,10 +975,10 @@ print('--------------------------------------')
 print('REPTRAN SPECTRUM OUTPUT')
 print('--------------------------------------')
 print(m)
-wr=m['wavelength'].values # reptran wavelength grid
-datasets=[]
+wr = m['wavelength'].values  # reptran wavelength grid
+datasets = []
 for b, srf in enumerate(SRF.columns.tolist()[1:]):
-    srf_band=np.array(SRF[srf])
+    srf_band = np.array(SRF[srf])
     # interpolate SRFs to reptran wavelengths
     spline = InterpolatedUnivariateSpline(w_srf, srf_band, k=1)
     fr = xr.DataArray(spline(wr), coords={'wavelength': wr},
@@ -988,14 +988,14 @@ for b, srf in enumerate(SRF.columns.tolist()[1:]):
         ds = (m * fr).mean('wavelength') / fr.mean('wavelength')
     ds.attrs = dict(m.attrs)
     ds.attrs['median wavelength'] = wmedian[b]
-    ds.attrs['band'] = b+1
+    ds.attrs['band'] = b + 1
     datasets.append(ds)
 # stack the bands along a new 'median wavelength' dimension
 band_dim = xr.DataArray(wmedian, dims='median wavelength',
                         name='median wavelength')
 ms2 = xr.concat(datasets, dim=band_dim,
                 combine_attrs='drop_conflicts')
-ms2 = ms2.assign_coords(band=('median wavelength', np.arange(len(wmedian))+1))
+ms2 = ms2.assign_coords(band=('median wavelength', np.arange(len(wmedian)) + 1))
 print()
 print('--------------------------------------')
 print('S2 CHANNELS OUTPUT')
@@ -1019,13 +1019,13 @@ plt.legend()
 
 # %%
 iaz = int(np.abs(ms2['Azimuth angles'].values - 180.).argmin())
-for i, (b, col) in enumerate(zip(wmedian, ['r', 'b', 'g', 'c']*2)):
-    if i==0:
-        fig=transect_view(ms2.isel({'median wavelength': i}), ind=[iaz],
+for i, (b, col) in enumerate(zip(wmedian, ['r', 'b', 'g', 'c'] * 2)):
+    if i == 0:
+        fig = transect_view(ms2.isel({'median wavelength': i}), ind=[iaz],
                           log_i=True, color='k', fmt='-')
-    _=transect_view(ms2.isel({'median wavelength': i}), ind=[iaz], log_i=True,
+    _ = transect_view(ms2.isel({'median wavelength': i}), ind=[iaz], log_i=True,
                     fig=fig, color=col, fmt='-')
-    _=transect_view(m2.isel({'wavelength': i}), ind=[iaz], log_i=True, fig=fig,
+    _ = transect_view(m2.isel({'wavelength': i}), ind=[iaz], log_i=True, fig=fig,
                     color=col, fmt=':')
 
 # %% [markdown]
@@ -1035,60 +1035,60 @@ for i, (b, col) in enumerate(zip(wmedian, ['r', 'b', 'g', 'c']*2)):
 # ### Ross-Thick Li-Sparse kernel
 
 # %%
-##### Spectral RTLS BRDF ######
-#Definition of a Ross-Thick Li-Sparse reflector
-#K0, K1, K2 are the 3 coefficients of:
-#K0 : Spectral Albedo of the isotropic (lambertian) kernel
-#K1 : Spectral weight the F1 (geometric) kernel
-#K2 : Spectral weight the F2 (volumetric) kernel
-#--------------
+# Spectral RTLS BRDF ######
+# Definition of a Ross-Thick Li-Sparse reflector
+# K0, K1, K2 are the 3 coefficients of:
+# K0 : Spectral Albedo of the isotropic (lambertian) kernel
+# K1 : Spectral weight the F1 (geometric) kernel
+# K2 : Spectral weight the F2 (volumetric) kernel
+# --------------
 # in SMART-G the RTLSSurface() objects is initialized with:
-#kp = (k0 , k1p, k2p): a tuple of
-#k0 : Spectral Albedo of the isotropic (lambertian) kernel
-#k1p: Spectral relative weight the F1 (geometric) kernel (=K1/K0)
-#k2p: Spectral relative weight the F2 (volumetric) kernel(=K2/K0)
+# kp = (k0 , k1p, k2p): a tuple of
+# k0 : Spectral Albedo of the isotropic (lambertian) kernel
+# k1p: Spectral relative weight the F1 (geometric) kernel (=K1/K0)
+# k2p: Spectral relative weight the F2 (volumetric) kernel(=K2/K0)
 ######################
-K_VIS = (0.06, 0.05, 0.3) # vegetation in VIS
-KP_VIS= (K_VIS[0], K_VIS[1]/K_VIS[0], K_VIS[2]/K_VIS[0])
-K_NIR = (0.36, 0.05, 0.3) # vegetation in NIR
-KP_NIR= (K_NIR[0], K_NIR[1]/K_NIR[0], K_NIR[2]/K_NIR[0])
-wavelength   = np.array([440., 760.])
-kp   = (AlbedoSpectrum(np.array([KP_VIS[0], KP_NIR[0]]), wavelength),
+K_VIS = (0.06, 0.05, 0.3)  # vegetation in VIS
+KP_VIS = (K_VIS[0], K_VIS[1] / K_VIS[0], K_VIS[2] / K_VIS[0])
+K_NIR = (0.36, 0.05, 0.3)  # vegetation in NIR
+KP_NIR = (K_NIR[0], K_NIR[1] / K_NIR[0], K_NIR[2] / K_NIR[0])
+wavelength = np.array([440., 760.])
+kp = (AlbedoSpectrum(np.array([KP_VIS[0], KP_NIR[0]]), wavelength),
         AlbedoSpectrum(np.array([KP_VIS[1], KP_NIR[1]]), wavelength),
         AlbedoSpectrum(np.array([KP_VIS[2], KP_NIR[2]]), wavelength))
-surface    = RTLSSurface(kp=kp)
+surface = RTLSSurface(kp=kp)
 atmosphere = Atm1D('afglt')
 # atmosphere + surface
 azimuth_transect = (10., 90)
-n_dir  = 24
+n_dir = 24
 le = LocalEstimate(th_deg=np.linspace(0, 80., num=n_dir),
                    phi_deg=np.linspace(360., 0., num=n_dir),
                    zip=False)
-m  = Smartg().run(wavelength, n_photons=1e6, th_deg=25., le=le,
+m = Smartg().run(wavelength, n_photons=1e6, th_deg=25., le=le,
                   atmosphere=atmosphere, surface=surface)
 ind_az = [int(np.abs(m['Azimuth angles'].values - a).argmin())
           for a in azimuth_transect]
-fig= smartg_view(m, ind=ind_az, qu=False,
+fig = smartg_view(m, ind=ind_az, qu=False,
                  interp_dict={'wavelength': m['wavelength'].values[0]})
-fig= smartg_view(m, ind=ind_az, qu=False,
+fig = smartg_view(m, ind=ind_az, qu=False,
                  interp_dict={'wavelength': m['wavelength'].values[1]})
 
 # %% [markdown]
 # ## Irradiances
 
 # %%
-spp        = Smartg()
-surface    = RoughSurface(sur=3, wind=10., nh2o=1.34)
+spp = Smartg()
+surface = RoughSurface(sur=3, wind=10., nh2o=1.34)
 atmosphere = Atm1D('afglms')
-water      = Water1D(grid=[0., -100.],
+water = Water1D(grid=[0., -100.],
                      comp=[HydrosolPR(chl=1.1, wavelength_phase=[550.])])
 wavelength = np.linspace(400., 700., num=11)
-th0        = 75.
+th0 = 75.
 
 # %%
 # 1) planar and spherical fluxes using the "flux" keyword
 # Flux are computed FAST in Cone sampling mode
-n_photons=1e7
+n_photons = 1e7
 m_planar = spp.run(th_deg=th0, wavelength=wavelength, n_photons=n_photons,
                    atmosphere=atmosphere, surface=surface, water=water,
                    flux='planar', output_layers=3)
@@ -1099,7 +1099,7 @@ m_spherical = spp.run(th_deg=th0, wavelength=wavelength, n_photons=n_photons,
 # 2) fluxes could be recomputed from radiances, with care about the
 # directional sampling and statistics
 # in general, longer and less accurate
-m_rad  = spp.run(th_deg=th0, wavelength=wavelength, n_photons=n_photons,
+m_rad = spp.run(th_deg=th0, wavelength=wavelength, n_photons=n_photons,
                  atmosphere=atmosphere, n_theta=360, n_phi=360,
                  surface=surface, water=water, output_layers=3)
 # directional integration for irradiances
@@ -1137,11 +1137,11 @@ t_direct = m_planar['direct transmission']
 plt.figure()
 plt.plot(m_planar['wavelength'], m_planar['flux_down (0+)'], 'r.--',
          label='down 0+ diffuse planar')
-plt.plot(m_planar['wavelength'], m_planar['flux_down (0+)']+t_direct, 'r.-',
+plt.plot(m_planar['wavelength'], m_planar['flux_down (0+)'] + t_direct, 'r.-',
          label='down 0+ total planar')
 plt.plot(m_spherical['wavelength'], m_spherical['flux_down (0+)'], 'b.--',
          label='down 0+ diffuse spherical')
-plt.plot(m_spherical['wavelength'], m_spherical['flux_down (0+)']+t_direct,
+plt.plot(m_spherical['wavelength'], m_spherical['flux_down (0+)'] + t_direct,
          'b.-', label='down 0+ total spherical')
 plt.plot(m_planar['wavelength'], m_planar['flux_down (0-)'], 'rx-',
          label='down 0- planar')
@@ -1154,7 +1154,7 @@ plt.legend(loc='best')
 # ## Thermal source (dev)
 
 # %%
-#REPTRAN k distribution file here MSG/SEVIRI1 thermal channels
+# REPTRAN k distribution file here MSG/SEVIRI1 thermal channels
 from smartg.reptran import reptran_avg_emission
 
 SEVIRI_THERMAL = Reptran('reptran_thermal_msg')
@@ -1164,9 +1164,9 @@ SEVIRI_THERMAL = Reptran('reptran_thermal_msg')
 # Only in forward mode for the moment, no ground
 s_thermal = Smartg(thermal=True, alt_pp=True, back=False)
 for platform in ['1', '2', '3', '4']:
-    ibands         = SEVIRI_THERMAL.to_smartg(include='msg'+platform)
-    atmosphere     = Atm1D('afglt', grid=np.linspace(50, 0, num=51))
-    prof_atm       = atmosphere.calc(ibands.l)
+    ibands = SEVIRI_THERMAL.to_smartg(include='msg' + platform)
+    atmosphere = Atm1D('afglt', grid=np.linspace(50, 0, num=51))
+    prof_atm = atmosphere.calc(ibands.l)
     # DIRECT option activated i.e direct transmitted radiance form
     # source to receiver counted
     # (as opposite to solar computation where the direct light is not
@@ -1195,7 +1195,7 @@ plt.legend()
 # loop over Aerosol Optical Thickness
 ds_aot = []
 aots = np.linspace(0, 1.5, 5)
-spp=Smartg()
+spp = Smartg()
 for aot in aots:
     m_aot = spp.run(th_deg=30.,
                wavelength=443., n_photons=1e7,
@@ -1219,16 +1219,16 @@ m_aot['I_up (TOA)'].interp(
 # %%time
 # Here we compare the TOA radiance simulated with
 # plane parallel and spherical atmospheres, at 400 nm.
-atmosphere=Atm1D('afglt', tco3=0., no2=False)
+atmosphere = Atm1D('afglt', tco3=0., no2=False)
 ths = np.concatenate((
-            np.linspace(0. , 75., num=12, dtype=np.float32),
+            np.linspace(0., 75., num=12, dtype=np.float32),
             np.linspace(76., 89., num=12, dtype=np.float32)))
 le = LocalEstimate(
     th_deg=ths,
     phi_deg=np.array([0., 180.], dtype=np.float32))
 
-spp=Smartg(pp=True,   double=True, back=True, alt_pp=True)
-s_sp=Smartg(pp=False,  double=True, back=True)
+spp = Smartg(pp=True, double=True, back=True, alt_pp=True)
+s_sp = Smartg(pp=False, double=True, back=True)
 
 # show relative difference
 plt.figure(figsize=(6, 6))
@@ -1242,11 +1242,11 @@ pp = results[0]['I_up (TOA)'].interp({'Azimuth angles': 0.})
 sp = results[1]['I_up (TOA)'].interp({'Azimuth angles': 0.})
 pp_std = results[0]['I_stdev_up (TOA)'].interp({'Azimuth angles': 0.})
 sp_std = results[1]['I_stdev_up (TOA)'].interp({'Azimuth angles': 0.})
-diff = 100.*(pp-sp)/sp
+diff = 100. * (pp - sp) / sp
 plt.plot(diff['Zenith angles'], diff, '.:')
 plt.ylim(-3., 3.)
 plt.title('Plane Parallel - Spherical (%)')
-unc = np.sqrt((sp_std*sp_std/sp/sp) + (pp_std*pp_std/pp/pp))*100
+unc = np.sqrt((sp_std * sp_std / sp / sp) + (pp_std * pp_std / pp / pp)) * 100
 plt.errorbar(diff['Zenith angles'], diff.values, yerr=unc.values, fmt='none')
 
 # %% [markdown]
@@ -1255,9 +1255,10 @@ plt.errorbar(diff['Zenith angles'], diff.values, yerr=unc.values, fmt='none')
 # %%
 from ipywidgets import interact_manual
 
-sg=Smartg()
+sg = Smartg()
 le = LocalEstimate(phi=np.array([0.]),
-                   th=np.array([60.])*np.pi/180)
+                   th=np.array([60.]) * np.pi / 180)
+
 
 def simulate(
     thvdeg: float, surface: bool, aerosol_model: str, aot550: float
@@ -1269,6 +1270,7 @@ def simulate(
                  le=le, atmosphere=Atm1D('afglt', comp=[aer]),
                  surface=surface, progress=False)
     print(f"TOA Intensity : {float(out['I_up (TOA)'].data):.5f}")
+
 
 interact_manual(simulate, thvdeg=(0, 90), surface=True,
                 aerosol_model=AerOPAC('desert', 0.1, 550.).list(),
@@ -1297,28 +1299,31 @@ sg = Smartg(back=True, pp=False, double=True)
 # in this example, the sensor is placed at the TOA and is looking at the
 # limb
 h_toa = 120.
-r_ter = 6371. # Earth's radius
-wavelength   = [430., 660., 840.]
-grid    = np.linspace(h_toa, 0., num=51)
-atm1  = Atm1D('afglsw', grid=grid)
+r_ter = 6371.  # Earth's radius
+wavelength = [430., 660., 840.]
+grid = np.linspace(h_toa, 0., num=51)
+atm1 = Atm1D('afglsw', grid=grid)
 
 # lambertian surface
-alb  = AlbedoCst(0.1)
+alb = AlbedoCst(0.1)
 surface = LambSurface(alb=alb)
+
+
 def zt2thv(zt: float, r_ter: float = 6371., h_toa: float = 120.) -> float:
     """Convert a tangent height to the viewing zenith angle at TOA."""
-    return np.arcsin((r_ter+zt)/(r_ter+h_toa))*180/np.pi
+    return np.arcsin((r_ter + zt) / (r_ter + h_toa)) * 180 / np.pi
 # For a vertical profile in backward mode, several sensors are needed
 # we make a loop on trigonometric tangent heights and also viewing
 # azimuths
 # and make a LIST of sensors
 
+
 from itertools import product
 
-sensors= []
-n_zt = 16 # number of tangent heights
-n_phi = 4 # relative azimuths to the sun
-zts   = np.linspace(2., 50,  num=n_zt)
+sensors = []
+n_zt = 16  # number of tangent heights
+n_phi = 4  # relative azimuths to the sun
+zts = np.linspace(2., 50, num=n_zt)
 dphis = np.linspace(0., 91, num=n_phi)
 for zt, dphi in product(zts, dphis):
     sensors.append(
@@ -1328,9 +1333,9 @@ for zt, dphi in product(zts, dphis):
                 pos_y=0.,
                 # in spherical mode set Z to the distance from Earth
                 # center,
-                pos_z=h_toa+r_ter,
+                pos_z=h_toa + r_ter,
                                     # in pp, Z is the altitude
-                th_deg=180.-zt2thv(zt, h_toa=h_toa),
+                th_deg=180. - zt2thv(zt, h_toa=h_toa),
                                     # Sensor 'Emitting' zenith angle,
                                     # from 0: Zenith,
                                            # to 180.: Nadir (default:0.)
@@ -1346,15 +1351,15 @@ for zt, dphi in product(zts, dphis):
                                            # (default 0)
                     )
                )
-n_photons = 2e5 * n_zt * n_phi # so 2e5 photons per sensor
+n_photons = 2e5 * n_zt * n_phi  # so 2e5 photons per sensor
 
-ths    = np.array([60., 80., 91., 94.]) # different SZA
-phis   = np.array([0.])
+ths = np.array([60., 80., 91., 94.])  # different SZA
+phis = np.array([0.])
 # Local estimate directions correspond to solar positions
 le = LocalEstimate(th_deg=ths, phi_deg=phis)
 
 # the sensor keyword accepts a list of sensor obsjects
-m1  = sg.run(wavelength=wavelength, surface=surface, le=le, atmosphere=atm1,
+m1 = sg.run(wavelength=wavelength, surface=surface, le=le, atmosphere=atm1,
              n_photons=n_photons, earth_radius=r_ter, n_icdf=1e5,
              refraction=True, sensor=sensors, reflectance=False)
 # look at the result: a new dimension  'sensor index' is present in the
@@ -1366,19 +1371,19 @@ m1  = sg.run(wavelength=wavelength, surface=surface, le=le, atmosphere=atm1,
 # dimension
 col = ['r', 'g', 'b']
 lin = ['-', ':', '--', '-.']
-fig, ax =plt.subplots(1, 4)
+fig, ax = plt.subplots(1, 4)
 fig.set_size_inches(12, 4)
 
 for i, (ts, ls) in enumerate(zip(ths, lin)):
-    for  j, dp in enumerate(dphis):
+    for j, dp in enumerate(dphis):
         for k, (w, c) in enumerate(zip(wavelength[::-1], col)):
             i_2d = m1['I_up (TOA)'].isel({'Azimuth angles': 0}).interp(
                      wavelength=w, kwargs={'fill_value': 'extrapolate'}
                  ).interp({'Zenith angles': ts}).values.reshape(n_zt, n_phi)
-            if( i==0 and j==0):
+            if (i == 0 and j == 0):
                 ax[j].semilogx(i_2d[:, j], zts, ls, color=c,
                                                 label=f'{w:.0f} nm')
-            if( k==0 and j==1):
+            if (k == 0 and j == 1):
                 ax[j].semilogx(i_2d[:, j], zts, ls, color=c,
                                                 label=f'{ts:.0f}°')
             else:
@@ -1406,54 +1411,54 @@ for i, (ts, ls) in enumerate(zip(ths, lin)):
 # origin )
 # The interior of the circle is the ocean
 # Principal plane reflectance and DoLP for 380, 500 and 800 nm
-wavelength      = [ 380., 500., 800.]
-col     = ['b', 'g', 'r']
+wavelength = [380., 500., 800.]
+col = ['b', 'g', 'r']
 
 # Solar geometries in backward mode
-nsaa    = 4
-nsza    = 24
+nsaa = 4
+nsza = 24
 SZA_MAX = 70.
-saas    = np.linspace(0., 270.,    num=nsaa, dtype=np.float32, endpoint=True)
-szas    = np.linspace(0., SZA_MAX, num=nsza, dtype=np.float32, endpoint=True)
-le      = LocalEstimate(th_deg=szas, phi_deg=saas)
+saas = np.linspace(0., 270., num=nsaa, dtype=np.float32, endpoint=True)
+szas = np.linspace(0., SZA_MAX, num=nsza, dtype=np.float32, endpoint=True)
+le = LocalEstimate(th_deg=szas, phi_deg=saas)
 
-aer     = AerOPAC('maritime_polluted', 0.3, 500.)
-atmosphere  = Atm1D('afglms', comp=[aer])
+aer = AerOPAC('maritime_polluted', 0.3, 500.)
+atmosphere = Atm1D('afglms', comp=[aer])
 # Cox & Munk BRDF, time symetrical
-surface     = RoughSurface(wind=5., brdf=True)
+surface = RoughSurface(wind=5., brdf=True)
 
-vza     = 30.
-env_radius       = 1.0e6 #(km)
+vza = 30.
+env_radius = 1.0e6  # (km)
 # The Environement object creates a disk of ocean surface with radius
 # ENV_SIZE
 # centred on X0,Y0 , surrounded by lambertian reflector of albedo alb
 environment = Environment(env=1,
                   # radius of the circle with ocean surface condition
-                  env_size=env_radius ,
+                  env_size=env_radius,
                   # X coordinate of the center of the circle
                   x0=-env_radius,
                   y0=0,
                   # Lambertian grey albedo of the land zone (snow)
                   alb=AlbedoCst(0.5)
                  )
-s_back      = Smartg(back=True,  double=True) ## Plane Parallel
+s_back = Smartg(back=True, double=True)  # Plane Parallel
 
 # %%
 # %%time
-h_toa  = 120.
+h_toa = 120.
 # 4 View Azimuth Angles; vaa=0 the sensor is 'above water'
-vaas  = [0., 90., 180., 270.]
+vaas = [0., 90., 180., 270.]
 dists = [0.250, 5., env_radius]   # 3 distances to the coast (km)
 
-sensors= []
-cases  = list(product(vaas, dists))
+sensors = []
+cases = list(product(vaas, dists))
 for vaa, dist in cases:
     # sensor is placed at the TOA and is looking down
     # to the point (-dist, 0., 0.) from several relative azimuths
     # to the coastline (vaa);
-    delta_h = h_toa   * np.tan(np.radians(vza))
-    delta_x = delta_h * np.cos(np.radians(180-vaa))
-    delta_y = delta_h * np.sin(np.radians(180-vaa))
+    delta_h = h_toa * np.tan(np.radians(vza))
+    delta_x = delta_h * np.cos(np.radians(180 - vaa))
+    delta_y = delta_h * np.sin(np.radians(180 - vaa))
     sensors.append(
             Sensor(
             # Sensor coordinates (in km) (default:origin(0.,0.,0.))
@@ -1462,7 +1467,7 @@ for vaa, dist in cases:
             pos_z=h_toa,
             # Sensor 'Emitting' zenith angle, from 0: Zenith to 180.:
             # Nadir (default:0.)
-            th_deg=180-vza,
+            th_deg=180 - vza,
             ph_deg=vaa,     # Sensor 'Emitting' azimuth angle (default:0.)
             # location of sensor (default: (SURF0P, just above surface)
             loc='ATMOS',
@@ -1473,7 +1478,7 @@ for vaa, dist in cases:
             )
     )
 n_photons = 1e6 * len(vaas) * len(dists)
-m  = s_back.run(wavelength=wavelength, atmosphere=atmosphere, surface=surface,
+m = s_back.run(wavelength=wavelength, atmosphere=atmosphere, surface=surface,
                 environment=environment, n_photons=n_photons, le=le,
                 sensor=sensors, progress=True)
 
@@ -1481,20 +1486,22 @@ m  = s_back.run(wavelength=wavelength, atmosphere=atmosphere, surface=surface,
 # the transects are plotted for raa=0, (principal plane)
 raa = 0.
 
+
 def azimuth_index(saa: float) -> list[int]:
     """Return the azimuth plane index nearest to ``saa``."""
     return [int(np.abs(m['Azimuth angles'].values - saa).argmin())]
+
 
 for i, w in enumerate(wavelength):
     # for vaa=0, the sensor is 'above water'
     vaa = vaas[0]
     saa = vaa - raa
-    ind = cases.index((vaa, dists[0])) # retrieving sensor index from the cases
-    fig=transect_view(m.isel({'sensor index': ind}),
+    ind = cases.index((vaa, dists[0]))  # retrieving sensor index from the cases
+    fig = transect_view(m.isel({'sensor index': ind}),
                       interp_dict={'wavelength': w}, color='m', fmt=':',
                       ind=azimuth_index(saa))
     ind = cases.index((vaa, dists[1]))
-    _=transect_view(m.isel({'sensor index': ind}),
+    _ = transect_view(m.isel({'sensor index': ind}),
                     interp_dict={'wavelength': w}, color='m', fmt='--',
                     ind=azimuth_index(saa), fig=fig)
 
@@ -1502,11 +1509,11 @@ for i, w in enumerate(wavelength):
     vaa = vaas[1]
     saa = vaa - raa
     ind = cases.index((vaa, dists[0]))
-    _=transect_view(m.isel({'sensor index': ind}),
+    _ = transect_view(m.isel({'sensor index': ind}),
                     interp_dict={'wavelength': w}, color='C1', fmt=':',
                     ind=azimuth_index(saa), fig=fig)
     ind = cases.index((vaa, dists[1]))
-    _=transect_view(m.isel({'sensor index': ind}),
+    _ = transect_view(m.isel({'sensor index': ind}),
                     interp_dict={'wavelength': w}, color='C1', fmt='--',
                     ind=azimuth_index(saa), fig=fig)
 
@@ -1514,22 +1521,22 @@ for i, w in enumerate(wavelength):
     vaa = vaas[2]
     saa = vaa - raa
     ind = cases.index((vaa, dists[0]))
-    _=transect_view(m.isel({'sensor index': ind}),
+    _ = transect_view(m.isel({'sensor index': ind}),
                     interp_dict={'wavelength': w}, color='g', fmt=':',
                     ind=azimuth_index(saa), fig=fig)
     ind = cases.index((vaa, dists[1]))
-    _=transect_view(m.isel({'sensor index': ind}),
+    _ = transect_view(m.isel({'sensor index': ind}),
                     interp_dict={'wavelength': w}, color='g', fmt='--',
                     ind=azimuth_index(saa), fig=fig)
 
     # whatever vaa, the last distance is 1e6 km similar to the infinite
     # homogeneous ocean case
     ind = cases.index((vaa, dists[-1]))
-    _=transect_view(m.isel({'sensor index': ind}),
+    _ = transect_view(m.isel({'sensor index': ind}),
                     interp_dict={'wavelength': w}, color='k', fmt='-',
                     ind=azimuth_index(saa), fig=fig, vmin=0, vmax=.4)
     plt.text(-50., 95, rf'$\lambda$={w:.0f} nm')
-    if i==2:
+    if i == 2:
         plt.plot([-50, -25], [90, 90], 'k-')
         plt.text(-23, 90, 'homogeneous ocean')
         plt.plot([-50, -25], [85, 85], 'k:')
@@ -1576,9 +1583,9 @@ y_bins = np.array([-10, 10, 1e8])
 # Negative indices are for the surface properties instead of the 2D env
 # albedos
 surface = RoughSurface(wind=5., wave_shadow=True)
-water= Water1D(grid=[0., -10.],
+water = Water1D(grid=[0., -10.],
                comp=[HydrosolPR(chl=0.1, wavelength_phase=[600.])])
-ai  = np.array([[-1, -1, -1], [-1, 0, -1], [-1, 1, -1], [-1, -1, -1]])
+ai = np.array([[-1, -1, -1], [-1, 0, -1], [-1, 1, -1], [-1, -1, -1]])
 #
 # we build the Albedo 2D object
 alb = AlbedoMap(ai, x_bins, y_bins, alb_list)
@@ -1588,11 +1595,11 @@ environment = Environment(env=5, x0=0, y0=0, alb=alb)
 # %%
 # Let us simulate an image seen from Top and looking at nadir (in
 # backward mode)
-n_sensors  = 8
+n_sensors = 8
 x0 = np.linspace(-10.1, 10.1, num=n_sensors, endpoint=True)
 y0 = np.linspace(-10.1, 10.1, num=n_sensors, endpoint=True)
 # building sensors list
-sensors=[]
+sensors = []
 for a in x0:
     for b in y0:
         sensors.append(Sensor(pos_z=120., pos_x=a, pos_y=b,
@@ -1603,17 +1610,17 @@ le = LocalEstimate(th_deg=np.array([60.]),
                    phi_deg=np.array([0.]), zip=True)
 atmosphere = Atm1D('afglt', comp=[AerOPAC('continental_clean', 0.3, 550.)],
                    wavelength_phase=[600.])
-wavelength   = np.linspace(400., 900., num=9)
+wavelength = np.linspace(400., 900., num=9)
 #
-#RUN
-res=Smartg().run(wavelength=wavelength, le=le, sensor=sensors,
+# RUN
+res = Smartg().run(wavelength=wavelength, le=le, sensor=sensors,
                  atmosphere=atmosphere, surface=surface,
                  environment=environment, water=water, n_photons=1e8, beer=1,
                  russian_roulette=0)
 res = drop_axes(res, 'Zenith angles')
 
 # %%
-fig  = plt.figure(figsize=(8, 8))
+fig = plt.figure(figsize=(8, 8))
 grid = ImageGrid(fig, 111,  # similar to subplot(111)
                  nrows_ncols=(3, 3),
                  axes_pad=0.3,
@@ -1626,12 +1633,12 @@ for (ax, w, im) in zip(grid, wavelength, res['I_up (TOA)'].data.T):  # pyright: 
     ax.set_title(f'{w:.0f} nm')
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
-#fig.colorbar()
+# fig.colorbar()
 
 # %% [markdown]
 # # Counters use
 #             SMIN : Minimum Interaction (scattering/reflection) order: Default 0
-#             SMAX : Maximum Interaction (scattering/reflection) order: Default 1e6          
+#             SMAX : Maximum Interaction (scattering/reflection) order: Default 1e6
 #             RMIN : Minimum Reflection (by surface only, not environement) order: Default 0
 #             RMAX : Maximum Reflection (by surface only, not environement) order: Default 1e6
 #             DIRECT : Include directly transmitted photons: Default False
@@ -1639,11 +1646,11 @@ for (ax, w, im) in zip(grid, wavelength, res['I_up (TOA)'].data.T):  # pyright: 
 # %%
 #
 atmosphere = Atm1D('afglus', tco3=300.)
-wavelength   = 590.
-sza  = 30.
+wavelength = 590.
+sza = 30.
 # downward surface planar diffuse irradiance (Diffuse transmission if
 # black surface)
-t_dif  = Smartg().run(wavelength=wavelength, atmosphere=atmosphere,
+t_dif = Smartg().run(wavelength=wavelength, atmosphere=atmosphere,
                       surface=None, flux='planar', n_photons=1e8, th_deg=sza,
                       output_layers=1)['flux_down (0+)'].data
 # downward surface planar total irradiance (Total transmission if balck
@@ -1654,7 +1661,7 @@ t_tot = Smartg().run(
     flux='planar', n_photons=1e8, direct=True, th_deg=sza,
     output_layers=1)['flux_down (0+)'].data
 ##
-## We add surface
+# We add surface
 ##
 surface = LambSurface(alb=AlbedoCst(1.0))
 # downward surface planar diffuse irradiance (Diffuse transmission if
@@ -1664,12 +1671,12 @@ t_dif_0 = Smartg().run(
     environment=None, flux='planar', n_photons=1e8, r_max=0,
     th_deg=sza, output_layers=1)['flux_down (0+)'].data
 # Multiple scattering contribution to the Diffuse transmission
-t_dif_0_ms  = Smartg().run(wavelength=wavelength, atmosphere=atmosphere,
+t_dif_0_ms = Smartg().run(wavelength=wavelength, atmosphere=atmosphere,
                            surface=surface, environment=None, flux='planar',
                            n_photons=1e8, r_max=0, s_min=2, th_deg=sza,
                            output_layers=1)['flux_down (0+)'].data
 # Single scattering contribution to the Diffuse transmission
-t_dif_0_ss  = Smartg().run(wavelength=wavelength, atmosphere=atmosphere,
+t_dif_0_ss = Smartg().run(wavelength=wavelength, atmosphere=atmosphere,
                            surface=surface, environment=None, flux='planar',
                            n_photons=1e8, r_max=0, s_max=1, th_deg=sza,
                            output_layers=1)['flux_down (0+)'].data

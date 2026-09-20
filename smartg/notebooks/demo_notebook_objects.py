@@ -449,7 +449,7 @@ m4 = Smartg(double=True, obj3d=True, back=True).run(
 # %%
 ind_az = [int(np.abs(m4['Azimuth angles'].values - a).argmin())
           for a in [0, 22, 44, 68, 90, 112, 134, 156]]
-_=smartg_view(m4, qu=True, ind=ind_az)
+_ = smartg_view(m4, qu=True, ind=ind_az)
 
 # %% [markdown]
 # ## STP construction with heliostats composed of facets

@@ -116,6 +116,7 @@ from radis.api.hdf5 import DataFileManager
 # ────────────────────────────────────────────────
 _orig_read_meta = DataFileManager.read_metadata
 
+
 def _patched_read_meta(
     self: DataFileManager, fname: str, key: str = 'df'
 ) -> Any:
@@ -128,11 +129,13 @@ def _patched_read_meta(
         # auto-removal.
         raise AttributeError("Attribute 'metadata' does not exist")
 
+
 DataFileManager.read_metadata = _patched_read_meta
 
 # ── Patch B: write
 # ────────────────────────────────────────────────────────
 _orig_write = DataFileManager.write
+
 
 def _patched_write(
     self: DataFileManager,
@@ -151,6 +154,7 @@ def _patched_write(
             df['branch'] = df['branch'].astype(str)
     return _orig_write(self, file, df, append=append, **kw)
 
+
 DataFileManager.write = _patched_write  # pyright: ignore[reportAttributeAccessIssue]
 
 print("RADIS patches applied (read_metadata + write).")
@@ -164,10 +168,10 @@ from radis import SpectrumFactory
 # ──────────────── USER PARAMETERS
 # ─────────────────────────────────────────
 # absorbing molecule: 'O2', 'H2O', 'CO2', 'CH4', 'N2O', 'CO', …
-MOLECULE  = 'O2'
+MOLECULE = 'O2'
 WL_MIN_NM = 765.    # nm  — start of high-resolution spectral grid
 WL_MAX_NM = 768.     # nm  — end
-N_LOW_R    = 3        # number of low-resolution ALIS wavelength points
+N_LOW_R = 3        # number of low-resolution ALIS wavelength points
 
 # Default VMR (volume mixing ratio) per molecule — override here if
 # needed
@@ -183,22 +187,22 @@ vmr_scalar = _VMR_DEFAULTS.get(MOLECULE, 1e-6)
 # ──────────────────────────────────────────────────────────────────────
 
 _ISOTOPES = {
-    'O2': '1',       'H2O': '1,2,3',  'CO2': '1,2,3,4',
-    'CH4': '1,2',     'N2O': '1,2,3,4,5',  'CO': '1,2',
+    'O2': '1', 'H2O': '1,2,3', 'CO2': '1,2,3,4',
+    'CH4': '1,2', 'N2O': '1,2,3,4,5', 'CO': '1,2',
 }
 ISOTOPE = _ISOTOPES.get(MOLECULE, '1')
 
 # ── vertical grid: interface altitudes (NZ=9)
 # ─────────────────────────────
 _afglt_grid = np.array([100., 75., 50., 30., 20., 10., 5., 2., 1., 0.])  # km
-_prof       = Atm1D('afglt', grid=_afglt_grid.tolist()).prof
-z_iface     = _afglt_grid
-z_mid       = 0.5 * (z_iface[:-1] + z_iface[1:])   # (NL=8,) layer midpoints
-t_mid       = np.interp(z_mid, _prof.z[::-1], _prof.t[::-1])
-p_mid       = np.interp(z_mid, _prof.z[::-1], _prof.p[::-1])
-n_mid       = np.interp(z_mid, _prof.z[::-1], _prof.dens_air[::-1])
-thick       = np.abs(np.diff(z_iface))  # (NL=8,) layer thicknesses in km
-n_layers   = len(z_mid)
+_prof = Atm1D('afglt', grid=_afglt_grid.tolist()).prof
+z_iface = _afglt_grid
+z_mid = 0.5 * (z_iface[:-1] + z_iface[1:])   # (NL=8,) layer midpoints
+t_mid = np.interp(z_mid, _prof.z[::-1], _prof.t[::-1])
+p_mid = np.interp(z_mid, _prof.z[::-1], _prof.p[::-1])
+n_mid = np.interp(z_mid, _prof.z[::-1], _prof.dens_air[::-1])
+thick = np.abs(np.diff(z_iface))  # (NL=8,) layer thicknesses in km
+n_layers = len(z_mid)
 
 # ── VMR vertical profile (NL,)
 # ────────────────────────────────────────────
@@ -218,7 +222,7 @@ wn_max = float(1e7 / WL_MIN_NM) + 1.
 # ── O₂-A band HR grid & ALIS low-res grid
 # ─────────────────────────────────
 # placeholder; updated from RADIS output
-wavelength_hr   = np.array([WL_MIN_NM, WL_MAX_NM])
+wavelength_hr = np.array([WL_MIN_NM, WL_MAX_NM])
 wavelength_lr_r = np.linspace(WL_MIN_NM, WL_MAX_NM, N_LOW_R)
 
 # ── SpectrumFactory + HITRAN download (once, then cached)
@@ -263,7 +267,7 @@ with (warnings.catch_warnings(),
         )
         wn_out, sigma_k = s.get('xsection')
         wavelength_out_k = 1e7 / wn_out[::-1]          # ascending wavelength
-        sigma_k  = sigma_k[::-1]                # align with wavelength_out_k
+        sigma_k = sigma_k[::-1]                # align with wavelength_out_k
         if _wl_ref is None:
             # fix reference grid from layer 0
             _wl_ref = wavelength_out_k
@@ -276,7 +280,7 @@ with (warnings.catch_warnings(),
 
 # (NWL_HR,)
 assert _wl_ref is not None
-wavelength_hr   = _wl_ref
+wavelength_hr = _wl_ref
 # (NWL_HR, NL=8)
 kabs_hr = jnp.array(np.stack(sigma_layers, axis=1), dtype=jnp.float32)
 # update to match wavelength_hr
@@ -306,15 +310,15 @@ print(f"prof_abs  : {prof_abs.shape}  max = {prof_abs.max():.3e}  (layer OD, "
 # independent computation per wavelength, n_photons shared equally
 # between all wavelegths (thus Monte Carlo NOISE in the spectrum)
 # wavelengths is a list or numpy array
-n_wl= wavelength_hr.size
-n_photons = 1e5 # photons per wavelength
+n_wl = wavelength_hr.size
+n_photons = 1e5  # photons per wavelength
 # monochromatic computation for custom aerosols and cloud
 wavelength_0 = 765.
 # Aerosols and cloud optical properties using OPAC database as processed
 # by the the libradtran (www.libradtran.org)
 # set the aerosol type to 'desert' and its AOT at the reference
 # wavelength wavelength_0 to 0.25
-aer1 = AerOPAC( 'desert',  0.25, wavelength_0)
+aer1 = AerOPAC('desert', 0.25, wavelength_0)
 # tropical atmosphere with O2 absorption in the O2-A band
 pro = Atm1D('afglt',
               # particles in atmosphere are a mix of aerosols 1 and 2
@@ -329,8 +333,8 @@ pro = Atm1D('afglt',
                                      # bands
                                      # nearest neighbour is then used
                                      # during the RT computation
-              no2=False, # NO2 included
-              tco3=0., # no ozone
+              no2=False,  # NO2 included
+              tco3=0.,  # no ozone
               prof_abs=prof_abs   # (NWL_HR, NL) layer OD = kabs_hr * thick
              )
 pro0 = Atm1D('afglt',    # tropical atmosphere, no gaseous absorption
@@ -346,29 +350,29 @@ pro0 = Atm1D('afglt',    # tropical atmosphere, no gaseous absorption
                                      # bands
                                      # nearest neighbour is then used
                                      # during the RT computation
-              no2=False, # NO2 included
-              tco3=0., # no ozone
+              no2=False,  # NO2 included
+              tco3=0.,  # no ozone
              )
 
 ALBEDO = 0.3
-#ALBEDO = 0.
+# ALBEDO = 0.
 GREY_ALB = AlbedoCst(ALBEDO)
 surface = LambSurface(alb=GREY_ALB)
 sza, vza = 30., 20.
-le = LocalEstimate(th=np.array([vza]) *np.pi/180,
-                   phi=np.array([180.]) *np.pi/180, zip=False)
+le = LocalEstimate(th=np.array([vza]) * np.pi / 180,
+                   phi=np.array([180.]) * np.pi / 180, zip=False)
 mc = Smartg(alt_pp=True, double=True).run(wavelength=wavelength_hr, le=le,
-           th_deg=sza, n_photons=n_photons*n_wl,
+           th_deg=sza, n_photons=n_photons * n_wl,
            atmosphere=pro, output_layers=1,
            surface=surface)
 mc = drop_axes(mc, 'Azimuth angles')
 plt.plot(mc['wavelength'], mc['I_up (TOA)'][:, 0], '-r',
-         label=rf'$\Delta\Phi=${le.phi[0]*180/np.pi:.0f}°')
+         label=rf'$\Delta\Phi=${le.phi[0] * 180 / np.pi:.0f}°')
 plt.legend()
 print(' GPU time: ', mc.attrs['kernel time (s)'], 's')
 
 # %% [markdown]
-# ### Correlated spectral computations: ALIS method 
+# ### Correlated spectral computations: ALIS method
 # The ALIS method is described in <br>
 # Emde, C., Buras, R., and Mayer, B.: ALIS: An efficient method to
 # compute high spectral resolution polarized solar radiances using the Monte Carlo approach, J. Quant. Spectrosc. Ra., 112, 1622–1631, 2011.
@@ -398,12 +402,12 @@ m = drop_axes(m, 'Azimuth angles')
 # for the same number of photons, the spectrum is much less noisy
 plt.plot(mc['wavelength'], mc['I_up (TOA)'][:, 0], '-r',
          label='no alis: {:.0e} phot.; {:.5f} (s)'.format(
-             n_photons*n_wl, float(mc.attrs['kernel time (s)'])))
+             n_photons * n_wl, float(mc.attrs['kernel time (s)'])))
 plt.plot(m['wavelength'], m['I_up (TOA)'][:, 0], '-k',
          label='alis     :{:.0e} phot.; {:.5f} (s)'.format(
              n_photons, float(m.attrs['kernel time (s)'])))
 plt.legend()
-#plt.ylim(0.21,0.27)
+# plt.ylim(0.21,0.27)
 print(' GPU time: ', m.attrs['kernel time (s)'], 's')
 
 # %% [markdown]
@@ -427,7 +431,7 @@ s_alis = Smartg(alt_pp=True, double=True, alis=True)
 surf_hist = LambSurface(alb=AlbedoCst(1.))
 # specify the number of
 alis_options = Alis(n_low=wavelength_lr_r.size, hist=True,
-                    max_hist=int(n_photons*20))
+                    max_hist=int(n_photons * 20))
 # low spectral resolution
 # computations for the scattering correction terms, phtons histories are
 # recorded and the maximum
@@ -440,12 +444,12 @@ atmosphere = pro0.calc(wavelength_lr_r)
 # %%
 # %%time
 s_alis = Smartg(alt_pp=True, double=True, alis=True)
-m_hist=s_alis.run(seed=SEED, wavelength=wavelength_lr_r, le=le,
+m_hist = s_alis.run(seed=SEED, wavelength=wavelength_lr_r, le=le,
                   alis_options=alis_options, th_deg=sza, n_photons=n_photons,
                   n_loop=n_photons, atmosphere=atmosphere, output_layers=1,
                   surface=surf_hist)
 print("m_hist {:.2g} photons : {:.5f} (ms)".format(
-    n_photons, float(m_hist.attrs['kernel time (s)'])*1000))
+    n_photons, float(m_hist.attrs['kernel time (s)']) * 1000))
 
 # %%
 # %%time
@@ -460,14 +464,14 @@ m_amf = s_amf.run(wavelength=wavelength_lr_r, le=le,
                   n_photons=n_photons, n_loop=n_photons,
                   atmosphere=atmosphere, output_layers=1, surface=surface)
 print("m_amf {:.2g} photons : {:.5f} (ms)".format(
-    n_photons, float(m_amf.attrs['kernel time (s)'])*1000))
+    n_photons, float(m_amf.attrs['kernel time (s)']) * 1000))
 
 # %%
 # %%time
 # Since always autoinit = True used until now, only 1 current context
 # We can clear manually the context (!!! all previous Smartg object
 # cannot be reused, they must be reinitialized !!!)
-s_alis.clear_context() # now we can use jax
+s_alis.clear_context()  # now we can use jax
 jax.default_backend()
 os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
 print(jax.devices())
@@ -477,18 +481,19 @@ print(jax.devices())
  nint_h, _) = get_histories(m_hist, level=0, verbose=False)
 
 # Upload to JAX device (GPU) once
-s_h    = jnp.array(s_h)     # (NLE, NStokes)
-d_h    = jnp.array(d_h)     # (NLE, NL)
-w_h    = jnp.array(w_h)     # (NLE, NLR)
+s_h = jnp.array(s_h)     # (NLE, NStokes)
+d_h = jnp.array(d_h)     # (NLE, NL)
+w_h = jnp.array(w_h)     # (NLE, NLR)
 nref_h = jnp.array(nref_h)  # (NLE,)
 
 # ── Shared per-photon kernel (reused by all subsequent Jacobian cells)
 # ────
-kabs_j   = jnp.array(kabs,               dtype=jnp.float32)  # (NWL_HR, NL)
+kabs_j = jnp.array(kabs, dtype=jnp.float32)  # (NWL_HR, NL)
 # (NWL_HR,)
-wavelength_hr_j  = jnp.array(wavelength_hr,              dtype=jnp.float32)
+wavelength_hr_j = jnp.array(wavelength_hr, dtype=jnp.float32)
 # (NWL_HR,)
 alb_hr_j = jnp.array(GREY_ALB.get(wavelength_hr), dtype=jnp.float32)
+
 
 def _si_one(
     sik: ArrayLike,
@@ -503,6 +508,7 @@ def _si_one(
     wi = jnp.interp(wavelength_i, wavelength_lr_r, wi_lr)
     return wi * sik * jnp.exp(-jnp.sum(dij * kabs_i)) * alb_i**ki
 
+
 # over NLE photons
 _si_photons = vmap(_si_one, in_axes=(0, 0, 0, 0, None, None, None))
 # over the Stokes components
@@ -511,10 +517,11 @@ _si_stokes = vmap(_si_photons,
 # _si_stokes(s_h, w_h, d_h, nref_h, wavelength_scalar, kabs_1d,
 # alb_scalar) → (NStokes, NLE)
 
-_n_h    = float(n_h)
-n_wl     = int(kabs_j.shape[0])
-n_l     = int(kabs_j.shape[1])
+_n_h = float(n_h)
+n_wl = int(kabs_j.shape[0])
+n_l = int(kabs_j.shape[1])
 n_stokes = int(s_h.shape[1])
+
 
 # ── Forward stokes + variance via fori_loop
 # ───────────────────────────────
@@ -528,24 +535,25 @@ def _body_fw(i: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Arra
     return (s_sum.at[i].set(si.sum(axis=1)),
             s2_sum.at[i].set((si**2).sum(axis=1)))
 
+
 _zeros = (jnp.zeros((n_wl, n_stokes)),
           jnp.zeros((n_wl, n_stokes)))
 stokes_j, stokes2_j = jit(
     lambda: lax.fori_loop(0, n_wl, _body_fw, _zeros))()
-stokes  = np.array(stokes_j).T / _n_h   # (NStokes, NWL_HR)
+stokes = np.array(stokes_j).T / _n_h   # (NStokes, NWL_HR)
 stokes2 = np.array(stokes2_j).T / _n_h  # (NStokes, NWL_HR)
 
-std   = np.sqrt((stokes2 - stokes**2) / _n_h)
-upper = stokes + 1.95*std
-lower = stokes - 1.95*std
+std = np.sqrt((stokes2 - stokes**2) / _n_h)
+upper = stokes + 1.95 * std
+lower = stokes - 1.95 * std
 
 # Extract data arrays
-wavelength_mc   = mc['wavelength'].values
-i_mc    = mc['I_up (TOA)'].values[:, 0]
+wavelength_mc = mc['wavelength'].values
+i_mc = mc['I_up (TOA)'].values[:, 0]
 wavelength_alis = m['wavelength'].values
 # same wavelength grid as wavelength_hr
-i_alis  = m['I_up (TOA)'].values[:, 0]
-i_hist  = stokes[0, :]
+i_alis = m['I_up (TOA)'].values[:, 0]
+i_hist = stokes[0, :]
 
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 11), sharex=True)
 
@@ -553,7 +561,7 @@ fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 11), sharex=True)
 # ───────────────────────────────────────────────────────────
 ax1.plot(wavelength_mc, i_mc, '-r',
          label='no alis:   {:.0e} phot.; {:.5f} s'.format(
-             n_photons*n_wl, float(mc.attrs['kernel time (s)'])))
+             n_photons * n_wl, float(mc.attrs['kernel time (s)'])))
 ax1.plot(wavelength_alis, i_alis, '-k',
          label='alis:      {:.0e} phot.; {:.5f} s'.format(
              n_photons, float(m.attrs['kernel time (s)'])))
@@ -570,12 +578,12 @@ ax1.grid(True, alpha=0.3)
 # ── Middle: hist − alis
 # ────────────────────────────────────────────────────
 alis_ref = np.interp(wavelength_hr, wavelength_alis, i_alis)
-diff_alis       = i_hist  - alis_ref
+diff_alis = i_hist - alis_ref
 diff_alis_upper = upper[0, :] - alis_ref
 diff_alis_lower = lower[0, :] - alis_ref
-rel_alis        = 100. * diff_alis       / alis_ref
-rel_alis_upper  = 100. * diff_alis_upper / alis_ref
-rel_alis_lower  = 100. * diff_alis_lower / alis_ref
+rel_alis = 100. * diff_alis / alis_ref
+rel_alis_upper = 100. * diff_alis_upper / alis_ref
+rel_alis_lower = 100. * diff_alis_lower / alis_ref
 
 ax2.plot(wavelength_hr, diff_alis, '-c', lw=1.5, label='hist − alis')
 ax2.fill_between(wavelength_hr, diff_alis_lower, diff_alis_upper,
@@ -592,13 +600,13 @@ ax2r.set_ylim(100. * np.array(ax2.get_ylim()) / np.mean(alis_ref))
 
 # ── Bottom: hist − no alis
 # ─────────────────────────────────────────────────
-mc_ref          = np.interp(wavelength_hr, wavelength_mc, i_mc)
-diff_mc         = i_hist  - mc_ref
-diff_mc_upper   = upper[0, :] - mc_ref
-diff_mc_lower   = lower[0, :] - mc_ref
-rel_mc          = 100. * diff_mc       / mc_ref
-rel_mc_upper    = 100. * diff_mc_upper / mc_ref
-rel_mc_lower    = 100. * diff_mc_lower / mc_ref
+mc_ref = np.interp(wavelength_hr, wavelength_mc, i_mc)
+diff_mc = i_hist - mc_ref
+diff_mc_upper = upper[0, :] - mc_ref
+diff_mc_lower = lower[0, :] - mc_ref
+rel_mc = 100. * diff_mc / mc_ref
+rel_mc_upper = 100. * diff_mc_upper / mc_ref
+rel_mc_lower = 100. * diff_mc_lower / mc_ref
 
 ax3.plot(wavelength_hr, diff_mc, '-r', lw=1.5, label='hist − no alis')
 ax3.fill_between(wavelength_hr, diff_mc_lower, diff_mc_upper, facecolor='r',
@@ -620,8 +628,8 @@ plt.tight_layout()
 # %% [markdown]
 # ### Pure-scattering run + post-hoc gas absorption (RADIS / Beer-Lambert via histories)
 #
-# Run SmartG **once** in pure-scattering mode (no gas absorption).  
-# Per-photon path lengths `U[Nph, NL]` and weights `w[Nph]` are stored.  
+# Run SmartG **once** in pure-scattering mode (no gas absorption).
+# Per-photon path lengths `U[Nph, NL]` and weights `w[Nph]` are stored.
 # Any cross-section `σ(ν̃, T_k, P_k)` from **RADIS** (or Atm1D fallback) is then applied post-hoc:
 #
 # $$\tau_i(\tilde\nu) = \mathbf{U}_i \cdot \boldsymbol{\sigma}(\tilde\nu) \qquad W_i = e^{-\tau_i} \qquad \rho(\tilde\nu) = \frac{\mathbf{w}^\top \mathbf{W}}{\sum w_i}$$
@@ -646,19 +654,20 @@ def _body_i(i: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Array
     jac_i = -jnp.dot(d_h.T, si[0]) / _n_h          # (NL,)
     return rho_arr.at[i].set(rho_i_j), jac_arr.at[i].set(jac_i)
 
+
 rho_jax_j, di_dkabs_j = jit(
     lambda: lax.fori_loop(0, n_wl, _body_i,
                           (jnp.zeros(n_wl), jnp.zeros((n_wl, n_l))))
 )()
-rho_jax  = np.array(rho_jax_j)    # (NWL_HR,)
+rho_jax = np.array(rho_jax_j)    # (NWL_HR,)
 di_dkabs = np.array(di_dkabs_j)   # (NWL_HR, NL)
 
 # ── SRF convolution
 # ───────────────────────────────────────────────────────
 wavelength_c, fwhm = 766.5, 1.25
-sig   = fwhm / (2 * np.sqrt(2 * np.log(2)))
-srf   = np.exp(-0.5 * ((wavelength_hr - wavelength_c) / sig)**2)
-srf  /= np.trapezoid(srf, wavelength_hr)
+sig = fwhm / (2 * np.sqrt(2 * np.log(2)))
+srf = np.exp(-0.5 * ((wavelength_hr - wavelength_c) / sig)**2)
+srf /= np.trapezoid(srf, wavelength_hr)
 rho_conv = float(np.trapezoid(srf * rho_jax, wavelength_hr))
 print(f"SRF-convolved reflectance at {wavelength_c} nm (FWHM={fwhm} nm): "
       f"{rho_conv:.5f}")
@@ -716,7 +725,7 @@ _sink = io.StringIO()
 
 # ── 1. kabs per layer at reference T and T+ΔT
 # ─────────────────────────────
-kabs_t   = np.zeros((len(wavelength_hr), n_layers), dtype='float32')
+kabs_t = np.zeros((len(wavelength_hr), n_layers), dtype='float32')
 kabs_t_dt = np.zeros_like(kabs_t)
 
 with (warnings.catch_warnings(),
@@ -727,7 +736,7 @@ with (warnings.catch_warnings(),
     for k_idx in range(n_layers):
         vmr_k = float(vmr_profile[k_idx])
         p_bar = float(p_mid[k_idx]) * 1e-3          # hPa → bar
-        n_k   = vmr_k * n_mid[k_idx]               # number density [molec/cm³]
+        n_k = vmr_k * n_mid[k_idx]               # number density [molec/cm³]
 
         s0 = sfac.eq_spectrum(Tgas=float(t_mid[k_idx]), pressure=p_bar,
                               mole_fraction=vmr_k)
@@ -750,12 +759,12 @@ print(f"kabs_T: {kabs_t.shape},  max = {kabs_t.max():.3e} km⁻¹")
 # ── 2. T-Jacobian via chain rule
 # ───────────────────────────────────────────
 # (n_wl, NL) km⁻¹/K
-dkabs_dt   = (kabs_t_dt - kabs_t) / delta_t
+dkabs_dt = (kabs_t_dt - kabs_t) / delta_t
 dkabs_dt_j = jnp.array(dkabs_dt, dtype=jnp.float32)
 di_dkabs_j = jnp.array(di_dkabs, dtype=jnp.float32)
 drho_dt_wl = di_dkabs_j * dkabs_dt_j
-dwl        = float(wavelength_hr[1] - wavelength_hr[0])
-drho_dt    = np.array(jnp.sum(drho_dt_wl, axis=0) * dwl)         # (NL,)
+dwl = float(wavelength_hr[1] - wavelength_hr[0])
+drho_dt = np.array(jnp.sum(drho_dt_wl, axis=0) * dwl)         # (NL,)
 print(f"max |∂ρ/∂T_{MOLECULE}|   = {np.abs(drho_dt).max():.3e} K⁻¹")
 
 # ── 3. VMR-Jacobian (analytical: kabs ∝ VMR)
@@ -764,7 +773,7 @@ with np.errstate(divide='ignore', invalid='ignore'):
     dkabs_dvmr = np.where(vmr_profile[None, :] > 0,
                           kabs_t / vmr_profile[None, :], 0.)       # (n_wl, NL)
 drho_dvmr_wl = di_dkabs * dkabs_dvmr
-drho_dvmr    = drho_dvmr_wl.sum(axis=0) * dwl                     # (NL,)
+drho_dvmr = drho_dvmr_wl.sum(axis=0) * dwl                     # (NL,)
 print(f"max |∂ρ/∂VMR_{MOLECULE}| = {np.abs(drho_dvmr).max():.3e}")
 
 # ── 4. Plots
@@ -834,7 +843,7 @@ import jax.numpy as jnp
 delta_p = 1.0   # hPa
 _sink2 = io.StringIO()
 
-kabs_p   = np.zeros((len(wavelength_hr), n_layers), dtype='float32')
+kabs_p = np.zeros((len(wavelength_hr), n_layers), dtype='float32')
 kabs_p_dp = np.zeros_like(kabs_p)
 
 with (warnings.catch_warnings(),
@@ -844,7 +853,7 @@ with (warnings.catch_warnings(),
     logging.disable(logging.CRITICAL)
     for k_idx in range(n_layers):
         vmr_k = float(vmr_profile[k_idx])
-        n_k   = vmr_k * n_mid[k_idx]
+        n_k = vmr_k * n_mid[k_idx]
 
         s0 = sfac.eq_spectrum(Tgas=float(t_mid[k_idx]),
                               pressure=float(p_mid[k_idx]) * 1e-3,
@@ -865,7 +874,7 @@ with (warnings.catch_warnings(),
     logging.disable(logging.NOTSET)
 
 # forward-difference ∂kabs/∂P  [km⁻¹ hPa⁻¹],  shape (NWL_HR, NL)
-dkabs_dp   = (kabs_p_dp - kabs_p) / delta_p
+dkabs_dp = (kabs_p_dp - kabs_p) / delta_p
 dkabs_dp_j = jnp.array(dkabs_dp, dtype=jnp.float32)
 print(f"dkabs_dP: {dkabs_dp.shape},  "
       f"max |∂kabs/∂P| = {float(np.abs(dkabs_dp).max()):.3e} km⁻¹/hPa")
@@ -929,8 +938,8 @@ def _body_pol(
 ) -> tuple[jax.Array, ...]:
     r_q, r_i, r_u, dq_k, dq_a, di_a = carry
     kabs_i = kabs_j[i]
-    wavelength_i   = wavelength_hr_j[i]
-    alb_i  = alb_hr_j[i]
+    wavelength_i = wavelength_hr_j[i]
+    alb_i = alb_hr_j[i]
 
     # (NStokes, NLE)
     si = _si_stokes(s_h, w_h, d_h, nref_h, wavelength_i, kabs_i, alb_i)
@@ -940,9 +949,9 @@ def _body_pol(
     rho_u_j = jnp.sum(si[2]) / _n_h
 
     dq_dkabs_i = -jnp.dot(d_h.T, si[1]) / _n_h          # (NL,)
-    safe_alb   = jnp.where(alb_i > 0., alb_i, 1.)
-    dq_dalb_i  = jnp.dot(nref_h, si[1]) / (safe_alb * _n_h)
-    di_dalb_i  = jnp.dot(nref_h, si[0]) / (safe_alb * _n_h)
+    safe_alb = jnp.where(alb_i > 0., alb_i, 1.)
+    dq_dalb_i = jnp.dot(nref_h, si[1]) / (safe_alb * _n_h)
+    di_dalb_i = jnp.dot(nref_h, si[0]) / (safe_alb * _n_h)
 
     return (
         r_q.at[i].set(rho_q_j),
@@ -953,6 +962,7 @@ def _body_pol(
         di_a.at[i].set(di_dalb_i),
     )
 
+
 init_pol = (
     jnp.zeros(n_wl), jnp.zeros(n_wl), jnp.zeros(n_wl),
     jnp.zeros((n_wl, n_l)), jnp.zeros(n_wl), jnp.zeros(n_wl),
@@ -961,15 +971,15 @@ rho_q, rho_i, rho_u, dq_dkabs, dq_dalb, di_dalb = jit(
     lambda: lax.fori_loop(0, n_wl, _body_pol, init_pol)
 )()
 
-rho_q    = np.array(rho_q)
-rho_u    = np.array(rho_u)
-rho_i    = np.array(rho_i)
+rho_q = np.array(rho_q)
+rho_u = np.array(rho_u)
+rho_i = np.array(rho_i)
 dq_dkabs = np.array(dq_dkabs)
-dq_dalb  = np.array(dq_dalb)
-di_dalb  = np.array(di_dalb)
+dq_dalb = np.array(dq_dalb)
+di_dalb = np.array(di_dalb)
 
 rho_pol = np.sqrt(rho_q**2 + rho_u**2)
-dolp    = rho_pol / np.maximum(rho_i, 1e-12)
+dolp = rho_pol / np.maximum(rho_i, 1e-12)
 print(f"peak  ρ_Q   = {rho_q.min():.4f} … {rho_q.max():.4f}")
 print(f"peak  ρ_U   = {rho_u.min():.4f} … {rho_u.max():.4f}")
 print(f"peak  ρ_pol = {rho_pol.max():.4f}")
@@ -983,15 +993,15 @@ fig, axes = plt.subplots(2, 2, figsize=(14, 9))
 
 # ── [0,0] I / Q / U reflectance
 # ───────────────────────────────────────────
-ax0  = axes[0, 0]
+ax0 = axes[0, 0]
 ax0r = ax0.twinx()
-l1, = ax0.plot( wavelength_hr, rho_i, 'b',  lw=1.2, label=r'$\rho_I$ (left)')
-l2, = ax0r.plot(wavelength_hr, rho_q, 'r',  lw=1.2, label=r'$\rho_Q$ (right)')
-l3, = ax0r.plot(wavelength_hr, rho_u, 'g',  lw=1.2, label=r'$\rho_U$ (right)')
+l1, = ax0.plot(wavelength_hr, rho_i, 'b', lw=1.2, label=r'$\rho_I$ (left)')
+l2, = ax0r.plot(wavelength_hr, rho_q, 'r', lw=1.2, label=r'$\rho_Q$ (right)')
+l3, = ax0r.plot(wavelength_hr, rho_u, 'g', lw=1.2, label=r'$\rho_U$ (right)')
 ax0r.axhline(0, color='k', lw=0.7, ls='--', alpha=0.5)
 _qu_lo = min(rho_q.min(), rho_u.min())
 _qu_hi = max(rho_q.max(), rho_u.max())
-_pad   = (_qu_hi - _qu_lo) * 0.15 if _qu_hi != _qu_lo else max(
+_pad = (_qu_hi - _qu_lo) * 0.15 if _qu_hi != _qu_lo else max(
     abs(_qu_hi), 1e-12) * 0.15
 ax0r.set_ylim(_qu_lo - _pad, _qu_hi + _pad)
 ax0.set_xlabel('wavelength (nm)')
@@ -1005,9 +1015,9 @@ ax0.grid(True, alpha=0.3)
 
 # ── [0,1] dolp (left) + sqrt(Q²+U²) (right)
 # ──────────────────────────────
-ax1  = axes[0, 1]
+ax1 = axes[0, 1]
 ax1r = ax1.twinx()
-l4, = ax1.plot( wavelength_hr, dolp,    'b',   lw=1.2, label=r'DoLP (left)')
+l4, = ax1.plot(wavelength_hr, dolp, 'b', lw=1.2, label=r'DoLP (left)')
 l5, = ax1r.plot(wavelength_hr, rho_pol, 'r--', lw=1.2,
                 label=r'$\sqrt{\rho_Q^2+\rho_U^2}$ (right)')
 ax1.set_xlabel('wavelength (nm)')
@@ -1035,7 +1045,7 @@ ax2.set_title(r'Jacobian $\partial\rho_Q/\partial k_\mathrm{abs}$')
 
 # ── [1,1] Albedo Jacobians
 # ────────────────────────────────────────────────
-ax3  = axes[1, 1]
+ax3 = axes[1, 1]
 ax3r = ax3.twinx()
 l6, = ax3.plot(wavelength_hr, di_dalb, 'b', lw=1.2,
                label=r'$\partial\rho_I/\partial a$ (left)')
@@ -1084,46 +1094,46 @@ for i, name in enumerate(ax_names):
 cd = cd[tuple(idx)]   # (nlayer, [nscl,] niamf)
 
 has_scl = 'iSCL' in ax_names
-nscl    = cdist.shape[ax_names.index('iSCL')] if has_scl else 1
+nscl = cdist.shape[ax_names.index('iSCL')] if has_scl else 1
 
 if has_scl:
     # cd shape: (nlayer, nscl, niamf)
-    w_cls          = cd[:, :, 0]     # (nlayer, nscl)
-    mean_dist_cls  = cd[:, :, 1] / np.where(w_cls > 0, w_cls, 1.)
+    w_cls = cd[:, :, 0]     # (nlayer, nscl)
+    mean_dist_cls = cd[:, :, 1] / np.where(w_cls > 0, w_cls, 1.)
     mean_dist2_cls = cd[:, :, 2] / np.where(w_cls > 0, w_cls, 1.)
-    var_dist_cls   = mean_dist2_cls - mean_dist_cls**2
+    var_dist_cls = mean_dist2_cls - mean_dist_cls**2
 
-    W         = w_cls.sum(axis=1)
-    wd        = cd[:, :, 1].sum(axis=1)
-    wd2       = cd[:, :, 2].sum(axis=1)
-    mean_dist = wd  / np.where(W > 0, W, 1.)
+    W = w_cls.sum(axis=1)
+    wd = cd[:, :, 1].sum(axis=1)
+    wd2 = cd[:, :, 2].sum(axis=1)
+    mean_dist = wd / np.where(W > 0, W, 1.)
 
-    frac_cls    = w_cls / np.where(W > 0, W, 1.)[:, None]
-    var_within  = (frac_cls * var_dist_cls).sum(axis=1)
+    frac_cls = w_cls / np.where(W > 0, W, 1.)[:, None]
+    var_within = (frac_cls * var_dist_cls).sum(axis=1)
     var_between = (frac_cls
                    * (mean_dist_cls - mean_dist[:, None])**2).sum(axis=1)
-    var_dist    = var_within + var_between
+    var_dist = var_within + var_between
 else:
     # cd shape: (nlayer, niamf)
-    W          = cd[:, 0]
-    mean_dist  = cd[:, 1] / np.where(W > 0, W, 1.)
+    W = cd[:, 0]
+    mean_dist = cd[:, 1] / np.where(W > 0, W, 1.)
     mean_dist2 = cd[:, 2] / np.where(W > 0, W, 1.)
-    var_dist   = mean_dist2 - mean_dist**2
+    var_dist = mean_dist2 - mean_dist**2
 
 # Layer thicknesses and amf = <D> / Δz
 thick_amf = abs(np.diff(m_amf['z_atm'].values))
-amf       = mean_dist / thick_amf
+amf = mean_dist / thick_amf
 
 # Analytical single-scatter amf for comparison
 sza_rad = sza * np.pi / 180
 vza_rad = le.th[0]
-amf_ss  = 1./np.cos(sza_rad) + 1./np.cos(vza_rad)
+amf_ss = 1. / np.cos(sza_rad) + 1. / np.cos(vza_rad)
 
 std_amf = np.sqrt(np.maximum(var_dist, 0.)) / thick_amf
 
 # --- Diagnostic: total ---
 print(f"Expected single-scatter AMF = sec({sza:.0f}°) + "
-      f"sec({vza_rad*180/np.pi:.0f}°) = {amf_ss:.4f}")
+      f"sec({vza_rad * 180 / np.pi:.0f}°) = {amf_ss:.4f}")
 print(f"nscl = {nscl}")
 print("\nTotal moments per layer:")
 if has_scl:
@@ -1131,8 +1141,8 @@ if has_scl:
           f"{'Var_within':>12s}  {'Var_between':>12s}  {'%between':>9s}  "
           f"{'AMF':>8s}  {'σ(AMF)':>8s}  {'CV%':>6s}")
     for i in range(len(amf)):
-        cv     = 100*std_amf[i]/amf[i]     if amf[i]     > 0 else 0
-        pct_bw = 100*var_between[i]/var_dist[i] if var_dist[i] > 0 else 0
+        cv = 100 * std_amf[i] / amf[i] if amf[i] > 0 else 0
+        pct_bw = 100 * var_between[i] / var_dist[i] if var_dist[i] > 0 else 0
         print(f"{i:3d}  {thick_amf[i]:8.3f}  {mean_dist[i]:10.4f}  "
               f"{var_dist[i]:12.6f}  {var_within[i]:12.6f}  "
               f"{var_between[i]:12.6f}  {pct_bw:8.1f}%  {amf[i]:8.4f}  "
@@ -1141,7 +1151,7 @@ else:
     print(f"{'lay':>3s}  {'Δz(km)':>8s}  {'<D>':>10s}  {'Var(D)':>12s}  "
           f"{'AMF':>8s}  {'σ(AMF)':>8s}  {'CV%':>6s}")
     for i in range(len(amf)):
-        cv = 100*std_amf[i]/amf[i] if amf[i] > 0 else 0
+        cv = 100 * std_amf[i] / amf[i] if amf[i] > 0 else 0
         print(f"{i:3d}  {thick_amf[i]:8.3f}  {mean_dist[i]:10.4f}  "
               f"{var_dist[i]:12.6f}  {amf[i]:8.4f}  {std_amf[i]:8.4f}  "
               f"{cv:6.1f}")
@@ -1155,14 +1165,14 @@ if has_scl:
     ]:
         print(f"\n{label}")
         hdr = f"{'lay':>3s}  " + "  ".join(
-            [f"{'cls'+str(j):>8s}" for j in range(nscl)])
+            [f"{'cls' + str(j):>8s}" for j in range(nscl)])
         print(hdr)
         for i in range(len(amf)):
             if arr is None:
-                fracs = w_cls[i] / W[i] if W[i] > 0 else w_cls[i]*0
-                vals  = [f"{fracs[j]:8.4f}" for j in range(nscl)]
+                fracs = w_cls[i] / W[i] if W[i] > 0 else w_cls[i] * 0
+                vals = [f"{fracs[j]:8.4f}" for j in range(nscl)]
             else:
-                vals = [f"{arr[i,j]:8.4f}" if w_cls[i, j] > 0
+                vals = [f"{arr[i, j]:8.4f}" if w_cls[i, j] > 0
                         else f"{'---':>8s}"
                         for j in range(nscl)]
             print(f"{i:3d}  " + "  ".join(vals))
@@ -1176,19 +1186,19 @@ ax_var = axes[1] if has_scl else None
 x = np.arange(len(amf))
 width = 0.4
 
-ax.bar(x - width/2, mean_dist, color='b', width=width,
+ax.bar(x - width / 2, mean_dist, color='b', width=width,
        label='mean distance (km)')
 ax.set_ylabel('mean distance traveled (km)', color='b')
 ax.set_xlabel('layer #')
 ax2 = ax.twinx()
-ax2.bar(x + width/2, amf, color='r', width=width, alpha=0.7, label='AMF (MC)')
-ax2.errorbar(x + width/2, amf, yerr=std_amf, fmt='none', ecolor='k', capsize=3,
+ax2.bar(x + width / 2, amf, color='r', width=width, alpha=0.7, label='AMF (MC)')
+ax2.errorbar(x + width / 2, amf, yerr=std_amf, fmt='none', ecolor='k', capsize=3,
              label=r'$\pm\sigma$(AMF)')
 ax2.axhline(amf_ss, color='green', ls='--', lw=1.5,
             label=f'single-scatter AMF = {amf_ss:.3f}')
 ax2.set_ylabel('AMF', color='r')
 ax2.set_ylim(bottom=0)
-ax.set_title(f'AMF per layer (SZA={sza:.0f}°, VZA={vza_rad*180/np.pi:.0f}°, '
+ax.set_title(f'AMF per layer (SZA={sza:.0f}°, VZA={vza_rad * 180 / np.pi:.0f}°, '
              f'nscl={nscl})')
 fig.legend(loc='upper right', bbox_to_anchor=(0.55 if has_scl else 0.95, 0.95),
            fontsize=8)
@@ -1219,29 +1229,29 @@ if has_scl:
     bw = 0.8 / (nc + 1)
 
     for k, j in enumerate(active_cls):
-        offset = (k - nc/2) * bw
+        offset = (k - nc / 2) * bw
         mask = w_cls[:, j] > 0
         ax_amf.bar(x[mask] + offset, amf_cls[mask, j], width=bw, color=cmap(j),
                    alpha=0.8, label=f'cls {j}')
         ax_std.bar(x[mask] + offset, std_cls[mask, j], width=bw, color=cmap(j),
                    alpha=0.8, label=f'cls {j}')
     # total
-    ax_amf.bar(x + (nc/2)*bw, amf, width=bw, color='k', alpha=0.5,
+    ax_amf.bar(x + (nc / 2) * bw, amf, width=bw, color='k', alpha=0.5,
                label='total')
     ax_amf.axhline(amf_ss, color='green', ls='--', lw=1.5,
                    label=f'single-scatter = {amf_ss:.3f}')
     ax_amf.set_xlabel('layer #')
     ax_amf.set_ylabel('AMF')
     ax_amf.set_title('Mean AMF per scatter class')
-    ax_amf.legend(fontsize=7, ncol=min(nc+2, 5))
+    ax_amf.legend(fontsize=7, ncol=min(nc + 2, 5))
     ax_amf.set_ylim(bottom=0)
 
-    ax_std.bar(x + (nc/2)*bw, std_amf, width=bw, color='k', alpha=0.5,
+    ax_std.bar(x + (nc / 2) * bw, std_amf, width=bw, color='k', alpha=0.5,
                label='total')
     ax_std.set_xlabel('layer #')
     ax_std.set_ylabel(r'$\sigma$(AMF)')
     ax_std.set_title(r'$\sigma$(AMF) per scatter class')
-    ax_std.legend(fontsize=7, ncol=min(nc+2, 5))
+    ax_std.legend(fontsize=7, ncol=min(nc + 2, 5))
     plt.tight_layout()
 
 else:
@@ -1291,13 +1301,13 @@ def _memory_safe_validation_run(
 Smartg.run = _memory_safe_validation_run
 
 # %%
-typ='desert' # tau=0.25
-n_photons=2e6
-####################""""""
+typ = 'desert'  # tau=0.25
+n_photons = 2e6
+# """"""
 fgas = Path(DIR_AUXDATA) / 'validation' / f"cTauGas_ray_{typ}_O2.dat"
-gas_valid   = diff1(np.loadtxt(fgas, skiprows=7)[:, 1:].T, axis=1)
-z_valid   = np.loadtxt(fgas, skiprows=7)[:, 0]
-w_valid   = np.array(fgas.read_text().splitlines()[5].split()).astype(float)
+gas_valid = diff1(np.loadtxt(fgas, skiprows=7)[:, 1:].T, axis=1)
+z_valid = np.loadtxt(fgas, skiprows=7)[:, 0]
+w_valid = np.array(fgas.read_text().splitlines()[5].split()).astype(float)
 fray = Path(DIR_AUXDATA) / 'validation' / f"cTauRay_ray_{typ}_O2.dat"
 ray_valid = diff1(np.loadtxt(fray, skiprows=7)[:, 1:].T, axis=1)
 faer_abs = Path(DIR_AUXDATA) / 'validation' / f"cTauAbs_ptcle_ray_{typ}_O2.dat"
@@ -1305,22 +1315,22 @@ aer_abs_valid = diff1(np.loadtxt(faer_abs, skiprows=7)[:, 1:].T, axis=1)
 faer_sca = Path(DIR_AUXDATA) / 'validation' / f"cTauSca_ptcle_ray_{typ}_O2.dat"
 aer_sca_valid = diff1(np.loadtxt(faer_sca, skiprows=7)[:, 1:].T, axis=1)
 # aerosols phase matrix import
-faer_phase= Path(DIR_AUXDATA) / 'validation' / f"phasemat_ray_{typ}_O2.dat"
-N=int(np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int))
-wavelength_phase=[]
-n_pf=3
-data=np.zeros((n_pf, 1, N, 5), dtype=np.float32)
+faer_phase = Path(DIR_AUXDATA) / 'validation' / f"phasemat_ray_{typ}_O2.dat"
+N = int(np.genfromtxt(faer_phase, usecols=range(1), max_rows=1, dtype=int))
+wavelength_phase = []
+n_pf = 3
+data = np.zeros((n_pf, 1, N, 5), dtype=np.float32)
 for k in range(n_pf):
     wavelength_phase.append(np.genfromtxt(faer_phase, usecols=range(1),
-                                          skip_header=(1+(2+N)*k), max_rows=1))
+                                          skip_header=(1 + (2 + N) * k), max_rows=1))
     data[k, 0, :, :] = np.genfromtxt(faer_phase, usecols=range(5),
-                                  skip_header=(1+(2+N)*k+2), max_rows=N)
-data=data.swapaxes(2, 3)
+                                  skip_header=(1 + (2 + N) * k + 2), max_rows=N)
+data = data.swapaxes(2, 3)
 
 # From iparper to standard phase convention
 pha_data = data[:, :, 1:, :].copy()
-pha_data[:, :, 0, :] = (data[:, :, 1, :] + data[:, :, 2, :])*0.5
-pha_data[:, :, 1, :] = (data[:, :, 1, :] - data[:, :, 2, :])*0.5
+pha_data[:, :, 0, :] = (data[:, :, 1, :] + data[:, :, 2, :]) * 0.5
+pha_data[:, :, 1, :] = (data[:, :, 1, :] - data[:, :, 2, :]) * 0.5
 
 phase_valid = xr.DataArray(pha_data,
         dims=['wavelength_phase', 'z_phase', 'nphamat', 'theta_atm'],
@@ -1329,10 +1339,10 @@ phase_valid = xr.DataArray(pha_data,
 data_valid = np.loadtxt(
     Path(DIR_AUXDATA) / 'validation'
     / f"artdeco_lbl_nstr_32_ray_{typ}_O2.dat")
-aer_ext_valid  = aer_sca_valid + aer_abs_valid
-aer_ssa_valid  = aer_sca_valid / aer_ext_valid
-aer_ssa_valid[aer_ext_valid==0]=1.
-comp=[AerOPAC('desert', 0.5, 550., phase=phase_valid)]
+aer_ext_valid = aer_sca_valid + aer_abs_valid
+aer_ssa_valid = aer_sca_valid / aer_ext_valid
+aer_ssa_valid[aer_ext_valid == 0] = 1.
+comp = [AerOPAC('desert', 0.5, 550., phase=phase_valid)]
 atm_valid = Atm1D('afglmw', grid=z_valid, tco3=0., no2=False,
                   wavelength_phase=wavelength_phase, comp=comp,
                   prof_ray=ray_valid, prof_aer=(aer_ext_valid, aer_ssa_valid),
@@ -1343,7 +1353,7 @@ sigma_valid = od2k(atm_valid.calc(w_valid), 'OD_abs_atm')[:, 1:]
 le = LocalEstimate(th_deg=np.array([20.]),
                    phi_deg=np.array([180.]), zip=False)
 N_LOW = 3
-wavelength_lr= np.linspace(w_valid.min(), w_valid.max(), num=N_LOW)
+wavelength_lr = np.linspace(w_valid.min(), w_valid.max(), num=N_LOW)
 
 sg = Smartg(alis=True, alt_pp=True)
 m1 = sg.run(seed=0, th_deg=30., wavelength=w_valid, surface=None, le=le,
@@ -1355,7 +1365,7 @@ m1 = drop_axes(m1, 'Zenith angles', 'Azimuth angles')
 m2 = sg.run(seed=0, th_deg=30., wavelength=w_valid, surface=None, le=le,
             beer=0, atmosphere=atm_valid.calc(w_valid), depo=0.,
             alis_options=Alis(n_low=N_LOW, hist=True,
-                              max_hist=int(n_photons*5)),
+                              max_hist=int(n_photons * 5)),
             n_photons=n_photons, n_loop=n_photons, n_icdf=1e3)
 m2 = drop_axes(m2, 'Zenith angles', 'Azimuth angles')
 sg.clear_context()
@@ -1368,18 +1378,18 @@ with jax.default_device(jax.devices("cpu")[0]):
         m2, level=0, verbose=True)
 
     # Upload to JAX device once
-    s_h    = jnp.array(s_h,    dtype=jnp.float32)  # (NLE, NStokes)
-    d_h    = jnp.array(d_h,    dtype=jnp.float32)  # (NLE, NL)
-    w_h    = jnp.array(w_h,    dtype=jnp.float32)  # (NLE, NLR)
+    s_h = jnp.array(s_h, dtype=jnp.float32)  # (NLE, NStokes)
+    d_h = jnp.array(d_h, dtype=jnp.float32)  # (NLE, NL)
+    w_h = jnp.array(w_h, dtype=jnp.float32)  # (NLE, NLR)
     nref_h = jnp.array(nref_h, dtype=jnp.float32)  # (NLE,)
 
     # Shared arrays
-    kabs_j   = jnp.array(sigma_valid,          dtype=jnp.float32)  # (n_wl, NL)
+    kabs_j = jnp.array(sigma_valid, dtype=jnp.float32)  # (n_wl, NL)
     # (n_wl,)
-    wavelength_hr_j  = jnp.array(w_valid,              dtype=jnp.float32)
+    wavelength_hr_j = jnp.array(w_valid, dtype=jnp.float32)
     # (n_wl,) — no surface
-    alb_hr_j = jnp.zeros(len(w_valid),         dtype=jnp.float32)
-    wavelength_lr_j  = jnp.array(wavelength_lr, dtype=jnp.float32)  # (NLR,)
+    alb_hr_j = jnp.zeros(len(w_valid), dtype=jnp.float32)
+    wavelength_lr_j = jnp.array(wavelength_lr, dtype=jnp.float32)  # (NLR,)
 
     def _si_one(
         sik: ArrayLike,
@@ -1394,11 +1404,11 @@ with jax.default_device(jax.devices("cpu")[0]):
         return wi * sik * jnp.exp(-jnp.sum(dij * kabs_i)) * alb_i**ki
 
     _si_photons = vmap(_si_one, in_axes=(0, 0, 0, 0, None, None, None))
-    _si_stokes  = vmap(_si_photons, in_axes=(1, None, None, None, None, None,
+    _si_stokes = vmap(_si_photons, in_axes=(1, None, None, None, None, None,
                                              None))
 
-    _n_h     = float(n_h)
-    n_wl      = int(kabs_j.shape[0])
+    _n_h = float(n_h)
+    n_wl = int(kabs_j.shape[0])
     n_stokes = int(s_h.shape[1])
 
     def _body_fw(i: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array]:
@@ -1412,29 +1422,29 @@ with jax.default_device(jax.devices("cpu")[0]):
               jnp.zeros((n_wl, n_stokes)))
     stokes_j, stokes2_j = jit(
         lambda: lax.fori_loop(0, n_wl, _body_fw, _zeros))()
-    stokes  = np.array(stokes_j).T / _n_h   # (NStokes, n_wl)
+    stokes = np.array(stokes_j).T / _n_h   # (NStokes, n_wl)
     stokes2 = np.array(stokes2_j).T / _n_h  # (NStokes, n_wl)
-    std     = np.sqrt((stokes2 - stokes**2) / _n_h)
-    upper   = stokes + 1.96 * std
-    lower   = stokes - 1.96 * std
+    std = np.sqrt((stokes2 - stokes**2) / _n_h)
+    upper = stokes + 1.96 * std
+    lower = stokes - 1.96 * std
 
-    stk_i  = stokes[0]
-    stk_q  = stokes[1]
+    stk_i = stokes[0]
+    stk_q = stokes[1]
 
 #####################
 # Comparison plots: DA reference vs ALIS (no hist) vs ALIS (hist + JAX)
 i_valid = data_valid[:, 1]
 q_valid = data_valid[:, 2]
-i_alis  = m1['I_up (TOA)'].data.flatten()
-q_alis  = m1['Q_up (TOA)'].data.flatten()
+i_alis = m1['I_up (TOA)'].data.flatten()
+q_alis = m1['Q_up (TOA)'].data.flatten()
 
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
 
 # ── Top: absolute reflectance
 # ──────────────────────────────────────────────
 ax1.plot(w_valid, i_valid, 'r-', lw=1.2, label='Doubling Adding (32 streams)')
-ax1.plot(w_valid, i_alis,     'c-',  lw=1.2, label='SMART-G ALIS (no hist)')
-ax1.plot(w_valid, stk_i,          'b-',  lw=1.2, label='SMART-G ALIS (hist + JAX)')
+ax1.plot(w_valid, i_alis, 'c-', lw=1.2, label='SMART-G ALIS (no hist)')
+ax1.plot(w_valid, stk_i, 'b-', lw=1.2, label='SMART-G ALIS (hist + JAX)')
 ax1.fill_between(w_valid, lower[0], upper[0], facecolor='b', alpha=0.2,
                  label='95 % CI (hist)')
 ax1.set_ylabel('I_up (TOA)')
@@ -1446,7 +1456,7 @@ ax1.set_ylim(0, 0.02)
 # ── Bottom: relative difference vs DA reference
 # ───────────────────────────
 diff_alis = (i_alis - i_valid) / i_valid * 100
-diff_hist = (stk_i      - i_valid) / i_valid * 100
+diff_hist = (stk_i - i_valid) / i_valid * 100
 diff_hist_upper = (upper[0] - i_valid) / i_valid * 100
 diff_hist_lower = (lower[0] - i_valid) / i_valid * 100
 
@@ -1468,8 +1478,8 @@ plt.tight_layout()
 # ────────────────────────────────────
 # dolp = |Q|/I (U ≈ 0 for this geometry)
 dolp_valid = np.abs(q_valid) / i_valid
-dolp_alis  = np.abs(q_alis) / i_alis
-dolp_hist  = np.abs(stk_q) / stk_i
+dolp_alis = np.abs(q_alis) / i_alis
+dolp_hist = np.abs(stk_q) / stk_i
 
 fig2, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
 
@@ -1477,7 +1487,7 @@ fig2, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
 # ────────────────────────────────────────────────────
 axes[0].plot(w_valid, q_valid, 'r-', lw=1.2,
              label='Doubling Adding (32 streams)')
-axes[0].plot(w_valid, q_alis,  'c-',  lw=1.2, label='SMART-G ALIS (no hist)')
+axes[0].plot(w_valid, q_alis, 'c-', lw=1.2, label='SMART-G ALIS (no hist)')
 axes[0].plot(w_valid, stk_q, 'b-', lw=1.2, label='SMART-G ALIS (hist + JAX)')
 axes[0].fill_between(w_valid, lower[1], upper[1], facecolor='b', alpha=0.2,
                      label='95 % CI (hist)')
@@ -1489,7 +1499,7 @@ axes[0].grid(True, alpha=0.3)
 # ── Panel 2: Q relative difference
 # ─────────────────────────────────────────
 diff_q_alis = (q_alis - q_valid) / np.abs(q_valid) * 100
-diff_q_hist = (stk_q      - q_valid) / np.abs(q_valid) * 100
+diff_q_hist = (stk_q - q_valid) / np.abs(q_valid) * 100
 diff_q_hist_upper = (upper[1] - q_valid) / np.abs(q_valid) * 100
 diff_q_hist_lower = (lower[1] - q_valid) / np.abs(q_valid) * 100
 
@@ -1508,7 +1518,7 @@ axes[1].set_ylim(-1, 1)
 # ───────────────────────────────────────────────
 axes[2].plot(w_valid, dolp_valid, 'r-', lw=1.2,
              label='Doubling Adding (32 streams)')
-axes[2].plot(w_valid, dolp_alis,  'c-', lw=1.2, label='SMART-G ALIS (no hist)')
+axes[2].plot(w_valid, dolp_alis, 'c-', lw=1.2, label='SMART-G ALIS (no hist)')
 axes[2].plot(w_valid, dolp_hist, 'b-', lw=1.2,
              label='SMART-G ALIS (hist + JAX)')
 axes[2].set_xlabel('Wavelength (nm)')
