@@ -36,6 +36,7 @@ IC_CELL = (1, 0, 1)
 
 
 def _build_grid():
+    """Build the 4 x 1 x 3 periodic grid the tests share."""
     return Grid3D(
         np.array([0.0, 1.0, 2.0, 3.0, 4.0]),
         np.array([0.0, 1.0]),
@@ -48,6 +49,7 @@ def _build_clouds():
     # 1-based IPRT convention for the cell indices; two distinct
     # effective radii for the water cloud so that its phase matrix
     # set has more than one unique matrix
+    """Build two clouds, one of them with two effective radii."""
     cld1 = Cloud3D(
         "wc",
         w_ref=550.0,
@@ -70,6 +72,7 @@ def _build_clouds():
 def _build_profile(grid3, comp_3d):
     # the IPRT C2 "without atmosphere" configuration: no Rayleigh
     # scattering and no gaseous absorption
+    """Build the 3D profile of the given components."""
     atm_1d = Atm1D("afglt", tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0)
     atm3 = Atm3D(
         atm_1d=atm_1d,
@@ -82,7 +85,7 @@ def _build_profile(grid3, comp_3d):
 
 @pytest.fixture(scope="module")
 def scene():
-    """The grid, the two clouds and the mixed profile"""
+    """Build the grid, the two clouds and the mixed profile."""
     grid3 = _build_grid()
     cld1, cld2 = _build_clouds()
     pro = _build_profile(grid3, [cld1, cld2])
@@ -90,7 +93,7 @@ def scene():
 
 
 def _voxel_props(pro, grid3, cell):
-    """The (ext, ssa, phase matrix) of a voxel of the profile"""
+    """Return the ext, ssa and phase matrix of one voxel."""
     icell = np.ravel_multi_index(
         cell, (grid3.NX, grid3.NY, grid3.NZ)
     )
@@ -103,7 +106,7 @@ def _voxel_props(pro, grid3, cell):
 
 
 def _expected(cld):
-    """The per-cell (ext, ssa, phase matrices) of a component"""
+    """Return the per cell ext, ssa and phase matrices."""
     ext = cld.get_ext(WAV)[0]
     ssa = cld.get_ssa(WAV)[0]
     luts, idx, _ = cld.get_phase_set(WAV, n_theta=NTH)
@@ -115,6 +118,7 @@ def test_two_components_accepted(scene):
     # the profile combines the NZ + 1 background levels and the four
     # cloudy voxels of the union (the ice cloud cell is shared with
     # the water cloud), each with its own optical properties
+    """Check that two components give one optical set per voxel."""
     grid3, _, _, pro = scene
     nbz = grid3.NZ + 1
     assert pro["OD_p"].shape[1] == nbz + 4
@@ -131,6 +135,7 @@ def test_two_components_accepted(scene):
 
 
 def test_extinction_summation(scene):
+    """Check that the extinctions of a voxel add up."""
     grid3, cld1, cld2, pro = scene
     e1, _, _ = _expected(cld1)
     e2, _, _ = _expected(cld2)
@@ -141,6 +146,7 @@ def test_extinction_summation(scene):
 
 
 def test_ssa_weighting(scene):
+    """Check that the albedos are weighted by the extinctions."""
     grid3, cld1, cld2, pro = scene
     e1, s1, _ = _expected(cld1)
     e2, s2, _ = _expected(cld2)
@@ -156,6 +162,7 @@ def test_ssa_weighting(scene):
 
 
 def test_phase_mixing_shared_voxel(scene):
+    """Check the phase matrix a voxel holding two components gets."""
     grid3, cld1, cld2, pro = scene
     e1, s1, p1 = _expected(cld1)
     e2, s2, p2 = _expected(cld2)
@@ -176,6 +183,7 @@ def test_phase_single_component_voxels(scene):
     # are normalized by the total extinction, not by the total
     # scattering; the scale is harmless as the phase matrices are
     # normalized when sampling the scattering angle)
+    """Check that a lone component keeps its own phase matrix."""
     grid3, cld1, _, pro = scene
     _, s1, p1 = _expected(cld1)
     for j, cell in enumerate(WC_CELLS):
@@ -195,6 +203,7 @@ def test_phase_kept_in_iquv_convention(scene):
     # convention of the kernels being done by the run method: F12 of a
     # spherical water cloud is nonzero, whereas its parallel/
     # perpendicular counterpart 0.5 * (F11 - F22) would be zero
+    """Check that the mixed matrix keeps its second element non null."""
     grid3, _, _, pro = scene
     cell = next(c for c in WC_CELLS if c != IC_CELL)
     _, _, pha = _voxel_props(pro, grid3, cell)
@@ -202,6 +211,7 @@ def test_phase_kept_in_iquv_convention(scene):
 
 
 def test_empty_voxels_no_atmosphere(scene):
+    """Check that a grid without atmosphere carries no optical depth."""
     grid3, _, _, pro = scene
     # the empty voxels fall back to the 1D background levels, without
     # particles nor molecular contribution here
@@ -218,6 +228,7 @@ def test_empty_voxels_no_atmosphere(scene):
 
 def test_component_order_invariance(scene):
     # the per-voxel properties do not depend on the component order
+    """Check that the order of the components does not matter."""
     grid3, cld1, cld2, pro = scene
     pro_swap = _build_profile(grid3, [cld2, cld1])
     for cell in sorted(set(WC_CELLS) | {IC_CELL}):
@@ -244,6 +255,7 @@ AER_RH = np.array([50.0, 70.0, 80.0, 80.0])
 
 
 def _build_aerosol(name="desert", **kwargs):
+    """Build a 3D aerosol field of the given mixture."""
     kwargs.setdefault("w_ref", 550.0)
     kwargs.setdefault("ext_ref", AER_EXT)
     kwargs.setdefault("rh", AER_RH)
@@ -253,8 +265,9 @@ def _build_aerosol(name="desert", **kwargs):
 
 @pytest.fixture(scope="module")
 def aer_scene():
-    """The grid, the water cloud, the desert aerosol and the mixed
-    profile (the aerosol shares all four water cloud voxels)
+    """Build the grid, the cloud, the aerosol and their profile.
+
+    The aerosol shares all four voxels of the water cloud.
     """
     grid3 = _build_grid()
     cld1, _ = _build_clouds()
@@ -265,7 +278,7 @@ def aer_scene():
 
 @pytest.fixture(scope="module")
 def desert_ds():
-    """The desert OPAC bulk optical properties, for expected values"""
+    """Return the desert OPAC bulk properties, to expect from."""
     fname = (
         DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures" / "desert_sol.nc"
     )
@@ -273,7 +286,7 @@ def desert_ds():
 
 
 def _dense_aerosol_dataset():
-    """The dense-schema dataset equivalent to the raw-route inputs"""
+    """Build the dense dataset matching the raw route inputs."""
     ext = np.zeros((3, 1, 4), dtype=np.float64)
     rh = np.zeros_like(ext)
     ext[1, 0, :] = AER_EXT
@@ -293,6 +306,7 @@ def _dense_aerosol_dataset():
 
 
 def test_aer3d_raw_route():
+    """Check the aerosol field built from arrays."""
     aer = _build_aerosol()
     assert np.array_equal(
         aer.get_cell_indices(), AER_CELL_INDICES - 1
@@ -303,6 +317,7 @@ def test_aer3d_raw_route():
 
 
 def test_aer3d_dense_dataset_route():
+    """Check that the dense dataset route gives the same field."""
     aer_raw = _build_aerosol()
     aer_ds = Aer3D("desert", ds=_dense_aerosol_dataset())
     assert np.array_equal(
@@ -320,12 +335,14 @@ def test_aer3d_dense_dataset_route():
 
 
 def test_aer3d_dataset_missing_var():
+    """Check that a dataset missing 'rh' is refused."""
     ds = _dense_aerosol_dataset().drop_vars("rh")
     with pytest.raises(ValueError, match="'rh'"):
         Aer3D("desert", ds=ds)
 
 
 def test_aer3d_raw_route_missing_args():
+    """Check that the raw route refuses an incomplete set of arrays."""
     with pytest.raises(ValueError, match="rh, ext_ref and"):
         Aer3D(
             "desert",
@@ -336,12 +353,14 @@ def test_aer3d_raw_route_missing_args():
 
 
 def test_aer3d_unknown_species():
+    """Check that an unknown mixture raises FileNotFoundError."""
     with pytest.raises(FileNotFoundError):
         _build_aerosol("no_such_mixture")
 
 
 def test_read_i3rc_aerosol(tmp_path):
     # synthetic I3RC/IPRT-style ASCII field matching the raw route
+    """Check the reading of an I3RC style 3D aerosol file."""
     lines = ["# synthetic 3D aerosol field\n", "4 1 3 2\n"]
     lines.append("1.0 1.0 0.0 1.0 3.0 4.0\n")
     for (ix, iy, iz), ext, rh in zip(
@@ -368,6 +387,7 @@ def test_aer3d_ext_spectral_scaling(desert_ds):
     # on-grid rh and wavelengths, so the expected values are direct
     # file lookups:
     # ext(wavelength) = ext_ref * k(rh, wavelength) / k(rh, w_ref)
+    """Check that the extinction is scaled to the other wavelengths."""
     wavelength_axis = desert_ds["wav"].values
     iw_ref = int(np.abs(wavelength_axis - 550.0).argmin())
     w_ref = float(wavelength_axis[iw_ref])
@@ -385,6 +405,7 @@ def test_aer3d_ext_spectral_scaling(desert_ds):
 
 
 def test_aer3d_ssa_values(desert_ds):
+    """Check the albedo, constant or read from the mixture."""
     wavelength_axis = desert_ds["wav"].values
     w = float(wavelength_axis[np.abs(wavelength_axis - 550.0).argmin()])
     aer = _build_aerosol(w_ref=w)
@@ -399,6 +420,7 @@ def test_aer3d_ssa_values(desert_ds):
 def test_aer3d_rh_clamping():
     # rh values outside the OPAC humidity axis (0-99 %) are clamped
     # to its extrema, as in the 1D AerOPAC
+    """Check that a humidity outside the table is clamped to it."""
     aer_hi = _build_aerosol(
         ext_ref=np.array([0.1, 0.1]),
         rh=np.array([100.0, 99.0]),
@@ -425,6 +447,7 @@ def test_aer3d_rh_clamping():
 
 
 def test_aer3d_rh_acc_min_max():
+    """Check the humidity accepted between its bounds."""
     aer = _build_aerosol(
         ext_ref=AER_EXT[:2],
         rh=np.array([79.996, 80.004]),
@@ -447,6 +470,7 @@ def test_aer3d_rh_acc_min_max():
 
 def test_aer3d_hydrophobic_species():
     # 'inso' has a single humidity node: rh is ignored (clamped to it)
+    """Check that a hydrophobic mixture ignores the humidity."""
     aer = _build_aerosol(
         "inso",
         ext_ref=AER_EXT[:2],
@@ -465,6 +489,7 @@ def test_aer3d_phase_stk_signature():
     # desert aerosols are non-spherical (6-term phase matrices): F22
     # differs from F11; continental_clean is spherical (4-term): its
     # F22 (row 4) is a copy of F11, populated by the 4 -> 6 expansion
+    """Check that the aerosol phase matrix has its polarised terms."""
     one_cell = dict(
         ext_ref=AER_EXT[:1],
         rh=AER_RH[:1],
@@ -488,6 +513,7 @@ def test_cloud_aerosol_mixing(aer_scene):
     # water cloud and desert aerosol in the same voxels: extinctions
     # summed, ssa extinction-weighted, phase matrices weighted by the
     # scattering coefficients
+    """Check a voxel mixing a cloud and an aerosol."""
     grid3, cld1, aer, pro = aer_scene
     e_c, s_c, p_c = _expected(cld1)
     e_a, s_a, p_a = _expected(aer)
@@ -511,6 +537,7 @@ def test_cloud_aerosol_mixing(aer_scene):
 
 def test_two_aerosols_mixing():
     # desert and continental_clean sharing one voxel
+    """Check a voxel mixing two aerosol mixtures."""
     grid3 = _build_grid()
     desert = Aer3D(
         "desert",
