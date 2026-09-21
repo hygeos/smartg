@@ -114,13 +114,13 @@ def get_histories(
         # LUT.axis().size works at runtime; missing from the stub.
         nl = m.axis('z_atm').size - 1  # type: ignore
     tab_hist_ = np.squeeze(m['histories'].data)
-    tab_hist = tab_hist_[level, :,:]
+    tab_hist = tab_hist_[level, :, :]
     if verbose:
         print(tab_hist.shape)
-    w0      = tab_hist[:, nl+4:-7]
-    #d0      = tab_hist[:,0]
-    good    = w0[:,0]!=0
-    ngood   = np.sum(good)
+    w0 = tab_hist[:, nl + 4:-7]
+    # d0      = tab_hist[:,0]
+    good = w0[:, 0] != 0
+    ngood = np.sum(good)
     max_hist = tab_hist.shape[0]
     if ngood >= max_hist:
         # Use print rather than warnings.warn: Python's default
@@ -129,24 +129,25 @@ def get_histories(
         # session.
         print(
             f"\033[1;33m[ALIS hist WARNING] History buffer saturated: "
-            f"{ngood:,}/{max_hist:,} slots used ({100.*ngood/max_hist:.0f}%). "
+            f"{ngood:,}/{max_hist:,} slots used "
+            f"({100. * ngood / max_hist:.0f}%). "
             "Photons beyond max_hist were NOT recorded — results "
             "will be biased. "
             "→ Increase max_hist or reduce n_photons per loop.\033[0m"
         )
-    n = m['Nphotons_in'].data[0,0]
+    n = m['Nphotons_in'].data[0, 0]
     ###################
-    s       = np.zeros((ngood,4),dtype=np.float32)
-    d       = tab_hist[good,     :nl  ]
-    s[:,:4] = tab_hist[good, nl:nl+4  ]
-    w       = tab_hist[good, nl+4:-7  ]
-    nrrs    = tab_hist[good,      -7  ]
-    nref    = tab_hist[good,      -6  ]
-    nsif    = tab_hist[good,      -5  ]
-    nvrs    = tab_hist[good,      -4  ]
-    nenv    = tab_hist[good,      -3  ]
-    nint    = tab_hist[good,      -2  ]
-    nlscl   = tab_hist[good,      -1  ]
+    s = np.zeros((ngood, 4), dtype=np.float32)
+    d = tab_hist[good, :nl]
+    s[:, :4] = tab_hist[good, nl:nl + 4]
+    w = tab_hist[good, nl + 4:-7]
+    nrrs = tab_hist[good, -7]
+    nref = tab_hist[good, -6]
+    nsif = tab_hist[good, -5]
+    nvrs = tab_hist[good, -4]
+    nenv = tab_hist[good, -3]
+    nint = tab_hist[good, -2]
+    nlscl = tab_hist[good, -1]
     if verbose:
         print(
             'Number of photons in : {}\n'
@@ -156,8 +157,6 @@ def get_histories(
         )
 
     return n, s, d, w, nrrs, nref, nsif, nvrs, nenv, nint, nlscl
-
-
 
 
 def si(
@@ -253,8 +252,9 @@ def si2(
     float
         The square of `si` for the same arguments.
     """
-    return si(wavelength, kabs, alb, sik, wi_lr, dij, ki, wavelength_lr_grid)**2
-
+    return si(
+        wavelength, kabs, alb, sik, wi_lr, dij, ki, wavelength_lr_grid
+    ) ** 2
 
 
 def big_sum(
@@ -272,8 +272,8 @@ def big_sum(
     Parameters
     ----------
     s : callable
-        A function with the signature of `si`:
-        ``s(wavelength, kabs, alb, sik, wi_lr, dij, ki, wavelength_lr_grid)``.
+        A function with the signature of `si`, taking wavelength,
+        kabs, alb, sik, wi_lr, dij, ki and wavelength_lr_grid.
     grad : int, optional
         If given, `s` is first replaced with its value and
         gradient with respect to its `grad`-th positional argument
@@ -325,11 +325,11 @@ def compute_cdist_hist(
     alb_ref: float,
     natm_abs: int,
     *,
-    amf_variance: bool           = True,
-    nscl: int                    = 1,
-    scatter_classes: str         = 'last_scattering_layer',
-    norders: int                 = 1,
-    cdist_wabs: bool             = False,
+    amf_variance: bool = True,
+    nscl: int = 1,
+    scatter_classes: str = 'last_scattering_layer',
+    norders: int = 1,
+    cdist_wabs: bool = False,
     kabs_ref: NDArray[np.floating] | None = None,
 ) -> NDArray[np.float64]:
     """Compute cdist (tabDist) moments from ALIS photon histories.
@@ -396,13 +396,13 @@ def compute_cdist_hist(
         definitions.
     """
     niamf = 3 if amf_variance else 2
-    nle   = int(d_h.shape[0])
+    nle = int(d_h.shape[0])
 
-    wavelength_lr_j  = jnp.array(wavelength_lr_r, dtype=jnp.float32)
+    wavelength_lr_j = jnp.array(wavelength_lr_r, dtype=jnp.float32)
     wavelength_ref_j = jnp.float32(wavelength_ref)
 
     # 1. ALIS scattering-correction weight at wavelength_ref
-    w_h_j    = jnp.array(w_h,  dtype=jnp.float32)
+    w_h_j = jnp.array(w_h, dtype=jnp.float32)
     w_scalar = vmap(
         lambda wi: jnp.interp(wavelength_ref_j, wavelength_lr_j, wi)
     )(w_h_j)
@@ -417,12 +417,12 @@ def compute_cdist_hist(
 
     # 3. Effective photon weight  w_n = S_I · wsca · alb^Ki · Tabs
     safe_alb = jnp.float32(alb_ref if float(alb_ref) > 0. else 1.)
-    nref_j   = jnp.array(nref_h, dtype=jnp.float32)
-    s_h_j    = jnp.array(s_h,    dtype=jnp.float32)
+    nref_j = jnp.array(nref_h, dtype=jnp.float32)
+    s_h_j = jnp.array(s_h, dtype=jnp.float32)
     w_n = s_h_j[:, 0] * w_scalar * jnp.power(safe_alb, nref_j) * t_abs
 
     # 4. Scatter class index (mirrors SCL_MODE in device.cu)
-    nint_np  = np.asarray(nint_h,  dtype=np.int32)
+    nint_np = np.asarray(nint_h, dtype=np.int32)
     nlscl_np = np.asarray(nlscl_h, dtype=np.int32)
 
     if nscl <= 1:
@@ -453,7 +453,7 @@ def compute_cdist_hist(
     # 5. Accumulate moments
     if nscl <= 1:
         w_tot = float(jnp.sum(w_n))
-        dw    = np.array(jnp.sum(d_abs * w_n[:, None], axis=0))
+        dw = np.array(jnp.sum(d_abs * w_n[:, None], axis=0))
         cdist_out = np.empty((natm_abs, niamf), dtype=np.float64)
         cdist_out[:, 0] = w_tot
         cdist_out[:, 1] = dw
@@ -462,11 +462,11 @@ def compute_cdist_hist(
                 jnp.sum(d_abs ** 2 * w_n[:, None], axis=0)
             )
     else:
-        cls_j  = jnp.array(cls_np, dtype=jnp.int32)
+        cls_j = jnp.array(cls_np, dtype=jnp.int32)
         cls_oh = (
             jnp.arange(nscl, dtype=jnp.int32)[None, :] == cls_j[:, None]
         ).astype(jnp.float32)
-        w_cls  = w_n[:, None] * cls_oh
+        w_cls = w_n[:, None] * cls_oh
         w_cls_sum = np.array(jnp.sum(w_cls, axis=0))
         dw_cls = np.array(jnp.einsum('il,ic->lc', d_abs, w_cls))
         cdist_out = np.empty((natm_abs, nscl, niamf), dtype=np.float64)
@@ -524,45 +524,45 @@ def amf_from_cdist(
         'var_between' : ndarray of shape (NL,)
             The between-class variance.
     """
-    thick   = np.asarray(thick, dtype=np.float64)
-    niamf   = cdist.shape[-1]
+    thick = np.asarray(thick, dtype=np.float64)
+    niamf = cdist.shape[-1]
     has_scl = (cdist.ndim == 3)
 
     if has_scl:
-        w_cls         = cdist[:, :, 0]
-        w             = w_cls.sum(axis=1)
+        w_cls = cdist[:, :, 0]
+        w = w_cls.sum(axis=1)
         mean_dist_cls = cdist[:, :, 1] / np.where(w_cls > 0, w_cls, 1.)
-        mean_dist     = cdist[:, :, 1].sum(axis=1) / np.where(w > 0, w, 1.)
-        amf           = mean_dist / thick
-        amf_cls       = mean_dist_cls / thick[:, None]
+        mean_dist = cdist[:, :, 1].sum(axis=1) / np.where(w > 0, w, 1.)
+        amf = mean_dist / thick
+        amf_cls = mean_dist_cls / thick[:, None]
         result = {
             "AMF": amf, "W": w, "mean_dist": mean_dist, "W_cls": w_cls,
             "AMF_cls": amf_cls,
         }
         if niamf >= 3:
             mean_dist2_cls = cdist[:, :, 2] / np.where(w_cls > 0, w_cls, 1.)
-            var_cls        = mean_dist2_cls - mean_dist_cls ** 2
-            frac_cls       = w_cls / np.where(w > 0, w, 1.)[:, None]
-            var_within     = (frac_cls * var_cls).sum(axis=1)
-            var_between    = (
+            var_cls = mean_dist2_cls - mean_dist_cls ** 2
+            frac_cls = w_cls / np.where(w > 0, w, 1.)[:, None]
+            var_within = (frac_cls * var_cls).sum(axis=1)
+            var_between = (
                 frac_cls * (mean_dist_cls - mean_dist[:, None]) ** 2
             ).sum(axis=1)
-            std_amf        = (
+            std_amf = (
                 np.sqrt(np.maximum(var_within + var_between, 0.)) / thick
             )
-            std_amf_cls    = np.sqrt(np.maximum(var_cls, 0.)) / thick[:, None]
+            std_amf_cls = np.sqrt(np.maximum(var_cls, 0.)) / thick[:, None]
             result.update(std_AMF=std_amf, std_AMF_cls=std_amf_cls,
                           var_within=var_within, var_between=var_between)
         else:
             result.update(std_AMF=np.zeros_like(amf),
                           std_AMF_cls=np.zeros_like(amf_cls))
     else:
-        w         = cdist[:, 0]
+        w = cdist[:, 0]
         mean_dist = cdist[:, 1] / np.where(w > 0, w, 1.)
-        amf       = mean_dist / thick
+        amf = mean_dist / thick
         result = {"AMF": amf, "W": w, "mean_dist": mean_dist}
         if niamf >= 3:
-            mean_dist2    = cdist[:, 2] / np.where(w > 0, w, 1.)
+            mean_dist2 = cdist[:, 2] / np.where(w > 0, w, 1.)
             result['std_AMF'] = (
                 np.sqrt(np.maximum(mean_dist2 - mean_dist**2, 0.)) / thick
             )
@@ -665,9 +665,9 @@ def compute_amf(
 
     # Auto-fill optional parameters from the output
     if wavelength_lr_r is None:
-        wavelength_lr_r  = m['wavelength'].values
+        wavelength_lr_r = m['wavelength'].values
     if wavelength_ref is None:
-        wavelength_ref   = float(np.median(wavelength_lr_r))
+        wavelength_ref = float(np.median(wavelength_lr_r))
     if natm_abs is None:
         natm_abs = int(m['z_atm'].size) - 1
 
@@ -692,25 +692,25 @@ def compute_amf(
         cdist = compute_cdist_hist(
             d, s, w, nref, nint, nlscl,
             wavelength_lr_r, wavelength_ref, alb_ref, natm_abs,
-            amf_variance    = amf_variance,
-            nscl            = nscl,
-            scatter_classes = scatter_classes,
-            norders         = norders,
-            cdist_wabs      = cdist_wabs,
-            kabs_ref        = kabs_ref,
+            amf_variance=amf_variance,
+            nscl=nscl,
+            scatter_classes=scatter_classes,
+            norders=norders,
+            cdist_wabs=cdist_wabs,
+            kabs_ref=kabs_ref,
         )
     else:
         # hist=False path: read GPU tabDist directly from the output
         try:
-            da    = m['cdist_up (TOA)']
+            da = m['cdist_up (TOA)']
         except Exception as err:
             raise ValueError(
                 "compute_amf: m contains neither 'histories' (hist=True) "
                 "nor 'cdist_up (TOA)' (hist=False)."
             ) from err
         names = list(da.dims)
-        arr   = da.data
-        idx   = [slice(None)] * arr.ndim
+        arr = da.data
+        idx = [slice(None)] * arr.ndim
         for i, nm in enumerate(names):
             if nm in ('Azimuth angles', 'Zenith angles'):
                 idx[i] = 0

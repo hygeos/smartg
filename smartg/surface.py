@@ -19,7 +19,7 @@ Environment
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import get_args
+from typing import TypeAlias, get_args
 from warnings import warn
 
 from smartg.albedo import AlbedoCst, AlbedoLike
@@ -417,3 +417,9 @@ class Environment:
         """Return the identifier of the environment effect."""
         return 'ENV={ENV_SIZE}-X={X0:.1f}-Y={Y0:.1f}'.format(
             **self.dict)
+
+
+#: Any surface class ``Smartg.run`` accepts.
+SurfaceLike: TypeAlias = (
+    FlatSurface | RoughSurface | LambSurface | RTLSSurface | RPVSurface
+)

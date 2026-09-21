@@ -76,14 +76,7 @@ from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
 from smartg.phase import theta_grid as _make_theta_grid
 from smartg.progress import progress as make_progress
 from smartg.sensor import Sensor
-from smartg.surface import (
-    Environment,
-    FlatSurface,
-    LambSurface,
-    RoughSurface,
-    RPVSurface,
-    RTLSSurface,
-)
+from smartg.surface import Environment, SurfaceLike
 from smartg.typing import BandLike, NumericArrayLike
 from smartg.water import Water
 from smartg.xarray import drop_axes
@@ -478,12 +471,16 @@ class Alis:
 
     def __str__(self) -> str:
         """Return a readable description of the Alis."""
-        return f'ALIS=-n_low{self.n_low}-hist{int(self.hist)}-n_jac{self.n_jac}'
+        return (
+            f'ALIS=-n_low{self.n_low}-hist{int(self.hist)}'
+            f'-n_jac{self.n_jac}'
+        )
 
     def __repr__(self) -> str:
         """Return the representation of the Alis."""
         return (
-            f'Alis(n_low={self.n_low!r}, hist={self.hist!r}, max_hist={self.max_hist!r}, n_jac={self.n_jac!r}, '
+            f'Alis(n_low={self.n_low!r}, hist={self.hist!r}, '
+            f'max_hist={self.max_hist!r}, n_jac={self.n_jac!r}, '
             f'n_jac_abs={self.n_jac_abs!r})'
         )
 
@@ -609,7 +606,8 @@ class LocalEstimate:
         if zip and self.phi.shape[0] != self.th.shape[0]:
             raise ValueError(
                 'With zip, there must be as many azimuth angles as '
-                f'zenith angles, got {self.phi.shape[0]} and {self.th.shape[0]}.'
+                f'zenith angles, got {self.phi.shape[0]} and '
+                f'{self.th.shape[0]}.'
             )
 
         self.count_level: NDArray[np.int32] | None = None
@@ -620,17 +618,22 @@ class LocalEstimate:
             if self.count_level.shape[0] != self.th.shape[0]:
                 raise ValueError(
                     'count_level must hold one value per zenith '
-                    f'angle, got {self.count_level.shape[0]} for {self.th.shape[0]} angles.'
+                    f'angle, got {self.count_level.shape[0]} for '
+                    f'{self.th.shape[0]} angles.'
                 )
 
     def __str__(self) -> str:
         """Return a readable description of the LocalEstimate."""
-        return f'LE=-n_th{self.th.shape[0]}-n_phi{self.phi.shape[0]}-zip{int(self.zip)}'
+        return (
+            f'LE=-n_th{self.th.shape[0]}-n_phi{self.phi.shape[0]}'
+            f'-zip{int(self.zip)}'
+        )
 
     def __repr__(self) -> str:
         """Return the representation of the LocalEstimate."""
         return (
-            f'LocalEstimate(th={self.th!r}, phi={self.phi!r}, zip={self.zip!r}, '
+            f'LocalEstimate(th={self.th!r}, phi={self.phi!r}, '
+            f'zip={self.zip!r}, '
             f'count_level={self.count_level!r})'
         )
 
@@ -1037,7 +1040,7 @@ class Smartg:
         self,
         wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
         atmosphere: Atmosphere | xr.Dataset | None = None,
-        surface: FlatSurface | RoughSurface | LambSurface | RTLSSurface | RPVSurface | None = None,
+        surface: SurfaceLike | None = None,
         water: Water | xr.Dataset | None = None,
         environment: Environment | None = None,
         alis_options: Alis | dict | None = None,
@@ -1096,7 +1099,7 @@ class Smartg:
             KdisIband objects.
         atmosphere : None | Atm1D | MLUT, optional
             The atmosphere profile. If None, there is no atmosphere.
-        surface : None | RoughSurface | FlatSurface | LambSurface, optional
+        surface : None | SurfaceLike, optional
             The surface profile, see `smartg.surface`. If None, there is
             no surface.
         water : None | Water1D | MLUT, optional
@@ -1196,7 +1199,8 @@ class Smartg:
               a profile computed with `n_theta='native'`, this keeps
               the union of the angles the components' tables carry
             - 'uniform', 'chebyshev', 'lobatto' or 'peak' -> generate
-              `n_icdf` angles of that kind, see `smartg.phase.theta_grid`
+              `n_icdf` angles of that kind, see
+              `smartg.phase.theta_grid`
             - an array of angles in degrees, from 0 to 180
 
             Clustering the angles towards 0 and 180 degrees resolves
@@ -1325,8 +1329,9 @@ class Smartg:
             If is_atm=0 provide more robust test with 3d objects in case
             the atmosphere we remove the atmosphere.
         cus_l : None | CusForward | CusBackward, optional
-            Use the RF, FF (CusForward) or B, BR (CusBackward) launching
-            modes. The compilation option `obj3d` must be set to True.
+            Use the RF, FF (CusForward) or B, BR (CusBackward)
+            launching modes. The compilation option `obj3d` must be
+            set to True.
             A CusBackward can also carry the sun direction as a vector
             in its v_sun parameter (see th_deg) and the angular size
             of the sun in its sun_fov parameter (see sun_disc), which
@@ -2565,8 +2570,8 @@ def _finalize(
     Parameters
     ----------
     tab_photons_tot : np.ndarray
-        Accumulated photon weights of shape (level, stk, sensor, wavelength,
-        theta, phi).
+        Accumulated photon weights of shape (level, stk, sensor,
+        wavelength, theta, phi).
     tab_photons_tot_no_aer : np.ndarray
         Same as tab_photons_tot but without the aerosol scattering
         contributions (see the no_aer_output option of run).
@@ -3581,7 +3586,6 @@ def _calc_phase_host(
             phase_host['a_P44'][idx, :] = f6(ang)  # V P44=P33
             # phase_host['a_P33'][idx, :] = f6(ang)  # V P44=P33
 
-
     return phase_host, _cdf_of_table(phase_host, ang)
 
 
@@ -3665,7 +3669,7 @@ def _calc_phase_gpu(
 
 
 def _init_const(
-    surface: FlatSurface | RoughSurface | LambSurface | RTLSSurface | RPVSurface | None,
+    surface: SurfaceLike | None,
     environment: Environment | None,
     n_atm: int,
     n_atm_abs: int | np.integer,

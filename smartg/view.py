@@ -658,7 +658,10 @@ def transect_view(
         ind = [0]
 
     if isinstance(ds_sg, MLUT):
-        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
+        warn_message = (
+            "\nUsing an MLUT for ds_sg is deprecated, "
+            "use an xarray.Dataset instead."
+        )
         warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
@@ -686,11 +689,15 @@ def transect_view(
     # Handle deprecated subdict parameter
     if subdict is not None and interp_dict is not None:
         raise ValueError(
-            "Cannot specify both 'subdict' and 'interp_dict'. Use 'interp_dict' instead."
+            "Cannot specify both 'subdict' and 'interp_dict'. "
+            "Use 'interp_dict' instead."
         )
 
     if subdict is not None:
-        warn_message = "\nThe 'subdict' parameter is deprecated. Use 'interp_dict' instead."
+        warn_message = (
+            "\nThe 'subdict' parameter is deprecated. "
+            "Use 'interp_dict' instead."
+        )
         warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         # Convert Idx_base objects to values before converting
         # to interp_dict
@@ -1113,7 +1120,8 @@ def spectrum_view(
     # Handle deprecated subdict parameter
     if subdict is not None and interp_dict is not None:
         raise ValueError(
-            "Cannot specify both 'subdict' and 'interp_dict'. Use 'interp_dict' instead."
+            "Cannot specify both 'subdict' and 'interp_dict'. "
+            "Use 'interp_dict' instead."
         )
 
     if subdict is not None:
@@ -1707,13 +1715,17 @@ def profile_view(
                 (d_tau_abs_p / d_z), z, "r--", label=r"$\sigma_{abs}^{p}$"
             )
         if np.max(d_tau_sca_p) > 0.0:
-            ax.semilogx((d_tau_sca_p / d_z), z, "r", label=r"$\sigma_{sca}^{p}$")
+            ax.semilogx(
+                (d_tau_sca_p / d_z), z, "r", label=r"$\sigma_{sca}^{p}$"
+            )
         if np.max(d_tau_abs_w) > 0.0:
             ax.semilogx(
                 (d_tau_abs_w / d_z), z, "b--", label=r"$\sigma_{abs}^{w}$"
             )
         if np.max(d_tau_sca_w) > 0.0:
-            ax.semilogx((d_tau_sca_w / d_z), z, "b", label=r"$\sigma_{sca}^{w}$")
+            ax.semilogx(
+                (d_tau_sca_w / d_z), z, "b", label=r"$\sigma_{sca}^{w}$"
+            )
         if np.max(d_tau_abs_y) > 0.0:
             ax.semilogx(
                 (d_tau_abs_y / d_z), z, "y--", label=r"$\sigma_{abs}^{y}$"
@@ -1782,7 +1794,10 @@ def input_view(
         None, uses all unique indices.
     """
     if isinstance(ds_sg, MLUT):
-        warn_message = "\nUsing an MLUT for ds_sg is deprecated, use an xarray.Dataset instead."
+        warn_message = (
+            "\nUsing an MLUT for ds_sg is deprecated, "
+            "use an xarray.Dataset instead."
+        )
         warnings.warn(warn_message, DeprecationWarning, stacklevel=2)
         ds_sg = ds_sg.to_xarray()
 
@@ -2353,7 +2368,7 @@ def plot_iquv_comparison(
         Save the figure at this path, the extension giving the
         format, e.g. save_fig='myFigName.png'.
     """
-    fig, ax = plt.subplots(2,4, figsize=(13,8))
+    fig, ax = plt.subplots(2, 4, figsize=(13, 8))
     if title:
         fig.suptitle(title, fontsize=15)
 

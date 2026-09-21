@@ -912,7 +912,9 @@ class AerOPAC:
                         )[0][0],
                     ]
                 )
-                ilam_tabulated = np.arange(len(wavelength_tabulated), dtype=int)
+                ilam_tabulated = np.arange(
+                    len(wavelength_tabulated), dtype=int
+                )
                 ilam_opti = np.concatenate(
                     np.argwhere(
                         (ilam_tabulated >= range_ind[0])
@@ -1336,7 +1338,8 @@ class AerUser(AerOPAC):
     Parameters
     ----------
     aod : 2-D ndarray
-        aerosol optical depth values with shape (len(hum), len(wavelength))
+        aerosol optical depth values with shape
+        (len(hum), len(wavelength))
     ssa : 2-D ndarray
         Single scattering albedo values with shape (len(hum),
         len(wavelength))
@@ -2645,8 +2648,9 @@ class Atm1D(Atmosphere):
                         )
                     pha_tr = np.zeros(pha_.shape, dtype=np.float64)
                     nphac = pha_.shape[1]
-                    # initialize truncation-related locals to avoid static
-                    # analyzer warnings about possibly unbound variables
+                    # initialize truncation-related locals to avoid
+                    # static analyzer warnings about possibly unbound
+                    # variables
                     th_tol = None
                     l_opti = False
                     th_f = None
@@ -2659,12 +2663,13 @@ class Atm1D(Atmosphere):
                         raise ValueError("truncation method not recognized")
                     method = truncation.integral_method
                     f_pha = np.zeros(nphase, dtype=np.float64)
+                    pha_f64 = np.asarray(pha_, dtype=np.float64)
                     for iph in range(nphase):
                         if isinstance(truncation, DMTrunc):
                             ds_pha = cast(
                                 xr.Dataset,
                                 delta_m_phase_approx(
-                                    np.asarray(pha_[iph, 0, :], dtype=np.float64),
+                                    pha_f64[iph, 0, :],
                                     theta,
                                     truncation.m_max,
                                     method=method,
@@ -2675,7 +2680,7 @@ class Atm1D(Atmosphere):
                             ds_pha = cast(
                                 xr.Dataset,
                                 gt_phase_approx(
-                                    np.asarray(pha_[iph, 0, :], dtype=np.float64),
+                                    pha_f64[iph, 0, :],
                                     theta,
                                     truncation.trunc_frac,
                                     method=method,
@@ -3032,8 +3037,8 @@ class Atm1D(Atmosphere):
                 - **1D Mode (opt3d=False)**: Returns cumulated optical
           thicknesses with axes
           [wavelength, z_atm]
-                - **3D Mode (opt3d=True)**: Returns extinction/absorption
-          coefficients with axes
+                - **3D Mode (opt3d=True)**: Returns extinction and
+          absorption coefficients with axes
           [wavelength, iopt] for use in 3D radiative transfer
           calculations. The dataset carries no ``z_atm`` axis: the
           ``iopt`` axis is not a vertical dependence but the set of
@@ -5057,12 +5062,14 @@ class ProfileBase:
             )
         except ValueError:
             print(
-                f"Error interpolating ({z[0]}, {z[-1]}) -> ({znew[0]}, {znew[-1]})"
+                f"Error interpolating ({z[0]}, {z[-1]}) "
+                f"-> ({znew[0]}, {znew[-1]})"
             )
             print(f"atm_filename = {self.fname}")
             raise
         # k=1: linear interpolation; BSpline extrapolates linearly
-        # beyond the data range by default (replaces fill_value="extrapolate")
+        # beyond the data range by default (replaces
+        # fill_value="extrapolate")
         _tmp_t = make_interp_spline(z[_s], self.t[_s], k=1)
         prof.t = _tmp_t(znew)
 
@@ -5264,7 +5271,11 @@ def f_o2(wavelength: NumericArrayLike) -> float | NDArray:
     wavelength = np.asarray(wavelength, dtype=np.float64)
     if wavelength.ndim == 0:
         wavelength = float(wavelength)
-    return 1.096 + 1.385 * 1e-3 * wavelength ** (-2) + 1.448 * 1e-4 * wavelength ** (-4)
+    return (
+        1.096
+        + 1.385 * 1e-3 * wavelength ** (-2)
+        + 1.448 * 1e-4 * wavelength ** (-4)
+    )
 
 
 def f_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
@@ -5278,7 +5289,8 @@ def f_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     wavelength : array_like
         Wavelength values in micrometers (μm). Shape: (N,)
     co2 : array_like
-        CO2 concentration in parts per million (ppm). Shape: (M,) or scalar.
+        CO2 concentration in parts per million (ppm), of shape (M,)
+        or scalar.
 
     Returns
     -------
@@ -5356,7 +5368,8 @@ def n_air_co2(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
     wavelength : array_like
         Wavelength values in micrometers (μm). Shape: (N,)
     co2 : array_like
-        CO2 concentration in parts per million (ppm). Shape: (M,) or scalar.
+        CO2 concentration in parts per million (ppm), of shape (M,)
+        or scalar.
 
     Returns
     -------
@@ -5406,7 +5419,9 @@ def m_dry_air(co2: NumericArrayLike) -> float | NDArray:
     return 15.0556 * co2 * 1e-6 + 28.9595
 
 
-def rayleigh_crs(wavelength: NumericArrayLike, co2: NumericArrayLike) -> NDArray:
+def rayleigh_crs(
+    wavelength: NumericArrayLike, co2: NumericArrayLike
+) -> NDArray:
     """Compute the Rayleigh cross section.
 
     Parameters
@@ -5459,7 +5474,8 @@ def gravity_z0(lat: NumericArrayLike) -> float | NDArray:
     Parameters
     ----------
     lat : array_like
-        Latitude values in degrees. Positive for North, negative for South.
+        Latitude values in degrees, positive for North and negative
+        for South.
 
     Returns
     -------
@@ -5603,7 +5619,10 @@ def rayleigh_od(
     else:
         raise ValueError(f"Invalid pressure type ({pressure})")
 
-    return rayleigh_crs(wavelength, co2) * p_surf * avogadro / m_dry_air(co2) / g_z
+    return (
+        rayleigh_crs(wavelength, co2)
+        * p_surf * avogadro / m_dry_air(co2) / g_z
+    )
 
 
 def refractivity(
@@ -5751,7 +5770,9 @@ def blackbody_radiance(
     try:
         np.broadcast_shapes(wavelength.shape, temperature.shape)
     except ValueError as err:
-        raise ValueError("wavelength and temperature must be broadcastable") from err
+        raise ValueError(
+            "wavelength and temperature must be broadcastable"
+        ) from err
 
     c1 = 2.0 * Planck * speed_of_light**2
     c2 = Planck * speed_of_light / Boltzmann
@@ -5817,7 +5838,8 @@ def check_date(dates: Iterable[str] | NDArray[np.str_], year: int) -> None:
     -------
     None
     """
-    # Normalize input to a list of strings so we accept numpy/pandas arrays
+    # Normalize input to a list of strings so we accept numpy/pandas
+    # arrays
     dates_list = [str(d) for d in dates]
 
     if len(dates_list) == 0:
