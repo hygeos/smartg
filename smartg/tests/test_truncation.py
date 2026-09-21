@@ -152,12 +152,12 @@ def test_truncate_phase_any_normalization(
 
 
 def test_as_truncation() -> None:
-    """None and False disable the truncation; True names no method."""
+    """None is no truncation; a boolean names no truncation method."""
     assert as_truncation(None) is None
-    assert as_truncation(False) is None
     assert as_truncation(GT) is GT
-    with pytest.raises(TypeError, match="DMTrunc or a GTTrunc"):
-        as_truncation(True)  # type: ignore
+    for value in (False, True):
+        with pytest.raises(TypeError, match="DMTrunc or a GTTrunc"):
+            as_truncation(value)  # type: ignore
     with pytest.raises(TypeError, match="DMTrunc or a GTTrunc"):
         as_truncation("GT")  # type: ignore
 

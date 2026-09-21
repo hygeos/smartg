@@ -64,8 +64,8 @@ GTTrunc
 Key Functions
 -------------
 as_truncation
-    Read the `truncation` parameter of a component, None and False
-    disabling the truncation.
+    Check the `truncation` parameter of a component, None meaning no
+    truncation.
 truncate_phase
     Truncate one phase matrix, and return its truncated fraction.
 truncate_phase_set
@@ -75,7 +75,7 @@ truncated_ext_ssa
     truncation.
 """
 
-from typing import Literal, cast
+from typing import cast
 
 import numpy as np
 import xarray as xr
@@ -230,38 +230,35 @@ class GTTrunc:
         self.pha_scale_method = pha_scale_method
 
 
-#: What the `truncation` parameter of a component accepts: a truncation
-#: configuration, or None or False to disable the truncation.
-TruncationLike = DMTrunc | GTTrunc | Literal[False] | None
+def as_truncation(
+    truncation: DMTrunc | GTTrunc | None,
+) -> DMTrunc | GTTrunc | None:
+    """Return the truncation a component carries, once checked.
 
-
-def as_truncation(truncation: TruncationLike) -> DMTrunc | GTTrunc | None:
-    """Return the truncation a component carries.
+    A truncation is only applied when asked for: the `truncation`
+    parameter of every component defaults to None, no truncation.
 
     Parameters
     ----------
-    truncation : DMTrunc or GTTrunc or False or None
-        The `truncation` parameter of a component. None and False both
-        disable the truncation.
+    truncation : DMTrunc or GTTrunc or None
+        The `truncation` parameter of a component.
 
     Returns
     -------
     DMTrunc or GTTrunc or None
-        The truncation configuration, or None when disabled.
+        `truncation` itself.
 
     Raises
     ------
     TypeError
-        If `truncation` is anything else, True included, which names
-        no truncation method.
+        If `truncation` is neither a DMTrunc, a GTTrunc nor None, e.g.
+        a boolean, which names no truncation method.
     """
-    if truncation is None or truncation is False:
-        return None
-    if isinstance(truncation, (DMTrunc, GTTrunc)):
+    if truncation is None or isinstance(truncation, (DMTrunc, GTTrunc)):
         return truncation
     raise TypeError(
-        "truncation must be a DMTrunc or a GTTrunc, or None or False to "
-        f"disable the truncation, not {truncation!r}."
+        "truncation must be a DMTrunc or a GTTrunc, or None for no "
+        f"truncation, not {truncation!r}."
     )
 
 

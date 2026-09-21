@@ -365,10 +365,13 @@ and will be completed and corrected before the final `v2.0.0` release.
   - The `fournier_forand` function has been removed from `smartg.phase`
     -> use `pytrunc.phase.fournier_forand` (pytrunc >= 2)
   - The `theta_trunc` parameter of `Hydrosol`, `HydrosolPR` and `HydrosolZhai`
-    has been replaced by `truncation` (`DM_trunc | GT_trunc | None`, default
-    `GT_trunc(trunc_frac=0.3, theta_tr=5.0)`): the water phase functions are
-    now truncated with pytrunc like the atmospheric ones, and the scattering
-    coefficient is scaled by `1 - f`. `None` disables the truncation.
+    has been replaced by `truncation` (`DMTrunc | GTTrunc | None`): the water
+    phase functions are truncated with pytrunc like the atmospheric ones, and
+    the scattering coefficient is scaled by `1 - f`. The truncation is only
+    applied when asked for: the default is `None`, no truncation, where
+    v1.2.0 always cut the forward peak below 5 degrees. Pass
+    `truncation=DEFAULT_WATER_TRUNC` (`GTTrunc(trunc_frac=0.3, theta_tr=5.0)`,
+    the recommended one) to truncate the derived phase functions
   - The phase matrix truncation is carried by the components: the
     `truncation` argument of `Atm1D.calc` and `Atm3D.calc` has been
     removed, and `AerOPAC`, `Cloud`, `AerUser`, `Cloud3D` and `Aer3D` take
@@ -397,15 +400,15 @@ and will be completed and corrected before the final `v2.0.0` release.
       as it already did for the hydrosols, instead of reaching the profile
       unnoticed: GT on a phase function without a marked forward peak (a
       continental aerosol), or Delta-M with too few streams
-    - `truncation=False` disables the truncation as `None` does, on the
-      atmospheric components and on the hydrosols; anything else than a
-      `DMTrunc`, a `GTTrunc`, `False` or `None` raises a `TypeError` when
-      the component is built
+    - no component is truncated unless asked for: `truncation=None`, the
+      default of the atmospheric components as of the hydrosols, is no
+      truncation, and anything else than a `DMTrunc`, a `GTTrunc` or `None`
+      (a boolean included) raises a `TypeError` when the component is built
   - A `Hydrosol` given its own phase matrices (`phase=`) now truncates them
-    too, with the default `DEFAULT_WATER_TRUNC` as the derived ones, and
-    scales its scattering coefficient by `1 - f`: pass `truncation=False`
-    for a phase function without a marked forward peak, which the
-    truncation would leave negative (and which is then refused)
+    too when given a `truncation`, as the derived ones, and scales its
+    scattering coefficient by `1 - f`. A phase function without a marked
+    forward peak cannot be truncated: the truncation would leave it
+    negative, and is refused
   - The `show_trunc` option of `smartg.view.phase_view` has been removed: it
     read a `phase_atm_tr` / `phase_oc_tr` variable that no profile carries
     any more, the profile holding only the (truncated) matrices the

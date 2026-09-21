@@ -107,7 +107,6 @@ from smartg.phase import (
 from smartg.truncation import (
     DMTrunc,
     GTTrunc,
-    TruncationLike,
     as_truncation,
     truncate_phase_set,
     truncated_ext_ssa,
@@ -281,7 +280,7 @@ class AerOPAC:
     rh_mix/free/stra : None or float, optional
         Force relative humidity of mixture/free tropo/strato. Default
         None.
-    truncation : DMTrunc or GTTrunc or False or None, optional
+    truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the phase matrices of this
         component alone (see `smartg.truncation`), for forward-peaked
         phase functions only (large particles). It takes effect when
@@ -289,8 +288,8 @@ class AerOPAC:
         phase matrices are truncated before being mixed with those of
         the other components of the layer, and its own scattering
         coefficient is scaled by `1 - f`, `f` being the truncated
-        fraction of the scattered energy. None, the default, or False
-        disables the truncation.
+        fraction of the scattered energy. None, the default, disables
+        the truncation.
 
     Notes
     -----
@@ -338,7 +337,7 @@ class AerOPAC:
         rh_mix: float | None = None,
         rh_free: float | None = None,
         rh_stra: float | None = None,
-        truncation: TruncationLike = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
 
         self.truncation = as_truncation(truncation)
@@ -1223,10 +1222,10 @@ class Cloud(AerOPAC):
           spherical particles)
         - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both
           spherical and non-spherical particles)
-    truncation : DMTrunc or GTTrunc or False or None, optional
+    truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the phase matrices of this
-        cloud alone, see `AerOPAC`. None, the default, or False
-        disables the truncation.
+        cloud alone, see `AerOPAC`. None, the default, disables the
+        truncation.
 
     Examples
     --------
@@ -1253,7 +1252,7 @@ class Cloud(AerOPAC):
         | LUT
         | None = None,
         phase: xr.DataArray | LUT | None = None,
-        truncation: TruncationLike = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
         self.truncation = as_truncation(truncation)
         if zmax - zmin <= 1e-6:
@@ -1396,10 +1395,10 @@ class AerUser(AerOPAC):
         Force max altitude of the mixture
     z_mix : float, optional
         Force scale height (see notes) of the mixture
-    truncation : DMTrunc or GTTrunc or False or None, optional
+    truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the phase matrices of this
-        aerosol alone, see `AerOPAC`. None, the default, or False
-        disables the truncation.
+        aerosol alone, see `AerOPAC`. None, the default, disables the
+        truncation.
 
     Notes
     -----
@@ -1422,7 +1421,7 @@ class AerUser(AerOPAC):
         h_mix_min: float = 0.0,
         h_mix_max: float = 2.0,
         z_mix: float = 2,
-        truncation: TruncationLike = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
 
         self.truncation = as_truncation(truncation)
@@ -1612,7 +1611,7 @@ class _Comp3DFile(Comp3D):
         param_max: float | None = None,
         phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
-        truncation: TruncationLike = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
 
         self.truncation = as_truncation(truncation)
@@ -2022,15 +2021,15 @@ class Cloud3D(_Comp3DFile):
         Force the cloud single scattering albedo to this constant
         value. If None, the single scattering albedo is interpolated
         from the bulk optical properties file.
-    truncation : DMTrunc or GTTrunc or False or None, optional
+    truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the phase matrices of this
         cloud alone (see `smartg.truncation`). It takes effect when
         :class:`Atm3D` merges the components: the cloud phase matrices
         are truncated before being mixed with those of the other
         components of each cell, and the cloud scattering coefficient
         of each cell is scaled by `1 - f`, `f` being the truncated
-        fraction of the scattered energy. None, the default, or False
-        disables the truncation.
+        fraction of the scattered energy. None, the default, disables
+        the truncation.
     """
 
     _param_name = "reff"
@@ -2052,7 +2051,7 @@ class Cloud3D(_Comp3DFile):
         reff_max: float | None = None,
         phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
-        truncation: TruncationLike = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
         super().__init__(
             fname,
@@ -2154,10 +2153,10 @@ class Aer3D(_Comp3DFile):
         Force the aerosol single scattering albedo to this constant
         value. If None, the single scattering albedo is interpolated
         from the bulk optical properties file.
-    truncation : DMTrunc or GTTrunc or False or None, optional
+    truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the phase matrices of this
-        aerosol alone, see :class:`Cloud3D`. None, the default, or
-        False disables the truncation.
+        aerosol alone, see :class:`Cloud3D`. None, the default,
+        disables the truncation.
     """
 
     _param_name = "rh"
@@ -2179,7 +2178,7 @@ class Aer3D(_Comp3DFile):
         rh_max: float | None = None,
         phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
-        truncation: TruncationLike = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
         super().__init__(
             fname,

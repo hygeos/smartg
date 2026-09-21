@@ -667,7 +667,7 @@ import matplotlib.pyplot as plt
 
 from smartg.albedo import AlbedoMap
 from smartg.surface import Environment, RoughSurface
-from smartg.water import HydrosolPR, Water1D
+from smartg.water import DEFAULT_WATER_TRUNC, HydrosolPR, Water1D
 
 # %%
 # ── Scene parameters ────────────────────────────────────────────────
@@ -724,7 +724,9 @@ print(f"Ocean depths to simulate [m]: {depths}")
 res_bath = {}   # key = depth [m]
 
 for d in depths:
-    water_d = Water1D(grid=[0., -d], comp=[HydrosolPR(chl=0.1)],
+    water_d = Water1D(grid=[0., -d],
+                      comp=[HydrosolPR(chl=0.1,
+                                       truncation=DEFAULT_WATER_TRUNC)],
                       alb=AlbedoCst(0.20))
     m_d = Smartg().run(
         wavelength=wavelength_bath,

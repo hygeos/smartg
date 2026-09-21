@@ -21,7 +21,7 @@ from smartg.phase import integ_phase, read_phase
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import RoughSurface
 from smartg.truncation import DMTrunc, GTTrunc
-from smartg.water import Hydrosol, Water1D, WaterRw
+from smartg.water import DEFAULT_WATER_TRUNC, Hydrosol, Water1D, WaterRw
 
 SmartgRun = tuple[
     NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]
@@ -227,15 +227,11 @@ def _build_water_iop() -> Water1D:
 
     phase = read_phase(pure_water_path, kind="oc")
 
-    # the analytic phase function has no forward peak to truncate: the
-    # default truncation of the hydrosols would leave it negative
     return Water1D(
         grid=WATER_GRID,
         aw=aw,
         bw=bw,
-        comp=[
-            Hydrosol(phase=phase, ap=aph, acdom=ag, bp=bph, truncation=False)
-        ],
+        comp=[Hydrosol(phase=phase, ap=aph, acdom=ag, bp=bph)],
     )
 
 
@@ -622,11 +618,11 @@ def test_hydrosol_calc_phase_truncation() -> None:
         assert (p[:, :, [1, 2, 3, 5], :] == 0.0).all()
         return coef.values
 
-    # default GT truncation: coef_trunc = 1 - trunc_frac
-    np.testing.assert_allclose(calc(), 0.7)
+    # no truncation by default
+    np.testing.assert_array_equal(calc(), 1.0)
 
-    # no truncation
-    np.testing.assert_array_equal(calc(truncation=None), 1.0)
+    # the recommended GT truncation: coef_trunc = 1 - trunc_frac
+    np.testing.assert_allclose(calc(truncation=DEFAULT_WATER_TRUNC), 0.7)
 
     # GT truncation with a searched truncation angle
     coef = calc(

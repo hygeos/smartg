@@ -71,7 +71,7 @@ from smartg.sensor import Sensor
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import Environment, LambSurface, RoughSurface, RTLSSurface
 from smartg.view import input_view, smartg_view, spectrum_view, transect_view
-from smartg.water import Hydrosol, HydrosolPR, Water1D
+from smartg.water import DEFAULT_WATER_TRUNC, Hydrosol, HydrosolPR, Water1D
 from smartg.xarray import drop_axes
 
 warnings.filterwarnings("ignore")
@@ -172,8 +172,10 @@ print(m)
 atmosphere = Atm1D('afglms', tco3=0., no2=False)
 surface = RoughSurface(wind=5., nh2o=1.34)
 # Case I water Inherent Optical Properties depending on Chlorophyll
-# concentration only
-water = Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)])
+# concentration only; the forward peak of its phase function is
+# truncated as recommended (the hydrosols truncate nothing by default)
+water = Water1D(grid=[0., -5.],
+                comp=[HydrosolPR(chl=0.5, truncation=DEFAULT_WATER_TRUNC)])
 # compute outputs at the surface and bottom of ocean also,
 # view results for upwelling and downwelling radiances
 wavelength = 500.
@@ -191,7 +193,8 @@ for log_i, field in zip(log_is, fields):
 # surface + ocean
 atmosphere = None
 surface = RoughSurface(wind=5., nh2o=1.34)
-water = Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)])
+water = Water1D(grid=[0., -5.],
+                comp=[HydrosolPR(chl=0.5, truncation=DEFAULT_WATER_TRUNC)])
 # compute outputs at the surface also, view results for downwelling
 # at bottom of ocean
 fig = smartg_view(Smartg().run(wavelength, n_photons=1e9, th_deg=th0,
@@ -204,7 +207,8 @@ fig = smartg_view(Smartg().run(wavelength, n_photons=1e9, th_deg=th0,
 # ocean only
 atmosphere = None
 surface = None
-water = Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)])
+water = Water1D(grid=[0., -5.],
+                comp=[HydrosolPR(chl=0.5, truncation=DEFAULT_WATER_TRUNC)])
 # compute outputs at the surface also, view results for downwelling
 # at bottom of ocean
 fig = smartg_view(Smartg().run(wavelength, n_photons=1e9, th_deg=th0,
@@ -237,7 +241,10 @@ m = Smartg().run(wavelength=wavelength, n_photons=1e6, th_deg=th0,
                  output_layers=3, le=le,
                  atmosphere=Atm1D('afglms', tco3=0., no2=False),
                  surface=RoughSurface(wind=5., nh2o=1.34),
-                 water=Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)]))
+                 water=Water1D(
+                     grid=[0., -5.],
+                     comp=[HydrosolPR(chl=0.5,
+                                      truncation=DEFAULT_WATER_TRUNC)]))
 
 fig = smartg_view(m, field='up (0-)', log_i=True, i_min=-2.5, i_max=-1.)
 
@@ -255,7 +262,10 @@ mz = Smartg().run(wavelength=wavelength, n_photons=1e6, th_deg=th0,
                   output_layers=3, le=le,
                   atmosphere=Atm1D('afglms', tco3=0., no2=False),
                   surface=RoughSurface(wind=5., nh2o=1.34),
-                  water=Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)]))
+                  water=Water1D(
+                      grid=[0., -5.],
+                      comp=[HydrosolPR(chl=0.5,
+                                       truncation=DEFAULT_WATER_TRUNC)]))
 # the result has an "Azimuth angles" coordinate, but no variable depends
 # on it
 print(mz)
@@ -835,7 +845,8 @@ atmosphere = Atm1D('afglms', wavelength_phase=[400., 700., 1000., 1300., 1600,
                                              1900., 2200.])
 
 water = Water1D(grid=[0., -50.],
-              comp=[HydrosolPR(1., wavelength_phase=[400., 700.])])
+              comp=[HydrosolPR(1., wavelength_phase=[400., 700.],
+                               truncation=DEFAULT_WATER_TRUNC)])
 
 surface = RoughSurface()
 
@@ -1082,7 +1093,8 @@ spp = Smartg()
 surface = RoughSurface(sur=3, wind=10., nh2o=1.34)
 atmosphere = Atm1D('afglms')
 water = Water1D(grid=[0., -100.],
-                     comp=[HydrosolPR(chl=1.1, wavelength_phase=[550.])])
+                     comp=[HydrosolPR(chl=1.1, wavelength_phase=[550.],
+                                      truncation=DEFAULT_WATER_TRUNC)])
 wavelength = np.linspace(400., 700., num=11)
 th0 = 75.
 
@@ -1585,7 +1597,8 @@ y_bins = np.array([-10, 10, 1e8])
 # albedos
 surface = RoughSurface(wind=5., wave_shadow=True)
 water = Water1D(grid=[0., -10.],
-               comp=[HydrosolPR(chl=0.1, wavelength_phase=[600.])])
+               comp=[HydrosolPR(chl=0.1, wavelength_phase=[600.],
+                                truncation=DEFAULT_WATER_TRUNC)])
 ai = np.array([[-1, -1, -1], [-1, 0, -1], [-1, 1, -1], [-1, -1, -1]])
 #
 # we build the Albedo 2D object
