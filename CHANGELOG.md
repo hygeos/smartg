@@ -5,8 +5,8 @@
 Release date: xxx
 
 Note: this changelog entry has been started during the `v2.0.0dev1` stage,
-updated for `v2.0.0dev2`, `v2.0.0dev3` and `v2.0.0dev4`, and will be
-completed and corrected before the final `v2.0.0` release.
+updated for `v2.0.0dev2`, `v2.0.0dev3`, `v2.0.0dev4` and `v2.0.0dev5`,
+and will be completed and corrected before the final `v2.0.0` release.
 
 * Several breaking changes
   - The `AtmAFGL` class has been renamed to `Atm1D`, with PEP 8 constructor
@@ -105,8 +105,9 @@ completed and corrected before the final `v2.0.0` release.
     in `AerOPAC`, `Cloud`, `read_i3rc_aerosol`, `read_i3rc_cloud`,
     `AlbedoSpeclib`, `Hydrosol`, `HydrosolPR`, `HydrosolZhai` and
     `extract_points`; the classes store it as `self.fname`
-  - The `lam` parameter and attribute of `AlbedoSpectrum`, `smartg.rrs`,
-    `smartg.vrs` and `smartg.histories` is now `wavelength`
+  - The `lam` parameter and attribute of `AlbedoSpectrum`,
+    `smartg.atmosphere`, `smartg.rrs`, `smartg.vrs` and
+    `smartg.histories` is now `wavelength`
   - `smartg.truncation`: the `DM_trunc` and `GT_trunc` classes follow the
     CapWords convention as `DMTrunc` and `GTTrunc`
   - A wrong argument type now raises `TypeError` instead of
