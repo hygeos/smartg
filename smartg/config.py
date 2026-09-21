@@ -11,8 +11,8 @@ import time. Importing this module will raise :class:`NameError` if the
 variable is not set, with a chained ``KeyError`` indicating the missing
 environment variable.
 
-Exposes
--------
+Key Constants
+-------------
 DIR_ROOT : pathlib.Path
     Absolute path to the SMART-G repository root (parent of the
     ``smartg`` package).

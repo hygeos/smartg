@@ -5,8 +5,8 @@ when the ALIS option is used with alis_options=Alis(hist=True):
 it rebuilds high-resolution Stokes vectors from the recorded events
 (with JAX) and derives air mass factor (AMF) statistics.
 
-Functions
----------
+Key Functions
+-------------
 get_histories
     Return the main outputs of the recorded photon histories.
 si

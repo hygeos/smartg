@@ -4,7 +4,7 @@ This module provides tools to define the wavelength bands used in
 SMART-G radiative transfer simulations and to build the spectral grids
 required for absorption and scattering computations.
 
-Key components
+Key Components
 --------------
 BandSet
     Common object for formatting input band definitions. Accepts a
