@@ -421,8 +421,10 @@ lobj4 = generate_h_p(theta_deg=sza, phi_deg=phi,
                      helio_size_y=0.01284, reflectivity=0.88)
 
 # Modify the rugosity ? here -->
-lobj4[0].material_front = Mirror(reflectivity=0.88, roughness=0.1,
-                                 shadow=True)
+heliostat = lobj4[0]
+assert isinstance(heliostat, Entity)
+heliostat.material_front = Mirror(reflectivity=0.88, roughness=0.1,
+                                  shadow=True)
 
 # Creation of the sensor
 # the sensor direction is described by a vector

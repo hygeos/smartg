@@ -1096,6 +1096,10 @@ cd = cd[tuple(idx)]   # (nlayer, [nscl,] niamf)
 has_scl = 'iSCL' in ax_names
 nscl = cdist.shape[ax_names.index('iSCL')] if has_scl else 1
 
+# the per-class arrays exist only in the scattering-class mode
+w_cls = mean_dist_cls = var_dist_cls = np.empty((0, 0))
+var_within = var_between = np.empty(0)
+
 if has_scl:
     # cd shape: (nlayer, nscl, niamf)
     w_cls = cd[:, :, 0]     # (nlayer, nscl)
