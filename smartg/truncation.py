@@ -31,6 +31,11 @@ These methods support different integration techniques (Lobatto
 quadrature, trapezoid, Simpson) for computing phase matrix moments and
 offer flexible scaling approaches.
 
+A truncated phase matrix goes with a truncated fraction `f` of the
+scattered energy, removed with the forward peak: the scattering
+coefficient of the particles it describes must be scaled by `1 - f`,
+their absorption being left unchanged (see `truncated_ext_ssa`).
+
 Examples
 --------
 >>> from smartg.truncation import DMTrunc
@@ -42,10 +47,24 @@ DMTrunc
     Delta-M truncation.
 GTTrunc
     GT truncation, as in Iwabuchi and Suzuki (2009).
+
+Key Functions
+-------------
+truncate_phase
+    Truncate one phase matrix, and return its truncated fraction.
+truncate_phase_set
+    Truncate a set of phase matrices, each distinct one once.
+truncated_ext_ssa
+    Scale an extinction and a single scattering albedo for the
+    truncation.
 """
 
+from typing import cast
 
 import numpy as np
+import xarray as xr
+from numpy.typing import ArrayLike, NDArray
+from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 
 
 class DMTrunc:
@@ -134,7 +153,7 @@ class GTTrunc:
 
         - 1 -> use Eq. 5 in Waquet et al. 2019 (Default)
         - 2 -> use ARTDECO way (same as 1, but with different rescalling
-          for F12 and F34)
+          for F21 and F34)
     """
 
     def __init__(
@@ -191,3 +210,181 @@ class GTTrunc:
         self.theta_tr = theta_tr
         self.lobatto_optimization = lobatto_optimization
         self.pha_scale_method = pha_scale_method
+
+
+def truncate_phase(
+    pha: ArrayLike,
+    theta_deg: ArrayLike,
+    truncation: DMTrunc | GTTrunc,
+) -> tuple[NDArray[np.float64], float]:
+    """Truncate the forward peak of one phase matrix.
+
+    The F11 term is truncated with pytrunc, following `truncation`.
+    The other terms are scaled by the ratio of the truncated F11 to
+    the exact one, angle by angle (Eq. 5 in Waquet et al. 2019), and
+    `pha_scale_method` 2 instead scales F21 and F34 by `1 / (1 - f)`.
+
+    A null matrix, the one of a component absent from a layer, is
+    returned unchanged with a null truncated fraction: it carries no
+    peak to remove and no scattering to rescale.
+
+    Parameters
+    ----------
+    pha : array_like
+        Phase matrix of shape (nphamat, ntheta), whose terms follow the
+        SMART-G order F11, F21, F33, F34, F22, F44 (only the first ones
+        when nphamat < 6). F11 is normalized to 2 over `theta_deg`.
+    theta_deg : array_like
+        Scattering angles in degrees, from 0 to 180.
+    truncation : DMTrunc or GTTrunc
+        Truncation configuration.
+
+    Returns
+    -------
+    pha_tr : ndarray
+        Truncated phase matrix, same shape as `pha`, in float64.
+    f : float
+        Truncated fraction of the scattered energy, i.e. the fraction
+        removed with the forward peak.
+
+    Raises
+    ------
+    TypeError
+        If the truncation configuration is not recognized.
+    """
+    pha = np.asarray(pha, dtype=np.float64)
+    theta_deg = np.asarray(theta_deg, dtype=np.float64)
+    if not isinstance(truncation, (DMTrunc, GTTrunc)):
+        raise TypeError("truncation method not recognized")
+    f11 = pha[0]
+    if not f11.any():
+        return pha.copy(), 0.0
+
+    if isinstance(truncation, DMTrunc):
+        ds_pha = cast(
+            xr.Dataset,
+            delta_m_phase_approx(
+                f11,
+                theta_deg,
+                truncation.m_max,
+                method=truncation.integral_method,
+            ),
+        )
+    else:
+        ds_pha = cast(
+            xr.Dataset,
+            gt_phase_approx(
+                f11,
+                theta_deg,
+                truncation.trunc_frac,
+                method=truncation.integral_method,
+                th_tol=truncation.theta_tol,
+                th_f=truncation.theta_tr,
+                lobatto_optimization=truncation.lobatto_optimization,
+            ),
+        )
+    f11_tr = np.asarray(ds_pha["phase_tr"].values, dtype=np.float64)
+    f = float(ds_pha["f"].values)
+
+    pha_tr = np.empty_like(pha)
+    pha_tr[0] = f11_tr
+    # the other terms keep their ratio to F11; where F11 vanishes, so
+    # do they
+    beta = np.divide(
+        f11_tr, f11, out=np.zeros_like(f11), where=f11 != 0.0
+    )
+    pha_tr[1:] = pha[1:] * beta
+    if truncation.pha_scale_method == 2 and pha.shape[0] > 3:
+        pha_tr[1] = pha[1] / (1.0 - f)
+        pha_tr[3] = pha[3] / (1.0 - f)
+    return pha_tr, f
+
+
+def truncate_phase_set(
+    pha: ArrayLike,
+    theta_deg: ArrayLike,
+    truncation: DMTrunc | GTTrunc,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Truncate a set of phase matrices, each distinct one once.
+
+    Identical matrices, which the tabulations share widely (a
+    wavelength or a layer repeating the same matrix, the null matrix
+    of the layers a component is absent from), are truncated once and
+    share the result.
+
+    Parameters
+    ----------
+    pha : array_like
+        Phase matrices of shape (..., nphamat, ntheta), see
+        `truncate_phase`.
+    theta_deg : array_like
+        Scattering angles in degrees, from 0 to 180.
+    truncation : DMTrunc or GTTrunc
+        Truncation configuration.
+
+    Returns
+    -------
+    pha_tr : ndarray
+        Truncated phase matrices, same shape as `pha`, in float64.
+    f : ndarray
+        Truncated fraction of each matrix, of shape `pha.shape[:-2]`.
+    """
+    pha = np.asarray(pha, dtype=np.float64)
+    lead = pha.shape[:-2]
+    flat = pha.reshape((-1,) + pha.shape[-2:])
+    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
+    inv = np.asarray(inv).reshape(-1)
+    pha_tr_uniq = np.empty_like(uniq)
+    f_uniq = np.zeros(len(uniq), dtype=np.float64)
+    for i in range(len(uniq)):
+        pha_tr_uniq[i], f_uniq[i] = truncate_phase(
+            uniq[i], theta_deg, truncation
+        )
+    return pha_tr_uniq[inv].reshape(pha.shape), f_uniq[inv].reshape(lead)
+
+
+def truncated_ext_ssa(
+    ext: ArrayLike,
+    ssa: ArrayLike,
+    f: ArrayLike,
+) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
+    """Rescale an extinction and its albedo for a truncation.
+
+    The scattering `ext * ssa` is scaled by `1 - f` while the
+    absorption `ext * (1 - ssa)` is kept:
+
+    - ``ext_tr = ext * (1 - f * ssa)``
+    - ``ssa_tr = ssa * (1 - f) / (1 - f * ssa)``
+
+    The inputs are broadcast together. Where `f * ssa` is 1, i.e. the
+    whole extinction is truncated scattering, `ext_tr` is null and
+    `ssa` is kept unchanged.
+
+    Parameters
+    ----------
+    ext : array_like
+        Extinction coefficient or optical thickness, in any unit.
+    ssa : array_like
+        Single scattering albedo.
+    f : array_like
+        Truncated fraction of the phase matrix, see `truncate_phase`.
+
+    Returns
+    -------
+    ext_tr : ndarray
+        Truncated extinction, in the unit of `ext`.
+    ssa_tr : ndarray
+        Truncated single scattering albedo.
+    """
+    ext = np.asarray(ext)
+    ssa = np.asarray(ssa)
+    f = np.asarray(f)
+    scale = 1.0 - f * ssa
+    ext_tr = ext * scale
+    ssa_tr = np.divide(
+        ssa * (1.0 - f),
+        scale,
+        out=np.array(np.broadcast_to(ssa, scale.shape), dtype=scale.dtype),
+        where=scale != 0.0,
+    )
+    return ext_tr, ssa_tr
