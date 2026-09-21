@@ -1302,7 +1302,6 @@ def phase_view(
     axarr: np.ndarray[Any, Any] | None = None,
     iw: int = 0,
     kind: str = "atm",
-    show_trunc: bool = False,
     force_4stk: bool = False,
 ) -> tuple[Figure, np.ndarray[Any, Any]]:
     """
@@ -1328,8 +1327,6 @@ def phase_view(
     kind : {'atm', 'oc'}, optional
         Phase function type: 'atm' for atmospheric, 'oc' for oceanic.
         Default is 'atm'.
-    show_trunc : bool, optional
-        If True, also plots truncated phase function. Default is False.
     force_4stk : bool, optional
         If True, forces 2x2 subplot layout even for 6-stokes. Default is
         False.
@@ -1340,6 +1337,16 @@ def phase_view(
         Figure object containing the phase function plots.
     axarr : numpy.ndarray
         Array of matplotlib axes.
+
+    Notes
+    -----
+    The phase matrices of a profile are the ones the simulation uses,
+    truncated for the components carrying a `truncation`. To see what
+    the truncation removes, plot the profile computed without it and
+    the truncated one on the same axes:
+
+    >>> fig, ax = phase_view(pro_full)  # doctest: +SKIP
+    >>> phase_view(pro_tr, fig=fig, axarr=ax)  # doctest: +SKIP
     """
     if isinstance(ds_sg, MLUT):
         warn_message = (
@@ -1368,12 +1375,6 @@ def phase_view(
         labw = ""
 
     phase = ds_sg[phase_key].values
-    if show_trunc:
-        phase_tr: np.ndarray[Any, Any] | None = ds_sg[
-            "phase_" + kind + "_tr"
-        ].values
-    else:
-        phase_tr = None
 
     ang = ds_sg.coords[theta_key].values
     nstk = phase.shape[1]
@@ -1452,8 +1453,6 @@ def phase_view(
 
             if np.max(p_11[:]) > 0.0:
                 axarr[0, 0].semilogy(ang, p_11, label=f"{i:3d}")
-                if show_trunc and phase_tr is not None:
-                    axarr[0, 0].semilogy(ang, phase_tr[i, 0, :], "k--")
             axarr[0, 0].set_title(r"$P_{11}$" + labw)
             axarr[0, 0].grid()
             axarr[0, 0].set_xlim([0, 180])
@@ -1461,8 +1460,6 @@ def phase_view(
 
             if np.max(p_11[:]) > 0.0:
                 axarr[0, 1].plot(ang, -p_12 / p_11)
-                if show_trunc and phase_tr is not None:
-                    axarr[0, 1].plot(ang, -phase_tr[i, 1, :] / p_11, "k--")
             axarr[0, 1].set_title(r"-$P_{12}/P_{11}$")
             axarr[0, 1].grid()
             axarr[0, 1].set_xlim([0, 180])
@@ -1470,8 +1467,6 @@ def phase_view(
 
             if np.max(p_11[:]) > 0.0:
                 axarr[1, 0].plot(ang, p_33 / p_11)
-                if show_trunc and phase_tr is not None:
-                    axarr[1, 0].plot(ang, phase_tr[i, 2, :] / p_11, "k--")
             axarr[1, 0].set_title(r"$P_{33}/P_{11}$")
             axarr[1, 0].grid()
             axarr[1, 0].set_xlim([0, 180])
@@ -1480,8 +1475,6 @@ def phase_view(
 
             if np.max(p_11[:]) > 0.0:
                 axarr[1, 1].plot(ang, p_43 / p_11)
-                if show_trunc and phase_tr is not None:
-                    axarr[1, 1].plot(ang, phase_tr[i, 3, :] / p_11, "k--")
             axarr[1, 1].set_title(r"$P_{43}/P_{11}$")
             axarr[1, 1].grid()
             axarr[1, 1].set_xlim([0, 180])
@@ -1497,8 +1490,6 @@ def phase_view(
 
             if np.max(p_11[:]) > 0.0:
                 axarr[0, 0].semilogy(ang, p_11, label=f"{i:3d}")
-                if show_trunc and phase_tr is not None:
-                    axarr[0, 0].semilogy(ang, phase_tr[i, 0, :], "k--")
             axarr[0, 0].set_title(r"$P_{11}$" + labw)
             axarr[0, 0].grid()
             axarr[0, 0].set_xlim([0, 180])
@@ -1506,8 +1497,6 @@ def phase_view(
 
             if np.max(p_11[:]) > 0.0:
                 axarr[0, 1].plot(ang, -p_12 / p_11)
-                if show_trunc and phase_tr is not None:
-                    axarr[0, 1].plot(ang, -phase_tr[i, 1, :] / p_11, "k--")
             axarr[0, 1].set_title(r"-$P_{12}/P_{11}$")
             axarr[0, 1].grid()
             axarr[0, 1].set_xlim([0, 180])
@@ -1515,8 +1504,6 @@ def phase_view(
 
             if np.max(p_11[:]) > 0.0:
                 axarr[1, 0].plot(ang, p_33 / p_11)
-                if show_trunc and phase_tr is not None:
-                    axarr[1, 0].plot(ang, phase_tr[i, 2, :] / p_11, "k--")
             axarr[1, 0].set_title(r"$P_{33}/P_{11}$")
             axarr[1, 0].grid()
             axarr[1, 0].set_xlim([0, 180])
@@ -1526,8 +1513,6 @@ def phase_view(
 
             if np.max(p_11[:]) > 0.0:
                 axarr[1, 1].plot(ang, p_34 / p_11)
-                if show_trunc and phase_tr is not None:
-                    axarr[1, 1].plot(ang, phase_tr[i, 3, :] / p_11, "k--")
             axarr[1, 1].set_title(r"$P_{34}/P_{11}$")
             axarr[1, 1].grid()
             axarr[1, 1].set_xlim([0, 180])
@@ -1538,8 +1523,6 @@ def phase_view(
             if not force_4stk:
                 if np.max(p_11[:]) > 0.0:
                     axarr[2, 0].plot(ang, p_22 / p_11)
-                    if show_trunc and phase_tr is not None:
-                        axarr[2, 0].plot(ang, phase_tr[i, 4, :] / p_11, "k--")
                 axarr[2, 0].set_title(r"$P_{22}/P_{11}$")
                 axarr[2, 0].grid()
                 axarr[2, 0].set_xlim([0, 180])
@@ -1548,8 +1531,6 @@ def phase_view(
 
                 if np.max(p_11[:]) > 0.0:
                     axarr[2, 1].plot(ang, p_44 / p_11)
-                    if show_trunc and phase_tr is not None:
-                        axarr[2, 1].plot(ang, phase_tr[i, 5, :] / p_11, "k--")
                 axarr[2, 1].set_title(r"$P_{44}/P_{11}$")
                 axarr[2, 1].grid()
                 axarr[2, 1].set_xlim([0, 180])

@@ -406,6 +406,11 @@ and will be completed and corrected before the final `v2.0.0` release.
     scales its scattering coefficient by `1 - f`: pass `truncation=False`
     for a phase function without a marked forward peak, which the
     truncation would leave negative (and which is then refused)
+  - The `show_trunc` option of `smartg.view.phase_view` has been removed: it
+    read a `phase_atm_tr` / `phase_oc_tr` variable that no profile carries
+    any more, the profile holding only the (truncated) matrices the
+    simulation uses. Plot the profile computed without truncation and the
+    truncated one on the same axes instead (`fig` and `axarr` arguments)
   - The declared dependencies have been trimmed and bounded. `pyarrow`,
     `pyhdf` and `statsmodels` are no longer declared, as no module nor
     notebook imports them (`pyhdf` still comes in as a dependency of
