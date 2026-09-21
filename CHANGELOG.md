@@ -306,7 +306,7 @@ completed and corrected before the final `v2.0.0` release.
     - `NBPHOTONS` → `n_photons`, `NBLOOP` → `n_loop`,
       `NBTHETA` → `n_theta`, `NBPHI` → `n_phi`, `NF` → `n_icdf`
     - `THVDEG` → `th_deg`, `PHVDEG` → `ph_deg`, `SEED` → `seed`,
-      `RTER` → `earth_radius`, `DEPO` → `depo`, `DEPO_WATER` → `depo_water`
+      `RTER` → `earth_radius`, `DEPO` → `depol`, `DEPO_WATER` → `depol_water`
     - `OUTPUT_LAYERS` → `output_layers`, `XBLOCK` → `xblock`,
       `XGRID` → `xgrid`, `BEER` → `beer`, `RR` → `russian_roulette`,
       `WEIGHTRR` → `russian_roulette_weight`, `SZA_MAX` → `sza_max`,
@@ -332,6 +332,11 @@ completed and corrected before the final `v2.0.0` release.
     it sizes (the phase functions and the wavelength probability)
   - The `r_r` and `weight_r_r` parameters of `Smartg.run` are now spelled out
     as `russian_roulette` and `russian_roulette_weight`
+  - The depolarization is spelled `depol` throughout, the physics term and
+    the spelling the `smartg.iprt` modules already used: the `depo` and
+    `depo_water` parameters of `Smartg.run` are now `depol` and
+    `depol_water`, as are the `depo` parameters of the internal
+    `_rayleigh`, `_calc_phase_host` and `_calc_phase_gpu` helpers
   - The `pol_off` parameter of `Smartg.run` has become `polarization`, with
     the opposite meaning and a `True` default: polarized light is considered
     unless `polarization=False` is passed. The `pol_off` parameter of the
