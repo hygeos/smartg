@@ -63,6 +63,9 @@ GTTrunc
 
 Key Functions
 -------------
+as_truncation
+    Read the `truncation` parameter of a component, None and False
+    disabling the truncation.
 truncate_phase
     Truncate one phase matrix, and return its truncated fraction.
 truncate_phase_set
@@ -72,12 +75,14 @@ truncated_ext_ssa
     truncation.
 """
 
-from typing import cast
+from typing import Literal, cast
 
 import numpy as np
 import xarray as xr
 from numpy.typing import ArrayLike, NDArray
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
+
+from smartg.phase import integ_phase
 
 
 class DMTrunc:
@@ -225,6 +230,41 @@ class GTTrunc:
         self.pha_scale_method = pha_scale_method
 
 
+#: What the `truncation` parameter of a component accepts: a truncation
+#: configuration, or None or False to disable the truncation.
+TruncationLike = DMTrunc | GTTrunc | Literal[False] | None
+
+
+def as_truncation(truncation: TruncationLike) -> DMTrunc | GTTrunc | None:
+    """Return the truncation a component carries.
+
+    Parameters
+    ----------
+    truncation : DMTrunc or GTTrunc or False or None
+        The `truncation` parameter of a component. None and False both
+        disable the truncation.
+
+    Returns
+    -------
+    DMTrunc or GTTrunc or None
+        The truncation configuration, or None when disabled.
+
+    Raises
+    ------
+    TypeError
+        If `truncation` is anything else, True included, which names
+        no truncation method.
+    """
+    if truncation is None or truncation is False:
+        return None
+    if isinstance(truncation, (DMTrunc, GTTrunc)):
+        return truncation
+    raise TypeError(
+        "truncation must be a DMTrunc or a GTTrunc, or None or False to "
+        f"disable the truncation, not {truncation!r}."
+    )
+
+
 def truncate_phase(
     pha: ArrayLike,
     theta_deg: ArrayLike,
@@ -245,12 +285,17 @@ def truncate_phase(
     function is no probability distribution, and the Monte Carlo
     sampling of the scattering angle breaks on it.
 
+    pytrunc builds the truncated phase function of an F11 normalized
+    to 2: an F11 normalized otherwise, by more than 1 % (to 4 pi, or a
+    volume scattering function), is normalized before the truncation,
+    and the truncated matrix comes back in the normalization of `pha`.
+
     Parameters
     ----------
     pha : array_like
         Phase matrix of shape (nphamat, ntheta), whose terms follow the
         SMART-G order F11, F21, F33, F34, F22, F44 (only the first ones
-        when nphamat < 6). F11 is normalized to 2 over `theta_deg`.
+        when nphamat < 6), in any normalization.
     theta_deg : array_like
         Scattering angles in degrees, from 0 to 180.
     truncation : DMTrunc or GTTrunc
@@ -269,11 +314,12 @@ def truncate_phase(
     TypeError
         If the truncation configuration is not recognized.
     ValueError
-        If the truncated F11 is negative, which happens when the
-        truncation removes more energy than the forward peak holds: a
-        GT truncation fraction larger than that energy (with the
-        truncation angle imposed, or on a phase function without
-        a peak), or the Legendre ringing of a Delta-M truncation with
+        If F11 does not integrate to a positive value, or if the
+        truncated F11 is negative, which happens when the truncation
+        removes more energy than the forward peak holds: a GT
+        truncation fraction larger than that energy (with the
+        truncation angle imposed, or on a phase function without a
+        peak), or the Legendre ringing of a Delta-M truncation with
         too few streams.
     """
     pha = np.asarray(pha, dtype=np.float64)
@@ -284,11 +330,22 @@ def truncate_phase(
     if not f11.any():
         return pha.copy(), 0.0
 
+    norm = float(integ_phase(np.deg2rad(theta_deg), f11))
+    if not norm > 0.0:
+        raise ValueError(
+            f"F11 integrates to {norm:.3g}: it cannot be truncated."
+        )
+    # pytrunc truncates an F11 normalized to 2. A table normalized to
+    # within 1 % is truncated as it is: the angle search of GT is so
+    # sensitive that renormalizing to the accuracy of another
+    # integration rule (1e-4) moves its truncation angle by tenths of a
+    # degree, a change that tells nothing about the table
+    scale = 2.0 / norm if abs(norm - 2.0) > 0.02 else 1.0
     if isinstance(truncation, DMTrunc):
         ds_pha = cast(
             xr.Dataset,
             delta_m_phase_approx(
-                f11,
+                f11 * scale,
                 theta_deg,
                 truncation.m_max,
                 method=truncation.integral_method,
@@ -298,7 +355,7 @@ def truncate_phase(
         ds_pha = cast(
             xr.Dataset,
             gt_phase_approx(
-                f11,
+                f11 * scale,
                 theta_deg,
                 truncation.trunc_frac,
                 method=truncation.integral_method,
@@ -307,7 +364,7 @@ def truncate_phase(
                 lobatto_optimization=truncation.lobatto_optimization,
             ),
         )
-    f11_tr = np.asarray(ds_pha["phase_tr"].values, dtype=np.float64)
+    f11_tr = np.asarray(ds_pha["phase_tr"].values, dtype=np.float64) / scale
     f = float(ds_pha["f"].values)
     if (f11_tr < 0.0).any():
         raise ValueError(

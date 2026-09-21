@@ -73,14 +73,20 @@ from smartg.phase import (
     expand_phase_4_to_6,
     integ_phase,
 )
-from smartg.truncation import DMTrunc, GTTrunc, truncate_phase_set
+from smartg.truncation import (
+    GTTrunc,
+    TruncationLike,
+    as_truncation,
+    truncate_phase_set,
+)
 from smartg.typing import NumericArrayLike, PathType
 
-#: Default truncation of the derived water phase functions: the forward
-#: peak below 5 deg is replaced following Iwabuchi & Suzuki (2009), with
-#: a truncation fraction of 0.3 (larger fractions make the truncated
-#: phase function negative for the most forward-peaked Fournier-Forand
-#: mixtures).
+#: Default truncation of the hydrosol phase functions, derived or
+#: supplied: the forward peak below 5 deg is replaced following Iwabuchi
+#: & Suzuki (2009), with a truncation fraction of 0.3 (larger fractions
+#: make the truncated phase function negative for the most
+#: forward-peaked Fournier-Forand mixtures). A supplied phase function
+#: without a marked forward peak must be given truncation=False.
 DEFAULT_WATER_TRUNC = GTTrunc(trunc_frac=0.3, theta_tr=5.0)
 
 
@@ -193,11 +199,14 @@ class Hydrosol:
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
         forward and backward directions.
-    truncation : DMTrunc or GTTrunc or None, optional
-        Truncation of the forward peak of the derived phase matrices,
-        performed with `smartg.truncation.truncate_phase_set`, as the
-        `truncation` of the atmospheric components. None disables the
-        truncation. Defaults to `DEFAULT_WATER_TRUNC`.
+    truncation : DMTrunc or GTTrunc or False or None, optional
+        Truncation of the forward peak of the phase matrices, the ones
+        supplied through `phase` as well as the derived ones, performed
+        with `smartg.truncation.truncate_phase_set` as the `truncation`
+        of the atmospheric components. False or None disables the
+        truncation, which a supplied phase function without a marked
+        forward peak requires: the truncation would leave it negative,
+        and is refused. Defaults to `DEFAULT_WATER_TRUNC`.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -205,16 +214,19 @@ class Hydrosol:
     Raises
     ------
     TypeError
-        If `phase` is neither a DataArray, a LUT nor None.
+        If `phase` is neither a DataArray, a LUT nor None, or if
+        `truncation` is not a truncation configuration, False or None.
 
     Notes
     -----
     When `phase` is not provided, the phase matrices are derived from
     the backscattering ratio `bbp_ratio` following Park & Ruddick
-    (2005), as a mixture of two Fournier-Forand phase functions. Their
-    forward peak is truncated as configured by `truncation`, and the
-    scattering coefficient `bp` is scaled by `1 - f`, with `f` the
-    truncated fraction of the scattered energy.
+    (2005), as a mixture of two Fournier-Forand phase functions.
+
+    Whether supplied or derived, their forward peak is truncated as
+    configured by `truncation`, and the scattering coefficient `bp` is
+    scaled by `1 - f`, with `f` the truncated fraction of the scattered
+    energy of the phase matrix each wavelength and depth is given.
 
     The pure water absorption and scattering coefficients are not
     defined here but in the Water1D profile, since pure water is always
@@ -235,7 +247,7 @@ class Hydrosol:
         acdom: NumericArrayLike | None = None,
         bbp_ratio: NumericArrayLike | None = None,
         n_theta: int = 721,
-        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
+        truncation: TruncationLike = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
     ) -> None:
         self.bp = bp
@@ -244,7 +256,7 @@ class Hydrosol:
         self.bbp_ratio = bbp_ratio
         self._phase = expand_phase_4_to_6(phase)
         self.n_theta = n_theta
-        self.truncation = truncation
+        self.truncation = as_truncation(truncation)
         self.wavelength_phase = (
             None if wavelength_phase is None
             else np.array(wavelength_phase)
@@ -476,9 +488,10 @@ class Hydrosol:
         """
         Phase matrices of the hydrosol.
 
-        The phase matrices supplied at construction time are returned as
-        such; otherwise they are derived from the backscattering ratio
-        (see `calc_phase`) and memoized.
+        The phase matrices supplied at construction time are returned
+        truncated as configured by `truncation` (as such when it is
+        None); otherwise they are derived from the backscattering ratio
+        (see `calc_phase`). Both are memoized.
 
         Parameters
         ----------
@@ -504,7 +517,10 @@ class Hydrosol:
             the backscattering ratio have been provided.
         """
         if self._phase is not None:
-            return self._phase
+            if self.truncation is None:
+                return self._phase
+            self._resolve_user_truncation()
+            return self._pha
 
         iop = self.iop(wavelength, z)
         if not (np.asarray(iop["bp"]) > 0).any():
@@ -594,6 +610,33 @@ class Hydrosol:
             bp[:, sl] * self._coef_trunc.values * self._trunc_scaling()
         )
 
+    def _resolve_user_truncation(self) -> None:
+        """
+        Truncate the phase matrices supplied at construction time.
+
+        Each distinct matrix is truncated once, and the result memoized
+        in `_pha` and `_coef_trunc`, the truncation factor `1 - f` over
+        [wavelength_phase, z_phase]. The supplied matrices do not depend
+        on the grids of the profile, so they are truncated once for all.
+        """
+        if self._coef_trunc is not None:
+            return
+        assert self._phase is not None and self.truncation is not None
+        pha_tr, f = truncate_phase_set(
+            self._phase.values,
+            self._phase.coords[self._phase.dims[-1]].values,
+            self.truncation,
+        )
+        self._pha = self._phase.copy(data=pha_tr)
+        self._coef_trunc = xr.DataArray(
+            1.0 - f,
+            dims=["wavelength_phase", "z_phase"],
+            coords={
+                dim: self._phase.coords[dim].values
+                for dim in ["wavelength_phase", "z_phase"]
+            },
+        )
+
     def _coef_trunc_on(
         self,
         wavelength: NDArray,
@@ -606,7 +649,8 @@ class Hydrosol:
         It is mapped from the tabulation grid of the phase matrices
         onto the given wavelength and depth grids.
 
-        Must be called after `_resolve_truncation` has filled the cache.
+        Must be called after `_resolve_truncation` or
+        `_resolve_user_truncation` has filled the cache.
 
         Parameters
         ----------
@@ -655,15 +699,19 @@ class Hydrosol:
         ndarray or None
             Scattering coefficient in m-1 with dimensions
             [wavelength_phase, z_phase], corrected for the phase
-            matrix truncation when the phase matrices are derived
-            rather than supplied. None if the
-            truncation has not been resolved yet.
+            matrix truncation. None if the truncation of the derived
+            phase matrices has not been resolved yet.
         """
         if self._phase is None:
             return self._bsca
-        return self.iop(
+        bp = self.iop(
             pha.coords["wavelength_phase"].values, pha.coords["z_phase"].values
         )["bp"]
+        if self.truncation is None:
+            return bp
+        self._resolve_user_truncation()
+        assert self._coef_trunc is not None
+        return bp * self._coef_trunc.values * self._trunc_scaling()
 
     def coeffs(
         self,
@@ -704,20 +752,25 @@ class Hydrosol:
             the backscattering ratio have been provided.
         """
         iop = self.iop(wavelength, z)
+        if not (np.asarray(iop["bp"]) > 0).any():
+            return iop
 
-        if (self._phase is None) and (np.asarray(iop["bp"]) > 0).any():
+        if self._phase is None:
             if iop["bbp_ratio"] is None:
                 raise ValueError(
                     "No phase function nor bbp_ratio has been "
                     "provided, but bp>0"
                 )
-            if phase:
-                self._resolve_truncation(wavelength, z, use_old_calc_iphase)
-                coef_trunc = self._coef_trunc_on(
-                    wavelength, z, use_old_calc_iphase
-                )
-                iop["bp"] = iop["bp"] * coef_trunc * self._trunc_scaling()
+            if not phase:
+                return iop
+            self._resolve_truncation(wavelength, z, use_old_calc_iphase)
+        else:
+            if not phase or self.truncation is None:
+                return iop
+            self._resolve_user_truncation()
 
+        coef_trunc = self._coef_trunc_on(wavelength, z, use_old_calc_iphase)
+        iop["bp"] = iop["bp"] * coef_trunc * self._trunc_scaling()
         return iop
 
 
@@ -741,10 +794,10 @@ class HydrosolPR(Hydrosol):
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
         forward and backward directions.
-    truncation : DMTrunc or GTTrunc or None, optional
+    truncation : DMTrunc or GTTrunc or False or None, optional
         Truncation of the forward peak of the derived phase matrices
-        (see `Hydrosol`). None disables the truncation. Defaults to
-        `DEFAULT_WATER_TRUNC`.
+        (see `Hydrosol`). None or False disables the truncation.
+        Defaults to `DEFAULT_WATER_TRUNC`.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -778,7 +831,7 @@ class HydrosolPR(Hydrosol):
         self,
         chl: float,
         n_theta: int = 72001,
-        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
+        truncation: TruncationLike = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
         fqyc: float = 0.0,
     ) -> None:
@@ -918,10 +971,10 @@ class HydrosolZhai(Hydrosol):
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
         forward and backward directions.
-    truncation : DMTrunc or GTTrunc or None, optional
+    truncation : DMTrunc or GTTrunc or False or None, optional
         Truncation of the forward peak of the derived phase matrices
-        (see `Hydrosol`). None disables the truncation. Defaults to
-        `DEFAULT_WATER_TRUNC`.
+        (see `Hydrosol`). None or False disables the truncation.
+        Defaults to `DEFAULT_WATER_TRUNC`.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -966,7 +1019,7 @@ class HydrosolZhai(Hydrosol):
         self,
         chl_surf: float,
         n_theta: int = 7201,
-        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
+        truncation: TruncationLike = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
         euphotic_depth: float | None = None,
         mixed: bool = False,

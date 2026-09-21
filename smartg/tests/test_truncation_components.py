@@ -24,7 +24,7 @@ from smartg.truncation import (
     truncate_phase,
     truncated_ext_ssa,
 )
-from smartg.water import HydrosolPR, Water1D
+from smartg.water import Hydrosol, HydrosolPR, Water1D
 
 WAV = np.array([550.0])
 GRID = [100.0, 50.0, 20.0, 10.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]
@@ -252,3 +252,92 @@ def test_hydrosol_reused_at_another_wavelength() -> None:
         np.testing.assert_array_equal(
             again[var].values, fresh[var].values, err_msg=var
         )
+
+
+WATER_GRID = [0.0, -10.0]
+WATER_WAV = np.array([550.0])
+
+
+def _ff_phase() -> xr.DataArray:
+    """Return the untruncated Fournier-Forand mixture of a hydrosol.
+
+    Derived from a backscattering ratio of 0.01, at 550 nm, on a single
+    depth, in the shape the `phase` parameter of Hydrosol accepts.
+    """
+    h = Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=7201, truncation=None)
+    pha, _ = h.calc_phase(WATER_WAV, np.array([0.0]), np.full((1, 1), 0.01))
+    return pha
+
+
+def test_hydrosol_supplied_phase_truncated_by_default() -> None:
+    """A supplied phase is truncated by default, as a derived one is.
+
+    Given the untruncated Fournier-Forand mixture a backscattering
+    ratio derives, a hydrosol gives the profile of the hydrosol that
+    derives it: the same truncated matrix, the same scattering scaled
+    by 1 - f.
+    """
+    supplied = Water1D(
+        grid=WATER_GRID, comp=[Hydrosol(phase=_ff_phase(), bp=0.1)]
+    ).calc(WATER_WAV)
+    derived = Water1D(
+        grid=WATER_GRID,
+        comp=[Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=7201)],
+    ).calc(WATER_WAV)
+    np.testing.assert_allclose(
+        supplied["phase_oc"].values, derived["phase_oc"].values,
+        rtol=1e-12, atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        supplied["OD_p_oc"].values, derived["OD_p_oc"].values, rtol=1e-12
+    )
+    # GT with the default fraction of 0.3: 70 % of bp is left
+    np.testing.assert_allclose(
+        supplied["OD_p_oc"].values[0, -1], -0.7 * 0.1 * 10.0, rtol=1e-12
+    )
+
+
+def test_hydrosol_supplied_phase_truncation_false() -> None:
+    """truncation=False keeps a supplied phase as it is."""
+    pha = _ff_phase()
+    pro = Water1D(
+        grid=WATER_GRID,
+        comp=[Hydrosol(phase=pha, bp=0.1, truncation=False)],
+    ).calc(WATER_WAV)
+    np.testing.assert_array_equal(pro["phase_oc"].values[0], pha.values[0, 0])
+    np.testing.assert_allclose(
+        pro["OD_p_oc"].values[0, -1], -0.1 * 10.0, rtol=1e-12
+    )
+
+
+def test_hydrosol_supplied_flat_phase_refused() -> None:
+    """A supplied phase without a forward peak needs truncation=False.
+
+    The default truncation leaves it negative, and is refused.
+    """
+    theta = theta_grid(721)
+    mu = np.cos(np.deg2rad(theta))
+    pha = np.zeros((1, 1, 6, len(theta)))
+    pha[0, 0, 0] = pha[0, 0, 4] = 0.75 * (1.0 + 0.835 * mu**2)
+    phase = xr.DataArray(
+        pha,
+        dims=["wavelength_phase", "z_phase", "nphamat", "theta_oc"],
+        coords={"wavelength_phase": WATER_WAV, "z_phase": [0.0],
+                "theta_oc": theta},
+    )
+    with pytest.raises(ValueError, match="negative"):
+        Water1D(
+            grid=WATER_GRID, comp=[Hydrosol(phase=phase, bp=0.1)]
+        ).calc(WATER_WAV)
+    Water1D(
+        grid=WATER_GRID,
+        comp=[Hydrosol(phase=phase, bp=0.1, truncation=False)],
+    ).calc(WATER_WAV)
+
+
+def test_truncation_false_disables_an_atmospheric_component() -> None:
+    """truncation=False disables the truncation, as None does."""
+    off = _calc([_cloud(truncation=False)])
+    none = _calc([_cloud()])
+    for var in ["OD_p", "ssa_p_atm", "phase_atm"]:
+        np.testing.assert_array_equal(off[var].values, none[var].values)

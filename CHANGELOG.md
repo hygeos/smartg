@@ -397,6 +397,15 @@ and will be completed and corrected before the final `v2.0.0` release.
       as it already did for the hydrosols, instead of reaching the profile
       unnoticed: GT on a phase function without a marked forward peak (a
       continental aerosol), or Delta-M with too few streams
+    - `truncation=False` disables the truncation as `None` does, on the
+      atmospheric components and on the hydrosols; anything else than a
+      `DMTrunc`, a `GTTrunc`, `False` or `None` raises a `TypeError` when
+      the component is built
+  - A `Hydrosol` given its own phase matrices (`phase=`) now truncates them
+    too, with the default `DEFAULT_WATER_TRUNC` as the derived ones, and
+    scales its scattering coefficient by `1 - f`: pass `truncation=False`
+    for a phase function without a marked forward peak, which the
+    truncation would leave negative (and which is then refused)
   - The declared dependencies have been trimmed and bounded. `pyarrow`,
     `pyhdf` and `statsmodels` are no longer declared, as no module nor
     notebook imports them (`pyhdf` still comes in as a dependency of
@@ -413,6 +422,10 @@ and will be completed and corrected before the final `v2.0.0` release.
     of a set once, and rescale the extinction and the single scattering
     albedo of the truncated particles; a null matrix passes through with
     `f = 0`
+    - `truncate_phase` normalizes an F11 normalized otherwise than to 2 by
+      more than 1 % (to 4 pi, or a volume scattering function) before the
+      truncation, as pytrunc expects, and gives the truncated matrix back
+      in the normalization of its input
   - The scattering angles of a phase matrix no longer have to be equally
     spaced. Clustering them towards the forward and backward directions
     resolves the diffraction peak of large particles (desert aerosols,

@@ -20,6 +20,7 @@ from smartg.phase import integ_phase, theta_grid
 from smartg.truncation import (
     DMTrunc,
     GTTrunc,
+    as_truncation,
     truncate_phase,
     truncate_phase_set,
     truncated_ext_ssa,
@@ -131,6 +132,34 @@ def test_truncate_phase_rejects_unknown_config() -> None:
     """Anything else than DMTrunc or GTTrunc is refused."""
     with pytest.raises(TypeError, match="not recognized"):
         truncate_phase(_hg_matrix(0.85), THETA, "GT")  # type: ignore
+
+
+@pytest.mark.parametrize("truncation", [GT, DM], ids=["GT", "DM"])
+def test_truncate_phase_any_normalization(
+    truncation: DMTrunc | GTTrunc,
+) -> None:
+    """The truncation does not depend on the normalization of F11.
+
+    pytrunc expects an F11 normalized to 2: a matrix normalized
+    otherwise (here to 4 pi) is truncated as its normalized copy, and
+    comes back in its own normalization.
+    """
+    pha = _hg_matrix(0.85)
+    pha_tr, f = truncate_phase(pha, THETA, truncation)
+    pha_tr_4pi, f_4pi = truncate_phase(2.0 * np.pi * pha, THETA, truncation)
+    assert f_4pi == pytest.approx(f, rel=1e-12)
+    np.testing.assert_allclose(pha_tr_4pi, 2.0 * np.pi * pha_tr, rtol=1e-10)
+
+
+def test_as_truncation() -> None:
+    """None and False disable the truncation; True names no method."""
+    assert as_truncation(None) is None
+    assert as_truncation(False) is None
+    assert as_truncation(GT) is GT
+    with pytest.raises(TypeError, match="DMTrunc or a GTTrunc"):
+        as_truncation(True)  # type: ignore
+    with pytest.raises(TypeError, match="DMTrunc or a GTTrunc"):
+        as_truncation("GT")  # type: ignore
 
 
 def test_truncate_phase_set(monkeypatch: pytest.MonkeyPatch) -> None:

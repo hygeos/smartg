@@ -227,11 +227,15 @@ def _build_water_iop() -> Water1D:
 
     phase = read_phase(pure_water_path, kind="oc")
 
+    # the analytic phase function has no forward peak to truncate: the
+    # default truncation of the hydrosols would leave it negative
     return Water1D(
         grid=WATER_GRID,
         aw=aw,
         bw=bw,
-        comp=[Hydrosol(phase=phase, ap=aph, acdom=ag, bp=bph)],
+        comp=[
+            Hydrosol(phase=phase, ap=aph, acdom=ag, bp=bph, truncation=False)
+        ],
     )
 
 
