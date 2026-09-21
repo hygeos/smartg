@@ -312,7 +312,7 @@ def test_the_device_table_adopts_the_union_intact() -> None:
         DMTrunc(n_streams=16, integral_method="lobatto"),
         DMTrunc(n_streams=16, integral_method="trapezoid"),
         DMTrunc(n_streams=16, integral_method="simpson"),
-        GTTrunc(trunc_frac=0.9, integral_method="lobatto"),
+        GTTrunc(trunc_frac=0.3, integral_method="lobatto"),
     ],
     ids=["DM-lobatto", "DM-trapezoid", "DM-simpson", "GT-lobatto"],
 )
@@ -330,16 +330,20 @@ def test_truncation_accepts_the_union_grid(
     that grid. The comparison here is against 1801 angles, to keep the
     test short, and the trapezoid factor on that grid is itself 1.6e-3
     from its converged value, which the union already reaches: hence
-    the tolerance. The factor is the one of the whole particle column,
-    both components being truncated.
+    the tolerance. The factor is the one of the whole particle column.
+    Delta-M truncates both components; GT truncates the cloud alone,
+    since on the aerosol, whose phase function has no marked forward
+    peak, it leaves a negative phase function on the union.
     """
+    trunc_aer = truncation if isinstance(truncation, DMTrunc) else None
+
     def factor(n_theta: ThetaLike) -> tuple[float, xr.Dataset]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             full = _atm([_aerosol(), _cloud()]).calc(WAV, n_theta=n_theta)
             trunc = _atm(
                 [
-                    _aerosol(truncation=truncation),
+                    _aerosol(truncation=trunc_aer),
                     _cloud(truncation=truncation),
                 ]
             ).calc(WAV, n_theta=n_theta)

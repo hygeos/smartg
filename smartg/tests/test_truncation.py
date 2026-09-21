@@ -27,7 +27,7 @@ from smartg.truncation import (
 
 THETA = theta_grid(1801)
 GT = GTTrunc(trunc_frac=0.3, theta_tr=10.0)
-DM = DMTrunc(n_streams=16)
+DM = DMTrunc(n_streams=64)
 
 
 def _hg_matrix(g: float) -> NDArray[np.float64]:
@@ -116,6 +116,17 @@ def test_truncate_phase_null_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[0] == 0
 
 
+def test_truncate_phase_refuses_negative_result() -> None:
+    """A truncation removing more than the peak holds is refused.
+
+    Imposing both the angle and a truncation fraction larger than the
+    energy within that angle leaves a negative phase function.
+    """
+    with pytest.raises(ValueError, match="negative"):
+        truncate_phase(_hg_matrix(0.85), THETA,
+                       GTTrunc(trunc_frac=0.9, theta_tr=10.0))
+
+
 def test_truncate_phase_rejects_unknown_config() -> None:
     """Anything else than DMTrunc or GTTrunc is refused."""
     with pytest.raises(TypeError, match="not recognized"):
@@ -124,7 +135,7 @@ def test_truncate_phase_rejects_unknown_config() -> None:
 
 def test_truncate_phase_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each distinct matrix is truncated once, the result shared."""
-    a, b = _hg_matrix(0.85), _hg_matrix(0.7)
+    a, b = _hg_matrix(0.85), _hg_matrix(0.9)
     zero = np.zeros_like(a)
     pha = np.stack([np.stack([a, b]), np.stack([a, zero])])
     calls = _count_calls(monkeypatch, "gt_phase_approx")

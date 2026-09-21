@@ -208,6 +208,18 @@ def test_no_phase_no_truncation() -> None:
     np.testing.assert_array_equal(trunc["OD_p"].values, full["OD_p"].values)
 
 
+def test_negative_truncated_phase_is_refused() -> None:
+    """A truncation leaving a negative phase function is refused.
+
+    Delta-M with 8 streams rings below zero on the cloud phase
+    function, which used to reach the profile unnoticed.
+    """
+    atm = Atm1D("afglms", comp=[_cloud(truncation=DMTrunc(n_streams=8))],
+                grid=GRID)
+    with pytest.raises(ValueError, match="negative"):
+        atm.calc(WAV, n_theta=N_THETA)
+
+
 def test_forced_particle_profile_is_refused() -> None:
     """A truncated component cannot ride on a forced prof_aer."""
     nz = len(GRID)

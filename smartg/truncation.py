@@ -241,6 +241,10 @@ def truncate_phase(
     returned unchanged with a null truncated fraction: it carries no
     peak to remove and no scattering to rescale.
 
+    A truncation giving a negative F11 is refused: a negative phase
+    function is no probability distribution, and the Monte Carlo
+    sampling of the scattering angle breaks on it.
+
     Parameters
     ----------
     pha : array_like
@@ -264,6 +268,13 @@ def truncate_phase(
     ------
     TypeError
         If the truncation configuration is not recognized.
+    ValueError
+        If the truncated F11 is negative, which happens when the
+        truncation removes more energy than the forward peak holds: a
+        GT truncation fraction larger than that energy (with the
+        truncation angle imposed, or on a phase function without
+        a peak), or the Legendre ringing of a Delta-M truncation with
+        too few streams.
     """
     pha = np.asarray(pha, dtype=np.float64)
     theta_deg = np.asarray(theta_deg, dtype=np.float64)
@@ -298,6 +309,15 @@ def truncate_phase(
         )
     f11_tr = np.asarray(ds_pha["phase_tr"].values, dtype=np.float64)
     f = float(ds_pha["f"].values)
+    if (f11_tr < 0.0).any():
+        raise ValueError(
+            "The truncated phase function is negative (down to "
+            f"{float(f11_tr.min()):.3g}, f = {f:.3g}): the truncation "
+            "removes more energy than the forward peak holds. Lower "
+            "trunc_frac, let GTTrunc search the truncation angle "
+            "(theta_tr=None), raise n_streams, or do not truncate a "
+            "phase function without a marked forward peak."
+        )
 
     pha_tr = np.empty_like(pha)
     pha_tr[0] = f11_tr

@@ -393,6 +393,10 @@ and will be completed and corrected before the final `v2.0.0` release.
       of `Atm3D`), which would stay untruncated
     - a 3D component is truncated once per distinct phase matrix instead of
       once per cell: 95 pytrunc calls instead of 20489 for the C3 cloud
+    - a truncation leaving a negative phase function raises a `ValueError`,
+      as it already did for the hydrosols, instead of reaching the profile
+      unnoticed: GT on a phase function without a marked forward peak (a
+      continental aerosol), or Delta-M with too few streams
   - The declared dependencies have been trimmed and bounded. `pyarrow`,
     `pyhdf` and `statsmodels` are no longer declared, as no module nor
     notebook imports them (`pyhdf` still comes in as a dependency of
