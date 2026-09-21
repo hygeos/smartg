@@ -3569,7 +3569,7 @@ class Atm1D(Atmosphere):
         return self._mix_phases(self._comp_phases(wavelength, n_theta))
 
     def _comp_phases(
-        self, wavelength: NDArray[np.floating], n_theta: ThetaLike
+        self, wavelength: NDArray[Any], n_theta: ThetaLike
     ) -> list[tuple[xr.DataArray, xr.DataArray, xr.DataArray | None]]:
         """Return the phase matrix of each component, truncated.
 

@@ -52,7 +52,7 @@ def _calc(comps: list[AerOPAC], **kwargs: Any) -> xr.Dataset:
 
 
 def _layer_sca(pro: xr.Dataset) -> np.ndarray:
-    """Return the particle scattering optical thickness of each layer."""
+    """Return the particle scattering optical depth of each layer."""
     return diff1(pro["OD_p"].values, axis=1) * pro["ssa_p_atm"].values
 
 
@@ -169,12 +169,11 @@ def test_layer_given_another_matrix_is_not_rescaled() -> None:
     untruncated aerosol matrix, so its cloud scattering must not be
     scaled by the truncated fraction of a matrix it does not use.
     """
-    cld = dict(zmin=2.0, zmax=2.2)
     pfgrid = [100.0, 2.3, 0.0]
 
     def thin_cloud(**kwargs: Any) -> Cloud:
-        return Cloud("wc", 12.68, cld["zmin"], cld["zmax"], 5.0, 550.0,
-                     **kwargs)
+        """Build a water cloud between 2 and 2.2 km."""
+        return Cloud("wc", 12.68, 2.0, 2.2, 5.0, 550.0, **kwargs)
 
     full = _calc([_aerosol(), thin_cloud()], pfgrid=pfgrid)
     trunc = _calc([_aerosol(), thin_cloud(truncation=GT)], pfgrid=pfgrid)

@@ -7,10 +7,11 @@ against direct pytrunc calls on a forward-peaked Henyey-Greenstein
 matrix, which needs no auxiliary data.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
+import xarray as xr
 from numpy.typing import NDArray
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 
@@ -73,17 +74,17 @@ def test_truncate_phase_matches_pytrunc(
     pha_tr, f = truncate_phase(pha, THETA, truncation)
 
     if isinstance(truncation, GTTrunc):
-        ds = gt_phase_approx(
+        ds = cast(xr.Dataset, gt_phase_approx(
             pha[0], THETA, truncation.trunc_frac,
             method=truncation.integral_method,
             th_tol=truncation.theta_tol, th_f=truncation.theta_tr,
             lobatto_optimization=truncation.lobatto_optimization,
-        )
+        ))
     else:
-        ds = delta_m_phase_approx(
+        ds = cast(xr.Dataset, delta_m_phase_approx(
             pha[0], THETA, truncation.m_max,
             method=truncation.integral_method,
-        )
+        ))
     assert f == pytest.approx(float(ds["f"].values), rel=0, abs=0)
     np.testing.assert_array_equal(pha_tr[0], ds["phase_tr"].values)
     beta = pha_tr[0] / pha[0]

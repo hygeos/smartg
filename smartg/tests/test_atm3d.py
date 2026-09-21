@@ -635,14 +635,19 @@ def _expected_truncated(
         return ext, ssa, pha
     luts, _, _ = comp.get_phase_set(WAV, n_theta=NTH)
     theta = luts[0].coords["theta_atm"].values
-    pha_tr, f = [], []
+    pha_tr: list[NDArray[np.float64]] = []
+    f: list[float] = []
     for p in pha:
         p_tr, f_j = truncate_phase(p, theta, truncation)
         pha_tr.append(p_tr)
         f.append(f_j)
     ext_tr, ssa_tr = truncated_ext_ssa(ext, ssa, np.array(f))
     assert all(0.0 < f_j < 1.0 for f_j in f)
-    return ext_tr, ssa_tr, pha_tr
+    return (
+        np.asarray(ext_tr, dtype=np.float64),
+        np.asarray(ssa_tr, dtype=np.float64),
+        pha_tr,
+    )
 
 
 def test_truncated_cloud_alone() -> None:
