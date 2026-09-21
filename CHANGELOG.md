@@ -725,6 +725,13 @@ and will be completed and corrected before the final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the phase matrix of a profile layer straddling two `pfgrid` layers:
+    it took the `pfgrid` layer it overlapped most, possibly one where its
+    particles are absent (a thin cloud low in a layer whose upper part lies
+    in another `pfgrid` layer scattered with the aerosol matrix). It now
+    takes, at each wavelength, the `pfgrid` layer holding the largest part
+    of its particle scattering. The profiles whose `pfgrid` levels are
+    profile levels, as all those of the tests and notebooks, are unchanged
   - Fix the phase matrices of a hydrosol reused at other wavelengths or on
     another grid: its memoized (truncated) phase matrices and truncation
     factor were those of its first use, e.g. the 450 nm matrix served

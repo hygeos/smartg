@@ -2710,6 +2710,10 @@ class Atm1D(Atmosphere):
                 self.prof.z,
                 use_old_calc_iphase,
             )
+            if not use_old_calc_iphase:
+                ipha = self._scattering_phase_index(
+                    np.atleast_1d(wavelength[:]), pha, ipha
+                )
             if any(truncated):
                 # mapped with the indices of the mixture, so that a
                 # layer whose phase matrix does not hold the component
@@ -3703,6 +3707,81 @@ class Atm1D(Atmosphere):
 
         assert pha is not None and norm is not None
         return (pha / norm).fillna(0.0)
+
+    def _scattering_phase_index(
+        self,
+        wavelength: NDArray[np.floating],
+        pha: xr.DataArray,
+        ipha: NDArray[np.integer],
+    ) -> NDArray[np.int32]:
+        """Give each profile layer the matrix holding its scattering.
+
+        `smartg.phase.calc_iphase` gives each layer of the profile the
+        layer of `pfgrid` it overlaps most. A profile layer straddling
+        several `pfgrid` layers can then be given one where its
+        particles are absent, e.g. a thin cloud in the lower part of a
+        layer whose upper part lies in another `pfgrid` layer: the
+        cloud would scatter with a matrix that does not hold it. Such
+        a layer is given, at each wavelength, the `pfgrid` layer
+        holding the largest part of its particle scattering instead,
+        computed on the union of the two grids. The profile layers
+        lying in a single `pfgrid` layer, and those without particle
+        scattering, keep their index.
+
+        Parameters
+        ----------
+        wavelength : ndarray
+            Wavelengths of the profile, in nm.
+        pha : DataArray
+            The mixed phase matrices, over [wavelength_phase, z_phase,
+            nphamat, theta_atm].
+        ipha : ndarray
+            The phase matrix index of each profile level, over
+            [wavelength, z], as `calc_iphase` returns it.
+
+        Returns
+        -------
+        ndarray
+            The phase matrix indices, over [wavelength, z].
+        """
+        z = np.asarray(self.prof.z, dtype=np.float64)
+        pf = np.asarray(self.pfgrid, dtype=np.float64)
+        n_pf = len(pf) - 1
+        z_phase = pha.coords["z_phase"].values
+        if (
+            n_pf < 2
+            or len(z_phase) != n_pf
+            or not np.allclose(z_phase, pf[1:])
+        ):
+            return np.asarray(ipha, dtype=np.int32)
+        # the pfgrid levels falling inside a profile layer
+        inner = pf[(pf < z[0]) & (pf > z[-1])]
+        levels = np.union1d(z, inner)[::-1]
+        if len(levels) == len(z):
+            return np.asarray(ipha, dtype=np.int32)
+
+        rh = np.interp(
+            levels[::-1], z[::-1], self.prof.relative_humidity()[::-1]
+        )[::-1]
+        sca = np.zeros((len(wavelength), len(levels)))
+        for comp in self.comp:
+            dtau, ssa = comp.dtau_ssa(wavelength, levels, rh)
+            sca += dtau * ssa
+        # the sub-layer j >= 1 lies between levels[j] and levels[j - 1],
+        # within the profile layer i_prof and the pfgrid layer k_pf
+        mid = 0.5 * (levels[1:] + levels[:-1])
+        i_prof = np.searchsorted(-z, -mid)
+        k_pf = np.clip(np.searchsorted(-pf, -mid) - 1, 0, n_pf - 1)
+        weight = np.zeros((len(wavelength), len(z), n_pf))
+        np.add.at(weight, (slice(None), i_prof, k_pf), sca[:, 1:])
+
+        ipha = np.asarray(ipha, dtype=np.int32).copy()
+        # the wavelength block of each index, of n_pf matrices
+        block = (ipha // n_pf) * n_pf
+        scatters = weight.sum(axis=2) > 0.0
+        best = block + weight.argmax(axis=2)
+        ipha[scatters] = best[scatters]
+        return ipha
 
     def calc_split(
         self,

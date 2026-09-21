@@ -162,27 +162,28 @@ def test_two_components_truncated_differently() -> None:
     assert not np.isnan(mix["phase_atm"].values).any()
 
 
-def test_layer_given_another_matrix_is_not_rescaled() -> None:
-    """A layer whose phase matrix does not hold the cloud keeps it.
+def test_straddling_layer_is_truncated_with_its_cloud() -> None:
+    """A layer straddling pfgrid layers is truncated with its cloud.
 
     With the phase matrices tabulated over two layers, 100-2.3 and
-    2.3-0 km, the 2-3 km profile layer takes the matrix of the upper
-    one, where the thin 2-2.2 km cloud is absent: it scatters with the
-    untruncated aerosol matrix, so its cloud scattering must not be
-    scaled by the truncated fraction of a matrix it does not use.
+    2.3-0 km, the 2-3 km profile layer straddles them. It takes the
+    matrix of the lower one, where its thin 2-2.2 km cloud is, so its
+    cloud scattering is scaled by the truncated fraction of the cloud
+    matrix, as with a single pfgrid layer.
     """
-    pfgrid = [100.0, 2.3, 0.0]
-
     def thin_cloud(**kwargs: Any) -> Cloud:
         """Build a water cloud between 2 and 2.2 km."""
         return Cloud("wc", 12.68, 2.0, 2.2, 5.0, 550.0, **kwargs)
 
-    full = _calc([_aerosol(), thin_cloud()], pfgrid=pfgrid)
-    trunc = _calc([_aerosol(), thin_cloud(truncation=GT)], pfgrid=pfgrid)
-    assert trunc["iphase_atm"].values[0, ICLD] == 0
+    two = _calc([_aerosol(), thin_cloud(truncation=GT)],
+                pfgrid=[100.0, 2.3, 0.0])
+    one = _calc([_aerosol(), thin_cloud(truncation=GT)])
+    full = _calc([_aerosol(), thin_cloud()])
+    assert two["iphase_atm"].values[0, ICLD] == 1
     np.testing.assert_allclose(
-        trunc["OD_p"].values, full["OD_p"].values, rtol=1e-6
+        two["OD_p"].values, one["OD_p"].values, rtol=1e-6
     )
+    assert two["OD_p"].values[0, -1] < full["OD_p"].values[0, -1]
 
 
 def test_calc_split_is_truncated() -> None:

@@ -25,6 +25,7 @@ from smartg.atmosphere import Aer3D, AerOPAC, Atm1D, Atm3D, Cloud, Cloud3D
 from smartg.grid3d import Grid3D
 from smartg.phase import (
     as_theta_grid,
+    calc_iphase,
     is_native_theta,
     theta_grid,
     union_theta_grid,
@@ -360,6 +361,56 @@ def test_truncation_accepts_the_union_grid(
 
     f_uniform, _ = factor(theta_grid(1801))
     assert abs(f_union - f_uniform) < 2e-3
+
+
+# --------------------------------------------------------------------
+# the matrix each profile layer is given
+# --------------------------------------------------------------------
+
+
+def _thin_cloud() -> Cloud:
+    """Build a water cloud between 2 and 2.2 km."""
+    return Cloud("wc", 12.68, 2.0, 2.2, 5.0, WAVELENGTH)
+
+
+def test_straddling_layer_takes_the_matrix_of_its_scattering() -> None:
+    """A layer straddling pfgrid layers takes the one it scatters in.
+
+    The 2-3 km profile layer lies for 0.7 km in the 2.3-100 km pfgrid
+    layer, where only the aerosol is, and for 0.3 km in the 0-2.3 km
+    one, where its thin 2-2.2 km cloud is. By its overlap it would
+    take the upper matrix, without the cloud that carries nearly all
+    its scattering; it takes the lower one. The other layers keep the
+    matrix of the pfgrid layer holding them.
+    """
+    atm = Atm1D("afglms", comp=[_aerosol(), _thin_cloud()], grid=GRID,
+                pfgrid=[100.0, 2.3, 0.0])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pro = atm.calc(WAV, n_theta=721)
+    ipha = pro["iphase_atm"].values[0]
+    # the levels of GRID bound the layers above them: 3-2 km is 7
+    np.testing.assert_array_equal(ipha[1:], [0, 0, 0, 0, 0, 0, 1, 1, 1])
+    pha = pro["phase_atm"].values
+    # the cloud forward peak is in the matrix of the 2-3 km layer
+    assert pha[ipha[7], 0, 0] > 10.0 * pha[ipha[6], 0, 0]
+
+
+def test_aligned_pfgrid_keeps_the_geometric_index() -> None:
+    """With the pfgrid levels on the profile grid, nothing changes.
+
+    No profile layer straddles two pfgrid layers, so each keeps the
+    index calc_iphase gives it.
+    """
+    atm = Atm1D("afglms", comp=[_aerosol(), _thin_cloud()], grid=GRID,
+                pfgrid=[100.0, 3.0, 2.0, 0.0])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pro = atm.calc(WAV, n_theta=721)
+        pha = atm.phase(WAV, n_theta=721)
+    assert pha is not None
+    _, ipha = calc_iphase(pha, WAV, atm.prof.z)
+    np.testing.assert_array_equal(pro["iphase_atm"].values, ipha)
 
 
 # --------------------------------------------------------------------
