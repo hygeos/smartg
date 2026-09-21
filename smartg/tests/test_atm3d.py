@@ -8,7 +8,8 @@ verify the Aer3D input routes and optical properties against the
 OPAC auxdata, and the per-voxel mixing rules on the profile dataset
 returned by Atm3D.calc: the extinctions are summed, the single
 scattering albedos are extinction-weighted and the phase matrices
-are weighted by the scattering coefficients.
+are weighted by the scattering coefficients. The last tests truncate
+one component, alone, before the mixing.
 """
 
 from pathlib import Path
@@ -19,8 +20,10 @@ import pytest
 import xarray as xr
 from numpy.typing import NDArray
 
+import smartg.truncation as trunc_mod
 from smartg.atmosphere import (
     Aer3D,
+    AerOPAC,
     Atm1D,
     Atm3D,
     Cloud3D,
@@ -28,6 +31,12 @@ from smartg.atmosphere import (
 )
 from smartg.config import DIR_AUXDATA
 from smartg.grid3d import Grid3D
+from smartg.truncation import (
+    DMTrunc,
+    GTTrunc,
+    truncate_phase,
+    truncated_ext_ssa,
+)
 
 Scene = tuple[Grid3D, Cloud3D, Cloud3D, xr.Dataset]
 AerScene = tuple[Grid3D, Cloud3D, Aer3D, xr.Dataset]
@@ -56,11 +65,16 @@ def _build_grid() -> Grid3D:
     )
 
 
-def _build_clouds() -> tuple[Cloud3D, Cloud3D]:
+def _build_clouds(
+    truncation: DMTrunc | GTTrunc | None = None,
+) -> tuple[Cloud3D, Cloud3D]:
     # 1-based IPRT convention for the cell indices; two distinct
     # effective radii for the water cloud so that its phase matrix
     # set has more than one unique matrix
-    """Build two clouds, one of them with two effective radii."""
+    """Build two clouds, one of them with two effective radii.
+
+    The water cloud, the first one, carries `truncation`.
+    """
     cld1 = Cloud3D(
         "wc",
         w_ref=550.0,
@@ -69,6 +83,7 @@ def _build_clouds() -> tuple[Cloud3D, Cloud3D]:
         cell_indices=np.array(
             [[1, 1, 2], [2, 1, 2], [3, 1, 2], [4, 1, 2]]
         ),
+        truncation=truncation,
     )
     cld2 = Cloud3D(
         "ic_baum_ghm",
@@ -595,3 +610,159 @@ def test_two_aerosols_mixing() -> None:
     # continental-only voxel: spherical, F22 == F11
     _, _, pha = _voxel_props(pro, grid3, (2, 0, 1))
     assert np.allclose(pha[4], pha[0], rtol=1e-12)
+
+
+# ===================================================================
+# Truncation carried by a component
+# ===================================================================
+
+GT = GTTrunc(trunc_frac=0.3, theta_tr=8.0)
+DM = DMTrunc(n_streams=16)
+
+
+def _expected_truncated(
+    comp: Cloud3D | Aer3D,
+    truncation: DMTrunc | GTTrunc | None,
+) -> Expected:
+    """Return the per cell ext, ssa and phase matrices, truncated.
+
+    They are the untruncated ones of `_expected`, the matrix of each
+    cell truncated alone and its extinction and albedo scaled with
+    the truncated fraction.
+    """
+    ext, ssa, pha = _expected(comp)
+    if truncation is None:
+        return ext, ssa, pha
+    luts, _, _ = comp.get_phase_set(WAV, n_theta=NTH)
+    theta = luts[0].coords["theta_atm"].values
+    pha_tr, f = [], []
+    for p in pha:
+        p_tr, f_j = truncate_phase(p, theta, truncation)
+        pha_tr.append(p_tr)
+        f.append(f_j)
+    ext_tr, ssa_tr = truncated_ext_ssa(ext, ssa, np.array(f))
+    assert all(0.0 < f_j < 1.0 for f_j in f)
+    return ext_tr, ssa_tr, pha_tr
+
+
+def test_truncated_cloud_alone() -> None:
+    """A truncated cloud alone gets its own truncated properties."""
+    grid3 = _build_grid()
+    cld1, _ = _build_clouds(truncation=GT)
+    pro = _build_profile(grid3, [cld1])
+    e, s, p = _expected_truncated(cld1, GT)
+    e_full, _, _ = _expected(cld1)
+    for j, cell in enumerate(WC_CELLS):
+        ext, ssa, pha = _voxel_props(pro, grid3, cell)
+        assert np.isclose(ext, e[j], rtol=1e-12), cell
+        assert np.isclose(ssa, s[j], rtol=1e-12), cell
+        assert np.allclose(pha, p[j], rtol=1e-9, atol=1e-12), cell
+        assert ext < e_full[j]
+
+
+@pytest.mark.parametrize(
+    "trunc_cloud, trunc_aer",
+    [(GT, None), (None, DM), (GT, DM)],
+    ids=["cloud", "aerosol", "both"],
+)
+def test_truncated_component_in_shared_voxels(
+    trunc_cloud: GTTrunc | None, trunc_aer: DMTrunc | None
+) -> None:
+    """Each component is truncated alone, then the voxel is mixed.
+
+    The share of an untruncated component is left as it is.
+    """
+    grid3 = _build_grid()
+    cld1, _ = _build_clouds(truncation=trunc_cloud)
+    aer = _build_aerosol(truncation=trunc_aer)
+    pro = _build_profile(grid3, [cld1, aer])
+    e_c, s_c, p_c = _expected_truncated(cld1, trunc_cloud)
+    e_a, s_a, p_a = _expected_truncated(aer, trunc_aer)
+    for j, cell in enumerate(WC_CELLS):
+        ext, ssa, pha = _voxel_props(pro, grid3, cell)
+        ext_tot = e_c[j] + e_a[j]
+        assert np.isclose(ext, ext_tot, rtol=1e-12), cell
+        assert np.isclose(
+            ssa, (e_c[j] * s_c[j] + e_a[j] * s_a[j]) / ext_tot,
+            rtol=1e-12,
+        ), cell
+        expected = (
+            e_c[j] * s_c[j] * p_c[j] + e_a[j] * s_a[j] * p_a[j]
+        ) / ext_tot
+        assert np.allclose(pha, expected, rtol=1e-9, atol=1e-12), cell
+
+
+def test_truncated_cloud_over_1d_aerosol() -> None:
+    """A truncated cloud leaves the 1D aerosol background untouched.
+
+    This is the pattern of the IPRT C3 case: the cells are mixed with
+    the untruncated 1D aerosol, and only the cloud share of each cell
+    changes.
+    """
+    grid3 = _build_grid()
+
+    def profile(truncation: GTTrunc | None) -> xr.Dataset:
+        cld1, _ = _build_clouds(truncation=truncation)
+        atm_1d = Atm1D(
+            "afglt", comp=[AerOPAC("continental_clean", 0.2, 550.0)],
+            tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0,
+        )
+        atm3 = Atm3D(atm_1d=atm_1d, grid_3d=grid3, comp_3d=[cld1],
+                     wavelength_phase=[550.0])
+        return atm3.calc(WAV, n_theta=NTH)
+
+    full = profile(None)
+    trunc = profile(GT)
+    cld1, _ = _build_clouds(truncation=GT)
+    e_tr, s_tr, _ = _expected_truncated(cld1, GT)
+    e_full, s_full, _ = _expected(cld1)
+
+    nbz = grid3.NZ + 1
+    np.testing.assert_array_equal(
+        trunc["OD_p"].values[:, :nbz], full["OD_p"].values[:, :nbz]
+    )
+    ipha_bg = trunc["iphase_atm"].values[0, :nbz]
+    np.testing.assert_array_equal(
+        trunc["phase_atm"].values[ipha_bg],
+        full["phase_atm"].values[full["iphase_atm"].values[0, :nbz]],
+    )
+    for j, cell in enumerate(WC_CELLS):
+        ext_t, ssa_t, _ = _voxel_props(trunc, grid3, cell)
+        ext_f, ssa_f, _ = _voxel_props(full, grid3, cell)
+        assert np.isclose(ext_t - ext_f, e_tr[j] - e_full[j],
+                          rtol=1e-9), cell
+        assert np.isclose(
+            ext_t * ssa_t - ext_f * ssa_f,
+            e_tr[j] * s_tr[j] - e_full[j] * s_full[j],
+            rtol=1e-9,
+        ), cell
+
+
+def test_truncation_once_per_unique_matrix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cloud is truncated once per distinct matrix, not per cell."""
+    calls = [0]
+    func = trunc_mod.gt_phase_approx
+
+    def counting(*args: Any, **kwargs: Any) -> Any:
+        calls[0] += 1
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(trunc_mod, "gt_phase_approx", counting)
+    cld1, _ = _build_clouds(truncation=GT)
+    _build_profile(_build_grid(), [cld1])
+    # four cells, two effective radii, one phase wavelength
+    assert calls[0] == 2
+
+
+def test_truncated_1d_component_with_forced_arrays() -> None:
+    """Forced 1D aerosol arrays cannot go with a truncated 1D one."""
+    atm_1d = Atm1D(
+        "afglt",
+        comp=[AerOPAC("continental_clean", 0.2, 550.0, truncation=GT)],
+    )
+    grid3 = _build_grid()
+    ext = np.zeros((1, grid3.NZ + 1))
+    with pytest.raises(ValueError, match="aer_ext_1d"):
+        Atm3D(atm_1d=atm_1d, grid_3d=grid3, aer_ext_1d=ext)

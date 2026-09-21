@@ -1496,7 +1496,15 @@ class Comp3D(ABC):
     Implementations must provide the per-cell extinction, single
     scattering albedo and phase matrices used by :class:`Atm3D` to
     merge the component into the 3D atmospheric profile.
+
+    The `truncation` attribute, None unless an implementation sets it,
+    is the truncation of the forward peak of the phase matrices of the
+    component alone, applied by :class:`Atm3D` before it mixes the
+    components of each cell (see `smartg.truncation`). The per-cell
+    optical properties an implementation returns are untruncated.
     """
+
+    truncation: DMTrunc | GTTrunc | None = None
 
     @abstractmethod
     def get_cell_indices(self) -> NDArray[np.int32]:
@@ -1600,8 +1608,10 @@ class _Comp3DFile(Comp3D):
         param_max: float | None = None,
         phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
 
+        self.truncation = truncation
         fname = Path(fname)
         if fname.parent == Path("."):
             fname = Path(DIR_AUXDATA).joinpath(
@@ -2008,6 +2018,15 @@ class Cloud3D(_Comp3DFile):
         Force the cloud single scattering albedo to this constant
         value. If None, the single scattering albedo is interpolated
         from the bulk optical properties file.
+    truncation : DMTrunc or GTTrunc or None, optional
+        Truncation of the forward peak of the phase matrices of this
+        cloud alone (see `smartg.truncation`). It takes effect when
+        :class:`Atm3D` merges the components: the cloud phase matrices
+        are truncated before being mixed with those of the other
+        components of each cell, and the cloud scattering coefficient
+        of each cell is scaled by `1 - f`, `f` being the truncated
+        fraction of the scattered energy. None, the default, disables
+        the truncation.
     """
 
     _param_name = "reff"
@@ -2029,6 +2048,7 @@ class Cloud3D(_Comp3DFile):
         reff_max: float | None = None,
         phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
         super().__init__(
             fname,
@@ -2042,6 +2062,7 @@ class Cloud3D(_Comp3DFile):
             param_max=reff_max,
             phase=phase,
             ssa_cst=ssa_cst,
+            truncation=truncation,
         )
 
     @property
@@ -2129,6 +2150,10 @@ class Aer3D(_Comp3DFile):
         Force the aerosol single scattering albedo to this constant
         value. If None, the single scattering albedo is interpolated
         from the bulk optical properties file.
+    truncation : DMTrunc or GTTrunc or None, optional
+        Truncation of the forward peak of the phase matrices of this
+        aerosol alone, see :class:`Cloud3D`. None, the default,
+        disables the truncation.
     """
 
     _param_name = "rh"
@@ -2150,6 +2175,7 @@ class Aer3D(_Comp3DFile):
         rh_max: float | None = None,
         phase: xr.DataArray | LUT | None = None,
         ssa_cst: float | None = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
         super().__init__(
             fname,
@@ -2163,6 +2189,7 @@ class Aer3D(_Comp3DFile):
             param_max=rh_max,
             phase=phase,
             ssa_cst=ssa_cst,
+            truncation=truncation,
         )
 
     def _normalize_param(
@@ -4304,6 +4331,26 @@ class Atm3D(Atmosphere):
                     "comp_3d must be a list of Comp3D objects (e.g. "
                     "Cloud3D, Aer3D)!"
                 )
+        forced = [
+            name
+            for name, value in [
+                ("aer_ext_1d", aer_ext_1d),
+                ("aer_ssa_1d", aer_ssa_1d),
+                ("aer_phase_1d", aer_phase_1d),
+            ]
+            if value is not None
+        ]
+        if forced and any(
+            getattr(comp, "truncation", None) is not None
+            for comp in atm_1d.comp
+        ):
+            # the forced arrays replace those computed from atm_1d, so
+            # a truncated 1D component would be truncated in the ones
+            # and not in the others
+            raise ValueError(
+                "A 1D component carrying a truncation cannot be "
+                f"combined with forced 1D aerosol arrays ({forced})."
+            )
         self.atm_1d = atm_1d
         self.grid_3d = grid_3d
         self.comp_3d = comp_3d
@@ -4439,6 +4486,14 @@ class Atm3D(Atmosphere):
             `iabs_atm`, `pmin_atm`, `pmax_atm`, `neighbour_atm`)
             consumed by :meth:`smartg.smartg.Smartg.run`.
         """
+        if truncation is not None and any(
+            getattr(comp, "truncation", None) is not None
+            for comp in list(self.atm_1d.comp) + list(self.comp_3d)
+        ):
+            raise ValueError(
+                "The truncation argument cannot be combined with "
+                "components carrying their own truncation."
+            )
         if isinstance(wavelength, BandSet):
             wavelengths = np.asarray(wavelength.wavelength)
         else:
@@ -4578,6 +4633,89 @@ class Atm3D(Atmosphere):
             axis=1,
         )
 
+    @staticmethod
+    def _comp_optics(
+        comp: Comp3D,
+        wavelengths: NDArray[np.floating],
+        wavelength_pha: NDArray[np.floating],
+        n_theta: ThetaLike,
+    ) -> tuple[
+        NDArray[np.floating],
+        NDArray[np.floating],
+        NDArray[np.floating],
+        NDArray[np.floating],
+        tuple[list[xr.DataArray], NDArray[np.int32], int],
+    ]:
+        """Return the optical properties of a 3D component, truncated.
+
+        When the component carries a `truncation`, its unique phase
+        matrices are truncated (each distinct one once), and the
+        extinction and single scattering albedo of each cell are
+        scaled with the truncated fraction of the cell's matrix, so
+        that the component alone loses the fraction `f` of its
+        scattering (see `smartg.truncation.truncated_ext_ssa`).
+
+        Parameters
+        ----------
+        comp : Comp3D
+            The 3D component.
+        wavelengths : ndarray
+            The wavelengths of the profile, in nm.
+        wavelength_pha : ndarray
+            The wavelengths of the phase matrices, in nm.
+        n_theta : int, str or array_like
+            The scattering angles of the phase matrices.
+
+        Returns
+        -------
+        ext, ssa : ndarray
+            The (n_wavelength, N) cell extinctions in km-1 and single
+            scattering albedos, at `wavelengths`.
+        ext_pha, ssa_pha : ndarray
+            The same at `wavelength_pha`.
+        phase_set : tuple
+            The phase matrix set, as `Comp3D.get_phase_set` returns
+            it.
+        """
+        ext = comp.get_ext(wavelengths)
+        ssa = comp.get_ssa(wavelengths)
+        ext_pha = comp.get_ext(wavelength_pha)
+        ssa_pha = comp.get_ssa(wavelength_pha)
+        phases, cell_pha_idx, n_unique = comp.get_phase_set(
+            wavelength_pha, n_theta=n_theta
+        )
+        truncation = getattr(comp, "truncation", None)
+        if truncation is None:
+            return (
+                ext, ssa, ext_pha, ssa_pha,
+                (phases, cell_pha_idx, n_unique),
+            )
+
+        # the matrices are n_wavelength_pha blocks of n_unique, on the
+        # angle grid of the component
+        pha_tr, f = truncate_phase_set(
+            np.stack([pha.values for pha in phases]),
+            phases[0].coords["theta_atm"].values,
+            truncation,
+        )
+        phases = [
+            pha.copy(data=pha_tr[i]) for i, pha in enumerate(phases)
+        ]
+        f_cell = f.reshape(len(wavelength_pha), n_unique)[:, cell_pha_idx]
+        ext_pha, ssa_pha = truncated_ext_ssa(ext_pha, ssa_pha, f_cell)
+        # the i-th phase block serves the i-th profile wavelength (see
+        # the phase indices of `_glob_particles`); fall back on the
+        # nearest phase wavelength otherwise
+        if len(wavelength_pha) == len(wavelengths):
+            iw = np.arange(len(wavelengths))
+        else:
+            iw = np.abs(
+                np.asarray(wavelength_pha)[None, :]
+                - np.asarray(wavelengths)[:, None]
+            ).argmin(axis=1)
+        ext, ssa = truncated_ext_ssa(ext, ssa, f_cell[iw])
+        return ext, ssa, ext_pha, ssa_pha, (phases, cell_pha_idx, n_unique)
+
     def _glob_particles(
         self,
         wavelengths: NDArray[np.floating],
@@ -4631,11 +4769,13 @@ class Atm3D(Atmosphere):
         comp = self.comp_3d[0]
         assert self._cell_indices is not None
         n_cell = self._cell_indices.shape[0]
-        ext_3d = comp.get_ext(wavelengths)
-        ssa_3d = comp.get_ssa(wavelengths)
-        cld_phases, cell_pha_idx, n_unique = comp.get_phase_set(
-            wavelength_pha, n_theta=n_theta
-        )
+        (
+            ext_3d,
+            ssa_3d,
+            ext_3d_pha,
+            ssa_3d_pha,
+            (cld_phases, cell_pha_idx, n_unique),
+        ) = self._comp_optics(comp, wavelengths, wavelength_pha, n_theta)
 
         ext_mix_3d = np.zeros((len(wavelengths), n_cell), dtype=np.float64)
         ssa_mix_3d = np.ones((len(wavelengths), n_cell), dtype=np.float64)
@@ -4688,8 +4828,6 @@ class Atm3D(Atmosphere):
 
             # Second 3d mix phase, weighted by the extinctions at the
             # phase wavelengths
-            ext_3d_pha = comp.get_ext(wavelength_pha)
-            ssa_3d_pha = comp.get_ssa(wavelength_pha)
             for i_wavelength in range(len(wavelength_pha)):
                 ssa_aer_tmp = ssa_aer_1d[i_wavelength, idz_atm]
                 ext_aer_tmp = ext_aer_1d[i_wavelength, idz_atm]
@@ -4788,15 +4926,17 @@ class Atm3D(Atmosphere):
         assert self._comp_cell_pos is not None
         n_cell = self._cell_indices.shape[0]
 
-        # per-component optical properties and phase matrix sets
-        ext_3d = [comp.get_ext(wavelengths) for comp in self.comp_3d]
-        ssa_3d = [comp.get_ssa(wavelengths) for comp in self.comp_3d]
-        ext_3d_pha = [comp.get_ext(wavelength_pha) for comp in self.comp_3d]
-        ssa_3d_pha = [comp.get_ssa(wavelength_pha) for comp in self.comp_3d]
-        phase_sets = [
-            comp.get_phase_set(wavelength_pha, n_theta=n_theta)
+        # per-component optical properties and phase matrix sets,
+        # each component truncated alone if it carries a truncation
+        optics = [
+            self._comp_optics(comp, wavelengths, wavelength_pha, n_theta)
             for comp in self.comp_3d
         ]
+        ext_3d = [opt[0] for opt in optics]
+        ssa_3d = [opt[1] for opt in optics]
+        ext_3d_pha = [opt[2] for opt in optics]
+        ssa_3d_pha = [opt[3] for opt in optics]
+        phase_sets = [opt[4] for opt in optics]
 
         # align every phase matrix set (and the 1D aerosol one) on
         # the union of their scattering angle grids, which loses no
