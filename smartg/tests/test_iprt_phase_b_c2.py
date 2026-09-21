@@ -188,7 +188,7 @@ N_PHOTONS_TRUNC = N_PHOTONS / 50
 # one), and in forward the first group only, which is about 3 times
 # faster than the second one.
 TAU_RAYLEIGH = 0.5
-DEPO_ATM = 0.0
+DEPOL_ATM = 0.0
 ATM_BACKWARD_CASES = (1, 5)
 ATM_FORWARD_GROUP = 1
 # The case 5, in the nadir direction, is the slowest one: the notebook
@@ -580,7 +580,7 @@ def _run_case_backward(
     sensor_grid: Grid3D,
     case: int,
     n_photons: float = N_PHOTONS,
-    depo: float | None = None,
+    depol: float | None = None,
 ) -> tuple[xr.Dataset, float]:
     """Run one backward C2 case with the pinned settings.
 
@@ -596,7 +596,7 @@ def _run_case_backward(
         The case number.
     n_photons : float
         Number of photons.
-    depo : float, optional
+    depol : float, optional
         The depolarization factor. It is only given with a Rayleigh
         atmosphere, otherwise the SMART-G default is left alone.
 
@@ -608,8 +608,8 @@ def _run_case_backward(
         The normalisation of the maps.
     """
     options: dict[str, Any] = {"n_icdf": N_ICDF}
-    if depo is not None:
-        options["depo"] = depo
+    if depol is not None:
+        options["depol"] = depol
     xblock, xgrid = _xblock_xgrid(
         s3db, **backward_run_kwargs(atm, sensor_grid, case), **options
     )
@@ -625,7 +625,7 @@ def _run_group_forward(
     sensor_grid: Grid3D,
     group: ForwardGroup,
     n_photons: float = N_PHOTONS,
-    depo: float | None = None,
+    depol: float | None = None,
 ) -> tuple[xr.Dataset, float]:
     """Run one forward group of C2 cases with the pinned settings.
 
@@ -644,7 +644,7 @@ def _run_group_forward(
         The group of cases.
     n_photons : float
         Number of photons.
-    depo : float, optional
+    depol : float, optional
         The depolarization factor, see _run_case_backward.
 
     Returns
@@ -655,8 +655,8 @@ def _run_group_forward(
         The normalisation of the maps.
     """
     options: dict[str, Any] = {"n_icdf": N_ICDF}
-    if depo is not None:
-        options["depo"] = depo
+    if depol is not None:
+        options["depol"] = depol
     xblock, xgrid = _xblock_xgrid(
         s3df, **forward_run_kwargs(atm, sensor_grid, group), **options
     )
@@ -944,7 +944,7 @@ def test_c2_atm_backward(
         sensor_grid,
         case,
         n_photons=N_PHOTONS_ATM_B[case] / PHOTON_DIVIDER[tier],
-        depo=DEPO_ATM,
+        depol=DEPOL_ATM,
     )
     iquv_sg = smartg_iquv(ds, norm, N_SENSORS)
     iquv_my = read_iprt_iquv(MYSTIC_RES_C2, case + ATM_CASE_OFFSET,
@@ -991,7 +991,7 @@ def test_c2_atm_forward(
         sensor_grid,
         group,
         n_photons=N_PHOTONS / PHOTON_DIVIDER[tier],
-        depo=DEPO_ATM,
+        depol=DEPOL_ATM,
     )
 
     errors = _check_group_forward(
@@ -1038,7 +1038,7 @@ def test_c2_atm_forward_gt(
         sensor_grid,
         group,
         n_photons=N_PHOTONS_TRUNC / PHOTON_DIVIDER[tier],
-        depo=DEPO_ATM,
+        depol=DEPOL_ATM,
     )
 
     errors = _check_group_forward(

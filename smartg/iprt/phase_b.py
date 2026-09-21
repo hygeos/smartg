@@ -1043,7 +1043,7 @@ def run_case_backward(
         Number of photons of the run.
     **run_kwargs
         Other arguments of Smartg.run, e.g. n_loop, n_icdf, seed,
-        xblock, xgrid or depo.
+        xblock, xgrid or depol.
 
     Returns
     -------
@@ -1084,7 +1084,7 @@ def run_group_forward(
         Number of photons of the run.
     **run_kwargs
         Other arguments of Smartg.run, e.g. n_loop, n_icdf, seed,
-        xblock, xgrid or depo.
+        xblock, xgrid or depol.
 
     Returns
     -------

@@ -1357,13 +1357,13 @@ wavelength_lr = np.linspace(w_valid.min(), w_valid.max(), num=N_LOW)
 
 sg = Smartg(alis=True, alt_pp=True)
 m1 = sg.run(seed=0, th_deg=30., wavelength=w_valid, surface=None, le=le,
-            beer=0, atmosphere=atm_valid.calc(w_valid), depo=0.,
+            beer=0, atmosphere=atm_valid.calc(w_valid), depol=0.,
             alis_options=Alis(n_low=N_LOW, hist=False),
             n_photons=n_photons,
             n_loop=n_photons, n_icdf=1e3)
 m1 = drop_axes(m1, 'Zenith angles', 'Azimuth angles')
 m2 = sg.run(seed=0, th_deg=30., wavelength=w_valid, surface=None, le=le,
-            beer=0, atmosphere=atm_valid.calc(w_valid), depo=0.,
+            beer=0, atmosphere=atm_valid.calc(w_valid), depol=0.,
             alis_options=Alis(n_low=N_LOW, hist=True,
                               max_hist=int(n_photons * 5)),
             n_photons=n_photons, n_loop=n_photons, n_icdf=1e3)

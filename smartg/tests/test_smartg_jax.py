@@ -317,7 +317,7 @@ def test_validation_artdeco(
             le=le,
             beer=0,
             atmosphere=atm_valid.calc(w_valid),
-            depo=0.0,
+            depol=0.0,
             alis_options=Alis(n_low=nlow, hist=False),
             n_photons=n_photons,
             n_loop=n_photons,
@@ -334,7 +334,7 @@ def test_validation_artdeco(
             le=le,
             beer=0,
             atmosphere=atm_valid.calc(w_valid),
-            depo=0.0,
+            depol=0.0,
             alis_options=Alis(
                 n_low=nlow,
                 hist=True,

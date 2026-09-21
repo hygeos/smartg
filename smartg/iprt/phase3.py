@@ -614,7 +614,7 @@ def _run_and_save(
     m = sg.run(wavelength=wavelength, n_photons=n_directions * n_photons,
                n_loop=n_photons, atmosphere=pro, sensor=sensors,
                output_layers=1, le=le, surface=surface, xblock=64,
-               xgrid=1024, beer=1, depo=depol, reflectance=False,
+               xgrid=1024, beer=1, depol=depol, reflectance=False,
                earth_radius=earth_radius, stdev=True, progress=True,
                n_icdf=n_icdf, theta_grid=theta_grid, seed=seed)
     if angles is not None:

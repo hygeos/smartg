@@ -141,7 +141,7 @@ fig = smartg_view(
 # only Rayleigh with a custom grid, a custom depolarization ratio
 # and a custom surface pressure
 fig = smartg_view(Smartg().run(
-    wavelength=500., th_deg=30., depo=0., n_photons=1e8,
+    wavelength=500., th_deg=30., depol=0., n_photons=1e8,
     atmosphere=Atm1D('afglt', grid=np.linspace(100., 0., num=16),
                      p0=990.)))
 

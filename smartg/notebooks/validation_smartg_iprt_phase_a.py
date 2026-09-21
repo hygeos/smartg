@@ -123,7 +123,7 @@ for iza, za in enumerate(vza):
 
 m_a1b = s_1db.run(wavelength=550., n_photons=NB_PH * n_dir, n_loop=1e8,
                   atmosphere=pro_a1, sensor=lsensors, le=le, surface=surf_a1,
-                  xblock=64, xgrid=1024, beer=1, depo=0.0, stdev=True,
+                  xblock=64, xgrid=1024, beer=1, depol=0.0, stdev=True,
                   progress=True, seed=SEED, output_layers=0)
 
 m_a1b = drop_axes(m_a1b, 'Azimuth angles', 'Zenith angles')
@@ -159,7 +159,7 @@ for iza, za in enumerate(vza):
 
 m_a1b = s_1db.run(wavelength=wavelength, n_photons=NB_PH * n_dir, n_loop=1e8,
                   atmosphere=pro_a1, sensor=lsensors, le=le, surface=surf_a1,
-                  xblock=64, xgrid=1024, beer=1, depo=0.0, stdev=True,
+                  xblock=64, xgrid=1024, beer=1, depol=0.0, stdev=True,
                   progress=True, seed=SEED, output_layers=0)
 
 m_a1b = drop_axes(m_a1b, 'Azimuth angles', 'Zenith angles')
@@ -211,7 +211,7 @@ m_a1f_dep003 = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                          n_loop=min(1e6, round(NB_PH / 10.)),
                          atmosphere=pro_a1,
                          output_layers=7, le=le, surface=surf_a1,
-                         xblock=64, xgrid=1024, beer=1, depo=0.03, stdev=True,
+                         xblock=64, xgrid=1024, beer=1, depol=0.03, stdev=True,
                          seed=SEED)
 
 # %%
@@ -247,7 +247,7 @@ m_a1f_dep01 = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                         n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                         atmosphere=pro_a1, output_layers=7, le=le,
                         surface=surf_a1, xblock=64, xgrid=1024, beer=1,
-                        depo=0.1, stdev=True, seed=SEED)
+                        depol=0.1, stdev=True, seed=SEED)
 
 # %%
 m_a1f_dep01.to_netcdf(output_folder_path / "iprt_a1_smartg_dep01_ref.nc")
@@ -351,7 +351,7 @@ phi_0 = 180. - saa
 m_a2f = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=550., n_photons=NB_PH,
                   n_loop=min(1e6, round(NB_PH / 10.)), atmosphere=pro_a2,
                   output_layers=7, le=le, surface=surf_a2, xblock=64,
-                  xgrid=1024, beer=1, depo=0.03, stdev=True, seed=SEED)
+                  xgrid=1024, beer=1, depol=0.03, stdev=True, seed=SEED)
 
 # %%
 m_a2f.to_netcdf(output_folder_path / "iprt_a2_smartg_ref.nc")
@@ -458,7 +458,7 @@ m_a3f = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                   n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                   n_icdf=n_theta, atmosphere=pro_a3, output_layers=1,
                   le=le, surface=surf_a3, xblock=64, xgrid=1024, beer=1,
-                  depo=0.0, stdev=True, seed=SEED * 2)
+                  depol=0.0, stdev=True, seed=SEED * 2)
 
 # %%
 m_a3f.to_netcdf(output_folder_path / "iprt_a3_smartg_ref.nc")
@@ -568,7 +568,7 @@ m_a4f = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                   n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 100.)),
                   n_icdf=n_theta, atmosphere=pro_a4, output_layers=1,
                   le=le, surface=surf_a4, xblock=64, xgrid=1024, beer=1,
-                  depo=0.0, stdev=True, seed=SEED)
+                  depol=0.0, stdev=True, seed=SEED)
 
 # %%
 m_a4f.to_netcdf(output_folder_path / "iprt_a4_smartg_ref.nc")
@@ -674,7 +674,7 @@ m_a5f_pp = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                      n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                      n_icdf=n_theta, atmosphere=pro_a5, output_layers=7,
                      le=le, surface=surf_a5, xblock=64, xgrid=1024, beer=1,
-                     depo=0.03, stdev=True, seed=SEED)
+                     depol=0.03, stdev=True, seed=SEED)
 
 # %%
 m_a5f_pp.to_netcdf(output_folder_path / "iprt_a5_smartg_pp_ref.nc")
@@ -743,7 +743,7 @@ m_a5f_al = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                      n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                      n_icdf=n_theta, atmosphere=pro_a5, output_layers=7,
                      le=le, surface=surf_a5, xblock=64, xgrid=1024, beer=1,
-                     depo=0.03, stdev=True, seed=SEED)
+                     depol=0.03, stdev=True, seed=SEED)
 
 # %%
 m_a5f_al.to_netcdf(output_folder_path / "iprt_a5_smartg_al_ref.nc")
@@ -825,7 +825,7 @@ phi_0 = 180. - saa
 m_a6f = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                   n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                   atmosphere=pro_a6, output_layers=7, le=le,
-                  surface=surf_a6, xblock=64, xgrid=1024, beer=1, depo=0.03,
+                  surface=surf_a6, xblock=64, xgrid=1024, beer=1, depol=0.03,
                   stdev=True, seed=SEED)
 
 # %%
@@ -915,7 +915,7 @@ phi_0 = 180. - saa
 m_b1f = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                   n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                   atmosphere=pro_b1, output_layers=7, le=le,
-                  surface=surf_b1, xblock=64, xgrid=1024, beer=1, depo=0.03,
+                  surface=surf_b1, xblock=64, xgrid=1024, beer=1, depol=0.03,
                   stdev=True, seed=SEED)
 
 # %%
@@ -1005,7 +1005,7 @@ phi_0 = 180. - saa
 m_b2f = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                   n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                   atmosphere=pro_b2, output_layers=7, le=le,
-                  surface=surf_b2, xblock=64, xgrid=1024, beer=1, depo=0.03,
+                  surface=surf_b2, xblock=64, xgrid=1024, beer=1, depol=0.03,
                   stdev=True, seed=SEED)
 
 # %%
@@ -1121,7 +1121,7 @@ phi_0 = 180. - saa
 m_b3f = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                   n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                   atmosphere=pro_b3, output_layers=7, le=le,
-                  surface=surf_b3, xblock=64, xgrid=1024, beer=1, depo=0.03,
+                  surface=surf_b3, xblock=64, xgrid=1024, beer=1, depol=0.03,
                   stdev=True, seed=SEED)
 
 # %%
@@ -1233,13 +1233,13 @@ m_b4f = s_1df.run(
     th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
     n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
     atmosphere=pro_b4, output_layers=7, le=le,
-    surface=surf_b4, xblock=64, xgrid=1024, beer=1, depo=0.03,
+    surface=surf_b4, xblock=64, xgrid=1024, beer=1, depol=0.03,
     stdev=True, seed=SEED,
     n_icdf=n_theta)  # , russian_roulette=1, russian_roulette_weight=0.1)
 m_b4f2 = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                    n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                    atmosphere=pro_b4, output_layers=7, le=le,
-                   surface=surf_b4, xblock=64, xgrid=1024, beer=1, depo=0.03,
+                   surface=surf_b4, xblock=64, xgrid=1024, beer=1, depol=0.03,
                    stdev=True, seed=SEED * 2, n_icdf=n_theta)
 
 # %%
@@ -1332,7 +1332,7 @@ for iza, za in enumerate(vza):
 m_b4b_0km = s_1db.run(wavelength=wavelength, n_photons=NB_PH * n_dir,
                       n_loop=NB_PH, atmosphere=pro_b4, sensor=lsensors,
                       n_icdf=n_theta, le=le, surface=surf_b4, xblock=64,
-                      xgrid=1024, beer=1, depo=0.03, stdev=True, progress=True,
+                      xgrid=1024, beer=1, depol=0.03, stdev=True, progress=True,
                       seed=SEED, output_layers=0)
 
 m_b4b_0km = drop_axes(m_b4b_0km, 'Azimuth angles', 'Zenith angles')
@@ -1353,7 +1353,7 @@ m_b4b_0km = drop_axes(m_b4b_0km, 'sensor index')
 m_b4b_0km2 = s_1db.run(wavelength=wavelength, n_photons=NB_PH * n_dir,
                        n_loop=NB_PH, atmosphere=pro_b4, sensor=lsensors,
                        n_icdf=n_theta, le=le, surface=surf_b4, xblock=64,
-                       xgrid=1024, beer=1, depo=0.03, stdev=True,
+                       xgrid=1024, beer=1, depol=0.03, stdev=True,
                        progress=True, seed=SEED * 2, output_layers=0)
 
 m_b4b_0km2 = drop_axes(m_b4b_0km2, 'Azimuth angles', 'Zenith angles')
@@ -1413,7 +1413,7 @@ for iza, za in enumerate(vza):
 m_b4b_30km = s_1db.run(wavelength=wavelength, n_photons=NB_PH * n_dir,
                        n_loop=NB_PH, atmosphere=pro_b4, sensor=lsensors,
                        n_icdf=n_theta, le=le, surface=surf_b4, xblock=64,
-                       xgrid=1024, beer=1, depo=0.03, stdev=True,
+                       xgrid=1024, beer=1, depol=0.03, stdev=True,
                        progress=True, seed=SEED, output_layers=0)
 
 m_b4b_30km = drop_axes(m_b4b_30km, 'Azimuth angles', 'Zenith angles')
@@ -1434,7 +1434,7 @@ m_b4b_30km = drop_axes(m_b4b_30km, 'sensor index')
 m_b4b_30km2 = s_1db.run(wavelength=wavelength, n_photons=NB_PH * n_dir,
                         n_loop=NB_PH, atmosphere=pro_b4, sensor=lsensors,
                         n_icdf=n_theta, le=le, surface=surf_b4, xblock=64,
-                        xgrid=1024, beer=1, depo=0.03, stdev=True,
+                        xgrid=1024, beer=1, depol=0.03, stdev=True,
                         progress=True, seed=SEED * 2, output_layers=0)
 
 m_b4b_30km2 = drop_axes(m_b4b_30km2, 'Azimuth angles', 'Zenith angles')

@@ -134,7 +134,7 @@ def test_a1(
         xblock=64,
         xgrid=1024,
         beer=1,
-        depo=0.0,
+        depol=0.0,
         stdev=True,
         progress=True,
     )
@@ -188,7 +188,7 @@ def test_a1(
         xblock=64,
         xgrid=1024,
         beer=1,
-        depo=0.0,
+        depol=0.0,
         stdev=True,
         progress=True,
     )
@@ -239,7 +239,7 @@ def test_a1(
         xblock=64,
         xgrid=1024,
         beer=1,
-        depo=0.03,
+        depol=0.03,
         stdev=True,
     )
 
@@ -263,7 +263,7 @@ def test_a1(
         xblock=64,
         xgrid=1024,
         beer=1,
-        depo=0.1,
+        depol=0.1,
         stdev=True,
     )
     # *****************************************************************
@@ -661,7 +661,7 @@ def test_a2(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         xblock=64,
         xgrid=1024,
         beer=1,
-        depo=0.03,
+        depol=0.03,
         stdev=True,
         seed=SEED,
     )
@@ -1036,7 +1036,7 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         xblock=64,
         xgrid=1024,
         beer=1,
-        depo=0.03,
+        depol=0.03,
         stdev=True,
         seed=SEED,
     )
@@ -1353,7 +1353,7 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         xblock=64,
         xgrid=1024,
         beer=1,
-        depo=0.03,
+        depol=0.03,
         stdev=True,
         seed=SEED,
     )

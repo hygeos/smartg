@@ -1045,8 +1045,8 @@ class Smartg:
         environment: Environment | None = None,
         alis_options: Alis | dict | None = None,
         n_photons: float = 1e9,
-        depo: float = 0.0279,
-        depo_water: float = 0.0906,
+        depol: float = 0.0279,
+        depol_water: float = 0.0906,
         th_deg: float = 0.0,
         ph_deg: float = 0.0,
         seed: int = -1,
@@ -1143,9 +1143,9 @@ class Smartg:
         n_photons : int, optional
             The total number of photons used for the simulation. Default
             1e9.
-        depo : float, optional
+        depol : float, optional
             The Rayleigh depolarization factor (air). Default 0.0279.
-        depo_water : float, optional
+        depol_water : float, optional
             The Rayleigh depolarization factor (water). Default 0.0906.
         th_deg : float, optional
             The sun/viewing zenith angle in forward/backward mode, in
@@ -1759,7 +1759,7 @@ class Smartg:
             faer, caer = _calc_phase_gpu(
                 prof_atm,
                 n_theta=agrid_atm[0],
-                depo=depo,
+                depol=depol,
                 kind='atm',
                 polarization=polarization,
                 # mode 0 keeps the historical grid of each builder
@@ -1918,7 +1918,7 @@ class Smartg:
             foce, coce = _calc_phase_gpu(
                 prof_oc,
                 n_theta=agrid_oc[0],
-                depo=depo_water,
+                depol=depol_water,
                 kind='oc',
                 polarization=polarization,
                 ang_a=None if agrid_oc[1] == 0 else ang_oc,
@@ -3200,7 +3200,7 @@ def _isotropic(
 
 def _rayleigh(
     n_theta: int,
-    depo: float,
+    depol: float,
     polarization: bool = True,
     ang_a: NDArray[np.float64] | None = None,
 ) -> np.ndarray:
@@ -3217,7 +3217,7 @@ def _rayleigh(
         In CUDA, phase values are sampled over this angular
         discretization. A finer angular discretization improves sampling
         precision but increases GPU memory usage.
-    depo : float
+    depol : float
         Molecular depolarization factor. Generates the Rayleigh phase
         entry. If negative, an isotropic phase function is used instead
         of Rayleigh.
@@ -3236,7 +3236,7 @@ def _rayleigh(
     """
     pha = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
 
-    gama = depo / (2 - depo)
+    gama = depol / (2 - depol)
     delta = np.float32((1.0 - gama) / (1.0 + 2.0 * gama))
     delta_prim = np.float32(gama / (1.0 + 2.0 * gama))
 
@@ -3424,7 +3424,7 @@ def _pgrid_struct(pgrid: tuple) -> np.void:
 def _calc_phase_host(
     profile: xr.Dataset,
     n_theta: int,
-    depo: float,
+    depol: float,
     kind: str,
     polarization: bool = True,
     ang_a: NDArray[np.float64] | None = None,
@@ -3438,7 +3438,7 @@ def _calc_phase_host(
 
     - index 0 for the molecular phase function (Rayleigh, or isotropic
       when
-        ``depo < 0``),
+        ``depol < 0``),
     - index 1 for the VRS phase function,
     - subsequent indices for the tabulated particle phase functions
       found in
@@ -3471,7 +3471,7 @@ def _calc_phase_host(
         In CUDA, phase values are sampled over this ``n_theta`` angular
         discretization. A finer angular discretization improves sampling
         precision but increases GPU memory usage.
-    depo : float
+    depol : float
         Molecular depolarization factor used to generate the Rayleigh
         phase entry. If negative, an isotropic phase function is used
         instead of Rayleigh.
@@ -3518,10 +3518,10 @@ def _calc_phase_host(
     phase_host = np.zeros((nrows, n_theta), dtype=TYPE_PHASE, order='C')
     ang = _uniform_angles(n_theta) if ang_a is None else ang_a
 
-    # Set Rayleigh phase function or isotropic if depo <0
-    if depo >= 0:
+    # Set Rayleigh phase function or isotropic if depol <0
+    if depol >= 0:
         phase_host[0, :] = _rayleigh(
-            n_theta, depo, polarization=polarization, ang_a=ang_a
+            n_theta, depol, polarization=polarization, ang_a=ang_a
         )
     # no polarization switch in isotropic because the function needs
     # first to be corrected
@@ -3641,7 +3641,7 @@ def _cdf_of_table(
 def _calc_phase_gpu(
     profile: xr.Dataset,
     n_theta: int,
-    depo: float,
+    depol: float,
     kind: str,
     polarization: bool = True,
     ang_a: NDArray[np.float64] | None = None,
@@ -3662,7 +3662,7 @@ def _calc_phase_gpu(
         distribution, of the same shape and dtype ``TYPE_PCDF``.
     """
     phase_host, cdf_host = _calc_phase_host(
-        profile, n_theta, depo, kind, polarization=polarization, ang_a=ang_a,
+        profile, n_theta, depol, kind, polarization=polarization, ang_a=ang_a,
     )
 
     return to_gpu(phase_host), to_gpu(cdf_host)

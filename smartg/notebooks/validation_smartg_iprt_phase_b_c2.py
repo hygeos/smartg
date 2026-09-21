@@ -132,7 +132,7 @@ N_LOOP = 1e8
 N_THETA = 18001  # 1801 scattering angles are not enough for the case 6
 SEED = 1234
 TAU_RAYLEIGH = 0.5
-DEPO_ATM = 0.0
+DEPOL_ATM = 0.0
 
 # Accepted by most GPUs after the 10xx series
 X_BLOCK = 128
@@ -186,11 +186,11 @@ def run_options(sg: Smartg, geometry: dict[str, Any], with_atm: bool
     Returns
     -------
     dict
-        The n_icdf, n_loop, seed, xblock, xgrid and depo arguments.
+        The n_icdf, n_loop, seed, xblock, xgrid and depol arguments.
     """
     options: dict[str, Any] = {"n_icdf": N_THETA}
     if with_atm:
-        options["depo"] = DEPO_ATM
+        options["depol"] = DEPOL_ATM
     if FIND_OPTIMAL_XB_XG:
         xblock, xgrid = find_optimal_xb_xg(
             sg, X_BLOCKS, X_GRIDS, CHECK_N_PHOTONS, CHECK_N_LOOP,
