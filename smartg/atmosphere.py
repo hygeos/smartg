@@ -102,7 +102,12 @@ from smartg.phase import (
     is_native_theta,
     union_theta_grid,
 )
-from smartg.truncation import DMTrunc, GTTrunc
+from smartg.truncation import (
+    DMTrunc,
+    GTTrunc,
+    truncate_phase_set,
+    truncated_ext_ssa,
+)
 from smartg.typing import (
     BandLike,
     NumericArrayLike,
@@ -272,6 +277,16 @@ class AerOPAC:
     rh_mix/free/stra : None or float, optional
         Force relative humidity of mixture/free tropo/strato. Default
         None.
+    truncation : DMTrunc or GTTrunc or None, optional
+        Truncation of the forward peak of the phase matrices of this
+        component alone (see `smartg.truncation`), for forward-peaked
+        phase functions only (large particles). It takes effect when
+        the component is mixed into a profile by `Atm1D.calc`: its
+        phase matrices are truncated before being mixed with those of
+        the other components of the layer, and its own scattering
+        coefficient is scaled by `1 - f`, `f` being the truncated
+        fraction of the scattered energy. None, the default, disables
+        the truncation.
 
     Notes
     -----
@@ -319,8 +334,10 @@ class AerOPAC:
         rh_mix: float | None = None,
         rh_free: float | None = None,
         rh_stra: float | None = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
 
+        self.truncation = truncation
         self.tau_ref = (
             tau_ref.to_xarray() if isinstance(tau_ref, LUT) else tau_ref
         )
@@ -768,6 +785,9 @@ class AerOPAC:
         spherical (4 Stokes
         components) and non-spherical (6 components) particles.
 
+        The matrices are returned untruncated: the `truncation` of the
+        component is applied by `Atm1D` when it mixes the components.
+
         Parameters
         ----------
         wavelength : array-like
@@ -1199,6 +1219,10 @@ class Cloud(AerOPAC):
           spherical particles)
         - F11, F21, F33, F34, F22 and F44 if 6 terms are given (for both
           spherical and non-spherical particles)
+    truncation : DMTrunc or GTTrunc or None, optional
+        Truncation of the forward peak of the phase matrices of this
+        cloud alone, see `AerOPAC`. None, the default, disables the
+        truncation.
 
     Examples
     --------
@@ -1225,7 +1249,9 @@ class Cloud(AerOPAC):
         | LUT
         | None = None,
         phase: xr.DataArray | LUT | None = None,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
+        self.truncation = truncation
         if zmax - zmin <= 1e-6:
             raise ValueError(
                 "The cloud layer must have zmax > zmin, got "
@@ -1366,6 +1392,10 @@ class AerUser(AerOPAC):
         Force max altitude of the mixture
     z_mix : float, optional
         Force scale height (see notes) of the mixture
+    truncation : DMTrunc or GTTrunc or None, optional
+        Truncation of the forward peak of the phase matrices of this
+        aerosol alone, see `AerOPAC`. None, the default, disables the
+        truncation.
 
     Notes
     -----
@@ -1388,8 +1418,10 @@ class AerUser(AerOPAC):
         h_mix_min: float = 0.0,
         h_mix_max: float = 2.0,
         z_mix: float = 2,
+        truncation: DMTrunc | GTTrunc | None = None,
     ) -> None:
 
+        self.truncation = truncation
         self.fname = "none"
         self.tau_ref = None
         ext = aod / (
@@ -2598,33 +2630,84 @@ class Atm1D(Atmosphere):
         out : Dataset
             An xarray Dataset object with the profile and (if phase =
             True) the phase matrices.
+
+        Raises
+        ------
+        ValueError
+            If a component carries a `truncation` while the particle
+            profile is forced (`prof_aer`), whose extinction and single
+            scattering albedo would stay untruncated, or while the
+            `truncation` argument is given too.
+
+        Notes
+        -----
+        The components carrying a `truncation` are truncated one by one
+        before being mixed (see `phase`), and the scattering of each is
+        scaled by `1 - f` in the layers it occupies, `f` being the
+        truncated fraction of the phase matrix the layer is given. The
+        other components are left as they are. With `phase=False` no
+        phase matrix is computed, and nothing is truncated either.
         """
         if not isinstance(wavelength, BandSet):
             wavelength = BandSet(wavelength)
 
-        profile = self.profile(wavelength)
+        truncated = [
+            getattr(comp, "truncation", None) is not None
+            for comp in self.comp
+        ]
+        if phase and any(truncated):
+            if truncation is not None:
+                raise ValueError(
+                    "The truncation argument cannot be combined with "
+                    "components carrying their own truncation."
+                )
+            if self.prof_aer is not None:
+                raise ValueError(
+                    "A component carrying a truncation cannot be "
+                    "combined with a forced particle profile "
+                    "(prof_aer), whose extinction and single "
+                    "scattering albedo would not be truncated."
+                )
+
+        # the phase matrices come first: the truncation of a component
+        # scales its scattering in each layer by the truncated fraction
+        # of the phase matrix that layer is given
+        pha = None
+        pha_ = None
+        ipha = None
+        comp_trunc_frac = None
+        if phase and self.comp:
+            if self.wavelength_phase is None:
+                wavelength_pha = np.atleast_1d(wavelength[:])
+            else:
+                wavelength_pha = np.atleast_1d(self.wavelength_phase)
+            comp_phases = self._comp_phases(wavelength_pha, n_theta)
+            pha = self._mix_phases(comp_phases)
+            pha_, ipha = calc_iphase(
+                pha,
+                np.atleast_1d(wavelength[:]),
+                self.prof.z,
+                use_old_calc_iphase,
+            )
+            if any(truncated):
+                # mapped with the indices of the mixture, so that a
+                # layer whose phase matrix does not hold the component
+                # (null there) is not rescaled either
+                comp_trunc_frac = [
+                    None if f is None else f.values.ravel()[ipha]
+                    for _, _, f in comp_phases
+                ]
+
+        profile = self.profile(wavelength, comp_trunc_frac=comp_trunc_frac)
 
         if phase:
-            if self.wavelength_phase is None:
-                wavelength_pha = wavelength[:]
-            else:
-                wavelength_pha = self.wavelength_phase
-            pha = self.phase(wavelength_pha, n_theta=n_theta)
-            ipha = None
-
             pro_var = list(profile.data_vars)
             if pha is not None or (
                 self.opt3d and ("phase_atm" in pro_var) and truncation
             ):
-                if pha is not None:
-                    pha_, ipha = calc_iphase(
-                        pha,
-                        profile.coords["wavelength"].values,
-                        profile.coords["z_atm"].values,
-                        use_old_calc_iphase,
-                    )
-                else:  # 3D ATM
+                if pha is None:  # 3D ATM
                     pha_ = profile["phase_atm"].values
+                assert pha_ is not None
 
                 nphase = pha_.shape[0]
 
@@ -2976,6 +3059,10 @@ class Atm1D(Atmosphere):
         self,
         wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
         prof: ProfileBase | None = None,
+        *,
+        comp_trunc_frac: (
+            Sequence[NDArray[np.floating] | None] | None
+        ) = None,
     ) -> xr.Dataset:
         """Calculate the optical property profile at given wavelengths.
 
@@ -2996,6 +3083,15 @@ class Atm1D(Atmosphere):
             pressure,
             and density profiles. Default is None; uses self.prof if not
             provided.
+        comp_trunc_frac : sequence or None, optional
+            The truncated fraction `f` of the phase matrix of each
+            component of `comp`, in order, over [wavelength, z] on the
+            grid of `prof`, or None for an untruncated component. The
+            scattering of each truncated component is scaled by
+            `1 - f`, its absorption kept, before the components are
+            summed (see `smartg.truncation.truncated_ext_ssa`).
+            `calc` fills it from the `truncation` of the components.
+            If None (default), nothing is truncated.
 
         Returns
         -------
@@ -3193,10 +3289,16 @@ class Atm1D(Atmosphere):
         if self.prof_aer is None:
             dtaua = np.zeros((len(wavelength), len(prof.z)), dtype="float32")
             ssa_p = np.zeros((len(wavelength), len(prof.z)), dtype="float32")
-            for comp in self.comp:
+            if comp_trunc_frac is None:
+                comp_trunc_frac = [None] * len(self.comp)
+            for comp, f in zip(self.comp, comp_trunc_frac, strict=True):
                 dtau_, ssa_ = comp.dtau_ssa(
                     wavelength[:], prof.z, prof.relative_humidity()
                 )
+                if f is not None:
+                    # the scattering of this component alone loses the
+                    # truncated fraction of its energy
+                    dtau_, ssa_ = truncated_ext_ssa(dtau_, ssa_, f)
                 dtaua += dtau_
                 ssa_p += dtau_ * ssa_
             ssa_p[dtaua != 0] /= dtaua[dtaua != 0]
@@ -3744,13 +3846,17 @@ class Atm1D(Atmosphere):
         weighted average
         across all aerosol components defined in the comp attribute:
 
-        pha_total = [∑_i (pha_i x Δτ_i x ssa_i)) / (∑_i (Δτ_i x ssa_i)]
+        pha_total = [∑_i (pha_i x Δτ_i x ssa_i x (1 - f_i))]
+                    / [∑_i (Δτ_i x ssa_i x (1 - f_i))]
 
         where:
 
         - pha_i is the phase matrix of component i
         - Δτ_i is the optical depth of component i
         - ssa_i is the single scattering albedo of component i
+        - f_i is the truncated fraction of component i, 0 unless the
+          component carries a `truncation`, in which case pha_i is its
+          truncated phase matrix
 
         The relative humidity used for calculations is obtained from
         the reduced profile (self.prof_red).
@@ -3772,13 +3878,42 @@ class Atm1D(Atmosphere):
         wavelength = np.atleast_1d(wavelength)
         if len(self.comp) == 0:
             return None
-        rh = self.prof_red.relative_humidity()
+        return self._mix_phases(self._comp_phases(wavelength, n_theta))
 
+    def _comp_phases(
+        self, wavelength: NDArray[np.floating], n_theta: ThetaLike
+    ) -> list[tuple[xr.DataArray, xr.DataArray, xr.DataArray | None]]:
+        """Return the phase matrix of each component, truncated.
+
+        On the reduced profile `pfgrid`, one triple per component:
+
+        - the phase matrices over [wavelength_phase, z_phase, nphamat,
+          theta_atm], truncated when the component carries a
+          `truncation`;
+        - their mixing weight over [wavelength_phase, z_phase], the
+          scattering optical thickness of the component in each layer,
+          scaled by `1 - f` when it is truncated;
+        - the truncated fraction `f` over [wavelength_phase, z_phase],
+          or None when the component is not truncated.
+
+        Parameters
+        ----------
+        wavelength : ndarray
+            Wavelengths of the phase matrices, in nm.
+        n_theta : int, str or array_like
+            Scattering angles of the phase matrices, see `phase`.
+
+        Returns
+        -------
+        list of tuple
+            The (phase, weight, f) triple of each component of `comp`,
+            in order.
+        """
+        rh = self.prof_red.relative_humidity()
         theta_req = (
             self.native_theta() if is_native_theta(n_theta) else n_theta
         )
-        phases = []
-        weights = []
+        comp_phases = []
         for comp in self.comp:
             dtau, ssa_p = comp.dtau_ssa(wavelength, self.pfgrid, rh=rh)
             comp_pha = comp.phase(
@@ -3789,18 +3924,62 @@ class Atm1D(Atmosphere):
 
             # dtau/ssa grids are defined on pfgrid boundaries; skip TOA
             # bound to match z_phase layers.
-            weights.append(
-                xr.DataArray(
-                    dtau[:, 1:] * ssa_p[:, 1:],
-                    dims=["wavelength_phase", "z_phase"],
-                    coords={
-                        "wavelength_phase":
-                            comp_pha.coords["wavelength_phase"].values,
-                        "z_phase": comp_pha.coords["z_phase"].values,
-                    },
-                )
+            coords = {
+                "wavelength_phase":
+                    comp_pha.coords["wavelength_phase"].values,
+                "z_phase": comp_pha.coords["z_phase"].values,
+            }
+            weight = xr.DataArray(
+                dtau[:, 1:] * ssa_p[:, 1:],
+                dims=["wavelength_phase", "z_phase"],
+                coords=coords,
             )
-            phases.append(comp_pha)
+
+            f = None
+            truncation = getattr(comp, "truncation", None)
+            if truncation is not None:
+                # truncate the component alone, before the mixing, on
+                # its own angle grid; its scattering loses the
+                # fraction f of its energy, the forward peak
+                pha_tr, f_tr = truncate_phase_set(
+                    comp_pha.values,
+                    comp_pha.coords["theta_atm"].values,
+                    truncation,
+                )
+                comp_pha = comp_pha.copy(data=pha_tr)
+                f = xr.DataArray(
+                    f_tr, dims=["wavelength_phase", "z_phase"],
+                    coords=coords,
+                )
+                weight = weight * (1.0 - f)
+            comp_phases.append((comp_pha, weight, f))
+        return comp_phases
+
+    def _mix_phases(
+        self,
+        comp_phases: list[
+            tuple[xr.DataArray, xr.DataArray, xr.DataArray | None]
+        ],
+    ) -> xr.DataArray:
+        """Mix the phase matrices of the components.
+
+        Each matrix is weighted by the (truncated) scattering optical
+        thickness of its component, see `phase`.
+
+        Parameters
+        ----------
+        comp_phases : list of tuple
+            The (phase, weight, f) triples of the components, as
+            `_comp_phases` returns them.
+
+        Returns
+        -------
+        DataArray
+            The mixed phase matrices over [wavelength_phase, z_phase,
+            nphamat, theta_atm], null where no component scatters.
+        """
+        phases = [comp_pha for comp_pha, _, _ in comp_phases]
+        weights = [weight for _, weight, _ in comp_phases]
 
         # the sum below aligns the coordinates by their intersection,
         # which must never be where the angles go: bring every matrix

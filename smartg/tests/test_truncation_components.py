@@ -1,0 +1,239 @@
+"""GPU-free tests of the truncation carried by the 1D components.
+
+A component truncated through its `truncation` parameter is truncated
+alone, before being mixed with the other components of its layer, and
+only its own scattering is scaled by `1 - f`. The profiles returned by
+`Atm1D.calc` are checked against the untruncated ones transformed by
+hand, and against the profiles of each component alone.
+"""
+
+import warnings
+from typing import Any
+
+import numpy as np
+import pytest
+import xarray as xr
+
+from smartg.atmosphere import AerOPAC, Atm1D, Cloud
+from smartg.diff import diff1
+from smartg.phase import theta_grid
+from smartg.truncation import (
+    DMTrunc,
+    GTTrunc,
+    truncate_phase,
+    truncated_ext_ssa,
+)
+
+WAV = np.array([550.0])
+GRID = [100.0, 50.0, 20.0, 10.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]
+N_THETA = theta_grid(1801)
+GT = GTTrunc(trunc_frac=0.3, theta_tr=8.0)
+DM = DMTrunc(n_streams=16)
+# layer holding the cloud (2-3 km) on GRID, as a diff1 index
+ICLD = 7
+
+
+def _aerosol(**kwargs: Any) -> AerOPAC:
+    """Build the OPAC aerosol mixed with the cloud."""
+    return AerOPAC("continental_clean", 0.2, 550.0, **kwargs)
+
+
+def _cloud(**kwargs: Any) -> Cloud:
+    """Build the water cloud of the 2-3 km layer."""
+    return Cloud("wc", 12.68, 2.0, 3.0, 5.0, 550.0, **kwargs)
+
+
+def _calc(comps: list[AerOPAC], **kwargs: Any) -> xr.Dataset:
+    """Compute the profile of a 1D atmosphere holding `comps`."""
+    atm = Atm1D("afglms", comp=comps, grid=GRID, **kwargs)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return atm.calc(WAV, n_theta=N_THETA)
+
+
+def _layer_sca(pro: xr.Dataset) -> np.ndarray:
+    """Return the particle scattering optical thickness of each layer."""
+    return diff1(pro["OD_p"].values, axis=1) * pro["ssa_p_atm"].values
+
+
+@pytest.mark.parametrize("truncation", [GT, DM], ids=["GT", "DM"])
+def test_single_component(truncation: DMTrunc | GTTrunc) -> None:
+    """A truncated cloud alone: the untruncated profile, transformed.
+
+    The phase matrix is the untruncated one truncated, the particle
+    extinction and single scattering albedo follow `truncated_ext_ssa`
+    with its truncated fraction, and the absorption is unchanged.
+    """
+    full = _calc([_cloud()])
+    trunc = _calc([_cloud(truncation=truncation)])
+
+    theta = full.coords["theta_atm"].values
+    pha_expected, f = truncate_phase(
+        full["phase_atm"].values[0], theta, truncation
+    )
+    assert 0.0 < f < 1.0
+    np.testing.assert_allclose(
+        trunc["phase_atm"].values[0], pha_expected, rtol=1e-5, atol=1e-8
+    )
+
+    dtau_expected, ssa_expected = truncated_ext_ssa(
+        diff1(full["OD_p"].values, axis=1), full["ssa_p_atm"].values, f
+    )
+    np.testing.assert_allclose(
+        diff1(trunc["OD_p"].values, axis=1), dtau_expected,
+        rtol=1e-5, atol=1e-7,
+    )
+    np.testing.assert_allclose(
+        trunc["ssa_p_atm"].values, ssa_expected, rtol=1e-5
+    )
+    np.testing.assert_allclose(
+        trunc["OD_abs_atm"].values, full["OD_abs_atm"].values, rtol=1e-5
+    )
+    np.testing.assert_allclose(
+        trunc["OD_r"].values, full["OD_r"].values
+    )
+    # less particle scattering, hence more molecular scattering in
+    # proportion, in the cloud layer
+    assert trunc["pmol_atm"].values[0, ICLD] > full["pmol_atm"][0, ICLD]
+
+
+@pytest.mark.parametrize("truncation", [GT, DM], ids=["GT", "DM"])
+def test_single_component_as_global(truncation: DMTrunc | GTTrunc) -> None:
+    """Truncating the only component matches the global truncation."""
+    trunc = _calc([_cloud(truncation=truncation)])
+    atm = Atm1D("afglms", comp=[_cloud()], grid=GRID)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        glob = atm.calc(WAV, n_theta=N_THETA, truncation=truncation)
+    for var in ["OD_p", "ssa_p_atm", "OD_atm", "OD_sca_atm", "OD_abs_atm",
+                "ssa_atm", "pmol_atm"]:
+        np.testing.assert_allclose(
+            trunc[var].values, glob[var].values, rtol=1e-5, atol=1e-7,
+            err_msg=var,
+        )
+    np.testing.assert_allclose(
+        trunc["phase_atm"].values, glob["phase_atm"].values,
+        rtol=1e-5, atol=1e-8,
+    )
+
+
+def test_mixture_truncates_the_cloud_alone() -> None:
+    """In a layer of aerosol and truncated cloud, only the cloud is cut.
+
+    The layer holds the sum of the aerosol alone and of the truncated
+    cloud alone. Its phase matrix is a mixture of the aerosol matrix
+    and of the truncated cloud matrix, in which the weight of the
+    cloud against the aerosol is the untruncated one times `1 - f`.
+    """
+    aer_alone = _calc([_aerosol()])
+    cld_alone = _calc([_cloud(truncation=GT)])
+    cld_full = _calc([_cloud()])
+    mix = _calc([_aerosol(), _cloud(truncation=GT)])
+    mix_full = _calc([_aerosol(), _cloud()])
+
+    np.testing.assert_allclose(
+        diff1(mix["OD_p"].values, axis=1),
+        diff1(aer_alone["OD_p"].values, axis=1)
+        + diff1(cld_alone["OD_p"].values, axis=1),
+        rtol=1e-5, atol=1e-7,
+    )
+    np.testing.assert_allclose(
+        _layer_sca(mix), _layer_sca(aer_alone) + _layer_sca(cld_alone),
+        rtol=1e-5, atol=1e-7,
+    )
+
+    # the mixture is a convex combination of the two matrices; alpha
+    # is the aerosol share of the scattering
+    def aerosol_share(pro: xr.Dataset, cld: xr.Dataset) -> float:
+        p_mix = pro["phase_atm"].values[0, 0]
+        p_aer = aer_alone["phase_atm"].values[0, 0]
+        p_cld = cld["phase_atm"].values[0, 0]
+        alpha = np.dot(p_mix - p_cld, p_aer - p_cld) / np.dot(
+            p_aer - p_cld, p_aer - p_cld
+        )
+        np.testing.assert_allclose(
+            p_mix, p_cld + alpha * (p_aer - p_cld), rtol=1e-4, atol=1e-6
+        )
+        return float(alpha)
+
+    alpha = aerosol_share(mix, cld_alone)
+    alpha_full = aerosol_share(mix_full, cld_full)
+    _, f = truncate_phase(
+        cld_full["phase_atm"].values[0], N_THETA, GT
+    )
+    odds = alpha / (1.0 - alpha)
+    odds_full = alpha_full / (1.0 - alpha_full)
+    assert odds / odds_full == pytest.approx(1.0 / (1.0 - f), rel=1e-4)
+
+
+def test_two_components_truncated_differently() -> None:
+    """Each truncated component keeps its own truncated fraction."""
+    aer_t = _aerosol(truncation=DM)
+    cld_t = _cloud(truncation=GT)
+    mix = _calc([aer_t, cld_t])
+    np.testing.assert_allclose(
+        diff1(mix["OD_p"].values, axis=1),
+        diff1(_calc([aer_t])["OD_p"].values, axis=1)
+        + diff1(_calc([cld_t])["OD_p"].values, axis=1),
+        rtol=1e-5, atol=1e-7,
+    )
+    assert not np.isnan(mix["phase_atm"].values).any()
+
+
+def test_layer_given_another_matrix_is_not_rescaled() -> None:
+    """A layer whose phase matrix does not hold the cloud keeps it.
+
+    With the phase matrices tabulated over two layers, 100-2.3 and
+    2.3-0 km, the 2-3 km profile layer takes the matrix of the upper
+    one, where the thin 2-2.2 km cloud is absent: it scatters with the
+    untruncated aerosol matrix, so its cloud scattering must not be
+    scaled by the truncated fraction of a matrix it does not use.
+    """
+    cld = dict(zmin=2.0, zmax=2.2)
+    pfgrid = [100.0, 2.3, 0.0]
+
+    def thin_cloud(**kwargs: Any) -> Cloud:
+        return Cloud("wc", 12.68, cld["zmin"], cld["zmax"], 5.0, 550.0,
+                     **kwargs)
+
+    full = _calc([_aerosol(), thin_cloud()], pfgrid=pfgrid)
+    trunc = _calc([_aerosol(), thin_cloud(truncation=GT)], pfgrid=pfgrid)
+    assert trunc["iphase_atm"].values[0, ICLD] == 0
+    np.testing.assert_allclose(
+        trunc["OD_p"].values, full["OD_p"].values, rtol=1e-6
+    )
+
+
+def test_calc_split_is_truncated() -> None:
+    """calc_split returns the truncated particle profile."""
+    atm = Atm1D("afglms", comp=[_aerosol(), _cloud(truncation=GT)],
+                grid=GRID)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _, _, (ext, ssa), _ = atm.calc_split(WAV, n_theta=N_THETA)
+        pro = atm.calc(WAV, n_theta=N_THETA)
+    np.testing.assert_allclose(
+        ext, diff1(pro["OD_p"].values, axis=1), rtol=1e-6
+    )
+    np.testing.assert_allclose(ssa, pro["ssa_p_atm"].values)
+
+
+def test_no_phase_no_truncation() -> None:
+    """Without phase matrices, nothing is truncated."""
+    full = Atm1D("afglms", comp=[_cloud()], grid=GRID).calc(
+        WAV, phase=False
+    )
+    trunc = Atm1D("afglms", comp=[_cloud(truncation=GT)], grid=GRID).calc(
+        WAV, phase=False
+    )
+    np.testing.assert_array_equal(trunc["OD_p"].values, full["OD_p"].values)
+
+
+def test_forced_particle_profile_is_refused() -> None:
+    """A truncated component cannot ride on a forced prof_aer."""
+    nz = len(GRID)
+    prof_aer = (np.zeros((1, nz)), np.ones((1, nz)))
+    atm = Atm1D("afglms", comp=[_cloud(truncation=GT)], grid=GRID,
+                prof_aer=prof_aer)
+    with pytest.raises(ValueError, match="prof_aer"):
+        atm.calc(WAV, n_theta=N_THETA)
