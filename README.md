@@ -275,11 +275,11 @@ Four files compare SMART-G with the [IPRT](https://www.meteo.physik.uni-muenchen
 **Phase B** — `test_iprt_phase_b_c2.py` (cubic cloud) and `test_iprt_phase_b_c3.py` (cumulus cloud with aerosols) check the 3D atmosphere mode (`opt3d=True`) against the MYSTIC reference. Reproducing the benchmark photon counts takes hours, so each of their tests exists in two tiers: a fast one, run by default, and a slow one selected with `-m slow`.
 
 ```bash
-pytest smartg/tests/test_iprt_phase_b_c3.py           # fast, ~4 min
+pytest smartg/tests/test_iprt_phase_b_c3.py           # fast, ~3 min
 pytest -m slow smartg/tests/test_iprt_phase_b_c3.py   # slow, ~38 min
 ```
 
-Both files together take 7 min in the fast tier and 1 h 23 in the slow one; the CPU counts as much as the GPU for C3, whose atmosphere is built by a single threaded loop over the cloudy cells.
+Both files together take 6 min in the fast tier and 1 h 23 in the slow one. C3 builds each of its atmospheres, one mixed phase matrix per cloudy cell, in a single threaded loop of about 15 s; its truncated cloud costs a few seconds more, being truncated once per distinct effective radius rather than once per cell.
 
 The fast tier detects a 5 % error on the cloud optical properties, the slow one 1 %: run it before a release, or after a change to the 3D kernel, to the phase matrices or to the truncation.
 
