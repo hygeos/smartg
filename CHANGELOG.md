@@ -191,6 +191,9 @@ completed and corrected before the final `v2.0.0` release.
     - `ma`               → `m_dry_air`
     - `n300` / `n_air`   → `n_air_co2_300` / `n_air_co2`
     - `RH` method        → `relative_humidity`
+  - `atm_pro_from_aeronet` takes `p0`, `o3`, `h2o` and `o3_h2o_alt`
+    (were `P0`, `O3`, `H2O` and `O3_H2O_alt`), and `blackbody_radiance`
+    takes `temperature` (was `T`)
   - Several functions in `smartg.tools.smartg_view` have been renamed:
     - `plot_polar_xr`    → `plot_polar`
     - `transect2D_xr`    → `transect_2d` (via `transect2D`)
@@ -230,7 +233,12 @@ completed and corrected before the final `v2.0.0` release.
         private
     - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
       `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
-      new `smartg.grid3d` module
+      new `smartg.grid3d` module. The helpers are now `get_3d_cells`,
+      `get_3d_cells_indices`, `get_3d_cells_neighbours` and
+      `locate_3d_regular_cells`, with lowercase parameters (`nx`, `ny`,
+      `nz`, `dx`, `dy`, `dz`, `boundary_abs`, `boundary_boa`,
+      `boundary_toa`, `horiz_extent_length`, `sat_altitude`); the
+      `Grid3D` attributes keep their names
     - The constant-theta readers `read_cld_nth_cte` of `smartg.libATM3D`
       and `read_phase_nth_cte` of `smartg.iprt` have been merged into
       `read_phase_cdf`: the two were the same, only the iprt one
@@ -619,9 +627,17 @@ completed and corrected before the final `v2.0.0` release.
       removed
   - A ruff configuration in `pyproject.toml`: a line length of 79 and the
     PEP 8, naming, numpy docstring and annotation rules on top of the
-    default ones, for the whole package. `smartg/obselete_files`, whose
-    unused Python 2 modules no longer parse, is excluded from ruff and
-    from pyright
+    default ones, for the whole package, which passes them along with
+    pyright: every module, test and demo notebook is documented in
+    numpydoc style, type-hinted (`Smartg.run` and the profile builders
+    state what they accept, `smartg.surface.SurfaceLike` names the
+    surface classes) and reflowed to 79 columns of code and 72 of
+    prose. Along the way the type checks of `smartg.objects3d`,
+    `smartg.smartg`, `smartg.view` and `smartg.grid3d` raise
+    `TypeError` where they raised `NameError` or a bare `Exception`,
+    and `smartg.view.mdesc` accepts a name without the space before
+    the level. `smartg/obselete_files`, whose unused Python 2 modules
+    no longer parse, is excluded from ruff and from pyright
   - New `smartg.view.plot_polar_iquv` drawing I, Q, U and V matrices in
     polar view, split from `select_and_plot_polar_iprt`, which now selects
     with `select_iprt_iquv` and plots with it. `select_iprt_iquv` gains
