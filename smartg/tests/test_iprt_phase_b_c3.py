@@ -194,25 +194,34 @@ DELTAM_REF_AER_B = {
     },
 }
 
-# Same, with the GT truncated phase matrices. The photon count being
-# unchanged, the difference with the table above is the truncation
-# alone, and it goes both ways: Q, U and V improve by a factor 2.5 to 4
-# because they are noise dominated and the truncation is a variance
-# reduction, while I degrades from 1.308 to 3.758. That degradation is
-# a bias, not noise: the noise demonstrably went down, as the three
-# other components show. It is the price of the uncorrected GT scheme S
-# with the truncation angle imposed at THETA_TR.
+# Same, with the cloud phase matrices GT truncated. The photon count
+# being unchanged, the difference with the table above is the
+# truncation alone: Q, U and V improve by a factor 5 to 7 on the fast
+# tier because they are noise dominated and the truncation is a
+# variance reduction, and so does I, from 6.516 to 1.759.
+#
+# When the mixed matrices were truncated, the 1D aerosol was truncated
+# with the cloud, and that biased I: its slow tier delta_m degraded
+# from 1.308 to 3.758, its fast one only fell to 3.978, and its mean
+# came out 0.7 % above the untruncated one. With the cloud truncated
+# alone, the fast tier mean of I (1.074376e-01) is within 0.1 % of the
+# untruncated one. The slow tier value is pending: it has to be
+# measured again with this truncation, and the slow test reports the
+# missing reference until then.
 DELTAM_REF_AER_B_GT = {
-    "slow": {4: (3.758, 14.663, 28.646, 102.196)},
+    "slow": {},
     "fast": {
-        4: (3.978, 41.559, 109.220, 462.115),
+        4: (1.759, 30.047, 79.706, 330.221),
     },
 }
 
 # Reference spatial means of I, Q, U and V, shared by the two tiers,
 # see MEAN_TOL above. They are measured on the slow tier, which is the
 # most precise estimate available, and the fast tier is required to
-# reproduce them.
+# reproduce them. The GT ones still come from the truncation of the
+# mixed matrices, and are to be measured again on the slow tier with
+# the cloud truncated alone; the fast tier reproduces their I within
+# 0.7 %.
 MEAN_REF_AER_B = {
     4: (1.073469e-01, -9.372497e-04, 3.520986e-05, 1.951276e-06),
 }
