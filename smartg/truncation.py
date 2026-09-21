@@ -36,10 +36,23 @@ scattered energy, removed with the forward peak: the scattering
 coefficient of the particles it describes must be scaled by `1 - f`,
 their absorption being left unchanged (see `truncated_ext_ssa`).
 
+A truncation is carried by the component whose phase matrix is
+forward-peaked: the `truncation` parameter of the atmospheric
+components `AerOPAC`, `Cloud`, `AerUser`, `Cloud3D` and `Aer3D`, and
+of the hydrosols of `smartg.water`. Only that component is truncated:
+its phase matrices are truncated before being mixed with those of the
+other components of the layer or cell, and its own scattering is
+scaled by `1 - f`. Several components may carry different
+truncations.
+
 Examples
 --------
->>> from smartg.truncation import DMTrunc
->>> trunc = DMTrunc(n_streams=16, integral_method='lobatto')
+>>> from smartg.atmosphere import AerOPAC, Atm1D, Cloud
+>>> from smartg.truncation import GTTrunc
+>>> trunc = GTTrunc(trunc_frac=0.435, theta_tr=8.0)
+>>> cloud = Cloud('wc', 10., 2., 3., 5., 550., truncation=trunc)
+>>> aer = AerOPAC('continental_clean', 0.1, 550.)  # not truncated
+>>> pro = Atm1D('afglt', comp=[aer, cloud]).calc(550.)
 
 Key Classes
 -----------

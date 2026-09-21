@@ -52,6 +52,7 @@ find_optimal_xb_xg
     Find the CUDA block and grid sizes giving the shortest run.
 """
 
+import copy
 import logging
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -590,7 +591,7 @@ def build_atm_c2(
         domain, without absorption. By default there is no molecular
         atmosphere at all.
     truncation : DMTrunc or GTTrunc, optional
-        Truncation of the cloud phase matrix, applied by Atm3D.calc.
+        Truncation of the cloud phase matrix, carried by the Cloud3D.
     n_theta : int, str or array_like
         Scattering angles of the phase matrix: a number of equally
         spaced ones, the angles themselves, or 'native' for the grid
@@ -628,6 +629,7 @@ def build_atm_c2(
         reff=reff,
         phase=cld_phase,
         ssa_cst=1.0,
+        truncation=truncation,
     )
 
     sca_ray = abs_ray = None
@@ -652,8 +654,7 @@ def build_atm_c2(
         mol_sca_1d=sca_ray,
         mol_abs_1d=abs_ray,
     )
-    profile = atm3.calc(wavelengths, n_theta=n_theta,
-                        truncation=truncation)
+    profile = atm3.calc(wavelengths, n_theta=n_theta)
 
     return PhaseBAtmosphere(profile, grid3,
                             LambSurface(alb=AlbedoCst(0.2)), wavelengths)
@@ -772,7 +773,8 @@ def build_atm_c3(
     cloud_c3 : tuple of Cloud3D and Grid3D
         The cloud field and its grid, from build_cloud_c3.
     truncation : DMTrunc or GTTrunc, optional
-        Truncation of the phase matrices, applied by Atm3D.calc.
+        Truncation of the cloud phase matrices, carried by a copy of
+        the Cloud3D of `cloud_c3`. The 1D aerosol is not truncated.
     with_aer : bool
         Add the 1D aerosol, with its single scattering albedo
         SSA_AER_C3.
@@ -788,6 +790,11 @@ def build_atm_c3(
         wavelengths.
     """
     cloud3, grid3 = cloud_c3
+    if truncation is not None:
+        # on a copy: the cloud field is shared by the builds with and
+        # without truncation
+        cloud3 = copy.copy(cloud3)
+        cloud3.truncation = truncation
 
     # Columns of the IPRT file: bottom, top, temperature, then the
     # molecular absorption at 0.67, 2.13 and 11.0 um, the Rayleigh
@@ -834,8 +841,7 @@ def build_atm_c3(
         aer_ext_1d=ext_aer,
         aer_ssa_1d=ssa_aer,
     )
-    profile = atm3.calc(wavelengths, n_theta=n_theta,
-                        truncation=truncation)
+    profile = atm3.calc(wavelengths, n_theta=n_theta)
 
     return PhaseBAtmosphere(profile, grid3,
                             LambSurface(alb=AlbedoCst(0.2)), wavelengths)

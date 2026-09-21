@@ -322,22 +322,27 @@ def test_truncation_accepts_the_union_grid(
     """The truncation comes back on the irregular union, unchanged.
 
     The union has 0.01 degree bins in the peak and 1 degree bins in
-    the body; the truncation must integrate that grid as it is and
-    give the truncation factor it gives on an equally spaced grid of
-    the same order. Measured against 3601 equally spaced angles, the
-    factor moves by 4e-4 at most, less than the 6e-4 the integration
-    methods differ by among themselves on that grid. The comparison
-    here is against 1801 angles, to keep the test short, and the
-    trapezoid factor on that grid is itself 1.6e-3 from its converged
-    value, which the union already reaches: hence the tolerance.
+    the body; the truncation of each component must integrate that
+    grid as it is and give the truncation factor it gives on an
+    equally spaced grid of the same order. Measured against 3601
+    equally spaced angles, the factor moves by 4e-4 at most, less than
+    the 6e-4 the integration methods differ by among themselves on
+    that grid. The comparison here is against 1801 angles, to keep the
+    test short, and the trapezoid factor on that grid is itself 1.6e-3
+    from its converged value, which the union already reaches: hence
+    the tolerance. The factor is the one of the whole particle column,
+    both components being truncated.
     """
     def factor(n_theta: ThetaLike) -> tuple[float, xr.Dataset]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             full = _atm([_aerosol(), _cloud()]).calc(WAV, n_theta=n_theta)
-            trunc = _atm([_aerosol(), _cloud()]).calc(
-                WAV, n_theta=n_theta, truncation=truncation
-            )
+            trunc = _atm(
+                [
+                    _aerosol(truncation=truncation),
+                    _cloud(truncation=truncation),
+                ]
+            ).calc(WAV, n_theta=n_theta)
         f = 1.0 - trunc["OD_p"].values[0, -1] / full["OD_p"].values[0, -1]
         return f, trunc
 

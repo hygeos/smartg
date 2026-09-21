@@ -433,15 +433,18 @@ plt.tight_layout()
 
 # %%
 # simple GT trunction (without correction) -> scheme S in Iwabuchi et
-# al. 2009
+# al. 2009. The truncation is carried by the cloud: in a mixture, only
+# the components given a truncation are truncated.
 trunc = GTTrunc(trunc_frac=0.435, theta_tol=20, theta_tr=None,
                  integral_method='lobatto', lobatto_optimization=True)
+cld1_gt = Cloud('wc', 8., 0., 1., 1., 500., ssa=1., truncation=trunc)
+cld5_gt = Cloud('wc', 8., 0., 1., 5., 500., ssa=1., truncation=trunc)
+cld20_gt = Cloud('wc', 8., 0., 1., 20., 500., ssa=1., truncation=trunc)
 
 # tau = 1
 atmosphere = Atm1D(
-    'afglt', comp=[cld1], grid=zgrid, tco3=0., no2=False,
-    tcwp=0., tau_r=0.).calc(500., n_theta=18001,
-                           truncation=trunc)
+    'afglt', comp=[cld1_gt], grid=zgrid, tco3=0., no2=False,
+    tcwp=0., tau_r=0.).calc(500., n_theta=18001)
 
 m1_gt = stg.run(wavelength=500., atmosphere=atmosphere, ph_deg=saa[0],
                 th_deg=sza[0], le=le, n_loop=nbloop, n_photons=nph,
@@ -449,9 +452,8 @@ m1_gt = stg.run(wavelength=500., atmosphere=atmosphere, ph_deg=saa[0],
 
 # tau = 5
 atmosphere = Atm1D(
-    'afglt', comp=[cld5], grid=zgrid, tco3=0., no2=False,
-    tcwp=0., tau_r=0.).calc(500., n_theta=18001,
-                           truncation=trunc)
+    'afglt', comp=[cld5_gt], grid=zgrid, tco3=0., no2=False,
+    tcwp=0., tau_r=0.).calc(500., n_theta=18001)
 
 m5_gt = stg.run(wavelength=500., atmosphere=atmosphere, ph_deg=saa[0],
                 th_deg=sza[0], le=le, n_loop=nbloop, n_photons=nph,
@@ -459,9 +461,8 @@ m5_gt = stg.run(wavelength=500., atmosphere=atmosphere, ph_deg=saa[0],
 
 # tau = 20
 atmosphere = Atm1D(
-    'afglt', comp=[cld20], grid=zgrid, tco3=0., no2=False,
-    tcwp=0., tau_r=0.).calc(500., n_theta=18001,
-                           truncation=trunc)
+    'afglt', comp=[cld20_gt], grid=zgrid, tco3=0., no2=False,
+    tcwp=0., tau_r=0.).calc(500., n_theta=18001)
 
 m20_gt = stg.run(wavelength=500., atmosphere=atmosphere, ph_deg=saa[0],
                  th_deg=sza[0], le=le, n_loop=nbloop, n_photons=nph,

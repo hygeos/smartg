@@ -97,26 +97,6 @@ def test_single_component(truncation: DMTrunc | GTTrunc) -> None:
     assert trunc["pmol_atm"].values[0, ICLD] > full["pmol_atm"][0, ICLD]
 
 
-@pytest.mark.parametrize("truncation", [GT, DM], ids=["GT", "DM"])
-def test_single_component_as_global(truncation: DMTrunc | GTTrunc) -> None:
-    """Truncating the only component matches the global truncation."""
-    trunc = _calc([_cloud(truncation=truncation)])
-    atm = Atm1D("afglms", comp=[_cloud()], grid=GRID)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        glob = atm.calc(WAV, n_theta=N_THETA, truncation=truncation)
-    for var in ["OD_p", "ssa_p_atm", "OD_atm", "OD_sca_atm", "OD_abs_atm",
-                "ssa_atm", "pmol_atm"]:
-        np.testing.assert_allclose(
-            trunc[var].values, glob[var].values, rtol=1e-5, atol=1e-7,
-            err_msg=var,
-        )
-    np.testing.assert_allclose(
-        trunc["phase_atm"].values, glob["phase_atm"].values,
-        rtol=1e-5, atol=1e-8,
-    )
-
-
 def test_mixture_truncates_the_cloud_alone() -> None:
     """In a layer of aerosol and truncated cloud, only the cloud is cut.
 

@@ -139,29 +139,32 @@ N_SENSORS = 50
 
 # GT truncation, as in Iwabuchi and Suzuki (2009), with the parameters
 # of the notebook notebooks/demo_notebook.py: simple GT truncation
-# without correction, i.e. scheme S of the paper. The photon count is
-# left unchanged, so that the difference between the two tests below is
-# the truncation bias alone and not a difference of MC noise.
+# without correction, i.e. scheme S of the paper, carried by the cloud
+# alone: the 1D aerosol it is mixed with is not truncated. The photon
+# count is left unchanged, so that the difference between the two
+# tests below is the truncation bias alone and not a difference of MC
+# noise.
 #
-# The truncation is applied to one phase matrix at a time by Atm3D.calc
-# and, with aerosols, the C3 field holds one
-# mixed matrix per cloudy cell, so pytrunc.gt_phase_approx is called
-# 20489 times. Its cost per call, measured with pytrunc 1.1.0 at this
-# N_THETA on a Ryzen 9 5950X, the loop being single threaded:
+# The cloud is truncated before being mixed with the aerosol, once per
+# distinct effective radius of the field, so pytrunc.gt_phase_approx
+# is called 95 times; truncating the mixed matrices instead called it
+# once per cloudy cell, 20489 times. Its cost per call, measured with
+# pytrunc 1.1.0 at this N_THETA on a Ryzen 9 5950X:
 #
-#     method     angle                 ms/call   total
-#     lobatto    searched, th_tol=20      25.0    8.5 min
-#     lobatto    forced 8 deg              2.6    0.9 min
-#     trapezoid  searched, th_tol=20      30.2   10.3 min
-#     trapezoid  forced 8 deg              2.6    0.9 min
+#     method     angle                 ms/call   95 calls
+#     lobatto    searched, th_tol=20      25.0      2.4 s
+#     lobatto    forced 8 deg              2.6      0.2 s
+#     trapezoid  searched, th_tol=20      30.2      2.9 s
+#     trapezoid  forced 8 deg              2.6      0.2 s
 #
-# The Lobatto rows are the ones with lobatto_optimization, as in the C2
-# test; without it the search costs 8.9 s per call. The angle is imposed
-# here, and not only for the 8.5 min a build that it saves: measured on
-# the slow tier, searching it degrades the delta_m of Q by 4.0 % and
-# that of U by 8.9 %, for 2.2 % gained on the one of I. The fast tier
-# reverses that verdict, but wrongly, its Q and U being noise dominated
-# and a change of truncation drawing a different noise.
+# The Lobatto rows are the ones with lobatto_optimization, as in the
+# C2 test; without it the search costs 8.9 s per call. The angle is
+# imposed for accuracy rather than speed: measured on the slow tier,
+# when the mixed matrices were truncated, searching it degraded the
+# delta_m of Q by 4.0 % and that of U by 8.9 %, for 2.2 % gained on
+# the one of I. The fast tier reverses that verdict, but wrongly, its
+# Q and U being noise dominated and a change of truncation drawing a
+# different noise.
 THETA_TR = 8.0
 GT_TRUNC = GTTrunc(
     trunc_frac=0.435,

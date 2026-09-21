@@ -12,7 +12,10 @@ Workflow
 --------
 Typical usage involves:
 1. Create an atmospheric profile using model classes (e.g., Atm1D)
-2. Add atmospheric components (aerosols, clouds, surface) as needed
+2. Add atmospheric components (aerosols, clouds, surface) as needed,
+   giving a `truncation` (see `smartg.truncation`) to those whose
+   forward-peaked phase matrix is to be truncated: each component is
+   truncated alone, before being mixed with the others
 3. (Optional) Call the profile's `calc()` method to compute optical
    properties
    with specific parameters (if using optional parameters not set by
@@ -85,7 +88,6 @@ import xarray as xr
 from gatiab import vec_float_indexing
 from luts.luts import LUT
 from numpy.typing import NDArray
-from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 from scipy import constants
 from scipy.constants import Boltzmann, Planck, speed_of_light
 from scipy.integrate import simpson
@@ -2629,7 +2631,6 @@ class Atm1D(Atmosphere):
         phase: bool = True,
         n_theta: ThetaLike = 721,
         use_old_calc_iphase: bool = False,
-        truncation: DMTrunc | GTTrunc | None = None,
     ) -> xr.Dataset:
         """Calculate the profile and phase matrices at wavelengths.
 
@@ -2649,8 +2650,6 @@ class Atm1D(Atmosphere):
             on the device.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (depracated).
-        truncation : None or DMTrunc or GTTrunc, optional
-            The scattering phase truncation to use.
 
         Returns
         -------
@@ -2663,8 +2662,7 @@ class Atm1D(Atmosphere):
         ValueError
             If a component carries a `truncation` while the particle
             profile is forced (`prof_aer`), whose extinction and single
-            scattering albedo would stay untruncated, or while the
-            `truncation` argument is given too.
+            scattering albedo would stay untruncated.
 
         Notes
         -----
@@ -2682,19 +2680,13 @@ class Atm1D(Atmosphere):
             getattr(comp, "truncation", None) is not None
             for comp in self.comp
         ]
-        if phase and any(truncated):
-            if truncation is not None:
-                raise ValueError(
-                    "The truncation argument cannot be combined with "
-                    "components carrying their own truncation."
-                )
-            if self.prof_aer is not None:
-                raise ValueError(
-                    "A component carrying a truncation cannot be "
-                    "combined with a forced particle profile "
-                    "(prof_aer), whose extinction and single "
-                    "scattering albedo would not be truncated."
-                )
+        if phase and any(truncated) and self.prof_aer is not None:
+            raise ValueError(
+                "A component carrying a truncation cannot be combined "
+                "with a forced particle profile (prof_aer), whose "
+                "extinction and single scattering albedo would not be "
+                "truncated."
+            )
 
         # the phase matrices come first: the truncation of a component
         # scales its scattering in each layer by the truncated fraction
@@ -2727,358 +2719,27 @@ class Atm1D(Atmosphere):
 
         profile = self.profile(wavelength, comp_trunc_frac=comp_trunc_frac)
 
-        if phase:
-            pro_var = list(profile.data_vars)
-            if pha is not None or (
-                self.opt3d and ("phase_atm" in pro_var) and truncation
-            ):
-                if pha is None:  # 3D ATM
-                    pha_ = profile["phase_atm"].values
-                assert pha_ is not None
-
-                nphase = pha_.shape[0]
-
-                # If truncation parameter is given compute truncated
-                # phase function
-                f = None
-                pha_tr: NDArray[np.float64] | None = None
-                theta = None
-                if truncation is not None:
-                    if self.opt3d:
-                        theta = profile.coords["theta_atm"].values
-                    else:
-                        assert pha is not None, (
-                            "Truncation is only possible if phase "
-                            + "matrix is provided in 1D atm mode"
-                        )
-                        theta = (
-                            pha.coords["theta_atm"].values
-                            if hasattr(pha, "coords")
-                            else pha.axes[-1]
-                        )
-                    pha_tr = np.zeros(pha_.shape, dtype=np.float64)
-                    nphac = pha_.shape[1]
-                    # initialize truncation-related locals to avoid
-                    # static analyzer warnings about possibly unbound
-                    # variables
-                    th_tol = None
-                    l_opti = False
-                    th_f = None
-
-                    if isinstance(truncation, GTTrunc):
-                        th_tol = truncation.theta_tol
-                        l_opti = truncation.lobatto_optimization
-                        th_f = truncation.theta_tr
-                    elif not isinstance(truncation, DMTrunc):
-                        raise ValueError("truncation method not recognized")
-                    method = truncation.integral_method
-                    f_pha = np.zeros(nphase, dtype=np.float64)
-                    pha_f64 = np.asarray(pha_, dtype=np.float64)
-                    for iph in range(nphase):
-                        if isinstance(truncation, DMTrunc):
-                            ds_pha = cast(
-                                xr.Dataset,
-                                delta_m_phase_approx(
-                                    pha_f64[iph, 0, :],
-                                    theta,
-                                    truncation.m_max,
-                                    method=method,
-                                ),
-                            )
-
-                        elif isinstance(truncation, GTTrunc):
-                            ds_pha = cast(
-                                xr.Dataset,
-                                gt_phase_approx(
-                                    pha_f64[iph, 0, :],
-                                    theta,
-                                    truncation.trunc_frac,
-                                    method=method,
-                                    th_tol=th_tol,
-                                    th_f=th_f,
-                                    lobatto_optimization=l_opti,
-                                ),
-                            )
-                        f11_tr = ds_pha["phase_tr"].values
-                        f = ds_pha["f"].values
-                        f_pha[iph] = f
-                        # One truncation factor for the whole medium.
-                        # Every phase matrix of the profile is truncated
-                        # here, and the optical depth and the single
-                        # scattering albedo are rescaled further down
-                        # with this one scalar f over every cell at
-                        # once, so a second factor would have nothing to
-                        # rescale with.
-                        #
-                        # Two things are missing to truncate one layer
-                        # or one voxel alone. Indexing f_pha by
-                        # iphase_atm would give one f per cell and lift
-                        # this guard, unchanged wherever a single factor
-                        # is used today. That alone is not enough: a
-                        # cell mixing a peaked component with a smooth
-                        # one carries a single mixed phase matrix, so
-                        # truncating it truncates both. Truncating only
-                        # the peaked one asks for the truncation to be
-                        # carried by the component, applied before the
-                        # mixing, with the scattering coefficient of
-                        # that component alone scaled by 1 - f.
-                        if iph > 0 and not np.isclose(
-                            f_pha[iph], f_pha[0], atol=1e-6
-                        ):
-                            raise ValueError(
-                                f"Only one truncation factor is "
-                                f"supported: the phase matrix {iph} "
-                                f"truncates at f={float(f_pha[iph]):.4g} "
-                                f"against {float(f_pha[0]):.4g} for the "
-                                "first one. Truncate components that "
-                                "truncate alike, or a single one."
-                            )
-
-                        pha_tr[iph, 0, :] = f11_tr
-                        beta = pha_tr[iph, 0, :] / pha_[iph, 0, :]
-                        for icomp in range(1, nphac):
-                            pha_tr[iph, icomp, :] = pha_[iph, icomp, :] * beta
-                        if truncation.pha_scale_method == 2:
-                            beta2 = 1.0 / (1 - f)
-                            pha_tr[iph, 1, :] = pha_[iph, 1, :] * beta2
-                            pha_tr[iph, 3, :] = pha_[iph, 3, :] * beta2
-
-                if not self.opt3d:
-                    assert pha is not None
-                    theta_atm = (
-                        pha.coords["theta_atm"].values
-                        if hasattr(pha, "coords")
-                        else pha.axes[-1]
-                    )
-                    profile = profile.assign_coords(theta_atm=theta_atm)
-                    profile["phase_atm"] = xr.DataArray(
-                        pha_,
-                        dims=["iphase", "nphamat", "theta_atm"],
-                        coords={
-                            "iphase": np.arange(pha_.shape[0]),
-                            "nphamat": np.arange(pha_.shape[1]),
-                            "theta_atm": theta_atm,
-                        },
-                    )
-                    profile["iphase_atm"] = xr.DataArray(
-                        ipha,
-                        dims=["wavelength", "z_atm"],
-                        coords={
-                            "wavelength": profile.coords["wavelength"],
-                            "z_atm": profile.coords["z_atm"],
-                        },
-                    )
-                else:
-                    # In 3D the phase matrices and their indices come
-                    # from the profile itself, so pha and ipha are None
-                    attrs_tmp = (
-                        profile["phase_atm"].attrs.copy()
-                        if "phase_atm" in profile.data_vars
-                        else {}
-                    )
-                    if "phase_atm" in profile.data_vars:
-                        profile = profile.drop_vars("phase_atm")
-                    theta_atm = (
-                        pha.coords["theta_atm"].values
-                        if pha is not None and hasattr(pha, "coords")
-                        else as_theta_grid(pha_.shape[-1])
-                    )
-                    profile["phase_atm"] = xr.DataArray(
-                        pha_,
-                        dims=["iphase", "nphamat", "theta_atm"],
-                        coords={
-                            "iphase": np.arange(pha_.shape[0]),
-                            "nphamat": np.arange(pha_.shape[1]),
-                            "theta_atm": theta_atm,
-                        },
-                        attrs=attrs_tmp,
-                    )
-
-                if truncation is not None:
-                    assert pha_tr is not None
-                    assert f is not None
-                    # profile.add_dataset('phase_atm_tr', pha_tr,
-                    # axnames=['iphase', 'stk', 'theta_atm'])
-                    attrs_tmp = profile["phase_atm"].attrs
-                    if "phase_atm" in profile.data_vars:
-                        profile = profile.drop_vars("phase_atm")
-                    # the truncated matrix comes back on the grid
-                    # it was given, so keep that grid
-                    assert theta is not None
-                    assert len(theta) == pha_tr.shape[-1]
-                    theta_atm = theta
-                    profile["phase_atm"] = xr.DataArray(
-                        pha_tr,
-                        dims=["iphase", "nphamat", "theta_atm"],
-                        coords={
-                            "iphase": np.arange(pha_tr.shape[0]),
-                            "nphamat": np.arange(pha_tr.shape[1]),
-                            "theta_atm": theta_atm,
-                        },
-                        attrs=attrs_tmp,
-                    )
-
-                    # case tau instead of coeff (1D atm)
-                    if not self.opt3d:
-                        dtau_p = diff1(profile["OD_p"].values, axis=1)
-                        dtau_p_tr = (
-                            1 - f * profile["ssa_p_atm"].values
-                        ) * dtau_p
-                        tau_p_tr = np.cumsum(dtau_p_tr, axis=1)
-                        ssa_p_atm_tr = profile["ssa_p_atm"].values * (
-                            (1 - f) / (1 - f * profile["ssa_p_atm"].values)
-                        )
-                        tau_atm_tr = (
-                            tau_p_tr
-                            + profile["OD_r"].values
-                            + profile["OD_g"].values
-                        )
-                        dtau_r = diff1(profile["OD_r"].values, axis=1)
-                        tau_sca_tr = np.cumsum(
-                            dtau_r + dtau_p_tr * ssa_p_atm_tr, axis=1
-                        )
-                        with np.errstate(invalid="ignore", divide="ignore"):
-                            ssa_atm_tr = (
-                                dtau_r + dtau_p_tr * ssa_p_atm_tr
-                            ) / diff1(tau_atm_tr, axis=1)
-                        ssa_atm_tr[np.isnan(ssa_atm_tr)] = 1.0
-                        with np.errstate(invalid="ignore", divide="ignore"):
-                            pmol_tr = dtau_r / (
-                                dtau_r + dtau_p_tr * ssa_p_atm_tr
-                            )
-                        pmol_tr[np.isnan(pmol_tr)] = 1.0
-
-                        profile["OD_p"] = xr.DataArray(
-                            tau_p_tr,
-                            dims=["wavelength", "z_atm"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"],
-                                "z_atm": profile.coords["z_atm"],
-                            },
-                            attrs=profile["OD_p"].attrs,
-                        )
-                        profile["ssa_p_atm"] = xr.DataArray(
-                            ssa_p_atm_tr,
-                            dims=["wavelength", "z_atm"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"],
-                                "z_atm": profile.coords["z_atm"],
-                            },
-                            attrs=profile["ssa_p_atm"].attrs,
-                        )
-                        profile["OD_atm"] = xr.DataArray(
-                            tau_atm_tr,
-                            dims=["wavelength", "z_atm"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"],
-                                "z_atm": profile.coords["z_atm"],
-                            },
-                            attrs=profile["OD_atm"].attrs,
-                        )
-                        profile["OD_sca_atm"] = xr.DataArray(
-                            tau_sca_tr,
-                            dims=["wavelength", "z_atm"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"],
-                                "z_atm": profile.coords["z_atm"],
-                            },
-                            attrs=profile["OD_sca_atm"].attrs,
-                        )
-                        profile["ssa_atm"] = xr.DataArray(
-                            ssa_atm_tr,
-                            dims=["wavelength", "z_atm"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"],
-                                "z_atm": profile.coords["z_atm"],
-                            },
-                            attrs=profile["ssa_atm"].attrs,
-                        )
-                        profile["pmol_atm"] = xr.DataArray(
-                            pmol_tr,
-                            dims=["wavelength", "z_atm"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"],
-                                "z_atm": profile.coords["z_atm"],
-                            },
-                            attrs=profile["pmol_atm"].attrs,
-                        )
-                    # case coeff instead of tau (3D atm)
-                    # sig for coeficients
-                    else:
-                        sig_p = profile["OD_p"].values
-                        sig_p_tr = (
-                            1 - f * profile["ssa_p_atm"].values
-                        ) * sig_p
-                        ssa_p_atm_tr = profile["ssa_p_atm"].values * (
-                            (1 - f) / (1 - f * profile["ssa_p_atm"].values)
-                        )
-                        sig_atm_tr = (
-                            sig_p_tr
-                            + profile["OD_r"].values
-                            + profile["OD_g"].values
-                        )
-                        sig_sca_tr = (
-                            profile["OD_r"].values + sig_p_tr * ssa_p_atm_tr
-                        )
-                        with np.errstate(invalid="ignore", divide="ignore"):
-                            ssa_atm_tr = (
-                                profile["OD_r"].values
-                                + sig_p_tr * ssa_p_atm_tr
-                            ) / sig_atm_tr
-                        ssa_atm_tr[np.isnan(ssa_atm_tr)] = 1.0
-                        sig_r = profile["OD_r"].values
-                        with np.errstate(invalid="ignore", divide="ignore"):
-                            pmol_tr = sig_r / (sig_r + sig_p_tr * ssa_p_atm_tr)
-                        pmol_tr[np.isnan(pmol_tr)] = 1.0
-
-                        profile["OD_p"] = xr.DataArray(
-                            sig_p_tr,
-                            dims=["wavelength", "iopt"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"]
-                            },
-                            attrs=profile["OD_p"].attrs,
-                        )
-                        profile["ssa_p_atm"] = xr.DataArray(
-                            ssa_p_atm_tr,
-                            dims=["wavelength", "iopt"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"]
-                            },
-                            attrs=profile["ssa_p_atm"].attrs,
-                        )
-                        profile["OD_atm"] = xr.DataArray(
-                            sig_atm_tr,
-                            dims=["wavelength", "iopt"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"]
-                            },
-                            attrs=profile["OD_atm"].attrs,
-                        )
-                        profile["OD_sca_atm"] = xr.DataArray(
-                            sig_sca_tr,
-                            dims=["wavelength", "iopt"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"]
-                            },
-                            attrs=profile["OD_sca_atm"].attrs,
-                        )
-                        profile["ssa_atm"] = xr.DataArray(
-                            ssa_atm_tr,
-                            dims=["wavelength", "iopt"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"]
-                            },
-                            attrs=profile["ssa_atm"].attrs,
-                        )
-                        profile["pmol_atm"] = xr.DataArray(
-                            pmol_tr,
-                            dims=["wavelength", "iopt"],
-                            coords={
-                                "wavelength": profile.coords["wavelength"]
-                            },
-                            attrs=profile["pmol_atm"].attrs,
-                        )
+        if pha is not None:
+            assert pha_ is not None and ipha is not None
+            theta_atm = pha.coords["theta_atm"].values
+            profile = profile.assign_coords(theta_atm=theta_atm)
+            profile["phase_atm"] = xr.DataArray(
+                pha_,
+                dims=["iphase", "nphamat", "theta_atm"],
+                coords={
+                    "iphase": np.arange(pha_.shape[0]),
+                    "nphamat": np.arange(pha_.shape[1]),
+                    "theta_atm": theta_atm,
+                },
+            )
+            profile["iphase_atm"] = xr.DataArray(
+                ipha,
+                dims=["wavelength", "z_atm"],
+                coords={
+                    "wavelength": profile.coords["wavelength"],
+                    "z_atm": profile.coords["z_atm"],
+                },
+            )
 
         return profile
 
@@ -4456,7 +4117,6 @@ class Atm3D(Atmosphere):
         phase: bool = True,
         n_theta: ThetaLike = 721,
         use_old_calc_iphase: bool = False,
-        truncation: DMTrunc | GTTrunc | None = None,
     ) -> xr.Dataset:
         """Compute the 3D atmospheric profile at given wavelengths.
 
@@ -4474,8 +4134,6 @@ class Atm3D(Atmosphere):
             exact, see `native_theta`.
         use_old_calc_iphase : bool, optional
             Use the old (slower) implementation of calc_iphase.
-        truncation : DMTrunc, GTTrunc or None, optional
-            Phase matrix truncation method. See :meth:`Atm1D.calc`.
 
         Returns
         -------
@@ -4485,15 +4143,13 @@ class Atm3D(Atmosphere):
             optical properties, and the 3D cell datasets (`iopt_atm`,
             `iabs_atm`, `pmin_atm`, `pmax_atm`, `neighbour_atm`)
             consumed by :meth:`smartg.smartg.Smartg.run`.
+
+        Notes
+        -----
+        The 1D and 3D components carrying a `truncation` are truncated
+        one by one before being mixed in each layer or cell (see
+        `Atm1D.calc` and :class:`Cloud3D`).
         """
-        if truncation is not None and any(
-            getattr(comp, "truncation", None) is not None
-            for comp in list(self.atm_1d.comp) + list(self.comp_3d)
-        ):
-            raise ValueError(
-                "The truncation argument cannot be combined with "
-                "components carrying their own truncation."
-            )
         if isinstance(wavelength, BandSet):
             wavelengths = np.asarray(wavelength.wavelength)
         else:
@@ -4598,7 +4254,6 @@ class Atm3D(Atmosphere):
             phase=phase,
             n_theta=n_theta,
             use_old_calc_iphase=use_old_calc_iphase,
-            truncation=truncation,
         )
 
     def _grid(self) -> NDArray[np.integer]:

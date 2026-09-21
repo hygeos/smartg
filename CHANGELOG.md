@@ -369,6 +369,30 @@ and will be completed and corrected before the final `v2.0.0` release.
     `GT_trunc(trunc_frac=0.3, theta_tr=5.0)`): the water phase functions are
     now truncated with pytrunc like the atmospheric ones, and the scattering
     coefficient is scaled by `1 - f`. `None` disables the truncation.
+  - The phase matrix truncation is carried by the components: the
+    `truncation` argument of `Atm1D.calc` and `Atm3D.calc` has been
+    removed, and `AerOPAC`, `Cloud`, `AerUser`, `Cloud3D` and `Aer3D` take
+    a `truncation` parameter (`DMTrunc | GTTrunc | None`, default `None`),
+    like the hydrosols
+    - only the components given a truncation are truncated; the others,
+      such as a smooth aerosol mixed with a cloud, keep their phase matrix
+    - each component is truncated alone, before the components of a layer
+      or of a cell are mixed, and its own scattering is scaled by `1 - f`
+      while its absorption is kept; the phase matrices are mixed with the
+      truncated scattering coefficients as weights
+    - several components may truncate differently, which the "Only one
+      truncation factor is supported" error used to refuse
+    - a component alone gives the profile the `truncation` argument gave,
+      to float32 rounding (the IPRT C2 profiles are identical); a mixture
+      differs, e.g. the 1D aerosol of the IPRT C3 case is no longer
+      truncated with its cloud
+    - `calc_split` returns the truncated profile, and `calc(phase=False)`
+      truncates nothing, as for the hydrosols
+    - a truncated 1D component is refused with a forced particle profile
+      (`prof_aer` of `Atm1D`, `aer_ext_1d`, `aer_ssa_1d` or `aer_phase_1d`
+      of `Atm3D`), which would stay untruncated
+    - a 3D component is truncated once per distinct phase matrix instead of
+      once per cell: 95 pytrunc calls instead of 20489 for the C3 cloud
   - The declared dependencies have been trimmed and bounded. `pyarrow`,
     `pyhdf` and `statsmodels` are no longer declared, as no module nor
     notebook imports them (`pyhdf` still comes in as a dependency of
@@ -380,6 +404,11 @@ and will be completed and corrected before the final `v2.0.0` release.
     `>=3.11,<3.15`, which is what the classifiers already announced
 
 * New features
+  - New `smartg.truncation.truncate_phase`, `truncate_phase_set` and
+    `truncated_ext_ssa` truncate a phase matrix, or each distinct matrix
+    of a set once, and rescale the extinction and the single scattering
+    albedo of the truncated particles; a null matrix passes through with
+    `f = 0`
   - The scattering angles of a phase matrix no longer have to be equally
     spaced. Clustering them towards the forward and backward directions
     resolves the diffraction peak of large particles (desert aerosols,
