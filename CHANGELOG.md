@@ -712,6 +712,10 @@ and will be completed and corrected before the final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the phase matrices of a hydrosol reused at other wavelengths or on
+    another grid: its memoized (truncated) phase matrices and truncation
+    factor were those of its first use, e.g. the 450 nm matrix served
+    again at 650 nm by a loop over the wavelengths
   - Fix the nodes of the cumulative distribution a scattering deflection
     is drawn from. `_calc_phase_host` and `_isotropic` placed them at
     probabilities `(i+1)/n`, but the kernel indexes them with

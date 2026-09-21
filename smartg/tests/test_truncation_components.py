@@ -1,10 +1,11 @@
-"""GPU-free tests of the truncation carried by the 1D components.
+"""GPU-free tests of the truncation carried by the components.
 
 A component truncated through its `truncation` parameter is truncated
 alone, before being mixed with the other components of its layer, and
 only its own scattering is scaled by `1 - f`. The profiles returned by
 `Atm1D.calc` are checked against the untruncated ones transformed by
-hand, and against the profiles of each component alone.
+hand, and against the profiles of each component alone. The last test
+checks the memoized truncation of a hydrosol of `smartg.water`.
 """
 
 import warnings
@@ -23,6 +24,7 @@ from smartg.truncation import (
     truncate_phase,
     truncated_ext_ssa,
 )
+from smartg.water import HydrosolPR, Water1D
 
 WAV = np.array([550.0])
 GRID = [100.0, 50.0, 20.0, 10.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0]
@@ -228,3 +230,25 @@ def test_forced_particle_profile_is_refused() -> None:
                 prof_aer=prof_aer)
     with pytest.raises(ValueError, match="prof_aer"):
         atm.calc(WAV, n_theta=N_THETA)
+
+
+def test_hydrosol_reused_at_another_wavelength() -> None:
+    """A reused hydrosol gives what a new one would.
+
+    Its truncated phase matrices and truncation factor are memoized;
+    used at other wavelengths (or on another grid), it must tabulate
+    them again rather than serve the first ones. The backscattering
+    ratio of HydrosolPR varies with the wavelength, so its phase
+    matrix at 650 nm differs from the one at 450 nm.
+    """
+    grid = [0.0, -10.0]
+    h = HydrosolPR(chl=0.5, n_theta=721)
+    Water1D(grid=grid, comp=[h]).calc([450.0])
+    again = Water1D(grid=grid, comp=[h]).calc([650.0])
+    fresh = Water1D(
+        grid=grid, comp=[HydrosolPR(chl=0.5, n_theta=721)]
+    ).calc([650.0])
+    for var in ["OD_p_oc", "phase_oc", "iphase_oc"]:
+        np.testing.assert_array_equal(
+            again[var].values, fresh[var].values, err_msg=var
+        )

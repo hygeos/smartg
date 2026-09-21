@@ -253,6 +253,8 @@ class Hydrosol:
         self._pha: xr.DataArray | None = None
         self._coef_trunc: xr.DataArray | None = None
         self._bsca: NDArray | None = None
+        # the wavelengths and depths the cache above was tabulated for
+        self._tab_grid: tuple[NDArray, NDArray] | None = None
 
     def iop(self, wavelength: NDArray, z: NDArray) -> IOPDict:
         """
@@ -530,9 +532,11 @@ class Hydrosol:
         The result is memoized in `_pha`, `_coef_trunc` and `_bsca`, so
         that the scattering coefficient and the phase matrices stay
         consistent whichever is requested first. Returns immediately if
-        the cache is already filled. A single depth is tabulated when
-        neither the backscattering ratio nor the scattering coefficient
-        varies vertically.
+        the cache already holds the tabulation of these wavelengths and
+        depths, and computes it again otherwise, e.g. for a hydrosol
+        reused at other wavelengths or on another grid. A single depth
+        is tabulated when neither the backscattering ratio nor the
+        scattering coefficient varies vertically.
 
         Parameters
         ----------
@@ -551,14 +555,21 @@ class Hydrosol:
             If the backscattering ratio is not defined at the tabulation
             wavelengths.
         """
-        if self._coef_trunc is not None:
-            return
-
-        wavelength_pha = (
+        wavelength_pha = np.asarray(
             wavelength if self.wavelength_phase is None
-            else self.wavelength_phase
+            else self.wavelength_phase,
+            dtype="float",
         )
         z = np.asarray(z, dtype="float")
+        if (
+            self._coef_trunc is not None
+            and self._tab_grid is not None
+            and np.array_equal(self._tab_grid[0], wavelength_pha)
+            and np.array_equal(self._tab_grid[1], z)
+        ):
+            return
+        self._tab_grid = (wavelength_pha.copy(), z.copy())
+
         iop = self.iop(wavelength_pha, z)
         bbp_ratio, bp = iop["bbp_ratio"], iop["bp"]
         if bbp_ratio is None:
