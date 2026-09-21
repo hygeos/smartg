@@ -3773,7 +3773,8 @@ class Atm1D(Atmosphere):
         i_prof = np.searchsorted(-z, -mid)
         k_pf = np.clip(np.searchsorted(-pf, -mid) - 1, 0, n_pf - 1)
         weight = np.zeros((len(wavelength), len(z), n_pf))
-        np.add.at(weight, (slice(None), i_prof, k_pf), sca[:, 1:])
+        for iw in range(len(wavelength)):
+            np.add.at(weight[iw], (i_prof, k_pf), sca[iw, 1:])
 
         ipha = np.asarray(ipha, dtype=np.int32).copy()
         # the wavelength block of each index, of n_pf matrices
