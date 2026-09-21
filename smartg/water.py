@@ -61,7 +61,6 @@ import xarray as xr
 from luts.luts import LUT
 from numpy.typing import NDArray
 from pytrunc.phase import fournier_forand
-from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 
 from smartg.albedo import AlbedoCst, AlbedoLike
 from smartg.bandset import BandSet
@@ -74,7 +73,7 @@ from smartg.phase import (
     expand_phase_4_to_6,
     integ_phase,
 )
-from smartg.truncation import DMTrunc, GTTrunc
+from smartg.truncation import DMTrunc, GTTrunc, truncate_phase_set
 from smartg.typing import NumericArrayLike, PathType
 
 #: Default truncation of the derived water phase functions: the forward
@@ -83,69 +82,6 @@ from smartg.typing import NumericArrayLike, PathType
 #: phase function negative for the most forward-peaked Fournier-Forand
 #: mixtures).
 DEFAULT_WATER_TRUNC = GTTrunc(trunc_frac=0.3, theta_tr=5.0)
-
-
-def _truncate_f11(
-    f11: NDArray,
-    theta_deg: NDArray,
-    truncation: DMTrunc | GTTrunc,
-) -> tuple[NDArray, float]:
-    """
-    Truncate a single scalar phase function with pytrunc.
-
-    The `pha_scale_method` attribute of the truncation has no effect
-    here: only the F11 (and F22 = F11) terms of the water phase matrices
-    are non-null, so the rescaling of the other terms is the identity.
-
-    Parameters
-    ----------
-    f11 : ndarray
-        1-D phase function, normalized to 2 over `theta_deg`.
-    theta_deg : ndarray
-        Scattering angles in degrees.
-    truncation : DMTrunc or GTTrunc
-        Truncation configuration.
-
-    Returns
-    -------
-    f11_tr : ndarray
-        Truncated phase function, normalized to 2 over `theta_deg`.
-    f : float
-        Truncation fraction, i.e. the fraction of the scattered energy
-        removed with the forward peak.
-
-    Raises
-    ------
-    ValueError
-        If the truncation configuration is not recognized.
-    """
-    if isinstance(truncation, DMTrunc):
-        ds_pha = cast(
-            xr.Dataset,
-            delta_m_phase_approx(
-                f11,
-                theta_deg,
-                truncation.m_max,
-                method=truncation.integral_method,
-            ),
-        )
-    elif isinstance(truncation, GTTrunc):
-        ds_pha = cast(
-            xr.Dataset,
-            gt_phase_approx(
-                f11,
-                theta_deg,
-                truncation.trunc_frac,
-                method=truncation.integral_method,
-                th_tol=truncation.theta_tol,
-                th_f=truncation.theta_tr,
-                lobatto_optimization=truncation.lobatto_optimization,
-            ),
-        )
-    else:
-        raise TypeError("truncation method not recognized")
-
-    return ds_pha["phase_tr"].values, float(ds_pha["f"].values)
 
 
 class IOPDict(TypedDict):
@@ -259,10 +195,9 @@ class Hydrosol:
         forward and backward directions.
     truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices,
-        performed with pytrunc (see `smartg.truncation`, and the
-        truncation of the atmospheric phase matrices in `Atm1D.calc`).
-        None disables the truncation. Defaults to
-        `DEFAULT_WATER_TRUNC`.
+        performed with `smartg.truncation.truncate_phase_set`, as the
+        `truncation` of the atmospheric components. None disables the
+        truncation. Defaults to `DEFAULT_WATER_TRUNC`.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -500,21 +435,14 @@ class Hydrosol:
 
         coef = np.ones(len(r1_uniq), dtype="float64")
         if self.truncation is not None:
-            theta_deg = np.rad2deg(ang)
-            for i in range(len(r1_uniq)):
-                f11[i], f = _truncate_f11(
-                    f11[i], theta_deg, self.truncation
-                )
-                coef[i] = 1.0 - f
-            if (f11 < 0.0).any():
-                raise ValueError(
-                    "The truncated water phase function is negative: "
-                    "the truncation is inconsistent with the "
-                    "Fournier-Forand mixture (e.g. a truncation "
-                    "fraction larger than the energy of the truncated "
-                    "peak). Lower trunc_frac, or let GTTrunc search "
-                    "the truncation angle (theta_tr=None)."
-                )
+            # only F11 (and F22 = F11) is non-null, so it is truncated
+            # alone, as a one-term matrix; the helper refuses a
+            # negative result
+            f11_tr, f = truncate_phase_set(
+                f11[:, None, :], np.rad2deg(ang), self.truncation
+            )
+            f11 = f11_tr[:, 0, :]
+            coef = 1.0 - f
 
         pha = np.zeros((n_wavelength, nz, 6, len(ang)), dtype="float64")
         pha[:, :, 0, :] = f11[inv]
