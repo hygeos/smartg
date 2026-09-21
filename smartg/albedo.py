@@ -249,7 +249,9 @@ class AlbedoMap:
         alist: Sequence[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum],
     ) -> None:
         self.map: LUT = LUT(ai, axes=[x, y], names=["X", "Y"])
-        self.list: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum] = list(alist)
+        self.list: list[AlbedoCst | AlbedoSpeclib | AlbedoSpectrum] = list(
+            alist
+        )
         self.nalb: int = len(alist)
 
     def get(self, wavelength: NumericArrayLike) -> NDArray[np.floating]:

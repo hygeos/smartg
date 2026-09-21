@@ -64,7 +64,7 @@ MYSTIC_RES_PATH = DIR_AUXDATA / 'IPRT' / 'phaseA' / 'mystic_res'
 s_1df = Smartg(alt_pp=False, back=False, double=True, bias=True)
 s_1db = Smartg(alt_pp=False, back=True, double=True, bias=True)
 
-SEED = 1e8
+SEED = 100_000_000
 NB_PH = 1e7
 
 # %% [markdown]
