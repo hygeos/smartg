@@ -1,12 +1,13 @@
 # SMART-G CHANGELOG
 
 
-## v2.0.0
-Release date: xxx
+## v2.0.0b1
+Release date: 2026-09-22
 
 Note: this changelog entry has been started during the `v2.0.0dev1` stage,
-updated for `v2.0.0dev2`, `v2.0.0dev3`, `v2.0.0dev4` and `v2.0.0dev5`,
-and will be completed and corrected before the final `v2.0.0` release.
+updated for `v2.0.0dev2`, `v2.0.0dev3`, `v2.0.0dev4`, `v2.0.0dev5` and
+the `v2.0.0b1` beta, and will be completed and corrected before the
+final `v2.0.0` release.
 
 * Several breaking changes
   - The `AtmAFGL` class has been renamed to `Atm1D`, with PEP 8 constructor
@@ -391,6 +392,9 @@ and will be completed and corrected before the final `v2.0.0` release.
       truncated with its cloud
     - `calc_split` returns the truncated profile, and `calc(phase=False)`
       truncates nothing, as for the hydrosols
+    - `Atm1D.profile` takes the truncated fraction of each component as a
+      keyword-only `comp_trunc_frac`, which `calc` fills; called without
+      it, `profile` truncates nothing, as before
     - a truncated 1D component is refused with a forced particle profile
       (`prof_aer` of `Atm1D`, `aer_ext_1d`, `aer_ssa_1d` or `aer_phase_1d`
       of `Atm3D`), which would stay untruncated
@@ -434,6 +438,9 @@ and will be completed and corrected before the final `v2.0.0` release.
       more than 1 % (to 4 pi, or a volume scattering function) before the
       truncation, as pytrunc expects, and gives the truncated matrix back
       in the normalization of its input
+    - `as_truncation` returns the `truncation` given to a component once
+      checked, raising a `TypeError` for anything else than a `DMTrunc`, a
+      `GTTrunc` or `None`
   - The scattering angles of a phase matrix no longer have to be equally
     spaced. Clustering them towards the forward and backward directions
     resolves the diffraction peak of large particles (desert aerosols,
