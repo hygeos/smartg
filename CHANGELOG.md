@@ -330,6 +330,8 @@ final `v2.0.0` release.
   - Every count is spelled `n_`: the `nb_` prefix of `StdevLim(nb_loop_min)`,
     `DM_trunc(nb_streams)` and `aer2smartg(nb_theta)` is gone, they are now
     `n_loop_min`, `n_streams` and `n_theta`
+  - `StdevLim(stk)` → `StdevLim(stokes)`, the spelling of the rest of the
+    package, and its `dict` key with it
   - The abbreviated parameters of `Smartg.run` have been given their full
     name: `atm` → `atmosphere`, `surf` → `surface` and `env` → `environment`
   - The `th_v_deg` and `ph_v_deg` angles of `Smartg.run` are now `th_deg` and

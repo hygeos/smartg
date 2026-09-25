@@ -319,7 +319,7 @@ class StdevLim:
     n_loop_min : int, optional
         The minimum kernel loop number before allowing to stop the
         simulation.
-    stk : int, optional
+    stokes : int, optional
         The Stokes component to consider. Choices are:
 
             * 0 -> I Stokes component (Default)
@@ -352,7 +352,7 @@ class StdevLim:
         err_abs_min: float = 0.0,
         err_rel_min: float = 0.0,
         n_loop_min: int = 10,
-        stk: int = 0,
+        stokes: int = 0,
         level: int = 0,
         verbose: bool = False,
         fmt: str = ".5e",
@@ -362,7 +362,7 @@ class StdevLim:
             'err_abs_min': err_abs_min,
             'err_rel_min': err_rel_min,
             'n_loop_min': n_loop_min,
-            'stk': stk,
+            'stokes': stokes,
             'level': level,
             'verbose': verbose,
             'format': fmt,
@@ -4738,7 +4738,7 @@ def _loop_kernel(
                 abs_min = stdev_lim.dict['err_abs_min']
                 rel_min = stdev_lim.dict['err_rel_min']
                 min_loop = stdev_lim.dict['n_loop_min']
-                stk_stdev = stdev_lim.dict['stk']
+                stk_stdev = stdev_lim.dict['stokes']
                 level_stdev = stdev_lim.dict['level']
                 format_std = stdev_lim.dict['format']
 
