@@ -65,6 +65,11 @@ logger.addHandler(file_handler)
 # **********************************************************************
 
 
+# Largest relative difference between the replay of the histories and
+# the direct run of test_smartg_jax2, see its docstring
+REPLAY_RTOL = 1e-2
+
+
 # Clean up JAX memory and stale PyCUDA atexit handlers after each test
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_after_each_test() -> Iterator[None]:
@@ -97,7 +102,16 @@ def test_smartg_jax2(
     n_photons: float = 5e4,
     max_hist: float = 1e6,
 ) -> None:
-    """Replay the histories of a run with jax, on the CPU."""
+    """Replay the histories of a run with jax, on the CPU.
+
+    The two runs, with and without histories, draw the same photon
+    paths (same seed), so the replay, which applies the absorption and
+    the albedo of the direct run, must give its TOA reflectance back:
+    within 0.3 % measured on gpu4 on 2026-09-25, up to the float32
+    weights of the kernel. REPLAY_RTOL leaves room for that, and fails
+    a replay that would keep the unit albedo of the histories or miss
+    the absorption.
+    """
     alb_snow = AlbedoCst(0.6)
     alb_hist = AlbedoCst(1.0)
     wavelength_sca = np.linspace(wmin, wmax, num=11)
@@ -107,6 +121,7 @@ def test_smartg_jax2(
         th_deg=np.array([0.0]), phi_deg=np.array([0.0]), zip=False
     )
 
+    max_rel_diff = []
     for aod, fmt1 in zip(
         np.linspace(0.1, 0.5, num=2), ["-m", "-c"], strict=True
     ):
@@ -181,6 +196,12 @@ def test_smartg_jax2(
                 )
                 / n
             )
+        i_direct = m0["I_up (TOA)"].to_numpy()
+        max_rel_diff.append(float(np.max(np.abs(stk_i / i_direct - 1))))
+        logger.info(
+            f"jax2 AOD {aod:.1f}: replay vs direct run, max relative "
+            f"difference {max_rel_diff[-1]:.2e}"
+        )
         std = np.sqrt((stk_i2 - stk_i**2) / n)
         upper = stk_i + 1.95 * std
         lower = stk_i - 1.95 * std
@@ -218,6 +239,11 @@ def test_smartg_jax2(
         plt.grid()
     plt.legend()
     conftest.savefig(request)
+
+    assert max(max_rel_diff) < REPLAY_RTOL, (
+        f"the replay of the histories differs from the direct run by "
+        f"up to {max(max_rel_diff):.2e}, more than {REPLAY_RTOL}"
+    )
 
 
 def test_validation_artdeco(
