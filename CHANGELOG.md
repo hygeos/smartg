@@ -1015,6 +1015,14 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the `device` parameter of `Smartg`, ignored with `autoinit=False`,
+    whose context went to the default device, and, silently, by every
+    `autoinit` Smartg after the first of the process, which all run on
+    the device of the first. The context of `autoinit=False` is now
+    created on `device`, and an `autoinit` Smartg asking for another
+    device than the one of `pycuda.autoinit` raises a `ValueError`, as
+    `device` together with the environment variable `CUDA_DEVICE` now
+    does instead of an `AssertionError`
   - Fix the default sensor of `Smartg.run` (without `sensor`) for a
     non-zero `ph_deg`: it started from the entry point of azimuth 0, so
     that its ray missed the origin. In spherical mode the sun reached the

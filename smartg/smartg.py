@@ -675,8 +675,15 @@ class Smartg:
     opt3d : bool, optional
         Activate the 3D atmosphere mode
     device : int | str, optional
-        The device number / GPU to use. The GPU numbers can be obtained
-        with the command `nvidia-smi`.
+        The CUDA device number of the GPU to use, which the command
+        `nvidia-smi` lists. By default the one of the environment
+        variable CUDA_DEVICE, else of the file ~/.cuda_device, else
+        the first GPU available. With autoinit, the context is the
+        one pycuda.autoinit creates once per process: every Smartg of
+        the process runs on the device of the first one, and asking
+        another device raises a ValueError, unless clear_context was
+        called on the previous Smartg. Without autoinit, each Smartg
+        creates its own context on its device.
     sif : bool, optional
         Include the Sun Induced Fluorescence
     thermal : bool, optional
@@ -779,9 +786,11 @@ class Smartg:
         scatter_classes: str | list = 'last_scattering_layer',
         norders: int = 1,
     ) -> None:
-        assert not ((device is not None) and ('CUDA_DEVICE' in os.environ)), (
-            "Can not use the 'device' option while the CUDA_DEVICE is set"
-        )
+        if (device is not None) and ('CUDA_DEVICE' in os.environ):
+            raise ValueError(
+                "Can not use the 'device' option while the CUDA_DEVICE "
+                "environment variable is set"
+            )
 
         if device is not None:
             env_modif = {'CUDA_DEVICE': str(device)}
@@ -821,11 +830,29 @@ class Smartg:
                     pycuda.autoinit = import_module('pycuda.autoinit')
                     reload(pycuda.autoinit)
                     self.ctx = pycuda.autoinit.context
+            # pycuda.autoinit creates its context once per process: a
+            # later Smartg would silently run on the device of the first
+            requested = None if device is None else (
+                cuda.Device  # pyright: ignore[reportAttributeAccessIssue]
+            )(int(device))
+            if requested is not None and (
+                pycuda.autoinit.device.pci_bus_id()
+                != requested.pci_bus_id()
+            ):
+                raise ValueError(
+                    f"pycuda.autoinit already runs on the device "
+                    f"{pycuda.autoinit.device.name()} "
+                    f"({pycuda.autoinit.device.pci_bus_id()}) of a "
+                    f"previous Smartg, not on the device {device}: call "
+                    "clear_context on that Smartg first, or use "
+                    "autoinit=False"
+                )
         else:
             cuda.init()  # pyright: ignore[reportAttributeAccessIssue]
             from pycuda.tools import make_default_context
 
-            self.ctx = make_default_context()
+            with modified_environ(**env_modif):
+                self.ctx = make_default_context()
 
         self.autoinit = autoinit
         self.pp = pp

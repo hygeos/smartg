@@ -819,3 +819,12 @@ def test_default_sensor_aims_at_the_origin_in_any_azimuth() -> None:
         for seed, ph_deg in ((71, 0.0), (72, 90.0))
     ]
     assert np.all(np.abs(_z_scores(runs[0], runs[1], "up (TOA)")) < 5)
+
+
+def test_device_with_cuda_device_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check that device and CUDA_DEVICE cannot be given together."""
+    monkeypatch.setenv("CUDA_DEVICE", "0")
+    with pytest.raises(ValueError, match="CUDA_DEVICE"):
+        Smartg(device=0)
