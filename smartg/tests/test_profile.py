@@ -4,6 +4,8 @@ Each one builds an Atm1D, with or without components, on the
 default grid or on a given one, and computes it at one or several
 wavelengths.
 """
+from pathlib import Path
+
 import numpy as np
 import pytest
 from numpy.typing import NDArray
@@ -12,10 +14,12 @@ from smartg.atmosphere import (
     AerOPAC,
     Atm1D,
     Cloud,
+    ProfileBase,
     n_air_co2,
     refractivity,
     strgrid_to_numpy,
 )
+from smartg.config import DIR_AUXDATA
 
 Wavelength = float | list[float] | NDArray[np.float64]
 
@@ -222,3 +226,44 @@ def test_pfgrid_above_the_ground_refused() -> None:
         "afglt", comp=comp, grid=grid, pfgrid=[100.0, 3.0, 2.0, 0.0]
     ).calc([550.0, 650.0])
     assert (pro["iphase_atm"].values >= 0).all()
+
+
+def _write_dat(fname: Path, header: str | None, n_columns: int) -> None:
+    """Write the afglus profile as a libRadtran .dat file."""
+    src = ProfileBase(DIR_AUXDATA / "atmospheres" / "afglus.nc")
+    columns = [
+        src.z, src.p, src.t, src.dens_air, src.dens_o3, src.dens_o2,
+        src.dens_h2o, src.dens_co2, src.dens_no2,
+    ][:n_columns]
+    np.savetxt(
+        fname, np.stack(columns, axis=1), fmt="%.6e",
+        header="" if header is None else header, comments="# ",
+    )
+
+
+def test_dat_profile_without_header(tmp_path: Path) -> None:
+    """A .dat profile without its header keeps its gases, loudly.
+
+    Its gas columns were all read as zero, with no warning, which
+    removed the O3 and H2O absorption and dried the aerosols.
+    """
+    header = (
+        "z(km) p(mb) T(K) air(cm-3) o3(cm-3) o2(cm-3) h2o(cm-3) "
+        "co2(cm-3) no2(cm-3)"
+    )
+    _write_dat(tmp_path / "with.dat", header, 9)
+    _write_dat(tmp_path / "without.dat", None, 9)
+    ref = ProfileBase(tmp_path / "with.dat")
+    with pytest.warns(UserWarning, match="no header line"):
+        prof = ProfileBase(tmp_path / "without.dat")
+    for gas in ("o3", "o2", "h2o", "co2", "no2"):
+        np.testing.assert_array_equal(
+            getattr(prof, f"dens_{gas}"), getattr(ref, f"dens_{gas}")
+        )
+    assert prof.dens_h2o.max() > 0.0
+
+    # a file of the four first columns only has no gas, and says so
+    _write_dat(tmp_path / "dry.dat", None, 4)
+    with pytest.warns(UserWarning, match="without o3.* set to zero"):
+        prof = ProfileBase(tmp_path / "dry.dat")
+    assert prof.dens_o3.max() == 0.0

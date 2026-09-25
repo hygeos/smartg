@@ -128,6 +128,12 @@ if TYPE_CHECKING:
 # constants
 M_H2O = 18.015  # g/mol
 
+# the columns of the libRadtran atmosphere files
+_LIBRADTRAN_COLUMNS = (
+    "z(km)", "p(mb)", "T(K)", "air(cm-3)", "o3(cm-3)", "o2(cm-3)",
+    "h2o(cm-3)", "co2(cm-3)", "no2(cm-3)",
+)
+
 # the files of the OPAC mixtures folder that are not mixtures: the
 # single species, which AerOPAC and Aer3D accept as well, and the
 # free troposphere and stratosphere layers
@@ -5226,7 +5232,11 @@ class ProfileBase:
       dimension 'z_atm' for altitude
     - .dat (libratran): Text format with header line containing variable
       names
-      (e.g., 'z(km) p(mb) T(K) air(cm-3) o3(cm-3) ...')
+      (e.g., 'z(km) p(mb) T(K) air(cm-3) o3(cm-3) ...'). The gases
+      the header does not name are set to zero. A file without such
+      a line is read in the libRadtran column order, z(km) p(mb) T(K)
+      air(cm-3) o3(cm-3) o2(cm-3) h2o(cm-3) co2(cm-3) no2(cm-3), with
+      a warning.
     """
 
     def __init__(
@@ -5255,7 +5265,6 @@ class ProfileBase:
                 lines = f.readlines()
 
             desc = None
-            desc = ""
             n = 0
             for line in lines:
                 if (
@@ -5268,44 +5277,61 @@ class ProfileBase:
                     break
                 else:
                     n += 1
-            if desc == "":
+            if desc is None:
+                # accepted without the header line (65c4825)
                 n = 0
 
-            if desc is not None:
-                # data = np.loadtxt(fname, dtype=np.float32,
-                # comments="#", skiprows=n)
-                data = pd.read_csv(
-                    fname,
-                    comment="#",
-                    header=None,
-                    sep=r"\s+",
-                    dtype=np.float32,
-                    skiprows=n,
-                ).values
-                self.z = data[:, 0]  # Altitude in km
-                self.p = data[:, 1]  # pressure in hPa
-                self.t = data[:, 2]  # temperature in K
-                self.dens_air = data[:, 3]  # Air density in cm-3
-                data2 = np.zeros((data.shape[0], 5))
-                for i, gas in enumerate(["o3", "o2", "h2o", "co2", "no2"]):
-                    try:
-                        ind = desc.split().index(gas + "(cm-3)")
-                        data2[:, i] = data[:, ind - 1]
-                    except ValueError:
-                        data2[:, i] = 0.0
-                self.dens_o3 = data2[:, 0]  # Ozone density in cm-3
-                self.dens_o2 = data2[:, 1]  # O2 density in cm-3
-                self.dens_h2o = data2[:, 2]  # H2O density in cm-3
-                self.dens_co2 = data2[:, 3]  # CO2 density in cm-3
-                self.dens_no2 = data2[:, 4]  # NO2 density in cm-3
-                nz = data.shape[0]
-                self.dens_ch4 = np.zeros(nz, dtype=np.float32)
-                self.dens_co = np.zeros(nz, dtype=np.float32)
-                self.dens_n2o = np.zeros(nz, dtype=np.float32)
-                self.dens_n2 = np.zeros(nz, dtype=np.float32)
-                self.dens_so2 = np.zeros(nz, dtype=np.float32)
-            else:
-                raise ValueError("Invalid atmospheric file format")
+            data = pd.read_csv(
+                fname,
+                comment="#",
+                header=None,
+                sep=r"\s+",
+                dtype=np.float32,
+                skiprows=n,
+            ).values
+            if data.shape[1] < 4:
+                raise ValueError(
+                    f"The profile {fname.name} must have the columns "
+                    "z(km), p(mb), T(K) and air(cm-3) at least, got "
+                    f"{data.shape[1]} columns."
+                )
+            if desc is None:
+                # read in the order of the libRadtran files, loudly,
+                # rather than dropping every gas column
+                desc = " ".join(_LIBRADTRAN_COLUMNS[: data.shape[1]])
+                absent = _LIBRADTRAN_COLUMNS[data.shape[1]:]
+                warnings.warn(
+                    f"The profile {fname.name} has no header line naming "
+                    "its columns: they are read in the libRadtran order "
+                    f"{desc}"
+                    + (f", without {' '.join(absent)}, set to zero"
+                       if absent else "")
+                    + ".",
+                    stacklevel=2,
+                )
+            # the columns are counted from the one of the altitude,
+            # after the comment sign of the header line
+            names = desc.split()
+            i_z = next(i for i, name in enumerate(names) if "z(km)" in name)
+            self.z = data[:, 0]  # Altitude in km
+            self.p = data[:, 1]  # pressure in hPa
+            self.t = data[:, 2]  # temperature in K
+            self.dens_air = data[:, 3]  # Air density in cm-3
+            data2 = np.zeros((data.shape[0], 5))
+            for i, gas in enumerate(["o3", "o2", "h2o", "co2", "no2"]):
+                if gas + "(cm-3)" in names:
+                    data2[:, i] = data[:, names.index(gas + "(cm-3)") - i_z]
+            self.dens_o3 = data2[:, 0]  # Ozone density in cm-3
+            self.dens_o2 = data2[:, 1]  # O2 density in cm-3
+            self.dens_h2o = data2[:, 2]  # H2O density in cm-3
+            self.dens_co2 = data2[:, 3]  # CO2 density in cm-3
+            self.dens_no2 = data2[:, 4]  # NO2 density in cm-3
+            nz = data.shape[0]
+            self.dens_ch4 = np.zeros(nz, dtype=np.float32)
+            self.dens_co = np.zeros(nz, dtype=np.float32)
+            self.dens_n2o = np.zeros(nz, dtype=np.float32)
+            self.dens_n2 = np.zeros(nz, dtype=np.float32)
+            self.dens_so2 = np.zeros(nz, dtype=np.float32)
         elif fname.suffix == ".nc":
             with xr.open_dataset(fname) as data:
                 self.z = data.coords["z_atm"].values  # Altitude in km

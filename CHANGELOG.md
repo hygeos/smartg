@@ -1009,6 +1009,12 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix the `.dat` profiles without the libRadtran header line (or with
+    one spelled differently): every gas column was read as zero, with no
+    warning, removing the O3 and H2O absorption and drying the aerosols.
+    The columns are now read in the libRadtran order, z(km) p(mb) T(K)
+    air(cm-3) o3 o2 h2o co2 no2 (cm-3), with a warning saying so and
+    naming the gases a shorter file lacks
   - `Atm1D.calc` refuses a `pfgrid` whose last level lies above the bottom
     of the profile grid with a `ValueError`: the layers below it got the
     phase index -1, which the kernel reads as the VRS phase function, and
