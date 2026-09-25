@@ -920,6 +920,11 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.view.camera_view`, and so the IPRT phase B camera plots,
+    which raised a `ValueError` for a panel whose values are all zero
+    (for instance V of a Rayleigh scene) or all NaN. Given `matrices`,
+    `camera_view` now requires one `stokes` label per matrix and says so,
+    instead of raising an `IndexError` with the default `stokes='I'`
   - Fix the import of `smartg.view`, and so of the `smartg.iprt` phase
     modules, which called `np.seterr(invalid='ignore', divide='ignore')`
     and silenced these NumPy warnings for the whole process. Only the

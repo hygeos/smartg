@@ -20,6 +20,7 @@ import xarray as xr
 from smartg.reptran import ReptranIbandList
 from smartg.view import (
     _mirror_azimuths,
+    camera_view,
     cat_view,
     nopt_view,
     plot_polar_iquv,
@@ -203,3 +204,30 @@ def test_view_import_keeps_numpy_error_state() -> None:
     with np.errstate(all="raise"):
         importlib.reload(smartg.view)
         assert set(np.geterr().values()) == {"raise"}
+
+
+def _camera_matrices() -> list[np.ndarray]:
+    """Return I, Q and an all-zero and an all-NaN matrix on 3 x 4."""
+    i = np.linspace(1.0, 2.0, 12).reshape(3, 4)
+    return [i, -0.1 * i, np.zeros((3, 4)), np.full((3, 4), np.nan)]
+
+
+def test_camera_view_zero_and_nan_panels() -> None:
+    """A panel with no non-zero value gets default colorbar ticks."""
+    fig = camera_view(
+        None, np.arange(5.0), np.arange(4.0), matrices=_camera_matrices(),
+        stokes=["I", "Q", "U", "V"],
+    )
+    # 4 panels and their colorbars
+    assert len(fig.axes) == 8
+    plt.close(fig)
+
+
+def test_camera_view_needs_one_stokes_per_matrix() -> None:
+    """Two matrices with the default stokes raise a clear error."""
+    with pytest.raises(ValueError, match="one label per matrix"):
+        camera_view(
+            None, np.arange(5.0), np.arange(4.0),
+            matrices=_camera_matrices()[:2],
+        )
+    plt.close("all")

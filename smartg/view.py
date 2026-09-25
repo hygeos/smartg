@@ -3361,8 +3361,15 @@ class _FixedOrderFormatter(ScalarFormatter):
 
 
 def _order_of_magnitude(values: np.ndarray) -> int:
-    """Return the order of magnitude of the largest absolute value."""
-    return math.floor(math.log10(np.max(np.abs(values))))
+    """
+    Return the order of magnitude of the largest absolute value.
+
+    It is 0 when there is no value or when all of them are zero.
+    """
+    vmax = float(np.max(np.abs(values))) if values.size else 0.0
+    if vmax == 0.0 or not math.isfinite(vmax):
+        return 0
+    return math.floor(math.log10(vmax))
 
 
 def _colorbar_formatter(
@@ -3379,16 +3386,20 @@ def _colorbar_ticks(
     vmax: float | None,
     values: np.ndarray,
     log_scale: bool = False,
-) -> np.ndarray:
+) -> np.ndarray | None:
     """
     Return 9 colorbar tick values.
 
     The values are evenly spaced, or geometrically with ``log_scale``.
     The bounds default to the extrema of ``values`` when ``vmin`` or
-    ``vmax`` is None, of its positive values with ``log_scale``.
+    ``vmax`` is None, of its positive values with ``log_scale``. None,
+    for the default ticks, when such a bound has no value to come
+    from.
     """
     if log_scale:
         values = values[values > 0]
+    if values.size == 0 and (vmin is None or vmax is None):
+        return None
     lo = np.min(values) if vmin is None else vmin
     hi = np.max(values) if vmax is None else vmax
     if log_scale:
@@ -3630,7 +3641,8 @@ def camera_view(
         the Dataset. Default: 1.
     matrices : np.ndarray or list of np.ndarray, optional
         Force the shown matrix(ces) instead of extracting them from
-        the Dataset (max 4).
+        the Dataset (max 4). ``stokes`` then labels them, one element
+        per matrix.
     cbar_shrink : float, optional
         The colorbar shrink value. Default: 0.9.
     cbar_sci_format : bool, optional
@@ -3701,6 +3713,11 @@ def camera_view(
     n_panel = len(matrix)
     if n_panel > 4:
         raise ValueError("Give more than 4 stokes is not authorized!")
+    if len(stokes_labels) != n_panel:
+        raise ValueError(
+            f"stokes must give one label per matrix: {len(stokes_labels)} "
+            f"label(s) for {n_panel} matrices."
+        )
 
     vmin = _as_list(vmin, n_panel)
     vmax = _as_list(vmax, n_panel)
