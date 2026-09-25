@@ -89,7 +89,11 @@ def reduce_reptran(
 
     The spectral variables selected from ``ds`` are weighted by the
     internal-band weights and grouped by their central channel
-    wavelength.
+    wavelength. Channels that share a central wavelength (in float32),
+    as channels made of the same internal bands do, give a single
+    value, their average; with ``integrated=True``, the value for their
+    mean bandwidth. :meth:`ReptranIbandList.get_names` names the
+    reduced wavelengths in the same order.
 
     Parameters
     ----------
@@ -850,23 +854,30 @@ class ReptranIbandList:
         return bsgroup - bsgroup[0]
 
     def get_names(self) -> list[str]:
-        """Return the unique channel names represented by this list.
+        """Return the channel names, one per reduced wavelength.
 
         Returns
         -------
         list of str
-            Unique sensor channel names, sorted by channel central
-            wavelength, the order of the ``wavelength`` axis of
-            :func:`reduce_reptran`. Channels with the same central
-            wavelength keep their order in the list.
+            Sensor channel names, sorted by channel central wavelength:
+            one per value of the ``wavelength`` axis of
+            :func:`reduce_reptran` and of the sums of
+            :meth:`get_weights`, in the same order. The channels that
+            share a central wavelength (in float32), which that axis
+            merges, give a single entry, their names joined by ``'+'``
+            in the order of the file.
         """
-        centres: dict[str, np.float32] = {}
+        centres: dict[np.float32, set[tuple[int, str]]] = {}
         for iband in self.l:
-            centres.setdefault(
-                iband.band.name, np.float32(np.mean(iband.band.awvl))
+            centre = np.float32(np.mean(iband.band.awvl))
+            centres.setdefault(centre, set()).add(
+                (iband.band.band, iband.band.name)
             )
 
-        return sorted(centres, key=centres.__getitem__)
+        return [
+            "+".join(name for _, name in sorted(centres[centre]))
+            for centre in sorted(centres)
+        ]
 
 
 class ReadCrs:

@@ -228,10 +228,23 @@ def test_channel_name_spaces_are_ignored() -> None:
     assert reptran.band(band.name).band == 0
 
 
-def test_get_names_follow_the_reduced_axis() -> None:
-    """Name i labels channel i of the reduce_reptran output."""
-    reptran = Reptran("reptran_solar_msg")
-    ibands = reptran.to_smartg(include="msg1")
+@pytest.mark.parametrize(
+    ("fname", "include", "n_merged"),
+    [("reptran_solar_msg", "msg1", 0), ("reptran_solar_sentinel", "", 1)],
+    ids=["msg1", "sentinel"],
+)
+def test_get_names_follow_the_reduced_axis(
+    fname: str, include: str, n_merged: int
+) -> None:
+    """Name i labels channel i of the reduce_reptran output.
+
+    sentinel2a_msi_b08a and sentinel3_slstr_b3 share their internal
+    band, so their central wavelength: the reduced axis merges them,
+    and their names are joined, instead of shifting the names of the
+    following channels by one.
+    """
+    reptran = Reptran(fname)
+    ibands = reptran.to_smartg(include=include)
     wavelength = np.array([iband.w for iband in ibands.l], dtype=np.float32)
     dataset = xr.Dataset(
         {"I_test": (("wavelength",), np.ones(wavelength.size))},
@@ -239,10 +252,15 @@ def test_get_names_follow_the_reduced_axis() -> None:
     )
     reduced = reduce_reptran(dataset, ibands)
     names = ibands.get_names()
-    centres = [np.mean(reptran.band(name).awvl) for name in names]
 
     assert len(names) == reduced.sizes["wavelength"] > 2
-    np.testing.assert_allclose(centres, reduced.wavelength, rtol=1e-6)
+    assert len(names) == ibands.get_weights()[4].size
+    assert sum("+" in name for name in names) == n_merged
+    for name, centre in zip(names, reduced.wavelength.values, strict=True):
+        for channel in name.split("+"):
+            np.testing.assert_allclose(
+                np.mean(reptran.band(channel).awvl), centre, rtol=1e-6
+            )
     assert ReptranIbandList(ibands.l[::-1]).get_names() == names
 
 

@@ -1513,7 +1513,9 @@ final `v2.0.0` release.
     `cat_view` gave one value per internal band divided by its own weight,
     and merged the internal bands of two channels at the same wavelength.
     They sum the internal bands of each channel again, on the channel
-    central wavelengths, as v1.2.0 did. KDIS bands are unchanged
+    central wavelengths, as v1.2.0 did; as then, channels that share their
+    central wavelength (`sentinel2a_msi_b08a` and `sentinel3_slstr_b3`)
+    give a single sum. KDIS bands are unchanged
   - Fix `reduce_reptran` and `reduce_kdis` on a run over a single internal
     band (24 of the 40 `reptran_solar_sentinel` channels, kato bands 5 to
     10...), whose output has no `wavelength` dimension: they raised a
@@ -1548,8 +1550,11 @@ final `v2.0.0` release.
   - Fix the order of `ReptranIbandList.get_names`, which changed from one
     Python process to the next (it came from a `set`), so the demo
     notebook labelled the reduced channels with the wrong names. The names
-    are now sorted by channel central wavelength, the order of the
-    `wavelength` axis of `reduce_reptran`
+    are now sorted by channel central wavelength, one per value of the
+    `wavelength` axis of `reduce_reptran` and in its order: the channels
+    that share a central wavelength, which that axis merges (in the
+    sentinel, MODIS, Himawari, PROBA, SPOT and ADEOS files), give one
+    entry, their names joined by `+`
   - Fix the REPTRAN channel names, which kept the repr of the bytes read
     from the file (`"b'msg1_seviri_ch006'"`), so that
     `Reptran.band('msg1_seviri_ch006')` raised a `ValueError`. The names
