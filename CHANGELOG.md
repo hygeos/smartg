@@ -1015,6 +1015,11 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the reflection on `RoughSurface(brdf=True)` in a 3D atmosphere
+    (`opt3d=True`): the photon left the surface from the cell whose index
+    is the number of optical properties instead of the cell it reached the
+    surface in, so that the reflected photons were lost or attenuated
+    along a wrong path. The error was already in v1.2.0
   - Fix the altitude of the photons in the default plane-parallel move
     (`pp=True` without `alt_pp`): after each move in the atmosphere a
     photon was placed at the altitude mirrored inside its layer, while its

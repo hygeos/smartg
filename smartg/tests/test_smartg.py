@@ -14,9 +14,10 @@ from numpy.typing import NDArray
 
 from smartg import conftest
 from smartg.albedo import AlbedoCst
-from smartg.atmosphere import AerOPAC, Atm1D, Cloud
+from smartg.atmosphere import AerOPAC, Atm1D, Atm3D, Cloud
+from smartg.grid3d import Grid3D
 from smartg.reptran import Reptran, reduce_reptran
-from smartg.sensor import Sensor
+from smartg.sensor import Sensor, get_sensors_grid
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import Environment, LambSurface, RoughSurface
 from smartg.view import smartg_view
@@ -577,3 +578,50 @@ def test_adjacency_fast_and_alt_pp_moves_agree(back: bool) -> None:
     fast = _adjacency_run(alt_pp=False, back=back, seed=11)
     alt = _adjacency_run(alt_pp=True, back=back, seed=12)
     assert np.all(np.abs(_z_scores(fast, alt, "up (TOA)")) < 5)
+
+
+def _empty_atmosphere() -> Atm1D:
+    """Return an atmosphere without scattering nor absorption."""
+    return Atm1D("afglt", tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0)
+
+
+def test_brdf_surface_in_3d_atmosphere() -> None:
+    """Check that a 3D atmosphere reflects on a BRDF surface as in 1D.
+
+    Without anything in the atmosphere the radiance is the one of the
+    Cox and Munk BRDF alone, the same for every sensor of the 3D
+    domain and for the 1D run.
+    """
+    surface = RoughSurface(wind=5.0, brdf=True)
+    le = LocalEstimate(th_deg=[40.0], phi_deg=[0.0], count_level=[0])
+    edges = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+    grid3 = Grid3D(edges, edges, np.array([0.0, 1.0, 2.0]), periodic=True)
+    sensors = get_sensors_grid(
+        edges, edges, pos_z=2.0, th_deg=150.0, ph_deg=0.0, loc="ATMOS",
+        cell_size=1.0, grid_3d=grid3,
+    )
+    m3 = Smartg(opt3d=True, alt_pp=True, back=True).run(
+        550.0,
+        atmosphere=Atm3D(atm_1d=_empty_atmosphere(), grid_3d=grid3),
+        surface=surface,
+        sensor=sensors,
+        le=le,
+        n_photons=1e6,
+        seed=41,
+        progress=False,
+    )
+    m1 = Smartg(alt_pp=True, back=True).run(
+        550.0,
+        atmosphere=_empty_atmosphere(),
+        surface=surface,
+        sensor=Sensor(pos_z=120.0, th_deg=150.0, ph_deg=0.0, loc="ATMOS"),
+        le=le,
+        n_photons=1e6,
+        seed=42,
+        progress=False,
+    )
+    np.testing.assert_allclose(
+        m3["I_up (TOA)"].values.ravel(),
+        float(m1["I_up (TOA)"].values.ravel()[0]),
+        rtol=1e-3,
+    )

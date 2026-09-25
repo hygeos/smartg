@@ -5347,7 +5347,9 @@ __device__ void surfaceBRDF(Photon* ph, int le,
     else
     {
         ph->loc = ATMOS;
-        #ifdef OPT3D
+        // in 3D, layer is the index of the cell the photon is in, and
+        // the photon leaves the surface from the cell it reached it in
+        #ifndef OPT3D
         ph->layer = NATMd;
         #endif
     }
@@ -5572,7 +5574,7 @@ __device__ void surfaceBRDF_global2local(Photon* ph, int le,
     else
     {
         ph->loc = ATMOS;
-        #ifdef OPT3D
+        #ifndef OPT3D
         ph->layer = NATMd;
         #endif
     }
@@ -5792,7 +5794,7 @@ __device__ void surfaceBRDF_old(Photon* ph, int le,
         ph->loc = SPACE;
     } else {
           ph->loc = ATMOS;
-          #ifdef OPT3D
+          #ifndef OPT3D
           ph->layer = NATMd;
           #endif
     }
