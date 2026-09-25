@@ -31,9 +31,10 @@ final `v2.0.0` release.
       post-processing, with PEP 8 names: `Irr` → `plane_irr`,
       `SpherIrr` → `spherical_irr`, `reduce_Irr` → `irradiance_ds` (which
       now returns an `xr.Dataset`)
-    - `diff1` and `diff1_end` have been moved into the new `smartg.diff`
-      module, `expand_phase_4_to_6` into `smartg.phase` and the
-      `AlbedoLike` alias into `smartg.albedo`
+    - `diff1` has been moved from `smartg.atmosphere` into the new
+      `smartg.diff` module, next to the new `diff1_end`; the new
+      `expand_phase_4_to_6` is in `smartg.phase` and the new `AlbedoLike`
+      alias in `smartg.albedo`
   - The `visualizegeo` module has been renamed to `smartg.objects3d`, with
     PEP 8 names:
     - functions: `findRots` → `find_rots`, `generateMTF` →
@@ -95,17 +96,26 @@ final `v2.0.0` release.
     - kdis: `KDIS` → `Kdis`, `KDIS_BAND` → `KdisBand`,
       `KDIS_IBAND` → `KdisIband`, `KDIS_IBAND_LIST` → `KdisIbandList`,
       `Kdis_Emission` / `Kdis_Avg_Emission` → `kdis_emission` /
-      `kdis_avg_emission`; `reduce_kdis` completely rewritten
+      `kdis_avg_emission`; `reduce_kdis` completely rewritten;
+      `Kdis.get_weight`, which returned five LUTs, is now
+      `Kdis.get_weights` and returns the six values of
+      `KdisIbandList.get_weights` (the bandwidth-weighted norm added),
+      and both return `xr.DataArray` objects instead of LUTs
     - reptran: `REPTRAN` → `Reptran`, `REPTRAN_BAND` → `ReptranBand`,
       `REPTRAN_IBAND` → `ReptranIband`,
       `REPTRAN_IBAND_LIST` → `ReptranIbandList`, `Reptran_Emission` /
       `Reptran_Avg_Emission` → `reptran_emission` / `reptran_avg_emission`,
-      `filename` → `fname`; the `output_type` parameter of `get_weights`
-      has been removed and `reduce_reptran` / `reptran_emission` now return
-      xarray objects
+      `filename` → `fname`; `ReptranIbandList.get_weights` returns
+      `xr.DataArray` objects instead of LUTs, and `reduce_reptran` /
+      `reptran_emission` now return xarray objects
     - rrs: `Fk_N2` / `Fk_O2` → `fk_n2` / `fk_o2`, `Epsilon_N2` /
       `Epsilon_O2` / `Epsilon_air` → `epsilon_n2` / `epsilon_o2` /
-      `epsilon_air`, `f0_N2` / `f0_O2` → `f0_n2` / `f0_o2`, `K` → `k_ratio`
+      `epsilon_air`, `f0_N2` / `f0_O2` → `f0_n2` / `f0_o2`, `K` →
+      `k_ratio`, `bjp` / `bjm` → `bjm_plus` / `bjm_minus`, `L_O2` /
+      `L_N2` / `L` → `l_o2` / `l_n2` / `l_air`, `L2d` / `L2d_inv` →
+      `l2d` / `l2d_inv`; `is_odd` has been removed
+    - vrs: `Gauss` → `gaussian_peak`, `fR` → `raman_response`, `V2d` /
+      `V2d_inv` → `raman_forward` / `raman_inverse`
     - cdf: `ICDF` → `icdf`, `ICDF2D` → `icdf_2d`
     - progress: `Progress` → `progress`, `Progress_notebook` →
       `ProgressNotebook`, `Progress_invisible` → `ProgressInvisible`,
@@ -186,9 +196,8 @@ final `v2.0.0` release.
     `get_d1_to_e5_toa_sensors`, `get_d1_to_e5_toa_sensors_old`,
     `get_e6_toa_sensors`) is now `earth_radius`, as in `Smartg.run`
   - The `filename` parameter is now `fname`, as in the spectral modules,
-    in `AerOPAC`, `Cloud`, `read_i3rc_aerosol`, `read_i3rc_cloud`,
-    `AlbedoSpeclib`, `Hydrosol`, `HydrosolPR`, `HydrosolZhai` and
-    `extract_points`; the classes store it as `self.fname`
+    in `AerOPAC`, `Cloud`, `AlbedoSpeclib` and `extract_points`;
+    `AerOPAC` and `Cloud` store it as `self.fname`
   - The vertical structure parameters of `AerOPAC` are lower case, as in
     `AerUser`: `H_mix_min` / `H_mix_max` → `h_mix_min` / `h_mix_max`
     (`h_min_mix` in 2.0.0b1), `H_free_min` / `H_free_max` →
@@ -218,7 +227,13 @@ final `v2.0.0` release.
     `Water1D` / `WaterRw` and `Hydrosol` / `HydrosolPR` / `HydrosolZhai`
     class hierarchy, with PEP 8 parameter names; the legacy water folder
     has been moved to `smartg/obselete_files/`
-  - `saturation_pressure` now returns Pa instead of hPa
+  - The relative humidity of the profiles (`relative_humidity`, formerly
+    the `RH` method), and so the hygroscopic growth of the OPAC
+    aerosols, is computed with the new `saturation_pressure` (Huang
+    2018, in Pa), which takes the saturation over ice below 0 °C, where
+    v1.2.0 took it over liquid water at every temperature. The humidity
+    is unchanged above 0 °C and higher below: in `afglsw`, 81 → 94 % at
+    the surface and 24 → 39 % at 8 km; in `afglus`, 51 → 73 % at 8 km
   - The internal data structures have been migrated from the legacy
     LUT/MLUT objects to xarray in most of the package (atmosphere,
     smartg, water, reptran, postprocess, views); the albedo classes
@@ -233,9 +248,10 @@ final `v2.0.0` release.
     matrices they build by hand are `xr.DataArray` objects
   - `Smartg.run` returns an `xr.Dataset` instead of an MLUT. The
     variable names, their order, the coordinates and the attributes
-    are unchanged, and the dimensions which were anonymous in the
+    are unchanged, the dimensions which were anonymous in the
     MLUT are named (`sensor_in` / `wavelength_in`, `cdist_layer`,
-    `hist_*`);
+    `hist_*`), and those of the phase matrices are renamed (see
+    below);
     `smartg.xarray.dataset_to_mlut` converts the output back to an MLUT
   - The `mixture` attribute of `AerOPAC`, `Cloud` and `AerUser` is now
     `ds_mix`, and holds the bulk optical properties as an `xr.Dataset`
@@ -261,8 +277,9 @@ final `v2.0.0` release.
     conversion into the parallel/perpendicular convention of the kernels
   - The phase-matrix term dimension is now named `nphamat` internally
     (was `stk`; the auxdata files keep `stk`, which is renamed on load),
-    and the run output dimensions `stk_atm` / `stk_oc` are now
-    `nphamat_atm` / `nphamat_oc`
+    and the `iphase` / `stk` dimensions of `phase_atm` and `phase_oc` in
+    the run output are now `phase_index_atm` / `nphamat_atm` and
+    `phase_index_oc` / `nphamat_oc`
   - The phase-matrix wavelength dimension is now named `wavelength_phase`
     (was `wav_phase`); it remains distinct from the `wavelength` axis of
     the profiles and run outputs
@@ -291,6 +308,10 @@ final `v2.0.0` release.
     - `ma`               → `m_dry_air`
     - `n300` / `n_air`   → `n_air_co2_300` / `n_air_co2`
     - `RH` method        → `relative_humidity`
+    - `Profile_base`     → `ProfileBase`, with PEP 8 parameters:
+      `atm_filename` → `fname`, `O3` → `tco3`, `H2O` → `tcwp`, `NO2` →
+      `tcno2`, `P0` → `p0`, `RH_cst` → `rh_cst`, `O3_H2O_alt` →
+      `o3_h2o_alt`, and the unused `US` removed
   - The Aeronet readers of `smartg.atmosphere` follow PEP 8:
     `read_Aeronet_AOD` → `read_aeronet_aod`, `read_Aeronet_SSA` →
     `read_aeronet_ssa` and `read_Aeronet_PFN` → `read_aeronet_pfn`
@@ -512,7 +533,9 @@ final `v2.0.0` release.
   - The unused `lib3D` module, a copy of the 3D grid helpers of
     `smartg.libATM3D`, has been removed
   - Several obsolete utility functions removed: `average`, `isiterable`,
-    `isnumeric`, `vapor_pressure` and `trapzinterp` of
+    `isnumeric`, `vapor_pressure`, `trapzinterp`, `generatePro_multi`,
+    `conv_pha3D_to_pha4D`, `compute_AB_coeff`, `get_AB_coeff`,
+    `get_AB_coeff2` and the `Profile_base2` class of
     `smartg.atmosphere`, `compare_spectrum` of `smartg.tools.smartg_view`,
     and `convertVtoAngles`, `convertAnglestoV`, `Analyse_create_entity`,
     `random_equal_area_geometries` and `packed_geometries` of
@@ -521,8 +544,10 @@ final `v2.0.0` release.
     functions of `smartg.tools.phase` have been removed -> use
     `pytrunc.phase.fournier_forand` and `pytrunc.phase.henyey_greenstein`
     (pytrunc >= 2)
-  - The `theta_trunc` parameter of `Hydrosol`, `HydrosolPR` and `HydrosolZhai`
-    has been replaced by `truncation` (`DMTrunc | GTTrunc | None`): the water
+  - The `ang_trunc` parameter of the `IOP`, `IOP_1` and `IOP_profile`
+    classes has been replaced, in the `Hydrosol`, `HydrosolPR` and
+    `HydrosolZhai` classes that took over, by `truncation`
+    (`DMTrunc | GTTrunc | None`): the water
     phase functions are truncated with pytrunc like the atmospheric ones, and
     the scattering coefficient is scaled by `1 - f`. The truncation is only
     applied when asked for: the default is `None`, no truncation, where
@@ -593,8 +618,11 @@ final `v2.0.0` release.
   - The declared dependencies have been trimmed and bounded. `pyarrow`,
     `pyhdf` and `statsmodels` are no longer declared, as no module nor
     notebook imports them (`pyhdf` still comes in as a dependency of
-    `luts`), and the `ephem` and `docformatter` pixi dependencies have
-    been dropped. The libraries whose API SMART-G calls directly are
+    `luts`). `gatiab`, which `smartg.atmosphere` now imports, has moved
+    from the `extra` group to the required dependencies, and `extra`
+    holds `jax[cuda12]`, `radis` and `hitran-api`, the last two for the
+    photon histories notebook. The libraries whose API SMART-G calls
+    directly are
     now capped at their next major version (`numpy>=2,<3`,
     `jupytext>=1.16,<2`, `geoclide>=4.0.0,<5`, `pytrunc>=2.0.0,<3`,
     `gatiab>=1.1.2,<2`), and the supported Python versions are
