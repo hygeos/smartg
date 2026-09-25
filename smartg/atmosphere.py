@@ -3269,7 +3269,15 @@ class Atm1D(Atmosphere):
         assert tauray.ndim == 2
 
         # Rayleigh optical thickness
-        dtaur = diff1(tauray, axis=1)
+        if self.opt3d and self.prof_ray is not None:
+            # the coefficients of the 3D profile themselves, the first
+            # (TOA) level holding none as diff1 gives it: their float32
+            # cumulated sum over every cell, differentiated back, would
+            # quantize them to the ulp of the running sum
+            dtaur = np.array(self.prof_ray, copy=True)
+            dtaur[:, 0] = 0.0
+        else:
+            dtaur = diff1(tauray, axis=1)
         if not self.opt3d:
             pro["OD_r"] = xr.DataArray(
                 tauray,

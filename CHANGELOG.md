@@ -1013,6 +1013,11 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix the molecular share of the scattering (`pmol_atm`) of the `Atm3D`
+    cells, which came from a float32 cumulated sum of the Rayleigh
+    coefficients over every cell, differentiated back: its error grew
+    with the number of cells (4e-4 relative with 10 000 cells, 1e-2
+    absolute with millions). It is now computed from the coefficients
   - Fix a 4-term `aer_phase_1d` forced into `Atm3D`: the mixing kept the
     4 terms it shares with the 6-term 3D components, so that a
     non-spherical component (ice cloud, desert aerosol) lost its F22 and

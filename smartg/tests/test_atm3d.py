@@ -1032,3 +1032,31 @@ def test_forced_4_term_1d_aerosol_phase() -> None:
         )
     _, _, pha = _voxel_props(pro, grid3, (1, 0, 1))
     assert np.max(np.abs(pha[4] - pha[0])) > 0.0
+
+
+def test_3d_molecular_share_is_exact() -> None:
+    """The pmol of a cell is its Rayleigh share of the scattering.
+
+    It came from a float32 cumulated sum over all the cells,
+    differentiated back, whose error grows with the number of cells:
+    4e-4 relative here with 10 000 cells.
+    """
+    n = 50
+    x = np.arange(n + 1.0)
+    grid3 = Grid3D(x, x, np.array([0.0, 1.0, 2.0, 3.0, 4.0]), periodic=True)
+    ix, iy, iz = np.meshgrid(
+        np.arange(n), np.arange(n), np.arange(4), indexing="ij"
+    )
+    cells = np.stack([ix.ravel(), iy.ravel(), iz.ravel()], axis=1) + 1
+    rng = np.random.default_rng(0)
+    aer = Aer3D(
+        "desert", w_ref=550.0, cell_indices=cells,
+        ext_ref=rng.uniform(0.025, 0.075, len(cells)),
+        rh=np.full(len(cells), 70.0),
+    )
+    pro = Atm3D(Atm1D("afglt"), grid3, [aer]).calc(WAV, n_theta=NTH)
+    ray = pro["OD_r"].values[:, 1:].astype(np.float64)
+    sca = ray + pro["OD_p"].values[:, 1:] * pro["ssa_p_atm"].values[:, 1:]
+    np.testing.assert_allclose(
+        pro["pmol_atm"].values[:, 1:], ray / sca, rtol=1e-6
+    )
