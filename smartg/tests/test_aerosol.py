@@ -861,3 +861,33 @@ def test_forced_ssa_arrays_off_the_grid_refused() -> None:
     atm.calc([500.0, 700.0], phase=False)
     with pytest.raises(ValueError, match="wavelength and the altitude"):
         atm.calc([500.0, 700.0])
+
+
+def test_opac_file_without_default_heights() -> None:
+    """mineral_transported needs its heights, then it works.
+
+    Its file gives 'None' to all its heights and scale heights, which
+    made the constructor fail on float('None').
+    """
+    with pytest.raises(ValueError, match="h_mix_min, h_mix_max and z_mix"):
+        AerOPAC("mineral_transported", 0.1, 550.0)
+    with pytest.raises(ValueError, match="z_mix"):
+        AerOPAC(
+            "mineral_transported", 0.1, 550.0, h_mix_min=1.5, h_mix_max=3.5
+        )
+    aer = AerOPAC(
+        "mineral_transported", 0.1, 550.0,
+        h_mix_min=1.5, h_mix_max=3.5, z_mix=1.0,
+    )
+    assert aer.h_min == [1.5] and aer.h_max == [3.5]
+    dtau, _ = aer.dtau_ssa(np.array([550.0]), Z_LEVELS, 50.0)
+    assert np.isclose(dtau.sum(), 0.1, rtol=1e-5)
+    np.testing.assert_array_equal(dtau[0, (Z_LEVELS > 4.0)], 0.0)
+
+
+def test_opac_list_holds_mixtures_only() -> None:
+    """AerOPAC.list leaves out the species and the layer files."""
+    names = AerOPAC.list()
+    assert "desert" in names and "mineral_transported" in names
+    for name in ("free_troposphere", "stratosphere", "waso", "inso"):
+        assert name not in names

@@ -128,6 +128,17 @@ if TYPE_CHECKING:
 # constants
 M_H2O = 18.015  # g/mol
 
+# the files of the OPAC mixtures folder that are not mixtures: the
+# single species, which AerOPAC and Aer3D accept as well, and the
+# free troposphere and stratosphere layers
+_OPAC_NOT_MIXTURES = frozenset(
+    {
+        "free_troposphere", "stratosphere", "inso", "miam", "mian",
+        "micm", "micn", "minm", "minn", "mitr", "soot", "ssam", "sscm",
+        "suso", "waso",
+    }
+)
+
 
 def _grid_label(comp: object) -> str:
     """Name a component in a message about its scattering angle grid.
@@ -187,6 +198,27 @@ def _common_theta_grid(
         stacklevel=3,
     )
     return theta, True
+
+
+def _opac_height(
+    attrs: dict[Any, Any], name: str, value: float | None
+) -> float | None:
+    """Return a layer height or scale height of an OPAC component.
+
+    The `value` given, else the attribute of the file named after
+    `name` (``h_mix_min`` -> ``H_mix_min``), None when the file holds
+    the string 'None' or no such attribute. A scale height of 99, the
+    OPAC code of a constant vertical distribution, becomes 1e6 km in
+    the stratosphere.
+    """
+    if value is not None:
+        return value
+    raw = str(attrs.get(name[0].upper() + name[1:], "None"))
+    if raw == "None":
+        return None
+    if name == "z_stra" and raw == "99":
+        return 1e6
+    return float(raw)
 
 
 def _as_tau_ref(
@@ -335,7 +367,11 @@ class AerOPAC:
         continental_clean, continental_polluted, desert, desert_spheric,
         maritime_clean,
         maritime_polluted, mineral_transported, maritime_tropical and
-        urban
+        urban (see `list`). The file of mineral_transported gives no
+        default heights: pass `h_mix_min`, `h_mix_max` and `z_mix`
+        (and those of the free troposphere or the stratosphere to add
+        them). The single OPAC species of the same folder (inso, waso,
+        soot, ...) are accepted too.
     tau_ref : float or DataArray or LUT or None
         Optical thickness at the reference wavelength `w_ref`; an array
         holding a single value is taken as that value, and one of
@@ -541,28 +577,49 @@ class AerOPAC:
             ds2 = self.ds_mix.assign_coords(hum=[hum_v2])
             self.ds_mix = xr.concat([self.ds_mix, ds2], dim="hum")
 
-        if h_mix_min is None:
-            h_mix_min = float(self.ds_mix.attrs["H_mix_min"])
-        if h_mix_max is None:
-            h_mix_max = float(self.ds_mix.attrs["H_mix_max"])
-        if h_free_min is None:
-            h_free_min = float(self.ds_mix.attrs["H_free_min"])
-        if h_free_max is None:
-            h_free_max = float(self.ds_mix.attrs["H_free_max"])
-        if h_stra_min is None:
-            h_stra_min = float(self.ds_mix.attrs["H_stra_min"])
-        if h_stra_max is None:
-            h_stra_max = float(self.ds_mix.attrs["H_stra_max"])
-
-        if z_mix is None:
-            z_mix = float(self.ds_mix.attrs["Z_mix"])
-        if z_free is None:
-            z_free = float(self.ds_mix.attrs["Z_free"])
-        if z_stra is None:
-            if self.ds_mix.attrs["Z_stra"] == "99":
-                z_stra = 1e6  # -> OPAC Z=99 for constant vertical dist
+        # the heights and scale height of each layer, as given or from
+        # the file; a layer the file gives no height to ('None') is
+        # absent unless all three are given
+        layers = {}
+        absent = []
+        for layer, given in [
+            ("mix", (h_mix_min, h_mix_max, z_mix)),
+            ("free", (h_free_min, h_free_max, z_free)),
+            ("stra", (h_stra_min, h_stra_max, z_stra)),
+        ]:
+            names = [f"h_{layer}_min", f"h_{layer}_max", f"z_{layer}"]
+            values = [
+                _opac_height(self.ds_mix.attrs, name, value)
+                for name, value in zip(names, given, strict=True)
+            ]
+            missing = [
+                name
+                for name, value in zip(names, values, strict=True)
+                if value is None
+            ]
+            if len(missing) == len(names):
+                layers[layer] = (0.0, 0.0, 1.0)
+                absent.append(layer)
+            elif missing:
+                raise ValueError(
+                    f"{self.fname.name} gives no default value to "
+                    f"{', '.join(missing)}: pass them to have that "
+                    "layer."
+                )
             else:
-                z_stra = float(self.ds_mix.attrs["Z_stra"])
+                layers[layer] = cast(
+                    tuple[float, float, float], tuple(values)
+                )
+        if len(absent) == len(layers):
+            raise ValueError(
+                f"{self.fname.name} gives no default heights to its "
+                "layers: pass h_mix_min, h_mix_max and z_mix (and those "
+                "of the free troposphere or the stratosphere to add "
+                "them)."
+            )
+        h_mix_min, h_mix_max, z_mix = layers["mix"]
+        h_free_min, h_free_max, z_free = layers["free"]
+        h_stra_min, h_stra_max, z_stra = layers["stra"]
 
         self.hum_or_reff = "hum"
         self.free_tropo = None
@@ -1256,6 +1313,10 @@ class AerOPAC:
     def list() -> list[str]:
         """List available standard OPAC aerosol mixture files.
 
+        The single OPAC species (inso, waso, soot, ...) and the free
+        troposphere and stratosphere layers, which lie in the same
+        folder, are not mixtures and are left out.
+
         Returns
         -------
         list of str
@@ -1269,8 +1330,8 @@ class AerOPAC:
         ['antarctic', 'antarctic_spheric', 'arctic']
         """
         base_dir = DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures"
-        files = list(base_dir.glob("*.nc"))
-        return sorted([f.stem.replace("_sol", "") for f in files])
+        names = [f.stem.replace("_sol", "") for f in base_dir.glob("*.nc")]
+        return sorted(n for n in names if n not in _OPAC_NOT_MIXTURES)
 
 
 class Cloud(AerOPAC):
