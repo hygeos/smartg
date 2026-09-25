@@ -920,6 +920,10 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the pytest plugin `smartg/conftest.py`, which stopped pytest with
+    an `INTERNALERROR` (unknown hook `pytest_html_results_summary`) when
+    pytest-html, an optional test dependency, is not installed: its
+    pytest-html hooks are now optional
   - Fix `GTTrunc`, which accepted any `theta_tr`: 0, a negative or NaN
     angle, or one below half the first angle step of the phase matrix,
     left the phase matrix unchanged but still removed `trunc_frac` of the

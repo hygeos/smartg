@@ -253,6 +253,8 @@ def pytest_runtest_makereport(item: pytest.Function) -> Iterator[None]:
         report.extras = extra
 
 
+# optional: pytest-html may not be installed
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_results_table_header(cells: list[str]) -> None:
     """Insert per-test memory columns in pytest-html results table."""
     if _pytest_config is not None and _monitor_peak_memory_enabled(
@@ -261,6 +263,8 @@ def pytest_html_results_table_header(cells: list[str]) -> None:
         cells.insert(2, "<th>Mem Peak (MiB)</th>")
 
 
+# optional: pytest-html may not be installed
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_results_table_row(
     report: pytest.TestReport,
     cells: list[str],
@@ -429,6 +433,8 @@ a:hover {
 """
 
 
+# optional: pytest-html may not be installed
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_results_summary(
     prefix: list[str],
     summary: list[str],
