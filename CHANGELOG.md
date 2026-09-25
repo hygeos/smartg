@@ -1694,7 +1694,11 @@ final `v2.0.0` release.
     differ) or `wavelength_phase`, or a `Hydrosol` given its phase and a `bp`
     array. Their phase matrices are now averaged on a common grid, holding
     the angles of all of them, with unchanged results where they already
-    shared one
+    shared one. A mixture that varies with depth holds one matrix per
+    wavelength and level on that grid: 1.8 GB for `HydrosolPR` (72001
+    angles) with `HydrosolZhai` over 10 wavelengths and 51 levels; a
+    common coarser `n_theta`, a common `wavelength_phase` or fewer levels
+    reduce it
   - Fix a `Hydrosol` given its coefficients as arrays over the wavelengths
     of the profile and a `wavelength_phase`: the arrays were refused, or
     paired by position with the tabulation wavelengths when these were as

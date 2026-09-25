@@ -72,6 +72,7 @@ from smartg.phase import (
     calc_iphase,
     expand_phase_4_to_6,
     integ_phase,
+    union_theta_grid,
 )
 from smartg.truncation import (
     DMTrunc,
@@ -1740,9 +1741,10 @@ class Water1D(Water):
         `wavelength_phase` of the hydrosols if they share it, the
         wavelengths of the profile otherwise; their `z_phase` if they
         share it and no weight varies with depth, the depths of `grid`
-        otherwise; their angles if they share them, all of their angles
-        otherwise, each phase matrix being interpolated linearly in
-        angle, as the kernel reads it.
+        otherwise; their angles if they share them, the union of their
+        angles otherwise (see `smartg.phase.union_theta_grid`), each
+        phase matrix being interpolated linearly in angle, as the
+        kernel reads it.
 
         Parameters
         ----------
@@ -1757,6 +1759,18 @@ class Water1D(Water):
             The phase matrices with dimensions [wavelength_phase,
             z_phase, nphamat, theta_oc], or None if no hydrosol
             scatters.
+
+        Notes
+        -----
+        A mixture that varies with depth, such as `HydrosolZhai`,
+        whose `bp` follows the chlorophyll profile, mixed with any
+        other hydrosol, holds one float64 matrix of 6 terms per
+        wavelength and level, on the union of the angles: 48 bytes per
+        angle each. With the 72001 angles of `HydrosolPR`, 10
+        wavelengths and 51 levels, this is 1.8 GB, and `Smartg.run`
+        then samples each of these matrices on `n_icdf` angles. Giving
+        the hydrosols a common, coarser `n_theta`, a common
+        `wavelength_phase` or fewer levels reduces it.
         """
         z = self.grid
 
@@ -1804,36 +1818,47 @@ class Water1D(Water):
             z_c = z
         theta_c = shared("theta_oc")
         if theta_c is None:
-            theta_c = np.unique(
-                np.concatenate(
-                    [pha.coords["theta_oc"].values for _, pha in phases]
-                )
+            # the angles round-trip through radians in calc_phase, so
+            # two grids can hold the same node a few ulp apart: they
+            # are merged, as the kernel needs strictly increasing angles
+            theta_c = union_theta_grid(
+                [pha.coords["theta_oc"].values for _, pha in phases]
             )
 
-        pha_tot: NDArray | float = 0.0
-        bsca: NDArray | float = 0.0
+        # the average is accumulated in place, one matrix at a time,
+        # so that the only full-size array is the result
+        n_mat = phases[0][1].sizes["nphamat"]
+        pha_tot = np.zeros((len(wavelength_c), len(z_c), n_mat, len(theta_c)))
+        bsca = np.zeros((len(wavelength_c), len(z_c)))
         for (_, pha), weight in zip(phases, weights, strict=True):
             if np.array_equal(
                 pha.coords["wavelength_phase"].values, wavelength_c
             ) and np.array_equal(pha.coords["z_phase"].values, z_c):
-                values = pha.values
+                flat = pha.values.reshape(-1, *pha.shape[2:])
+                ipha = np.arange(len(flat)).reshape(pha.shape[:2])
             else:
                 # the phase matrix each wavelength and depth of the
                 # common grid is given, as calc_iphase gives the profile
                 flat, ipha = calc_iphase(
                     pha, wavelength_c, z_c, use_old_calc_iphase
                 )
-                values = flat[ipha]
             theta = pha.coords["theta_oc"].values
-            if not np.array_equal(theta, theta_c):
-                values = _interp_theta(values, theta, theta_c)
-            bsca = bsca + weight
-            pha_tot = pha_tot + values * weight[:, :, None, None]
+            same_theta = np.array_equal(theta, theta_c)
+            k_row, row = -1, flat[0]
+            for iw, iz in np.ndindex(ipha.shape):
+                if ipha[iw, iz] != k_row:
+                    k_row = ipha[iw, iz]
+                    row = flat[k_row]
+                    if not same_theta:
+                        row = _interp_theta(row, theta, theta_c)
+                pha_tot[iw, iz] += row * weight[iw, iz]
+            bsca += weight
 
         with np.errstate(divide="ignore", invalid="ignore"):
-            pha_tot = pha_tot / np.asarray(bsca)[:, :, None, None]
+            pha_tot /= bsca[:, :, None, None]
+        pha_tot[np.isnan(pha_tot)] = 0.0
         return xr.DataArray(
-            np.where(np.isnan(pha_tot), 0.0, pha_tot),
+            pha_tot,
             dims=["wavelength_phase", "z_phase", "nphamat", "theta_oc"],
             coords={
                 "wavelength_phase": wavelength_c,

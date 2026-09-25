@@ -18,9 +18,9 @@ from numpy.typing import NDArray
 from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
-from smartg.phase import integ_phase, read_phase
+from smartg.phase import as_theta_grid, integ_phase, read_phase
 from smartg.sensor import Sensor
-from smartg.smartg import LocalEstimate, Smartg
+from smartg.smartg import LocalEstimate, Smartg, _resolve_agrid
 from smartg.surface import Environment, RoughSurface
 from smartg.truncation import DMTrunc, GTTrunc
 from smartg.water import (
@@ -1146,6 +1146,27 @@ def test_water1d_mixes_hydrosols_of_other_grids(make: Any) -> None:
         total / bsca[:, :, None, None],
         rtol=1e-12, atol=1e-12,
     )
+
+
+def test_water1d_mixes_the_default_grids_on_their_union() -> None:
+    """HydrosolPR and HydrosolZhai mix on the union of their angles.
+
+    Their default grids of 72001 and 7201 angles round-trip through
+    radians, which leaves some shared nodes a few ulp apart. Kept as
+    two nodes, they made the angles of the mixture non-increasing in
+    radians, and Smartg.run(theta_grid='phase') refused the profile.
+    """
+    wavelength = np.array([443.0, 550.0])
+    grid = np.array([0.0, -5.0, -10.0])
+    pro = Water1D(
+        grid=grid, comp=[HydrosolPR(chl=0.5), HydrosolZhai(chl_surf=0.5)]
+    ).calc(wavelength)
+
+    np.testing.assert_allclose(
+        pro["theta_oc"].values, as_theta_grid(72001), rtol=0, atol=1e-9
+    )
+    n, mode, _ = _resolve_agrid("phase", 1000, pro, "oc")[1]
+    assert (n, mode) == (72001, 0)
 
 
 def test_water1d_mixes_a_hydrosol_given_arrays() -> None:
