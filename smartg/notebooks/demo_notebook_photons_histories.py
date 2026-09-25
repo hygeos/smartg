@@ -76,7 +76,7 @@ from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D, od2k
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
-from smartg.histories import get_histories
+from smartg.histories import get_histories, get_photon_index
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import LambSurface
 from smartg.xarray import drop_axes
@@ -479,11 +479,21 @@ print(jax.devices())
 (n_h, s_h, d_h, w_h, nrrs_h, nref_h, nsif_h, nvrs_h, nenv_h,
  nint_h, _) = get_histories(m_hist, level=0, verbose=False)
 
+# A photon leaves one record per local estimate event: the records of
+# a photon are summed before the variance, as
+# smartg.histories.photon_mean_std does (the sum of the squares of the
+# records underestimates it, down to negative values). photon_h numbers
+# the photons of the records from 0 to n_ph - 1.
+_, photon_h = np.unique(get_photon_index(m_hist, level=0),
+                        return_inverse=True)
+n_ph = int(photon_h.max()) + 1
+
 # Upload to JAX device (GPU) once
 s_h = jnp.array(s_h)     # (NLE, NStokes)
 d_h = jnp.array(d_h)     # (NLE, NL)
 w_h = jnp.array(w_h)     # (NLE, NLR)
 nref_h = jnp.array(nref_h)  # (NLE,)
+photon_h = jnp.array(photon_h)  # (NLE,)
 
 # ── Shared per-photon kernel (reused by all subsequent Jacobian cells)
 # ────
@@ -531,8 +541,10 @@ def _body_fw(i: jax.Array, carry: tuple[jax.Array, jax.Array]) -> tuple[jax.Arra
     s_sum, s2_sum = carry
     si = _si_stokes(s_h, w_h, d_h, nref_h, wavelength_hr_j[i], kabs_j[i],
                     alb_hr_j[i])  # (NStokes, NLE)
-    return (s_sum.at[i].set(si.sum(axis=1)),
-            s2_sum.at[i].set((si**2).sum(axis=1)))
+    # the value of each photon, its records summed: (n_ph, NStokes)
+    sp = jax.ops.segment_sum(si.T, photon_h, num_segments=n_ph)
+    return (s_sum.at[i].set(sp.sum(axis=0)),
+            s2_sum.at[i].set((sp**2).sum(axis=0)))
 
 
 _zeros = (jnp.zeros((n_wl, n_stokes)),
@@ -542,7 +554,8 @@ stokes_j, stokes2_j = jit(
 stokes = np.array(stokes_j).T / _n_h   # (NStokes, NWL_HR)
 stokes2 = np.array(stokes2_j).T / _n_h  # (NStokes, NWL_HR)
 
-std = np.sqrt((stokes2 - stokes**2) / _n_h)
+# the photons without any record count as zeros through _n_h
+std = np.sqrt(np.maximum(stokes2 - stokes**2, 0.0) / _n_h)
 upper = stokes + 1.95 * std
 lower = stokes - 1.95 * std
 
@@ -1379,8 +1392,14 @@ print(f"GPU time hist: {float(m2.attrs['kernel time (s)']):.4f}", 's')
 with jax.default_device(jax.devices("cpu")[0]):
     n_h, s_h, d_h, w_h, _, nref_h, _, _, _, _, _ = get_histories(
         m2, level=0, verbose=True)
+    # the records of a photon are summed before the variance, as in the
+    # histories section above
+    _, photon_h = np.unique(get_photon_index(m2, level=0),
+                            return_inverse=True)
+    n_ph = int(photon_h.max()) + 1
 
     # Upload to JAX device once
+    photon_h = jnp.array(photon_h)  # (NLE,)
     s_h = jnp.array(s_h, dtype=jnp.float32)  # (NLE, NStokes)
     d_h = jnp.array(d_h, dtype=jnp.float32)  # (NLE, NL)
     w_h = jnp.array(w_h, dtype=jnp.float32)  # (NLE, NLR)
@@ -1418,8 +1437,10 @@ with jax.default_device(jax.devices("cpu")[0]):
         s_sum, s2_sum = carry
         si = _si_stokes(s_h, w_h, d_h, nref_h, wavelength_hr_j[i], kabs_j[i],
                         alb_hr_j[i])
-        return (s_sum.at[i].set(si.sum(axis=1)),
-                s2_sum.at[i].set((si**2).sum(axis=1)))
+        # the value of each photon, its records summed: (n_ph, NStokes)
+        sp = jax.ops.segment_sum(si.T, photon_h, num_segments=n_ph)
+        return (s_sum.at[i].set(sp.sum(axis=0)),
+                s2_sum.at[i].set((sp**2).sum(axis=0)))
 
     _zeros = (jnp.zeros((n_wl, n_stokes)),
               jnp.zeros((n_wl, n_stokes)))
@@ -1427,7 +1448,7 @@ with jax.default_device(jax.devices("cpu")[0]):
         lambda: lax.fori_loop(0, n_wl, _body_fw, _zeros))()
     stokes = np.array(stokes_j).T / _n_h   # (NStokes, n_wl)
     stokes2 = np.array(stokes2_j).T / _n_h  # (NStokes, n_wl)
-    std = np.sqrt((stokes2 - stokes**2) / _n_h)
+    std = np.sqrt(np.maximum(stokes2 - stokes**2, 0.0) / _n_h)
     upper = stokes + 1.96 * std
     lower = stokes - 1.96 * std
 
