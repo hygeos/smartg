@@ -1015,6 +1015,13 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the albedo map of `Environment(env=5)` in spherical mode
+    (`pp=False`): the distance to the origin of the map was the arc cosine
+    of a single precision cosine, which rounds to 1 near the origin, so
+    that the points within about 2 km of it were read at the origin, the
+    ones a little further at about 3.1 km, or in the last cell of the map.
+    The error decreased with the distance, to tens of metres beyond 50 km.
+    It was already in v1.2.0
   - Fix `Smartg.run(sun_disc=...)` with the cone sampling at the downward
     levels (`down (0+)`, `down (0-)`, `down (B)`): each box was centred on
     an upward direction, so that no downward photon but the ones near the

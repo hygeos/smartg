@@ -9106,10 +9106,12 @@ __device__ int GetEnvIndex(float3 pos, struct EnvMap *envmap) {
     float posx = pos.x;
     float posy = pos.y;
     #ifdef SPHERIQUE
-    // Origin of env map grid in geocentric frame
-    float3 ref = make_float3(0.F, 0.F, RTER);
-    float dist = acosf(dot(ref, pos)/(RTER*RTER)) * RTER; // distance on Earth between point && origin
+    // Origin of env map grid in geocentric frame: (0, 0, RTER)
     float distXY = sqrtf(pos.x*pos.x+pos.y*pos.y); // planar distance between projected point on plane Z=0 && origin
+    // distance on Earth between the point and the origin, from the angle
+    // between them: atan2 keeps its precision near the origin, where
+    // the acos of a cosine rounded to 1 in single precision did not
+    float dist = atan2f(distXY, pos.z) * RTER;
     if (distXY !=0.) {
         posx=pos.x*dist/distXY;
         posy=pos.y*dist/distXY;

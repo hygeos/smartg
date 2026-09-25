@@ -13,7 +13,7 @@ import xarray as xr
 from numpy.typing import NDArray
 
 from smartg import conftest
-from smartg.albedo import AlbedoCst
+from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.atmosphere import AerOPAC, Atm1D, Atm3D, Cloud
 from smartg.grid3d import Grid3D
 from smartg.reptran import Reptran, reduce_reptran
@@ -695,3 +695,36 @@ def test_sun_disc_boxes_of_every_level() -> None:
             / boxes[f"I_{level}"].values.mean(axis=0)
         )
         np.testing.assert_allclose(ratio[3:8], 1.0, atol=0.05)
+
+
+def test_albedo_map_near_the_origin_in_spherical_mode() -> None:
+    """Check that a spherical run reads the albedo map at 1 km.
+
+    Two nadir sensors look at the ground 1 km on each side of the
+    origin, through an empty atmosphere, one onto a white strip of the
+    map and the other onto black ground.
+    """
+    albedo_map = AlbedoMap(
+        np.array([[0], [1], [0]]),
+        np.array([0.5, 1.5, 1e8]),
+        np.array([1e8]),
+        [AlbedoCst(0.0), AlbedoCst(1.0)],
+    )
+    sensors = [
+        Sensor(pos_x=x, pos_z=6371.0 + 120.0, th_deg=180.0, loc="ATMOS")
+        for x in (1.0, -1.0)
+    ]
+    m = Smartg(pp=False, back=True).run(
+        550.0,
+        atmosphere=_empty_atmosphere(),
+        surface=LambSurface(alb=AlbedoCst(0.0)),
+        environment=Environment(env=5, alb=albedo_map),
+        sensor=sensors,
+        le=LocalEstimate(th_deg=[30.0], phi_deg=[0.0], count_level=[0]),
+        n_photons=1e5,
+        seed=51,
+        progress=False,
+    )
+    white, black = m["I_up (TOA)"].values.ravel()
+    assert white > 0.5
+    assert black < 1e-6
