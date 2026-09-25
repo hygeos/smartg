@@ -953,6 +953,13 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the `Environment` of a run with water and without atmosphere: the
+    photons it reflected went into the empty atmosphere instead of leaving
+    to space, as they do from the other surfaces. With `alt_pp=True` the
+    move sent them back onto the environment at once, forever, so that
+    the run never ended once a photon reached the environment, and the
+    local estimate counted nothing at the top of the atmosphere. The
+    error was already in v1.2.0
   - Fix the pytest plugin `smartg/conftest.py`, which stopped pytest with
     an `INTERNALERROR` (unknown hook `pytest_html_results_summary`) when
     pytest-html, an optional test dependency, is not installed: its

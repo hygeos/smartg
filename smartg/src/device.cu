@@ -5927,7 +5927,10 @@ __device__ void surfaceLambert(Photon* ph, int le,
 	/* Update of photon location && weight */
 	/***************************************************/
 	if (ph->loc == SURF0P){
-		bool test_s = ( SIMd == SURF_ONLY);
+		// without atmosphere the photon leaves to space, as from the
+		// other surfaces: the alternative PP move would send it back
+		// to the surface at once, forever
+		bool test_s = ( SIMd == SURF_ONLY || SIMd == OCEAN_SURF);
 		ph->loc = SPACE*test_s + ATMOS*(!test_s);
         #ifndef OPT3D
 		ph->layer = NATMd;
@@ -7128,7 +7131,10 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             prof = prof_atm;
         }
         if ((count_level==DOWN0P) || (count_level==DOWN0M) || (count_level==UP0P) || (count_level==UP0M) ) {
+            // a photon in SPACE left the surface of a run without
+            // atmosphere, toward UP0P
             if ((ph->loc == ATMOS) || (ph->loc == SURF0M) || (ph->loc == SURF0P)
+                || (ph->loc == SPACE)
 				#ifdef OBJ3D
 				|| (ph->loc == OBJSURF)
 				#endif

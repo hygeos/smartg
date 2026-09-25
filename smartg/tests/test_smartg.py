@@ -770,6 +770,37 @@ def test_albedo_map_seafloor_below_the_land() -> None:
     assert np.all(np.abs(_z_scores(runs[0], runs[1], "up (TOA)")) < 5)
 
 
+@pytest.mark.parametrize("alt_pp", [False, True])
+def test_environment_without_atmosphere_reflects_to_space(
+    alt_pp: bool,
+) -> None:
+    """Check the environment of a run with water and no atmosphere.
+
+    The light reaches the ground on the environment, a Lambertian
+    albedo of 0.3 around a disc of sea 10 km away, and leaves to space:
+    the radiance is the albedo, above the surface as at the top of the
+    atmosphere. The environment sent the photon into the empty
+    atmosphere, from where the alternative PP move returned it to the
+    ground at once, forever, and counted nothing at the top of the
+    atmosphere.
+    """
+    m = Smartg(alt_pp=alt_pp).run(
+        450.0,
+        surface=RoughSurface(),
+        water=Water1D(grid=[0.0, -10.0], comp=[]),
+        environment=Environment(
+            env=1, env_size=1.0, x0=10.0, alb=AlbedoCst(0.3)
+        ),
+        th_deg=30.0,
+        le=LocalEstimate(th_deg=[30.0], phi_deg=[90.0]),
+        output_layers=2,
+        n_photons=1e4,
+        progress=False,
+    )
+    for level in ("up (TOA)", "up (0+)"):
+        np.testing.assert_allclose(m[f"I_{level}"].values, 0.3, rtol=1e-5)
+
+
 def test_toa_sphere_start_without_objects() -> None:
     """Check the cell_size=-2 sensors of a run without 3D objects.
 
