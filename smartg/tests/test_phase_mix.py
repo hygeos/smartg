@@ -255,13 +255,54 @@ def test_same_grid_mixture_neither_warns_nor_resamples() -> None:
 
 
 def test_wavelength_axes_cannot_be_merged() -> None:
-    # a 2-D user matrix is monochromatic, the OPAC aerosol is not:
-    # there is no union of wavelengths, so this must not go through
+    # a 4-D user matrix keeps its own wavelengths, the OPAC aerosol is
+    # computed at those asked for: there is no union of wavelengths,
+    # so this must not go through
     """Check that differing wavelength axes are refused."""
     aer = _aerosol()
-    cld = _cloud(phase=_file_matrix(_cloud()))
-    with pytest.raises(ValueError, match="wavelength_phase"):
-        _atm([aer, cld]).phase(np.array([500.0, 600.0]))
+    user = _file_matrix(_cloud()).expand_dims(
+        {"wavelength_phase": [500.0, 600.0], "z_phase": [0.0]}
+    ).copy()
+    cld = _cloud(phase=user)
+    with pytest.raises(ValueError, match="same wavelength_phase axis"):
+        _atm([aer, cld]).phase(np.array([510.0, 610.0]))
+
+
+def test_2d_user_matrix_serves_every_wavelength_and_layer() -> None:
+    """A 2-D user matrix is the same at every wavelength and layer.
+
+    It came back at the first wavelength and in a single layer, which
+    the mixing refused for several wavelengths or pfgrid layers.
+    """
+    user = _file_matrix(_cloud())
+    cld = _cloud(phase=user)
+    with pytest.warns(UserWarning, match=MISMATCH):
+        pha = _atm([_aerosol(), cld]).phase(np.array([500.0, 600.0]))
+    assert pha is not None and pha.sizes["wavelength_phase"] == 2
+
+    pro = Atm1D(
+        "afglms", comp=[cld], grid=GRID, pfgrid=[100.0, 3.0, 2.0, 0.0]
+    ).calc(np.array([500.0, 600.0]))
+    # the layer from 3 to 2 km holds the cloud
+    k = GRID.index(2.0)
+    for iw in range(2):
+        pha_k = pro["phase_atm"].values[pro["iphase_atm"].values[iw, k]]
+        np.testing.assert_allclose(pha_k[:4], user.values, rtol=1e-6)
+        np.testing.assert_allclose(pha_k[4], user.values[0], rtol=1e-6)
+        np.testing.assert_allclose(pha_k[5], user.values[2], rtol=1e-6)
+
+
+def test_4d_user_matrix_off_the_mixing_axes_refused() -> None:
+    """A 4-D user matrix not over the mixing axes gets a clear error.
+
+    Instead of a CoordinateValidationError from xarray.
+    """
+    user = _file_matrix(_cloud()).expand_dims(
+        {"wavelength_phase": [500.0, 550.0, 600.0], "z_phase": [0.0]}
+    ).copy()
+    cld = _cloud(phase=user)
+    with pytest.raises(ValueError, match="4-D phase matrix must follow"):
+        _atm([cld]).phase(np.array([500.0, 600.0]))
 
 
 def test_single_user_matrix_keeps_its_grid() -> None:

@@ -1009,6 +1009,13 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix the 2-D user `phase` of `AerOPAC` and `Cloud`, documented as
+    constant vertically, which raised an xarray error in `Atm1D.calc` at
+    several wavelengths or with a `pfgrid` of several layers: it is now
+    the same matrix at every wavelength and in every layer. A 4-D user
+    phase not over the `wavelength_phase` and `pfgrid` axes of the
+    mixing, and a 2-D one not over `('nphamat', 'theta_atm')`, raise a
+    `ValueError` saying so
   - Fix `AerOPAC('mineral_transported')`, documented as available, which
     failed on `float('None')`: its file gives no default layer heights.
     They must now be passed (`h_mix_min`, `h_mix_max` and `z_mix`), which

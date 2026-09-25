@@ -426,7 +426,7 @@ class AerOPAC:
         components and scattering angle
         The variable names must be:
         If 4-D matrix -> wavelength_phase, z_phase, nphamat, theta
-        If 2-D matrix (assumed monochromatic and constant vertically) ->
+        If 2-D matrix (the same at every wavelength and altitude) ->
         nphamat, theta
         Where:
         - wavelength_phase is the wavelength. It must be equal to
@@ -1002,10 +1002,15 @@ class AerOPAC:
         """
         if self._phase is not None:
             if self._phase.ndim == 2:
-                # convert to 4-dim by inserting empty dimensions
-                # wavelength_phase and z_phase
+                # monochromatic and constant vertically: the same
+                # matrix at every wavelength and in every layer asked
+                # for
                 dims = list(self._phase.dims)
-                assert dims == ["nphamat", "theta_atm"]
+                if dims != ["nphamat", "theta_atm"]:
+                    raise ValueError(
+                        "A 2-D phase matrix must lie over the dimensions "
+                        f"('nphamat', 'theta_atm'), got {tuple(dims)}."
+                    )
                 pha_ = self._phase.values[:, :]
                 if pha_.shape[0] == 4:
                     pha_6 = np.zeros((6, pha_.shape[1]), dtype=pha_.dtype)
@@ -1013,15 +1018,19 @@ class AerOPAC:
                     pha_6[4, :] = pha_[0, :].copy()  # F22 = F11
                     pha_6[5, :] = pha_[2, :].copy()  # F44 = F33
                     pha_ = pha_6
+                wavelength = np.atleast_1d(wavelength)
+                z = np.atleast_1d(z)
                 return xr.DataArray(
-                    pha_[None, None, :, :],
+                    np.broadcast_to(
+                        pha_, (len(wavelength), len(z) - 1, *pha_.shape)
+                    ).copy(),
                     dims=[
                         "wavelength_phase", "z_phase", "nphamat",
                         "theta_atm",
                     ],
                     coords={
-                        "wavelength_phase": [wavelength[0]],
-                        "z_phase": [0.0],
+                        "wavelength_phase": wavelength,
+                        "z_phase": z[1:],
                         "nphamat": np.arange(6),
                         "theta_atm": self._phase.coords["theta_atm"].values,
                     },
@@ -1380,7 +1389,7 @@ class Cloud(AerOPAC):
         components and scattering angle
         The variable names must be:
         If 4-D matrix -> wavelength_phase, z_phase, nphamat, theta
-        If 2-D matrix (assumed monochromatic and contant vertically) ->
+        If 2-D matrix (the same at every wavelength and altitude) ->
         nphamat, theta
         Where:
         - wavelength_phase is the wavelength. It must be equal to
@@ -3810,6 +3819,20 @@ class Atm1D(Atmosphere):
             if hasattr(comp_pha, "to_xarray"):
                 comp_pha = comp_pha.to_xarray()
 
+            n_wavelength, n_layer = dtau.shape[0], dtau.shape[1] - 1
+            sizes = (
+                comp_pha.sizes["wavelength_phase"],
+                comp_pha.sizes["z_phase"],
+            )
+            if sizes != (n_wavelength, n_layer):
+                raise ValueError(
+                    f"The phase matrices of {_grid_label(comp)} lie over "
+                    f"{sizes[0]} wavelengths and {sizes[1]} layers, but "
+                    f"they are mixed at {n_wavelength} wavelengths (the "
+                    "wavelength_phase of Atm1D, else those of calc) on "
+                    f"the {n_layer} layers of pfgrid: a 4-D phase matrix "
+                    "must follow them."
+                )
             # dtau/ssa grids are defined on pfgrid boundaries; skip TOA
             # bound to match z_phase layers.
             coords = {
