@@ -424,7 +424,6 @@ kabs = od2k(m, 'OD_abs_atm')[:, 1:]
 s_alis = Smartg(alt_pp=True, double=True, alis=True)
 # Computations of histories are done on the low resolution grid (only
 # scattering !)
-# !! n_loop and n_photons should be equal (one UNIQUE pass)
 # the surface albedo as to be set to 1. Reflection is computed
 # afterwards using the photon histories
 # and the high resolution albedos

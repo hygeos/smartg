@@ -418,8 +418,11 @@ class Alis:
         Activate the recording of the photon histories, which the
         `smartg.histories` module post-processes. Default False.
     max_hist : int, optional
-        The maximum number of recorded histories, only used if hist is
-        True. Default 8e6.
+        The maximum number of recorded histories, over all the kernel
+        launches and shared by the TOA and 0+ levels, only used if
+        hist is True. The output attribute 'hist records' gives the
+        number of histories produced, beyond max_hist when some were
+        dropped. Default 8e6.
     n_jac : int, optional
         The number of perturbed profiles. Default 0, no Jacobian.
     n_jac_abs : bool, optional
@@ -2480,6 +2483,10 @@ class Smartg:
 
         attrs['kernel time (s)'] = secs_cuda_clock
         attrs['number of kernel iterations'] = n_kernel
+        if hist:
+            # the histories the kernel produced, the records beyond
+            # max_hist being dropped
+            attrs['hist records'] = int(n_photons_out_tot.flat[0])
         attrs['seed'] = seed
         attrs.update(self.common_attrs)
 
@@ -5005,7 +5012,12 @@ def _loop_kernel(
     while (np.sum(n_photons_in_tot.get()) / alis_norm) < n_photons_target:
         tab_photons.fill(0.0)
         tab_photons_no_aer.fill(0.0)
-        n_photons_out.fill(0)
+        # With histories, the first element of n_photons_out is the
+        # record counter of the kernel: it runs over the launches, so
+        # that each one appends its records instead of overwriting
+        # those of the previous ones from the first slot
+        if not hist:
+            n_photons_out.fill(0)
         n_photons_out_no_aer.fill(0)
         n_photons_in.fill(0)
         counter.fill(0)
@@ -5102,7 +5114,10 @@ def _loop_kernel(
         launched_last = n_photons_in
         n_photons_in_tot += launched_last
 
-        n_photons_out_tot += n_photons_out
+        if hist:
+            n_photons_out_tot = n_photons_out.copy()
+        else:
+            n_photons_out_tot += n_photons_out
         sum_weights = tab_photons
 
         n_photons_out_tot_no_aer += n_photons_out_no_aer

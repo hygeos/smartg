@@ -246,6 +246,58 @@ def test_smartg_jax2(
     )
 
 
+def test_histories_several_loops(n_photons: float = 5e4) -> None:
+    """Check that the histories of every kernel loop are kept.
+
+    Each loop used to overwrite the records of the previous ones while
+    Nphotons_in counted them all, so that the radiance rebuilt from
+    the histories came out about n_loops times too small.
+    """
+    wavelength = np.linspace(320.0, 350.0, num=11)
+    atmosphere = Atm1D(
+        "afglms", grid=np.linspace(50.0, 0.0, num=21)
+    ).calc(wavelength)
+    kabs = od2k(atmosphere, "OD_abs_atm")[:, 1:]
+    common = {
+        "seed": 0,
+        "th_deg": 45.0,
+        "wavelength": wavelength,
+        "surface": LambSurface(AlbedoCst(1.0)),
+        "le": LocalEstimate(th_deg=[0.0], phi_deg=[0.0]),
+        "atmosphere": atmosphere,
+        "n_photons": n_photons,
+    }
+    max_hist = int(1e6)
+    sg = Smartg(alis=True, alt_pp=True)
+    m_hist = sg.run(
+        alis_options=Alis(
+            n_low=wavelength.size, hist=True, max_hist=max_hist
+        ),
+        n_loop=n_photons / 5,
+        **common,
+    )
+    m_ref = sg.run(alis_options=Alis(n_low=wavelength.size), **common)
+    sg.clear_context()
+    assert int(m_hist.attrs["number of kernel iterations"]) >= 5
+    assert int(m_hist.attrs["hist records"]) <= max_hist
+
+    with jax.default_device(jax.devices("cpu")[0]):
+        n, s, d, w, _, nref, _, _, _, _, _ = get_histories(m_hist)
+        stk_i = (
+            np.array(
+                big_sum(si, only_i=True)(
+                    wavelength, kabs, np.ones_like(wavelength), s[:, 0],
+                    w, d, nref, wavelength
+                ).sum(axis=0)
+            )
+            / n
+        )
+    i_ref = np.squeeze(m_ref["I_up (TOA)"].values)
+    rel_diff = np.max(np.abs(stk_i / i_ref - 1))
+    logger.info(f"several loops: max rel diff = {rel_diff:.4f}")
+    np.testing.assert_allclose(stk_i, i_ref, rtol=0.05)
+
+
 def test_validation_artdeco(
     request: pytest.FixtureRequest,
     n_photons: float = 5e5,

@@ -1310,6 +1310,15 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix the photon histories of `Alis(hist=True)` with more than one
+    kernel launch, the default `n_loop`: each launch overwrote the
+    records of the previous ones while `Nphotons_in` counted every
+    photon, so the radiances rebuilt from `get_histories` came out about
+    n_loops times too small. The records of all the launches are now
+    kept, up to `max_hist`, and the new output attribute 'hist records'
+    gives the number of histories produced. The saturation warning of
+    `get_histories` now counts them over the TOA and 0+ levels together,
+    which share the buffer: it never fired when both were recorded
   - Fix the ALIS spectra when `n_low - 1` does not divide `n_lam - 1`
     (for instance `Alis(n_low=5)` over 100 wavelengths): the wavelengths
     past the last low resolution point were interpolated towards an

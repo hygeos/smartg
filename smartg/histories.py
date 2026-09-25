@@ -122,18 +122,26 @@ def get_histories(
     good = w0[:, 0] != 0
     ngood = np.sum(good)
     max_hist = tab_hist.shape[0]
-    if ngood >= max_hist:
+    attrs = getattr(m, 'attrs', {})
+    if 'hist records' in attrs:
+        # the histories the kernel produced, over both levels
+        n_records = int(attrs['hist records'])
+        saturated = n_records > max_hist
+    else:
+        # an older output: the slots used by either level
+        n_records = int(np.sum((tab_hist_[:, :, nl + 4] != 0).any(axis=0)))
+        saturated = n_records >= max_hist
+    if saturated:
         # Use print rather than warnings.warn: Python's default
         # warning filter deduplicates per call-site, so the message
         # would silently disappear on the second call in the same
         # session.
         print(
             f"\033[1;33m[ALIS hist WARNING] History buffer saturated: "
-            f"{ngood:,}/{max_hist:,} slots used "
-            f"({100. * ngood / max_hist:.0f}%). "
+            f"{n_records:,} histories for {max_hist:,} slots. "
             "Photons beyond max_hist were NOT recorded — results "
             "will be biased. "
-            "→ Increase max_hist or reduce n_photons per loop.\033[0m"
+            "→ Increase max_hist.\033[0m"
         )
     n = m['Nphotons_in'].data[0, 0]
     ###################
