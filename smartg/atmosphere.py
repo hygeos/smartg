@@ -443,10 +443,10 @@ class AerOPAC:
     phase : None or DataArray, optional
         Phase matrix F as function of wavelength, altitude, stoke
         components and scattering angle
-        The variable names must be:
-        If 4-D matrix -> wavelength_phase, z_phase, nphamat, theta
+        The dimension names must be:
+        If 4-D matrix -> wavelength_phase, z_phase, nphamat, theta_atm
         If 2-D matrix (the same at every wavelength and altitude) ->
-        nphamat, theta
+        nphamat, theta_atm
         Where:
         - wavelength_phase is the wavelength. It must be equal to
           the `wavelength_phase` parameter of Atm1D if defined, else
@@ -455,8 +455,12 @@ class AerOPAC:
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
           of Atm1D
-        - nphamat the phase matrix unique terms.
-        - theta the scattering angle.
+        - nphamat the phase matrix unique terms (a legacy ``stk``
+          dimension is renamed so).
+        - theta_atm the scattering angle in degrees, a coordinate.
+
+        The phase readers of `smartg.phase` (``read_phase`` with
+        ``kind='atm'``) give these names.
 
         The phase matrix terms (IQUV convention) must be given in the
         folowing order:
@@ -1051,10 +1055,9 @@ class AerOPAC:
             [wavelength_phase, z_phase, nphamat, theta_atm].
             Shape is (len(wavelength), len(z)-1, nphamat, n_theta)
             where:
-            - nphamat = 4 for spherical particles only (phase matrix
-              unique terms P11, P21, P33, P34)
-            - nphamat = 6 for spherical and non-spherical particles
-              (additional phase matrix unique terms P22, P44)
+            - nphamat = 6, the unique terms F11, F21, F33, F34, F22 and
+              F44 in the IQUV convention, those of spherical particles
+              completed with F22 = F11 and F44 = F33
             - theta_atm: scattering angles from 0° to 180°
         """
         if self._phase is not None:
@@ -1447,10 +1450,10 @@ class Cloud(AerOPAC):
     phase : None or DataArray, optional
         Phase matrix F as function of wavelength, altitude, stoke
         components and scattering angle
-        The variable names must be:
-        If 4-D matrix -> wavelength_phase, z_phase, nphamat, theta
+        The dimension names must be:
+        If 4-D matrix -> wavelength_phase, z_phase, nphamat, theta_atm
         If 2-D matrix (the same at every wavelength and altitude) ->
-        nphamat, theta
+        nphamat, theta_atm
         Where:
         - wavelength_phase is the wavelength. It must be equal to
           the `wavelength_phase` parameter of Atm1D if defined, else
@@ -1459,8 +1462,12 @@ class Cloud(AerOPAC):
         - z_phase is the phase altitude. It must be equal to the
           `pfgrid[1:]` parameter
           of Atm1D
-        - nphamat the phase matrix unique terms.
-        - theta the scattering angle.
+        - nphamat the phase matrix unique terms (a legacy ``stk``
+          dimension is renamed so).
+        - theta_atm the scattering angle in degrees, a coordinate.
+
+        The phase readers of `smartg.phase` (``read_phase`` with
+        ``kind='atm'``) give these names.
 
         The phase matrix terms (IQUV convention) must be given in the
         folowing order:
@@ -2761,9 +2768,13 @@ class Atm1D(Atmosphere):
         profile (ext) and single scattering albedo arrays (ssa), it
         shortcuts any further particles scattering computation.
     prof_phases : tuple or None, optional
-        A tuple (iphase, phases ) where iphase is the phase matrix
-        indices profile (nwavelength,nz), and phases is a list of phase
-        matrices LUT (as outputs of the `read_phase` utility).
+        A tuple (iphase, phases) where iphase is the phase matrix
+        indices profile (nwavelength, nz), and phases is a list of
+        phase matrices, one per index, each a DataArray over
+        ('nphamat', 'theta_atm') (or a legacy LUT), as
+        `smartg.phase.get_prof_phases` builds them from the output of
+        `smartg.phase.read_phase`, and as `calc_split` and
+        `extract_split` return them.
     rh_cst : float or None, optional
         Force relative humidity to be constant at this value. If None,
         relative humidity is recalculated from the temperature and water
@@ -2943,6 +2954,11 @@ class Atm1D(Atmosphere):
         wavelength : array_like or BandSet
             Wavelengths at which to calculate the profile. It can be a
             list of ReptranIband or KdisIband.
+        phase : bool, optional
+            If True (default), compute the phase matrices of the
+            components, and truncate those carrying a `truncation`
+            (see the Notes). With False, the profile carries only the
+            forced `prof_phases`, if any.
         n_theta : int, str or array_like, optional
             The number of equally spaced angles to be considered for
             the phase matrix, the angles themselves in degrees,
@@ -3851,10 +3867,8 @@ class Atm1D(Atmosphere):
             Shape is (len(wavelength), nz, nphamat, n_theta) where:
             - nz: number of altitude levels in the reduced profile
               (self.pfgrid)
-            - nphamat = 4 for spherical particles only (phase matrix
-              unique terms P11, P21, P33, P34)
-            - nphamat = 6 for spherical and non-spherical particles
-              (additional terms P22, P44)
+            - nphamat = 6, the unique terms F11, F21, F33, F34, F22
+              and F44 in the IQUV convention
             - theta_atm: scattering angles from 0° to 180°
 
             Returns None if no aerosol components are defined (self.comp
@@ -4370,6 +4384,12 @@ class Atm3D(Atmosphere):
         Force the 1D molecular scattering (Rayleigh) coefficients in
         km-1, with the shape (nwavelength, NZ + 1) where NZ is the
         number of vertical cells of `grid_3d` including the boundary.
+        The columns follow the levels of ``grid_3d.zGRID[::-1]``,
+        from the top down, as `od2k` gives them for a profile on that
+        grid: column j is the layer between ``zGRID[NZ - j]`` and
+        ``zGRID[NZ - j + 1]``, column 1 the top cell, column NZ the
+        bottom one, and column 0, the top level, is not used. The same
+        holds for the other forced 1D arrays below.
         If None, computed from `atm_1d`.
     mol_abs_1d : 2-D ndarray or None, optional
         Force the 1D molecular absorption coefficients in km-1, same
@@ -5966,15 +5986,14 @@ def gravity_z0(lat: NumericArrayLike) -> float | NDArray:
     Returns
     -------
     float or ndarray
-        Gravitational acceleration at ground level in m/s².
+        Gravitational acceleration at ground level in cm/s², as
+        Bodhaine et al. (1999), eq. 11, and `rayleigh_od` use it.
 
     References
     ----------
     .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables*
-    (Sixth revised
-           edition; fourth reprint issued 1968). Smithsonian Institution
-           Press,
-           City of Washington, 527 pp.
+       (Sixth revised edition; fourth reprint issued 1968).
+       Smithsonian Institution Press, City of Washington, 527 pp.
     """
     lat = np.asarray(lat)
     if lat.ndim == 0:
@@ -6004,15 +6023,14 @@ def gravity_z(
     -------
     float or ndarray
         Gravitational acceleration at the given altitude(s) and latitude
-        in m/s².
+        in cm/s², as Bodhaine et al. (1999), eq. 11, and `rayleigh_od`
+        use it.
 
     References
     ----------
     .. [1] List, R. J. (1968). *Smithsonian Meteorological Tables*
-    (Sixth revised
-           edition; fourth reprint issued 1968). Smithsonian Institution
-           Press,
-           City of Washington, 527 pp.
+       (Sixth revised edition; fourth reprint issued 1968).
+       Smithsonian Institution Press, City of Washington, 527 pp.
     """
     if not isinstance(lat, (float, int, np.floating, np.integer)):
         raise TypeError("The parameter lat must be a scalar value.")

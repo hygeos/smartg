@@ -673,11 +673,11 @@ final `v2.0.0` release.
     `read_phase_nc` and `read_phase_cdf`: True (the default, and the
     former output) lays the matrix on a 1D profile, interpolated at
     `wavelength_phase` and `z_rh_reff` on a `z_phase` axis, for the
-    `phase` argument of `AerOPAC` / `Cloud` / `Hydrosol` and
-    `Atm1D.prof_phases`; False returns the table on the wavelength and
-    `hum` / `reff` axes of the file, which the `phase` argument of
-    `Cloud3D` / `Aer3D` takes, and which `read_phase_nth_cte` alone
-    used to produce. A `.dat` file, a single matrix, has only the
+    `phase` argument of `AerOPAC` / `Cloud` / `Hydrosol` and, through
+    `get_prof_phases`, `Atm1D.prof_phases`; False returns the table on the
+    wavelength and `hum` / `reff` axes of the file, which the `phase`
+    argument of `Cloud3D` / `Aer3D` takes, and which `read_phase_nth_cte`
+    alone used to produce. A `.dat` file, a single matrix, has only the
     first layout
     - `read_phase_cdf` gains `n_theta`: `None` keeps the automatic
       equally spaced grid capped by `n_theta_max` (`ntheta_max` in
