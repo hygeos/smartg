@@ -6166,6 +6166,29 @@ __device__ void surfaceBRDF_new(Photon* ph, int le,
 } //surfaceBRDF
 
 #ifdef OBJ3D
+/* objLocalFrame
+* Orthonormal frame of a hit on an object, around its normal on the
+* side the photon comes from: Nz is the face-forwarded normal, Nx the
+* x axis of the object projected on the surface. On the front of a
+* plane it is the frame of the object itself; on its back, that frame
+* turned upside down about x; on a sphere, the frame of the hit point.
+*/
+__device__ void objLocalFrame(IGeo* geoS, float3* Nx, float3* Ny, float3* Nz)
+{
+	Transform<float> transfo = geoS->mvTF;
+	*Nz = normalize(geoS->normal);
+	float3 ax = transfo(Vectorf(make_float3(1.F, 0.F, 0.F)));
+	float3 tx = ax - dot(ax, *Nz) * (*Nz);
+	if (length(tx) < 1e-3F)
+	{
+		// the x axis of the object is along the normal of the hit
+		float3 ay = transfo(Vectorf(make_float3(0.F, 1.F, 0.F)));
+		tx = ay - dot(ay, *Nz) * (*Nz);
+	}
+	*Nx = normalize(tx);
+	*Ny = cross(*Nz, *Nx);
+}
+
 __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabphi,
 									  struct Spectrum *spectrum, struct RNG_State *rngstate, IGeo* geoS)
 {
@@ -6199,7 +6222,8 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 		thv = tabthv[ph->ith];
 		DirectionToUV(thv, phi, &ph->v, &ph->u);
 
-		float weight = dot(ph->v, geoS->normalBase);
+		// on the side the photon comes from, front || back
+		float weight = dot(ph->v, geoS->normal);
 		if (weight <= 0.)
 		{
 			ph->loc = ABSORBED;
@@ -6216,15 +6240,11 @@ __device__ void surfaceLambert3D(Photon* ph, int le, float* tabthv, float* tabph
 		thv = acosf(sqrtf(RAND));
 		DirectionToUV(thv, phi, &v_n, &u_n);
 
+		// around the normal on the side the photon comes from, so
+		// that a back face reflects back, and a sphere around the
+		// normal of the hit
 		float3 vecX, vecY, vecZ;
-		vecX=make_float3(1., 0., 0.);
-		vecY=make_float3(0., 1., 0.);
-		vecZ=make_float3(0., 0., 1.);
-   
-		Transform<float> transfo=geoS->mvTF;
-		vecX=transfo(Vectorf(vecX)); vecX=normalize(vecX);
-		vecY=transfo(Vectorf(vecY)); vecY=normalize(vecY);
-		vecZ=transfo(Vectorf(vecZ)); vecZ=normalize(vecZ);
+		objLocalFrame(geoS, &vecX, &vecY, &vecZ);
 
 		float4x4 M = make_float4x4(
 			vecX.x, vecY.x, vecZ.x, 0.f,
@@ -6406,8 +6426,9 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 	float thv, phi;                        // used only in LE
 
 	// Find if the photon come from the front(1) || back(-1) of the obj surface
-	// geoS->normalBase is the obj normal of the front surface
-	int sign = (isBackward(macroFnormal_n, v_i)) ? 1 : -1;
+	// geoS->normalBase is the obj normal of the front surface (geoS->normal
+	// is face-forwarded against the photon)
+	int sign = (isBackward(geoS->normalBase, v_i)) ? 1 : -1;
     float avz;
 	
 	if (geoS->type == HELIOSTAT)
@@ -6420,13 +6441,14 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 
 	if (le == 0)
 	{
-		// The initial normal of the obj before transfo is colinear to the z axis,
-		// then create the transfo inverse for the direction v_i && simplify sampling
-		Transform<float> transfo=geoS->mvTF, invTransfo;
-		invTransfo = transfo.Inverse(transfo);
+		// Sample the microfacets in the frame of the macro normal on
+		// the side the photon comes from (the frame of the object on
+		// the front of a plane), where the photon comes down the z axis
+		float3 Nx, Ny, Nz;
+		objLocalFrame(geoS, &Nx, &Ny, &Nz);
 		
-		// Incident direction v if obj normal colinear to z axis
-		float3 v_iInv = normalize(invTransfo(Vectorf(v_i)));
+		// Incident direction in that frame
+		float3 v_iInv = normalize(GlobalToLocal(Nx, Ny, Nz, v_i));
 		
 		// ***********************************************************************************
 		// Beckmann sampling of theta_m, phi_m to get cTheta_i, sTheta_i -> Walter et al. 2007
@@ -6449,7 +6471,7 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 				cTheta_m = __cosf(theta_m); sTheta_m = __sinf(theta_m);
 				cPhi_m = __cosf(phi_m); sPhi_m = __sinf(phi_m);
 				microFnormal_m = make_float3( sTheta_m*cPhi_m,  sTheta_m*sPhi_m, cTheta_m );
-				microFnormal_m *= sign; microFnormal_m = normalize(microFnormal_m);
+				microFnormal_m = normalize(microFnormal_m);
 				cTheta_i = -dot( microFnormal_m, v_iInv);
 				cTheta_i = clamp(cTheta_i, -1.F, 1.F);
 			}
@@ -6457,14 +6479,12 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
 		else // Roughness equal zero  || very very close) --> perfect flat surface
 		{
 			microFnormal_m = make_float3(0.F, 0.F, 1.F);
-			microFnormal_m *= sign;
 			cTheta_i = -dot( microFnormal_m, v_iInv);
 			cTheta_i = clamp(cTheta_i, -1.F, 1.F);
 		}
 	
-		// Inverse transfo has been used in sampling then come back to "real basis"
-		//microFnormal_m = normalize(transfo(Normalf(microFnormal_m)));
-		microFnormal_m = normalize(transfo(Vectorf(microFnormal_m)));
+		// Back from the frame of the macro normal to the global one
+		microFnormal_m = normalize(LocalToGlobal(Nx, Ny, Nz, microFnormal_m));
 	} // end le==0 
 	else // else if le==1 -->
 	{
@@ -8518,6 +8538,9 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				// *****************************First Step********************************
 				// Consider all the transformation of object (j)
 				Transform<float> Tj, invTj; // Declaration of the tranform && its inverse
+				// Normal of the front surface: the rotated z axis of a
+				// plane, the outward normal at the hit of a sphere
+				float3 nBj = make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz);
 
 				/* !!! We note that it is crucial to begin with the translation because if there
 				   is a rotation then the coordinate system change (x || y || z axis) !!! */
@@ -8544,6 +8567,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 
 					if (myBBox.IntersectP(R1))
 						myBj = myObject.Intersect(R1, &myTj, &myDgj);
+					if (myBj) nBj = normalize(myDgj.nn);
 				}
 				else if (ObjT[IND+j].geo == 2) // Case with a plane object
 				{
@@ -8573,7 +8597,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 					myT = myTj;
 					myDg = myDgj;
 					GeoV->normal = faceForward(myDg.nn, -1.*R1.d);
-					GeoV->normalBase = make_float3(ObjT[IND+j].nBx, ObjT[IND+j].nBy, ObjT[IND+j].nBz);
+					GeoV->normalBase = nBj;
 					if(  isBackward( make_double3(GeoV->normalBase.x, GeoV->normalBase.y, GeoV->normalBase.z),
 									 make_double3(dir.x, dir.y, dir.z) )  )
 					{

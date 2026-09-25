@@ -1143,6 +1143,17 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the reflection on the back face of an object and on a sphere. The
+    front material of a `Spheric` entity was never used, its base normal
+    being left at zero: every hit took its back material, and a sphere
+    with the default `Matte` back absorbed everything. A `LambMirror`
+    back face reflected through the plane, as its reflection and its local
+    estimates were drawn around the front normal, and so did a sphere
+    around the z axis of the object; a rough `Mirror` back face lost every
+    photon, and a flat one with a refractive index got inverted Fresnel
+    coefficients (a reflectance of 25 instead of 0.04 at normal incidence).
+    The front of a sphere is its outside, and every reflection is drawn
+    around the normal of the side hit
   - Fix the intersection of a `Spheric` entity rotated about x or y by an
     angle that is not a multiple of 90 degrees: the kernel bounded its
     transformed box by 5 of its 8 corners, so that the rays crossing only

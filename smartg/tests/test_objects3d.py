@@ -26,6 +26,7 @@ from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.objects3d import (
     CusForward,
     Entity,
+    LambMirror,
     MaterialType,
     Matte,
     Mirror,
@@ -561,13 +562,13 @@ def _sphere_shadow(
     rotation: tuple[float, float, float],
     front: MaterialType,
     back: MaterialType,
-) -> tuple[float, float]:
-    """Return the power on a receiver under a sphere, and its expected.
+) -> tuple[xr.Dataset, float]:
+    """Run a sphere over a receiver; return the output and the shadow.
 
     A sphere of radius 2 m, 10 m high, over a 6 m square receiver 1 m
-    high, under a zenith sun: the receiver gets the sun but for the
-    shadow of the sphere, a disc of radius 2 m, when the sphere absorbs
-    or reflects all it intercepts upward or aside.
+    high, under a zenith sun: the direct sun reaches the receiver but
+    for the shadow of the sphere, a disc of radius 2 m. Also return the
+    direct power expected on the receiver, in m².
     """
     radius, half = 0.002, 0.003
     sphere = Entity(
@@ -582,7 +583,7 @@ def _sphere_shadow(
     receiver = _receiver(half, (0.0, 0.0, 0.001))
     ds = _run_ff(sg, [sphere, receiver], _transparent(), 2 * half)
     expected = (2 * half * 1e3) ** 2 - np.pi * (radius * 1e3) ** 2
-    return float(ds["cat_irr"].values[0]), expected
+    return ds, expected
 
 
 def test_rotated_sphere_casts_its_whole_shadow(sg: Smartg) -> None:
@@ -593,7 +594,71 @@ def test_rotated_sphere_casts_its_whole_shadow(sg: Smartg) -> None:
     beyond 0.37 of its radius along x was never tested, 27 % of its
     shadow under a zenith sun.
     """
-    power, expected = _sphere_shadow(
+    ds, expected = _sphere_shadow(
         sg, (0.0, 30.0, 0.0), Matte(reflectivity=0.0), Matte(reflectivity=0.0)
     )
-    np.testing.assert_allclose(power, expected, rtol=5e-3)
+    np.testing.assert_allclose(ds["cat_irr"].values[0], expected, rtol=5e-3)
+
+
+def test_sphere_reflects_with_its_front(sg: Smartg) -> None:
+    """The outside of a sphere is its front.
+
+    The base normal of a sphere was left at zero, so every hit took
+    its back material: this white Lambertian sphere with a black back
+    absorbed everything. Its light reaches the receiver around its
+    shadow, at most the sixth of the power it intercepts that a
+    Lambertian sphere under a zenith sun sends downward.
+    """
+    ds, expected = _sphere_shadow(
+        sg, (0.0, 0.0, 0.0), LambMirror(reflectivity=1.0), Matte()
+    )
+    cat_irr = ds["cat_irr"].values
+    np.testing.assert_allclose(cat_irr[1], expected, rtol=5e-3)
+    intercepted = np.pi * 2.0**2
+    assert 0.0 < cat_irr[3] < intercepted / 6.0
+
+
+def _flipped_plane(
+    back: MaterialType, tilt: float, translation: tuple[float, float, float]
+) -> Entity:
+    """Return a 10 m square facing down, its back tilted by tilt."""
+    return Entity(
+        name="environment",
+        material_front=Matte(reflectivity=0.0),
+        material_back=back,
+        geo=_plane(0.005, 0.005),
+        transformation=Transformation(
+            rotation=np.array([0.0, 180.0 + tilt, 0.0]),
+            translation=np.array(translation),
+        ),
+    )
+
+
+def test_lambertian_back_face_reflects_back(sg: Smartg) -> None:
+    """The back of a Lambertian plane reflects to the back side.
+
+    It was sampled around the front normal: the light hitting this
+    upward back face went through the plane, onto the receiver below.
+    """
+    plane = _flipped_plane(LambMirror(reflectivity=1.0), 0.0, (0, 0, 0.01))
+    receiver = _receiver(0.005, (0.0, 0.0, 0.001))
+    ds = _run_ff(sg, [plane, receiver], _transparent(), 0.01)
+    assert ds["cat_irr"].values[0] == 0.0
+
+
+def test_rough_mirror_back_face_reflects(sg: Smartg) -> None:
+    """The back of a rough mirror reflects like its front.
+
+    Its microfacets were drawn around the front normal, so that no
+    reflection was ever found and every photon hitting it was lost.
+    The back face, tilted by 22.5 degrees, sends the zenith sun onto
+    the receiver 50 m away.
+    """
+    tilt = 22.5
+    back = Mirror(reflectivity=1.0, roughness=0.02)
+    plane = _flipped_plane(back, tilt, (0.0, 0.0, 0.005))
+    objects, projected = _two_heliostats(1.0)
+    receiver = objects[2]
+    ds = _run_ff(sg, [plane, receiver], _transparent(), 0.012)
+    power = ds["cat_irr"].values[0]
+    assert 0.95 * projected < power < 1.005 * projected
