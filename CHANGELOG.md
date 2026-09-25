@@ -1310,6 +1310,11 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix the ocean layers of the ALIS cdist outputs ('cdist_up (TOA)' and
+    the others): they were written with the stride of a single moment
+    and without the photon weights, so they mixed layers, directions and
+    moments (already so in v1.2.0). They now hold the same weighted
+    moments as the atmospheric layers
   - Fix the output of an ALIS run with zipped local estimate directions
     (`LocalEstimate(zip=True)`) and several sensors, a single direction
     or a single absorbing layer: the cdist variables were squeezed out of

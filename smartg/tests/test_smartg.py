@@ -344,6 +344,36 @@ def test_alis_uneven_n_low(sg_alis: Smartg) -> None:
     np.testing.assert_allclose(i_up[11], i_up[9], rtol=1e-5)
 
 
+def test_alis_cdist_ocean(sg_alis: Smartg) -> None:
+    """Check the cdist moments of the ocean layers.
+
+    The ocean layers, first on the 'cdist_layer' axis, used to be
+    written with the stride of a single moment and without the photon
+    weights. Every photon adds its weight to every layer, so the sum
+    of the weights (iAMF=0) is the same for all the layers.
+    """
+    m = sg_alis.run(
+        np.array([500.0, 510.0]),
+        atmosphere=Atm1D("afglt", grid=np.linspace(50.0, 0.0, 6)),
+        surface=RoughSurface(),
+        water=Water1D(grid=[0.0, -5.0, -10.0], comp=[HydrosolPR(chl=1.0)]),
+        le=LocalEstimate(th_deg=[0.0, 30.0], phi_deg=[0.0]),
+        alis_options=Alis(n_low=2),
+        n_photons=N_PHOTONS,
+        seed=1,
+    )
+    # (cdist_layer, Azimuth angles, Zenith angles, iAMF)
+    cdist = m["cdist_up (TOA)"].values
+    assert cdist.shape[0] == 2 + 5
+    weights = cdist[..., 0]
+    assert np.all(weights[0] > 0.0)
+    np.testing.assert_allclose(
+        weights, np.broadcast_to(weights[:1], weights.shape), rtol=1e-9
+    )
+    # the photons reaching the TOA from the ocean travel in it
+    assert np.all(cdist[:2, ..., 1] > 0.0)
+
+
 class _ErrorCount:
     """Stand for the GPU error counters of a run."""
 

@@ -6729,6 +6729,8 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
     }
 } // FUNCTION OBJ3DROUGHSURF
 
+#endif // OBJ3D, reopened below: the ALIS counts use atomicAddW too
+
 // Add a weight to a receiver or loss tally: the native atomicAdd, or
 // DatomicAdd for the doubles of the GPUs without a double precision
 // atomicAdd (FORCE_DATOMICADD selects it on any GPU, for the tests)
@@ -6748,6 +6750,7 @@ __device__ __forceinline__ void atomicAddW(double* address, double val)
 }
 #endif
 
+#ifdef OBJ3D
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 {
 	#ifdef DOUBLE
@@ -7655,14 +7658,6 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
 
        #ifdef DOUBLE
           tabCount2   = (double*)tabDist     + count_level*KK;
-          for (int n=0; n<NOCE_ABSd; n++){
-            LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            #if __CUDA_ARCH__ >= 600
-            atomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
-            #else
-            DatomicAdd(tabCount2+LL, (double)ph->cdist_oc[n+1]);
-            #endif
-          }
           // Intensity-weighted cdist moments: w_n = weight * wsca * I, where I = (Ix+Iy) = st.x+st.y
           // wsca_ref is the scattering correction at the reference wavelength.
           #ifdef CDIST_WABS
@@ -7670,6 +7665,16 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           #else
           float w_n = (float)weight * wsca_ref * (st.x + st.y);
           #endif
+          // The ocean layers come first on the layer axis, with the same moments
+          for (int n=0; n<NOCE_ABSd; n++){
+            float d_n = ph->cdist_oc[n+1];
+            LL = n*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
+            atomicAddW(tabCount2+LL,   (double)w_n);
+            atomicAddW(tabCount2+LL+1, (double)d_n * (double)w_n);
+            #ifdef AMF_VARIANCE
+            atomicAddW(tabCount2+LL+2, (double)d_n * (double)d_n * (double)w_n);
+            #endif
+          }
           for (int n=0; n<NATM_ABSd; n++){
             float d_n = ph->cdist_atm[n+1];
             LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
@@ -7686,16 +7691,21 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           }
        #else
           tabCount2   = (float*)tabDist     + count_level*KK;
-          for (int n=0; n<NOCE_ABSd; n++){
-            LL = n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            atomicAdd(tabCount2+LL, ph->cdist_oc[n+1]);
-          }
           // Intensity-weighted cdist moments (same as DOUBLE branch above)
           #ifdef CDIST_WABS
           float w_n = weight * wsca_ref * wabs_cdist * (st.x + st.y);
           #else
           float w_n = weight * wsca_ref * (st.x + st.y);
           #endif
+          for (int n=0; n<NOCE_ABSd; n++){
+            float d_n = ph->cdist_oc[n+1];
+            LL = n*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
+            atomicAdd(tabCount2+LL,   w_n);
+            atomicAdd(tabCount2+LL+1, d_n * w_n);
+            #ifdef AMF_VARIANCE
+            atomicAdd(tabCount2+LL+2, d_n * d_n * w_n);
+            #endif
+          }
           for (int n=0; n<NATM_ABSd; n++){
             float d_n = ph->cdist_atm[n+1];
             LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
