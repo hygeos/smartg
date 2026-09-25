@@ -76,8 +76,8 @@ def reduce_kdis(
     Parameters
     ----------
     ds : Dataset or MLUT
-        Spectral SMART-G results containing a ``wavelength``
-        coordinate.
+        Spectral SMART-G results with a ``wavelength`` dimension. A
+        run on a single internal band, which has none, is reduced too.
     ibands : KdisIbandList
         KDIS internal bands providing weights, channel wavelengths,
         and bandwidths.
@@ -96,6 +96,12 @@ def reduce_kdis(
     Dataset
         Channel-reduced variables whose names contain an accepted
         output prefix, with source variable attributes preserved.
+
+    Raises
+    ------
+    ValueError
+        If ``ds`` has no ``wavelength`` dimension and ``ibands`` holds
+        several internal bands.
     """
     if isinstance(ds, MLUT):
         warnings.warn(
@@ -109,6 +115,16 @@ def reduce_kdis(
         raise TypeError("ds must be an xarray Dataset or an MLUT")
 
     we, wb, ex, dl, _, _ = ibands.get_weights()
+    if "wavelength" not in ds.dims:
+        # a run on a single wavelength keeps it as an attribute only
+        if len(ibands.l) != 1:
+            raise ValueError(
+                "ds has no wavelength dimension, but ibands holds "
+                f"{len(ibands.l)} internal bands"
+            )
+        ds = ds.drop_vars("wavelength", errors="ignore").expand_dims(
+            wavelength=we.coords["wavelength"].to_numpy()
+        )
     wavelength = ds.coords["wavelength"]
     grouping = xr.DataArray(
         wb.to_numpy(),

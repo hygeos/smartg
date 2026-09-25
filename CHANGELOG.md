@@ -916,6 +916,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `reduce_reptran` and `reduce_kdis` on a run over a single internal
+    band (24 of the 40 `reptran_solar_sentinel` channels, kato bands 5 to
+    10...), whose output has no `wavelength` dimension: they raised a
+    `KeyError` since v2.0.0dev2, and now return that band as its channel.
+    Several internal bands without a `wavelength` dimension raise a
+    `ValueError`
   - Fix `reptran_emission`, `kdis_emission` and their `*_avg_emission`:
     each internal band took the Planck average of the i-th channel in
     wavelength order, where i was its channel index in the file minus that

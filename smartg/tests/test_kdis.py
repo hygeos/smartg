@@ -199,3 +199,51 @@ def test_emission_takes_the_planck_average_of_each_channel() -> None:
     for i, (index, _) in enumerate(selection):
         expected = kabs[i] * _planck_band_mean(*channels[index], t_atm)
         np.testing.assert_allclose(emission[i], expected, rtol=1e-6)
+
+
+def _single_band_run(scalar_coordinate: bool) -> xr.Dataset:
+    """Return the output of a run on one wavelength, as Smartg gives it.
+
+    It keeps the wavelength as an attribute, or as a scalar coordinate
+    once a wavelength is selected from a spectral output.
+    """
+    dataset = xr.Dataset(
+        {
+            "I_up (TOA)": (
+                ("Azimuth angles", "Zenith angles"),
+                np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+                {"desc": "I_up (TOA)"},
+            )
+        },
+        attrs={"wavelength": "[650.]"},
+    )
+    if scalar_coordinate:
+        dataset = dataset.assign_coords(wavelength=650.0)
+    return dataset
+
+
+@pytest.mark.parametrize(
+    "scalar_coordinate", [False, True], ids=["attribute", "coordinate"]
+)
+def test_reduce_a_single_internal_band(scalar_coordinate: bool) -> None:
+    """A run on one internal band reduces to its own values."""
+    ibands = KdisIbandList([_iband(w=650.0, weight=2.0, ex=1.0, dl=200.0)])
+    dataset = _single_band_run(scalar_coordinate)
+
+    reduced = reduce_kdis(dataset, ibands)
+
+    np.testing.assert_array_equal(reduced.wavelength, [650.0])
+    np.testing.assert_allclose(
+        reduced["I_up (TOA)"].sel(wavelength=650.0),
+        dataset["I_up (TOA)"],
+    )
+    assert reduced["I_up (TOA)"].attrs == {"desc": "I_up (TOA)"}
+
+
+def test_reduce_without_wavelength_needs_one_internal_band() -> None:
+    """Several internal bands need a wavelength dimension."""
+    iband = _iband(w=650.0, weight=2.0, ex=1.0, dl=200.0)
+    ibands = KdisIbandList([iband, iband])
+
+    with pytest.raises(ValueError, match="holds 2 internal bands"):
+        reduce_kdis(_single_band_run(False), ibands)
