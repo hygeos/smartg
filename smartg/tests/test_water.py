@@ -660,6 +660,207 @@ def test_photons_move_under_water_in_kilometres(
     assert np.all(np.abs(z) < 5)
 
 
+def _fresnel_reflectance(
+    mu: float | NDArray[np.float64], n: float
+) -> NDArray[np.float64]:
+    """Return the Fresnel reflectance of a flat air-water interface.
+
+    Parameters
+    ----------
+    mu : float or ndarray
+        Cosine of the incidence angle in the air.
+    n : float
+        Relative refractive index water/air.
+
+    Returns
+    -------
+    ndarray
+        Reflectance for unpolarized light coming from the air.
+    """
+    mu = np.asarray(mu, dtype=float)
+    mu_t = np.sqrt(1.0 - (1.0 - mu**2) / n**2)
+    r_par = (n * mu - mu_t) / (n * mu + mu_t)
+    r_per = (mu - n * mu_t) / (mu + n * mu_t)
+    return 0.5 * (r_par**2 + r_per**2)
+
+
+def _seafloor_reflectances(
+    th_sun: float, th_view: float, albedo: float, n: float
+) -> tuple[float, float]:
+    """Return the analytic radiances over a Lambertian seafloor.
+
+    The water is transparent, the interface flat and the sky black.
+    With t = 1 - R the transmittance of the interface seen from the
+    air and r_e its white-sky reflectance, the seafloor receives the
+    irradiance E = mu_0 F_0 t(th_sun) / (1 - A r_i), where
+    r_i = 1 - (1 - r_e) / n^2 is the reflectance of the interface to
+    the isotropic radiance A E / pi of the seafloor (reciprocity). That
+    radiance leaves the water multiplied by t(th_view) / n^2.
+
+    Parameters
+    ----------
+    th_sun, th_view : float
+        Solar and viewing zenith angles in the air, in degrees.
+    albedo : float
+        Albedo A of the seafloor.
+    n : float
+        Relative refractive index water/air.
+
+    Returns
+    -------
+    rho_air, rho_water : float
+        pi L / (mu_0 F_0) of the upwelling radiance just above the
+        surface, at th_view, and just below it.
+    """
+    mu = np.linspace(0.0, 1.0, 20001)
+    r_e = 2.0 * np.trapezoid(_fresnel_reflectance(mu, n) * mu, mu)
+    t_sun, t_view = 1.0 - _fresnel_reflectance(
+        np.cos(np.radians([th_sun, th_view])), n
+    )
+    denominator = n**2 * (1.0 - albedo) + albedo * (1.0 - r_e)
+    rho_water = albedo * t_sun * n**2 / denominator
+    return float(rho_water * t_view / n**2), float(rho_water)
+
+
+def _clear_water(albedo: float) -> Water1D:
+    """Return 10 m of water that neither absorbs nor scatters."""
+    zeros = np.zeros((1, 2))
+    return Water1D(
+        grid=[0.0, -10.0], comp=[], aw=zeros, bw=zeros,
+        alb=AlbedoCst(albedo),
+    )
+
+
+def _radiance(m: xr.Dataset, level: str) -> tuple[float, float]:
+    """Return the radiance of a one-direction run and its stdev."""
+    return (
+        float(m[f"I_{level}"].values.ravel()[0]),
+        float(m[f"I_stdev_{level}"].values.ravel()[0]),
+    )
+
+
+@pytest.mark.parametrize("side", ["air", "water"])
+@pytest.mark.parametrize("alt_pp", [False, True])
+def test_backward_radiance_crosses_the_interface(
+    alt_pp: bool, side: str
+) -> None:
+    """Forward and backward agree on the analytic seafloor radiance.
+
+    No atmosphere, 10 m of transparent water over a Lambertian seafloor
+    of albedo 0.5, a slightly rough interface; sun and view 30 degrees
+    from the zenith and 90 degrees apart in azimuth, far from the glint.
+    The radiance is looked at just above the surface and just below
+    it. A backward photon carries a radiance, which the interface
+    divides by n^2 on the way down and multiplies by n^2 on the way up:
+    without that factor, and with the refraction local estimate of the
+    forward photon, the backward radiance above the water was 1.9 times
+    the forward one and the analytic value, and 1.08 times below.
+    """
+    th, albedo = 30.0, 0.5
+    surface = RoughSurface(wind=2.0)
+    ref = _seafloor_reflectances(
+        th, th, albedo, surface.dict["NH2O"]
+    )[side == "water"]
+    le = LocalEstimate(th_deg=[th], phi_deg=[90.0], count_level=[0])
+    if side == "air":
+        sensor = Sensor(th_deg=180.0 - th, ph_deg=0.0, loc="SURF0P")
+        fw_kwargs: dict[str, Any] = {"le": le}
+        fw_level = "up (TOA)"
+    else:
+        sensor = Sensor(
+            th_deg=180.0 - th, ph_deg=0.0, loc="OCEAN", pos_z=-1e-3
+        )
+        fw_kwargs = {
+            "le": LocalEstimate(
+                th_deg=[th], phi_deg=[90.0], count_level=[4]
+            ),
+            "output_layers": 3,
+        }
+        fw_level = "up (0-)"
+    common: dict[str, Any] = {
+        "surface": surface,
+        "water": _clear_water(albedo),
+        "n_photons": 1e7,
+        "stdev": True,
+        "seed": 41,
+        "progress": False,
+    }
+    fw, fw_sd = _radiance(
+        Smartg(alt_pp=alt_pp).run(
+            450.0, th_deg=th, **fw_kwargs, **common
+        ),
+        fw_level,
+    )
+    bw, bw_sd = _radiance(
+        Smartg(alt_pp=alt_pp, back=True).run(
+            450.0, sensor=sensor, le=le, **common
+        ),
+        "up (TOA)",
+    )
+    msg = (
+        f"forward {fw:.5f}+-{fw_sd:.5f}, backward {bw:.5f}+-{bw_sd:.5f},"
+        f" analytic {ref:.5f}"
+    )
+    logger.info("interface %s alt_pp=%s: %s", side, alt_pp, msg)
+    assert abs(fw - bw) < 4 * np.hypot(fw_sd, bw_sd), msg
+    # 0.5 % for the rough interface against the flat one of the
+    # analytic value
+    for value, sd in ((fw, fw_sd), (bw, bw_sd)):
+        assert abs(value - ref) < 4 * sd + 5e-3 * ref, msg
+
+
+@pytest.mark.parametrize("wind", [0.0])
+def test_backward_sky_seen_from_under_water(wind: float) -> None:
+    """Forward and backward agree on the sky seen from under water.
+
+    A Rayleigh atmosphere, transparent water over a black seafloor, the
+    sun 30 degrees from the zenith; the downwelling radiance just below
+    the surface, 40 degrees from the zenith and 90 degrees in azimuth
+    from the sun, is sky light only. The backward photons leave the
+    water to scatter in the atmosphere, and the interface multiplies
+    their radiance by n^2: without it the backward radiance was
+    1 / n^2 = 0.57 times the forward one.
+    """
+    common: dict[str, Any] = {
+        "atmosphere": Atm1D("afglt"),
+        "surface": RoughSurface(wind=wind),
+        "water": _clear_water(0.0),
+        "stdev": True,
+        "seed": 45,
+        "progress": False,
+    }
+    fw, fw_sd = _radiance(
+        Smartg().run(
+            450.0,
+            th_deg=30.0,
+            le=LocalEstimate(
+                th_deg=[40.0], phi_deg=[90.0], count_level=[2]
+            ),
+            output_layers=3,
+            n_photons=1e8,
+            **common,
+        ),
+        "down (0-)",
+    )
+    bw, bw_sd = _radiance(
+        Smartg(back=True).run(
+            450.0,
+            sensor=Sensor(
+                th_deg=40.0, ph_deg=0.0, loc="OCEAN", pos_z=-1e-3
+            ),
+            le=LocalEstimate(
+                th_deg=[30.0], phi_deg=[90.0], count_level=[0]
+            ),
+            n_photons=1e7,
+            **common,
+        ),
+        "up (TOA)",
+    )
+    msg = f"forward {fw:.5f}+-{fw_sd:.5f}, backward {bw:.5f}+-{bw_sd:.5f}"
+    logger.info("sky under water, wind %s: %s", wind, msg)
+    assert abs(fw - bw) < 4 * np.hypot(fw_sd, bw_sd), msg
+
+
 def test_hydrosol_calc_phase_truncation() -> None:
     """GPU-free checks of the pytrunc truncation of the derived phase.
 

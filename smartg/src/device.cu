@@ -4920,12 +4920,10 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
             if (sTh <= nind) {
                 if(HORIZd) {qv  =  __fdividef(p * fabs(cTh), cBeta * fabs(v.z));}
                 else {qv  =  __fdividef(p * fabs(cTh), cBeta);}
-                // Multiplication by the refraction Jacobian
-                #ifndef BACK
+                // Multiplication by the refraction Jacobian, the
+                // same in both modes; the transmission below applies
+                // the n^2 law of the radiance in backward mode
                 jac = __fdividef(nind*nind * cot, (ncot - cTh)*(ncot - cTh)); // See Zhai et al., 2010
-                #else
-                jac = __fdividef(cTh, nind*nind * (cTh/nind - cot)*(cTh/nind - cot));
-                #endif
             }
             else qv = 0.F;
      }
@@ -5057,7 +5055,9 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         #ifndef BACK
         float geo_trans_factor = nind* cot/cTh; // DR Mobley 2015 OK , see Xun 2014, Zhai et al 2010
         #else
-        float geo_trans_factor = 1./nind* cTh/cot;
+        // The backward photon carries a radiance, which the n^2 law
+        // divides by nind^2 = (n_t/n_i)^2 across the interface
+        float geo_trans_factor = 1./nind* cTh/cot / (nind*nind);
         #endif
         ph->weight *= geo_trans_factor;
 

@@ -953,6 +953,20 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the backward mode (`back=True`) at the air-water interface of a
+    `RoughSurface` with `water`. A backward photon carries a radiance, which
+    the interface divides by n^2 when the photon enters the water and
+    multiplies by n^2 when it leaves it: neither was done, and the local
+    estimate refracting it towards the sun took the Jacobian of the direction
+    in the water instead of the one in the air (the ratio of their cosines,
+    1.07 for the sun at 30 degrees). The sunlight the water sends back up was
+    1.9 times too bright: 1.95 instead of 1.03 over a white seafloor under 10 m
+    of clear water, without atmosphere, and +9.5 % at the top of a Rayleigh
+    atmosphere over a chlorophyll 0.1 ocean (450 nm, sun and view at 30
+    degrees); a sensor in the water saw the sky n^2 = 1.77 times too dark and
+    the sunlit seafloor 8 % too bright. Every backward run with water is
+    concerned; the forward mode, the surface reflection and the skylight that
+    enters and leaves the water are unchanged. The error was already in v1.2.0
   - Fix the horizontal move of the photons in the water: the altitudes of
     the water profile are in metres and the horizontal positions in
     kilometres, and the plane-parallel moves (fast and `alt_pp=True`)
