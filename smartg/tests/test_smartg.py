@@ -662,3 +662,36 @@ def test_sza_max_keeps_the_radiances(sg: Smartg) -> None:
     )
     for level in ("up (TOA)", "down (0+)"):
         assert np.all(np.abs(_z_scores(full[common], part, level)) < 6)
+
+
+def test_sun_disc_boxes_of_every_level() -> None:
+    """Check that sun_disc counts the downward photons too.
+
+    With sun_disc, a box counts only the photons within sun_disc of
+    its centre, and its radiance is normalised by the solid angle of
+    the disc instead of the one of the box, which divides it by 2 pi.
+    Where the disc lies inside the box, 2 pi times the radiance must
+    match the one of the whole box, at the top of the atmosphere as at
+    the surface.
+    """
+    sg = Smartg()
+    kwargs: dict[str, Any] = {
+        "atmosphere": Atm1D("afglt", comp=[AerOPAC("desert", 0.3, 550.0)]),
+        "surface": LambSurface(alb=AlbedoCst(0.2)),
+        "th_deg": 30.0,
+        "n_theta": 9,
+        "n_phi": 36,
+        "output_layers": 1,
+        "n_photons": 2e7,
+        "progress": False,
+    }
+    boxes = sg.run(550.0, seed=31, **kwargs)
+    disc = sg.run(550.0, seed=32, sun_disc=2.0, **kwargs)
+    for level in ("up (TOA)", "down (0+)"):
+        # mean over the azimuth, where the 2 degree disc lies inside
+        # the 10 x 10 degree boxes: 30 to 80 degrees of zenith angle
+        ratio = (
+            2 * np.pi * disc[f"I_{level}"].values.mean(axis=0)
+            / boxes[f"I_{level}"].values.mean(axis=0)
+        )
+        np.testing.assert_allclose(ratio[3:8], 1.0, atol=0.05)

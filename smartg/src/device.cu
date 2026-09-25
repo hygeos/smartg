@@ -7841,6 +7841,13 @@ __device__ int ComputeBox(int* ith, int* iphi, int* il,
     float phi = *iphi * __fdividef(2.F*PI, NBPHId);
     float dth =  __fdividef(SZA_MAXd * PI, 180.F * NBTHETAd);
     float cth = cosf((*ith + 0.5F) * dth);
+    // the box of a downward photon, binned from the vertical, is
+    // centred on a downward direction
+    #ifdef SPHERIQUE
+    if (count_level != UPTOA) cth = copysignf(cth, photon->v.z);
+    #else
+    cth = copysignf(cth, photon->v.z);
+    #endif
     float sth = sqrtf(1.F - cth*cth);
     float3 center_dir = make_float3(cosf(phi)*sth, sinf(phi)*sth, cth);
     if ((abs(acosf(dot(photon->v, center_dir)))*180.F/PI) >  SUN_DISCd ) {

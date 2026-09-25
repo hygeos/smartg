@@ -1015,6 +1015,12 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix `Smartg.run(sun_disc=...)` with the cone sampling at the downward
+    levels (`down (0+)`, `down (0-)`, `down (B)`): each box was centred on
+    an upward direction, so that no downward photon but the ones near the
+    horizon was counted and those radiances were zero. `sun_disc` is also
+    set by a planar flux `Sensor` with a `fov`. The error was already in
+    v1.2.0
   - Fix `Smartg.run(sza_max=...)` with the cone sampling (without `le`)
     when `sza_max` is not 90: the radiances were multiplied by
     `1 - cos(sza_max)`, halved at 60 degrees, and the kernel binned every
