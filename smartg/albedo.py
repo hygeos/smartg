@@ -215,8 +215,10 @@ class AlbedoMap:
     (for instance the sea, with its water): there ``alist[k]`` is the
     albedo of the seafloor, which replaces the one of the water
     profile, so that -k then needs ``k < len(alist)`` (and ``k >= 1``,
-    since -0 is 0). Below a rectangle of index k >= 0, the seafloor
-    keeps the albedo of the water profile.
+    since -0 is 0). For a ``WaterRw``, whose reflector is read as the
+    seafloor of a column of null thickness, ``alist[k]`` is its R(0-).
+    Below a rectangle of index k >= 0, the seafloor keeps the albedo of
+    the water profile.
 
     Parameters
     ----------

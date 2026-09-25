@@ -433,7 +433,8 @@ class Environment:
                 Smartg run method, and a photon reaching the sea
                 floor below it is reflected with the albedo alist[k]
                 instead of the sea floor albedo of the water profile
-                (so 1 <= k < len(alist), which the run checks)
+                (so 1 <= k < len(alist), which the run checks); with
+                a WaterRw, alist[k] replaces its R(0-)
 
         Whatever `env`, the Smartg run method needs a surface when an
         environment is given, and raises a ValueError otherwise.

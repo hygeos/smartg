@@ -1905,7 +1905,11 @@ class WaterRw(Water):
 
     Note that, unlike the `alb` of Water1D, this reflector is not a sea
     floor: it stands for the water body itself, and it is placed at the
-    top of the water column rather than at its bottom.
+    top of the water column rather than at its bottom. The kernel still
+    reads it as the seafloor albedo of a column of null thickness, so
+    with an ``Environment(env=5)`` map, the ``alist[k]`` of a sea cell
+    of index -k replaces it: under such a map, R(0-) is given in the
+    map list, and the `alb` of WaterRw is not used.
 
     Being lambertian, the reflector is isotropic, whereas the upwelling
     field of real water is not (Q = Eu/Lu differs from pi). The angular
