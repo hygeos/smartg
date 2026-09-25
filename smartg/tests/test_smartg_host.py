@@ -130,9 +130,10 @@ def test_impact_point_aims_at_the_origin(
     v = -np.array([np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph),
                    np.cos(th)])
     to_origin = np.array([0.0, 0.0, 0.0 if pp else 6371.0]) - x0
+    distance = float(np.linalg.norm(to_origin))
     assert np.dot(to_origin, v) > 0
     np.testing.assert_allclose(
-        np.cross(to_origin, v), 0.0, atol=1e-5 * np.linalg.norm(to_origin)
+        np.cross(to_origin, v), 0.0, atol=1e-5 * distance
     )
     np.testing.assert_allclose(trans, trans_0)
 
