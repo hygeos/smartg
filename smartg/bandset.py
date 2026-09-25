@@ -64,9 +64,9 @@ class BandSet:
         """Initialize a BandSet from wavelength band definitions.
 
         Common object for formatting input band definitions. Accepts a
-        scalar float, a 1-D array of wavelengths, or a list of KDIS or
-        RepTran ``IBandS`` objects (detected automatically via the
-        ``calc_profile`` attribute of the first element).
+        real number, a sequence or an array of wavelengths, or a list of
+        KDIS or RepTran ``IBandS`` objects (detected automatically via
+        the ``calc_profile`` attribute of the first element).
 
         The wavelengths are stored internally as a ``float32`` NumPy
         array. When the input is a scalar, it is reshaped to a 1-element
@@ -74,10 +74,16 @@ class BandSet:
 
         Parameters
         ----------
-        wavelength : float, list, ndarray, or list of IBandS
-            Wavelength band definition. A float or 1-D array of
-            wavelengths (in nm), or a list of KDIS/RepTran ``IBandS``
-            objects whose ``w`` attribute gives the band wavelength.
+        wavelength : real, array_like, or list of IBandS
+            Wavelength band definition. A real number, or a sequence,
+            an array or a DataArray of wavelengths (in nm), or a list
+            or tuple of KDIS/RepTran ``IBandS`` objects whose ``w``
+            attribute gives the band wavelength.
+
+        Raises
+        ------
+        TypeError
+            If ``wavelength`` is neither real numbers nor band objects.
 
         Notes
         -----
@@ -93,7 +99,7 @@ class BandSet:
         try:
             first = (
                 wavelength[0]
-                if isinstance(wavelength, (list, np.ndarray))
+                if isinstance(wavelength, (list, tuple, np.ndarray))
                 else wavelength
             )
             self.use_reptran_kdis: bool = isinstance(first, BandLike)
@@ -113,10 +119,21 @@ class BandSet:
             self.data = None
             self.type_wavelength = None
 
-        assert isinstance(wavelength_vals, (float, list, np.ndarray))
-        self.wavelength: NDArray[np.float32] = np.array(
-            wavelength_vals, dtype="float32"
+        values = (
+            None
+            if isinstance(wavelength_vals, (str, bytes))
+            else np.asarray(wavelength_vals)
         )
+        if values is None or values.dtype.kind not in "iuf":
+            got = type(wavelength).__name__
+            if values is not None:
+                got += f" of {values.dtype}"
+            raise TypeError(
+                "wavelength must be a real number, a sequence or an array "
+                "of real numbers, or a list of KDIS or REPTRAN internal "
+                f"bands, got {got}"
+            )
+        self.wavelength: NDArray[np.float32] = values.astype("float32")
         self.scalar: bool = self.wavelength.ndim == 0
         if self.scalar:
             self.wavelength = self.wavelength.reshape(1)

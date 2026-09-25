@@ -1,9 +1,13 @@
 """GPU-free tests of the spectral band set and grids."""
 
+from types import SimpleNamespace
+from typing import Any, cast
+
 import numpy as np
 import pytest
+import xarray as xr
 
-from smartg.bandset import spectral_grids
+from smartg.bandset import BandSet, spectral_grids
 
 
 def _flat_solar_spectrum() -> np.ndarray:
@@ -41,3 +45,56 @@ def test_spectral_grids_leaves_the_solar_spectrum_alone() -> None:
     assert first[first.axis("wavelength").searchsorted(450.0)] == (
         pytest.approx(expected, rel=1e-3)
     )
+
+
+@pytest.mark.parametrize(
+    "wavelength",
+    [500, np.int64(500), 500.0, np.float32(500.0), np.array(500.0)],
+    ids=["int", "int64", "float", "float32", "0-d array"],
+)
+def test_bandset_real_scalars(wavelength: float) -> None:
+    """Every real scalar gives a scalar band set."""
+    bands = BandSet(wavelength)
+
+    assert bands.scalar
+    np.testing.assert_array_equal(bands[:], np.array([500.0], np.float32))
+
+
+@pytest.mark.parametrize(
+    "wavelength",
+    [
+        [400, 500],
+        (400.0, 500.0),
+        np.array([400.0, 500.0]),
+        xr.DataArray([400.0, 500.0], dims="wavelength"),
+    ],
+    ids=["list", "tuple", "array", "DataArray"],
+)
+def test_bandset_real_sequences(wavelength: list[float]) -> None:
+    """Every sequence of real numbers gives a band set."""
+    bands = BandSet(wavelength)
+
+    assert not bands.scalar and not bands.use_reptran_kdis
+    np.testing.assert_array_equal(bands[:], [400.0, 500.0])
+
+
+def test_bandset_tuple_of_internal_bands() -> None:
+    """A tuple of internal bands is recognised as a list is."""
+    ibands = tuple(
+        SimpleNamespace(w=w, calc_profile=lambda prof: None)
+        for w in (400.0, 500.0)
+    )
+
+    bands = BandSet(cast(Any, ibands))
+
+    assert bands.use_reptran_kdis
+    np.testing.assert_array_equal(bands[:], [400.0, 500.0])
+
+
+@pytest.mark.parametrize(
+    "wavelength", ["500", None, ["a", "b"], 500 + 1j], ids=repr
+)
+def test_bandset_refuses_non_real_input(wavelength: object) -> None:
+    """A wavelength that is not real raises a TypeError saying so."""
+    with pytest.raises(TypeError, match="wavelength must be a real"):
+        BandSet(cast(Any, wavelength))

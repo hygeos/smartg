@@ -916,6 +916,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `BandSet`, and so the `wavelength` of `Smartg.run`, `Atm1D.calc`
+    and `Water1D.calc`, which refused an integer, a NumPy integer or
+    `float32` scalar, a tuple or a DataArray with a bare `AssertionError`.
+    Any real number, sequence or array of real numbers is accepted, a
+    tuple of internal bands as a list is, and other input raises a
+    `TypeError` saying what is expected
   - Fix `smartg.bandset.spectral_grids(unit='photons/cm2/s/nm')`, which
     converted the irradiance column of the caller's `datas` in place, so
     that a second call with the same array converted it again, about 1e11
