@@ -11,6 +11,8 @@ import numpy as np
 import pytest
 
 from smartg.objects3d import (
+    CusBackward,
+    CusForward,
     Entity,
     GroupE,
     Heliostat,
@@ -22,7 +24,7 @@ from smartg.objects3d import (
     generate_h_p,
     rotate_vector,
 )
-from smartg.smartg import _od_at_altitude
+from smartg.smartg import _check_object_roles, _od_at_altitude
 
 
 def _xyz(point: gc.Vector | gc.Point) -> np.ndarray:
@@ -191,3 +193,34 @@ def test_od_at_altitude_outside_the_profile() -> None:
     od_atm = np.linspace(0.0, 0.3, z_atm.size)[None, :]
     with pytest.raises(ValueError, match="outside the atmosphere profile"):
         _od_at_altitude(z_atm, od_atm, 0.005)
+
+
+@pytest.mark.parametrize(
+    ("name", "cus_l"),
+    [
+        ("receiver", None),
+        ("receiver", CusForward(mode="FF")),
+        ("reflector", CusForward(mode="RF")),
+    ],
+)
+def test_spheric_receiver_or_rf_reflector_is_refused(
+    name: str, cus_l: CusForward | None
+) -> None:
+    """A receiver, or a reflector in the RF mode, must be a Plane."""
+    sphere = Entity(name=name, geo=Spheric(radius=0.01))
+    with pytest.raises(ValueError, match="Plane geometry"):
+        _check_object_roles([sphere], cus_l)
+
+
+def test_spheric_reflector_outside_rf_is_accepted() -> None:
+    """A sphere reflects in the FF mode and without a launching mode."""
+    sphere = Entity(name="reflector", geo=Spheric(radius=0.01))
+    for cus_l in (None, CusForward(mode="FF")):
+        _check_object_roles([sphere, Entity(name="receiver")], cus_l)
+
+
+def test_spheric_br_receiver_is_refused() -> None:
+    """The receiver of the BR mode must be a Plane."""
+    receiver = Entity(name="receiver", geo=Spheric(radius=0.01))
+    with pytest.raises(ValueError, match="Plane geometry"):
+        CusBackward(receiver=receiver, mode="BR")

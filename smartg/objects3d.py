@@ -2598,9 +2598,14 @@ class CusBackward:
                 'The CusBackward sun_fov must be in ]0, 90[ degrees')
         if mode not in ("B", "BR"):
             raise ValueError('The CusBackward mode must be B or BR')
-        if mode == "BR" and not isinstance(receiver, Entity):
-            raise ValueError(
-                'In the BR mode you have to specify a receiver!')
+        if mode == "BR":
+            if not isinstance(receiver, Entity):
+                raise ValueError(
+                    'In the BR mode you have to specify a receiver!')
+            if not isinstance(receiver.geo, Plane):
+                raise ValueError(
+                    'The receiver of the BR mode must have a Plane '
+                    'geometry')
         if sampling == "lambertian":
             sampling_code = 1
         elif sampling == "isotropic":

@@ -5677,6 +5677,7 @@ def _init_obj(
                 'classes are authorized!'
             )
 
+    _check_object_roles(lobj, cus_l)
     lgobj_gpu = to_gpu(lgobj_gpu)
     n_obj = len(lobj)
 
@@ -6010,6 +6011,45 @@ def _init_obj(
         lobj_spect,
         n_cos,
     )
+
+
+def _check_object_roles(
+    lobj: Sequence[Entity],
+    cus_l: CusForward | CusBackward | None,
+) -> None:
+    """Check the geometry of the objects for their role.
+
+    The kernel bins the hits of a receiver on the cells of its
+    rectangle, and in the RF mode launches the photons toward the
+    rectangles of the reflectors: both must be Plane objects.
+
+    Parameters
+    ----------
+    lobj : sequence of Entity
+        The entities of the scene, groups flattened.
+    cus_l : CusForward or CusBackward or None
+        The launching mode of the run.
+
+    Raises
+    ------
+    ValueError
+        If a receiver, or a reflector in the RF mode, is not a Plane.
+    """
+    rf_mode = cus_l is not None and cus_l.dict['mode'] == "RF"
+    for entity in lobj:
+        if isinstance(entity.geo, Plane):
+            continue
+        if entity.name == "receiver":
+            raise ValueError(
+                "A receiver must have a Plane geometry, not "
+                f"{type(entity.geo).__name__}"
+            )
+        if entity.name == "reflector" and rf_mode:
+            raise ValueError(
+                "In the RF mode the photons are launched toward the "
+                "reflectors, which must have a Plane geometry, not "
+                f"{type(entity.geo).__name__}"
+            )
 
 
 def _normalize_rec(

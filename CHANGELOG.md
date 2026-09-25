@@ -1143,6 +1143,11 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the opaque `AttributeError: 'Spheric' object has no attribute 'p1'`
+    that `Smartg.run` raised for a `Spheric` receiver, or a `Spheric`
+    reflector in the RF mode, and `CusBackward` for a `Spheric` receiver
+    in the BR mode. Both raise a `ValueError` saying that these objects
+    must have a `Plane` geometry
   - Fix the STP extinction from TOA to the mean heliostat altitude, which
     gives the `n_tr` and `powc_H` outputs and so every efficiency of
     `nopt_view`: it interpolated the optical depth as if the level below
