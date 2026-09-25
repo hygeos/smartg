@@ -916,6 +916,11 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.bandset.spectral_grids(unit='photons/cm2/s/nm')`, which
+    converted the irradiance column of the caller's `datas` in place, so
+    that a second call with the same array converted it again, about 1e11
+    times too large. `unit` is the unit of the returned `es_lut`; `datas`
+    is always in mW/m2/nm
   - Fix `smartg.bandset.spectral_grids` with 131 or more scattering
     wavelengths (for instance 150 nm at `dls=1`): the interpolation
     indices were `int8`, so NumPy 2 raised an `OverflowError`, and NumPy 1

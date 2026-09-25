@@ -231,7 +231,8 @@ def spectral_grids(
         Maximum wavelength of the spectral range (nm).
     datas : ndarray
         Solar spectrum data with shape ``(N, 2)``: column 0 holds the
-        wavelengths (nm) and column 1 the irradiance values.
+        wavelengths (nm) and column 1 the irradiance (mW/m2/nm). It is
+        not modified.
     dl : float, optional
         High spectral resolution step for absorption features (nm).
         If ``None`` (default), the solar spectrum sampling within
@@ -245,9 +246,10 @@ def spectral_grids(
         uses a 90 deg scattering angle and 243 K temperature;
         ``'VRS'`` (vibrational Raman) uses ``raman_inverse``.
     unit : {'mW/m2/nm', 'photons/cm2/s/nm'}, optional
-        Unit of the solar irradiance in ``datas``. If
-        ``'photons/cm2/s/nm'``, the values are converted from
-        ``mW/m2/nm`` to photon flux. Default is ``'mW/m2/nm'``.
+        Unit of the solar irradiance of ``es_lut``. If
+        ``'photons/cm2/s/nm'``, the irradiance of ``datas`` is
+        converted from ``mW/m2/nm`` to photon flux. Default is
+        ``'mW/m2/nm'``.
 
     Returns
     -------
@@ -274,9 +276,10 @@ def spectral_grids(
     # Solar spectrum input data
     wavelength_0 = datas[:, 0]
     e0 = datas[:, 1]
-    # Convert from mW/m2/nm to photons/cm2/s/nm
+    # Convert from mW/m2/nm to photons/cm2/s/nm, into a new array so
+    # that the caller's datas is left as it is
     if unit == "photons/cm2/s/nm":
-        e0 *= 1e-3 * 1e-4 / (cst.h * cst.c) * (wavelength_0 * 1e-9)
+        e0 = e0 * (1e-3 * 1e-4 / (cst.h * cst.c) * (wavelength_0 * 1e-9))
 
     # High spectral resolution grid (for absorption features)
     if dl is None:
