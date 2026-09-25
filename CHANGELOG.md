@@ -1143,6 +1143,14 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the default drawing (`draw_method='SM'`) of `visualize_entity`,
+    which drew each object from its first two triangles and chose the
+    surface by exact float equality: a vertical plane, such as a tower
+    receiver, raised a qhull `RuntimeError`, a sphere showed 2 of its
+    triangles, and a plane rotated about z filled its bounding box. Every
+    triangle of each object is drawn, in the colour of its own entity,
+    where the colours followed the list order while the objects were drawn
+    reflectors first
   - Fix the error of `nsbsa` that `nopt_view(back=True)` prints, whose
     term in the incident weight lacked the error of that weight: the
     printed `errAbs` and `err%` came out about 10 to 20 % too small

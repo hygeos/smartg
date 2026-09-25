@@ -13,12 +13,17 @@ import warnings
 from types import SimpleNamespace
 from typing import Any, Literal, cast
 
+import geoclide as gc
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import xarray as xr
+from matplotlib.figure import Figure
 from matplotlib.image import AxesImage
+from mpl_toolkits.mplot3d import art3d
 
+from smartg.objects3d import Entity, Plane, Spheric, Transformation
 from smartg.reptran import ReptranIbandList
 from smartg.view import (
     _mirror_azimuths,
@@ -29,6 +34,7 @@ from smartg.view import (
     plot_polar_iquv,
     profile_view,
     receiver_view,
+    visualize_entity,
 )
 
 N_PHOTONS = 1000
@@ -376,3 +382,62 @@ def test_nopt_view_backward_nsbsa_error(
         + k * w2 * w1 / (ncos * w0**2 * rho**2) * dw[0]
     )
     np.testing.assert_allclose(err_abs, expected, rtol=1e-8)
+
+
+def _surfaces(fig: Figure) -> list[art3d.Poly3DCollection]:
+    """Return the drawn surfaces of a visualize_entity figure."""
+    fig.canvas.draw()
+    return [
+        c for c in fig.axes[0].collections
+        if isinstance(c, art3d.Poly3DCollection)
+    ]
+
+
+def _square(
+    name: str, rotation: list[float], translation: list[float], color: str
+) -> Entity:
+    """Return a 2 m square plane entity."""
+    return Entity(
+        name=name,
+        geo=Plane(
+            p1=gc.Point(-0.001, -0.001, 0.0),
+            p2=gc.Point(0.001, -0.001, 0.0),
+            p3=gc.Point(-0.001, 0.001, 0.0),
+            p4=gc.Point(0.001, 0.001, 0.0),
+        ),
+        transformation=Transformation(
+            rotation=np.array(rotation), translation=np.array(translation)
+        ),
+        color=color,
+    )
+
+
+@pytest.mark.parametrize("rotation", [[0.0, -90.0, 0.0], [90.0, 0.0, 0.0]])
+def test_visualize_entity_draws_a_vertical_receiver(
+    rotation: list[float],
+) -> None:
+    """A vertical plane is drawn, where qhull failed on it.
+
+    Each mesh gets its own colour, whatever the order of the list.
+    """
+    receiver = _square("receiver", rotation, [0.0, 0.0, 0.1], "red")
+    mirror = _square("reflector", [0.0, 20.0, 0.0], [0.05, 0.0, 0.005], "blue")
+    surfaces = _surfaces(visualize_entity([receiver, mirror], theta_deg=10.0))
+    assert [len(s.get_paths()) for s in surfaces] == [2, 2]
+    # the meshes are drawn reflectors first, shaded in their colour
+    for surface, color in zip(surfaces, ["blue", "red"], strict=True):
+        rgb = np.asarray(surface.get_facecolor()[0][:3])
+        assert np.all((rgb > 0.0) == (np.array(mcolors.to_rgb(color)) > 0.0))
+    plt.close("all")
+
+
+def test_visualize_entity_draws_every_triangle_of_a_sphere() -> None:
+    """A sphere is drawn with all its triangles, not the first two."""
+    geo = Spheric(radius=0.01, z0=-0.01, z1=-0.005)
+    sphere = Entity(name="reflector", geo=geo)
+    surfaces = _surfaces(visualize_entity(sphere, show_rays=False))
+    n_triangles = gc.Sphere(
+        geo.radius, geo.z0, geo.z1, geo.phi
+    ).to_trianglemesh().ntriangles
+    assert [len(s.get_paths()) for s in surfaces] == [n_triangles]
+    plt.close("all")

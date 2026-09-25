@@ -4714,6 +4714,8 @@ def visualize_entity(
     wsz = -sun_dir.z
 
     ltmesh = []
+    # the entity of each mesh, for its colour
+    lentity: list[Entity] = []
     n_mirror_hits = 0
     rec_entities = []
     ref_entities = []
@@ -4804,6 +4806,7 @@ def visualize_entity(
 
         tmesh.apply_tf(tt)
         ltmesh.append(tmesh)
+        lentity.append(ref_entities[k])
 
         # cast: calc_intersection always forces ds_output=True, so it
         # always returns a Dataset
@@ -4889,6 +4892,7 @@ def visualize_entity(
             raise TypeError("This geometry is unknown or not yet accepted!")
         tmesh.apply_tf(tt)
         ltmesh.append(tmesh)
+        lentity.append(rec_entities[k])
 
         for i in range(n_mirror_hits):
             ds = cast(
@@ -4944,80 +4948,27 @@ def visualize_entity(
                 )
                 face1 = art3d.Poly3DCollection(
                     [face_pts],
-                    alpha=entity_list[itmesh].alpha_color,
+                    alpha=lentity[itmesh].alpha_color,
                     linewidths=0.2,
                 )
-                face1.set_facecolor(mcolors.to_rgba(entity_list[itmesh].color))
+                face1.set_facecolor(mcolors.to_rgba(lentity[itmesh].color))
                 ax.add_collection3d(face1)
 
         # Second method (better visual, avoid some matplotlib bugs):
+        # every triangle of the mesh in one surface, triangulated by
+        # the mesh itself, whatever the orientation of the object
         # ----------------------------->
         if draw_method == "SM":
-            p0_t0 = gc.Point(tmesh.vertices[tmesh.faces[0, 0], :])
-            p1_t0 = gc.Point(tmesh.vertices[tmesh.faces[0, 1], :])
-            p2_t0 = gc.Point(tmesh.vertices[tmesh.faces[0, 2], :])
-            p0_t1 = gc.Point(tmesh.vertices[tmesh.faces[1, 0], :])
-            p1_t1 = gc.Point(tmesh.vertices[tmesh.faces[1, 1], :])
-            p2_t1 = gc.Point(tmesh.vertices[tmesh.faces[1, 2], :])
-            face_pts = np.array(
-                [
-                    [p0_t0.x, p0_t0.y, p0_t0.z],
-                    [p1_t0.x, p1_t0.y, p1_t0.z],
-                    [p2_t0.x, p2_t0.y, p2_t0.z],
-                    [p0_t1.x, p0_t1.y, p0_t1.z],
-                    [p1_t1.x, p1_t1.y, p1_t1.z],
-                    [p2_t1.x, p2_t1.y, p2_t1.z],
-                ]
+            ax.plot_trisurf(
+                tmesh.vertices[:, 0],
+                tmesh.vertices[:, 1],
+                tmesh.vertices[:, 2],
+                triangles=tmesh.faces,
+                color=mcolors.to_rgba(lentity[itmesh].color),
+                alpha=lentity[itmesh].alpha_color,
+                linewidth=0.2,
+                antialiased=True,
             )
-
-            if np.array_equal(face_pts[:, 0], np.full((6), face_pts[0, 0])):
-                yy, zz = np.meshgrid(face_pts[:, 0], face_pts[:, 2])
-                xx = np.full((6, 6), face_pts[0, 0])
-                ax.plot_surface(
-                    xx,
-                    yy,
-                    zz,
-                    color=mcolors.to_rgba(entity_list[itmesh].color),
-                    alpha=entity_list[itmesh].alpha_color,
-                    linewidth=0.2,
-                    antialiased=True,
-                )
-            elif np.array_equal(face_pts[:, 1], np.full((6), face_pts[0, 1])):
-                xx, zz = np.meshgrid(face_pts[:, 0], face_pts[:, 2])
-                yy = np.full((6, 6), face_pts[0, 1])
-                ax.plot_surface(
-                    xx,
-                    yy,
-                    zz,
-                    color=mcolors.to_rgba(entity_list[itmesh].color),
-                    alpha=entity_list[itmesh].alpha_color,
-                    linewidth=0.2,
-                    antialiased=True,
-                )
-            elif np.array_equal(
-                face_pts[:, 2], np.full((6), face_pts[0, 2])
-            ):  # need to be verified
-                xx, yy = np.meshgrid(face_pts[:, 0], face_pts[:, 1])
-                zz = np.full((6, 6), face_pts[0, 2])
-                ax.plot_surface(
-                    xx,
-                    yy,
-                    zz,
-                    color=mcolors.to_rgba(entity_list[itmesh].color),
-                    alpha=entity_list[itmesh].alpha_color,
-                    linewidth=0.2,
-                    antialiased=True,
-                )
-            else:
-                ax.plot_trisurf(
-                    face_pts[:, 0],
-                    face_pts[:, 1],
-                    face_pts[:, 2],
-                    color=mcolors.to_rgba(entity_list[itmesh].color),
-                    alpha=0.5,
-                    linewidth=0.2,
-                    antialiased=True,
-                )
 
     # ==============================================
     # plot all the geometries
