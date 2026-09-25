@@ -34,7 +34,7 @@ from smartg.objects3d import (
     Spheric,
     Transformation,
 )
-from smartg.smartg import Smartg
+from smartg.smartg import Smartg, _od_at_altitude
 from smartg.surface import LambSurface
 from smartg.view import nopt_view
 
@@ -130,12 +130,14 @@ def _run_ff(
     field: float,
     centre: tuple[float, float] = (0.0, 0.0),
     wavelength: float = 550.0,
+    cftz: float = 0.0,
     **kwargs: Any,
 ) -> xr.Dataset:
     """Run a scene in the FF mode, zenith sun and black ground.
 
     The photons are launched over a square of side field centred on
-    centre, and the direct ones are counted by the receivers.
+    centre, cftz km above TOA, and the direct ones are counted by the
+    receivers.
     """
     return sg.run(
         wavelength=wavelength,
@@ -145,7 +147,12 @@ def _run_ff(
         n_photons=1e6,
         my_objects=objects,
         cus_l=CusForward(
-            cfx=field, cfy=field, cftx=centre[0], cfty=centre[1], mode="FF"
+            cfx=field,
+            cfy=field,
+            cftx=centre[0],
+            cfty=centre[1],
+            cftz=cftz,
+            mode="FF",
         ),
         direct=True,
         seed=SEED,
@@ -683,4 +690,33 @@ def test_direct_sun_on_a_receiver_in_absorbing_air(
     area = (2 * half * 1e3) ** 2
     np.testing.assert_allclose(
         ds["cat_irr"].values[1], area * np.exp(-od), rtol=0.015
+    )
+
+
+def test_ff_launch_below_toa(sg: Smartg) -> None:
+    """A FF launch moved down by cftz starts at the optical depth there.
+
+    It started at the position PZd but with the layer and the optical
+    depth of TOA: the direct sun on the ground was attenuated by the
+    whole atmosphere, and more, instead of the 1.5 km below the launch.
+    """
+    atmosphere = Atm1D("afglt")
+    profile = atmosphere.calc(450.0)
+    z_atm = profile["z_atm"].values
+    od_atm = profile["OD_atm"].values
+    launch = 1.5
+    od = od_atm[0, -1] - _od_at_altitude(z_atm, od_atm, launch)[0]
+    half = 0.002
+    receiver = _receiver(half, (0.0, 0.0, 0.0))
+    ds = _run_ff(
+        sg,
+        [receiver],
+        atmosphere,
+        4 * half,
+        wavelength=450.0,
+        cftz=launch - z_atm[0],
+    )
+    area = (2 * half * 1e3) ** 2
+    np.testing.assert_allclose(
+        ds["cat_irr"].values[1], area * np.exp(-od), rtol=0.01
     )

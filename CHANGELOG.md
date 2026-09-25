@@ -1143,6 +1143,11 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the FF launching mode with a negative `cftz` in an atmosphere: the
+    photons started at the lowered altitude but with the layer and the
+    optical depth of TOA, which the plane-parallel transport follows, so
+    that their path and attenuation were those of a start at TOA from a
+    wrong position. They start with the optical depth of their altitude
   - Fix the 3D objects with `beer=0` in an absorbing atmosphere: a photon
     reaching an object before any collision was still multiplied by the
     single scattering albedo of its layer, the survival factor of a

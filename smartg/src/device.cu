@@ -1616,6 +1616,11 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         #else
         POSZd_alt = tab_sensor[ph->is].POSZ;
         #endif
+        #if defined(OBJ3D) && !defined(BACK)
+        // The FF launch of the 3D objects starts at PZd, below TOA
+        // when shifted by a negative cftz
+        if (LMODEd == 2 && PZd < ZTOAd) POSZd_alt = PZd;
+        #endif
 
         /* Determine layer index */
         /* if 3D atmospheric properties mode (OPT3D) is not chosen*/
