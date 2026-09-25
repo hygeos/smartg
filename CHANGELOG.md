@@ -916,6 +916,11 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.vrs.raman_response` for a scalar wavenumber, which raised
+    a `ValueError` since v2.0.0dev2, and for integer wavenumbers, which
+    raised a `UFuncTypeError`; it returns an array of at least one
+    dimension. The internal callers pass float arrays and were not
+    affected
   - Fix `smartg.rrs.l2d`, which raised a `TypeError` on every call since
     v2.0.0dev2 (`np.atleast_1d` was given a `dtype`), and
     `smartg.rrs.bjm_minus`, which raised one for a scalar `j`, as its

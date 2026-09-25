@@ -81,8 +81,10 @@ def raman_response(ks: NumericArrayLike) -> NDArray[np.floating]:
     Returns
     -------
     ndarray
-        Normalized Raman spectral response evaluated at ``ks``.
+        Normalized Raman spectral response evaluated at ``ks``, at
+        least 1-D.
     """
+    ks = np.atleast_1d(np.asarray(ks, dtype=np.float64))
     a = np.array([0.41, 0.39, 0.10, 0.10])
     k = np.array([3250.0, 3425.0, 3530.0, 3625.0])
     dk = np.array([210.0, 175.0, 140.0, 140.0])
