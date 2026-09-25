@@ -341,24 +341,6 @@ class Hydrosol:
             "fqyc": zeros.copy(),
         }
 
-    def _trunc_scaling(self) -> float:
-        """
-        Return the scattering factor of the forward peak truncation.
-
-        It accounts for the truncation of the phase matrix forward
-        peak.
-
-        It multiplies the truncation factor `coef_trunc` returned by
-        `calc_phase`, and is meant to be overridden by the subclasses
-        whose phase matrices follow a different normalization.
-
-        Returns
-        -------
-        float
-            Always 1., i.e. `coef_trunc` is applied unchanged.
-        """
-        return 1.0
-
     def calc_phase(
         self,
         wavelength: NDArray,
@@ -607,9 +589,7 @@ class Hydrosol:
         self._pha, self._coef_trunc = self.calc_phase(
             wavelength_pha, z[sl], bbp_ratio[:, sl]
         )
-        self._bsca = (
-            bp[:, sl] * self._coef_trunc.values * self._trunc_scaling()
-        )
+        self._bsca = bp[:, sl] * self._coef_trunc.values
 
     def _resolve_user_truncation(self) -> None:
         """
@@ -712,7 +692,7 @@ class Hydrosol:
             return bp
         self._resolve_user_truncation()
         assert self._coef_trunc is not None
-        return bp * self._coef_trunc.values * self._trunc_scaling()
+        return bp * self._coef_trunc.values
 
     def coeffs(
         self,
@@ -771,7 +751,7 @@ class Hydrosol:
             self._resolve_user_truncation()
 
         coef_trunc = self._coef_trunc_on(wavelength, z, use_old_calc_iphase)
-        iop["bp"] = iop["bp"] * coef_trunc * self._trunc_scaling()
+        iop["bp"] = iop["bp"] * coef_trunc
         return iop
 
 
@@ -808,8 +788,11 @@ class HydrosolPR(Hydrosol):
     Notes
     -----
     The phytoplankton absorption follows Bricaud et al. (1998), the CDM
-    absorption Bricaud et al. (2012), and the phase matrices are derived
-    from the backscattering ratio as in the base class.
+    absorption Bricaud et al. (2012), and the particle scattering
+    coefficient Loisel & Morel (1998), 0.416 chl^0.766 (550 /
+    wavelength) in m-1. As in the base class, the phase matrices are
+    derived from the backscattering ratio, and the scattering
+    coefficient is scaled by their truncation factor only.
 
     References
     ----------
@@ -855,21 +838,6 @@ class HydrosolPR(Hydrosol):
         self.bricaud["E"] = xr.DataArray(
             1 - ap_bricaud[:, 2], dims=["wavelength"]
         )
-
-    def _trunc_scaling(self) -> float:
-        """
-        Return the extra factor applied to the scattering coefficient.
-
-        It applies on top of the truncation factor, see
-        `Hydrosol._trunc_scaling`.
-
-        Returns
-        -------
-        float
-            Always 0.5, the normalization of the Park & Ruddick phase
-            function mixture used by this model.
-        """
-        return 0.5
 
     def iop(self, wavelength: NDArray, z: NDArray) -> IOPDict:
         """
@@ -1004,6 +972,12 @@ class HydrosolZhai(Hydrosol):
     following Wei et al. (2016), the spectral slope being taken
     symmetrical with respect to 440 nm over the 360-520 nm range.
 
+    The particle scattering is covariant with the phytoplankton
+    absorption, for a particle single scattering albedo of 0.68 at
+    440 nm. As in the base class, the phase matrices are derived from
+    the backscattering ratio, and the scattering coefficient is scaled
+    by their truncation factor only.
+
     References
     ----------
     .. [1] P.-W. Zhai, Y. Hu, D. M. Winker, B. A. Franz, J. Werdell, and
@@ -1133,21 +1107,6 @@ class HydrosolZhai(Hydrosol):
         zeta = np.abs(np.asarray(z, dtype="float") / self.euphotic_depth)
         chl = self.chl_surf * self.chi(zeta) / self.chi(0.0)
         return np.where(chl < 0.0, 1e-8, chl)
-
-    def _trunc_scaling(self) -> float:
-        """
-        Return the extra factor applied to the scattering coefficient.
-
-        It applies on top of the truncation factor, see
-        `Hydrosol._trunc_scaling`.
-
-        Returns
-        -------
-        float
-            Always 0.5, the normalization of the Park & Ruddick phase
-            function mixture used by this model.
-        """
-        return 0.5
 
     def iop(
         self,

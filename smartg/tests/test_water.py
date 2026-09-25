@@ -21,7 +21,14 @@ from smartg.phase import integ_phase, read_phase
 from smartg.smartg import LocalEstimate, Smartg
 from smartg.surface import RoughSurface
 from smartg.truncation import DMTrunc, GTTrunc
-from smartg.water import DEFAULT_WATER_TRUNC, Hydrosol, Water1D, WaterRw
+from smartg.water import (
+    DEFAULT_WATER_TRUNC,
+    Hydrosol,
+    HydrosolPR,
+    HydrosolZhai,
+    Water1D,
+    WaterRw,
+)
 
 SmartgRun = tuple[
     NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]
@@ -648,3 +655,43 @@ def test_hydrosol_calc_phase_truncation() -> None:
             n_theta=721,
             truncation=DMTrunc(n_streams=8),
         ).calc_phase(wavelength, z, bbp)
+
+
+def test_chlorophyll_hydrosols_scatter_their_whole_bp() -> None:
+    """HydrosolPR and HydrosolZhai scatter their whole bp.
+
+    Their scattering coefficient is scaled by the factor their phase
+    matrices come with, and by nothing else: they used to halve it
+    whenever the phase matrices were calculated, as in every run, but
+    not with `phase=False`. HydrosolPR gives the profile of a Hydrosol
+    built from its own inherent optical properties.
+    """
+    wavelength = np.array([443.0, 550.0])
+    grid = np.array([0.0, -5.0, -10.0])
+    for hydrosol in (
+        HydrosolPR(chl=1.0, n_theta=721),
+        HydrosolZhai(chl_surf=1.0, n_theta=721),
+    ):
+        iop = hydrosol.iop(wavelength, grid)
+        assert iop["bbp_ratio"] is not None
+        _, coef = hydrosol.calc_phase(wavelength, grid, iop["bbp_ratio"])
+        np.testing.assert_allclose(
+            hydrosol.coeffs(wavelength, grid)["bp"],
+            hydrosol.coeffs(wavelength, grid, phase=False)["bp"]
+            * coef.values,
+            rtol=1e-12,
+        )
+
+    pr = HydrosolPR(chl=1.0, n_theta=721)
+    iop = pr.iop(wavelength, grid)
+    user = Hydrosol(
+        bp=iop["bp"], ap=iop["ap"], acdom=iop["acdom"],
+        bbp_ratio=iop["bbp_ratio"], n_theta=721,
+    )
+    pro_pr = Water1D(grid=grid, comp=[pr]).calc(wavelength)
+    pro_user = Water1D(grid=grid, comp=[user]).calc(wavelength)
+    for var in ["OD_sca_oc", "OD_abs_oc", "phase_oc"]:
+        np.testing.assert_allclose(
+            pro_pr[var].values, pro_user[var].values, rtol=1e-12,
+            err_msg=var,
+        )

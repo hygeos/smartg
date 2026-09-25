@@ -1131,6 +1131,12 @@ final `v2.0.0` release.
     the leading factor of the Edlén equation: `n_atm - 1` was 100 times
     too small, so that the runs with `refraction=True` hardly refracted.
     Their results change
+  - Fix `HydrosolPR` and `HydrosolZhai`, which halved their particle
+    scattering coefficient whenever the phase matrices were calculated, as
+    in every `Smartg.run`, but not with `Water1D.calc(phase=False)`: they
+    now scatter their whole `bp`, scaled by the truncation factor only, as
+    `Hydrosol` does. Their results change: the particle scattering is twice
+    that of 2.0.0b1 and v1.2.0, where the factor 0.5 dated from 2017
   - Fix `smartg.objects3d.extract_points`: it dropped the first line of
     coordinates when no blank line followed the comments, misread the
     numbers written with an exponent, and printed a message and returned
