@@ -1907,6 +1907,8 @@ class Smartg:
         else:
             nbsx = 0
             nbsy = 0
+        if self.opt3d and not self.back:
+            _check_forward_raster(sensor2, sxmin, symin, nbsx, nbsy)
 
         #
         # ocean
@@ -2417,6 +2419,63 @@ class Smartg:
             clear_context_caches()
 
         return output
+
+
+def _check_forward_raster(
+    sensors: Sequence[Sensor],
+    sx_min: float,
+    sy_min: float,
+    n_sx: int,
+    n_sy: int,
+) -> None:
+    """Check the sensors of a forward run in a 3D atmosphere.
+
+    There the sensors are both the source, every photon starting in
+    the cell_size square of one of them, and the raster the photons
+    leaving the domain are counted on. They must form a complete
+    raster of equal square cells, x varying first, as
+    `smartg.sensor.get_sensors_grid` builds it.
+
+    Parameters
+    ----------
+    sensors : sequence of Sensor
+        The sensors of the run.
+    sx_min, sy_min : float
+        The lower x and y bounds of the raster, in km.
+    n_sx, n_sy : int
+        The number of cells of the raster along x and y.
+
+    Raises
+    ------
+    ValueError
+        If the sensors do not form such a raster.
+    """
+    cell_size = sensors[0].cell_size
+    if cell_size <= 0:
+        raise ValueError(
+            "a forward run in a 3D atmosphere needs sensors with a "
+            "cell_size > 0, forming a raster (see get_sensors_grid)"
+        )
+    if len(sensors) != n_sx * n_sy:
+        raise ValueError(
+            f"the {len(sensors)} sensors of a forward run in a 3D "
+            f"atmosphere do not fill their {n_sx} x {n_sy} raster of "
+            f"{cell_size} km cells (see get_sensors_grid)"
+        )
+    tolerance = 1e-3 * cell_size
+    for i, sensor in enumerate(sensors):
+        x = sx_min + (i % n_sx + 0.5) * cell_size
+        y = sy_min + (i // n_sx + 0.5) * cell_size
+        if (
+            sensor.cell_size != cell_size
+            or abs(sensor.dict['pos_x'] - x) > tolerance
+            or abs(sensor.dict['pos_y'] - y) > tolerance
+        ):
+            raise ValueError(
+                f"the sensor {i} of a forward run in a 3D atmosphere is "
+                f"not the cell ({x}, {y}) of their raster of {cell_size} "
+                "km cells, x varying first (see get_sensors_grid)"
+            )
 
 
 def _check_albedo_map_codes(albedo_map: AlbedoMap, water: bool) -> None:

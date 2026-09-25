@@ -8,7 +8,12 @@ import numpy as np
 import pytest
 
 from smartg.albedo import AlbedoCst, AlbedoMap
-from smartg.smartg import _calc_solid_angles, _check_albedo_map_codes
+from smartg.sensor import Sensor, get_sensors_grid
+from smartg.smartg import (
+    _calc_solid_angles,
+    _check_albedo_map_codes,
+    _check_forward_raster,
+)
 
 
 @pytest.mark.parametrize("sza_max", [30.0, 60.0, 90.0, 120.0])
@@ -55,3 +60,33 @@ def test_albedo_map_codes_refused(codes: list[list[int]], water: bool) -> None:
     """Check that a code past the albedo list raises a ValueError."""
     with pytest.raises(ValueError, match="list holds 2 albedos"):
         _check_albedo_map_codes(_coast_map(codes), water=water)
+
+
+def _raster(xgrid: list[float], ygrid: list[float]) -> list[Sensor]:
+    """Return the sensors of a raster of 1 km cells, x varying first."""
+    return get_sensors_grid(
+        np.array(xgrid), np.array(ygrid), loc="ATMOS", cell_size=1.0
+    )
+
+
+def test_forward_raster_accepted() -> None:
+    """Check that the raster of get_sensors_grid is accepted."""
+    _check_forward_raster(_raster([0, 1, 2, 3], [5, 6, 7]), 0.0, 5.0, 3, 2)
+
+
+@pytest.mark.parametrize(
+    "case", ["no cell", "missing", "y first", "other size"]
+)
+def test_forward_raster_refused(case: str) -> None:
+    """Check the sensor lists that are not a complete raster."""
+    sensors = _raster([0, 1, 2, 3], [5, 6, 7])
+    if case == "no cell":
+        sensors = [Sensor(loc="ATMOS")]
+    elif case == "missing":
+        del sensors[4]
+    elif case == "y first":
+        sensors = sorted(sensors, key=lambda s: s.dict["pos_x"])
+    else:
+        sensors[2].cell_size = 0.5
+    with pytest.raises(ValueError, match="forward run in a 3D atmosphere"):
+        _check_forward_raster(sensors, 0.0, 5.0, 3, 2)

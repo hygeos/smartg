@@ -96,6 +96,11 @@ class Sensor:
         every photon starts at the sensor position. The special value
         -2 moves the start position to the intersection with the top
         of atmosphere sphere, in spherical geometry with 3D objects.
+        In a forward run in a 3D atmosphere, the sensors are also the
+        raster the photons leaving the domain are counted on: they
+        must form a complete raster of equal cells, x varying first,
+        as `get_sensors_grid` builds it, and the photons leaving
+        outside it are not counted.
 
     Attributes
     ----------

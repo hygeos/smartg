@@ -1015,6 +1015,14 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the forward runs in a 3D atmosphere (`opt3d=True`, `back=False`)
+    whose sensors are not the complete raster, x varying first, that the
+    kernel counts the photons leaving the domain on: the photons leaving
+    outside it were counted on the edge sensors or in the next row, and
+    the kernel printed a line for each of them. `Smartg.run` now raises a
+    `ValueError` for such sensors (`get_sensors_grid` builds the raster),
+    and the photons leaving outside the raster are not counted. The
+    error was already in v1.2.0
   - Fix the seafloor of `Environment(env=5)` with water below a land cell
     of the `AlbedoMap`, reached by photons travelling under the coast:
     the kernel read the albedo before the start of the albedo list, 0 or

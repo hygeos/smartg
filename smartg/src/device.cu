@@ -9174,16 +9174,12 @@ __device__ unsigned int get_isens(Photon* ph, struct Sensor *tab_sensor, int cou
     if (xsens_le < sxmind && xsens_le >= sxmind-VALMIN2) { xsens_le = sxmind;}
     if (ysens_le > symaxd && ysens_le <= symaxd+VALMIN2) { ysens_le = symaxd;}
     if (ysens_le < symind && ysens_le >= symind-VALMIN2) { ysens_le = symind;}
-    // here x && y periodic boundary conditions are assumed
-    if (xsens_le  > sxmaxd || xsens_le  < sxmind)
-    {
-        printf("posx =%f; posy=%f \n",xsens_le,ysens_le);
-    }
-
-    if (ysens_le > symaxd || ysens_le < symind)
-    {            
-        printf("posx =%f; posy=%f \n",xsens_le,ysens_le);
-    }
+    // A photon leaving outside the raster of the sensors is not
+    // counted: its index is past the last sensor, which countPhoton
+    // drops. With x and y periodic boundary conditions and a raster
+    // covering the domain, this does not happen.
+    if (xsens_le > sxmaxd || xsens_le < sxmind ||
+        ysens_le > symaxd || ysens_le < symind) return NSENSORd;
 
     xsens_le = xsens_le - sxmind;
     ysens_le = ysens_le - symind;
