@@ -854,7 +854,8 @@ class ReadCrs:
         with xr.open_dataset(fname) as dataset:
             self.wvl_index = dataset["wvl_index"].values
             ii = list(self.wvl_index).index(iband)
-            self.xsec = dataset["xsec"].values[:, :, ii, :]
+            # read only the slice of this internal band from the file
+            self.xsec = dataset["xsec"][:, :, ii, :].to_numpy()
             self.pressure = dataset["pressure"].values
             self.t_ref = dataset["t_ref"].values
             self.t_pert = dataset["t_pert"].values
