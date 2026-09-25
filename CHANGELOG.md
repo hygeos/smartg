@@ -920,6 +920,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.cdf.icdf` with `n=None`, which raised an `OverflowError`
+    when a probability after the first one was zero, and sized `n`
+    without the first probability, which could then get no sample.
+    `n` now gives the smallest non-zero probability, the first one
+    included, 10 samples, and a `pdf` that cannot size it raises a
+    `ValueError`
   - Fix `smartg.phase.read_phase_cdf`, `read_phase_nc` and `read_phase`
     with a `wavelength_phase` outside the wavelengths of a file that has
     several: they returned an all-NaN matrix, which `Atm1D` turned into a

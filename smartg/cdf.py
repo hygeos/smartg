@@ -41,8 +41,9 @@ def icdf(
     evenly spaced over ``[0, 1]``, yielding the indices of ``pdf``
     that should be sampled to follow the distribution. When ``n`` is
     not provided, it is automatically estimated so that the smallest
-    CDF bin is sampled over at least ``n_min = 10`` values, bounding
-    the maximum relative sampling error to ``1 / n_min``.
+    non-zero probability is sampled over at least ``n_min = 10``
+    values, bounding the maximum relative sampling error to
+    ``1 / n_min``.
 
     Parameters
     ----------
@@ -52,15 +53,23 @@ def icdf(
     n : int, optional
         Number of discretisation points for the inverse cumulative
         distribution function. If ``None`` (default), it is
-        automatically estimated from the smallest CDF step so that
-        the smallest bin is sampled over at least ``n_min = 10``
-        values.
+        automatically estimated from the smallest non-zero
+        probability, the first one included, so that it is sampled
+        over at least ``n_min = 10`` values. The zero probabilities
+        are never sampled.
 
     Returns
     -------
     ndarray of int
         1-D array of length ``n`` holding the indices of ``pdf`` to
         sample in order to follow the input distribution.
+
+    Raises
+    ------
+    ValueError
+        If ``n`` is None and ``pdf`` has a negative or non-finite
+        value, no positive one, or a smallest positive probability
+        that would need more than ``1e8`` points.
 
     Notes
     -----
@@ -70,19 +79,33 @@ def icdf(
     """
     pdf = np.array(pdf)
 
-    # calculate the cumulative distribution function
-    cdf: NDArray[np.floating] = np.cumsum(pdf).astype("float32")
-    cdf /= cdf[-1]  # normalization
-
     if n is None:
-        # m is the size of smallest CDF value (relative to 1)
-        m = np.amin(np.diff(cdf))
+        with np.errstate(invalid="ignore", divide="ignore"):
+            proba = pdf / np.sum(pdf)
+        if not (np.all(np.isfinite(proba)) and np.all(proba >= 0)):
+            raise ValueError(
+                "pdf must hold finite non-negative values with a positive "
+                "sum to size the inverse CDF."
+            )
+        # m is the smallest non-zero probability, the first one
+        # included; a zero one needs no sample
+        m = np.min(proba[proba > 0])
         # calculate the number of bins n in the icdf
         # such that the smallest bin be sampled over at least n_min
         # values to avoid sampling inaccuracies
         # (maximum relative error is then 1/n_min)
         n_min = 10.0
+        n_max = 10**8
+        if n_min / m > n_max:
+            raise ValueError(
+                f"the smallest non-zero probability of pdf, {m:.3g}, "
+                f"needs more than {n_max} points; pass n explicitly."
+            )
         n = int(np.round(n_min / m))
+
+    # calculate the cumulative distribution function
+    cdf: NDArray[np.floating] = np.cumsum(pdf).astype("float32")
+    cdf /= cdf[-1]  # normalization
 
     #
     # inverse the CDF
