@@ -10,6 +10,7 @@ import xarray as xr
 
 from smartg.atmosphere import ProfileBase
 from smartg.reptran import (
+    ReadCrs,
     Reptran,
     ReptranBand,
     ReptranIbandList,
@@ -241,3 +242,65 @@ def test_get_names_follow_the_reduced_axis() -> None:
     assert len(names) == reduced.sizes["wavelength"] > 2
     np.testing.assert_allclose(centres, reduced.wavelength, rtol=1e-6)
     assert ReptranIbandList(ibands.l[::-1]).get_names() == names
+
+
+def _write_lookup(fname: Path) -> None:
+    """Write an O2 lookup table of two internal bands, 2 and 3 m2."""
+    xsec = np.empty((3, 1, 2, 2), dtype=np.float32)
+    xsec[:, :, 0, :] = 2.0
+    xsec[:, :, 1, :] = 3.0
+    xr.Dataset(
+        {
+            "wvl_index": (("nwvl",), np.array([1, 2], dtype=np.int32)),
+            "pressure": (("n_pressure",), np.array([1e3, 1e5])),
+            "t_ref": (("n_pressure",), np.array([250.0, 250.0])),
+            "t_pert": (("n_t_pert",), np.array([-50.0, 0.0, 50.0])),
+            "vmrs": (("n_vmrs",), np.array([0.0])),
+            "xsec": (("n_t_pert", "n_vmrs", "nwvl", "n_pressure"), xsec),
+        }
+    ).to_netcdf(fname)
+
+
+def test_read_crs_keeps_the_directory(tmp_path: Path) -> None:
+    """A lookup table path is read from its own directory."""
+    _write_lookup(tmp_path / "custom.lookup.O2.cdf")
+
+    crs = ReadCrs(tmp_path / "custom.lookup.O2", 2)
+
+    assert crs.xsec.shape == (3, 1, 2)
+    np.testing.assert_array_equal(crs.xsec, 3.0)
+    np.testing.assert_array_equal(crs.pressure, [1e3, 1e5])
+
+
+def test_read_crs_bare_name_uses_auxdata() -> None:
+    """A bare lookup table name is read from the REPTRAN auxdata."""
+    fname = "reptran_solar_msg.lookup.O2"
+    with xr.open_dataset(dir_reptran / f"{fname}.cdf") as dataset:
+        iband = int(dataset["wvl_index"][-1])
+        xsec = dataset["xsec"][:, :, -1, :].to_numpy()
+
+    crs = ReadCrs(fname, iband)
+
+    assert crs.fname == dir_reptran / fname
+    np.testing.assert_array_equal(crs.xsec, xsec)
+
+
+def test_calc_profile_reads_the_tables_of_its_file(
+    synthetic_reptran: Reptran, tmp_path: Path
+) -> None:
+    """A REPTRAN file out of the auxdata reads its own lookup tables."""
+    _write_lookup(tmp_path / "custom.lookup.O2.cdf")
+    synthetic_reptran.fname = tmp_path / "custom.cdf"
+    iband = next(ReptranBand(synthetic_reptran, 0).ibands())
+    iband.crs_source = np.zeros(len(SPECIES), dtype=int)
+    iband.crs_source[SPECIES.index("O2")] = 1
+    prof = SimpleNamespace(
+        t=np.array([250.0, 250.0]),
+        p=np.array([100.0, 500.0]),
+        dens_air=np.full(2, 1e19),
+        **{f"dens_{name.lower()}": np.full(2, 1e10) for name in SPECIES},
+    )
+
+    kabs = iband.calc_profile(cast(ProfileBase, prof))
+
+    np.testing.assert_allclose(kabs, 2.0 * 1e10 * 1e-11)

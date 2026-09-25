@@ -916,6 +916,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix a REPTRAN file given with its directory, `Reptran('/data/x.cdf')`:
+    `ReadCrs` dropped the directory and read the lookup tables
+    `x.lookup.<species>.cdf` from the auxdata REPTRAN folder, so
+    `Atm1D.calc` raised a `FileNotFoundError` or silently used the tables
+    of an auxdata file of the same name. A bare name is still looked up in
+    the auxdata
   - Fix the order of `ReptranIbandList.get_names`, which changed from one
     Python process to the next (it came from a `set`), so the demo
     notebook labelled the reduced channels with the wrong names. The names

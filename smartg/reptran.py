@@ -825,12 +825,16 @@ class ReadCrs:
     Parameters
     ----------
     fname : path-like
-        Lookup-table path without its final ``.cdf`` suffix.
+        Lookup-table path without its final ``.cdf`` suffix. If no
+        directory is provided, the table is looked up in the auxiliary
+        REPTRAN directory.
     iband : int
         REPTRAN internal-band index to select from the lookup table.
 
     Attributes
     ----------
+    fname : pathlib.Path
+        Lookup-table path without its final ``.cdf`` suffix.
     xsec : ndarray
         Cross-section values for the selected internal band.
     pressure, t_ref, t_pert, vmrs : ndarray
@@ -839,11 +843,14 @@ class ReadCrs:
     """
 
     def __init__(self, fname: PathType, iband: int) -> None:
-        self.fname = Path(fname)
+        fname = Path(fname)
+        if fname.parent == Path("."):
+            fname = dir_reptran / fname
+        self.fname = fname
         self._read_file_general(iband)
 
     def _read_file_general(self, iband: int) -> None:
-        fname = dir_reptran / f"{self.fname.name}.cdf"
+        fname = self.fname.with_name(f"{self.fname.name}.cdf")
         with xr.open_dataset(fname) as dataset:
             self.wvl_index = dataset["wvl_index"].values
             ii = list(self.wvl_index).index(iband)
