@@ -1742,6 +1742,21 @@ final `v2.0.0` release.
     - `smartg.diffgeom` and `smartg.shape`, the other legacy geometric
       modules, all replaced by `geoclide`
 
+* Known issues
+  - `normalize=True` of the phase readers normalizes F11 with the
+    trapezoid rule in cos(theta), while the kernel integrates the tables
+    linearly in theta. The local estimate and ALIS contributions of such
+    a component are scaled by the gap: 5e-4 for the IPRT water cloud on
+    its native grid, below 1e-5 on the default 18001 angles
+  - `icdf_2d` samples index 0 for a row that sums to zero or holds NaN,
+    as a wavelength without absorption does in the forward thermal
+    `cell_proba='auto'` path
+  - The forward thermal mode (`Smartg(thermal=True)`) is still in
+    development: it does not compile in the default plane-parallel mode
+    (use `alt_pp=True`), it ignores the emission point in spherical mode,
+    without `cell_proba` its weights lack the `dz * NATM` factor of the
+    uniform layer sampling, and in backward mode the ocean never emits
+
 
 ## v1.2.0
 Release date: 2026-03-13
