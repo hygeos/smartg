@@ -1015,6 +1015,12 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix `Smartg(rng='CURAND_PHILOX')`: `curand_uniform` returns exactly 1
+    for about 3e-8 of its draws, which made the sensor, wavelength or
+    icdf index one past the end of its array (a misplaced count, a NaN or
+    an illegal memory access), and the optical depth to the next event
+    infinite. Its draws now stay below 1, as the ones of the default
+    `PHILOX`. The error was already in v1.2.0
   - Fix the forward runs in a 3D atmosphere (`opt3d=True`, `back=False`)
     whose sensors are not the complete raster, x varying first, that the
     kernel counts the photons leaving the domain on: the photons leaving

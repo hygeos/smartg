@@ -155,7 +155,10 @@
         curandStatePhilox4_32_10_t state;
     };
 
-    #define RAND curand_uniform(&rngstate->state)
+    // curand_uniform draws in ]0;1], 1 included: clamp it to the
+    // largest float below 1, as the PHILOX generator gives, so that
+    // RAND*N truncates to an index below N and -logf(1-RAND) is finite
+    #define RAND fminf(curand_uniform(&rngstate->state), 0.99999994F)
 
 #endif
 
