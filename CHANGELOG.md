@@ -916,6 +916,11 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the N2O absorption of REPTRAN: `ReptranIband.calc_profile` scaled
+    the N2O cross sections by the NO2 density, about 1e4 times smaller in
+    the AFGL profiles (and zero with `no2=False`), so N2O absorption was
+    practically missing from the SWIR and thermal bands (already so in
+    v1.2.0)
   - Fix `smartg.objects3d.extract_points`: it dropped the first line of
     coordinates when no blank line followed the comments, misread the
     numbers written with an exponent, and printed a message and returned

@@ -345,7 +345,7 @@ class ReptranIband:
         density_molecules[:, 0] = prof.dens_h2o
         density_molecules[:, 1] = prof.dens_co2
         density_molecules[:, 2] = prof.dens_o3
-        density_molecules[:, 3] = prof.dens_no2
+        density_molecules[:, 3] = prof.dens_n2o
         density_molecules[:, 4] = prof.dens_co
         density_molecules[:, 5] = prof.dens_ch4
         density_molecules[:, 6] = prof.dens_o2

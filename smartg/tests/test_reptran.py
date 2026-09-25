@@ -1,15 +1,19 @@
 """Focused unit tests for REPTRAN channel utilities."""
 
 from pathlib import Path
+from types import SimpleNamespace
+from typing import ClassVar, cast
 
 import numpy as np
 import pytest
 import xarray as xr
 
+from smartg.atmosphere import ProfileBase
 from smartg.reptran import (
     Reptran,
     ReptranBand,
     ReptranIbandList,
+    dir_reptran,
     reduce_reptran,
 )
 
@@ -125,3 +129,76 @@ def test_reduce_reptran_uses_channel_weights(
     np.testing.assert_array_equal(
         reduced.wavelength.to_numpy(), [450.0, 650.0]
     )
+
+
+SPECIES = ["H2O", "CO2", "O3", "N2O", "CO", "CH4", "O2", "N2"]
+
+
+@pytest.mark.parametrize(
+    "fname", ["reptran_solar_coarse", "reptran_thermal_coarse"]
+)
+def test_species_follow_the_file(fname: str) -> None:
+    """The absorber slots follow the species_name of the file."""
+    with xr.open_dataset(dir_reptran / f"{fname}.cdf") as dataset:
+        names = [
+            name.decode().strip()
+            for name in dataset["species_name"].to_numpy()
+        ]
+    reptran = Reptran(fname)
+    iband = next(reptran.band(0).ibands())
+
+    assert names == SPECIES
+    assert iband.species == names
+
+
+class _UnitCrossSection:
+    """Stand in for ReadCrs with a cross section of one everywhere.
+
+    As in the REPTRAN files, only H2O has a mixing ratio axis.
+    """
+
+    opened: ClassVar[list[Path]] = []
+
+    def __init__(self, fname: Path, iband: int) -> None:
+        self.opened.append(Path(fname))
+        self.pressure = np.array([1e3, 1e5])
+        self.t_ref = np.array([250.0, 250.0])
+        self.t_pert = np.array([-50.0, 0.0, 50.0])
+        h2o = Path(fname).name.endswith("H2O")
+        self.vmrs = np.array([0.0, 1.0]) if h2o else np.array([0.0])
+        self.xsec = np.ones((3, self.vmrs.size, 2))
+
+
+@pytest.mark.parametrize("slot", range(len(SPECIES)))
+def test_calc_profile_scales_each_species_by_its_density(
+    synthetic_reptran: Reptran,
+    monkeypatch: pytest.MonkeyPatch,
+    slot: int,
+) -> None:
+    """Each absorber scales its own lookup table by its own density."""
+    monkeypatch.setattr("smartg.reptran.ReadCrs", _UnitCrossSection)
+    _UnitCrossSection.opened = []
+    densities = {
+        name: 1e10 * (index + 1) for index, name in enumerate(SPECIES)
+    }
+    prof = SimpleNamespace(
+        t=np.array([250.0, 250.0]),
+        p=np.array([100.0, 500.0]),
+        dens_air=np.full(2, 1e19),
+        dens_no2=np.full(2, 1e14),
+        **{
+            f"dens_{name.lower()}": np.full(2, value)
+            for name, value in densities.items()
+        },
+    )
+    iband = next(ReptranBand(synthetic_reptran, 0).ibands())
+    iband.crs_source = np.zeros(len(SPECIES), dtype=int)
+    iband.crs_source[slot] = 1
+
+    kabs = iband.calc_profile(cast(ProfileBase, prof))
+
+    species = SPECIES[slot]
+    assert [path.name for path in _UnitCrossSection.opened] == [
+        f"synthetic.lookup.{species}"
+    ]
+    np.testing.assert_allclose(kabs, densities[species] * 1e-11)
