@@ -247,11 +247,12 @@ def test_smartg_jax2(
 
 
 def test_histories_several_loops(n_photons: float = 5e4) -> None:
-    """Check that the histories of every kernel loop are kept.
+    """Check the histories of several loops and directions.
 
     Each loop used to overwrite the records of the previous ones while
     Nphotons_in counted them all, so that the radiance rebuilt from
-    the histories came out about n_loops times too small.
+    the histories came out about n_loops times too small. With two
+    directions, the records overlapped each other.
     """
     wavelength = np.linspace(320.0, 350.0, num=11)
     atmosphere = Atm1D(
@@ -263,7 +264,7 @@ def test_histories_several_loops(n_photons: float = 5e4) -> None:
         "th_deg": 45.0,
         "wavelength": wavelength,
         "surface": LambSurface(AlbedoCst(1.0)),
-        "le": LocalEstimate(th_deg=[0.0], phi_deg=[0.0]),
+        "le": LocalEstimate(th_deg=[0.0, 30.0], phi_deg=[0.0]),
         "atmosphere": atmosphere,
         "n_photons": n_photons,
     }
@@ -281,21 +282,28 @@ def test_histories_several_loops(n_photons: float = 5e4) -> None:
     assert int(m_hist.attrs["number of kernel iterations"]) >= 5
     assert int(m_hist.attrs["hist records"]) <= max_hist
 
-    with jax.default_device(jax.devices("cpu")[0]):
-        n, s, d, w, _, nref, _, _, _, _, _ = get_histories(m_hist)
-        stk_i = (
-            np.array(
-                big_sum(si, only_i=True)(
-                    wavelength, kabs, np.ones_like(wavelength), s[:, 0],
-                    w, d, nref, wavelength
-                ).sum(axis=0)
-            )
-            / n
-        )
+    # (wavelength, Zenith angles)
     i_ref = np.squeeze(m_ref["I_up (TOA)"].values)
-    rel_diff = np.max(np.abs(stk_i / i_ref - 1))
-    logger.info(f"several loops: max rel diff = {rel_diff:.4f}")
-    np.testing.assert_allclose(stk_i, i_ref, rtol=0.05)
+    for idir in range(2):
+        with jax.default_device(jax.devices("cpu")[0]):
+            n, s, d, w, _, nref, _, _, _, _, _ = get_histories(
+                m_hist, idir=idir
+            )
+            stk_i = (
+                np.array(
+                    big_sum(si, only_i=True)(
+                        wavelength, kabs, np.ones_like(wavelength),
+                        s[:, 0], w, d, nref, wavelength
+                    ).sum(axis=0)
+                )
+                / n
+            )
+        rel_diff = np.max(np.abs(stk_i / i_ref[:, idir] - 1))
+        logger.info(
+            f"several loops, direction {idir}: max rel diff = "
+            f"{rel_diff:.4f}"
+        )
+        np.testing.assert_allclose(stk_i, i_ref[:, idir], rtol=0.05)
 
 
 def test_validation_artdeco(

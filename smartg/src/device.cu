@@ -7537,6 +7537,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           //unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           unsigned long long KKK2  = K*KK2 * MAX_HIST;/* Number of individual information per vertical Level (Number of Records)*/
+          unsigned long long RR = counter2*KK2*K; /* Offset of the record, which holds KK2 fields for each of the K outputs */
           unsigned long long LL2;
           //tabCount3   = (float*)tabHist     ; /* we position the pointer at the good vertical level*/
           tabCount3   = (float*)tabHist     + count_level*KKK2; /* we position the pointer at the good vertical level*/
@@ -7544,53 +7545,53 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
                 /* The offset is the number of previous writing (counter2) * Record Length
                    + the offset of the individual information  + the place of the physical quantity */
                 //LL2 = counter2*KK2 +  n;
-                LL2 = counter2*KK2 +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                LL2 = RR +  n*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= ph->cdist_oc[n+1];
           }
           //for (int n=0; n<NATMd; n++){
           for (int n=0; n<NATM_ABSd; n++){
                 //LL2 = counter2*KK2 +  n+NOCE_ABSd;
-                LL2 = counter2*KK2 +  (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                LL2 = RR +  (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= ph->cdist_atm[n+1];
           }
           //LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+0;
-          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +  (NATM_ABSd+NOCE_ABSd+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.x+st.y);
           //LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+1;
-          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +  (NATM_ABSd+NOCE_ABSd+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.x-st.y);
           //LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+2;
-          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +  (NATM_ABSd+NOCE_ABSd+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.z);
           //LL2 = counter2*KK2 +  NATM_ABSd+NOCE_ABSd+3;
-          LL2 = counter2*KK2 +  (NATM_ABSd+NOCE_ABSd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +  (NATM_ABSd+NOCE_ABSd+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= weight * (st.w);
 
           for (int n=0; n<NLOWd; n++){
                 //LL2 = counter2*KK2 + n+NATM_ABSd+NOCE_ABSd+4;
-                LL2 = counter2*KK2 +  (n+NATM_ABSd+NOCE_ABSd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+                LL2 = RR +  (n+NATM_ABSd+NOCE_ABSd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= weight_sca[n];
           }
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+0;
-          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nrrs>=1);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+1;
-          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nref);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+2;
-          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nsif);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+3;
-          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nvrs>=1);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+4;
-          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nenv);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+5;
-          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+5)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+5)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nint);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+6;
-          LL2 = counter2*KK2 +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+6)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+6)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->last_scatter_layer); /* index of last scattering layer (-1 = surface/unscattered) */
        } // HISTd==1
 

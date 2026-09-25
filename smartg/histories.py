@@ -46,6 +46,7 @@ def get_histories(
     level: int = 0,
     idir: int = 0,
     verbose: bool = False,
+    isensor: int = 0,
 ) -> tuple[
     int,
     NDArray[np.float32],
@@ -69,12 +70,16 @@ def get_histories(
         The output level: 0 for TOA (up), 1 for downward at the 0+
         level. Default 0.
     idir : int, optional
-        Currently unused. Default 0.
+        The index of the output direction, ith * n_phi + iphi over the
+        'hist_theta' and 'hist_phi' axes of the histories (n_phi is 1
+        for zipped local estimate directions). Default 0.
     verbose : bool, optional
         If True, print the number of injected photons (N), of
         Local Estimate virtual photons (NLE), of Low Resolution
         wavelengths recorded (NLR) and of vertical layers (NL).
         Default False.
+    isensor : int, optional
+        The index of the sensor. Default 0.
 
     Returns
     -------
@@ -107,13 +112,29 @@ def get_histories(
     nlscl : ndarray of shape (NLE,)
         The last-scattering layer index (-1 for surface/unscattered
         photons).
+
+    Raises
+    ------
+    IndexError
+        If idir or isensor is out of the range of the histories.
     """
     if isinstance(m, xr.Dataset):
         nl = m['z_atm'].size - 1
     else:
         # LUT.axis().size works at runtime; missing from the stub.
         nl = m.axis('z_atm').size - 1  # type: ignore
-    tab_hist_ = np.squeeze(m['histories'].data)
+    # (level, photon, record, theta, sensor, phi): each record fills
+    # the fields of its own direction and sensor only
+    hist = np.asarray(m['histories'].data)
+    n_theta, n_sensor, n_phi = hist.shape[3:]
+    if not (0 <= idir < n_theta * n_phi and 0 <= isensor < n_sensor):
+        raise IndexError(
+            f'get_histories: idir={idir} and isensor={isensor} must lie '
+            f'below the {n_theta * n_phi} directions and {n_sensor} '
+            'sensors of the histories.'
+        )
+    ith, iphi = divmod(idir, n_phi)
+    tab_hist_ = hist[:, :, :, ith, isensor, iphi]
     tab_hist = tab_hist_[level, :, :]
     if verbose:
         print(tab_hist.shape)

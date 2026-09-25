@@ -1310,6 +1310,12 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix the photon histories of `Alis(hist=True)` with several local
+    estimate directions or sensors, or without a local estimate: the
+    kernel wrote each record with the stride of a single direction, so
+    the records overlapped and `get_histories` raised an `IndexError`.
+    `get_histories` now reads the direction `idir` (`ith * n_phi + iphi`),
+    documented as unused before, and the new `isensor`
   - Fix the photon histories of `Alis(hist=True)` with more than one
     kernel launch, the default `n_loop`: each launch overwrote the
     records of the previous ones while `Nphotons_in` counted every

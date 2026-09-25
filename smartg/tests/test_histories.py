@@ -44,17 +44,25 @@ def _output(
     records: list[tuple[int, np.ndarray]],
     max_hist: int,
     attrs: dict[str, str] | None = None,
+    directions: list[tuple[int, int, int]] | None = None,
+    shape: tuple[int, int, int] = (1, 1, 1),
 ) -> xr.Dataset:
     """
     Return a Smartg output holding the given histories.
 
     The records take their slots in turn from one counter shared by
-    the two levels, as in the kernel, which drops them past max_hist.
+    the two levels and the directions, as in the kernel, which drops
+    them past max_hist. Each fills the fields of its (theta, sensor,
+    phi) direction only, in the shape of these three axes.
     """
     n_cols = len(records[0][1])
-    hist = np.zeros((2, max_hist, n_cols, 1, 1, 1), dtype=np.float32)
-    for slot, (level, record) in enumerate(records[:max_hist]):
-        hist[level, slot, :, 0, 0, 0] = record
+    if directions is None:
+        directions = [(0, 0, 0)] * len(records)
+    hist = np.zeros((2, max_hist, n_cols, *shape), dtype=np.float32)
+    for slot, ((level, record), (ith, isen, iph)) in enumerate(
+        zip(records[:max_hist], directions, strict=False)
+    ):
+        hist[level, slot, :, ith, isen, iph] = record
     ds = xr.Dataset()
     ds["histories"] = (HIST_DIMS, hist)
     ds["Nphotons_in"] = (
@@ -99,3 +107,39 @@ def test_get_histories_not_saturated(
     )
     get_histories(ds, level=0)
     assert "saturated" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("shape", "idir", "isensor"),
+    [((2, 1, 1), 1, 0), ((1, 2, 1), 0, 1), ((2, 1, 3), 5, 0)],
+    ids=["zenith", "sensor", "zenith-azimuth"],
+)
+def test_get_histories_direction(
+    shape: tuple[int, int, int], idir: int, isensor: int
+) -> None:
+    """Check that the records of one direction and sensor are read."""
+    n_theta, n_sensor, n_phi = shape
+    wanted = (idir // n_phi, isensor, idir % n_phi)
+    records, directions = [], []
+    for i in range(12):
+        ith = i % n_theta
+        isen = (i // n_theta) % n_sensor
+        iph = (i // (n_theta * n_sensor)) % n_phi
+        record = _record(
+            [float(i)] * N_ATM, [i + 0.5, 0.0, 0.0, 0.0], [1.0] * N_LOW
+        )
+        records.append((0, record))
+        directions.append((ith, isen, iph))
+    ds = _output(records, 20, {"hist records": "12"}, directions, shape)
+    _, s, d, *_ = get_histories(ds, idir=idir, isensor=isensor)
+    expected = [i for i, dr in enumerate(directions) if dr == wanted]
+    assert len(expected) > 0
+    np.testing.assert_array_equal(d[:, 0], expected)
+    np.testing.assert_array_equal(s[:, 0], np.add(expected, 0.5))
+
+
+def test_get_histories_direction_invalid() -> None:
+    """Check that a direction beyond the histories is refused."""
+    ds = _output(_alternating(4), 10, {"hist records": "4"})
+    with pytest.raises(IndexError, match="idir=1"):
+        get_histories(ds, idir=1)
