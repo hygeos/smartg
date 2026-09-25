@@ -916,6 +916,14 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the KDIS models whose concentration axis is a density (the ascii
+    models with a concentration dependent species, and the h5 ones whose
+    `rho` is described as `density`): clipping the density to the axis
+    also clipped the density that scales the absorption, so a layer
+    without the gas absorbed as if it held 1.01 times the smallest
+    tabulated density, and a denser layer than the largest was capped.
+    The shipped models (kato, kato2, SENTINEL2_1_MSI) use molar fractions
+    and are unchanged
   - Fix `cat_view(kdis_rep_bands=...)` with REPTRAN bands, and the weight
     sums returned by `ReptranIbandList.get_weights`: since v2.0.0dev2 they
     grouped by internal-band wavelength instead of by channel, so

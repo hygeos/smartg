@@ -372,8 +372,10 @@ class KdisIband:
                 self.band.kdis.t,
                 self.band.kdis.c,
             )
+            # a copy, since only the interpolation point is clipped
+            # below, not the density that scales the absorption
             if self.band.kdis.c_desc == "density":
-                concentration = density_molecules[:, molecular_index]
+                concentration = density_molecules[:, molecular_index].copy()
             elif self.band.kdis.c_desc == "molar_fraction":
                 concentration = density_molecules[:, molecular_index] / (
                     prof.dens_air.copy()

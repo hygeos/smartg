@@ -247,3 +247,52 @@ def test_reduce_without_wavelength_needs_one_internal_band() -> None:
 
     with pytest.raises(ValueError, match="holds 2 internal bands"):
         reduce_kdis(_single_band_run(False), ibands)
+
+
+@pytest.mark.parametrize(
+    ("c_desc", "c"),
+    [("density", [1e15, 1e17]), ("molar_fraction", [1e-7, 1e-3])],
+)
+def test_calc_profile_clips_only_the_interpolation_point(
+    c_desc: str, c: list[float]
+) -> None:
+    """Densities out of the concentration axis still scale the k.
+
+    With k = 1 over the whole table, a layer without H2O absorbs
+    nothing and a dense layer absorbs in proportion to its density.
+    """
+    kdis = SimpleNamespace(
+        nsp_c=1,
+        species_c=["h2o"],
+        iki_eff_c=np.zeros((1, 1, 1), dtype=int),
+        ki_c=np.ones((1, 1, 1, 2, 2, 2)),
+        p=np.array([1.0, 1000.0]),
+        t=np.array([200.0, 300.0]),
+        c=np.array(c),
+        c_desc=c_desc,
+        nsp=0,
+    )
+    band = SimpleNamespace(
+        kdis=kdis,
+        band=0,
+        awvl=[500.0],
+        awvl_weight=np.array([1.0]),
+        solarflux=1.0,
+        dl=10.0,
+    )
+    zeros = np.zeros(2)
+    prof = SimpleNamespace(
+        t=np.array([250.0, 250.0]),
+        p=np.array([500.0, 500.0]),
+        dens_air=np.full(2, 1e19),
+        dens_h2o=np.array([0.0, 5e17]),
+        **{
+            f"dens_{name}": zeros
+            for name in ["co2", "o3", "no2", "co", "ch4", "o2", "n2", "n2o",
+                         "so2"]
+        },
+    )
+
+    kabs = KdisIband(cast(Any, band), 0).calc_profile(cast(Any, prof))
+
+    np.testing.assert_allclose(kabs, [0.0, 5e17 * 1e5])
