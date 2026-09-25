@@ -1015,6 +1015,15 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the default sensor of `Smartg.run` (without `sensor`) for a
+    non-zero `ph_deg`: it started from the entry point of azimuth 0, so
+    that its ray missed the origin. In spherical mode the sun reached the
+    ground at another zenith angle (61.9 instead of 60 degrees for
+    `ph_deg=90`) or missed the Earth, and with an `Environment` the direct
+    beam landed away from the target (98 km away for `th_deg=30`,
+    `ph_deg=90`). The kernel of the 3D objects already turned it; the
+    plane-parallel runs without environment do not change. The error was
+    already in v1.2.0
   - Fix the `Sensor(cell_size=-2)` of a spherical run with
     `Smartg(obj3d=True)` but without 3D objects: the altitude of the top
     of the atmosphere was only sent to the kernel with objects, so that

@@ -790,3 +790,32 @@ def test_toa_sphere_start_without_objects() -> None:
         progress=False,
     )
     assert np.all(m["N_up (TOA)"].values.reshape(2, -1).sum(axis=1) > 0)
+
+
+def test_default_sensor_aims_at_the_origin_in_any_azimuth() -> None:
+    """Check that the sun of the default sensor lights the origin.
+
+    A white disc of 5 km around the origin in a black environment
+    reflects the direct sunlight only if the sun, of any azimuth,
+    aims at the origin, and the nadir radiance does not depend on the
+    azimuth of the sun.
+    """
+    sg = Smartg()
+    runs = [
+        sg.run(
+            550.0,
+            atmosphere=Atm1D("afglt"),
+            surface=LambSurface(alb=AlbedoCst(1.0)),
+            environment=Environment(env=1, env_size=5.0,
+                                    alb=AlbedoCst(0.0)),
+            th_deg=30.0,
+            ph_deg=ph_deg,
+            le=LocalEstimate(th_deg=[0.0], phi_deg=[0.0], count_level=[0]),
+            n_photons=1e6,
+            stdev=True,
+            seed=seed,
+            progress=False,
+        )
+        for seed, ph_deg in ((71, 0.0), (72, 90.0))
+    ]
+    assert np.all(np.abs(_z_scores(runs[0], runs[1], "up (TOA)")) < 5)

@@ -1803,11 +1803,12 @@ class Smartg:
             n_atm = 0
             n_atm_abs = 0
 
-        # computation of the impact point
-        # x0, _ = _impact_init(prof_atm, n_lam, th_deg, earth_radius,
-        # self.pp)
+        # computation of the impact point, where the default sensor
+        # starts, aiming at the origin. The 3D objects kernel turns the
+        # position of every sensor by its azimuth itself.
         x0, tab_trans_dir_analytic = _impact_init(
-            prof_atm, n_lam, th_deg, earth_radius, self.pp
+            prof_atm, n_lam, th_deg, 0.0 if self.obj3d else ph_deg,
+            earth_radius, self.pp,
         )
 
         # sensor definition
@@ -5086,6 +5087,7 @@ def _impact_init(
     prof_atm: xr.Dataset | MLUT | None,
     nlam: int,
     thv_deg: float,
+    phv_deg: float,
     earth_radius: float,
     pp: bool,
 ) -> tuple:
@@ -5106,6 +5108,10 @@ def _impact_init(
         Number of wavelengths.
     thv_deg : float
         Solar/viewing zenith angle in degrees.
+    phv_deg : float
+        Solar/viewing azimuth angle in degrees: the entry point lies
+        in this azimuth from the origin, so that the ray of the
+        default sensor, of azimuth phv_deg + 180, goes through it.
     earth_radius : float
         Earth radius in km.
     pp : bool
@@ -5141,8 +5147,10 @@ def _impact_init(
             natm = prof_atm.sizes['iopt'] - 1
         od_atm = prof_atm['OD_atm'].to_numpy()
 
-    vx = -np.sin(thv_deg * np.pi / 180)
-    vy = 0.0
+    cos_phv = np.cos(np.radians(phv_deg))
+    sin_phv = np.sin(np.radians(phv_deg))
+    vx = -np.sin(thv_deg * np.pi / 180) * cos_phv
+    vy = -np.sin(thv_deg * np.pi / 180) * sin_phv
     vz = -np.cos(thv_deg * np.pi / 180)
     earth_radius = np.double(earth_radius)
 
@@ -5150,8 +5158,8 @@ def _impact_init(
 
     if pp:
         z0 = h_atm
-        x0 = h_atm * np.tan(thv_deg * np.pi / 180.0)
-        y0 = 0.0
+        x0 = h_atm * np.tan(thv_deg * np.pi / 180.0) * cos_phv
+        y0 = h_atm * np.tan(thv_deg * np.pi / 180.0) * sin_phv
 
         if natm != 0:
             assert prof_atm is not None and od_atm is not None
@@ -5181,17 +5189,17 @@ def _impact_init(
         # coordinates (x0, y0, earth_radius+z0)
         #     (origin is at the surface)
         # * Z is the projection of M on z axis
-        # tan(thv) = x0/z0
+        # tan(thv) = r0/z0, with r0^2 = x0^2 + y0^2
         # earth_radius is the radius of the earth and h_atm the
         # thickness of the atmosphere
-        # solve the equation x0^2 + (earth_radius+z0)^2 =
+        # solve the equation r0^2 + (earth_radius+z0)^2 =
         # (earth_radius+h_atm)^2 for z0
         delta = 4 * earth_radius**2 + 4 * (tanthv**2 + 1) * (
             h_atm**2 + 2 * h_atm * earth_radius
         )
         z0 = (-2.0 * earth_radius + np.sqrt(delta)) / (2 * (tanthv**2 + 1.0))
-        x0 = z0 * tanthv
-        y0 = 0.0
+        x0 = z0 * tanthv * cos_phv
+        y0 = z0 * tanthv * sin_phv
         z0 += earth_radius
 
         # loop over the NATM atmosphere layers to find the total optical
