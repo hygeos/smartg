@@ -574,24 +574,7 @@ class Entity:
             # if bbox pmin and pmax are not provided compute them
             # automatically based on the geometry and transformation
             if bbox_pmin is None or bbox_pmax is None:
-                box = gc.BBox()
-                entity_tf = self.get_transformation()
-                if isinstance(self.geo, Plane):
-                    box = box.union(entity_tf(self.geo.p1))
-                    box = box.union(entity_tf(self.geo.p2))
-                    box = box.union(entity_tf(self.geo.p3))
-                    box = box.union(entity_tf(self.geo.p4))
-                elif isinstance(self.geo, Spheric):
-                    p1 = entity_tf(
-                        gc.Point(
-                            -self.geo.radius, -self.geo.radius, self.geo.z0
-                        )
-                    )
-                    p2 = entity_tf(
-                        gc.Point(self.geo.radius, self.geo.radius, self.geo.z1)
-                    )
-                    box = box.union(p1)
-                    box = box.union(p2)
+                box = self._world_bbox()
                 if bbox_pmin is None:
                     bbox_pmin = box.pmin
                 if bbox_pmax is None:
@@ -715,26 +698,33 @@ class Entity:
 
         if recompute_bbox:
             # Recompute bounding box based on new transformation
-            box = gc.BBox()
-            entity_tf = self.get_transformation()
-
-            if isinstance(self.geo, Plane):
-                box = box.union(entity_tf(self.geo.p1))
-                box = box.union(entity_tf(self.geo.p2))
-                box = box.union(entity_tf(self.geo.p3))
-                box = box.union(entity_tf(self.geo.p4))
-            elif isinstance(self.geo, Spheric):
-                p1 = entity_tf(
-                    gc.Point(-self.geo.radius, -self.geo.radius, self.geo.z0)
-                )
-                p2 = entity_tf(
-                    gc.Point(self.geo.radius, self.geo.radius, self.geo.z1)
-                )
-                box = box.union(p1)
-                box = box.union(p2)
-
+            box = self._world_bbox()
             self.bbox_pmin = box.pmin
             self.bbox_pmax = box.pmax
+
+    def _world_bbox(self) -> gc.BBox:
+        """Return the bounding box of the transformed geometry.
+
+        The box of a Plane holds its four transformed corners. The box
+        of a Spheric holds the eight transformed corners of its local
+        box [-r, r] x [-r, r] x [z0, z1]: under a rotation, two
+        opposite corners do not bound the sphere.
+        """
+        if isinstance(self.geo, Plane):
+            corners = [self.geo.p1, self.geo.p2, self.geo.p3, self.geo.p4]
+        else:
+            radius = self.geo.radius
+            corners = [
+                gc.Point(x, y, z)
+                for x in (-radius, radius)
+                for y in (-radius, radius)
+                for z in (self.geo.z0, self.geo.z1)
+            ]
+        entity_tf = self.get_transformation()
+        box = gc.BBox()
+        for corner in corners:
+            box = box.union(entity_tf(corner))
+        return box
 
 
 class Heliostat:

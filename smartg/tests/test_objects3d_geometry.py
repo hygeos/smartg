@@ -10,7 +10,13 @@ import geoclide as gc
 import numpy as np
 import pytest
 
-from smartg.objects3d import Entity, Plane, rotate_vector
+from smartg.objects3d import (
+    Entity,
+    Plane,
+    Spheric,
+    Transformation,
+    rotate_vector,
+)
 
 
 @pytest.mark.parametrize("order", ["XYZ", "xyz", "zyx", "ZxY"])
@@ -68,3 +74,27 @@ def test_plane_names_the_violated_condition(
     """An invalid Plane raises a ValueError naming what is wrong."""
     with pytest.raises(ValueError, match=message):
         Plane(**corners)
+
+
+@pytest.mark.parametrize(
+    "rotation", [[0.0, 0.0, 45.0], [30.0, 0.0, 0.0], [0.0, 60.0, 20.0]]
+)
+def test_spheric_bbox_holds_the_rotated_sphere(rotation: list[float]) -> None:
+    """The bounding box of a rotated sphere holds the whole sphere.
+
+    Without a user box, and after set_transformation too.
+    """
+    radius, centre = 1.0, np.array([5.0, 0.0, 2.0])
+    transformation = Transformation(
+        rotation=np.array(rotation), translation=centre
+    )
+    entity = Entity(geo=Spheric(radius=radius), transformation=transformation)
+    moved = Entity(geo=Spheric(radius=radius))
+    moved.set_transformation(transformation)
+    for sphere in (entity, moved):
+        pmin = np.array([sphere.bbox_pmin.x, sphere.bbox_pmin.y,
+                         sphere.bbox_pmin.z])
+        pmax = np.array([sphere.bbox_pmax.x, sphere.bbox_pmax.y,
+                         sphere.bbox_pmax.z])
+        assert np.all(pmin <= centre - radius + 1e-12)
+        assert np.all(pmax >= centre + radius - 1e-12)

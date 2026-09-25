@@ -1143,6 +1143,11 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the automatic bounding box of a rotated `Spheric` entity, built from
+    two opposite corners of its local box only: a rotation that is not a
+    multiple of 90 degrees gave a box too small, or flat at 45 degrees
+    about z, and the kernel skipped the rays outside it, so that parts of
+    the sphere were invisible. The box holds the eight transformed corners
   - Fix the validation of `Plane`, which blamed the signs of the corners of
     any invalid plane with a positive `p3.y`, and reported an "Unknown
     error" for a rectangle below the x axis. It raises a `ValueError`
