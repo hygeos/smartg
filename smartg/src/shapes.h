@@ -197,16 +197,21 @@ bool Sphere<T,TF>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<
     // Passing the "ray" into the sphere space
 	(*this->WorldToObject)(r, &ray);
 
-    // Compute the quadratic coefficients of the sphere
+    // Solve |o + t d|^2 = radius^2 from the point of the ray closest
+    // to the centre, pc = o + tc d: the roots are tc -/+ h with
+    // h^2 = (radius^2 - |pc|^2) / |d|^2. The coefficients of the
+    // quadratic lose radius^2 against |o|^2 in float for a ray that
+    // starts far from a small sphere, as from TOA
     T A = ray.d.x*ray.d.x + ray.d.y*ray.d.y + ray.d.z*ray.d.z;
-    T B = 2 * (ray.d.x*ray.o.x + ray.d.y*ray.o.y + ray.d.z*ray.o.z);
-    T C = ray.o.x*ray.o.x + ray.o.y*ray.o.y +
-              ray.o.z*ray.o.z - radius*radius;
-
-    // Solve the equation of second order to get t0 and t1
-    T t0, t1;
-    if (!quadratic(&t0, &t1, A, B, C))
+    T tc = -(ray.d.x*ray.o.x + ray.d.y*ray.o.y + ray.d.z*ray.o.z) / A;
+    T pcx = ray.o.x + tc*ray.d.x;
+    T pcy = ray.o.y + tc*ray.d.y;
+    T pcz = ray.o.z + tc*ray.d.z;
+    T h2 = (radius*radius - (pcx*pcx + pcy*pcy + pcz*pcz)) / A;
+    if (h2 < T(0))
         return false;
+    T h = get_func_sqrt(h2);
+    T t0 = tc - h, t1 = tc + h;
 
     // Calculate the factor t at which the ray is reaching the sphere
     if (t0 > ray.maxt || t1 < ray.mint)

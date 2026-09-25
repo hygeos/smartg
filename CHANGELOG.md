@@ -1143,6 +1143,12 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the intersection of a `Spheric` entity with a ray from far away,
+    such as a photon launched from TOA: the quadratic of the intersection
+    lost the squared radius against the squared distance in single
+    precision, so that a sphere of 2 m hit from 120 km was missed by
+    about half of the rays through it. It is solved from the point of the
+    ray closest to the centre
   - Fix the FF launching mode with a negative `cftz` in an atmosphere: the
     photons started at the lowered altitude but with the layer and the
     optical depth of TOA, which the plane-parallel transport follows, so

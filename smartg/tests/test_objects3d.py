@@ -569,25 +569,29 @@ def _sphere_shadow(
     rotation: tuple[float, float, float],
     front: MaterialType,
     back: MaterialType,
+    height: float = 0.01,
+    half: float = 0.003,
 ) -> tuple[xr.Dataset, float]:
     """Run a sphere over a receiver; return the output and the shadow.
 
-    A sphere of radius 2 m, 10 m high, over a 6 m square receiver 1 m
-    high, under a zenith sun: the direct sun reaches the receiver but
-    for the shadow of the sphere, a disc of radius 2 m. Also return the
-    direct power expected on the receiver, in m².
+    A sphere of radius 2 m, its centre at height, over a square
+    receiver of half-width half 10 cm above the ground, under a zenith
+    sun: the direct sun reaches the receiver but for the shadow of the
+    sphere, a disc of radius 2 m. Also return the direct power expected
+    on the receiver, in m².
     """
-    radius, half = 0.002, 0.003
+    radius = 0.002
     sphere = Entity(
         name="environment",
         material_front=front,
         material_back=back,
         geo=Spheric(radius=radius),
         transformation=Transformation(
-            rotation=np.array(rotation), translation=np.array([0, 0, 0.01])
+            rotation=np.array(rotation),
+            translation=np.array([0.0, 0.0, height]),
         ),
     )
-    receiver = _receiver(half, (0.0, 0.0, 0.001))
+    receiver = _receiver(half, (0.0, 0.0, 0.0001))
     ds = _run_ff(sg, [sphere, receiver], _transparent(), 2 * half)
     expected = (2 * half * 1e3) ** 2 - np.pi * (radius * 1e3) ** 2
     return ds, expected
@@ -613,16 +617,21 @@ def test_sphere_reflects_with_its_front(sg: Smartg) -> None:
     The base normal of a sphere was left at zero, so every hit took
     its back material: this white Lambertian sphere with a black back
     absorbed everything. Its light reaches the receiver around its
-    shadow, at most the sixth of the power it intercepts that a
-    Lambertian sphere under a zenith sun sends downward.
+    shadow, 50 cm below it: 2.5 % of the power it intercepts, 0.315
+    m², by a Monte Carlo integration of its Lambertian reflection
+    around the normal of each hit.
     """
     ds, expected = _sphere_shadow(
-        sg, (0.0, 0.0, 0.0), LambMirror(reflectivity=1.0), Matte()
+        sg,
+        (0.0, 0.0, 0.0),
+        LambMirror(reflectivity=1.0),
+        Matte(),
+        height=0.0025,
+        half=0.006,
     )
     cat_irr = ds["cat_irr"].values
     np.testing.assert_allclose(cat_irr[1], expected, rtol=5e-3)
-    intercepted = np.pi * 2.0**2
-    assert 0.0 < cat_irr[3] < intercepted / 6.0
+    np.testing.assert_allclose(cat_irr[3], 0.315, rtol=0.1)
 
 
 def _flipped_plane(
