@@ -203,3 +203,22 @@ def test_grid_beyond_the_profile_refused() -> None:
     )
     assert np.isfinite(pro["OD_r"].values).all()
     assert np.isfinite(pro["OD_sca_atm"].values).all()
+
+
+def test_pfgrid_above_the_ground_refused() -> None:
+    """A pfgrid ending above the bottom of the grid is refused.
+
+    The layers below its last level got the phase index -1, which the
+    kernel reads as the VRS phase function, or at the other
+    wavelengths the index of a matrix of the previous wavelength.
+    """
+    comp = [AerOPAC("maritime_clean", 0.3, 550.0)]
+    grid = "100[25]25[5]10[1]0"
+    atm = Atm1D("afglt", comp=comp, grid=grid, pfgrid=[100.0, 3.0, 2.0])
+    with pytest.raises(ValueError, match="pfgrid must reach the bottom"):
+        atm.calc([550.0, 650.0])
+    atm.calc([550.0, 650.0], phase=False)
+    pro = Atm1D(
+        "afglt", comp=comp, grid=grid, pfgrid=[100.0, 3.0, 2.0, 0.0]
+    ).calc([550.0, 650.0])
+    assert (pro["iphase_atm"].values >= 0).all()

@@ -2727,7 +2727,8 @@ class Atm1D(Atmosphere):
         accurate when only 1 type of aerosol is present.
         However, if multiple aerosols are mixed (with different vertical
         distributions), a single phase matrix may
-        introduce an important bias.
+        introduce an important bias. Its last level must not lie above
+        the bottom of the profile grid.
     prof_abs : None or 2-D ndarray, optional
         Force the gaseous absorption optical thickness vertical profile
         (nwavelength,nz), it shortcuts any further gaseous absorption
@@ -2946,7 +2947,8 @@ class Atm1D(Atmosphere):
         ValueError
             If a component carries a `truncation` while the particle
             profile is forced (`prof_aer`), whose extinction and single
-            scattering albedo would stay untruncated.
+            scattering albedo would stay untruncated, or if the last
+            level of `pfgrid` lies above the bottom of the profile.
 
         Notes
         -----
@@ -2980,6 +2982,16 @@ class Atm1D(Atmosphere):
         ipha = None
         comp_trunc_frac = None
         if phase and self.comp:
+            # calc_iphase gives no phase matrix to the layers below the
+            # last pfgrid level
+            z_bottom = float(np.min(self.prof.z))
+            if self.pfgrid[-1] > z_bottom + 1e-6 * max(1.0, abs(z_bottom)):
+                raise ValueError(
+                    "pfgrid must reach the bottom of the profile grid, "
+                    f"{z_bottom:g} km: its last level, "
+                    f"{self.pfgrid[-1]:g} km, would leave the layers "
+                    "below it without a phase matrix."
+                )
             if self.wavelength_phase is None:
                 wavelength_pha = np.atleast_1d(wavelength[:])
             else:

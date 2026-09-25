@@ -1009,6 +1009,10 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - `Atm1D.calc` refuses a `pfgrid` whose last level lies above the bottom
+    of the profile grid with a `ValueError`: the layers below it got the
+    phase index -1, which the kernel reads as the VRS phase function, and
+    at the other wavelengths a matrix of the previous wavelength
   - `Atm1D` refuses a `grid` reaching above the top (or below the bottom)
     of its profile file with a `ValueError` naming them, unless `prof_ray`
     is given: the Rayleigh optical thickness of the levels beyond came out
