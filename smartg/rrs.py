@@ -7,9 +7,9 @@ in satellite backscatter ultraviolet measurements.
 
 The two main building blocks are:
 
-* Bates (1984) Rayleigh-scattering depolarization for N2 and O2, used
-  to compute Kattawar et al. (1981) Cabannes fractions
-  :func:`f0_air`, :func:`f0_n2`, :func:`f0_o2`.
+* Bates (1984) King correction factors of N2 and O2, which give the
+  polarizability anisotropy used to compute the Kattawar et al. (1981)
+  Cabannes fractions :func:`f0_air`, :func:`f0_n2`, :func:`f0_o2`.
 * Joiner et al. (1995) rotational Raman line strengths built from
   Boltzmann-weighted rigid-rotor populations and Placzek-Teller
   coefficients, exposed through :func:`l_air`, :func:`l2d` and
@@ -42,7 +42,7 @@ l2d_inv
 f0_air
     Cabannes fraction of dry air.
 epsilon_air
-    Effective depolarization ratio of dry air.
+    Squared polarizability anisotropy ratio of dry air.
 """
 
 from __future__ import annotations
@@ -88,11 +88,14 @@ def fk_n2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
 
 
 def epsilon_n2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
-    r"""Depolarization ratio of N2 as a function of wavelength.
+    r"""Squared polarizability anisotropy ratio of N2.
 
-    Computed from the King correction factor as
+    The ratio :math:`\varepsilon = (\gamma / \alpha)^2` of the
+    anisotropy to the mean of the polarizability, as a function of
+    wavelength, computed from the King correction factor as
     :math:`\varepsilon_{N_2} = (F_K - 1) \times 4.5`, where the
-    constant 4.5 follows Bates (1984).
+    constant 4.5 follows Bates (1984). It is not the depolarization
+    ratio :math:`\rho = 6 \varepsilon / (45 + 7 \varepsilon)`.
 
     Parameters
     ----------
@@ -102,8 +105,8 @@ def epsilon_n2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     Returns
     -------
     eps : float or ndarray
-        Dimensionless depolarization ratio of N2. Same shape as
-        ``wavelength``.
+        Dimensionless squared anisotropy ratio of N2. Same shape
+        as ``wavelength``.
 
     References
     ----------
@@ -147,11 +150,14 @@ def fk_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
 
 
 def epsilon_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
-    r"""Depolarization ratio of O2 as a function of wavelength.
+    r"""Squared polarizability anisotropy ratio of O2.
 
-    Computed from the King correction factor as
+    The ratio :math:`\varepsilon = (\gamma / \alpha)^2` of the
+    anisotropy to the mean of the polarizability, as a function of
+    wavelength, computed from the King correction factor as
     :math:`\varepsilon_{O_2} = (F_K - 1) \times 4.5`, where the
-    constant 4.5 follows Bates (1984).
+    constant 4.5 follows Bates (1984). It is not the depolarization
+    ratio :math:`\rho = 6 \varepsilon / (45 + 7 \varepsilon)`.
 
     Parameters
     ----------
@@ -161,8 +167,8 @@ def epsilon_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     Returns
     -------
     eps : float or ndarray
-        Dimensionless depolarization ratio of O2. Same shape as
-        ``wavelength``.
+        Dimensionless squared anisotropy ratio of O2. Same shape
+        as ``wavelength``.
 
     References
     ----------
@@ -174,10 +180,11 @@ def epsilon_o2(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
 
 
 def epsilon_air(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
-    r"""Effective depolarization ratio of dry air.
+    r"""Squared polarizability anisotropy ratio of dry air.
 
-    Weighted sum of the N2 and O2 depolarization ratios using the
-    standard dry-air mixing ratios :attr:`X_N2` and :attr:`X_O2`:
+    Weighted sum of the N2 and O2 squared anisotropy ratios
+    :math:`(\gamma / \alpha)^2` using the standard dry-air mixing
+    ratios :attr:`X_N2` and :attr:`X_O2`:
     :math:`\varepsilon_{\text{air}} = \varepsilon_{N_2} X_{N_2} +
     \varepsilon_{O_2} X_{O_2}`.
 
@@ -189,8 +196,8 @@ def epsilon_air(wavelength: NumericArrayLike) -> float | NDArray[np.floating]:
     Returns
     -------
     eps : float or ndarray
-        Dimensionless effective depolarization ratio of dry air.
-        Same shape as ``wavelength``.
+        Dimensionless squared anisotropy ratio of dry air. Same shape
+        as ``wavelength``.
 
     References
     ----------
@@ -208,9 +215,10 @@ def f0_air(
 ) -> float | NDArray[np.floating]:
     r"""Cabannes fraction of dry air (Kattawar's ``f0``).
 
-    Fraction of Rayleigh-scattered photons that are depolarized, i.e.
-    the probability that the scattered photon retains the polarization
-    memory. Computed from the dry-air depolarization ratio and the
+    Fraction of the molecular scattering that is elastic, in the
+    Cabannes line (the Rayleigh line and the Q branch), so that
+    ``1 - f0`` is the rotational Raman fraction. Computed from the
+    squared anisotropy ratio of dry air, :func:`epsilon_air`, and the
     scattering angle using the analytical expression given by
     Kattawar et al. (1981).
 
@@ -316,7 +324,7 @@ def f0_o2(
 def k_ratio(
     wavelength: NumericArrayLike, theta: float
 ) -> float | NDArray[np.floating]:
-    r"""Joiner's O2-to-N2 Cabannes ratio.
+    r"""Joiner's O2-to-N2 rotational Raman fraction ratio.
 
     Ratio :math:`K(\lambda, \theta) = (1 - f_0^{O_2}) /
     (1 - f_0^{N_2})` used to weight the O2 rotational Raman
@@ -560,10 +568,10 @@ def l_air(
 
     Combines the N2 and O2 rotational Raman line lists, weights them
     by the dry-air mixing ratios (``X_N2``, ``X_O2``) and Joiner's
-    O2-to-N2 Cabannes ratio :func:`k_ratio`, converts the frequency
-    shifts :math:`\Delta\nu` (cm:sup:`-1`) into output wavelengths
-    (nm), concatenates the four branches (Stokes/anti-Stokes for
-    N2/O2), normalises the resulting spectrum to unit area and sorts
+    O2-to-N2 Raman fraction ratio :func:`k_ratio`, converts the
+    frequency shifts :math:`\Delta\nu` (cm:sup:`-1`) into output
+    wavelengths (nm), concatenates the four branches (Stokes/anti-Stokes
+    for N2/O2), normalises the resulting spectrum to unit area and sorts
     it by increasing wavelength.
 
     Parameters
@@ -632,10 +640,10 @@ def l2d(
     Same physics as :func:`l_air`, but evaluated simultaneously for
     every excitation wavelength in ``wavelength``. The N2 and O2 line
     lists depend only on temperature and are reused across all
-    ``wavelength``; the wavelength-dependent Cabannes ratio
-    :func:`k_ratio` is broadcast
-    to weight each line. The output is sorted by increasing wavelength
-    along the last axis for each input excitation wavelength.
+    ``wavelength``; the wavelength-dependent O2-to-N2 Raman fraction
+    ratio :func:`k_ratio` is broadcast to weight each line. The output
+    is sorted by increasing wavelength along the last axis for each
+    input excitation wavelength.
 
     Parameters
     ----------
