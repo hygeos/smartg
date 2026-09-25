@@ -86,7 +86,6 @@ packages = [
     "smartg.src.incRNGs.Random123.conventional",
     "smartg.src.incRNGs.Random123.features",
     "smartg.tests",
-    "smartg.tests.aer_auxdata_ref",
     "smartg.tests.logs",
 ]
 
