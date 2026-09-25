@@ -17,6 +17,10 @@ from smartg.kdis import (
     reduce_kdis,
 )
 
+H = 6.62607015e-34  # J s
+C = 299792458.0  # m s-1
+K_B = 1.380649e-23  # J K-1
+
 
 def _iband(**fields: Any) -> KdisIband:
     """Stand in for a KdisIband with only the fields the tests read."""
@@ -125,6 +129,67 @@ def test_kdis_emission_returns_xarray_data_array() -> None:
     )
     np.testing.assert_array_equal(emission.z_atm.to_numpy(), [0.0, 1000.0])
     assert emission.shape == (3, 2)
+
+
+def _planck_channel(
+    wmin: float, wmax: float, temperature: float
+) -> float:
+    """Return the Planck radiance averaged over [wmin, wmax] in nm.
+
+    In W m-2 sr-1 nm-1, integrated here with the trapezoid rule on a
+    fine grid.
+    """
+    wavelength = np.linspace(wmin, wmax, 4001) * 1e-9  # m
+    radiance = (
+        2 * H * C**2 / wavelength**5
+        / np.expm1(H * C / (wavelength * K_B * temperature))
+    )  # W m-3 sr-1
+    return float(np.trapezoid(radiance, wavelength)) / (wmax - wmin)
+
+
+def test_kdis_emission_values() -> None:
+    """Check the emission against kabs times the channel Planck mean.
+
+    Thermal infrared channels, listed out of order, on the descending
+    altitudes in km of an Atm1D profile.
+    """
+    channels = [(12000.0, 13000.0), (10000.0, 11000.0), (12000.0, 13000.0)]
+    ibands = KdisIbandList(
+        [
+            _iband(
+                w=0.5 * (wmin + wmax), weight=1.0, ex=1.0, dl=wmax - wmin,
+                band=SimpleNamespace(wmin=wmin, wmax=wmax, band=0),
+            )
+            for wmin, wmax in channels
+        ]
+    )
+    t_atm = np.array([220.0, 250.0, 290.0])
+    # cumulated absorption optical depths, from the top at 2 km
+    od_abs = np.array(
+        [[0.0, 0.5, 1.5], [0.0, 0.1, 0.4], [0.0, 2.0, 2.5]]
+    )
+    dataset = xr.Dataset(
+        {
+            "OD_abs_atm": (("wavelength", "z_atm"), od_abs),
+            "T_atm": (("z_atm",), t_atm),
+        },
+        coords={
+            "wavelength": [12500.0, 10500.0, 12500.0],
+            "z_atm": [2.0, 1.0, 0.0],
+        },
+    )
+
+    emission = kdis_emission(dataset, ibands)
+
+    # km-1 over 1 km layers, in m-1; nothing above the top level
+    kabs = np.diff(od_abs, axis=1, prepend=0.0) * 1e-3
+    expected = np.array(
+        [
+            [_planck_channel(wmin, wmax, t) for t in t_atm]
+            for wmin, wmax in channels
+        ]
+    ) * kabs
+    np.testing.assert_allclose(emission.to_numpy(), expected, rtol=1e-6)
 
 
 def test_missing_model_raises(tmp_path: Path) -> None:
