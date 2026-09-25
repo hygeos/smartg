@@ -1359,9 +1359,11 @@ class Smartg:
         refraction : bool, optional
             If True include atmospheric refraction.
         reflectance : bool, optional
-           Convert output to reflectance units, otherwise in radiance
-           units with Solar irradiance set to PI. Only of flux is None
-           and for plane parallel atmosphere.
+            Convert output to reflectance units, otherwise in radiance
+            units with Solar irradiance set to PI. Only for the
+            spherical atmosphere (pp=False) and flux None: in plane
+            parallel geometry the output is always in reflectance
+            units, and False has no effect.
         my_objects : None | list, optional
             A list of 3d objects (Entity objects) that will be used in
             the simulation. Currently sphere and plane objects are
