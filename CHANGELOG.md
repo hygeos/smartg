@@ -916,6 +916,11 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.rrs.l2d`, which raised a `TypeError` on every call since
+    v2.0.0dev2 (`np.atleast_1d` was given a `dtype`), and
+    `smartg.rrs.bjm_minus`, which raised one for a scalar `j`, as its
+    docstring allows. The Raman path of `Smartg.run` uses `l2d_inv` and
+    was not affected
   - Fix `Smartg.run(cell_proba='auto')` (forward thermal mode): the
     probability of each level to emit took the Planck function at the
     wavelength in nm read as metres, where it is proportional to the

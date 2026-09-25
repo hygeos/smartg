@@ -418,10 +418,9 @@ def bjm_minus(j: NumericArrayLike) -> float | NDArray[np.floating]:
             f"got dtype {j_arr.dtype!r}"
         )
     j = j_arr.astype(np.int32)
-    bjm_minus = 3.0 * j * (j - 1) / 2.0 / (
-        2 * j + 1
-    ) / (2 * j - 1)
-    bjm_minus[j <= 1] = 0.0
+    bjm_minus = np.where(
+        j <= 1, 0.0, 3.0 * j * (j - 1) / 2.0 / (2 * j + 1) / (2 * j - 1)
+    )
     if bjm_minus.ndim == 0:
         bjm_minus = float(bjm_minus)
     return bjm_minus
@@ -664,7 +663,7 @@ def l2d(
        https://doi.org/10.1364/AO.34.004513
     """
     wavelength = np.atleast_1d(np.asarray(wavelength, dtype=np.float64))
-    kk = np.atleast_1d(k_ratio(wavelength, theta), dtype=np.float64)
+    kk = np.asarray(k_ratio(wavelength, theta), dtype=np.float64)
     nlam = wavelength.size
     dnu_stk_n2, lj_stk_n2, dnu_astk_n2, lj_astk_n2 = l_n2(t)
     dnu_stk_o2, lj_stk_o2, dnu_astk_o2, lj_astk_o2 = l_o2(t)
