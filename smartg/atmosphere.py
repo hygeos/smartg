@@ -4010,7 +4010,7 @@ class Atm1D(Atmosphere):
         np.ndarray,
         np.ndarray,
         tuple[np.ndarray, np.ndarray],
-        tuple[np.ndarray, list[xr.DataArray]],
+        tuple[np.ndarray, list[xr.DataArray]] | None,
     ]:
         """Compute the atmospheric optical properties at wavelengths.
 
@@ -4038,32 +4038,33 @@ class Atm1D(Atmosphere):
         Returns
         -------
         prof_abs : ndarray
-            Gaseous absorption coefficient [wavelength, altitude]
-            (km⁻¹).
-            Differential optical thickness for absorption from cumulated
+            Gaseous absorption optical thickness of each layer
+            [wavelength, altitude], the differences of the cumulated
             profile.
         prof_ray : ndarray
-            Rayleigh scattering coefficient [wavelength, altitude]
-            (km⁻¹).
-            Differential optical thickness for Rayleigh from cumulated
-            profile.
+            Rayleigh scattering optical thickness of each layer
+            [wavelength, altitude].
         (prof_aer, ssa_aer) : tuple
             Aerosol profiles with:
 
-            - prof_aer: Aerosol extinction coefficient [wavelength,
-              altitude] (km⁻¹)
+            - prof_aer: Particle extinction optical thickness of each
+              layer [wavelength, altitude]
             - ssa_aer: Particle single scattering albedo [wavelength,
               altitude]
 
-        (pro_iphase, pro_phases) : tuple
+        (pro_iphase, pro_phases) : tuple or None
             Phase function profiles with:
 
             - pro_iphase: Phase matrix indices array [wavelength,
               altitude]
             - pro_phases: List of xarray.DataArray phase matrices (one
               per phase index). Each entry is an `xr.DataArray`
-              representing the phase matrix for that phase index
-              (dimensions typically ['stk', 'theta_atm']).
+              representing the phase matrix for that phase index,
+              over ('nphamat', 'theta_atm').
+
+            None when the profile carries no phase matrix: with
+            ``phase=False`` (unless the atmosphere was built with
+            `prof_phases`), or without any aerosol or cloud component.
 
         Notes
         -----
@@ -4094,6 +4095,8 @@ class Atm1D(Atmosphere):
         ssa_aer = pro["ssa_p_atm"].values
         pro_ray = diff1(pro["OD_r"].values.astype(np.float32), axis=1)
         pro_abs = diff1(pro["OD_g"].values.astype(np.float32), axis=1)
+        if "phase_atm" not in pro:
+            return pro_abs, pro_ray, (pro_aer, ssa_aer), None
         pro_iphase = pro["iphase_atm"].values
         pro_phases = [
             pro["phase_atm"].sel(iphase=i)

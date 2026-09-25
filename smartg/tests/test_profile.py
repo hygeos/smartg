@@ -136,3 +136,28 @@ def test_refractivity_of_standard_air() -> None:
     # the standard conditions
     pro = Atm1D("afglus").calc(550.0)
     assert 2.7e-4 < pro["n_atm"].values[0, -1] - 1.0 < 2.9e-4
+
+
+def test_calc_split_without_phase_matrices() -> None:
+    """calc_split gives no phase profile when there is no matrix.
+
+    With phase=False, or without any component: it raised a KeyError
+    on 'iphase_atm'. Its per-layer optical thicknesses rebuild the
+    profile, but for the optical thickness above the top level.
+    """
+    atm = Atm1D("afglus", comp=[AerOPAC("desert", 0.1, 550.0)])
+    prof_abs, prof_ray, prof_aer, prof_phases = atm.calc_split(
+        500.0, phase=False
+    )
+    assert prof_phases is None
+    assert Atm1D("afglus").calc_split(500.0)[3] is None
+
+    pro = atm.calc(500.0, phase=False)
+    rebuilt = Atm1D(
+        "afglus", prof_abs=prof_abs, prof_ray=prof_ray, prof_aer=prof_aer,
+        prof_phases=prof_phases,
+    ).calc(500.0, phase=False)
+    for name in ("OD_p", "OD_r", "OD_g"):
+        np.testing.assert_allclose(
+            rebuilt[name].values, pro[name].values, rtol=1e-5, atol=1e-8
+        )

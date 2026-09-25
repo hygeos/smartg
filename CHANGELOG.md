@@ -1009,6 +1009,11 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix `Atm1D.calc_split(phase=False)`, and `calc_split` on an atmosphere
+    without any component, which raised a `KeyError` on `iphase_atm`: the
+    phase profile is then returned as None, which `Atm1D(prof_phases=...)`
+    accepts. Its docstring now calls the profiles it returns the optical
+    thicknesses of the layers, not coefficients
   - Fix the 2-D user `phase` of `AerOPAC` and `Cloud`, documented as
     constant vertically, which raised an xarray error in `Atm1D.calc` at
     several wavelengths or with a `pfgrid` of several layers: it is now
