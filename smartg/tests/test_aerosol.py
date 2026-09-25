@@ -212,8 +212,8 @@ def test_aer_mixtures(request: pytest.FixtureRequest, mix: str) -> None:
 
     assert np.all(
         np.isclose(
-            pro["phase_atm"].values[:, :4, :],
-            pro_ref["phase_atm"].values[:, :4, :],
+            pro["phase_atm"].values,
+            pro_ref["phase_atm"].values,
             atol=1e-5,
             rtol=1e-3,
         )
@@ -336,8 +336,8 @@ def test_aer_species(request: pytest.FixtureRequest, spe: str) -> None:
 
     assert np.all(
         np.isclose(
-            pro["phase_atm"].values[:, 0:4, :],
-            pro_ref["phase_atm"].values[:, 0:4, :],
+            pro["phase_atm"].values,
+            pro_ref["phase_atm"].values,
             atol=1e-5,
             rtol=1e-3,
         )
@@ -455,8 +455,8 @@ def test_desert_free_stra(request: pytest.FixtureRequest) -> None:
 
     assert np.all(
         np.isclose(
-            pro["phase_atm"].values[:, 0:4, :],
-            pro_ref["phase_atm"].values[:, 0:4, :],
+            pro["phase_atm"].values,
+            pro_ref["phase_atm"].values,
             atol=1e-5,
             rtol=1e-3,
         )
@@ -593,8 +593,8 @@ def test_dd_cc_mixture(request: pytest.FixtureRequest) -> None:
 
     assert np.all(
         np.isclose(
-            pro["phase_atm"].values[:, 0:4, :],
-            pro_ref["phase_atm"].values[:, 0:4, :],
+            pro["phase_atm"].values,
+            pro_ref["phase_atm"].values,
             atol=1e-5,
             rtol=1e-3,
         )
@@ -698,8 +698,8 @@ def test_desert_one_wavelength(request: pytest.FixtureRequest) -> None:
     ipha_ref = pro_ref["iphase_atm"][0, :].values
     assert np.all(
         np.isclose(
-            pro["phase_atm"].values[ipha, 0:4, :],
-            pro_ref["phase_atm"].values[ipha_ref, 0:4, :],
+            pro["phase_atm"].values[ipha],
+            pro_ref["phase_atm"].values[ipha_ref],
             atol=1e-5,
             rtol=1e-3,
         )
