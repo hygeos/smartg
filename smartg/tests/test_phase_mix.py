@@ -521,7 +521,7 @@ def test_3d_native_mixture_lives_on_the_union() -> None:
     expected = (
         e_c[1] * s_c[1] * p_c[i_c[1]].values
         + e_a[0] * s_a[0] * p_a[i_a[0]].values
-    ) / (e_c[1] + e_a[0])
+    ) / (e_c[1] * s_c[1] + e_a[0] * s_a[0])
     np.testing.assert_allclose(
         _voxel(pro, grid3, (1, 0, 1)), expected, rtol=1e-5, atol=1e-9
     )

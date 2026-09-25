@@ -4888,7 +4888,10 @@ class Atm3D(Atmosphere):
 
             # the phase matrices, wavelength by wavelength: the 1D
             # aerosol of each level, then the mixture of each cell,
-            # weighted by the extinctions at the phase wavelengths
+            # weighted by the scattering coefficients at the phase
+            # wavelengths and normalized by their sum, as in
+            # `Atm1D._mix_phases`: the local estimate reads the matrix
+            # as it is, the absorption being accounted for apart
             assert ipha_aer_1d is not None
             phases = []
             for i_wavelength in range(len(wavelength_pha)):
@@ -4897,9 +4900,13 @@ class Atm3D(Atmosphere):
                     phases.append(
                         phase_aer_1d.isel(iphase=ipha_aer_1d[row, iz])
                     )
-                ssa_aer_tmp = ssa_aer_1d[row, idz_atm]
-                ext_aer_tmp = ext_aer_1d[row, idz_atm]
-                ext_mix_tmp = ext_aer_tmp + ext_3d_pha[i_wavelength, :]
+                sca_aer_tmp = (
+                    ext_aer_1d[row, idz_atm] * ssa_aer_1d[row, idz_atm]
+                )
+                sca_cld_tmp = (
+                    ext_3d_pha[i_wavelength, :] * ssa_3d_pha[i_wavelength, :]
+                )
+                sca_mix_tmp = sca_aer_tmp + sca_cld_tmp
 
                 for icell in range(n_cell):
                     pha_cld_tmp = cld_phases[
@@ -4908,18 +4915,15 @@ class Atm3D(Atmosphere):
                     pha_aer_tmp = phase_aer_1d.isel(
                         iphase=ipha_aer_1d[row, idz_atm[icell]]
                     )
-                    pha_tot = (
-                        (
-                            pha_aer_tmp
-                            * ext_aer_tmp[icell]
-                            * ssa_aer_tmp[icell]
-                        )
-                        + (
-                            pha_cld_tmp
-                            * ext_3d_pha[i_wavelength, icell]
-                            * ssa_3d_pha[i_wavelength, icell]
-                        )
-                    ) / ext_mix_tmp[icell]
+                    if sca_mix_tmp[icell] > 0.0:
+                        pha_tot = (
+                            pha_aer_tmp * sca_aer_tmp[icell]
+                            + pha_cld_tmp * sca_cld_tmp[icell]
+                        ) / sca_mix_tmp[icell]
+                    else:
+                        # never sampled (no scattering): keep a valid
+                        # unweighted matrix rather than a null one
+                        pha_tot = pha_cld_tmp
                     phases.append(pha_tot)
 
             # the mixed extinctions and ssa of the profile, at the
@@ -4979,8 +4983,8 @@ class Atm3D(Atmosphere):
         In each cell the extinctions are summed, the single
         scattering albedos are extinction-weighted and the phase
         matrices are weighted by the scattering coefficients and
-        normalized by the total extinction, following the 1D/3D
-        mixing conventions of `_glob_particles`.
+        normalized by their sum, following the 1D/3D mixing
+        conventions of `_glob_particles`.
         """
         nz = self.grid_3d.NZ
         nbz = nz + 1
@@ -5058,10 +5062,10 @@ class Atm3D(Atmosphere):
         )
 
         # the mixed phase matrices, one per cell and per phase
-        # wavelength, weighted by the extinctions at the phase
-        # wavelengths (sharing the matrices of the cells occupied by
-        # a single component is a possible future memory
-        # optimization)
+        # wavelength, weighted by the scattering coefficients at the
+        # phase wavelengths and normalized by their sum (sharing the
+        # matrices of the cells occupied by a single component is a
+        # possible future memory optimization)
         phases = []
         for i_wavelength in range(len(wavelength_pha)):
             row = row_1d[i_wavelength]
@@ -5074,17 +5078,16 @@ class Atm3D(Atmosphere):
             for icell in range(n_cell):
                 pha_tot = None
                 pha_first = None
-                ext_tot = 0.0
+                sca_tot = 0.0
                 if phase_aer_1d is not None:
                     assert ipha_aer_1d is not None
                     idz = idz_atm[icell]
                     pha_first = phase_aer_1d.isel(
                         iphase=ipha_aer_1d[row, idz]
                     )
-                    pha_tot = pha_first * (
-                        ext_aer_1d[row, idz] * ssa_aer_1d[row, idz]
-                    )
-                    ext_tot += ext_aer_1d[row, idz]
+                    sca = ext_aer_1d[row, idz] * ssa_aer_1d[row, idz]
+                    pha_tot = pha_first * sca
+                    sca_tot += sca
                 for icomp in range(len(self.comp_3d)):
                     iloc = local_pos[icomp, icell]
                     if iloc < 0:
@@ -5095,20 +5098,21 @@ class Atm3D(Atmosphere):
                     ]
                     if pha_first is None:
                         pha_first = pha_cld
-                    pha_comp = pha_cld * (
+                    sca = (
                         ext_3d_pha[icomp][i_wavelength, iloc]
                         * ssa_3d_pha[icomp][i_wavelength, iloc]
                     )
+                    pha_comp = pha_cld * sca
                     pha_tot = (
                         pha_comp if pha_tot is None
                         else pha_tot + pha_comp
                     )
-                    ext_tot += ext_3d_pha[icomp][i_wavelength, iloc]
+                    sca_tot += sca
                 assert pha_tot is not None and pha_first is not None
-                if ext_tot > 0.0:
-                    pha_tot = pha_tot / ext_tot
+                if sca_tot > 0.0:
+                    pha_tot = pha_tot / sca_tot
                 else:
-                    # never sampled (zero extinction): keep a valid
+                    # never sampled (no scattering): keep a valid
                     # unweighted matrix rather than a null one
                     pha_tot = pha_first
                 phases.append(pha_tot)

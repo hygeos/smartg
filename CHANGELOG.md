@@ -1013,6 +1013,15 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix the phase matrices `Atm3D` mixes in the cells shared by several
+    3D components, or by a component and the 1D aerosols: normalized by
+    the total extinction instead of the total scattering, they were
+    scaled by the single scattering albedo of the cell particles, which
+    the local estimate, reading the matrix as it is, carried into the
+    radiance (11 % low for a desert aerosol cell next to another
+    component), and which biased the ALIS mixture ratios. They are now
+    normalized as in `Atm1D`. The IPRT C3 cells, a cloud of albedo
+    close to 1, change below the Monte Carlo noise
   - Fix `Atm3D(wavelength_phase=...)` with a number of phase wavelengths
     other than the number of profile wavelengths, which raised a
     `CoordinateValidationError` whenever the profile carried phase

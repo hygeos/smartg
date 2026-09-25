@@ -8,7 +8,9 @@ verify the Aer3D input routes and optical properties against the
 OPAC auxdata, and the per-voxel mixing rules on the profile dataset
 returned by Atm3D.calc: the extinctions are summed, the single
 scattering albedos are extinction-weighted and the phase matrices
-are weighted by the scattering coefficients. The last tests truncate
+are weighted by the scattering coefficients, and normalized by their
+sum, so that a mixed matrix keeps the normalization of the component
+ones: the local estimate reads it as it is. The last tests truncate
 one component, alone, before the mixing.
 """
 
@@ -204,7 +206,7 @@ def test_phase_mixing_shared_voxel(scene: Scene) -> None:
     _, _, pha = _voxel_props(pro, grid3, IC_CELL)
     j = WC_CELLS.index(IC_CELL)
     expected = (e1[j] * s1[j] * p1[j] + e2[0] * s2[0] * p2[0]) / (
-        e1[j] + e2[0]
+        e1[j] * s1[j] + e2[0] * s2[0]
     )
     assert np.allclose(pha, expected, rtol=1e-5, atol=1e-9)
     # the ice crystals are non-spherical: F22 differs from F11 in the
@@ -214,20 +216,18 @@ def test_phase_mixing_shared_voxel(scene: Scene) -> None:
 
 def test_phase_single_component_voxels(scene: Scene) -> None:
     # in the water-only voxels the stored matrix is the water cloud
-    # one, scaled by its single scattering albedo (the mixed matrices
-    # are normalized by the total extinction, not by the total
-    # scattering; the scale is harmless as the phase matrices are
-    # normalized when sampling the scattering angle)
+    # one, as it is: normalized by the extinction instead of the
+    # scattering, it was scaled by the single scattering albedo, which
+    # the local estimate, reading the matrix as it is, carried into
+    # the radiance
     """Check that a lone component keeps its own phase matrix."""
     grid3, cld1, _, pro = scene
-    _, s1, p1 = _expected(cld1)
+    _, _, p1 = _expected(cld1)
     for j, cell in enumerate(WC_CELLS):
         if cell == IC_CELL:
             continue
         _, _, pha = _voxel_props(pro, grid3, cell)
-        assert np.allclose(
-            pha, s1[j] * p1[j], rtol=1e-5, atol=1e-9
-        ), cell
+        assert np.allclose(pha, p1[j], rtol=1e-5, atol=1e-9), cell
         # water droplets are spherical: F22 == F11
         assert np.allclose(pha[4], pha[0], rtol=1e-12), cell
 
@@ -563,7 +563,7 @@ def test_cloud_aerosol_mixing(aer_scene: AerScene) -> None:
         ), cell
         expected = (
             e_c[j] * s_c[j] * p_c[j] + e_a[j] * s_a[j] * p_a[j]
-        ) / ext_tot
+        ) / (e_c[j] * s_c[j] + e_a[j] * s_a[j])
         assert np.allclose(pha, expected, rtol=1e-5, atol=1e-9), cell
         # the non-spherical desert makes F22 differ from F11 even
         # though the water droplets are spherical
@@ -601,11 +601,13 @@ def test_two_aerosols_mixing() -> None:
     )
     expected = (
         e_d[1] * s_d[1] * p_d[1] + e_c[0] * s_c[0] * p_c[0]
-    ) / ext_tot
+    ) / (e_d[1] * s_d[1] + e_c[0] * s_c[0])
     assert np.allclose(pha, expected, rtol=1e-5, atol=1e-9)
 
-    # desert-only voxel: non-spherical signature
+    # desert-only voxel: its own matrix, not scaled by its single
+    # scattering albedo (about 0.9), with the non-spherical signature
     _, _, pha = _voxel_props(pro, grid3, (0, 0, 1))
+    assert np.allclose(pha, p_d[0], rtol=1e-5, atol=1e-9)
     assert np.max(np.abs(pha[4] - pha[0])) > 0.0
     # continental-only voxel: spherical, F22 == F11
     _, _, pha = _voxel_props(pro, grid3, (2, 0, 1))
@@ -676,7 +678,9 @@ def test_1d_aerosol_of_the_cell_layer(n_comp: int) -> None:
         assert np.isclose(
             ssa, (e_c[j] * s_c[j] + e_b * s_b) / ext_tot, rtol=1e-6
         ), cell
-        expected = (e_c[j] * s_c[j] * p_c[j] + e_b * s_b * p_b) / ext_tot
+        expected = (e_c[j] * s_c[j] * p_c[j] + e_b * s_b * p_b) / (
+            e_c[j] * s_c[j] + e_b * s_b
+        )
         assert np.allclose(pha, expected, rtol=1e-5, atol=1e-9), cell
     # the two layers hold different amounts of aerosol, so that the
     # test tells the layer of a cell from its neighbours
@@ -810,7 +814,7 @@ def test_truncated_component_in_shared_voxels(
         ), cell
         expected = (
             e_c[j] * s_c[j] * p_c[j] + e_a[j] * s_a[j] * p_a[j]
-        ) / ext_tot
+        ) / (e_c[j] * s_c[j] + e_a[j] * s_a[j])
         assert np.allclose(pha, expected, rtol=1e-9, atol=1e-12), cell
 
 
