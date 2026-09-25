@@ -726,7 +726,9 @@ def build_cloud_c3(
     n_theta : int
         Number of scattering angles of the phase matrices.
     scale : float
-        Factor applied to the grid.
+        Factor applied to the grid, e.g. to test cells of a very small
+        size. The extinction coefficients are divided by it, so that
+        the optical depths do not change, as in build_atm_c2.
 
     Returns
     -------
@@ -739,19 +741,23 @@ def build_cloud_c3(
         DIR_PHASE_B / "opt_prop" / "watercloud_670.mie.cdf",
         n_theta=n_theta, normalize=False, output_sg_ready=False,
     )
+    ds_cld = read_i3rc_cloud(DIR_PHASE_B / "grids" / "cumulus.dat",
+                             loc_xgrid=0, loc_ygrid=0)
+    ds_cld = ds_cld.assign(ext=ds_cld["ext"] / scale).assign_coords(
+        {name: ds_cld[name] * scale
+         for name in ("x_bounds", "y_bounds", "z_bounds")}
+    )
     cloud3 = Cloud3D(
         "wc",
         w_ref=WAVELENGTH_C3,
-        ds=read_i3rc_cloud(DIR_PHASE_B / "grids" / "cumulus.dat",
-                           loc_xgrid=0, loc_ygrid=0),
+        ds=ds_cld,
         phase=cld_phase,
         reff_acc=1,
         reff_min=5,
     )
 
     xgrid, ygrid, zgrid = cloud3.get_xyz_grid()
-    grid3 = Grid3D(xgrid * scale, ygrid * scale, zgrid * scale,
-                   periodic=True)
+    grid3 = Grid3D(xgrid, ygrid, zgrid, periodic=True)
 
     return cloud3, grid3
 

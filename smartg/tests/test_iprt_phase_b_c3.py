@@ -524,3 +524,19 @@ def test_c3_aer_backward_gt(
         MEAN_REF_AER_B_GT.get(case), signal_ref, iquv_sg, label
     )
     assert not errors, "\n".join(errors)
+
+
+def test_build_cloud_c3_scale_keeps_optical_depths() -> None:
+    """A scaled grid has its extinctions divided by the scale."""
+    cloud, grid = build_cloud_c3(n_theta=181)
+    cloud_half, grid_half = build_cloud_c3(n_theta=181, scale=0.5)
+    for axis in ("xGRID", "yGRID", "zGRID"):
+        np.testing.assert_allclose(
+            getattr(grid_half, axis), 0.5 * getattr(grid, axis)
+        )
+    np.testing.assert_array_equal(
+        cloud_half.get_cell_indices(), cloud.get_cell_indices()
+    )
+    np.testing.assert_allclose(
+        cloud_half.get_ext_ref(), 2.0 * cloud.get_ext_ref()
+    )
