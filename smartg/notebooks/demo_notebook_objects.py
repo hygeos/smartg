@@ -680,7 +680,8 @@ wavelength_bath = np.array([490., 550., 670.])   # [nm]
 
 # ── Coastal environment (AlbedoMap, env=5) ──────────────────────────
 #   x < 0 : land  (environment index 0 → AlbedoCst(0.10))
-#   x ≥ 0 : ocean (environment index -1 → surface + water from run())
+#   x ≥ 0 : ocean (environment index -1 → surface + water from run(),
+#           with the albedo 1 of the list, AlbedoCst(0.20), as seafloor)
 #
 # AlbedoMap x-bins: (-inf, 0] = land, (0, +inf) = ocean
 x_env = np.array([0., 1e8])   # [km] upper edges of x-bins
@@ -688,7 +689,8 @@ y_env = np.array([1e8])       # single y-bin (whole domain)
 ai_coast = np.array([[0],     # bin x<=0 : land (alb list index 0)
                      [-1]])   # bin x>0  : ocean (negative → surface)
 alb_land = AlbedoCst(0.10)
-alb_coast = AlbedoMap(ai_coast, x_env, y_env, [alb_land])
+alb_sand = AlbedoCst(0.20)    # seafloor of the ocean cells coded -1
+alb_coast = AlbedoMap(ai_coast, x_env, y_env, [alb_land, alb_sand])
 env_coast = Environment(env=5, x0=0., y0=0., alb=alb_coast)
 
 # ── Surface and atmosphere ──────────────────────────────────────────
@@ -715,7 +717,9 @@ print(f"Ocean depths to simulate [m]: {depths}")
 #               (chl = 0.1 mg/m³)
 #  seafloor:    AlbedoCst(0.20) — sandy/coral bottom (20% reflectance)
 #  alb in Water1D is the *seafloor* albedo; grid sets the water-column
-#  thickness.
+#  thickness. Below the ocean cells of the map, coded -1, the seafloor
+#  albedo is the one of index 1 of the map list, the same sand here;
+#  the one of Water1D applies below the land cells.
 #
 #  Note: SmartG's ocean is 1-D (a single global water profile per
 #  run), so we run once per representative depth and then assemble a

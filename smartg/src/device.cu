@@ -5962,10 +5962,14 @@ __device__ void surfaceLambert(Photon* ph, int le,
         #ifndef OPT3D
 		ph->layer = NOCEd; 
         #endif
-        if (ENVd==5) {
-            int ispec = -GetEnvIndex(ph->pos, envmap);
-            ph->nenvs[ispec]+=1;
-            ph->weight *= spectrum[ph->ilam].alb_envs[ispec];
+        // With an albedo map, a water cell coded -k has the albedo k of
+        // the map as seafloor. Below a land cell (code >= 0), which a
+        // photon reaches travelling under the coast, the seafloor keeps
+        // the albedo of the water profile.
+        int ispec = (ENVd==5) ? GetEnvIndex(ph->pos, envmap) : 0;
+        if (ispec < 0) {
+            ph->nenvs[-ispec]+=1;
+            ph->weight *= spectrum[ph->ilam].alb_envs[-ispec];
         }
 		else {
             ph->weight *= spectrum[ph->ilam].alb_seafloor; /*[Eq. 16,39]*/

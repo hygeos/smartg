@@ -1992,6 +1992,7 @@ class Smartg:
             albenv = environment.alb.get(wavelength[:])
             if albenv.ndim == 2:
                 assert isinstance(environment.alb, AlbedoMap)
+                _check_albedo_map_codes(environment.alb, water is not None)
                 environment.nenv = albenv.shape[1]
                 spectrum['alb_envs'][:, : environment.nenv] = albenv
                 shp = environment.alb.map.data.shape
@@ -2416,6 +2417,40 @@ class Smartg:
             clear_context_caches()
 
         return output
+
+
+def _check_albedo_map_codes(albedo_map: AlbedoMap, water: bool) -> None:
+    """Check that the codes of an env=5 albedo map address its albedos.
+
+    A cell coded k >= 0 has the albedo ``albedo_map.list[k]``. A cell
+    coded -k has the surface of the run instead; with water, the
+    albedo k of the list is also the one of the seafloor below it.
+
+    Parameters
+    ----------
+    albedo_map : AlbedoMap
+        The albedo map of the Environment.
+    water : bool
+        Whether the run has water.
+
+    Raises
+    ------
+    ValueError
+        If a code addresses no albedo of the list.
+    """
+    codes = np.asarray(albedo_map.map.data)
+    n_alb = albedo_map.nalb
+    if codes.max() >= n_alb:
+        raise ValueError(
+            f"the albedo map has a cell coded {codes.max()}, but its "
+            f"list holds {n_alb} albedos"
+        )
+    if water and -codes.min() >= n_alb:
+        raise ValueError(
+            f"the albedo map has a water cell coded {codes.min()}, whose "
+            f"seafloor has the albedo {-codes.min()} of the list, but the "
+            f"list holds {n_alb} albedos"
+        )
 
 
 def _emission_proba(

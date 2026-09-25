@@ -210,15 +210,21 @@ class AlbedoMap:
     ``+Inf`` (and similarly for ``y``).
 
     Each rectangle is assigned an index in ``alist`` through the 2D
-    array ``ai`` of shape ``(len(x), len(y))``. Negative indices are
-    reserved for surface properties.
+    array ``ai`` of shape ``(len(x), len(y))``. A negative index -k
+    marks a rectangle where the surface of the run applies instead
+    (for instance the sea, with its water): there ``alist[k]`` is the
+    albedo of the seafloor, which replaces the one of the water
+    profile, so that -k then needs ``k < len(alist)`` (and ``k >= 1``,
+    since -0 is 0). Below a rectangle of index k >= 0, the seafloor
+    keeps the albedo of the water profile.
 
     Parameters
     ----------
     ai : ndarray of int
         2D array of shape ``(len(x), len(y))`` giving, for each grid
-        cell, the index of the corresponding albedo in ``alist``.
-        Negative indices are reserved for surface properties.
+        cell, the index of the corresponding albedo in ``alist``, or
+        -k for the surface of the run with the seafloor albedo
+        ``alist[k]``.
     x : ndarray
         Monotonic array of upper ``x`` boundaries (km) of the grid
         cells.

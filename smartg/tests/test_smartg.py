@@ -728,3 +728,39 @@ def test_albedo_map_near_the_origin_in_spherical_mode() -> None:
     white, black = m["I_up (TOA)"].values.ravel()
     assert white > 0.5
     assert black < 1e-6
+
+
+def test_albedo_map_seafloor_below_the_land() -> None:
+    """Check the seafloor below the land cells of an albedo map.
+
+    The sensor looks at the sea near the coast, obliquely, so that the
+    photons refracted into the water reach the seafloor below the land
+    cell. There the seafloor keeps the albedo of the water profile,
+    the same as the one the map gives below the sea cells here, so the
+    radiance must be the one of a map of sea only.
+    """
+    sg = Smartg(back=True)
+    water = Water1D(
+        grid=[0.0, -5.0], comp=[HydrosolPR(chl=0.01)], alb=AlbedoCst(0.5)
+    )
+    alist = [AlbedoCst(0.2), AlbedoCst(0.5)]
+    runs = []
+    for seed, codes in ((91, [[1], [-1]]), (92, [[-1], [-1]])):
+        albedo_map = AlbedoMap(
+            np.array(codes), np.array([0.0, 1e8]), np.array([1e8]), alist
+        )
+        runs.append(sg.run(
+            550.0,
+            surface=RoughSurface(),
+            water=water,
+            environment=Environment(env=5, alb=albedo_map),
+            sensor=Sensor(
+                pos_x=0.5, th_deg=120.0, ph_deg=180.0, loc="SURF0P"
+            ),
+            le=LocalEstimate(th_deg=[30.0], phi_deg=[0.0], count_level=[0]),
+            n_photons=1e6,
+            stdev=True,
+            seed=seed,
+            progress=False,
+        ))
+    assert np.all(np.abs(_z_scores(runs[0], runs[1], "up (TOA)")) < 5)

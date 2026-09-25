@@ -1015,6 +1015,17 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the seafloor of `Environment(env=5)` with water below a land cell
+    of the `AlbedoMap`, reached by photons travelling under the coast:
+    the kernel read the albedo before the start of the albedo list, 0 or
+    another field of the spectrum, and overwrote the photon's counter of
+    environment reflections. The seafloor there now keeps the albedo of
+    the water profile. Below a water cell coded -k it is the albedo k of
+    the list, as before; this convention is now documented in `AlbedoMap`
+    and `Environment`, and `Smartg.run` raises a `ValueError` for a code
+    outside the list. The bathymetry section of `demo_notebook_objects`
+    gave its ocean cells a black seafloor instead of the sand it
+    describes
   - Fix the albedo map of `Environment(env=5)` in spherical mode
     (`pp=False`): the distance to the origin of the map was the arc cosine
     of a single precision cosine, which rounds to 1 near the origin, so

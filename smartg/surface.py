@@ -420,13 +420,14 @@ class Environment:
                 Abs(X) <= env_size, -4 for Abs(X) >= env_size
         *  5 -> 2D horizontal map of albedos for the whole
                 surface, need alb to be an AlbedoMap object. A
-                cell of index i >= 0 of the map is a lambertian
-                reflector of albedo alist[i]. A cell of negative
-                index -i takes the surface given to the Smartg run
-                method, and a photon reaching the sea floor below
-                it is reflected with the albedo alist[i] instead
-                of the sea floor albedo of the water profile (a
-                black one if alist has no entry i)
+                cell of index k >= 0 of the map is a lambertian
+                reflector of albedo alist[k], above a sea floor that
+                keeps the albedo of the water profile. A cell of
+                negative index -k takes the surface given to the
+                Smartg run method, and a photon reaching the sea
+                floor below it is reflected with the albedo alist[k]
+                instead of the sea floor albedo of the water profile
+                (so 1 <= k < len(alist), which the run checks)
 
         Whatever `env`, the Smartg run method needs a surface when an
         environment is given, and raises a ValueError otherwise.
