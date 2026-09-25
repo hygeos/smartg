@@ -7478,31 +7478,18 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           dwsca=(double)wsca;
           dwabs=(double)wabs;
 
-		  #if __CUDA_ARCH__ >= 600
-          atomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
-          atomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
-		  atomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-          atomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
+          // the native double atomicAdd, or DatomicAdd before the GTX 1000
+          atomicAddW(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
+          atomicAddW(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
+          atomicAddW(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
+          atomicAddW(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
           if (ph->no_aer)
           {
-            atomicAdd(tabCountNoAer+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
-            atomicAdd(tabCountNoAer+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
-		    atomicAdd(tabCountNoAer+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-            atomicAdd(tabCountNoAer+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
+            atomicAddW(tabCountNoAer+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
+            atomicAddW(tabCountNoAer+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
+            atomicAddW(tabCountNoAer+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
+            atomicAddW(tabCountNoAer+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
           }
-		  #else
-		  // If GTX 1000 || more recent use native double atomic add
-          DatomicAdd(tabCount+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
-          DatomicAdd(tabCount+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
-          DatomicAdd(tabCount+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-          DatomicAdd(tabCount+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
-          {
-            DatomicAdd(tabCountNoAer+(0*II+JJ), dweight * dwsca * dwabs * (ds.x+ds.y));
-            DatomicAdd(tabCountNoAer+(1*II+JJ), dweight * dwsca * dwabs * (ds.x-ds.y));
-            DatomicAdd(tabCountNoAer+(2*II+JJ), dweight * dwsca * dwabs * ds.z);
-            DatomicAdd(tabCountNoAer+(3*II+JJ), dweight * dwsca * dwabs * ds.w);
-          }
-		  #endif		  
 
           #else
           tabCount = (float*)tabPhotons + count_level*JJJ;
@@ -7679,14 +7666,10 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
             float d_n = ph->cdist_atm[n+1];
             LL = (n+NOCE_ABSd)*K*TABDIST_NIAMF*NSCLd + is*NBPHId*NBTHETAd*TABDIST_NIAMF*NSCLd + ith*NBPHId*TABDIST_NIAMF*NSCLd + iphi*TABDIST_NIAMF*NSCLd + iclass*TABDIST_NIAMF + 0;
             //LL = (n+NOCE_ABSd)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-            #if __CUDA_ARCH__ >= 600
-            atomicAdd(tabCount2+LL,   (double)w_n);
-            atomicAdd(tabCount2+LL+1, (double)d_n * (double)w_n);
+            atomicAddW(tabCount2+LL,   (double)w_n);
+            atomicAddW(tabCount2+LL+1, (double)d_n * (double)w_n);
             #ifdef AMF_VARIANCE
-            atomicAdd(tabCount2+LL+2, (double)d_n * (double)d_n * (double)w_n);
-            #endif
-            #else
-            DatomicAdd(tabCount2+LL, (double)ph->cdist_atm[n+1]);
+            atomicAddW(tabCount2+LL+2, (double)d_n * (double)d_n * (double)w_n);
             #endif
           }
        #else
@@ -8508,7 +8491,8 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
 }
 #endif
 
-#if defined(DOUBLE) && (!(__CUDA_ARCH__ >= 600) || defined(FORCE_DATOMICADD))
+// (reduce_absorption_gpu accumulates doubles in single precision too)
+#if !(__CUDA_ARCH__ >= 600) || (defined(DOUBLE) && defined(FORCE_DATOMICADD))
 __device__ double DatomicAdd(double* address, double val)
 {
         unsigned long long int* address_as_ull =
@@ -9325,7 +9309,7 @@ __global__ void reduce_absorption_gpu(unsigned long long NPHOTON, unsigned long 
               ns = s + 4*n;
               //offset = iw + NWVL*s + NWVL*NBTHETA*ith[n]; 
               offset = ith[n] + NBTHETA*iw + NWVL*NBTHETA*s;
-          #if defined(DOUBLE) && !(__CUDA_ARCH__ >= 600)
+          #if !(__CUDA_ARCH__ >= 600) || (defined(DOUBLE) && defined(FORCE_DATOMICADD))
               if (!nsif[n])             DatomicAdd(res    +offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
               if (!nrrs[n] && !nsif[n]) DatomicAdd(res_sca+offset, (double)S[ns] * exp(-wabs) * (double)wsca * walb);
               //if (!nsif[n])             DatomicAdd(res_sca+offset, (double)S[ns] *              (double)wsca * walb);

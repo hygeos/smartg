@@ -1310,6 +1310,11 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix the ALIS counts in double precision on the GPUs older than the
+    GTX 1000 series (deprecated): their fallback without a double
+    `atomicAdd` added the no-aerosol counts through an unset pointer and
+    only the raw path lengths to the cdist moments (already so in
+    v1.2.0). It now adds what the native path adds
   - Fix the ocean layers of the ALIS cdist outputs ('cdist_up (TOA)' and
     the others): they were written with the stride of a single moment
     and without the photon weights, so they mixed layers, directions and

@@ -5,6 +5,7 @@ surface and water in the combinations the code allows, and check
 the outputs and the arguments the run accepts.
 """
 
+from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
@@ -12,6 +13,7 @@ import pytest
 import xarray as xr
 from numpy.typing import NDArray
 
+import smartg.smartg as smartg_mod
 from smartg import conftest
 from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.atmosphere import AerOPAC, Atm1D, Atm3D, Cloud
@@ -372,6 +374,55 @@ def test_alis_cdist_ocean(sg_alis: Smartg) -> None:
     )
     # the photons reaching the TOA from the ocean travel in it
     assert np.all(cdist[:2, ..., 1] > 0.0)
+
+
+@pytest.fixture(scope="module")
+def sg_alis_datomicadd() -> Iterator[Smartg]:
+    """Build an ALIS Smartg on the DatomicAdd fallback of old GPUs."""
+    source_module = smartg_mod.SourceModule
+
+    def forced(*args: Any, **kwargs: Any) -> Any:
+        options = list(kwargs.pop("options", []))
+        return source_module(
+            *args, options=[*options, "-DFORCE_DATOMICADD"], **kwargs
+        )
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(smartg_mod, "SourceModule", forced)
+        yield Smartg(alis=True, alt_pp=True, amf_variance=True)
+
+
+def test_alis_datomicadd(sg_alis_datomicadd: Smartg) -> None:
+    """Check the ALIS counts of the GPUs without a double atomicAdd.
+
+    Their fallback added the no-aerosol counts through an unset
+    pointer, and only the raw path lengths to the cdist moments. The
+    radiances and the mean path lengths must match those of the
+    native atomicAdd, within the Monte Carlo noise.
+    """
+    kwargs = {
+        "wavelength": np.array([500.0, 510.0, 520.0]),
+        "atmosphere": Atm1D("afglt", grid=np.linspace(50.0, 0.0, 6)),
+        "surface": LambSurface(alb=AlbedoCst(0.2)),
+        "le": LocalEstimate(th_deg=[0.0, 30.0], phi_deg=[0.0]),
+        "alis_options": Alis(n_low=3),
+        "n_photons": 1e5,
+        "seed": 1,
+    }
+    forced = sg_alis_datomicadd.run(**kwargs)
+    native = Smartg(alis=True, alt_pp=True, amf_variance=True).run(**kwargs)
+    np.testing.assert_allclose(
+        forced["I_up (TOA)"].values, native["I_up (TOA)"].values, rtol=0.03
+    )
+    # (cdist_layer, Azimuth angles, Zenith angles, iAMF)
+    for m in (forced, native):
+        cdist = m["cdist_up (TOA)"].values
+        assert np.all(cdist[..., 2] > 0.0)
+    mean_path = [
+        m["cdist_up (TOA)"].values[..., 1] / m["cdist_up (TOA)"].values[..., 0]
+        for m in (forced, native)
+    ]
+    np.testing.assert_allclose(mean_path[0], mean_path[1], rtol=0.03)
 
 
 class _ErrorCount:
