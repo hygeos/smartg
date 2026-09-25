@@ -1013,6 +1013,12 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix a 4-term `aer_phase_1d` forced into `Atm3D`: the mixing kept the
+    4 terms it shares with the 6-term 3D components, so that a
+    non-spherical component (ice cloud, desert aerosol) lost its F22 and
+    F44 in every mixed cell, or raised an xarray `AlignmentError` when
+    the term axis had no coordinate. It is now completed to 6 terms
+    (F22 = F11, F44 = F33), and the other term counts are refused
   - Fix the phase matrices `Atm3D` mixes in the cells shared by several
     3D components, or by a component and the 1D aerosols: normalized by
     the total extinction instead of the total scattering, they were

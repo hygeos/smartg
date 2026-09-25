@@ -998,3 +998,37 @@ def test_fewer_phase_wavelengths_than_profile_ones(
                 three["iphase_atm"].values[iw, iopt]
             ]
             np.testing.assert_allclose(pha, ref, rtol=1e-6, atol=1e-10)
+
+
+def test_forced_4_term_1d_aerosol_phase() -> None:
+    """A forced 4-term 1D aerosol phase is completed to 6 terms.
+
+    With a term coordinate, the mixing kept the 4 common terms of
+    every cell and the non-spherical ice cloud lost its F22 and F44;
+    without one, xarray raised an AlignmentError. The 1D aerosol is
+    spherical: its 4 terms give the profile of its 6.
+    """
+    grid3 = _build_grid()
+    cld = Cloud3D(
+        "ic_baum_ghm", w_ref=550.0, ext_ref=np.array([2.0]),
+        reff=np.array([30.0]), cell_indices=np.array([[2, 1, 2]]),
+    )
+    comp = [AerOPAC("continental_clean", 0.2, 550.0)]
+    kwargs = {"tau_r": 0.0, "no2": False, "tco3": 0.0, "tcwp": 0.0}
+    ref = Atm3D(Atm1D("afglt", comp=comp, **kwargs), grid3, [cld]).calc(
+        WAV, n_theta=NTH
+    )
+    ds_1d = Atm1D(
+        "afglt", comp=comp, grid=grid3.zGRID[::-1], **kwargs
+    ).calc(WAV, n_theta=NTH)
+    pha_4 = ds_1d["phase_atm"][:, :4, :].rename(nphamat="stk")
+    for phases in (pha_4, pha_4.drop_vars("stk")):
+        pro = Atm3D(
+            Atm1D("afglt", comp=comp, **kwargs), grid3, [cld],
+            aer_phase_1d=(ds_1d["iphase_atm"].values, phases),
+        ).calc(WAV, n_theta=NTH)
+        np.testing.assert_allclose(
+            pro["phase_atm"].values, ref["phase_atm"].values, rtol=1e-6
+        )
+    _, _, pha = _voxel_props(pro, grid3, (1, 0, 1))
+    assert np.max(np.abs(pha[4] - pha[0])) > 0.0

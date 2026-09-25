@@ -4376,8 +4376,11 @@ class Atm3D(Atmosphere):
         Force the 1D aerosol phase matrices, as a tuple
         (iphase, phases) where iphase is the (nwavelength, NZ + 1)
         phase matrix indices profile and phases a DataArray (or
-        legacy LUT) of phase matrices over (iphase, stk, theta_atm).
-        If None, computed from `atm_1d`.
+        legacy LUT) of phase matrices over (iphase, nphamat,
+        theta_atm), in that order whatever their names, with a
+        'theta_atm' coordinate: 6 terms (F11, F21, F33, F34, F22,
+        F44), or the 4 first of spherical particles, completed with
+        F22 = F11 and F44 = F33. If None, computed from `atm_1d`.
     """
 
     def __init__(
@@ -4636,6 +4639,20 @@ class Atm3D(Atmosphere):
                     )
                 )
             )
+            # the 3D components carry 6 terms, on the term coordinate
+            # the mixing aligns on: complete a spherical 4-term matrix
+            # (F22 = F11, F44 = F33) rather than lose F22 and F44
+            n_terms = pha_aer_1d.sizes["nphamat"]
+            if n_terms == 4:
+                pha_aer_1d = expand_phase_4_to_6(
+                    pha_aer_1d.expand_dims("block")
+                ).isel(block=0, drop=True)
+            elif n_terms != 6:
+                raise ValueError(
+                    "The 1D aerosol phase matrices must hold 4 or 6 "
+                    f"terms, got {n_terms}."
+                )
+            pha_aer_1d = pha_aer_1d.assign_coords(nphamat=np.arange(6))
         if isinstance(ipha_aer_1d, xr.DataArray):
             ipha_aer_1d = ipha_aer_1d.values
         if isinstance(ssa_aer_1d, xr.DataArray):
