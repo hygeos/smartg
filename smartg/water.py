@@ -227,7 +227,10 @@ class Hydrosol:
         negative, and is refused.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
-        None, they are calculated at all wavelengths.
+        None, they are calculated at all wavelengths. The coefficients
+        supplied as arrays over the wavelengths of the profile are
+        interpolated linearly onto them, and taken constant beyond the
+        end wavelengths.
 
     Raises
     ------
@@ -287,8 +290,9 @@ class Hydrosol:
         self._pha: xr.DataArray | None = None
         self._coef_trunc: xr.DataArray | None = None
         self._bsca: NDArray | None = None
-        # the wavelengths and depths the cache above was tabulated for
-        self._tab_grid: tuple[NDArray, NDArray] | None = None
+        # the wavelengths and depths the cache above was tabulated for,
+        # and the wavelengths the supplied arrays were given over
+        self._tab_grid: tuple[NDArray, NDArray, NDArray] | None = None
 
     def iop(self, wavelength: NDArray, z: NDArray) -> IOPDict:
         """
@@ -360,6 +364,75 @@ class Hydrosol:
             ),
             "aphy": ap,
             "fqyc": zeros.copy(),
+        }
+
+    def _supplies_arrays(self) -> bool:
+        """Whether a coefficient has been supplied as an array."""
+        return any(
+            x is not None and np.size(x) > 1
+            for x in (self.bp, self.ap, self.acdom, self.bbp_ratio)
+        )
+
+    def _iop_on(
+        self,
+        wavelength_tab: NDArray,
+        wavelength: NDArray,
+        z: NDArray,
+    ) -> IOPDict:
+        """
+        Return the inherent optical properties at other wavelengths.
+
+        The coefficients supplied as arrays are given over the
+        wavelengths of the profile: they are evaluated there, and
+        interpolated linearly onto `wavelength_tab`, constant beyond
+        the end wavelengths. The others are evaluated at
+        `wavelength_tab` directly.
+
+        Parameters
+        ----------
+        wavelength_tab : ndarray
+            Wavelengths in nm at which the properties are returned,
+            e.g. those the phase matrices are tabulated at.
+        wavelength : ndarray
+            Wavelengths in nm of the profile.
+        z : ndarray
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
+
+        Returns
+        -------
+        IOPDict
+            Same as the `iop` method, with dimensions
+            [len(wavelength_tab), len(z)].
+        """
+        wavelength_tab = np.asarray(wavelength_tab, dtype="float")
+        wavelength = np.asarray(wavelength, dtype="float")
+        if not self._supplies_arrays() or np.array_equal(
+            wavelength_tab, wavelength
+        ):
+            return self.iop(wavelength_tab, z)
+
+        iop = self.iop(wavelength, z)
+        order = np.argsort(wavelength)
+
+        def interp(x: NDArray) -> NDArray:
+            """Interpolate each depth of `x` onto `wavelength_tab`."""
+            return np.stack(
+                [
+                    np.interp(wavelength_tab, wavelength[order], col)
+                    for col in x[order].T
+                ],
+                axis=1,
+            )
+
+        bbp_ratio = iop["bbp_ratio"]
+        return {
+            "ap": interp(iop["ap"]),
+            "bp": interp(iop["bp"]),
+            "acdom": interp(iop["acdom"]),
+            "bbp_ratio": None if bbp_ratio is None else interp(bbp_ratio),
+            "aphy": interp(iop["aphy"]),
+            "fqyc": interp(iop["fqyc"]),
         }
 
     def calc_phase(
@@ -581,7 +654,9 @@ class Hydrosol:
         Parameters
         ----------
         wavelength : ndarray
-            Wavelengths in nm. Only used if `wavelength_phase` is None.
+            Wavelengths in nm of the profile. The phase matrices are
+            tabulated at these unless `wavelength_phase` is set, and
+            the coefficients supplied as arrays are given over them.
         z : ndarray
             Vertical grid of the water column in m. These are z
             coordinates: 0 at the surface, negative downwards.
@@ -601,16 +676,25 @@ class Hydrosol:
             dtype="float",
         )
         z = np.asarray(z, dtype="float")
+        # the supplied arrays are interpolated from the wavelengths of
+        # the profile, which the tabulation then depends on
+        wavelength_src = np.asarray(
+            wavelength if self._supplies_arrays() else wavelength_pha,
+            dtype="float",
+        )
         if (
             self._coef_trunc is not None
             and self._tab_grid is not None
             and np.array_equal(self._tab_grid[0], wavelength_pha)
             and np.array_equal(self._tab_grid[1], z)
+            and np.array_equal(self._tab_grid[2], wavelength_src)
         ):
             return
-        self._tab_grid = (wavelength_pha.copy(), z.copy())
+        self._tab_grid = (
+            wavelength_pha.copy(), z.copy(), wavelength_src.copy()
+        )
 
-        iop = self.iop(wavelength_pha, z)
+        iop = self._iop_on(wavelength_pha, wavelength, z)
         bbp_ratio, bp = iop["bbp_ratio"], iop["bp"]
         if bbp_ratio is None:
             raise ValueError(

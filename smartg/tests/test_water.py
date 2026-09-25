@@ -787,3 +787,40 @@ def test_hydrosol_zhai_warns_nothing() -> None:
             np.array([443.0, 550.0]), np.array([0.0, -5.0, -10.0])
         )
     assert np.isfinite(iop["bp"]).all()
+
+
+def test_hydrosol_arrays_interpolated_onto_wavelength_phase() -> None:
+    """Arrays over the profile wavelengths work with wavelength_phase.
+
+    The coefficients supplied over the wavelengths of the profile are
+    interpolated linearly onto `wavelength_phase` to tabulate the phase
+    matrices, where they used to be refused, or paired by position
+    with the tabulation wavelengths.
+    """
+    wavelength = np.array([443.0, 550.0])
+    grid = np.array([0.0, -5.0, -10.0])
+    ones = np.ones((1, len(grid)))
+    hydrosol = Hydrosol(
+        bp=np.array([[0.1], [0.2]]) * ones,
+        bbp_ratio=np.array([[0.01], [0.02]]) * ones,
+        n_theta=721,
+        wavelength_phase=[500.0],
+    )
+    pro = Water1D(grid=grid, comp=[hydrosol]).calc(wavelength)
+
+    # the backscattering ratio interpolated at 500 nm
+    bbp_500 = 0.01 + 0.01 * (500.0 - 443.0) / (550.0 - 443.0)
+    ref = Hydrosol(
+        bp=0.1, bbp_ratio=bbp_500, n_theta=721, wavelength_phase=[500.0]
+    )
+    pro_ref = Water1D(grid=grid, comp=[ref]).calc(wavelength)
+    np.testing.assert_allclose(
+        pro["phase_oc"].values, pro_ref["phase_oc"].values, rtol=1e-12
+    )
+    # the scattering of each wavelength, scaled by the factor of the
+    # phase matrix at 500 nm
+    np.testing.assert_allclose(
+        pro["OD_p_oc"].values,
+        pro_ref["OD_p_oc"].values * np.array([[1.0], [2.0]]),
+        rtol=1e-12,
+    )

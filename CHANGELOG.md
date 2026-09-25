@@ -1131,6 +1131,10 @@ final `v2.0.0` release.
     the leading factor of the Edlén equation: `n_atm - 1` was 100 times
     too small, so that the runs with `refraction=True` hardly refracted.
     Their results change
+  - Fix a `Hydrosol` given its coefficients as arrays over the wavelengths
+    of the profile and a `wavelength_phase`: the arrays were refused, or
+    paired by position with the tabulation wavelengths when these were as
+    many; they are now interpolated linearly onto `wavelength_phase`
   - Fix `LambSurface`, `RTLSSurface`, `RPVSurface`, `Water1D` and `WaterRw`,
     which accepted an `AlbedoMap` as albedo or BRDF coefficient, as the
     `LambSurface` error message and the `AlbedoLike` alias advertised, and
