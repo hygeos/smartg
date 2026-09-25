@@ -1871,6 +1871,13 @@ final `v2.0.0` release.
     (use `alt_pp=True`), it ignores the emission point in spherical mode,
     without `cell_proba` its weights lack the `dz * NATM` factor of the
     uniform layer sampling, and in backward mode the ocean never emits
+  - The photon histories (`Alis(hist=True)`) do not support a water
+    body, which the run refuses: their post-processing only rebuilds the
+    atmospheric absorption. Without a local estimate they store
+    `n_theta * n_phi * n_sensor` values per record field
+  - Solar-induced fluorescence (`sif=True`) is experimental: its PAR is
+    the sum of the scattering corrections of the simulated wavelengths
+    within 400-700 nm
 
 
 ## v1.2.0
