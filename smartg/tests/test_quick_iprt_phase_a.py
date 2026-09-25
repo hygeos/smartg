@@ -40,7 +40,32 @@ from smartg.xarray import drop_axes
 # a fixed seed, with the launch geometry pinned in each run, so that a
 # run repeats its noise realization rather than drawing a new one
 SEED = 1234
+# The delta_m of a run against MYSTIC must not exceed the one of the
+# saved SMART-G reference shifted by STDFAC times its standard
+# deviation. Shifting every direction at once, this band is loose:
+# it accepts a sign-flipped V or a Q off by 15 % in A5. It is kept as
+# the IPRT benchmark check, and the run is also compared with the
+# saved reference direction by direction, see Z_RMS_MAX. The V of
+# MYSTIC being zero in A1 and A2, where compute_deltam returns 0, only
+# the latter checks V there.
 STDFAC = 4
+# Root mean square, over the directions, of the difference between
+# the run and the saved SMART-G reference in units of their combined
+# standard deviation, to which REL_FLOOR times the reference value is
+# added. It is about 1 for a run that only differs by its Monte Carlo
+# noise. The floor absorbs the 1e-3 by which GPU runs of the same seed
+# differ from one process to the next, which reaches twice the
+# standard deviation of the I of A1 and A2: without it, the z_rms of
+# that I went from 1.31 to 1.75 between two runs. Measured on gpu4 on
+# 2026-09-25, three runs: 0.38 to 1.22 for every Stokes component of
+# every case. The bound of 2 then fails an I scaled by 0.3 % in A1 and
+# A2 and by 1.2 % in A5, a Q or U of the A5 almucantar scaled by 12 %
+# (the band above accepted 15 to 23 %), zeroed or of the wrong sign.
+# The U and V of A5 in the principal plane, and its V in the
+# almucantar, are pure noise at this photon count and cannot be
+# checked beyond their level.
+Z_RMS_MAX = 2.0
+REL_FLOOR = 1e-3
 ROOT_PATH = Path(__file__).resolve().parent.parent
 # **********************************************************************
 
@@ -64,6 +89,46 @@ for handler, level in (
     handler.setFormatter(LOG_FORMATTER)
     logger.addHandler(handler)
 # **********************************************************************
+
+
+def _check_against_reference(
+    run: np.ndarray, ref: np.ndarray, label: str
+) -> None:
+    """Compare a run with the saved reference, direction by direction.
+
+    Both are IPRT phase A tables with standard deviations: the geometry
+    in the columns 1 to 5 (the depolarization of column 0 is not always
+    written in the reference), I, Q, U and V in 6 to 9 and their
+    standard deviations in 10 to 13. The differences are compared with
+    the combined standard deviation and REL_FLOOR, see Z_RMS_MAX. A
+    component whose standard deviations are all zero, the V of a
+    Rayleigh atmosphere, must be the same in both.
+    """
+    assert run.shape == ref.shape, f"{label}: {run.shape} vs {ref.shape}"
+    assert np.array_equal(run[:, 1:6], ref[:, 1:6]), (
+        f"{label}: the directions differ from the reference"
+    )
+    atol = 1e-6 * np.max(np.abs(ref[:, 6]))
+    for istk, stk in enumerate(["I", "Q", "U", "V"]):
+        diff = run[:, 6 + istk] - ref[:, 6 + istk]
+        sigma = np.sqrt(
+            run[:, 10 + istk] ** 2
+            + ref[:, 10 + istk] ** 2
+            + (REL_FLOOR * ref[:, 6 + istk]) ** 2
+        )
+        noisy = sigma > 0
+        assert np.all(np.abs(diff[~noisy]) <= atol), (
+            f"{label}: {stk} differs from the reference where both have "
+            "no noise"
+        )
+        if not noisy.any():
+            continue
+        z_rms = float(np.sqrt(np.mean((diff[noisy] / sigma[noisy]) ** 2)))
+        logger.info(f"{label} - {stk}: z_rms={z_rms:.3f} against the ref")
+        assert z_rms <= Z_RMS_MAX, (
+            f"{label}: {stk} differs from the reference by {z_rms:.3f} "
+            f"standard deviations (root mean square), above {Z_RMS_MAX}"
+        )
 
 
 @pytest.fixture(scope="module")
@@ -612,6 +677,8 @@ def test_a1(
             + f" {stk} must be < to {max_val:.5f}"
         )
 
+    _check_against_reference(smartg_a1, smartg_a1_ref, "A1")
+
 
 def test_a2(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     """IPRT phase A, case A2: Rayleigh layer on a Lambertian surface."""
@@ -956,6 +1023,8 @@ def test_a2(request: pytest.FixtureRequest, s1df: Smartg) -> None:
             + f" {stk} must be < to {max_val:.5f}"
         )
 
+    _check_against_reference(smartg_a2, smartg_a2_ref, "A2")
+
 
 def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     """IPRT phase A, case A5: a water cloud, in the principal plane."""
@@ -1273,6 +1342,8 @@ def test_a5_pp(request: pytest.FixtureRequest, s1df: Smartg) -> None:
             + f" {stk} must be < to {max_val:.5f}"
         )
 
+    _check_against_reference(smartg_a5_pp, smartg_a5_pp_ref, "A5_pp")
+
 
 def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
     """IPRT phase A, case A5: a water cloud, in the almucantar."""
@@ -1559,3 +1630,5 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
             f"Problem with {stk} values, get {delta_m[istk]:.5f}."
             + f" {stk} must be < to {max_val:.5f}"
         )
+
+    _check_against_reference(smartg_a5_al, smartg_a5_al_ref, "A5_al")
