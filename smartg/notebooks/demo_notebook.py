@@ -1197,7 +1197,7 @@ for platform in ['1', '2', '3', '4']:
     plt.errorbar(fl_int['wavelength'].values,
               fl_int['flux_up (TOA)'].values,
               label=platform, marker='^')
-plt.ylim(0, 2)
+plt.ylim(bottom=0)
 plt.ylabel('TOA irradiance (W.m-2)')
 plt.legend()
 
