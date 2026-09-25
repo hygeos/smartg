@@ -12,12 +12,15 @@ from smartg import smartg as sg_module
 from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.sensor import Sensor, get_sensors_grid
 from smartg.smartg import (
+    StdevLim,
     _calc_solid_angles,
     _check_albedo_map_codes,
     _check_forward_raster,
     _impact_init,
     _isotropic,
+    _RatioStdev,
     _resolve_n_loop,
+    _stdev_lim_reached,
     multi_profiles,
 )
 
@@ -218,3 +221,78 @@ def test_no_direct_transmission_of_a_3d_profile(
     )
     _, trans = _impact_init(profile, 1, 30.0, 0.0, 6371.0, True)
     assert trans is None
+
+
+def _loops(launched: np.ndarray, seed: int = 0) -> tuple[np.ndarray, ...]:
+    """Return the weights of loops launching the given photons.
+
+    Each photon weighs 1 with the probability 0.3, in the bins of
+    shape (level, stokes, sensor, wavelength, theta, phi) = (1, 1, 2,
+    1, 1, 1).
+    """
+    rng = np.random.default_rng(seed)
+    weights = np.array(
+        [rng.binomial(n, 0.3) for n in launched.ravel()], dtype=np.float64
+    ).reshape(len(launched), 1, 1, 2, 1, 1, 1)
+    return tuple(weights)
+
+
+def test_ratio_stdev_of_equal_loops() -> None:
+    """Check the standard deviation of loops of equal photon counts.
+
+    It is then the one of the per loop results over the square root of
+    the number of loops, as the former estimate of Smartg.run.
+    """
+    launched = np.full((40, 2), 1000)
+    stats = _RatioStdev((1, 1, 2, 1, 1, 1))
+    x = []
+    for weights, n in zip(_loops(launched), launched, strict=True):
+        stats.add(weights, n.reshape(2, 1))
+        x.append(weights / n.reshape(1, 1, 2, 1, 1, 1))
+    x = np.array(x)
+    expected = np.sqrt((x**2).mean(axis=0) - x.mean(axis=0) ** 2) / np.sqrt(
+        len(x)
+    )
+    np.testing.assert_allclose(stats.mean(), x.mean(axis=0))
+    np.testing.assert_allclose(stats.sigma(), expected, rtol=1e-9)
+
+
+def test_ratio_stdev_of_a_loop_without_photon() -> None:
+    """Check the standard deviation of a bin missed by some loops."""
+    launched = np.tile([[3, 1000]], (40, 1))
+    launched[::4, 0] = 0
+    stats = _RatioStdev((1, 1, 2, 1, 1, 1))
+    for weights, n in zip(_loops(launched), launched, strict=True):
+        stats.add(weights, n.reshape(2, 1))
+    sigma = stats.sigma().ravel()
+    assert np.all(np.isfinite(sigma))
+    # about sqrt(p (1 - p) / N) for N photons weighing 1 with p = 0.3
+    n_total = launched.sum(axis=0)
+    np.testing.assert_allclose(
+        sigma, np.sqrt(0.21 / n_total), rtol=0.5
+    )
+
+
+def _stats(mean: float, sigma: float) -> tuple[np.ndarray, np.ndarray]:
+    """Return a result and its stdev with level 0 set, level 1 empty."""
+    shape = (2, 4, 1, 1, 3, 2)
+    means = np.zeros(shape)
+    sigmas = np.zeros(shape)
+    means[0] = mean
+    sigmas[0] = sigma
+    return means, sigmas
+
+
+def test_stdev_lim_reached() -> None:
+    """Check the stop of a run that reached its relative error."""
+    means, sigmas = _stats(1.0, 0.005)
+    lim = StdevLim(err_rel_min=1.0, n_loop_min=10)
+    assert not _stdev_lim_reached(lim, 9, means, sigmas)[0]
+    assert _stdev_lim_reached(lim, 10, means, sigmas) == (True, 0.005, 0.5)
+
+
+def test_stdev_lim_level_without_signal() -> None:
+    """Check that a level without any signal never stops the run."""
+    means, sigmas = _stats(1.0, 0.005)
+    lim = StdevLim(err_rel_min=1.0, n_loop_min=10, level=1)
+    assert not _stdev_lim_reached(lim, 100, means, sigmas)[0]

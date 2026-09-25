@@ -345,6 +345,9 @@ class StdevLim:
     Notes
     -----
     For the moment, it does not work correctly with kdis and reptran.
+    A level or a Stokes component that gets no signal at all, e.g. a
+    level that output_layers or the count_level of the local estimate
+    leave out, never stops the run.
     """
 
     def __init__(
@@ -4730,10 +4733,13 @@ def _loop_kernel(
         (n_level, n_pstk, n_sensor, n_lam, n_theta, n_phi), dtype=np.float64
     )
     n_simu = 0
-    # Accumulate normalized quantities and their squares to estimate
-    # sigma (only filled when stdev is enabled).
-    sum_x = 0.0
-    sum_x2 = 0.0
+    # Accumulate the loops to estimate sigma (only when stdev is
+    # enabled)
+    loop_stats = (
+        _RatioStdev((n_level, n_pstk, n_sensor, n_lam, n_theta, n_phi))
+        if stdev
+        else None
+    )
     format_std = ''
     max_aerr = None
     max_rerr = None
@@ -4945,33 +4951,13 @@ def _loop_kernel(
         n_simu += 1
 
         sphot = np.sum(n_photons_in_tot.get()) / alis_norm
-        if stdev:
-            n_sensor_cur, n_lam_cur = n_photons_in.shape
-            launched_last = launched_last.reshape(
-                (1, 1, n_sensor_cur, n_lam_cur, 1, 1)
-            )
-            s_over_l = sum_weights.get() / launched_last.get()
-            sum_x += s_over_l
-            sum_x2 += s_over_l**2
+        if loop_stats is not None:
+            loop_stats.add(sum_weights.get(), launched_last.get())
 
             if stdev_lim is not None:
-                sigma_bis = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu) ** 2)
-                sigma_bis /= np.sqrt(n_simu)
-                sigma_bis[np.isnan(sigma_bis)] = 0
-
-                abs_min = stdev_lim.dict['err_abs_min']
-                rel_min = stdev_lim.dict['err_rel_min']
-                min_loop = stdev_lim.dict['n_loop_min']
-                stk_stdev = stdev_lim.dict['stokes']
-                level_stdev = stdev_lim.dict['level']
                 format_std = stdev_lim.dict['format']
-
-                avg = sum_x / n_simu
-                err_rel = (sigma_bis / avg) * 100
-                err_rel[np.isnan(err_rel)] = 0
-                max_rerr = np.max(err_rel[level_stdev, stk_stdev, :, :, :, :])
-                max_aerr = np.max(
-                    sigma_bis[level_stdev, stk_stdev, :, :, :, :]
+                reached, max_aerr, max_rerr = _stdev_lim_reached(
+                    stdev_lim, n_simu, loop_stats.mean(), loop_stats.sigma()
                 )
 
                 if stdev_lim.dict['verbose']:
@@ -4980,9 +4966,7 @@ def _loop_kernel(
                         f"max abs_err = {max_aerr:{format_std}}"
                     )
 
-                if (n_simu >= min_loop and max_aerr <= abs_min) or (
-                    n_simu >= min_loop and max_rerr <= rel_min
-                ):
+                if reached:
                     progress.update(
                         sphot,
                         f"Launched {sphot:.3g} photons; "
@@ -5053,11 +5037,7 @@ def _loop_kernel(
                     mat_cats[i, 4] = (n_bis * abs(sum_z2 - sum_2z)) ** 0.5
                 mat_cats[i, 5] = (mat_cats[i, 4] / mat_cats[i, 1]) * 100
 
-    if stdev:
-        sigma = np.sqrt(sum_x2 / n_simu - (sum_x / n_simu) ** 2)
-        sigma /= np.sqrt(n_simu)
-    else:
-        sigma = None
+    sigma = loop_stats.sigma() if loop_stats is not None else None
 
     return (
         n_photons_in_tot.get(),
@@ -5078,6 +5058,121 @@ def _loop_kernel(
         w_ph_cat_tot.get(),
         w_ph_cat2_tot.get(),
     )
+
+
+class _RatioStdev:
+    """Accumulate the kernel loops of a run for its standard deviation.
+
+    The result of a run is, per sensor and wavelength, the ratio r = S
+    / N of the weights S summed over all its kernel loops to the
+    number N of photons launched over them. With s_k the weights and
+    n_k the photons of the loop k, its standard deviation is estimated
+    as the one of a ratio estimator (Cochran, Sampling Techniques,
+    1977, section 6.3)::
+
+        sigma^2 = sum_k (s_k - r n_k)^2 / N^2
+
+    which is the variance of the per loop ratios s_k / n_k over the
+    number of loops when every loop launches the same number of
+    photons, and stays defined for a sensor or a wavelength that gets
+    no photon in some loops.
+
+    Parameters
+    ----------
+    shape : tuple of int
+        The shape of the weights, (level, stokes, sensor, wavelength,
+        theta, phi).
+    """
+
+    def __init__(self, shape: tuple[int, ...]) -> None:
+        self.s1 = np.zeros(shape, dtype=np.float64)
+        self.s2 = np.zeros(shape, dtype=np.float64)
+        self.sn = np.zeros(shape, dtype=np.float64)
+        n_shape = (1, 1, shape[2], shape[3], 1, 1)
+        self.n1 = np.zeros(n_shape, dtype=np.float64)
+        self.n2 = np.zeros(n_shape, dtype=np.float64)
+
+    def add(self, weights: np.ndarray, launched: np.ndarray) -> None:
+        """Add the weights and the launched photons of a kernel loop.
+
+        Parameters
+        ----------
+        weights : np.ndarray
+            The weights counted in the loop, of the accumulator shape.
+        launched : np.ndarray
+            The photons launched in the loop, of shape (sensor,
+            wavelength).
+        """
+        s = np.asarray(weights, dtype=np.float64)
+        n = np.asarray(launched, dtype=np.float64).reshape(self.n1.shape)
+        self.s1 += s
+        self.s2 += s * s
+        self.sn += s * n
+        self.n1 += n
+        self.n2 += n * n
+
+    def mean(self) -> np.ndarray:
+        """Return the weights per launched photon, NaN without any."""
+        with np.errstate(invalid='ignore', divide='ignore'):
+            return self.s1 / self.n1
+
+    def sigma(self) -> np.ndarray:
+        """Return the standard deviation of the mean, NaN if none."""
+        r = self.mean()
+        # the sum of the squares of s_k - r n_k, expanded
+        q = self.s2 - 2 * r * self.sn + r * r * self.n2
+        with np.errstate(invalid='ignore', divide='ignore'):
+            return np.sqrt(np.maximum(q, 0.0)) / self.n1
+
+
+def _stdev_lim_reached(
+    stdev_lim: StdevLim,
+    n_loops: int,
+    mean: np.ndarray,
+    sigma: np.ndarray,
+) -> tuple[bool, float, float]:
+    """Tell whether a run has reached the precision of its StdevLim.
+
+    Parameters
+    ----------
+    stdev_lim : StdevLim
+        The stopping criterion of the run.
+    n_loops : int
+        The number of kernel loops run so far.
+    mean, sigma : np.ndarray
+        The result of the run so far and its standard deviation, of
+        shape (level, stokes, sensor, wavelength, theta, phi).
+
+    Returns
+    -------
+    reached : bool
+        Whether the run can stop: after n_loop_min loops, when the
+        largest absolute or relative error of the level and Stokes
+        component of the criterion is below its limit. A slice that
+        got no signal at all, e.g. a level that output_layers or the
+        local estimate do not count, never stops the run.
+    max_aerr, max_rerr : float
+        The largest absolute and relative (in %) errors of the slice,
+        where the bins without any photon count as zero.
+    """
+    level = stdev_lim.dict['level']
+    stokes = stdev_lim.dict['stokes']
+    mean_lim = np.nan_to_num(mean[level, stokes])
+    sigma_lim = np.nan_to_num(sigma[level, stokes])
+    with np.errstate(invalid='ignore', divide='ignore'):
+        err_rel = sigma_lim / mean_lim * 100
+    err_rel[np.isnan(err_rel)] = 0
+    max_aerr = float(np.max(sigma_lim))
+    max_rerr = float(np.max(err_rel))
+    reached = bool(
+        np.any(mean_lim)
+        and n_loops >= stdev_lim.dict['n_loop_min']
+        and (
+            max_aerr <= stdev_lim.dict['err_abs_min']
+            or max_rerr <= stdev_lim.dict['err_rel_min']
+        )
+    )
+    return reached, max_aerr, max_rerr
 
 
 def _get_git_attrs() -> dict:

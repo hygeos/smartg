@@ -1015,6 +1015,16 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix `Smartg.run(stdev=True)` for a sensor or a wavelength that gets no
+    photon in some kernel loops, as with many sensors or a
+    `wavelength_proba`: each loop was normalised by its own photon count,
+    so that its `_stdev_` outputs were NaN. The standard deviation is now
+    the one of the ratio of the weights to the photons over all the loops,
+    the same as before when every loop launches the same photons. Fix
+    also `stdev_lim` on a level or a Stokes component without any signal,
+    for instance the default top of the atmosphere with `output_layers=4`:
+    its zero error stopped the run after `n_loop_min` loops. Such a slice
+    no longer stops the run. The errors were already in v1.2.0
   - Fix the `direct transmission (dev)` output with `Smartg(double=False)`:
     the kernel wrote single precision values into a double precision
     buffer, read as about 1 whatever the optical depth. The buffer now

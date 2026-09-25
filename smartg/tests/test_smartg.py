@@ -18,7 +18,7 @@ from smartg.atmosphere import AerOPAC, Atm1D, Atm3D, Cloud
 from smartg.grid3d import Grid3D
 from smartg.reptran import Reptran, reduce_reptran
 from smartg.sensor import Sensor, get_sensors_grid
-from smartg.smartg import Alis, LocalEstimate, Smartg
+from smartg.smartg import Alis, LocalEstimate, Smartg, StdevLim
 from smartg.surface import Environment, LambSurface, RoughSurface
 from smartg.view import smartg_view
 from smartg.water import HydrosolPR, Water1D
@@ -864,3 +864,50 @@ def test_spherical_3d_atmosphere_refused() -> None:
     """Check that the 3D atmosphere refuses the spherical geometry."""
     with pytest.raises(ValueError, match="pp=True"):
         Smartg(pp=False, opt3d=True)
+
+
+def test_stdev_lim_on_a_level_not_counted(sg_forward: Smartg) -> None:
+    """Check that a StdevLim on a level left out does not stop a run.
+
+    With output_layers=4, only the levels 0+ down and 0- up are
+    counted, not the default level of StdevLim, the top of the
+    atmosphere, whose zero error must not stop the run.
+    """
+    m = sg_forward.run(
+        550.0,
+        atmosphere=Atm1D("afglt"),
+        surface=LambSurface(alb=AlbedoCst(0.1)),
+        output_layers=4,
+        stdev=True,
+        stdev_lim=StdevLim(err_rel_min=1.0),
+        n_photons=1e6,
+        n_loop=1e4,
+        seed=101,
+        progress=False,
+    )
+    assert m.attrs["NPhotonIn_sum"] >= 1e6
+
+
+def test_stdev_of_sensors_missed_by_some_loops(sg_forward: Smartg) -> None:
+    """Check the stdev of the sensors that some kernel loops miss.
+
+    100 sensors share about 200 photons per loop, so that each of them
+    gets none in some loops.
+    """
+    sensors = [
+        Sensor(pos_z=120.0, th_deg=150.0, ph_deg=180.0, loc="ATMOS")
+        for _ in range(100)
+    ]
+    m = sg_forward.run(
+        550.0,
+        atmosphere=Atm1D("afglt"),
+        sensor=sensors,
+        stdev=True,
+        n_photons=1e4,
+        n_loop=200,
+        xblock=32,
+        xgrid=4,
+        seed=111,
+        progress=False,
+    )
+    assert not np.any(np.isnan(m["I_stdev_up (TOA)"].values))
