@@ -1714,6 +1714,23 @@ def ref_fresnel(dir_in: gc.Vector, geo_transform: gc.Transform) -> gc.Vector:
     return ray_dir
 
 
+def _heliostat_optics(
+    heliostat_type: Heliostat | None,
+    reflectivity: float | None,
+    roughness: float | None,
+) -> tuple[float, float]:
+    """Return the reflectivity and roughness of generated heliostats.
+
+    The values given to the generator win; otherwise those of the
+    heliostat_type template when it is given, else 1 and 0.
+    """
+    if reflectivity is None:
+        reflectivity = 1.0 if heliostat_type is None else heliostat_type.ref
+    if roughness is None:
+        roughness = 0.0 if heliostat_type is None else heliostat_type.rough
+    return reflectivity, roughness
+
+
 def generate_h_p(
     theta_deg: float = 0.0,
     phi_deg: float = 0.0,
@@ -1721,8 +1738,8 @@ def generate_h_p(
     receiver_pos: gc.Point | None = None,
     helio_size_x: float = 0.001,
     helio_size_y: float = 0.001,
-    reflectivity: float = 1,
-    roughness: float = 0,
+    reflectivity: float | None = None,
+    roughness: float | None = None,
     heliostat_type: Heliostat | None = None,
     facet_transforms_list: list[np.ndarray] | None = None,
 ) -> list[Entity | GroupE]:
@@ -1748,14 +1765,19 @@ def generate_h_p(
         Heliostat size in x-axis in kilometers. Default is 0.001.
     helio_size_y : float, optional
         Heliostat size in y-axis in kilometers. Default is 0.001.
-    reflectivity : float, optional
-        Reflectivity of the heliostats. Default is 1.
-    roughness : float, optional
-        Surface roughness of the heliostats. Default is 0.
+    reflectivity : float or None, optional
+        Reflectivity of the heliostats. If None (default), the
+        reflectivity of heliostat_type when it is given, 1 otherwise.
+    roughness : float or None, optional
+        Surface roughness of the heliostats. If None (default), the
+        roughness of heliostat_type when it is given, 0 otherwise.
     heliostat_type : Heliostat or None, optional
         If specified, must be a Heliostat class instance for generating
-        curved (faceted) heliostats. If None (default), generates planar
-        heliostats.
+        curved (faceted) heliostats: its number of facets, sizes and
+        focal length replace helio_size_x and helio_size_y, and its
+        reflectivity and roughness apply unless reflectivity or
+        roughness is given. Its position is not used. If None
+        (default), generates planar heliostats.
     facet_transforms_list : None or object, optional
         Under development. Default is None.
 
@@ -1769,6 +1791,9 @@ def generate_h_p(
         heliostat_pos_list = [gc.Point(0.0, 0.0, 0.0)]
     if receiver_pos is None:
         receiver_pos = gc.Point(0.0, 0.0, 0.0)
+    reflectivity, roughness = _heliostat_optics(
+        heliostat_type, reflectivity, roughness
+    )
     pos_list_copy = heliostat_pos_list.copy()
     obj_list = []
 
@@ -1896,8 +1921,8 @@ def generate_h_a(
     helio_size_x: float = ...,
     helio_size_y: float = ...,
     pillar_height: float = ...,
-    reflectivity: float = ...,
-    roughness: float = ...,
+    reflectivity: float | None = ...,
+    roughness: float | None = ...,
     heliostat_type: Heliostat | None = ...,
     facet_transforms_list: list[np.ndarray] | None = ...,
     return_positions: Literal[False] = ...,
@@ -1918,8 +1943,8 @@ def generate_h_a(
     helio_size_x: float = ...,
     helio_size_y: float = ...,
     pillar_height: float = ...,
-    reflectivity: float = ...,
-    roughness: float = ...,
+    reflectivity: float | None = ...,
+    roughness: float | None = ...,
     heliostat_type: Heliostat | None = ...,
     facet_transforms_list: list[np.ndarray] | None = ...,
     *,
@@ -1940,8 +1965,8 @@ def generate_h_a(
     helio_size_x: float = 0.001,
     helio_size_y: float = 0.001,
     pillar_height: float = 0.006,
-    reflectivity: float = 1,
-    roughness: float = 0,
+    reflectivity: float | None = None,
+    roughness: float | None = None,
     heliostat_type: Heliostat | None = None,
     facet_transforms_list: list[np.ndarray] | None = None,
     return_positions: bool = False,
@@ -2000,14 +2025,19 @@ def generate_h_a(
     pillar_height : float, optional
         Pillar height (distance from ground to heliostat) in kilometers.
         Default is 0.006.
-    reflectivity : float, optional
-        Reflectivity of the heliostats. Default is 1.
-    roughness : float, optional
-        Surface roughness of the heliostats. Default is 0.
+    reflectivity : float or None, optional
+        Reflectivity of the heliostats. If None (default), the
+        reflectivity of heliostat_type when it is given, 1 otherwise.
+    roughness : float or None, optional
+        Surface roughness of the heliostats. If None (default), the
+        roughness of heliostat_type when it is given, 0 otherwise.
     heliostat_type : Heliostat or None, optional
         If specified, must be a Heliostat class instance for generating
-        curved (faceted) heliostats. If None (default), generates planar
-        heliostats.
+        curved (faceted) heliostats: its number of facets, sizes and
+        focal length replace helio_size_x and helio_size_y, and its
+        reflectivity and roughness apply unless reflectivity or
+        roughness is given. Its position is not used. If None
+        (default), generates planar heliostats.
     facet_transforms_list : None or object, optional
         Under development. Default is None.
     return_positions : bool, optional
@@ -2025,6 +2055,9 @@ def generate_h_a(
     """
     if receiver_pos is None:
         receiver_pos = gc.Point(0.0, 0.0, 50.0)
+    reflectivity, roughness = _heliostat_optics(
+        heliostat_type, reflectivity, roughness
+    )
 
     # I) Find the position of all heliostats
     total_positions = int(

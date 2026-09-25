@@ -1143,6 +1143,12 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix `generate_h_p` and `generate_h_a` with a `heliostat_type`, which
+    took its facets and sizes but silently dropped its reflectivity and
+    roughness: the heliostats were perfect mirrors. Their `reflectivity`
+    and `roughness` now default to None, which takes the values of the
+    template when it is given, and 1 and 0 otherwise; values given to the
+    generator still win
   - Fix the automatic bounding box of a rotated `Spheric` entity, built from
     two opposite corners of its local box only: a rotation that is not a
     multiple of 90 degrees gave a box too small, or flat at 45 degrees

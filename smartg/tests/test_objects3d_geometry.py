@@ -12,9 +12,13 @@ import pytest
 
 from smartg.objects3d import (
     Entity,
+    GroupE,
+    Heliostat,
     Plane,
     Spheric,
     Transformation,
+    generate_h_a,
+    generate_h_p,
     rotate_vector,
 )
 
@@ -98,3 +102,59 @@ def test_spheric_bbox_holds_the_rotated_sphere(rotation: list[float]) -> None:
                          sphere.bbox_pmax.z])
         assert np.all(pmin <= centre - radius + 1e-12)
         assert np.all(pmax >= centre + radius - 1e-12)
+
+
+def _facet_mirrors(objects: list) -> list:
+    """Return the front materials of every facet of the heliostats."""
+    return [
+        entity.material_front
+        for group in objects
+        for entity in (group.le if isinstance(group, GroupE) else [group])
+    ]
+
+
+@pytest.mark.parametrize("generator", ["h_p", "h_a"])
+def test_generators_take_the_optics_of_heliostat_type(generator: str) -> None:
+    """The template reflectivity and roughness reach the facets.
+
+    Unless the generator is given its own.
+    """
+    template = Heliostat(
+        helio_size_x=0.01, helio_size_y=0.01, reflectivity=0.8, roughness=0.01
+    )
+    receiver = gc.Point(0.0, 0.0, 0.1)
+
+    def generate(**kwargs: float) -> list:
+        if generator == "h_p":
+            return generate_h_p(
+                heliostat_pos_list=[gc.Point(0.1, 0.0, 0.005)],
+                receiver_pos=receiver,
+                heliostat_type=template,
+                **kwargs,
+            )
+        return generate_h_a(
+            receiver_pos=receiver,
+            min_ang_deg=0.0,
+            max_ang_deg=0.0,
+            n_heliostats=1,
+            heliostat_type=template,
+            **kwargs,
+        )
+
+    mirrors = _facet_mirrors(generate())
+    assert len(mirrors) == template.n_facets_x * template.n_facets_y
+    for mirror in mirrors:
+        assert (mirror.reflectivity, mirror.roughness) == (0.8, 0.01)
+    for mirror in _facet_mirrors(generate(reflectivity=0.5, roughness=0.0)):
+        assert (mirror.reflectivity, mirror.roughness) == (0.5, 0.0)
+
+
+def test_generators_default_optics() -> None:
+    """Without a template, the heliostats are perfect mirrors."""
+    (heliostat,) = generate_h_p(
+        heliostat_pos_list=[gc.Point(0.1, 0.0, 0.005)],
+        receiver_pos=gc.Point(0.0, 0.0, 0.1),
+    )
+    assert isinstance(heliostat, Entity)
+    mirror = heliostat.material_front
+    assert (mirror.reflectivity, mirror.roughness) == (1.0, 0.0)
