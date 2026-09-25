@@ -1284,7 +1284,7 @@ def case_d4_bis(n_photons: float = 1e8, overwrite: bool = True,
         wavelength = np.array([350.0])
         aer = _opac_from_iprt_file(
             "sizedistr_spheroid.cdf", "spheroid_d4.nc", 0.2, 350.0,
-            h_min_mix=0.0, h_mix_max=120.0, h_free_min=120.0,
+            h_mix_min=0.0, h_mix_max=120.0, h_free_min=120.0,
             h_free_max=120.0, h_stra_min=120.0, h_stra_max=120.0,
             z_mix=1e6, rh_mix=0.0,
         )
@@ -1427,7 +1427,7 @@ def case_e3(n_photons: float = 1e8, overwrite: bool = True,
         wavelength = np.array([450.0])
         desert = _opac_from_iprt_file(
             "desert.cdf", "desert_e3.nc", 0.5, wavelength[0],
-            h_min_mix=0.0, h_mix_max=3.0, **_opac_free_and_stratosphere(),
+            h_mix_min=0.0, h_mix_max=3.0, **_opac_free_and_stratosphere(),
         )
         pro = Atm1D(
             "afglt", comp=[desert], grid=z, prof_ray=sca, prof_abs=abs_
@@ -1456,11 +1456,11 @@ def case_e4(n_photons: float = 1e8, overwrite: bool = True,
         wavelength = np.array([450.0])
         desert = _opac_from_iprt_file(
             "desert.cdf", "desert_e4.nc", 0.5, wavelength[0],
-            h_min_mix=0.0, h_mix_max=3.0, **_opac_free_and_stratosphere(),
+            h_mix_min=0.0, h_mix_max=3.0, **_opac_free_and_stratosphere(),
         )
         sulfate = _opac_from_iprt_file(
             "sulfate.cdf", "sulfate_e4.nc", 0.05, wavelength[0],
-            h_min_mix=20.0, h_mix_max=21.0,
+            h_mix_min=20.0, h_mix_max=21.0,
             **_opac_free_and_stratosphere(),
         )
         pro = Atm1D(

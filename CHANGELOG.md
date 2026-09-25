@@ -106,6 +106,13 @@ final `v2.0.0` release.
     in `AerOPAC`, `Cloud`, `read_i3rc_aerosol`, `read_i3rc_cloud`,
     `AlbedoSpeclib`, `Hydrosol`, `HydrosolPR`, `HydrosolZhai` and
     `extract_points`; the classes store it as `self.fname`
+  - The vertical structure parameters of `AerOPAC` are lower case, as in
+    `AerUser`: `H_mix_min` / `H_mix_max` → `h_mix_min` / `h_mix_max`
+    (`h_min_mix` in 2.0.0b1), `H_free_min` / `H_free_max` →
+    `h_free_min` / `h_free_max`, `H_stra_min` / `H_stra_max` →
+    `h_stra_min` / `h_stra_max`, and `Z_mix` / `Z_free` / `Z_stra` →
+    `z_mix` / `z_free` / `z_stra`; the attributes of the OPAC files keep
+    their names
   - The `lam` parameter and attribute of `AlbedoSpectrum`,
     `smartg.atmosphere`, `smartg.rrs`, `smartg.vrs` and
     `smartg.histories` is now `wavelength`

@@ -219,7 +219,7 @@ class AerOPAC:
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical depth tau_ref
-    h_min_mix : float, optional
+    h_mix_min : float, optional
         Force min altitude of the mixture
     h_mix_max : float, optional
         Force max altitude of the mixture
@@ -323,7 +323,7 @@ class AerOPAC:
         fname: str | Path,
         tau_ref: float | NumericArrayLike | xr.DataArray | LUT | None,
         w_ref: float,
-        h_min_mix: float | None = None,
+        h_mix_min: float | None = None,
         h_mix_max: float | None = None,
         h_free_min: float | None = None,
         h_free_max: float | None = None,
@@ -410,8 +410,8 @@ class AerOPAC:
             ds2 = self.ds_mix.assign_coords(hum=[hum_v2])
             self.ds_mix = xr.concat([self.ds_mix, ds2], dim="hum")
 
-        if h_min_mix is None:
-            h_min_mix = float(self.ds_mix.attrs["H_mix_min"])
+        if h_mix_min is None:
+            h_mix_min = float(self.ds_mix.attrs["H_mix_min"])
         if h_mix_max is None:
             h_mix_max = float(self.ds_mix.attrs["H_mix_max"])
         if h_free_min is None:
@@ -443,9 +443,9 @@ class AerOPAC:
         self.h_max = []
         self.z_sh = []
 
-        if h_mix_max - h_min_mix > 1e-6:
+        if h_mix_max - h_mix_min > 1e-6:
             self.vert_content.append(self.ds_mix)
-            self.h_min.append(h_min_mix)
+            self.h_min.append(h_mix_min)
             self.h_max.append(h_mix_max)
             self.z_sh.append(z_mix)
         if h_free_max - h_free_min > 1e-6:
