@@ -1658,7 +1658,9 @@ def _run_e6(
     toa_path : Path
         The file of the run.
     n_photons : float
-        Number of photons per pixel.
+        Number of photons per pixel. The run launches
+        N_PIXELS_E6 * N_PIXELS_E6 times it, whatever the number of
+        sensors.
     pro : xr.Dataset
         The atmosphere profile.
     surface : RoughSurface
@@ -1685,7 +1687,9 @@ def case_e6_v1(n_photons: float = 1e8, overwrite: bool = True,
     Parameters
     ----------
     n_photons : float
-        Number of photons per pixel.
+        Number of photons per pixel of the camera. The photons of the
+        pixels without a sensor go to the others: the 2997 sensors of
+        the 3721 pixels receive about 1.24 times n_photons each.
     overwrite, output_dir, seed
         See case_d1.
     """
