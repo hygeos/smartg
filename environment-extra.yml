@@ -4,31 +4,29 @@
 channels:
   - conda-forge
 dependencies:
-  - python>=3.11
-  - numpy>=2
+  - python>=3.11,<3.15
+  - numpy>=2,<3
   - xarray
   - pandas
   - scipy
   - h5py
-  - pyarrow
   - openpyxl
   - pytest
   - pytest-xdist
   - pytest-html
   - progressbar2
+  - tqdm
   - matplotlib
   - papermill
   - python-dotenv
   - notebook
-  - jupytext>=1.16
+  - jupytext>=1.16,<2
   - ipywidgets
   - ipympl
-  - pyhdf
-  - gatiab>=1.1.2
-  - geoclide>=4.0.0
-  - statsmodels
+  - geoclide>=4.0.0,<5
   - luts
-  - pytrunc>=2.0.0
+  - pytrunc>=2.0.0,<3
+  - gatiab>=1.1.2,<2
   - pip
   - pip:
     - pycuda
