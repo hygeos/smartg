@@ -1015,6 +1015,13 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix `multi_profiles`, which shifted the phase matrix indices of each
+    profile by the largest index it used plus one instead of by its
+    number of phase matrices: when a profile did not use all of its
+    matrices, as with a `wavelength_phase` grid wider than the run's
+    wavelengths, the next profiles scattered with the matrices of the
+    previous ones. Its docstring no longer claims to convert DataArray
+    inputs, which raise a `TypeError`. The error was already in v1.2.0
   - Fix `Smartg.run` with fewer than 30 photons (10 with 3D objects),
     which never returned: the default `n_loop`, `n_photons/30`, reached
     the kernel as 0, which launches no photon. It is now at least 1, and

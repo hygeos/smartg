@@ -18,6 +18,7 @@ from smartg.smartg import (
     _impact_init,
     _isotropic,
     _resolve_n_loop,
+    multi_profiles,
 )
 
 
@@ -165,3 +166,38 @@ def test_n_loop_refused(
     """Check that a run of no photon per loop raises a ValueError."""
     with pytest.raises(ValueError, match=f"{match} must be at least 1"):
         _resolve_n_loop(n_photons, n_loop, 0)
+
+
+def _profile_with_phases(marker: float) -> xr.Dataset:
+    """Return a profile of 3 phase matrices, of which it uses the first.
+
+    It is what a profile with a wavelength_phase grid wider than its
+    wavelengths looks like. Every matrix is filled with the marker.
+    """
+    return xr.Dataset(
+        {
+            "OD_atm": (("wavelength", "z_atm"), np.zeros((2, 3))),
+            "iphase_atm": (
+                ("wavelength", "z_atm"), np.zeros((2, 3), dtype=np.int32)
+            ),
+            "phase_atm": (
+                ("iphase", "nphamat", "theta_atm"), np.full((3, 1, 2), marker)
+            ),
+        },
+        coords={"wavelength": [500.0, 510.0], "z_atm": [2.0, 1.0, 0.0]},
+    )
+
+
+def test_multi_profiles_keeps_each_profile_phases() -> None:
+    """Check that each profile of multi_profiles scatters with its own.
+
+    The second profile must index the first of its own matrices, which
+    follow the 3 of the first profile, and not the second matrix of the
+    first profile.
+    """
+    pro = multi_profiles([_profile_with_phases(1.0),
+                          _profile_with_phases(2.0)])
+    iphase = pro["iphase_atm"].values
+    phase = pro["phase_atm"].values
+    np.testing.assert_array_equal(phase[iphase[:2]], 1.0)
+    np.testing.assert_array_equal(phase[iphase[2:]], 2.0)

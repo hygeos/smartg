@@ -4320,7 +4320,6 @@ def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
         Profiles returned by atmospheric or oceanic profile builders
         (for example ``atm.calc()`` or ``water.calc()``). MLUT-like
         objects are converted with ``to_xarray()`` when available.
-        DataArray inputs are converted to single-variable datasets.
     kind : str, default='atm'
         Profile family to process. Allowed values are:
 
@@ -4345,16 +4344,18 @@ def multi_profiles(profs: list, kind: str = 'atm') -> xr.Dataset:
     first = xprofs[0]
     pro = xr.Dataset(attrs=first.attrs)
 
+    phase = 'phase_' + kind
     for d in first.data_vars:
         if 'iphase' in d:
-            imax = 0
+            # each profile indexes its own block of the concatenated
+            # phase matrices, whose entries it may not all use
+            offset = 0
             chunks = []
             for m in xprofs:
-                da = m[d]
-                chunks.append(da + imax)
-                imax += np.unique(da.data).max() + 1
+                chunks.append(m[d] + offset)
+                offset += m[phase].sizes[m[phase].dims[0]]
             pro[d] = xr.concat(chunks, dim=chunks[0].dims[0])
-        elif d == ('phase_' + kind):
+        elif d == phase:
             pro[d] = xr.concat([m[d] for m in xprofs], dim=first[d].dims[0])
         elif d == ('T_' + kind):
             pro[d] = first[d]
