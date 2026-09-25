@@ -920,6 +920,11 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the import of `smartg.view`, and so of the `smartg.iprt` phase
+    modules, which called `np.seterr(invalid='ignore', divide='ignore')`
+    and silenced these NumPy warnings for the whole process. Only the
+    plotting functions that divide by values that may be zero ignore
+    them now, and they restore the caller's NumPy error state
   - Fix `smartg.environ.modified_environ` with a value that is not a
     string, which raised a misleading `KeyError` on exit: it now raises a
     `TypeError` naming the variable before changing the environment. Its

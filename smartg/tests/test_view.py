@@ -8,6 +8,7 @@ with the symmetry of a plane-parallel atmosphere, and the channel sums
 of cat_view on synthetic REPTRAN internal bands.
 """
 
+import importlib
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -193,3 +194,12 @@ def test_cat_view_sums_the_internal_bands_of_each_channel() -> None:
     np.testing.assert_allclose(out["FLUX_int"], [[12.0, 28.0]] * 9)
     np.testing.assert_allclose(out["FLUX"], [[0.12, 0.14]] * 9)
     np.testing.assert_allclose(out["FLUX_tot"], np.full(9, 40.0))
+
+
+def test_view_import_keeps_numpy_error_state() -> None:
+    """Importing smartg.view leaves the NumPy error state alone."""
+    import smartg.view
+
+    with np.errstate(all="raise"):
+        importlib.reload(smartg.view)
+        assert set(np.geterr().values()) == {"raise"}

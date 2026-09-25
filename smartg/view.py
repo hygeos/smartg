@@ -32,9 +32,10 @@ plot_iquv_comparison
 
 import math
 import warnings
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from functools import wraps
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal, ParamSpec, TypeVar, cast
 
 import geoclide as gc
 import matplotlib.pyplot as plt
@@ -74,8 +75,26 @@ from smartg.objects3d import (
     ref_fresnel,
 )
 
-# ignore division by zero errors
-np.seterr(invalid="ignore", divide="ignore")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _ignore_invalid_division(func: Callable[_P, _R]) -> Callable[_P, _R]:
+    """
+    Run a plotting function without NumPy division warnings.
+
+    The ratios it plots (degrees of polarization, relative differences,
+    coefficients per unit length) are NaN or infinite where their
+    denominator is zero, and those points are left blank. The NumPy
+    error state of the caller is restored on return.
+    """
+
+    @wraps(func)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return func(*args, **kwargs)
+
+    return wrapper
 
 
 def mdesc(desc: str, log_i: bool = False) -> str:
@@ -174,6 +193,7 @@ def _interp_and_squeeze_scalar_dims(
     return da_interp
 
 
+@_ignore_invalid_division
 def smartg_view(
     ds_sg: xr.Dataset | MLUT,
     log_i: bool = False,
@@ -571,6 +591,7 @@ def smartg_view(
     return fig
 
 
+@_ignore_invalid_division
 def transect_view(
     ds_sg: xr.Dataset | MLUT,
     log_i: bool = False,
@@ -1042,6 +1063,7 @@ def spectrum(
     return fig
 
 
+@_ignore_invalid_division
 def spectrum_view(
     ds_sg: xr.Dataset | MLUT,
     log_i: bool = False,
@@ -1291,6 +1313,7 @@ def spectrum_view(
         return fig1, fig2
 
 
+@_ignore_invalid_division
 def phase_view(
     ds_sg: xr.Dataset | MLUT,
     ipha: int
@@ -1546,6 +1569,7 @@ def phase_view(
     return fig, axarr
 
 
+@_ignore_invalid_division
 def profile_view(
     ds_sg: xr.Dataset | MLUT,
     fig: Figure | None = None,
@@ -1822,6 +1846,7 @@ def input_view(
     tight_layout()
 
 
+@_ignore_invalid_division
 def compare(
     ds_sg: xr.Dataset | MLUT,
     ds_ref: xr.Dataset | MLUT,
@@ -2455,6 +2480,7 @@ def _parse_subplot_position(
         )
 
 
+@_ignore_invalid_division
 def plot_polar(
     da: xr.DataArray,
     index: int | np.ndarray | list[int] | None = None,
@@ -2815,6 +2841,7 @@ def _mirror_azimuths(
     return np.concatenate((phis, phis + 180.0)), mirrored
 
 
+@_ignore_invalid_division
 def plot_polar_iquv(
     iquv: Sequence[np.ndarray],
     thetas: np.ndarray,
