@@ -1026,7 +1026,7 @@ def _profile_targets(
 
 
 def _cdf_theta_grid(
-    ds: xr.Dataset, n_theta: ThetaLike | None, ntheta_max: int
+    ds: xr.Dataset, n_theta: ThetaLike | None, n_theta_max: int
 ) -> NDArray[np.float64]:
     """Return the scattering angles a cdf file is resampled on.
 
@@ -1036,10 +1036,10 @@ def _cdf_theta_grid(
         The open file, with the variables 'theta' and 'ntheta'.
     n_theta : None, int, str or array_like
         ``None`` for an equally spaced grid fine enough for the finest
-        step of the file, capped at *ntheta_max* angles; a number of
+        step of the file, capped at *n_theta_max* angles; a number of
         equally spaced angles or the angles themselves in degrees; or
         ``'native'`` for the union of every grid the file carries.
-    ntheta_max : int
+    n_theta_max : int
         The cap of the automatic grid.
 
     Returns
@@ -1050,7 +1050,7 @@ def _cdf_theta_grid(
     if n_theta is None:
         dtheta_min = np.nanmin(np.abs(np.diff(ds.theta.values, axis=3)))
         ntheta = np.ceil(180 / dtheta_min).astype(int) + 1
-        ntheta = min(ntheta, ntheta_max)  # be sure to not exceed ntheta_max
+        ntheta = min(ntheta, n_theta_max)  # be sure to not exceed n_theta_max
         return np.linspace(0, 180, ntheta)
 
     if is_native_theta(n_theta):
@@ -1169,7 +1169,7 @@ def read_phase_cdf(
     kind: str = "atm",
     normalize: bool = True,
     n_theta: ThetaLike | None = None,
-    ntheta_max: int = 18001,
+    n_theta_max: int = 18001,
     wavelength_phase: NumericArrayLike | None = None,
     pfgrid: NumericArrayLike | None = None,
     z_rh_reff: NumericArrayLike | None = None,
@@ -1221,7 +1221,7 @@ def read_phase_cdf(
     n_theta : None, int, str or array_like, optional
         The scattering angles the phase matrices are resampled on:
         - None -> equally spaced angles, as many as the finest step of
-          the file needs, at most `ntheta_max` (default)
+          the file needs, at most `n_theta_max` (default)
         - an int -> that many equally spaced angles
         - an array -> the angles themselves in degrees, which
           :func:`theta_grid` can build clustered towards the forward
@@ -1235,7 +1235,7 @@ def read_phase_cdf(
           ``waso_670.mie.cdf``), each angle costing 28 bytes per phase
           function on the device.
 
-    ntheta_max : int, optional
+    n_theta_max : int, optional
         Cap of the automatic grid (`n_theta` = None): if the file
         provides higher resolution, it will be reduced to this limit.
         Default: 18001
@@ -1344,7 +1344,7 @@ def read_phase_cdf(
         )
     n_rh_reff = rh_reff.size
     n_wavelength = ds["wavelen"].size
-    theta = _cdf_theta_grid(ds, n_theta, ntheta_max)
+    theta = _cdf_theta_grid(ds, n_theta, n_theta_max)
     wavelength = ds["wavelen"].data * 1e3
 
     # checks at the beginning to avoid unnecessary computations
@@ -1431,7 +1431,7 @@ def read_phase(
         - for ``.cdf``: forwarded to :func:`read_phase_cdf`
 
         Typical arguments include ``wavelength_phase``, ``pfgrid``,
-        ``z_rh_reff``, and ``n_theta`` and ``ntheta_max`` (only for
+        ``z_rh_reff``, and ``n_theta`` and ``n_theta_max`` (only for
         ``.cdf``).
 
     Returns
@@ -1468,7 +1468,7 @@ def read_phase(
     ...                  wavelength_phase=550.0,
     ...                  z_rh_reff=[70.0, 60.0, 58.0],
     ...                  pfgrid=[100.0, 50.0, 10.0, 0.0],
-    ...                  ntheta_max=18001)
+    ...                  n_theta_max=18001)
     >>> pha = read_phase('wc_sol.nc',  # doctest: +SKIP
     ...                  output_sg_ready=False)
     """

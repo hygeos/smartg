@@ -516,11 +516,12 @@ final `v2.0.0` release.
     used to produce. A `.dat` file, a single matrix, has only the
     first layout
     - `read_phase_cdf` gains `n_theta`: `None` keeps the automatic
-      equally spaced grid capped by `ntheta_max`, an int or the angles
-      themselves choose the grid, and `'native'` resamples onto the
-      union of every grid the file carries (2818 angles for the 25
-      radii of the IPRT `watercloud_670.mie.cdf`, 38 for
-      `waso_670.mie.cdf`), on which the file is reproduced exactly
+      equally spaced grid capped by `n_theta_max` (`ntheta_max` in
+      2.0.0b1), an int or the angles themselves choose the grid, and
+      `'native'` resamples onto the union of every grid the file
+      carries (2818 angles for the 25 radii of the IPRT
+      `watercloud_670.mie.cdf`, 38 for `waso_670.mie.cdf`), on which
+      the file is reproduced exactly
   - A random walk now draws its deflection from exactly the phase
     matrix it then reads. `struct Phase` used to interleave a second
     copy of the matrix at equal-probability nodes, and the kernel drew
