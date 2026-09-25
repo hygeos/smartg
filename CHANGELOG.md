@@ -1143,6 +1143,9 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix `receiver_view`, which read the grid sizes through the deprecated
+    mapping of `Dataset.dims`: it warned on every call, and would raise a
+    `TypeError` once xarray returns a set of dimension names
   - Fix a `Plane` whose corners have a z coordinate: the kernel intersected
     it as if they were at z = 0 in its frame, while `visualize_entity` drew
     it at their z, so that such a plane was hit, blocked light and

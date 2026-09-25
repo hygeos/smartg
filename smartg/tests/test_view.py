@@ -9,6 +9,7 @@ of cat_view on synthetic REPTRAN internal bands.
 """
 
 import importlib
+import warnings
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -16,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import xarray as xr
+from matplotlib.image import AxesImage
 
 from smartg.reptran import ReptranIbandList
 from smartg.view import (
@@ -26,6 +28,7 @@ from smartg.view import (
     nopt_view,
     plot_polar_iquv,
     profile_view,
+    receiver_view,
 )
 
 N_PHOTONS = 1000
@@ -291,3 +294,26 @@ def test_compare_panel_titles() -> None:
         r"$DoLP^{\uparrow}_{TOA}$",
     ]
     plt.close(fig)
+
+
+def _receiver_dataset(weights: np.ndarray, cell_km: float) -> xr.Dataset:
+    """Return a receiver output of the given category 0 weights."""
+    c_receiver = np.zeros((9, *weights.shape))
+    c_receiver[0] = weights
+    return xr.Dataset(
+        {"C_Receiver": (("Categories", "X_Cell_Index", "Y_Cell_Index"),
+                        c_receiver)},
+        attrs={"S_Cell": str(cell_km)},
+    )
+
+
+def test_receiver_view_reads_the_sizes() -> None:
+    """The grid sizes are read without the deprecated Dataset.dims."""
+    ds = _receiver_dataset(np.ones((4, 6)), 0.0005)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        receiver_view(ds)
+    image = plt.gci()
+    assert isinstance(image, AxesImage)
+    np.testing.assert_allclose(image.get_extent(), [1.5, -1.5, -1.0, 1.0])
+    plt.close("all")

@@ -3265,8 +3265,8 @@ def receiver_view(
         )
     # Cell size: S_Cell attribute is in km, convert to m
     cell_size = float(ds_sg_out.attrs["S_Cell"]) * 1e3
-    half_x = (ds_sg_out.dims["X_Cell_Index"] * cell_size) / 2.0
-    half_y = (ds_sg_out.dims["Y_Cell_Index"] * cell_size) / 2.0
+    half_x = (ds_sg_out.sizes["X_Cell_Index"] * cell_size) / 2.0
+    half_y = (ds_sg_out.sizes["Y_Cell_Index"] * cell_size) / 2.0
     cell_area = cell_size * cell_size
     extent: tuple[float, float, float, float] = (
         half_y,
