@@ -1568,7 +1568,7 @@ for i, w in enumerate(wavelength):
 
 # %%
 # A 2D horizontal map of spectral albedos can be constructed
-# Spectral albedos are limited to a MAX_NREF=10 different kind, could be
+# Spectral albedos are limited to a MAX_NREF=100 different kind, could be
 # extended
 # They should be defined using AlbedoCst, AlbedoSpectrum or
 # AlbedoSpeclib classes
