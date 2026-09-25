@@ -6986,9 +6986,6 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
     float *tabCount3; // ALIS specific array pointer for photon's individual path histories
     #endif
 
-    // We dont count UPTOA photons leaving in boxes outside SZA range
-    if ((LEd==0) && (count_level==UPTOA) && (acosf(ph->v.z) > (SZA_MAXd*90./DEMIPI))) return;
-
 
     float theta = acosf(fmin(1.F, fmax(-1.F, ph->v.z)));
 	float psi=0.;
@@ -7779,15 +7776,18 @@ __device__ int ComputeBox(int* ith, int* iphi, int* il,
 	// vxy est la projection du vecteur vitesse du photon sur (x,y)
 	float vxy = sqrtf(photon->v.x * photon->v.x + photon->v.y * photon->v.y);
 
-	// Calcul de la valeur de ithv
-	// _rn correspond à round to the nearest integer
-    #ifndef SPHERIQUE
-	*ith = __float2int_rd(__fdividef(acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
-    #else
-    //if (count_level==UPTOA) *ith = __float2int_rd(__fdividef((acosf(photon->v.z) + (90.F-SZA_MAXd)*DEMIPI/90.) * NBTHETAd, SZA_MAXd/90.*DEMIPI));
-    if (count_level==UPTOA) *ith = __float2int_rd(__fdividef((acosf(photon->v.z) - 0.F)                            * NBTHETAd, SZA_MAXd/90.*DEMIPI));
-    else                    *ith = __float2int_rd(__fdividef( acosf(fabsf(photon->v.z)) * NBTHETAd, DEMIPI));
+	// Zenith angle index: the NBTHETA boxes span [0, SZA_MAX] at
+	// every level, the zenith angle being taken from the vertical,
+	// except at UPTOA in spherical mode, where it is taken from the z
+	// axis and can exceed 90 degrees. The photons leaving beyond
+	// SZA_MAX are not counted.
+	float th_max = SZA_MAXd/90.*DEMIPI;
+	float th_box = acosf(fminf(fabsf(photon->v.z), 1.F));
+    #ifdef SPHERIQUE
+    if (count_level==UPTOA) th_box = acosf(fminf(fmaxf(photon->v.z, -1.F), 1.F));
     #endif
+	if (th_box > th_max) return 0;
+	*ith = __float2int_rd(__fdividef(th_box * NBTHETAd, th_max));
 
 
 	// Calcul de la valeur de il

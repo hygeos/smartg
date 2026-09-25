@@ -1290,8 +1290,13 @@ class Smartg:
         russian_roulette_weight : float, optional
             The threshold weight to apply to the Russian Roulette.
         sza_max : float, optional
-            The maximum SZA value for solar BOXES in case a Regulard
-            grid and cone sampling.
+            The maximum zenith angle in degrees of the output boxes of
+            the cone sampling (without le), 90 by default: the n_theta
+            boxes span [0, sza_max] at every level, and the photons
+            leaving beyond sza_max are not counted. The zenith angle is
+            taken from the vertical, except at the top of the
+            atmosphere in spherical mode, where it is taken from the z
+            axis and sza_max can exceed 90.
         sun_disc : float, optional
             The angular size of the Sun disc in degrees, 0 (default
             means no angular size). In the B and BR modes the angular
@@ -2460,7 +2465,8 @@ def _calc_solid_angles(
     n_phi : int
         Number of azimuth angle bins.
     sza_max : float, optional
-        Maximum zenith angle in degrees. Default is ``90.``.
+        Maximum zenith angle in degrees: the n_theta bins span [0,
+        sza_max]. Default is ``90.``.
     sun_disc : float, optional
         Half-angle of the solar disc in degrees. When non-zero, all
         solid angles are set to the solid angle subtended by the solar
@@ -2475,8 +2481,9 @@ def _calc_solid_angles(
         Array of shape ``(n_phi,)`` containing the azimuth angles in
         radians, starting at ``0`` and spaced by ``2π / n_phi``.
     tab_omega : numpy.ndarray
-        Array of shape ``(n_theta,)`` containing the normalized solid
-        angles. When ``sun_disc != 0``, all elements are set to the
+        Array of shape ``(n_theta,)`` containing the solid angle of
+        one bin over the solid angle ``2π`` of the hemisphere, whatever
+        sza_max. When ``sun_disc != 0``, all elements are set to the
         solid angle of the solar disc ``2π(1 - cos(sun_disc))``.
     """
     # zenith angles
@@ -2492,8 +2499,11 @@ def _calc_solid_angles(
     # solid angles
     tab_ds = np.sin(tab_th) * dth * dphi
 
-    # normalize to 1
-    tab_omega = tab_ds / (sum(tab_ds) * n_phi)
+    # normalize to the hemisphere: the bins cover the fraction 1 -
+    # cos(sza_max) of it (more than 1 beyond 90 degrees)
+    tab_omega = (
+        tab_ds / (sum(tab_ds) * n_phi) * (1.0 - np.cos(np.radians(sza_max)))
+    )
     if sun_disc != 0:
         tab_omega[:] = 2 * np.pi * (1.0 - np.cos(sun_disc * np.pi / 180))
 
@@ -2674,7 +2684,7 @@ def _finalize(
     back : bool, optional
         Backward mode flag.
     sza_max : float, optional
-        Maximum solar zenith angle in degrees (sun_disc mode).
+        Maximum zenith angle in degrees of the output boxes of run.
     sun_disc : int, optional
         Sun discretization flag of run.
     hist : bool, optional

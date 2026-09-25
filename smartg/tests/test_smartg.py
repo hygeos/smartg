@@ -625,3 +625,40 @@ def test_brdf_surface_in_3d_atmosphere() -> None:
         float(m1["I_up (TOA)"].values.ravel()[0]),
         rtol=1e-3,
     )
+
+
+def _sza_max_run(
+    sg: Smartg, n_theta: int, sza_max: float, seed: int
+) -> xr.Dataset:
+    """Run the cone sampling of a dusty atmosphere on a zenith grid."""
+    return sg.run(
+        550.0,
+        atmosphere=Atm1D("afglt", comp=[AerOPAC("desert", 0.3, 550.0)]),
+        surface=LambSurface(alb=AlbedoCst(0.2)),
+        th_deg=30.0,
+        n_theta=n_theta,
+        n_phi=2,
+        sza_max=sza_max,
+        output_layers=1,
+        n_photons=1e7,
+        stdev=True,
+        seed=seed,
+        progress=False,
+    )
+
+
+def test_sza_max_keeps_the_radiances(sg: Smartg) -> None:
+    """Check that sza_max only cuts the zenith grid of the output.
+
+    The 2 degree boxes up to 60 degrees are the same with 45 boxes up
+    to 90 degrees and with 30 boxes up to 60 degrees, and so must be
+    their radiances, at the top of the atmosphere as at the surface.
+    """
+    full = _sza_max_run(sg, 45, 90.0, 21)
+    part = _sza_max_run(sg, 30, 60.0, 22)
+    common = {"Zenith angles": slice(0, 30)}
+    np.testing.assert_allclose(
+        part["Zenith angles"].values, full["Zenith angles"][common].values
+    )
+    for level in ("up (TOA)", "down (0+)"):
+        assert np.all(np.abs(_z_scores(full[common], part, level)) < 6)

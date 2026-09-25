@@ -1015,6 +1015,15 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix `Smartg.run(sza_max=...)` with the cone sampling (without `le`)
+    when `sza_max` is not 90: the radiances were multiplied by
+    `1 - cos(sza_max)`, halved at 60 degrees, and the kernel binned every
+    level in plane-parallel mode, and every level but the top of the
+    atmosphere in spherical mode, over 0 to 90 degrees while the output
+    labelled the boxes 0 to `sza_max`. The boxes now span 0 to `sza_max`
+    at every level, the photons leaving beyond are not counted, and the
+    radiances no longer depend on `sza_max`. The error was already in
+    v1.2.0
   - Fix the reflection on `RoughSurface(brdf=True)` in a 3D atmosphere
     (`opt3d=True`): the photon left the surface from the cell whose index
     is the number of optical properties instead of the cell it reached the
