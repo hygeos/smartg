@@ -24,6 +24,7 @@ def synthetic_reptran() -> Reptran:
     """Build a small in-memory REPTRAN object for unit tests."""
     reptran = object.__new__(Reptran)
     reptran.fname = Path("synthetic.cdf")
+    reptran.thermal = False
     reptran.wvl = np.array([400.0, 500.0, 600.0, 700.0])
     reptran.extra = np.array([1.0, 2.0, 3.0, 4.0])
     reptran.wvl_integral = np.array([200.0, 200.0])
@@ -304,3 +305,36 @@ def test_calc_profile_reads_the_tables_of_its_file(
     kabs = iband.calc_profile(cast(ProfileBase, prof))
 
     np.testing.assert_allclose(kabs, 2.0 * 1e10 * 1e-11)
+
+
+def test_thermal_bandwidth_is_in_nanometres(
+    synthetic_reptran: Reptran,
+) -> None:
+    """A thermal wavenumber integral becomes a bandwidth in nm."""
+    synthetic_reptran.thermal = True
+    parsed = ReptranBand(synthetic_reptran, 0)
+    fallback = ReptranBand(synthetic_reptran, 1)
+    # 200 cm-1 times the weighted mean of the squared wavelengths
+    dl = 200.0 * (0.25 * 600.0**2 + 0.75 * 700.0**2) * 1e-7
+    ibands = ReptranIbandList([*parsed.ibands(), *fallback.ibands()])
+
+    assert parsed.dl == pytest.approx(120.0)
+    assert fallback.dl == pytest.approx(dl)
+    assert fallback.wmax - fallback.wmin == pytest.approx(dl)
+    np.testing.assert_allclose(
+        ibands.get_weights()[3].to_numpy(), [120.0, 120.0, dl, dl]
+    )
+
+
+def test_thermal_bandwidth_matches_the_solar_file() -> None:
+    """A channel in both files gets about the same bandwidth in nm."""
+    solar = Reptran("reptran_solar_msg").band("msg1_seviri_ch039")
+    thermal = Reptran("reptran_thermal_msg").band("msg1_seviri_ch039")
+    coarse = Reptran("reptran_thermal_coarse").band(0)
+
+    assert not Reptran("reptran_solar_msg").thermal
+    assert solar.dl == solar.r_int
+    assert thermal.r_int == pytest.approx(365.6, abs=0.1)  # cm-1
+    assert thermal.dl == pytest.approx(solar.r_int, rel=0.01)
+    assert thermal.wmax - thermal.wmin == pytest.approx(thermal.dl)
+    assert coarse.dl == pytest.approx(2509.4103 - 2500.0)

@@ -469,9 +469,19 @@ class ReptranBand:
         Mean internal-band wavelength, used when channel limits cannot
         be parsed from ``name``.
     r_int : float
-        Wavelength integral, or channel bandwidth, in nanometres.
+        Integral of the channel response function, over wavelength in
+        nanometres for a solar file, over wavenumber in inverse
+        centimetres for a thermal file.
+    dl : float
+        Channel bandwidth in nanometres. It is ``r_int`` for a solar
+        file. For a thermal file it is ``wmax - wmin`` when the limits
+        are parsed from ``name``, and otherwise ``r_int`` converted
+        with the weighted mean of the squared internal-band
+        wavelengths, since dlambda = lambda**2 dnu / 1e7 (nm, cm-1).
     wmin, wmax : float
         Lower and upper wavelength limits of the channel in nanometres.
+        When they cannot be parsed from ``name``, they are ``w -+
+        dl / 2``.
     """
 
     def __init__(self, reptran: Reptran, band: int) -> None:
@@ -497,7 +507,8 @@ class ReptranBand:
         ]
         self.name = reptran.band_names[band]
         self.fname = Path(reptran.fname)
-        # the wavelength integral (width) of this channel
+        # the integral of the response function of this channel, in nm
+        # for a solar file and in cm-1 for a thermal one
         self.r_int = reptran.wvl_integral[self.band]
 
         try:
@@ -505,10 +516,23 @@ class ReptranBand:
                 self.name.split("to")[0].rstrip().split("bandfrom")[1]
             )
             self.wmax = float(self.name.split("to")[1].rstrip().split("nm")[0])
+            parsed = True
         except (IndexError, ValueError):
+            parsed = False
+
+        # the bandwidth in nm
+        if not reptran.thermal:
+            self.dl = float(self.r_int)
+        elif parsed:
+            self.dl = self.wmax - self.wmin
+        else:
+            mean_square = np.average(self.awvl**2, weights=self.awvl_weight)
+            self.dl = float(self.r_int * mean_square * 1e-7)
+
+        if not parsed:
             self.w = np.mean(self.awvl)
-            self.wmin = self.w - self.r_int / 2.0
-            self.wmax = self.w + self.r_int / 2.0
+            self.wmin = self.w - self.dl / 2.0
+            self.wmax = self.w + self.dl / 2.0
 
     def iband(self, index: int) -> ReptranIband:
         """Return an internal band by its zero-based index.
@@ -556,7 +580,12 @@ class Reptran:
     extra : numpy.ndarray
         Extraterrestrial solar irradiance at the internal wavelengths.
     wvl_integral : numpy.ndarray
-        Wavelength integral, or bandwidth, of each sensor channel.
+        Integral of the response function of each sensor channel, over
+        wavelength in nanometres for a solar file, over wavenumber in
+        inverse centimetres for a thermal file.
+    thermal : bool
+        Whether the file is a thermal one, which is told by the absence
+        of the extraterrestrial solar irradiance ``extra``.
     nwvl_in_band : numpy.ndarray
         Number of internal bands in each sensor channel.
     iwvl : numpy.ndarray
@@ -587,13 +616,16 @@ class Reptran:
     def _read_file_general(self) -> None:
         with xr.open_dataset(self.fname) as dataset:
             self.wvl = dataset["wvl"].values  # the wavelength grid
-            if "extra" in dataset.variables:
-                # the extra terrestrial solar irradiance for the
-                # wavelength grid
-                self.extra = dataset["extra"].values
-            else:
+            # only the solar files hold the extra terrestrial solar
+            # irradiance for the wavelength grid
+            self.thermal = "extra" not in dataset.variables
+            if self.thermal:
                 self.extra = np.ones_like(self.wvl)
-            # the wavelength integral (width) of each sensor channel
+            else:
+                self.extra = dataset["extra"].values
+            # the integral of the response function of each sensor
+            # channel, over wavelength in nm (solar) or over wavenumber
+            # in cm-1 (thermal)
             self.wvl_integral = dataset["wvl_integral"].values
             # the number of internal bands in each sensor channel
             self.nwvl_in_band = dataset["nwvl_in_band"].values
@@ -745,7 +777,7 @@ class ReptranIbandList:
             we_l.append(we)
             ex = iband.band.aextra[iband.index]  # E0 of internal band
             ex_l.append(ex)
-            dl = iband.band.r_int  # bandwidth
+            dl = iband.band.dl  # bandwidth in nm
             dl_l.append(dl)
             wb = np.mean(iband.band.awvl[:])
             wb_l.append(wb)

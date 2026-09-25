@@ -916,6 +916,16 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the bandwidth of the REPTRAN thermal channels: the `wvl_integral`
+    of a thermal file is a wavenumber integral in cm-1, which
+    `ReptranIbandList.get_weights` returned as a bandwidth in nm, so
+    `reduce_reptran(integrated=True)` of a thermal run was 1.5 (MSG
+    ch039) to 18 (ch134) times too small, and the limits derived for the
+    channels whose name holds none (all the sensor channels) were as many
+    times too narrow. The new `ReptranBand.dl` is the bandwidth in nm:
+    `r_int` for a solar file, and for a thermal one, told by its lack of
+    `extra`, the width of a named band or `r_int` converted to nm with the
+    squared internal wavelengths. Solar files are unchanged
   - Fix a REPTRAN file given with its directory, `Reptran('/data/x.cdf')`:
     `ReadCrs` dropped the directory and read the lookup tables
     `x.lookup.<species>.cdf` from the auxdata REPTRAN folder, so
