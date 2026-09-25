@@ -1124,12 +1124,13 @@ def test_sun_disc_boxes_of_every_level() -> None:
 
     With sun_disc, a box counts only the photons within sun_disc of
     its centre, and its radiance is normalised by the solid angle of
-    the disc instead of the one of the box, which divides it by 2 pi.
-    Where the disc lies inside the box, 2 pi times the radiance must
-    match the one of the whole box, at the top of the atmosphere as at
-    the surface. The molecular atmosphere has no aureole, whose peak
-    would make the radiance at the centre of a box differ from its
-    mean over the box.
+    the disc instead of the one of the box, in the same units: where
+    the disc lies inside the box, the radiance must match the one of
+    the whole box, at the top of the atmosphere as at the surface. It
+    used to be 2 pi times smaller, the disc being counted in sr and
+    the box as a fraction of the hemisphere. The molecular atmosphere
+    has no aureole, whose peak would make the radiance at the centre
+    of a box differ from its mean over the box.
     """
     sg = Smartg()
     kwargs: dict[str, Any] = {
@@ -1148,7 +1149,7 @@ def test_sun_disc_boxes_of_every_level() -> None:
         # mean over the azimuth, where the 2 degree disc lies inside
         # the 10 x 10 degree boxes: 30 to 80 degrees of zenith angle
         ratio = (
-            2 * np.pi * disc[f"I_{level}"].values.mean(axis=0)
+            disc[f"I_{level}"].values.mean(axis=0)
             / boxes[f"I_{level}"].values.mean(axis=0)
         )
         np.testing.assert_allclose(ratio[3:8], 1.0, atol=0.05)

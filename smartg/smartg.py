@@ -1502,11 +1502,15 @@ class Smartg:
             axis and sza_max can exceed 90.
         sun_disc : float, optional
             The angular size of the Sun disc in degrees, 0 (default
-            means no angular size). In the B and BR modes the angular
-            size of the Sun is given by the sun_fov parameter of
-            CusBackward instead, or by le_fov under local estimate,
-            and sun_disc has no effect on the signal collected by the
-            receiver.
+            means no angular size). Without le, a box of the output
+            then counts only the photons within sun_disc of its
+            centre, and its radiance is normalised by the solid angle
+            of the disc instead of the one of the box: it is the mean
+            radiance over the disc, in the units of the boxes. In the
+            B and BR modes the angular size of the Sun is given by the
+            sun_fov parameter of CusBackward instead, or by le_fov
+            under local estimate, and sun_disc has no effect on the
+            signal collected by the receiver.
         le_fov : float, optional
             The half-angle in degrees of the cone sampled around each
             local estimate direction, 0 (default) meaning the exact
@@ -2974,7 +2978,7 @@ def _calc_solid_angles(
     sun_disc : float, optional
         Half-angle of the solar disc in degrees. When non-zero, all
         solid angles are set to the solid angle subtended by the solar
-        disc. Default is ``0``.
+        disc, the only one a box then counts. Default is ``0``.
 
     Returns
     -------
@@ -2988,7 +2992,9 @@ def _calc_solid_angles(
         Array of shape ``(n_theta,)`` containing the solid angle of
         one bin over the solid angle ``2π`` of the hemisphere, whatever
         sza_max. When ``sun_disc != 0``, all elements are set to the
-        solid angle of the solar disc ``2π(1 - cos(sun_disc))``.
+        solid angle of the solar disc over that of the hemisphere,
+        ``1 - cos(sun_disc)``, so that the radiances of the disc and of
+        the boxes are in the same units.
     """
     # zenith angles
     dth = (sza_max / 180.0 * np.pi) / n_theta
@@ -3009,7 +3015,7 @@ def _calc_solid_angles(
         tab_ds / (sum(tab_ds) * n_phi) * (1.0 - np.cos(np.radians(sza_max)))
     )
     if sun_disc != 0:
-        tab_omega[:] = 2 * np.pi * (1.0 - np.cos(sun_disc * np.pi / 180))
+        tab_omega[:] = 1.0 - np.cos(np.radians(sun_disc))
 
     return tab_th, tab_phi, tab_omega
 

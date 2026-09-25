@@ -954,6 +954,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the radiances of `Smartg.run(sun_disc=...)` with the cone sampling
+    (without `le`), 2 pi times too small: the solid angle of the disc was
+    counted in sr, and the one of the boxes it replaces as a fraction of
+    the hemisphere. They are now the mean radiance over the disc, in the
+    units of the boxes. This applies too to a planar flux `Sensor` with a
+    `fov`, which sets `sun_disc`. The error was already in v1.2.0
   - Fix the directions the `Sensor` docstring gave to `loc='SURF0P'`, up,
     and `loc='SURF0M'`, down. The photons of a sensor on the surface meet it
     at once, so that it looks down from `'SURF0P'` and up from `'SURF0M'`,

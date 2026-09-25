@@ -48,6 +48,27 @@ def test_solid_angles_do_not_depend_on_sza_max() -> None:
     np.testing.assert_allclose(omega_part, omega_full[:30], rtol=1e-3)
 
 
+@pytest.mark.parametrize("sun_disc", [0.266, 2.0, 90.0])
+def test_sun_disc_solid_angle_in_the_units_of_the_bins(
+    sun_disc: float,
+) -> None:
+    """Check that the disc counts its solid angle as the bins do.
+
+    A bin counts its solid angle as a fraction of the hemisphere, so
+    must the disc, or the radiances of the disc and of the bins differ
+    by 2 pi: the disc of 90 degrees is the whole hemisphere, as all the
+    bins of 0 to 90 degrees are.
+    """
+    n_phi = 4
+    _, _, omega_bins = _calc_solid_angles(30, n_phi, 90.0)
+    _, _, omega_disc = _calc_solid_angles(30, n_phi, 90.0, sun_disc)
+    np.testing.assert_allclose(
+        omega_disc, 1.0 - np.cos(np.radians(sun_disc))
+    )
+    if sun_disc == 90.0:
+        np.testing.assert_allclose(omega_disc, omega_bins.sum() * n_phi)
+
+
 def _coast_map(codes: list[list[int]]) -> AlbedoMap:
     """Return a map of two cells along x, with two albedos."""
     return AlbedoMap(
