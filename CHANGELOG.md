@@ -1143,6 +1143,13 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the cosine efficiency `n_cos` of a heliostat field, and so the
+    `ncos` and `nsha` of `nopt_view`, which was the plain mean of the
+    cosines of the heliostats: it weighs each one by its area, as the
+    power it collects does. Fields of heliostats of one size, such as
+    those of `generate_h_p` and `generate_h_a`, are not affected. The
+    total heliostat area of `powc_H` takes the actual rectangle, where it
+    assumed one centred on its origin
   - Fix the RF launching mode (`CusForward(mode='RF')`), which drew every
     reflector with the same probability while each photon stands for the
     sum of the areas the reflectors project toward the sun: the power of

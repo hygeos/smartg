@@ -497,3 +497,21 @@ def test_rf_draws_heliostats_by_projected_area(sg: Smartg) -> None:
     np.testing.assert_allclose(
         ds["cat_irr"].values[0], reflectivity * projected, rtol=2e-3
     )
+
+
+def test_cosine_efficiency_weighs_the_heliostat_areas(sg: Smartg) -> None:
+    """The cosine efficiency n_cos weighs each heliostat by its area.
+
+    It was the plain mean of the cosines: 0.895 instead of 0.922 for
+    the large and the small heliostat, whose projected areas are 96 %
+    of the total.
+    """
+    objects, _ = _two_heliostats(1.0)
+    ds = _run_rf(sg, objects, n_photons=1e4)
+    areas = np.array([10.0, 2.0]) ** 2
+    cosines = np.cos(np.radians([22.5, 30.0]))
+    np.testing.assert_allclose(
+        float(ds.attrs["n_cos"]),
+        np.sum(areas * cosines) / np.sum(areas),
+        rtol=1e-6,
+    )

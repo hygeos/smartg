@@ -5906,8 +5906,13 @@ def _init_obj(
             ):
                 n_h += 1
                 z_alt_h += lobj[i].transformation.transz
-                tot_s_h += abs(lobj[i].geo.p1.x) * abs(lobj[i].geo.p1.y) * 4
-                ncos += gc.dot(
+                # the cosine efficiency of the field weighs each
+                # heliostat by its area
+                area = (lobj[i].geo.p2.x - lobj[i].geo.p1.x) * (
+                    lobj[i].geo.p3.y - lobj[i].geo.p1.y
+                )
+                tot_s_h += area
+                ncos += area * gc.dot(
                     normal_base, gc.Vector(-v_sun.x, -v_sun.y, -v_sun.z)
                 )
 
@@ -5960,7 +5965,7 @@ def _init_obj(
     lrobj_gpu = to_gpu(lrobj_gpu)
     lobj_spect = to_gpu(lobj_spect)
     if n_h > 0:
-        n_cos = ncos / n_h
+        n_cos = ncos / tot_s_h
     else:
         n_cos = 1
 
