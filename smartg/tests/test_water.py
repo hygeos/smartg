@@ -910,3 +910,34 @@ def test_water1d_mixes_a_hydrosol_given_arrays() -> None:
             pro["phase_oc"].values[pro["iphase_oc"].values[i]], expected,
             rtol=1e-12, atol=1e-12,
         )
+
+
+def test_hydrosol_1d_coefficient_is_a_depth_profile() -> None:
+    """A 1-D coefficient is a depth profile, refused when ambiguous.
+
+    With as many wavelengths as depths, a 1-D array could be either:
+    it is refused, where it used to be read silently as a depth
+    profile. A spectrum is given the shape (n_wavelength, 1).
+    """
+    wavelength = np.array([443.0, 550.0])
+
+    def od_p(grid: list[float], bp: Any) -> NDArray[np.float64]:
+        """Particle optical thickness of a hydrosol of that `bp`."""
+        hydrosol = Hydrosol(bp=bp, bbp_ratio=0.01, n_theta=721)
+        pro = Water1D(grid=grid, comp=[hydrosol]).calc(wavelength, phase=False)
+        return pro["OD_p_oc"].values
+
+    with pytest.raises(ValueError, match="ambiguous"):
+        od_p([0.0, -10.0], [0.1, 0.2])
+    with pytest.raises(ValueError, match=r"spectrum of shape \(2, 1\)"):
+        od_p([0.0, -5.0, -10.0], [0.1, 0.2])
+    np.testing.assert_allclose(
+        od_p([0.0, -10.0], [[0.1], [0.2]]), [[0.0, -1.0], [0.0, -2.0]]
+    )
+    np.testing.assert_allclose(
+        od_p([0.0, -10.0], [[0.1, 0.2]]), [[0.0, -2.0], [0.0, -2.0]]
+    )
+    np.testing.assert_allclose(
+        od_p([0.0, -5.0, -10.0], [0.0, 0.1, 0.2]),
+        [[0.0, -0.5, -1.5], [0.0, -0.5, -1.5]],
+    )

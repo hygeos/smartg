@@ -1131,6 +1131,11 @@ final `v2.0.0` release.
     the leading factor of the Edlén equation: `n_atm - 1` was 100 times
     too small, so that the runs with `refraction=True` hardly refracted.
     Their results change
+  - Fix a `Hydrosol` given a 1-D coefficient with as many values as there
+    are wavelengths and depths, which was read silently as a depth profile
+    where a spectrum was likely meant: it now raises a `ValueError`. The
+    docstring states the rule: a 1-D array is a depth profile, and a
+    spectrum takes the shape `(n_wavelength, 1)`
   - Fix `Water1D` given several scattering hydrosols tabulated on different
     grids, which it refused with an error suggesting a remedy that did not
     work: a hydrosol constant with depth with one that varies (`HydrosolPR`

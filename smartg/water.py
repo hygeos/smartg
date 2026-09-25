@@ -231,10 +231,13 @@ class Hydrosol:
         If None, the phase matrices are derived from `bbp_ratio`
         (see notes).
     bp : array_like or None, optional
-        Particle scattering coefficient in m-1, dimensions
-        [n_wavelength, nz].
-        If None, it is taken as null. A scalar or a lower-dimensional
-        array is broadcast over [n_wavelength, nz].
+        Particle scattering coefficient in m-1, over the n_wavelength
+        wavelengths and the nz levels of the profile. If None, it is
+        taken as null. It may be a scalar, a depth profile of shape
+        (nz,) or (1, nz), a spectrum of shape (n_wavelength, 1), or an
+        array of shape (n_wavelength, nz). A 1-D array is a depth
+        profile, and is refused as ambiguous when n_wavelength equals
+        nz.
     ap : array_like or None, optional
         Particle absorption coefficient in m-1, same shape rules as
         `bp`.
@@ -366,9 +369,12 @@ class Hydrosol:
         ------
         ValueError
             If a supplied coefficient cannot be broadcast over
-            [len(wavelength), len(z)].
+            [len(wavelength), len(z)], or if it is a 1-D array while
+            there are as many wavelengths as depths, which makes it
+            ambiguous (see the class parameters).
         """
-        shp = (len(wavelength), len(z))
+        n_wavelength, nz = len(wavelength), len(z)
+        shp = (n_wavelength, nz)
         zeros = np.zeros(shp, dtype="float")
 
         def as_2d(x: NumericArrayLike | None) -> NDArray:
@@ -376,14 +382,23 @@ class Hydrosol:
             if x is None:
                 return zeros.copy()
             x = np.asarray(x, dtype="float")
+            if x.ndim == 1 and x.size > 1 and x.size == nz == n_wavelength:
+                raise ValueError(
+                    f"A 1-D hydrosol coefficient of {x.size} values is "
+                    f"ambiguous over {n_wavelength} wavelengths and {nz} "
+                    f"depths: give a depth profile the shape (1, {nz}), "
+                    f"and a spectrum the shape ({n_wavelength}, 1)."
+                )
             try:
                 return np.broadcast_to(x, shp).copy()
             except ValueError:
                 raise ValueError(
                     "Cannot evaluate the hydrosol coefficients over "
-                    + f"{len(wavelength)} wavelengths and {len(z)} "
-                    + "depths: the "
-                    + f"provided arrays have shape {x.shape}."
+                    f"{n_wavelength} wavelengths and {nz} depths: an "
+                    f"array of shape {x.shape} is neither a depth "
+                    f"profile of shape ({nz},) or (1, {nz}), a spectrum "
+                    f"of shape ({n_wavelength}, 1), nor an array of "
+                    f"shape ({n_wavelength}, {nz})."
                 ) from None
 
         ap = as_2d(self.ap)
