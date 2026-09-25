@@ -13,7 +13,13 @@ import pytest
 import xarray as xr
 
 from smartg import conftest
-from smartg.atmosphere import AerOPAC, Atm1D
+from smartg.atmosphere import (
+    AerOPAC,
+    AerUser,
+    Atm1D,
+    atm_pro_from_aeronet,
+    read_aeronet_pfn,
+)
 from smartg.config import DIR_AUXDATA, DIR_ROOT
 
 # ************************ Global variable(s) **************************
@@ -728,3 +734,81 @@ def test_tau_ref_of_several_values_refused() -> None:
     """An array of several optical thicknesses has no meaning."""
     with pytest.raises(TypeError, match="tau_ref"):
         AerOPAC("continental_clean", np.array([0.1, 0.2]), 550.0)
+
+
+def _henyey_greenstein(theta: np.ndarray, g: float = 0.7) -> np.ndarray:
+    """Return the Henyey-Greenstein phase function, 2 over mu."""
+    mu = np.cos(np.radians(theta))
+    return (1.0 - g**2) / (1.0 + g**2 - 2.0 * g * mu) ** 1.5
+
+
+def test_read_aeronet_pfn_angles_increase(tmp_path: Path) -> None:
+    """The AERONET phase function comes back on increasing angles.
+
+    The files list them from 180 to 0 degrees.
+    """
+    angles = [180.0, 90.0, 0.0]
+    lines = ["preamble\n"] * 6
+    lines.append(
+        "Site,Date(dd:mm:yyyy),Day_of_Year(Fraction),"
+        + ",".join(f"{a:.6f}[440nm]" for a in angles)
+        + ",Phase_Function_Mode\n"
+    )
+    lines.append("Site,10:04:2020,101.5,0.2,0.3,25.0,Total\n")
+    fname = tmp_path / "site.pfn"
+    fname.write_text("".join(lines))
+    pfn = read_aeronet_pfn(fname, 2020)
+    np.testing.assert_array_equal(pfn["theta_atm"].values, [0.0, 90.0, 180.0])
+    np.testing.assert_array_equal(pfn.values[0, 0], [25.0, 0.3, 0.2])
+
+
+def test_aeronet_phase_matrix_does_not_polarize() -> None:
+    """A scalar AERONET phase function scatters without polarizing.
+
+    Its matrix is F11 = F22 = F33 = F44 = pfn and F21 = F34 = 0, in the
+    right angular order even when the angles decrease, as those of the
+    AERONET files do.
+    """
+    days = np.array([101.0, 102.0])
+    wavelengths = np.array([440.0, 675.0])
+    theta = np.linspace(180.0, 0.0, 181)
+    coords = {"Day_of_Year(Fraction)": days, "wavelength": wavelengths}
+    aod = xr.DataArray(np.full((2, 2), 0.2), coords=coords)
+    ssa = xr.DataArray(np.full((2, 2), 0.9), coords=coords)
+    pfn = xr.DataArray(
+        np.broadcast_to(_henyey_greenstein(theta), (2, 2, theta.size)),
+        coords={**coords, "theta_atm": theta},
+    )
+    pro = atm_pro_from_aeronet(
+        "2020-04-10", "12:00:00", aod, ssa, pfn, [550.0]
+    )
+    pha = pro["phase_atm"].values[0]
+    theta_atm = pro["theta_atm"].values
+    f11 = pha[0]
+    np.testing.assert_allclose(
+        f11[[0, -1]], _henyey_greenstein(theta_atm[[0, -1]]), rtol=1e-5
+    )
+    assert f11[0] > 100.0 * f11[-1]
+    for term in (2, 4, 5):  # F33, F22, F44
+        np.testing.assert_array_equal(pha[term], f11)
+    for term in (1, 3):  # F21, F34
+        np.testing.assert_array_equal(pha[term], 0.0)
+
+
+def test_aer_user_sorts_its_angles() -> None:
+    """AerUser sorts decreasing angles along with the phase matrix."""
+    theta = np.linspace(0.0, 180.0, 181)
+    pfn = _henyey_greenstein(theta)
+    zeros = np.zeros_like(pfn)
+    phase = np.stack([pfn, zeros, pfn, zeros])[None, None]
+    args = (np.full((1, 1), 0.2), np.full((1, 1), 0.9))
+    hum, wavelength = np.array([0.0]), np.array([550.0])
+    ref = AerUser(*args, phase, hum, wavelength, theta)
+    rev = AerUser(*args, phase[..., ::-1], hum, wavelength, theta[::-1])
+    rh = np.zeros(2)
+    np.testing.assert_array_equal(
+        rev.phase(wavelength, np.array([100.0, 0.0]), rh).values,
+        ref.phase(wavelength, np.array([100.0, 0.0]), rh).values,
+    )
+    with pytest.raises(ValueError, match="distinct"):
+        AerUser(*args, phase, hum, wavelength, np.full(181, 90.0))

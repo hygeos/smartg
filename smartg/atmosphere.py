@@ -1422,7 +1422,8 @@ class AerUser(AerOPAC):
     wavelength : 1-D ndarray
         Wavelength values in nanometers
     theta : 1-D ndarray
-        Scattering angle values in degrees
+        Scattering angle values in degrees, in any order: they are
+        sorted, with the phase matrices, in increasing order
     h_mix_min : float, optional
         Force min altitude of the mixture
     h_mix_max : float, optional
@@ -1433,6 +1434,11 @@ class AerUser(AerOPAC):
         Truncation of the forward peak of the phase matrices of this
         aerosol alone, see `AerOPAC`. None, the default, disables the
         truncation.
+
+    Raises
+    ------
+    ValueError
+        If `theta` holds the same angle twice.
 
     Notes
     -----
@@ -1461,6 +1467,17 @@ class AerUser(AerOPAC):
         self.truncation = as_truncation(truncation)
         self.fname = "none"
         self.tau_ref = None
+        # the phase matrices are resampled in angle as an increasing
+        # axis
+        theta = np.asarray(theta, dtype=np.float64)
+        order = np.argsort(theta, kind="stable")
+        theta = theta[order]
+        phase = np.asarray(phase)[..., order]
+        if np.any(np.diff(theta) <= 0.0):
+            raise ValueError(
+                "The scattering angles theta must be distinct, got "
+                "the same angle more than once."
+            )
         ext = aod / (
             z_mix * (np.exp(-h_mix_min / z_mix) - np.exp(-h_mix_max / z_mix))
         )
@@ -6071,7 +6088,8 @@ def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
     phase_da : DataArray
         Lookup table with phase function matrix as function of
         Day_of_Year(Fraction),
-        wavelength and theta_atm
+        wavelength and theta_atm, the angles in increasing order (the
+        file lists them from 180 to 0 degrees)
     """
     pfn = pd.read_csv(file, sep=",", skiprows=6)
     # take only total of fine + coarse
@@ -6087,7 +6105,7 @@ def read_aeronet_pfn(file: PathType, year: int) -> xr.DataArray:
             str_bis = key.split("[")
             ang.append(float(str_bis[0]))
             wavelength_pfn.append(float(str_bis[1][:-3]))
-    ang = np.unique(ang)[::-1]
+    ang = np.unique(ang)
     wavelength_pfn = np.unique(wavelength_pfn)
     n_ang = len(ang)
     n_wavelength_pfn = len(wavelength_pfn)
@@ -6210,6 +6228,8 @@ def atm_pro_from_aeronet(
         pfn_lut = pfn_file
     else:
         pfn_lut = read_aeronet_pfn(pfn_file, year=year)
+    # the phase function is resampled in angle as an increasing axis
+    pfn_lut = pfn_lut.sortby("theta_atm")
 
     if not isinstance(b_wavelength, BandSet):
         b_wavelength_bs = BandSet(b_wavelength)
@@ -6254,9 +6274,12 @@ def atm_pro_from_aeronet(
     )
     pfn_lut = pfn_lut.where(pfn_lut >= 0, 0)
 
+    # AERONET gives the phase function alone: it scatters without
+    # polarizing, F11 = F33 = pfn and F21 = F34 = 0 in the IQUV
+    # convention (F22 = F11 and F44 = F33 completing the matrix)
     pfn_val = pfn_lut.values
-    pfn_val = np.stack([pfn_val[:, :]] * 4, axis=1)
-    pfn_val[:, 2:3, :] = 0.0
+    zeros = np.zeros_like(pfn_val)
+    pfn_val = np.stack([pfn_val, zeros, pfn_val, zeros], axis=1)
     pfn_lut = xr.DataArray(
         pfn_val,
         dims=["wavelength", "nphamat", "theta_atm"],

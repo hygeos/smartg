@@ -1009,6 +1009,15 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix the aerosol phase matrix of `atm_pro_from_aeronet`, which was
+    flipped in angle and not physical. `read_aeronet_pfn` returned the
+    angles from 180 to 0 degrees, as the files list them, and `AerUser`
+    resampled them as increasing, moving the forward peak to 180
+    degrees; `read_aeronet_pfn` now returns them increasing, and
+    `AerUser` sorts its angles. The scalar AERONET phase function was
+    also turned into F21 = F34 = F11 and F33 = 0, fully polarizing every
+    scattering; it is now the non-polarizing F11 = F22 = F33 = F44 and
+    F21 = F34 = 0
   - Fix the `tau_ref` of `AerOPAC` and `Cloud` given as a list, a tuple or
     a 1-D array, documented as accepted: it was silently ignored, and the
     component kept the optical thickness of the OPAC number densities.
