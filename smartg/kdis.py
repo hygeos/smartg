@@ -450,7 +450,7 @@ class KdisBand:
     ----------
     kdis : Kdis
         Parent KDIS dataset.
-    band_index : int
+    band : int
         Zero-based index of the sensor channel.
 
     Attributes
