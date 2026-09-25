@@ -764,3 +764,29 @@ def test_albedo_map_seafloor_below_the_land() -> None:
             progress=False,
         ))
     assert np.all(np.abs(_z_scores(runs[0], runs[1], "up (TOA)")) < 5)
+
+
+def test_toa_sphere_start_without_objects() -> None:
+    """Check the cell_size=-2 sensors of a run without 3D objects.
+
+    They start on the top of atmosphere sphere: a far sensor whose line
+    of sight grazes the atmosphere 30 km above the ground, missing the
+    Earth, sees the light the atmosphere scatters, as does one looking
+    at the ground.
+    """
+    distance = 6371.0 + 1e4
+    alpha = np.degrees(np.arcsin((6371.0 + 30.0) / distance))
+    sensors = [
+        Sensor(pos_z=distance, th_deg=180.0 - a, ph_deg=0.0, loc="ATMOS",
+               cell_size=-2)
+        for a in (alpha, 10.0)
+    ]
+    m = Smartg(pp=False, obj3d=True, back=True).run(
+        550.0,
+        atmosphere=Atm1D("afglt"),
+        sensor=sensors,
+        n_photons=1e5,
+        seed=61,
+        progress=False,
+    )
+    assert np.all(m["N_up (TOA)"].values.reshape(2, -1).sum(axis=1) > 0)

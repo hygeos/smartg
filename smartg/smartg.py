@@ -2194,6 +2194,7 @@ class Smartg:
             scl_mode=self._scl_mode,
             n_orders=self.norders,
             n_jac_abs=n_jac_abs,
+            obj3d=self.obj3d,
         )
 
         # Initialize the progress bar
@@ -3914,6 +3915,7 @@ def _init_const(
     scl_mode: int = 0,
     n_orders: int = 1,
     n_jac_abs: int = 0,
+    obj3d: bool = False,
 ) -> None:
     """Upload the simulation constants to the CUDA device globals.
 
@@ -3989,6 +3991,10 @@ def _init_const(
     no_aer_output : bool
         Add output where only photons not scattered by aerosols are
         considered. Default False.
+    obj3d : bool
+        Whether the kernel is compiled with the 3D objects, which
+        read the altitude of the top of the atmosphere even without
+        any object. Default False.
 
     Returns
     -------
@@ -4097,6 +4103,10 @@ def _init_const(
     copy_to_device('SZA_MAXd', sza_max, np.float32)
     copy_to_device('SUN_DISCd', sun_disc, np.float32)
     copy_to_device('LE_FOVd', le_fov, np.float32)
+    # the 3D objects kernel starts the cell_size=-2 sensors on the top
+    # of atmosphere sphere, with or without objects
+    if obj3d:
+        copy_to_device('ZTOAd', z_toa, np.float32)
     # constants of the 3D objects:
     if n_obj != 0:
         copy_to_device('nObj', n_obj, np.int32)
@@ -4115,7 +4125,6 @@ def _init_const(
         copy_to_device('PXd', px_d, np.float32)
         copy_to_device('PYd', py_d, np.float32)
         copy_to_device('PZd', pz_d, np.float32)
-        copy_to_device('ZTOAd', z_toa, np.float32)
         if tc is not None:
             copy_to_device('TCd', tc, np.float32)
             copy_to_device('nbCx', n_cx, np.int32)

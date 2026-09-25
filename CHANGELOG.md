@@ -1015,6 +1015,13 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the `Sensor(cell_size=-2)` of a spherical run with
+    `Smartg(obj3d=True)` but without 3D objects: the altitude of the top
+    of the atmosphere was only sent to the kernel with objects, so that
+    these sensors started on the ground sphere instead. The lines of sight
+    crossing the atmosphere above the Earth's limb were lost, and the
+    other ones started on the ground, missing the path down to it through
+    the atmosphere. The error was already in v1.2.0
   - Fix the forward thermal emission without `cell_proba`
     (`Smartg(thermal=True)`, still in development): the emitting layer
     was drawn among the layers 0 to NATM-1 instead of 1 to NATM, so that
