@@ -3371,7 +3371,7 @@ class Atm1D(Atmosphere):
             tau_o3 = np.zeros((len(wavelength), len(prof.z)), dtype="float32")
             tau_no2 = np.zeros((len(wavelength), len(prof.z)), dtype="float32")
             if wavelength.use_reptran_kdis:
-                tau_mol = wavelength.calc_profile(self.prof) * dz
+                tau_mol = wavelength.calc_profile(prof) * dz
                 # If not reptran (i.e. Kdis case) we set 03 and NO2 to 0
                 # (already calculated in Kdis)
                 if (

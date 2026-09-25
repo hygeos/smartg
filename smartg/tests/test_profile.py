@@ -5,6 +5,7 @@ default grid or on a given one, and computes it at one or several
 wavelengths.
 """
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -267,3 +268,28 @@ def test_dat_profile_without_header(tmp_path: Path) -> None:
     with pytest.warns(UserWarning, match="without o3.* set to zero"):
         prof = ProfileBase(tmp_path / "dry.dat")
     assert prof.dens_o3.max() == 0.0
+
+
+class _KdisLikeBand:
+    """A stand-in KDIS band whose absorption follows the H2O density."""
+
+    w = 550.0
+    band = SimpleNamespace(kdis=SimpleNamespace(species=["h2o"], species_c=[]))
+
+    def calc_profile(self, prof: ProfileBase) -> NDArray[np.float64]:
+        """Return an absorption coefficient in km-1 on `prof`."""
+        return np.asarray(prof.dens_h2o, dtype=np.float64) * 1e-18
+
+
+def test_profile_absorption_on_the_given_profile() -> None:
+    """profile(prof=...) takes the band absorption on that profile.
+
+    It took it on the profile of the atmosphere, which gave a
+    broadcasting error, or the absorption of other altitudes.
+    """
+    grid = np.array([100.0, 10.0, 2.0, 0.0])
+    atm = Atm1D("afglt")
+    pro = atm.profile([_KdisLikeBand()], prof=atm.prof.regrid(grid))
+    ref = Atm1D("afglt", grid=grid).profile([_KdisLikeBand()])
+    np.testing.assert_allclose(pro["OD_g"].values, ref["OD_g"].values)
+    assert pro["OD_g"].values[0, -1] > 0.0

@@ -1009,6 +1009,10 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix `Atm1D.profile(wavelength, prof=...)` with REPTRAN or KDIS bands:
+    the gas absorption was computed on the profile of the atmosphere
+    instead of `prof`, which raised a broadcasting error, or took the
+    absorption of other altitudes
   - Fix the `.dat` profiles without the libRadtran header line (or with
     one spelled differently): every gas column was read as zero, with no
     warning, removing the O3 and H2O absorption and drying the aerosols.
