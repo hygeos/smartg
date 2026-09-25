@@ -1131,6 +1131,11 @@ final `v2.0.0` release.
     the leading factor of the Edlén equation: `n_atm - 1` was 100 times
     too small, so that the runs with `refraction=True` hardly refracted.
     Their results change
+  - `HydrosolZhai`, and a `Hydrosol` whose scattering coefficient alone
+    varies with depth, tabulate their phase matrices on a single depth when
+    they are the only scattering hydrosol, instead of one identical matrix
+    per wavelength and depth (510 matrices of 7201 angles, 176 MB, for 10
+    wavelengths and 51 levels)
   - Fix a `Hydrosol` given a 1-D coefficient with as many values as there
     are wavelengths and depths, which was read silently as a depth profile
     where a spectrum was likely meant: it now raises a `ValueError`. The

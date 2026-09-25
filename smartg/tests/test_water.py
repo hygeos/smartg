@@ -941,3 +941,22 @@ def test_hydrosol_1d_coefficient_is_a_depth_profile() -> None:
         od_p([0.0, -5.0, -10.0], [0.0, 0.1, 0.2]),
         [[0.0, -0.5, -1.5], [0.0, -0.5, -1.5]],
     )
+
+
+def test_hydrosol_zhai_tabulates_a_single_depth() -> None:
+    """A phase matrix constant with depth is tabulated once.
+
+    HydrosolZhai varies its scattering coefficient with depth, but not
+    its backscattering ratio, the only input of its phase matrix: it
+    used to tabulate the same matrix at every depth.
+    """
+    wavelength = np.array([443.0, 550.0])
+    grid = np.linspace(0.0, -100.0, 11)
+    pro = Water1D(
+        grid=grid, comp=[HydrosolZhai(chl_surf=0.5, n_theta=721)]
+    ).calc(wavelength)
+    assert pro["phase_oc"].shape[0] == len(wavelength)
+    np.testing.assert_array_equal(
+        pro["iphase_oc"].values,
+        np.repeat([[0], [1]], len(grid), axis=1),
+    )

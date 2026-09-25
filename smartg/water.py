@@ -695,8 +695,8 @@ class Hydrosol:
         the cache already holds the tabulation of these wavelengths and
         depths, and computes it again otherwise, e.g. for a hydrosol
         reused at other wavelengths or on another grid. A single depth
-        is tabulated when neither the backscattering ratio nor the
-        scattering coefficient varies vertically.
+        is tabulated when the backscattering ratio does not vary
+        vertically.
 
         Parameters
         ----------
@@ -748,12 +748,10 @@ class Hydrosol:
                 "No phase function nor bbp_ratio has been provided, but bp>0"
             )
 
-        # tabulate a single depth if neither the phase matrices nor the
-        # scattering coefficient vary vertically, to avoid duplicating
-        # the phase matrices
-        if np.allclose(bbp_ratio, bbp_ratio[:, :1]) and np.allclose(
-            bp, bp[:, :1]
-        ):
+        # tabulate a single depth if the phase matrices do not vary
+        # vertically, to avoid duplicating them; Water1D.phase weights
+        # a mixture by the scattering coefficient at every depth
+        if np.allclose(bbp_ratio, bbp_ratio[:, :1]):
             sl = slice(0, 1)
         else:
             sl = slice(None)
