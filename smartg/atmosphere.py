@@ -2229,10 +2229,9 @@ class _Comp3DFile(Comp3D):
                     )
                 )
 
-        # Obtain the correct indices from the unique-value phase bank
-        cell_phase_index = np.full(
-            self._param.size, np.nan, dtype=np.int32
-        )
+        # Obtain the correct indices from the unique-value phase bank;
+        # every cell gets one, the -1 fill is never kept
+        cell_phase_index = np.full(self._param.size, -1, dtype=np.int32)
         for iparam in range(n_unique):
             cell_phase_index[
                 np.squeeze(np.argwhere(self._param == param_unique[iparam]))
