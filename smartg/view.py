@@ -3835,8 +3835,9 @@ def cat_view(
         Accuracy: number of decimal points to display when printing.
         Default: 6
     kdis_rep_bands : KdisIbandList or ReptranIbandList, optional
-        Band information object. Used for spectral processing. Default:
-        None
+        Internal bands of the run. The outputs are then summed over the
+        internal bands of each channel and given on the channel central
+        wavelengths. Default: None
 
     Returns
     -------
@@ -3874,11 +3875,23 @@ def cat_view(
     # Parameters needed in case kdis or reptran is used
     norm: Any | None = None
     norm_dl: Any | None = None
+    wb: Any | None = None
     if kdis_rep_bands is not None:
-        _, _, _, _, norm, norm_dl = cast(Any, kdis_rep_bands).get_weights()
+        _, wb, _, _, norm, norm_dl = cast(Any, kdis_rep_bands).get_weights()
 
     # Check if there is a dimension wavelength
     is_wave_axis = "wavelength" in ds["wPhCats"].dims
+
+    # The channel central wavelength of each internal band, which groups
+    # the internal bands into channels
+    grouping: xr.DataArray | None = None
+    if wb is not None and is_wave_axis:
+        grouping = xr.DataArray(
+            wb.to_numpy(),
+            dims=("wavelength",),
+            coords={"wavelength": ds["wPhCats"].wavelength},
+            name="wavelength",
+        )
 
     # Fill needed parameters considering the case with and without
     # the wavelength
@@ -3970,20 +3983,17 @@ def cat_view(
     abs_err_da_n_int: xr.DataArray | None = None
     if is_wave_axis:
         if kdis_rep_bands is not None:
-            if norm is None or norm_dl is None:
+            if norm is None or norm_dl is None or grouping is None:
                 raise RuntimeError(
                     "kdis/reptran normalization weights are required."
                 )
-            # Group wavelengths by band structure and sum within
-            # each band
-            mf_n = (
-                (mf * cst * mtoa).groupby("wavelength").sum(dim="wavelength")
-            )
+            # Sum the internal bands of each channel
+            mf_n = (mf * cst * mtoa).groupby(grouping).sum(dim="wavelength")
             mf_n_int = mf_n / norm
 
             mf_2_n_int = (
                 (mf2 * (cst * mtoa) * (cst * mtoa))
-                .groupby("wavelength")
+                .groupby(grouping)
                 .sum(dim="wavelength")
             )
             mf_2_n_int /= norm
@@ -4055,10 +4065,14 @@ def cat_view(
             },
         )
         if kdis_rep_bands is not None:
-            # Group by bands and sum within each band
+            if grouping is None:
+                raise RuntimeError(
+                    "kdis/reptran channel grouping is required."
+                )
+            # Sum the internal bands of each channel
             abs_err_da_n = (
                 (abs_err_da * cst * mtoa * ld)
-                .groupby("wavelength")
+                .groupby(grouping)
                 .sum(dim="wavelength")
             )
             if norm_dl is None:

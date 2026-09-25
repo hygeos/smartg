@@ -4,15 +4,25 @@ The optical efficiencies of nopt_view are checked on synthetic solar
 tower power outputs: a run split into two identical wavelengths must
 give the efficiencies of the same run at one wavelength. The polar
 plots of the IPRT cases are checked on analytic Stokes parameters
-with the symmetry of a plane-parallel atmosphere.
+with the symmetry of a plane-parallel atmosphere, and the channel sums
+of cat_view on synthetic REPTRAN internal bands.
 """
+
+from types import SimpleNamespace
+from typing import Any, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import xarray as xr
 
-from smartg.view import _mirror_azimuths, nopt_view, plot_polar_iquv
+from smartg.reptran import ReptranIbandList
+from smartg.view import (
+    _mirror_azimuths,
+    cat_view,
+    nopt_view,
+    plot_polar_iquv,
+)
 
 N_PHOTONS = 1000
 # the loss weights W_I, W_rhoM, W_rhoP, W_BM, W_BP, W_SM, W_SP of a
@@ -124,3 +134,62 @@ def test_plot_polar_iquv_sym() -> None:
     plot_polar_iquv(_analytic_iquv(thetas, phis), thetas, phis, sym=True)
     assert len(plt.gcf().axes) >= 4
     plt.close("all")
+
+
+def _channel_ibands() -> ReptranIbandList:
+    """Return two REPTRAN channels sharing an internal wavelength.
+
+    Channel A (centre 450 nm, 100 nm wide) has internal bands at 400
+    and 500 nm, channel B (centre 600 nm, 200 nm wide) at 500 and
+    700 nm.
+    """
+    channel_a = SimpleNamespace(
+        awvl=np.array([400.0, 500.0]),
+        awvl_weight=np.array([0.6, 0.4]),
+        aextra=np.ones(2),
+        dl=100.0,
+    )
+    channel_b = SimpleNamespace(
+        awvl=np.array([500.0, 700.0]),
+        awvl_weight=np.array([0.3, 0.7]),
+        aextra=np.ones(2),
+        dl=200.0,
+    )
+    return ReptranIbandList(
+        [
+            cast(Any, SimpleNamespace(band=band, index=index))
+            for band, index in [
+                (channel_a, 0), (channel_a, 1), (channel_b, 0), (channel_b, 1)
+            ]
+        ]
+    )
+
+
+def test_cat_view_sums_the_internal_bands_of_each_channel() -> None:
+    """The REPTRAN outputs of cat_view have one value per channel."""
+    weights = np.array([1.0, 2.0, 3.0, 4.0])
+    cat_w = np.outer(np.ones(9), weights)
+    ds = xr.Dataset(
+        {
+            "wPhCats": (("Categories", "wavelength"), cat_w),
+            "wPhCats2": (("Categories", "wavelength"), cat_w**2 / 100.0),
+            "norm_npho": ("wavelength", np.full(4, 250.0)),
+            "cat_PhNb": ("Categories", np.full(9, 100.0)),
+        },
+        coords={
+            "Categories": np.arange(9.0),
+            "wavelength": np.array([400.0, 500.0, 500.0, 700.0], np.float32),
+        },
+        attrs={"ALDEG": "0", "NPHOTONS": "1000", "n_cte": "1.0"},
+    )
+
+    out = cat_view(
+        ds, mtoa=1.0, output_unit="FLUX", print_results=False,
+        kdis_rep_bands=_channel_ibands(),
+    )
+
+    # four bands of 250 photons each: cst = 4 in every band
+    np.testing.assert_array_equal(out.wavelength, [450.0, 600.0])
+    np.testing.assert_allclose(out["FLUX_int"], [[12.0, 28.0]] * 9)
+    np.testing.assert_allclose(out["FLUX"], [[0.12, 0.14]] * 9)
+    np.testing.assert_allclose(out["FLUX_tot"], np.full(9, 40.0))

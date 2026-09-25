@@ -916,6 +916,13 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `cat_view(kdis_rep_bands=...)` with REPTRAN bands, and the weight
+    sums returned by `ReptranIbandList.get_weights`: since v2.0.0dev2 they
+    grouped by internal-band wavelength instead of by channel, so
+    `cat_view` gave one value per internal band divided by its own weight,
+    and merged the internal bands of two channels at the same wavelength.
+    They sum the internal bands of each channel again, on the channel
+    central wavelengths, as v1.2.0 did. KDIS bands are unchanged
   - Fix `reduce_reptran` and `reduce_kdis` on a run over a single internal
     band (24 of the 40 `reptran_solar_sentinel` channels, kato bands 5 to
     10...), whose output has no `wavelength` dimension: they raised a

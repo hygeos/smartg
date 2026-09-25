@@ -776,7 +776,10 @@ class ReptranIbandList:
         tuple of DataArray
             Six arrays containing, in order, internal-band weights,
             channel central wavelengths, solar irradiance, bandwidth,
-            weight sums, and bandwidth-weighted sums.
+            weight sums, and bandwidth-weighted sums. The first four
+            have one value per internal band, on the internal-band
+            wavelengths; the two sums have one value per channel, on
+            the channel central wavelengths.
         """
         we_l = []
         ex_l = []
@@ -826,8 +829,8 @@ class ReptranIbandList:
             name="bandwidth",
             attrs={"desc": "Dlambda"},
         )
-        norm_dl = (we * dl).groupby("wavelength").sum(dim="wavelength")
-        norm = we.groupby("wavelength").sum(dim="wavelength")
+        norm_dl = (we * dl).groupby(wb).sum(dim="wavelength")
+        norm = we.groupby(wb).sum(dim="wavelength")
 
         return we, wb, ex, dl, norm, norm_dl
 

@@ -458,3 +458,21 @@ def test_reduce_without_wavelength_needs_one_internal_band(
 
     with pytest.raises(ValueError, match="holds 2 internal bands"):
         reduce_reptran(_single_band_run(False), ibands)
+
+
+def test_get_weights_sums_per_channel(synthetic_reptran: Reptran) -> None:
+    """The weight sums have one value per channel, on its centre."""
+    ibands = ReptranIbandList(
+        [
+            internal
+            for band in synthetic_reptran.bands()
+            for internal in band.ibands()
+        ]
+    )
+
+    _, _, _, _, norm, norm_dl = ibands.get_weights()
+
+    np.testing.assert_array_equal(norm.wavelength, [450.0, 650.0])
+    np.testing.assert_allclose(norm, [1.5, 1.0])
+    np.testing.assert_array_equal(norm_dl.wavelength, [450.0, 650.0])
+    np.testing.assert_allclose(norm_dl, [300.0, 200.0])
