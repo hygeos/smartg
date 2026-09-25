@@ -1143,6 +1143,17 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the RF launching mode (`CusForward(mode='RF')`), which drew every
+    reflector with the same probability while each photon stands for the
+    sum of the areas the reflectors project toward the sun: the power of
+    each heliostat was scaled by the mean projected area over its own, so
+    that the receiver flux map was biased as soon as the heliostats have
+    different projected areas, and the receiver power and the losses as
+    soon as their efficiencies differ too: factors of 0.85 to 1.33 per
+    heliostat in a surround field under a 107 m tower, 0.99 to 1.01 in the
+    sector field of the demo notebook. Each reflector is drawn with the
+    probability of its projected area, taken positive for a reflector lit
+    on its back
   - Fix the RF launch toward a reflector at z = 0, such as the default
     position of `generate_h_p`: the offset from the reflector up to TOA
     was computed only for a reflector with a z translation, so that in

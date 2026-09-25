@@ -479,6 +479,8 @@ struct IObjets {
 	float nBx;      /*  \                                  */
 	float nBy;      /*   | normalBase apres transfo        */
 	float nBz;      /*  /                                  */
+
+	float cdfRF;    /* cumulated RF launch probability     */
 };
 
 struct GObj {

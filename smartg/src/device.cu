@@ -1969,19 +1969,17 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		IObjets objP;
 		objP.type = 0;
 
-		// Permet de choisir aléatoirement un miroir
-		float randMirPrev = -1;
-		float randMir;		
+		// Choose a reflector with the probability of its area projected
+		// toward the sun, from the cumulated table cdfRF: every photon
+		// stands for the sum of these areas (the last reflector closes
+		// the table at 1)
+		float randMir = RAND;
 		for (int i=0; i<nObj; i++)
 		{
 			if (myObjets[i].type == 1) // if equal to reflector
 			{
-				randMir = RAND;
-				if (randMir > randMirPrev)
-				{
-					randMirPrev = randMir;
-					objP = myObjets[i];
-				}
+				objP = myObjets[i];
+				if (randMir <= objP.cdfRF) break;
 			}
 		}
     

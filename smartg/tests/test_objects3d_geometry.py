@@ -28,6 +28,7 @@ from smartg.smartg import (
     _check_object_roles,
     _od_at_altitude,
     _receiver_grid,
+    _rf_launch_cdf,
 )
 
 
@@ -269,3 +270,28 @@ def test_receiver_grid_refuses_what_the_kernel_cannot_bin(
     """An off-centre receiver, or one tc does not divide, raises."""
     with pytest.raises(ValueError, match=message):
         _receiver_grid(receiver)
+
+
+def test_rf_launch_cdf_follows_the_projected_areas() -> None:
+    """Each reflector is drawn with the probability of its area.
+
+    The receiver in the middle of the objects is never drawn, and the
+    last reflector closes the table at exactly 1.
+    """
+    area = np.array([3.0, 0.0, 1.0, 0.0])
+    is_reflector = np.array([True, False, True, False])
+    cdf = _rf_launch_cdf(area, is_reflector)
+    assert cdf.dtype == np.float32
+    np.testing.assert_array_equal(cdf[[0, 2]], [0.75, 1.0])
+    # a uniform draw picks the first reflector whose cdf reaches it
+    draws = np.linspace(0.0, 1.0, 100001)[1:]
+    drawn = np.flatnonzero(is_reflector)[
+        np.searchsorted(cdf[is_reflector], draws)
+    ]
+    np.testing.assert_allclose(np.mean(drawn == 0), 0.75, atol=1e-4)
+
+
+def test_rf_launch_cdf_without_projected_area() -> None:
+    """Reflectors edge-on to the sun are equally likely."""
+    cdf = _rf_launch_cdf(np.zeros(3), np.array([True, True, True]))
+    np.testing.assert_allclose(cdf, [1 / 3, 2 / 3, 1.0], rtol=1e-6)

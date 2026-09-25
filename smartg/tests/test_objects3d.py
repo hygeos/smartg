@@ -205,6 +205,37 @@ def _run_rf(
     )
 
 
+def _two_heliostats(
+    reflectivity: float,
+) -> tuple[list[Entity], float]:
+    """Return a large and a small heliostat, and a receiver.
+
+    Under a zenith sun, the large heliostat, 10 m wide and tilted by
+    22.5 degrees, reflects on the receiver 50 m away; the small one,
+    2 m wide and tilted by -30 degrees, reflects away from it. Also
+    return the area the large one projects toward the sun, in m².
+    """
+    tilt = 22.5
+    large = _mirror(0.005, (0.0, 0.0, 0.005), (0.0, tilt, 0.0), reflectivity)
+    small = _mirror(
+        0.001, (-0.1, 0.0, 0.005), (0.0, -30.0, 0.0), reflectivity
+    )
+    # the receiver faces the beam of the large heliostat
+    beam = np.array(
+        [np.sin(np.radians(2 * tilt)), 0.0, np.cos(np.radians(2 * tilt))]
+    )
+    centre = np.array([0.0, 0.0, 0.005]) + 0.05 * beam
+    facing = float(np.degrees(np.arctan2(-beam[0], -beam[2])))
+    receiver = _receiver(
+        0.008,
+        (float(centre[0]), float(centre[1]), float(centre[2])),
+        (0.0, facing, 0.0),
+        tc=0.002,
+    )
+    projected = 10.0**2 * float(np.cos(np.radians(tilt)))
+    return [large, small, receiver], projected
+
+
 def _run(
     sg: Smartg,
     wavelength: float | np.ndarray,
@@ -450,3 +481,19 @@ def test_rf_reflector_on_the_ground(sg: Smartg) -> None:
     # float launch positions 70 km away along the sun direction
     incident = ds["wLoss"].values[0] / float(ds["norm_npho"].sum())
     assert 0.99 < incident <= 1.0 + 1e-9
+
+
+def test_rf_draws_heliostats_by_projected_area(sg: Smartg) -> None:
+    """The RF launch draws each heliostat by its projected area.
+
+    As the host normalises every photon by the sum of the projected
+    areas. Drawn with the same probability, the large heliostat, 96 %
+    of the projected area, got half of the photons, and the receiver
+    about half of the power it reflects.
+    """
+    reflectivity = 0.9
+    objects, projected = _two_heliostats(reflectivity)
+    ds = _run_rf(sg, objects)
+    np.testing.assert_allclose(
+        ds["cat_irr"].values[0], reflectivity * projected, rtol=2e-3
+    )

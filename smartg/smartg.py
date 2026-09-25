@@ -288,6 +288,7 @@ TYPE_IOBJECTS = [
     ('nBx', 'float32'),  # \
     ('nBy', 'float32'),  # | normalBase de l'obj apres trans
     ('nBz', 'float32'),  # /
+    ('cdfRF', 'float32'),  # cumulated RF launch probability (reflector)
 ]
 
 TYPE_GOBJ = [
@@ -5739,7 +5740,10 @@ def _init_obj(
     z_alt_h = 0.0
     tot_s_h = 0.0
     ncos = 0.0
-    if cus_l is not None and cus_l.dict['mode'] == "RF":
+    rf_mode = cus_l is not None and cus_l.dict['mode'] == "RF"
+    # the area of each reflector projected toward the sun (RF mode)
+    rf_area = np.zeros(n_obj, dtype=np.float64)
+    if rf_mode:
         surf_lph = 0
     else:
         surf_lph = None
@@ -5907,7 +5911,7 @@ def _init_obj(
                     normal_base, gc.Vector(-v_sun.x, -v_sun.y, -v_sun.z)
                 )
 
-            if cus_l is not None and cus_l.dict['mode'] == "RF":
+            if rf_mode:
                 pp1 = lobj[i].geo.p1
                 pp2 = lobj[i].geo.p2
                 pp3 = lobj[i].geo.p3
@@ -5916,8 +5920,9 @@ def _init_obj(
                 two_aa_bis = abs((pp1.x - pp4.x) * (pp2.y - pp3.y)) + abs(
                     (pp2.x - pp3.x) * (pp1.y - pp4.y)
                 )
-                surf_lph_bis = (two_aa_bis / 2.0) * dot_p
-                surf_lph += surf_lph_bis
+                # lit on its front or on its back
+                rf_area[i] = (two_aa_bis / 2.0) * abs(dot_p)
+                surf_lph += rf_area[i]
         elif lobj[i].name == "receiver":
             lobj_gpu['type'][i] = 2
             # all the receivers share one flux map, so one grid
@@ -5936,6 +5941,11 @@ def _init_obj(
                 'You have to specify if your object is a reflector '
                 'or a receiver!'
             )
+
+    if rf_mode:
+        lobj_gpu['cdfRF'][:n_obj] = _rf_launch_cdf(
+            rf_area, lobj_gpu['type'][:n_obj] == 1
+        )
 
     # Create receiver-only GPU table.
     n_robj = len(ind_robj)
@@ -5971,6 +5981,40 @@ def _init_obj(
         lobj_spect,
         n_cos,
     )
+
+
+def _rf_launch_cdf(
+    area: NDArray[np.float64], is_reflector: NDArray[np.bool_]
+) -> NDArray[np.float32]:
+    """Return the cumulated probability to launch toward each reflector.
+
+    In the RF mode the kernel launches each photon toward one reflector,
+    the first one whose cumulated probability reaches a uniform random
+    number, and every photon stands for the sum of the areas the
+    reflectors project toward the sun. So each reflector is drawn with
+    the probability of its projected area.
+
+    Parameters
+    ----------
+    area : 1-D ndarray
+        Area of each object projected toward the sun, in km².
+    is_reflector : 1-D ndarray of bool
+        True for the reflectors, which are the only ones drawn.
+
+    Returns
+    -------
+    1-D ndarray of float32
+        The cumulated probability of each object, exactly 1 for the
+        last reflector. With no projected area at all, the reflectors
+        are equally likely: they then collect nothing anyway.
+    """
+    weight = np.where(is_reflector, area, 0.0)
+    if weight.sum() <= 0.0:
+        weight = is_reflector.astype(np.float64)
+    cdf = np.cumsum(weight) / weight.sum()
+    if is_reflector.any():
+        cdf[np.flatnonzero(is_reflector)[-1]:] = 1.0
+    return cdf.astype(np.float32)
 
 
 def _receiver_grid(receiver: Entity) -> tuple[int, int]:
