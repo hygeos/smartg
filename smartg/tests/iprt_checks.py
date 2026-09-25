@@ -4,9 +4,11 @@ The IPRT phase B tests assert two observables of the I, Q, U and V
 maps of a run: their delta_m against the reference model, within a
 fractional band around a saved value, and their spatial means, within
 an absolute band scaled by the mean of I. A Stokes component whose
-signal is too small compared with the one of I is only logged. The
-checks return the failure messages instead of asserting, so that a
-test reports every case it runs.
+signal is too small compared with the one of I is only logged, and one
+that is asserted must carry signal: the delta_m of a map of zeros is
+100 %, which the band of a noisy component can contain. The checks
+return the failure messages instead of asserting, so that a test
+reports every case it runs.
 
 Key Functions
 -------------
@@ -39,11 +41,18 @@ class ReferenceChecks:
     mean_tol : float
         The tolerance on the mean of every component, as a fraction of
         the mean of I.
+    signal_min : float
+        An asserted component whose mean absolute value is below
+        signal_min times its reference one fails: it lost its signal.
+        The reference is measured on the fast tier, and a component
+        that is pure noise there keeps about 0.18 of it on the slow
+        tier, with 30 times more photons.
     """
 
     logger: logging.Logger
     signal_floor: float
     mean_tol: float
+    signal_min: float = 0.05
 
     def is_significant(self, signal_ref: tuple[float, ...] | None,
                        istk: int) -> bool:
@@ -158,6 +167,18 @@ class ReferenceChecks:
                     f"{label}: problem with {stk} values, get "
                     f"{delta_m[istk]:.5f}. {stk} must be within "
                     f"[{(1 - tol) * ref:.5f}, {(1 + tol) * ref:.5f}]"
+                )
+            # a map of zeros has a delta_m of 100 %, inside the band of
+            # a noisy component
+            if signal_ref is None:
+                continue
+            level = float(np.mean(np.abs(iquv_mod[istk])))
+            if not level >= self.signal_min * signal_ref[istk]:
+                errors.append(
+                    f"{label}: {stk} has lost its signal, its mean "
+                    f"absolute value {level:.3e} is below "
+                    f"{self.signal_min} times the reference "
+                    f"{signal_ref[istk]:.3e}"
                 )
 
         return errors
