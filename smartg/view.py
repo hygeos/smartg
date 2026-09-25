@@ -222,15 +222,16 @@ def smartg_view(
     log_i : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
     qu : bool, optional
-        If True, show Q, U, and DoLP. If False, show only I and
-        polarization metrics. Default is False.
+        If True, show I, Q, U and DoP (V with ``circ=True``). If
+        False, show only I and DoP (DoCP with ``circ=True``). Default
+        is False.
     circ : bool, optional
-        If True, display circular polarization metrics (V and DoCP -
-        Degree of Circular Polarization). If False, display linear
-        polarization metrics (Q, U, and DoLP - Degree of Linear
-        Polarization). Effective with both ``qu=True`` and
-        ``qu=False``. When ``full=True``, both circular and linear
-        polarization metrics are displayed. Default is False.
+        If True, display circular polarization metrics (V or DoCP -
+        Degree of Circular Polarization). If False, display DoP, the
+        Degree of Polarization, which includes V (see Notes).
+        Effective with both ``qu=True`` and ``qu=False``. When
+        ``full=True``, DoLP, DoCP and DoP are all displayed. Default
+        is False.
     full : bool, optional
         If True, display everything. Default is False.
     field : str, optional
@@ -617,11 +618,13 @@ def transect_view(
     log_i : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
     qu : bool, optional
-        If True, show Q, U, and DoLP. If False, show only I and
-        polarization metrics. Default is False.
+        If True, show I, Q, U and DoP (V with ``circ=True``). If
+        False, show only I and DoP (DoCP with ``circ=True``). Default
+        is False.
     circ : bool, optional
-        If True, show circular polarization metrics. If False, show
-        linear polarization. Default is False.
+        If True, show circular polarization metrics (V or DoCP). If
+        False, show DoP = 100 * sqrt(Q² + U² + V²) / I, the degree of
+        polarization, which includes V. Default is False.
     full : bool, optional
         If True, return two figures with full and reduced polarization
         info. If False, return one figure. Default is False.
@@ -1087,11 +1090,13 @@ def spectrum_view(
     log_i : bool, optional
         If True, display Intensity (I) in log10 scale. Default is False.
     qu : bool, optional
-        If True, show Q, U, and DoLP. If False, show only I and
-        polarization metrics. Default is False.
+        If True, show I, Q, U and DoP (V with ``circ=True``). If
+        False, show only I and DoP (DoCP with ``circ=True``). Default
+        is False.
     circ : bool, optional
-        If True, show circular polarization metrics. If False, show
-        linear polarization. Default is False.
+        If True, show circular polarization metrics (V or DoCP). If
+        False, show DoP = 100 * sqrt(Q² + U² + V²) / I, the degree of
+        polarization, which includes V. Default is False.
     full : bool, optional
         If True, return two figures with full and reduced polarization
         info. If False, return one figure. Default is False.
