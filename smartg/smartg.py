@@ -1168,8 +1168,8 @@ class Smartg:
             Note: Optional for the dictionary keys indicate that the key
             is not required to be present.
         n_photons : int, optional
-            The total number of photons used for the simulation. Default
-            1e9.
+            The total number of photons used for the simulation, at
+            least 1. Default 1e9.
         depol : float, optional
             The Rayleigh depolarization factor (air), positive or zero.
             Default 0.0279.
@@ -1259,7 +1259,9 @@ class Smartg:
         xgrid : int, optional
             The number of cuda grids.
         n_loop : None | float, optional
-            The number of photons launched in one kernel run.
+            The number of photons launched in one kernel run, at least
+            1. By default n_photons/30, or n_photons/10 with 3D
+            objects, at most 1e6 and at least 1.
         progress : bool, optional
             Activate the progress bar. Default True.
         le : None | LocalEstimate | dict, optional
@@ -1672,10 +1674,7 @@ class Smartg:
         if n_phi % 2 == 1:
             warn('Odd number of azimuth', stacklevel=2)
 
-        if (n_loop is None) and (n_obj <= 0):
-            n_loop = min(n_photons / 30, 1e6)
-        elif (n_loop is None) and (n_obj > 0):
-            n_loop = min(n_photons / 10, 1e6)
+        n_loop = _resolve_n_loop(n_photons, n_loop, n_obj)
 
         n_icdf = int(n_icdf)
 
@@ -2456,6 +2455,42 @@ class Smartg:
             clear_context_caches()
 
         return output
+
+
+def _resolve_n_loop(
+    n_photons: float, n_loop: float | None, n_obj: int
+) -> float:
+    """Return the number of photons launched in one kernel run.
+
+    Parameters
+    ----------
+    n_photons : float
+        The total number of photons of the run.
+    n_loop : float | None
+        The n_loop parameter of run, None for the default.
+    n_obj : int
+        The number of 3D objects.
+
+    Returns
+    -------
+    float
+        n_loop, or by default n_photons/30, n_photons/10 with 3D
+        objects, at most 1e6 and at least 1: the kernel, which takes
+        it as an integer, launches no photon with 0, and the run
+        never ends.
+
+    Raises
+    ------
+    ValueError
+        If n_photons or n_loop is below 1.
+    """
+    if n_photons < 1:
+        raise ValueError(f"n_photons must be at least 1, got {n_photons}")
+    if n_loop is None:
+        return max(1, int(min(n_photons / (10 if n_obj > 0 else 30), 1e6)))
+    if n_loop < 1:
+        raise ValueError(f"n_loop must be at least 1, got {n_loop}")
+    return n_loop
 
 
 def _check_forward_raster(

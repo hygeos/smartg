@@ -1015,6 +1015,11 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix `Smartg.run` with fewer than 30 photons (10 with 3D objects),
+    which never returned: the default `n_loop`, `n_photons/30`, reached
+    the kernel as 0, which launches no photon. It is now at least 1, and
+    `n_photons` or `n_loop` below 1 raises a `ValueError`. The error was
+    already in v1.2.0
   - Fix `Smartg.run` with a negative `depol` or `depol_water`, an
     undocumented switch to an unvalidated "isotropic" molecular phase
     matrix, which kept Q and multiplied U and V by sqrt(2) at every

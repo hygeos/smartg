@@ -17,6 +17,7 @@ from smartg.smartg import (
     _check_forward_raster,
     _impact_init,
     _isotropic,
+    _resolve_n_loop,
 )
 
 
@@ -143,3 +144,24 @@ def test_isotropic_matrix_does_not_polarize() -> None:
     for name, value in [("a_P11", 0.5), ("a_P12", 0.5), ("a_P22", 0.5),
                         ("a_P33", 0.0), ("a_P43", 0.0), ("a_P44", 0.0)]:
         np.testing.assert_array_equal(table[name], value)
+
+
+@pytest.mark.parametrize(
+    ("n_photons", "n_obj", "expected"),
+    [(1e9, 0, 1e6), (3e5, 0, 1e4), (3e5, 2, 3e4), (20, 0, 1), (5, 2, 1)],
+)
+def test_default_n_loop(n_photons: float, n_obj: int, expected: float) -> None:
+    """Check the default n_loop, which must launch at least a photon."""
+    assert _resolve_n_loop(n_photons, None, n_obj) == expected
+
+
+@pytest.mark.parametrize(
+    ("n_photons", "n_loop", "match"),
+    [(0.5, None, "n_photons"), (100, 0.5, "n_loop"), (100, 0, "n_loop")],
+)
+def test_n_loop_refused(
+    n_photons: float, n_loop: float | None, match: str
+) -> None:
+    """Check that a run of no photon per loop raises a ValueError."""
+    with pytest.raises(ValueError, match=f"{match} must be at least 1"):
+        _resolve_n_loop(n_photons, n_loop, 0)

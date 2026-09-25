@@ -830,3 +830,11 @@ def test_device_with_cuda_device_refused(
     monkeypatch.setenv("CUDA_DEVICE", "0")
     with pytest.raises(ValueError, match="CUDA_DEVICE"):
         Smartg(device=0)
+
+
+def test_few_photons(sg_forward: Smartg) -> None:
+    """Check that a run of fewer photons than 30 ends."""
+    m = sg_forward.run(
+        500.0, atmosphere=Atm1D("afglt"), n_photons=10, progress=False
+    )
+    assert m.attrs["NPhotonIn_sum"] >= 10
