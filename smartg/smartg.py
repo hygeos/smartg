@@ -1471,7 +1471,9 @@ class Smartg:
                 - 'tilted planar'
         stdev : bool, optional
             Activate the calculation of the standard deviation (between
-            each kernel run).
+            each kernel run). A run in a single kernel launch, as with
+            n_loop=n_photons, has no spread to estimate it from: its
+            _stdev_ outputs are NaN, and it warns.
         stdev_lim : None | StdevLim, optional
             To stop the computation if the standard deviation is above a
             certain limit. Only if stdev is True.
@@ -2508,6 +2510,15 @@ class Smartg:
             # the histories the kernel produced, the records beyond
             # max_hist being dropped
             attrs['hist records'] = int(n_photons_out_tot.flat[0])
+        if sigma is not None and n_kernel < 2:
+            warn(
+                'stdev=True estimates the standard deviation from the '
+                'spread of the kernel launches, but the run made a '
+                'single one: its _stdev_ outputs are NaN. Lower n_loop '
+                'below n_photons.',
+                stacklevel=2,
+            )
+            sigma = np.full_like(sigma, np.nan)
         attrs['seed'] = seed
         attrs.update(self.common_attrs)
 

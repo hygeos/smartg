@@ -1310,6 +1310,11 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix `Smartg.run(stdev=True)` for a run made in a single kernel launch,
+    for instance with `n_loop=n_photons`, as the ALIS photon histories
+    required: the standard deviation, estimated from the spread of the
+    launches, came out as zero. The `_stdev_` outputs are now NaN, and
+    the run warns
   - Fix the ALIS scatter classes of `Smartg(nscl>1)` in the
     'last_scattering_layer' and 'scattering_order_per_layer' modes, new
     in 2.0: the layer of the last scattering was 1-based, so with one

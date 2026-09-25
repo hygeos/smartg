@@ -452,6 +452,36 @@ def test_alis_scatter_class_layer() -> None:
         np.testing.assert_array_equal(path[k + 1:], 0.0)
 
 
+@pytest.mark.parametrize("n_loop", [1e4, 1e5])
+def test_alis_stdev(sg_alis: Smartg, n_loop: float) -> None:
+    """Check the standard deviation of an ALIS run.
+
+    It is estimated from the spread of the kernel launches: a run in
+    a single launch, as the ALIS histories used to require, gave zeros.
+    """
+    kwargs = {
+        "atmosphere": Atm1D("afglt", grid=np.linspace(50.0, 0.0, 6)),
+        "le": LocalEstimate(th_deg=[0.0], phi_deg=[0.0]),
+        "alis_options": Alis(n_low=2),
+        "n_photons": 1e5,
+        "n_loop": n_loop,
+        "xblock": 64,
+        "xgrid": 16,
+        "stdev": True,
+        "seed": 1,
+    }
+    wavelength = np.array([500.0, 510.0])
+    if n_loop < kwargs["n_photons"]:
+        m = sg_alis.run(wavelength, **kwargs)
+        assert int(m.attrs["number of kernel iterations"]) > 1
+        std = m["I_stdev_up (TOA)"].values
+        assert np.all(np.isfinite(std)) and np.all(std > 0.0)
+    else:
+        with pytest.warns(UserWarning, match="single one"):
+            m = sg_alis.run(wavelength, **kwargs)
+        assert np.all(np.isnan(m["I_stdev_up (TOA)"].values))
+
+
 class _ErrorCount:
     """Stand for the GPU error counters of a run."""
 
