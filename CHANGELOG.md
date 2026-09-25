@@ -916,6 +916,15 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `reptran_emission`, `kdis_emission` and their `*_avg_emission`:
+    each internal band took the Planck average of the i-th channel in
+    wavelength order, where i was its channel index in the file minus that
+    of the first band, so the averages were right only for channels
+    contiguous in the file and in wavelength order. Several sensors
+    (`include='msg'`), a whole MODIS sensor or out of order channels got
+    another channel's average, and several `lmin`/`lmax` intervals or
+    `band_indices` with a gap raised an `IndexError`. Each internal band
+    now takes the average over its own channel limits
   - Fix the bandwidth of the REPTRAN thermal channels: the `wvl_integral`
     of a thermal file is a wavenumber integral in cm-1, which
     `ReptranIbandList.get_weights` returned as a bandwidth in nm, so

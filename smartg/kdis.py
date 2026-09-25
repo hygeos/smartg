@@ -170,7 +170,9 @@ def kdis_emission(
         Atmospheric optical properties containing ``OD_abs_atm``,
         ``T_atm``, ``wavelength``, and ``z_atm``.
     ibands : KdisIbandList
-        KDIS internal bands used to determine channel limits and groups.
+        KDIS internal bands, one per wavelength of ``ds`` and in the
+        same order. The Planck radiance of each is averaged over the
+        limits of its own channel.
 
     Returns
     -------
@@ -192,32 +194,29 @@ def kdis_emission(
     wavelength_axis = ds.coords["wavelength"].to_numpy()
     t_atm = ds["T_atm"].to_numpy()
 
-    bsgroup = ibands.get_groups()
     kabs = np.asarray(od2k(ds, "OD_abs_atm")) * 1e-3  # m-1
     z = -z_axis * 1e3  # m
-    band_wmin = np.unique([ib.band.wmin for ib in ibands.l])
-    band_wmax = np.unique([ib.band.wmax for ib in ibands.l])
-    avg_b = np.zeros((len(band_wmin), len(z)))
-    for i, (current_wmin, current_wmax) in enumerate(
-        zip(band_wmin, band_wmax, strict=True)
-    ):
-        for j, temperature in enumerate(t_atm):
-            wavelength_min, wavelength_max = (
-                current_wmin * 1e-9,
-                current_wmax * 1e-9,
-            )  # m
-            bandwidth = current_wmax - current_wmin  # nm
-            avg_b[i, j] = (
+    # the Planck radiance averaged over the channel of each internal
+    # band, computed once per channel
+    channel_b: dict[tuple[float, float], list[float]] = {}
+    avg_b = np.zeros((len(ibands.l), len(z)))
+    for i, iband in enumerate(ibands.l):
+        limits = (iband.band.wmin, iband.band.wmax)  # nm
+        if limits not in channel_b:
+            wmin, wmax = limits
+            channel_b[limits] = [
                 quad(
                     blackbody_radiance,
-                    wavelength_min,
-                    wavelength_max,
+                    wmin * 1e-9,  # m
+                    wmax * 1e-9,
                     args=temperature,
                 )[0]
-                / bandwidth
-            )
+                / (wmax - wmin)  # nm
+                for temperature in t_atm
+            ]
+        avg_b[i, :] = channel_b[limits]
     emission = xr.DataArray(
-        kabs * avg_b[bsgroup, :],
+        kabs * avg_b,
         dims=("wavelength", "z_atm"),
         coords={"wavelength": wavelength_axis, "z_atm": z},
         name="emission",
@@ -236,7 +235,7 @@ def kdis_avg_emission(
         Atmospheric optical properties accepted by
         :func:`kdis_emission`.
     ibands : KdisIbandList
-        KDIS internal bands used to determine channel groups.
+        KDIS internal bands, as for :func:`kdis_emission`.
 
     Returns
     -------
