@@ -953,6 +953,18 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the horizontal move of the photons in the water: the altitudes of
+    the water profile are in metres and the horizontal positions in
+    kilometres, and the plane-parallel moves (fast and `alt_pp=True`)
+    shifted a photon under water horizontally by as many kilometres as it
+    travelled metres. Where a photon leaves the water, and where it meets
+    the seafloor of an `Environment(env=5)` albedo map, are now right: a
+    sensor 0.5 km from the coast, looking obliquely into 5 m of water over
+    a seafloor of albedo 0.5, saw 0.005 instead of 0.25, its photons
+    reaching the black seafloor below the land 4 km away. The adjacency
+    effect of an `Environment` over water, and 3D objects above water,
+    change as well: -0.3 % for a sea disc of 1 km in a white environment
+    under a low aerosol layer. The error was already in v1.2.0
   - Fix the `Environment` of a run with water and without atmosphere: the
     photons it reflected went into the empty atmosphere instead of leaving
     to space, as they do from the other surfaces. With `alt_pp=True` the

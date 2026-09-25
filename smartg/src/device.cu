@@ -2510,6 +2510,18 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 #endif // SPHERIQUE
 
 
+/* Move a photon in the ocean over the distance d along its direction.
+   The altitudes of the ocean profile, and so pos.z and d there, are
+   in metres, while the horizontal positions are in kilometres
+   everywhere (surface, environment, albedo map, 3D objects, sensors):
+   the horizontal displacement is converted to kilometres. */
+__device__ void move_ocean(Photon* ph, float d) {
+    ph->pos.x += ph->v.x * d * 1e-3F;
+    ph->pos.y += ph->v.y * d * 1e-3F;
+    ph->pos.z += ph->v.z * d;
+}
+
+
 
 /*--------------------------------------------------------------------------------------------------*/
 /*                      MOVE PHOTONS                                                                */
@@ -2649,7 +2661,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
             else epsilon =1.F;
             d *= epsilon;
             AMF*= epsilon;
-            ph->pos = operator+(ph->pos, ph->v*d);
+            if (ph->loc == OCEAN) move_ocean(ph, d);
+            else ph->pos = operator+(ph->pos, ph->v*d);
             #ifndef ALIS
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
             #else
@@ -2670,7 +2683,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
         // 2. photon advances to the next layer
         else {
             hph += h_cur;
-            ph->pos = operator+(ph->pos, ph->v*d);
+            if (ph->loc == OCEAN) move_ocean(ph, d);
+            else ph->pos = operator+(ph->pos, ph->v*d);
 
             #ifndef ALIS
             if (BEERd == 1) ph->weight *= __expf(-( h_cur_abs));
@@ -3547,7 +3561,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
             // move the photon forward up to the surface
             // the linear distance is ph->z/ph->vz
-            operator+=(ph->pos, ph->v * fabs(ph->pos.z/ph->v.z));
+            move_ocean(ph, fabs(ph->pos.z/ph->v.z));
 
             #ifdef ALIS 
             // complete the records for this event
@@ -3586,7 +3600,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             ph->tau_abs = prof_oc[NOCEd + ph->ilam *(NOCEd+1)].OD_abs;
 
 			// move the photon forward down to the seafloor
-            operator+=(ph->pos, ph->v * fabs( (ph->pos.z - prof_oc[NOCEd].z) /ph->v.z));
+            move_ocean(ph, fabs( (ph->pos.z - prof_oc[NOCEd].z) /ph->v.z));
 
             #ifdef ALIS
             ph->nevt++;
@@ -3658,7 +3672,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             // calculate new photon position
             phz =  prof_oc[ilayer-1].z + epsilon * ( prof_oc[ilayer].z - prof_oc[ilayer-1].z); 
             // move the photon to new position
-            operator+=(ph->pos, ph->v * fabs( (ph->pos.z - phz) / ph->v.z));
+            move_ocean(ph, fabs( (ph->pos.z - phz) / ph->v.z));
         } // photon still in ocean
     } // Ocean
 

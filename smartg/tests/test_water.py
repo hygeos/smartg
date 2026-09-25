@@ -1,7 +1,8 @@
 """Tests of the ocean side of SMART-G.
 
-They cover the comparison with HydroLight, the water profiles and
-the truncation of the hydrosol phase matrices.
+They cover the comparison with HydroLight, the water profiles, the
+move of the photons under water and the truncation of the hydrosol
+phase matrices.
 """
 
 import logging
@@ -14,12 +15,13 @@ import pytest
 import xarray as xr
 from numpy.typing import NDArray
 
-from smartg.albedo import AlbedoCst
+from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
 from smartg.phase import integ_phase, read_phase
+from smartg.sensor import Sensor
 from smartg.smartg import LocalEstimate, Smartg
-from smartg.surface import RoughSurface
+from smartg.surface import Environment, RoughSurface
 from smartg.truncation import DMTrunc, GTTrunc
 from smartg.water import (
     DEFAULT_WATER_TRUNC,
@@ -597,6 +599,65 @@ def test_waterrw_simulation_matches_water1d(
             f"  tol     : {tol}"
         ),
     )
+
+
+def _sea_strip_run(
+    codes: list[int], alt_pp: bool, back: bool, seed: int
+) -> xr.Dataset:
+    """Run clear water 10 m deep under an albedo map of three strips.
+
+    The strips are cut across x at -1 and 1 km. A cell coded -1 is sea,
+    whose seafloor has the albedo 1 of the map list, white; a cell
+    coded 0 is land, below which the seafloor keeps the black albedo of
+    the water profile.
+    """
+    albedo_map = AlbedoMap(
+        np.array([[code] for code in codes]),
+        np.array([-1.0, 1.0, 1e8]),
+        np.array([1e8]),
+        [AlbedoCst(0.0), AlbedoCst(1.0)],
+    )
+    kwargs: dict[str, Any] = {}
+    if back:
+        kwargs["sensor"] = Sensor(th_deg=150.0, ph_deg=0.0, loc="SURF0P")
+    else:
+        kwargs["th_deg"] = 30.0
+    return Smartg(alt_pp=alt_pp, back=back).run(
+        450.0,
+        surface=RoughSurface(wind=2.0),
+        water=Water1D(grid=[0.0, -10.0], comp=[], alb=AlbedoCst(0.0)),
+        environment=Environment(env=5, alb=albedo_map),
+        le=LocalEstimate(th_deg=[30.0], phi_deg=[90.0], count_level=[0]),
+        n_photons=1e6,
+        stdev=True,
+        seed=seed,
+        progress=False,
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize("alt_pp", [False, True])
+@pytest.mark.parametrize("back", [False, True])
+def test_photons_move_under_water_in_kilometres(
+    alt_pp: bool, back: bool
+) -> None:
+    """Check the horizontal move of the photons under water.
+
+    The altitudes of the water profile are in metres, the horizontal
+    positions in kilometres. The light enters the sea at the origin, in
+    the middle of a strip 2 km wide between two lands, and reaches its
+    seafloor 10 m below, some metres away: the radiance must be the one
+    of a map of sea only. The photons moved horizontally in kilometres
+    the distance they travel in metres, and reached the black seafloor
+    below the land.
+    """
+    coast = _sea_strip_run([0, -1, 0], alt_pp, back, seed=21)
+    sea = _sea_strip_run([-1, -1, -1], alt_pp, back, seed=22)
+    level = "up (TOA)"
+    z = (coast[f"I_{level}"].values - sea[f"I_{level}"].values) / np.hypot(
+        coast[f"I_stdev_{level}"].values, sea[f"I_stdev_{level}"].values
+    )
+    assert np.all(np.abs(z) < 5)
 
 
 def test_hydrosol_calc_phase_truncation() -> None:

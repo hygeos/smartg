@@ -737,11 +737,11 @@ def test_albedo_map_near_the_origin_in_spherical_mode() -> None:
 def test_albedo_map_seafloor_below_the_land() -> None:
     """Check the seafloor below the land cells of an albedo map.
 
-    The sensor looks at the sea near the coast, obliquely, so that the
-    photons refracted into the water reach the seafloor below the land
-    cell. There the seafloor keeps the albedo of the water profile,
-    the same as the one the map gives below the sea cells here, so the
-    radiance must be the one of a map of sea only.
+    The sensor looks at the sea 2 m from the coast, obliquely, so that
+    the photons refracted into the water reach the seafloor, 5 m below,
+    under the land cell. There the seafloor keeps the albedo of the
+    water profile, the same as the one the map gives below the sea
+    cells here, so the radiance must be the one of a map of sea only.
     """
     sg = Smartg(back=True)
     water = Water1D(
@@ -759,7 +759,7 @@ def test_albedo_map_seafloor_below_the_land() -> None:
             water=water,
             environment=Environment(env=5, alb=albedo_map),
             sensor=Sensor(
-                pos_x=0.5, th_deg=120.0, ph_deg=180.0, loc="SURF0P"
+                pos_x=0.002, th_deg=120.0, ph_deg=180.0, loc="SURF0P"
             ),
             le=LocalEstimate(th_deg=[30.0], phi_deg=[0.0], count_level=[0]),
             n_photons=1e6,
