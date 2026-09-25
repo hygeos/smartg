@@ -16,6 +16,7 @@ from smartg import conftest
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D, Cloud
 from smartg.reptran import Reptran, reduce_reptran
+from smartg.sensor import Sensor
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import Environment, LambSurface, RoughSurface
 from smartg.view import smartg_view
@@ -526,3 +527,53 @@ def test_no_aer_output() -> None:
         1e-12,
         equal_nan=True,
     )
+
+
+def _z_scores(a: xr.Dataset, b: xr.Dataset, level: str) -> NDArray:
+    """Return the differences of two runs over their joint stdev."""
+    return (a[f"I_{level}"].values - b[f"I_{level}"].values) / np.sqrt(
+        a[f"I_stdev_{level}"].values ** 2 + b[f"I_stdev_{level}"].values ** 2
+    )
+
+
+def _adjacency_run(alt_pp: bool, back: bool, seed: int) -> xr.Dataset:
+    """Run a black disc of 2 km in a white environment, under dust."""
+    # a single thick aerosol layer, where the height of a scattering
+    # inside the layer sets how far from it the photon reaches the
+    # ground
+    atmosphere = Atm1D("afglt", comp=[AerOPAC("desert", 1.0, 550.0)],
+                       grid=[100.0, 10.0, 0.0])
+    kwargs: dict[str, Any] = {}
+    if back:
+        kwargs["sensor"] = Sensor(pos_z=100.0, th_deg=180.0, loc="ATMOS")
+        th_deg = 30.0
+    else:
+        kwargs["th_deg"] = 30.0
+        th_deg = 0.0
+    le = LocalEstimate(th_deg=[th_deg], phi_deg=[0.0], count_level=[0])
+    return Smartg(alt_pp=alt_pp, back=back).run(
+        550.0,
+        atmosphere=atmosphere,
+        surface=LambSurface(alb=AlbedoCst(0.0)),
+        environment=Environment(env=1, env_size=2.0, alb=AlbedoCst(1.0)),
+        le=le,
+        n_photons=1e7,
+        stdev=True,
+        seed=seed,
+        progress=False,
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize("back", [True, False])
+def test_adjacency_fast_and_alt_pp_moves_agree(back: bool) -> None:
+    """Check that the fast PP move places the photons at their height.
+
+    The adjacency effect depends on where the photons reach the
+    ground, so on the altitude of their scatterings: the fast move,
+    which follows the optical depth, must agree with the alternative
+    one, which follows the geometry.
+    """
+    fast = _adjacency_run(alt_pp=False, back=back, seed=11)
+    alt = _adjacency_run(alt_pp=True, back=back, seed=12)
+    assert np.all(np.abs(_z_scores(fast, alt, "up (TOA)")) < 5)

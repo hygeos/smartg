@@ -3954,8 +3954,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             }
             #endif
 
-            // calculate new photon position
-            phz = epsilon * (prof_atm[ilayer].z - prof_atm[ilayer-1].z) + prof_atm[ilayer-1].z; 
+            // calculate new photon position: epsilon is measured from
+            // the bottom of the layer, as delta and ab above
+            phz = prof_atm[ilayer].z + epsilon * (prof_atm[ilayer-1].z - prof_atm[ilayer].z);
             rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
             operator+= (ph->pos, ph->v*rdist);
             ph->pos.z = phz;

@@ -1015,6 +1015,14 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the altitude of the photons in the default plane-parallel move
+    (`pp=True` without `alt_pp`): after each move in the atmosphere a
+    photon was placed at the altitude mirrored inside its layer, while its
+    optical depth was right. The 1D radiances only depend on the optical
+    depth and do not change; the horizontal positions of the surface hits
+    do, and with them the adjacency effect of an `Environment` and the
+    runs with 3D objects and an atmosphere (`obj3d=True`). The error was
+    already in v1.2.0
   - Fix `BandSet`, and so the `wavelength` of `Smartg.run`, `Atm1D.calc`
     and `Water1D.calc`, which refused an integer, a NumPy integer or
     `float32` scalar, a tuple or a DataArray with a bare `AssertionError`.
