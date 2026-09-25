@@ -1380,7 +1380,10 @@ def read_phase_cdf(
     ...     pfgrid=[100., 50., 10., 0.],
     ...     normalize=True)
     >>> pha.shape  # doctest: +SKIP
-    (1, 3, 6, 18001)  # (wavelength_phase, z_phase, nphamat, theta_atm)
+    (1, 3, 4, 18001)  # (wavelength_phase, z_phase, nphamat, theta_atm)
+
+    The 4 terms of these spherical particles are completed to 6 by the
+    components, or by `expand_phase_4_to_6`.
 
     Read the table of an IPRT water cloud for a 3D cloud, on the
     angles of the file:
