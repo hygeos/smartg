@@ -1351,8 +1351,8 @@ for zt, dphi in product(zts, dphis):
                 th_deg=180. - zt2thv(zt, h_toa=h_toa),
                                     # Sensor 'Emitting' zenith angle,
                                     # from 0: Zenith,
-                                           # to 180.: Nadir (default:0.)
-                # Sensor 'Emitting' azimuth angle (default:0.)
+                                           # to 180.: Nadir (default:180.)
+                # Sensor 'Emitting' azimuth angle (default:180.)
                 ph_deg=dphi,
                 # location of sensor (default: (SURF0P, just above
                 # surface)
@@ -1479,9 +1479,10 @@ for vaa, dist in cases:
             pos_y=delta_y,
             pos_z=h_toa,
             # Sensor 'Emitting' zenith angle, from 0: Zenith to 180.:
-            # Nadir (default:0.)
+            # Nadir (default:180.)
             th_deg=180 - vza,
-            ph_deg=vaa,     # Sensor 'Emitting' azimuth angle (default:0.)
+            # Sensor 'Emitting' azimuth angle (default:180.)
+            ph_deg=vaa,
             # location of sensor (default: (SURF0P, just above surface)
             loc='ATMOS',
             fov=0.,         # Sensor FOV (default 0.)

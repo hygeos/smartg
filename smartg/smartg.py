@@ -2795,7 +2795,8 @@ def _check_sensor_directions(sensors: Sequence[Sensor]) -> None:
         if loc in ('SURF0P', 'SEAFLOOR'):
             if th_deg > 90. and th_deg - fov >= 90.:
                 continue
-            other = ("loc='ATMOS' at pos_z=0" if loc == 'SURF0P'
+            other = ("loc='ATMOS' at the surface altitude (pos_z=0 in "
+                     "plane-parallel geometry)" if loc == 'SURF0P'
                      else "loc='OCEAN' just above the seafloor")
             raise ValueError(
                 f"the sensor {i} at {loc!r} looks at the interface "
@@ -2808,7 +2809,8 @@ def _check_sensor_directions(sensors: Sequence[Sensor]) -> None:
                 f"the sensor {i} at 'SURF0M' looks at the surface above "
                 f"it, with th_deg + fov <= 90 and th_deg < 90, got "
                 f"th_deg={th_deg} and fov={fov}: a sensor looking down "
-                "from there is loc='OCEAN' at pos_z=0"
+                "from there is loc='OCEAN' at the surface altitude "
+                "(pos_z=0 in plane-parallel geometry)"
             )
 
 

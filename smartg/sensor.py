@@ -65,9 +65,11 @@ class Sensor:
         * 'SURF0M' -> Just below the surface (water side), looking up
           at it (th_deg < 90).
         * 'ATMOS' -> In the atmosphere, looking in any direction. At
-          pos_z=0 it looks up from just above the surface.
-        * 'OCEAN' -> In the ocean, looking in any direction. At
-          pos_z=0 it looks down from just below the surface.
+          the surface altitude (pos_z=0 in plane-parallel geometry)
+          it looks up from just above the surface.
+        * 'OCEAN' -> In the ocean, looking in any direction. At the
+          surface altitude (pos_z=0 in plane-parallel geometry) it
+          looks down from just below the surface.
         * 'SEAFLOOR' -> On the sea floor, looking down at it
           (th_deg > 90).
         * 'OBJSURF' -> Start from a 3d object surface.

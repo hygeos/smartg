@@ -968,8 +968,8 @@ final `v2.0.0` release.
     refuses them, and the kernel ends such photons. The default `th_deg`
     of `Sensor` is now 180 (nadir), so that the default `Sensor()`, at
     `'SURF0P'`, looks down. A sensor looking up from just above the surface
-    is `loc='ATMOS'` at `pos_z=0`, and one looking down from just below it
-    `loc='OCEAN'` at `pos_z=0`
+    is `loc='ATMOS'` at the surface altitude (`pos_z=0` in plane-parallel
+    geometry), and one looking down from just below it `loc='OCEAN'` there
   - Fix the `FlatSurface`, whose `WINDSPEED` of -999 gave a negative slope
     variance, and through its shadowing term a NaN weight to every photon
     meeting the surface, which was then dropped: the runs only counted the
