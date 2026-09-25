@@ -10,7 +10,7 @@ import geoclide as gc
 import numpy as np
 import pytest
 
-from smartg.objects3d import rotate_vector
+from smartg.objects3d import Entity, rotate_vector
 
 
 @pytest.mark.parametrize("order", ["XYZ", "xyz", "zyx", "ZxY"])
@@ -36,3 +36,11 @@ def test_rotate_vector_unknown_order() -> None:
     """An order that is not a permutation of XYZ raises ValueError."""
     with pytest.raises(ValueError, match="rotation_order"):
         rotate_vector(gc.Vector(0.0, 0.0, 1.0), 0.0, 0.0, 0.0, "XXY")
+
+
+def test_entity_copy_keeps_alpha_color() -> None:
+    """A copy of an Entity keeps every property, alpha_color too."""
+    entity = Entity(color="red", alpha_color=0.1)
+    copy = Entity(entity)
+    assert copy.color == "red"
+    assert copy.alpha_color == 0.1

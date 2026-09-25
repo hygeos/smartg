@@ -550,7 +550,7 @@ class Entity:
             self.bbox_pmin = entity.bbox_pmin
             self.bbox_pmax = entity.bbox_pmax
             self.color = entity.color
-            self.alpha_color = alpha_color
+            self.alpha_color = entity.alpha_color
         else:
             if not isinstance(geo, (Plane, Spheric)):
                 raise TypeError(
