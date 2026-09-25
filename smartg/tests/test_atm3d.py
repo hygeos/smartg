@@ -978,7 +978,9 @@ def test_fewer_phase_wavelengths_than_profile_ones(
         atm_1d = Atm1D(
             "afglt", comp=comp, tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0
         )
-        comp_3d: list[Cloud3D | Aer3D] = [_layer_cloud()][:n_comp]
+        comp_3d: list[Cloud3D | Aer3D] = []
+        if n_comp > 0:
+            comp_3d.append(_layer_cloud())
         if n_comp == 2:
             comp_3d.append(_build_aerosol(
                 ext_ref=np.array([0.1]), rh=np.array([70.0]),

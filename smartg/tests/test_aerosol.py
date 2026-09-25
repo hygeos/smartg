@@ -22,6 +22,7 @@ from smartg.atmosphere import (
     read_aeronet_pfn,
 )
 from smartg.config import DIR_AUXDATA, DIR_ROOT
+from smartg.typing import NumericArrayLike
 
 # ************************ Global variable(s) **************************
 MIXTURES = [
@@ -715,7 +716,7 @@ WAVELENGTHS = np.array([440.0, 550.0, 1020.0])
     [[0.1], (0.1,), np.array([0.1]), np.array(0.1)],
     ids=["list", "tuple", "array", "0-d"],
 )
-def test_tau_ref_holding_one_value(tau_ref: object) -> None:
+def test_tau_ref_holding_one_value(tau_ref: NumericArrayLike) -> None:
     """An array holding one optical thickness is taken as a number.
 
     It was silently ignored, the component keeping the optical

@@ -603,7 +603,7 @@ class AerOPAC:
         # the heights and scale height of each layer, as given or from
         # the file; a layer the file gives no height to ('None') is
         # absent unless all three are given
-        layers = {}
+        layers: dict[str, tuple[float, float, float]] = {}
         absent = []
         for layer, given in [
             ("mix", (h_mix_min, h_mix_max, z_mix)),
@@ -4680,8 +4680,9 @@ class Atm3D(Atmosphere):
             # (F22 = F11, F44 = F33) rather than lose F22 and F44
             n_terms = pha_aer_1d.sizes["nphamat"]
             if n_terms == 4:
-                pha_aer_1d = expand_phase_4_to_6(
-                    pha_aer_1d.expand_dims("block")
+                pha_aer_1d = cast(
+                    xr.DataArray,
+                    expand_phase_4_to_6(pha_aer_1d.expand_dims("block")),
                 ).isel(block=0, drop=True)
             elif n_terms != 6:
                 raise ValueError(
@@ -5428,7 +5429,7 @@ class ProfileBase:
                 )
             # the columns are counted from the one of the altitude,
             # after the comment sign of the header line
-            names = desc.split()
+            names = [str(name) for name in desc.split()]
             i_z = next(i for i, name in enumerate(names) if "z(km)" in name)
             self.z = data[:, 0]  # Altitude in km
             self.p = data[:, 1]  # pressure in hPa
