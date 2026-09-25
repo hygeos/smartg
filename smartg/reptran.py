@@ -235,7 +235,7 @@ def reptran_emission(
     channel_b: dict[tuple[float, float], list[float]] = {}
     avg_b = np.zeros((len(ibands.l), len(z)))
     for i, iband in enumerate(ibands.l):
-        limits = (iband.band.wmin, iband.band.wmax)  # nm
+        limits = (float(iband.band.wmin), float(iband.band.wmax))  # nm
         if limits not in channel_b:
             wmin, wmax = limits
             channel_b[limits] = [

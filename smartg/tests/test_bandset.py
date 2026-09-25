@@ -42,9 +42,8 @@ def test_spectral_grids_leaves_the_solar_spectrum_alone() -> None:
     np.testing.assert_array_equal(first.data, second.data)
     # 1 mW/m2/nm at 450 nm is 2.265e11 photons/cm2/s/nm
     expected = 1000.0 * 1e-7 * 450e-9 / (6.62607015e-34 * 299792458.0)
-    assert first[first.axis("wavelength").searchsorted(450.0)] == (
-        pytest.approx(expected, rel=1e-3)
-    )
+    index = np.searchsorted(np.asarray(first.axes[0]), 450.0)
+    assert first.data[index] == pytest.approx(expected, rel=1e-3)
 
 
 @pytest.mark.parametrize(
