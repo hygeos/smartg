@@ -953,6 +953,17 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the `FlatSurface`, whose `WINDSPEED` of -999 gave a negative slope
+    variance, and through its shadowing term a NaN weight to every photon
+    meeting the surface, which was then dropped: the runs only counted the
+    light that never met the surface, 0.11 instead of 0.40 for the upward
+    flux at the top of a Rayleigh atmosphere over clear water and a seafloor
+    of albedo 0.5, and 0 without atmosphere. With the cone sampling it now
+    matches a `RoughSurface(wind=0.)` within 0.1 %, forward and backward.
+    The local estimate cannot aim at the single direction a flat interface
+    sends a photon into, and loses every path through it (two thirds of the
+    TOA radiance over that water, 1.6 % of it without water): `Smartg.run`
+    now refuses a `FlatSurface` with `le`. The error was already in v1.2.0
   - Fix the weight of the photons meeting a `RoughSurface` at grazing
     incidence. The facet is drawn among those facing the photon, a part
     of the slope distribution that falls to 0.86 at 80 degrees and 0.70 at

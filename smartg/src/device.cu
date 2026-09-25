@@ -4906,8 +4906,9 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
     // Weighting
     float p,qv,LambdaS,LambdaR,jac;
 
-    // Lambda shadowing Source direction
-    LambdaS  =  LambdaM(avz,sig2*0.5);
+    // Lambda shadowing Source direction; a flat interface has no
+    // slopes, and its WINDSPEED of -999 no slope variance
+    LambdaS = (DIOPTREd != 0) ? LambdaM(avz, sig2*0.5) : 0.F;
 
     //
     // Local Estimate part
@@ -5153,7 +5154,7 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         }
 	} // Transmission
 
-    LambdaR  =  LambdaM(fabs(vzn),sig2*0.5);
+    LambdaR = (DIOPTREd != 0) ? LambdaM(fabs(vzn), sig2*0.5) : 0.F;
 
     if (!le) {
         // Ross et al 2005, Ross && Dion, 2007, Zeisse 1995

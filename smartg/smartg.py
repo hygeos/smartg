@@ -76,7 +76,7 @@ from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
 from smartg.phase import theta_grid as _make_theta_grid
 from smartg.progress import progress as make_progress
 from smartg.sensor import Sensor
-from smartg.surface import Environment, SurfaceLike
+from smartg.surface import Environment, FlatSurface, SurfaceLike
 from smartg.typing import BandLike, NumericArrayLike
 from smartg.water import Water
 from smartg.xarray import drop_axes
@@ -1288,7 +1288,7 @@ class Smartg:
             The atmosphere profile. If None, there is no atmosphere.
         surface : None | SurfaceLike, optional
             The surface profile, see `smartg.surface`. If None, there is
-            no surface.
+            no surface. A FlatSurface is accepted only without le.
         water : None | Water1D | MLUT, optional
             The water profile. If None, there is no water.
         environment : None | Environment, optional
@@ -1652,6 +1652,7 @@ class Smartg:
                 'The parameter le_fov can be used only with the '
                 'parameter le'
             )
+        _check_flat_surface_le(surface, le)
 
         # Check the custom launching mode and the 3D objects against
         # the compilation options: the launching code of the forward
@@ -2758,6 +2759,36 @@ def _check_forward_raster(
                 f"not the cell ({x}, {y}) of their raster of {cell_size} "
                 "km cells, x varying first (see get_sensors_grid)"
             )
+
+
+def _check_flat_surface_le(
+    surface: SurfaceLike | None,
+    le: LocalEstimate | dict | None,
+) -> None:
+    """Refuse a flat surface with the local estimate.
+
+    A flat interface reflects and refracts a photon in a single
+    direction, which a local estimate cannot aim at: every path that
+    reaches the output direction through the surface would be lost.
+
+    Parameters
+    ----------
+    surface : SurfaceLike or None
+        The surface of the run.
+    le : LocalEstimate, dict or None
+        The local estimate of the run.
+
+    Raises
+    ------
+    ValueError
+        If the surface is a FlatSurface and le is given.
+    """
+    if isinstance(surface, FlatSurface) and le is not None:
+        raise ValueError(
+            "a FlatSurface reflects and refracts the light in a single "
+            "direction, which the local estimate (le) cannot aim at: "
+            "use RoughSurface(wind=0.), or the cone sampling (le=None)"
+        )
 
 
 def _check_albedo_map_codes(albedo_map: AlbedoMap, water: bool) -> None:

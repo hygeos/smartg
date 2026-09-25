@@ -66,6 +66,12 @@ class FlatSurface:
     """
     Definition of a flat sea surface.
 
+    A flat interface reflects and refracts a photon in a single
+    direction, which a local estimate cannot aim at: `Smartg.run`
+    accepts it only with the cone sampling (le=None). A
+    RoughSurface(wind=0.) is an almost flat surface that works with
+    the local estimate.
+
     Parameters
     ----------
     sur : int, optional

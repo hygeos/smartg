@@ -31,7 +31,12 @@ from smartg.smartg import (
     _check_alis_layers,
     _finalize,
 )
-from smartg.surface import Environment, LambSurface, RoughSurface
+from smartg.surface import (
+    Environment,
+    FlatSurface,
+    LambSurface,
+    RoughSurface,
+)
 from smartg.view import smartg_view
 from smartg.water import HydrosolPR, Water1D
 from smartg.xarray import dataset_to_mlut
@@ -667,6 +672,14 @@ INVALID_RUNS = [
     ({"cell_proba": np.zeros((3, 5))}, ValueError, "one column"),
     ({"depol": -1.0}, ValueError, "depol must be positive"),
     ({"depol_water": -1.0}, ValueError, "depol_water must be positive"),
+    (
+        {
+            "surface": FlatSurface(),
+            "le": LocalEstimate(th_deg=[30.0], phi_deg=[0.0]),
+        },
+        ValueError,
+        "FlatSurface",
+    ),
 ]
 
 
@@ -676,7 +689,7 @@ INVALID_RUNS = [
     ids=[
         "flux", "flux-le", "alis", "environment", "wavelength_proba",
         "sensor_proba", "cell_proba-name", "cell_proba-auto",
-        "cell_proba-shape", "depol", "depol_water",
+        "cell_proba-shape", "depol", "depol_water", "flat-le",
     ],
 )
 def test_run_invalid(
@@ -1331,6 +1344,54 @@ def test_stdev_of_sensors_missed_by_some_loops(sg_forward: Smartg) -> None:
         progress=False,
     )
     assert not np.any(np.isnan(m["I_stdev_up (TOA)"].values))
+
+
+def _clear_water(albedo: float) -> Water1D:
+    """Return 10 m of transparent water over a Lambertian seafloor."""
+    zero = np.zeros((1, 2))
+    return Water1D(
+        grid=[0.0, -10.0], comp=[], aw=zero, bw=zero, alb=AlbedoCst(albedo)
+    )
+
+
+@pytest.mark.parametrize("alt_pp", [False, True])
+@pytest.mark.parametrize("back", [False, True])
+def test_flat_surface_equals_rough_surface_of_zero_wind(
+    back: bool, alt_pp: bool
+) -> None:
+    """Check that a flat surface lets the light through.
+
+    Its WINDSPEED of -999 gave a negative slope variance, whose
+    shadowing term made the weight of every photon meeting the surface
+    NaN, so that the photons were dropped: the upward flux over clear
+    water and a seafloor of albedo 0.5, 0.40 at the top of a Rayleigh
+    atmosphere, was 0.11, the one of the atmosphere alone. It is the
+    one of an almost flat rough surface, within 0.1 %, forward and
+    backward.
+    """
+    kwargs: dict[str, Any] = {}
+    if back:
+        kwargs["sensor"] = Sensor(
+            th_deg=150.0, ph_deg=0.0, loc="ATMOS", pos_z=120.0
+        )
+    else:
+        kwargs["th_deg"] = 30.0
+    flux = []
+    for seed, surface in ((121, FlatSurface()), (122, RoughSurface(wind=0.0))):
+        m = Smartg(back=back, alt_pp=alt_pp).run(
+            450.0,
+            atmosphere=Atm1D("afglt"),
+            surface=surface,
+            water=_clear_water(0.5),
+            flux="planar",
+            n_photons=1e6,
+            seed=seed,
+            progress=False,
+            **kwargs,
+        )
+        flux.append(float(np.sum(m["flux_up (TOA)"].values)))
+    assert flux[1] > 0.3
+    np.testing.assert_allclose(flux[0], flux[1], rtol=5e-3)
 
 
 def _cox_munk_reflected_up(th_deg: float, wind: float, nh2o: float) -> float:

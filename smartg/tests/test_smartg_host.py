@@ -12,9 +12,11 @@ from smartg import smartg as sg_module
 from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.sensor import Sensor, get_sensors_grid
 from smartg.smartg import (
+    LocalEstimate,
     StdevLim,
     _calc_solid_angles,
     _check_albedo_map_codes,
+    _check_flat_surface_le,
     _check_forward_raster,
     _impact_init,
     _isotropic,
@@ -23,6 +25,7 @@ from smartg.smartg import (
     _stdev_lim_reached,
     multi_profiles,
 )
+from smartg.surface import FlatSurface, RoughSurface
 
 
 @pytest.mark.parametrize("sza_max", [30.0, 60.0, 90.0, 120.0])
@@ -99,6 +102,20 @@ def test_forward_raster_refused(case: str) -> None:
         sensors[2].cell_size = 0.5
     with pytest.raises(ValueError, match="forward run in a 3D atmosphere"):
         _check_forward_raster(sensors, 0.0, 5.0, 3, 2)
+
+
+def test_flat_surface_refused_with_le() -> None:
+    """Check that a flat surface is refused with a local estimate.
+
+    It reflects and refracts in a single direction, which the local
+    estimate cannot aim at: the backward TOA radiance over water lost
+    two thirds of its value, the one leaving the water.
+    """
+    le = LocalEstimate(th_deg=[30.0], phi_deg=[90.0])
+    with pytest.raises(ValueError, match="FlatSurface"):
+        _check_flat_surface_le(FlatSurface(), le)
+    _check_flat_surface_le(FlatSurface(), None)
+    _check_flat_surface_le(RoughSurface(wind=0.0), le)
 
 
 def _profile_1d() -> xr.Dataset:
