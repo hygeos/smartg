@@ -1009,6 +1009,11 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - `Atm1D` refuses a `grid` reaching above the top (or below the bottom)
+    of its profile file with a `ValueError` naming them, unless `prof_ray`
+    is given: the Rayleigh optical thickness of the levels beyond came out
+    NaN from a 0 / 0 CO2 ratio, and spread through `OD_sca_atm`. That
+    ratio is now guarded, as the one of the refractive index was
   - `Atm1D` refuses a `grid` that does not decrease strictly, from TOA to
     BOA, with a `ValueError`: an increasing one went through and gave NaN
     particle optical thicknesses. Such a `pfgrid` raises a `ValueError`

@@ -184,3 +184,22 @@ def test_strgrid_error_gives_a_toa_to_boa_example() -> None:
     """The parse error of strgrid_to_numpy shows a TOA to BOA grid."""
     with pytest.raises(ValueError, match=r'"500\[10\]100\[1\]0"'):
         strgrid_to_numpy("100")
+
+
+def test_grid_beyond_the_profile_refused() -> None:
+    """A grid above the top of the profile file is refused.
+
+    There is no air above it, and the Rayleigh optical thickness came
+    out NaN from a 0 / 0 CO2 ratio, which profile() now guards.
+    """
+    with pytest.raises(ValueError, match="from 0 to 120 km"):
+        Atm1D("afglus", grid="150[10]120[5]0")
+    # with the Rayleigh scattering forced it may, as the camera level
+    # of the IPRT case E6 does
+    Atm1D("afglus", grid=[3e5, 120.0, 0.0], prof_ray=np.zeros((1, 3)))
+    atm = Atm1D("afglus")
+    pro = atm.profile(
+        550.0, prof=atm.prof.regrid(np.array([150.0, 120.0, 50.0, 0.0]))
+    )
+    assert np.isfinite(pro["OD_r"].values).all()
+    assert np.isfinite(pro["OD_sca_atm"].values).all()

@@ -2674,7 +2674,9 @@ class Atm1D(Atmosphere):
       If a string is provided, it is interpreted as a compact grid
       specification and converted to a NumPy array via
       :func:`strgrid_to_numpy` (see that function for the supported
-      format).
+      format). It must decrease strictly, and lie within the
+      altitudes of the profile file (0 to 120 km for the AFGL ones)
+      unless `prof_ray` is given.
     lat : float, optional
         The latitude used for Rayleigh optical depth calculation.
         Default: 45.
@@ -2884,6 +2886,21 @@ class Atm1D(Atmosphere):
         if grid is None:
             self.prof = prof
         else:
+            # beyond the profile there is no air to compute the
+            # Rayleigh scattering from, unless it is forced
+            z_top, z_bottom = float(np.max(prof.z)), float(np.min(prof.z))
+            tol = 1e-6 * max(1.0, abs(z_top))
+            if prof_ray is None and (
+                grid[0] > z_top + tol or grid[-1] < z_bottom - tol
+            ):
+                raise ValueError(
+                    f"grid must lie within the profile {fname.name}, "
+                    f"from {z_bottom:g} to {z_top:g} km, got a grid "
+                    f"from {grid[0]:g} to {grid[-1]:g} km: the Rayleigh "
+                    "optical thickness is computed from the profile, "
+                    "which holds no air beyond it (force it with "
+                    "prof_ray to extend the grid)."
+                )
             self.prof = prof.regrid(grid)
 
         #
@@ -3194,7 +3211,12 @@ class Atm1D(Atmosphere):
         if self.prof_ray is None:
             tauray = rayleigh_od(
                 wavelength[:] * 1e-3,
-                prof.dens_co2 / prof.dens_air * 1e6,
+                np.divide(
+                    prof.dens_co2 * 1e6,
+                    prof.dens_air,
+                    out=np.zeros_like(prof.dens_co2),
+                    where=prof.dens_air != 0,
+                ),
                 self.lat,
                 prof.z * 1e3,
                 prof.p,
