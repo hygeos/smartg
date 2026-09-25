@@ -242,6 +242,10 @@ final `v2.0.0` release.
     instead of an MLUT
   - The functions of `smartg.atmosphere` now raise `ValueError` instead of
     `NameError` on invalid inputs
+  - `Grid3D`, `create_1d_grid` and `extend_1d_grid` of `smartg.grid3d`
+    raise `ValueError` instead of `NameError` on invalid values (a grid
+    that is not 1-D or not sorted, `periodic` with `horiz_extend_length`,
+    a `vert_extend_limit` within the grid, an unknown `loc` or `type`)
   - The `phase` module has been moved from `smartg/tools/` to `smartg/`
     -> import from `smartg.phase` instead of `smartg.tools.phase`
   - `read_phase` and `convert_phase_to_iparper` (formerly

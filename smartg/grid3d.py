@@ -79,6 +79,11 @@ def create_1d_grid(
     -------
     NDArray
         Numpy array with a 1D grid profil.
+
+    Raises
+    ------
+    ValueError
+        If `loc` is neither 'centered' nor a number.
     """
     if loc == "centered":
         half_grid_size = cell_number * cell_size / 2.
@@ -90,7 +95,9 @@ def create_1d_grid(
         grid_size = cell_number * cell_size
         grid = np.linspace(loc, loc + grid_size, num=cell_number + 1)
     else:
-        raise NameError("Unkown argument for the variable loc!")
+        raise ValueError(
+            f"loc must be 'centered' or a number, got {loc!r}."
+        )
 
     return grid
 
@@ -117,6 +124,11 @@ def extend_1d_grid(
     NDArray
         The 1D array grid after the extend.
 
+    Raises
+    ------
+    ValueError
+        If `type` is unknown, or if the limit lies within the grid.
+
     Examples
     --------
     >>> grid = np.array([0., 10.])
@@ -134,7 +146,7 @@ def extend_1d_grid(
         extended_grid[1:-1] = grid[:]
     elif type == "limit":
         if (extend_value >= grid[0] and extend_value <= grid[-1]):
-            raise NameError(
+            raise ValueError(
                 "The extend limit value must be outside the range of the "
                 "initial grid!"
             )
@@ -145,7 +157,9 @@ def extend_1d_grid(
                 "NDArray[np.floating]", np.sort(extended_grid)
             )
     else:
-        raise NameError("Unkown extend type!")
+        raise ValueError(
+            f"type must be 'length' or 'limit', got {type!r}."
+        )
 
     return extended_grid
 
@@ -493,6 +507,15 @@ class Grid3D:
         :func:`get_3d_cells_neighbours`.
     pmin, pmax : ndarray
         (3, NCELL) lower-left and upper-right corners of the cells.
+
+    Raises
+    ------
+    TypeError
+        If a grid is not a numpy array.
+    ValueError
+        If a grid is not 1-D or not sorted in the ascending order, if
+        `periodic` is combined with `horiz_extend_length`, or if
+        `vert_extend_limit` does not exceed the last zgrid value.
     """
 
     def __init__(
@@ -511,13 +534,15 @@ class Grid3D:
             or (not isinstance(zgrid, np. ndarray))):
             raise TypeError('xgrid, ygrid and zgrid must be numpy arrays!')
         elif (xgrid.ndim > 1 or ygrid.ndim > 1 or zgrid.ndim > 1):
-            raise NameError('xgrid, ygrid and zgrid must be 1D numpy arrays!')
+            raise ValueError(
+                'xgrid, ygrid and zgrid must be 1D numpy arrays!'
+            )
 
         # Check that xgrid, ygrid and zgrid are sorted
         if (not is_sorted(xgrid)
             or not is_sorted(ygrid)
             or not is_sorted(zgrid)):
-            raise NameError(
+            raise ValueError(
                 'Check xgrid, ygrid or zgrid! Values must be in the '
                 'ascending order.'
             )
@@ -525,7 +550,7 @@ class Grid3D:
         # If there is a periodic condition the horizontal boundaries
         # are prohibited
         if (periodic and horiz_extend_length is not None):
-            raise NameError(
+            raise ValueError(
                 'If periodic is set to True, the variable '
                 'horiz_extend_length must be equal to None!'
             )
@@ -551,7 +576,7 @@ class Grid3D:
                     zgrid, vert_extend_limit, type='limit'
                 )
             else:
-                raise NameError(
+                raise ValueError(
                     'The vertical extend limit must be strictly '
                     'greater than the max value of zgrid!'
                 )

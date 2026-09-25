@@ -30,7 +30,7 @@ from smartg.atmosphere import (
     read_i3rc_aerosol,
 )
 from smartg.config import DIR_AUXDATA
-from smartg.grid3d import Grid3D
+from smartg.grid3d import Grid3D, create_1d_grid, extend_1d_grid
 from smartg.truncation import (
     DMTrunc,
     GTTrunc,
@@ -927,3 +927,21 @@ def test_periodic_single_cell_axis_wraps_onto_itself() -> None:
     )
     assert set(closed.neigh[2]) == {-5} and set(closed.neigh[3]) == {-5}
     assert closed.neigh[0, last] == -5
+
+
+def test_grid3d_invalid_arguments_raise_value_error() -> None:
+    """Invalid grid arguments raise a ValueError, not a NameError."""
+    x = np.array([0.0, 1.0, 2.0])
+    z = np.array([0.0, 1.0])
+    with pytest.raises(ValueError, match="1D"):
+        Grid3D(x.reshape(1, 3), x, z)
+    with pytest.raises(ValueError, match="ascending"):
+        Grid3D(x[::-1], x, z)
+    with pytest.raises(ValueError, match="horiz_extend_length"):
+        Grid3D(x, x, z, periodic=True, horiz_extend_length=1.0)
+    with pytest.raises(ValueError, match="vertical extend limit"):
+        Grid3D(x, x, z, vert_extend_limit=0.5)
+    with pytest.raises(ValueError, match="loc"):
+        create_1d_grid(3, 1.0, loc=[1])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="type"):
+        extend_1d_grid(x, 1.0, type="foo")
