@@ -613,6 +613,77 @@ def test_two_aerosols_mixing() -> None:
 
 
 # ===================================================================
+# 1D aerosols under the 3D components
+# ===================================================================
+
+
+def _profile_over_1d_aerosol(
+    comp_3d: list[Cloud3D | Aer3D],
+    wavelength: NDArray[np.float64] = WAV,
+) -> xr.Dataset:
+    """Build the profile of 3D components over a 1D aerosol."""
+    atm_1d = Atm1D(
+        "afglt", comp=[AerOPAC("continental_clean", 0.2, 550.0)],
+        tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0,
+    )
+    atm3 = Atm3D(atm_1d=atm_1d, grid_3d=_build_grid(), comp_3d=comp_3d)
+    return atm3.calc(wavelength, n_theta=NTH)
+
+
+# 0-based voxels of the cloud of the tests below: one in the bottom
+# layer (iz=0), one in the 1-3 km layer (iz=1)
+LAYER_CELLS = [(0, 0, 0), (1, 0, 1)]
+
+
+def _layer_cloud() -> Cloud3D:
+    """Build a water cloud in the bottom and in the middle layer."""
+    return Cloud3D(
+        "wc",
+        w_ref=550.0,
+        ext_ref=np.array([5.0, 10.0]),
+        reff=np.array([10.0, 12.0]),
+        cell_indices=np.array([[1, 1, 1], [2, 1, 2]]),
+    )
+
+
+@pytest.mark.parametrize("n_comp", [1, 2], ids=["one", "two"])
+def test_1d_aerosol_of_the_cell_layer(n_comp: int) -> None:
+    """A 3D cell is mixed with the 1D aerosol of its own layer.
+
+    The clear cell (3, 0, iz) of each layer carries the 1D aerosol of
+    that layer alone, so the mixed cloud cells must add the cloud to
+    it. A second component, an aerosol in the top layer away from the
+    cloud, takes the several component path of the mixing.
+    """
+    grid3 = _build_grid()
+    cld = _layer_cloud()
+    comp_3d: list[Cloud3D | Aer3D] = [cld]
+    if n_comp == 2:
+        comp_3d.append(_build_aerosol(
+            ext_ref=np.array([0.1]), rh=np.array([70.0]),
+            cell_indices=np.array([[1, 1, 3]]),
+        ))
+    pro = _profile_over_1d_aerosol(comp_3d)
+    e_c, s_c, p_c = _expected(cld)
+
+    backgrounds = []
+    for j, cell in enumerate(LAYER_CELLS):
+        e_b, s_b, p_b = _voxel_props(pro, grid3, (3, 0, cell[2]))
+        backgrounds.append(e_b)
+        ext, ssa, pha = _voxel_props(pro, grid3, cell)
+        ext_tot = e_c[j] + e_b
+        assert np.isclose(ext, ext_tot, rtol=1e-6), cell
+        assert np.isclose(
+            ssa, (e_c[j] * s_c[j] + e_b * s_b) / ext_tot, rtol=1e-6
+        ), cell
+        expected = (e_c[j] * s_c[j] * p_c[j] + e_b * s_b * p_b) / ext_tot
+        assert np.allclose(pha, expected, rtol=1e-5, atol=1e-9), cell
+    # the two layers hold different amounts of aerosol, so that the
+    # test tells the layer of a cell from its neighbours
+    assert not np.isclose(backgrounds[0], backgrounds[1], rtol=1e-3)
+
+
+# ===================================================================
 # Truncation carried by a component
 # ===================================================================
 

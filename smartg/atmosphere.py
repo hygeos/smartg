@@ -4542,14 +4542,9 @@ class Atm3D(Atmosphere):
                 cld_phases = [_on_theta_grid(p, theta) for p in cld_phases]
             phase_aer_1d = _on_theta_grid(pha_aer_1d, theta)
 
-            # the altitude level of the 1D aerosols co-located with
-            # each component cell (kept as-is from the historical
-            # implementation; note the inconsistency with the
-            # nz - idz mapping used for the molecular properties)
-            idz_atm = []
-            for icell in range(n_cell):
-                idz = self._cell_indices[icell, 2]
-                idz_atm.append(nz + 1 - idz)
+            # the layer of the 1D aerosols holding each component
+            # cell, as for the molecular properties
+            idz_atm = nz - self._cell_indices[:, 2]
 
             # First plan parallel phase
             assert ipha_aer_1d is not None
@@ -4697,9 +4692,9 @@ class Atm3D(Atmosphere):
         if pha_aer_1d is not None:
             phase_aer_1d = _on_theta_grid(pha_aer_1d, theta_ref)
 
-        # the altitude level of the 1D aerosols co-located with each
-        # cell (same historical mapping as `_glob_particles`)
-        idz_atm = nbz - self._cell_indices[:, 2]
+        # the layer of the 1D aerosols holding each cell, as for the
+        # molecular properties
+        idz_atm = nz - self._cell_indices[:, 2]
 
         # position of each cell of each component within the global
         # cell list

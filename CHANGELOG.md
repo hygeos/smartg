@@ -740,6 +740,10 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the 1D aerosol mixed into the cells of a 3D component of `Atm3D`:
+    each cell took the aerosol of the layer below its own, and a cell in
+    the bottom layer raised an `IndexError`. It now takes the aerosol of
+    its own layer, as the molecular properties already did
   - Fix the phase matrix of a profile layer straddling two `pfgrid` layers:
     it took the `pfgrid` layer it overlapped most, possibly one where its
     particles are absent (a thin cloud low in a layer whose upper part lies
