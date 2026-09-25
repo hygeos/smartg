@@ -1035,8 +1035,8 @@ final `v2.0.0` release.
     the local estimate, reading the matrix as it is, carried into the
     radiance (11 % low for a desert aerosol cell next to another
     component), and which biased the ALIS mixture ratios. They are now
-    normalized as in `Atm1D`. The IPRT C3 cells, a cloud of albedo
-    close to 1, change below the Monte Carlo noise
+    normalized as in `Atm1D`. The spatial means of the IPRT C3 case 4
+    change by 2e-4 in I and 1.6 % in Q, far within the test tolerance
   - Fix `Atm3D(wavelength_phase=...)` with a number of phase wavelengths
     other than the number of profile wavelengths, which raised a
     `CoordinateValidationError` whenever the profile carried phase
