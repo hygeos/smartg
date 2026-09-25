@@ -6819,8 +6819,10 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
     // x (axis from bot to the top ^); y (axis from right to the left <--)
 	indJ = floorf( (-(p_t.y/TCd)) + (sizeY/(2*TCd)) );
 	indI = floorf( (-(p_t.x/TCd)) + (sizeX/(2*TCd)) );
-	if (indJ == nbCy) indJ -= 1;
-	if (indI == nbCx) indI -= 1;
+	// The grid is the receiver rectangle: a hit on its edge can round
+	// one cell out, which must not be written outside the flux map
+	indJ = min(max(indJ, 0), nbCy-1);
+	indI = min(max(indI, 0), nbCx-1);
 	
     #ifdef DOUBLE
 	double *tabCountObj, *wPhCatC, *wPhCatC2;

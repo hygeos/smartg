@@ -1143,6 +1143,14 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the flux map of a receiver, whose number of cells truncated its
+    size over `tc` (0.0006 / 0.0001 gave 5 cells) and ignored where the
+    rectangle lies: the hits past the grid got a cell index of -1, which
+    the kernel wrote before the map or into the last row of the previous
+    category. The number of cells is rounded, a receiver must be centred
+    on its origin with sides multiples of `tc`, several receivers must
+    share one grid, and a `ValueError` says so otherwise; the kernel keeps
+    every hit inside the map
   - Fix the opaque `AttributeError: 'Spheric' object has no attribute 'p1'`
     that `Smartg.run` raised for a `Spheric` receiver, or a `Spheric`
     reflector in the RF mode, and `CusBackward` for a `Spheric` receiver

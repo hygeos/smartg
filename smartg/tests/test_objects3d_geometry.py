@@ -24,7 +24,11 @@ from smartg.objects3d import (
     generate_h_p,
     rotate_vector,
 )
-from smartg.smartg import _check_object_roles, _od_at_altitude
+from smartg.smartg import (
+    _check_object_roles,
+    _od_at_altitude,
+    _receiver_grid,
+)
 
 
 def _xyz(point: gc.Vector | gc.Point) -> np.ndarray:
@@ -224,3 +228,44 @@ def test_spheric_br_receiver_is_refused() -> None:
     receiver = Entity(name="receiver", geo=Spheric(radius=0.01))
     with pytest.raises(ValueError, match="Plane geometry"):
         CusBackward(receiver=receiver, mode="BR")
+
+
+def _receiver(x_low: float, x_high: float, half_y: float, tc: float) -> Entity:
+    """Return a receiver from x_low to x_high and -half_y to half_y."""
+    return Entity(
+        name="receiver",
+        tc=tc,
+        geo=Plane(
+            p1=gc.Point(x_low, -half_y, 0.0),
+            p2=gc.Point(x_high, -half_y, 0.0),
+            p3=gc.Point(x_low, half_y, 0.0),
+            p4=gc.Point(x_high, half_y, 0.0),
+        ),
+    )
+
+
+def test_receiver_grid_is_the_receiver() -> None:
+    """The cells tile the receiver, whatever the rounding of size / tc.
+
+    0.0006 / 0.0001 is 5.999999999999999, which int() truncated.
+    """
+    assert 0.0006 / 0.0001 < 6.0
+    small = _receiver(-0.0003, 0.0003, 0.0003, 0.0001)
+    assert _receiver_grid(small) == (6, 6)
+    scene = _receiver(-0.006, 0.006, 0.007, 0.0005)
+    assert _receiver_grid(scene) == (24, 28)
+
+
+@pytest.mark.parametrize(
+    ("receiver", "message"),
+    [
+        (_receiver(-0.001, 0.003, 0.001, 0.001), "centred"),
+        (_receiver(-0.006, 0.006, 0.007, 0.0007), "multiple"),
+    ],
+)
+def test_receiver_grid_refuses_what_the_kernel_cannot_bin(
+    receiver: Entity, message: str
+) -> None:
+    """An off-centre receiver, or one tc does not divide, raises."""
+    with pytest.raises(ValueError, match=message):
+        _receiver_grid(receiver)

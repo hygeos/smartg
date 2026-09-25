@@ -5684,34 +5684,7 @@ def _init_obj(
     if cus_l is not None and cus_l.dict['mode'] == "BR":
         lobj_gpu = np.zeros(n_obj + 1, dtype=TYPE_IOBJECTS, order='C')
         tc = cus_l.dict['receiver'].tc
-        size_x_min = min(
-            cus_l.dict['receiver'].geo.p1.x,
-            cus_l.dict['receiver'].geo.p2.x,
-            cus_l.dict['receiver'].geo.p3.x,
-            cus_l.dict['receiver'].geo.p4.x,
-        )
-        size_x_max = max(
-            cus_l.dict['receiver'].geo.p1.x,
-            cus_l.dict['receiver'].geo.p2.x,
-            cus_l.dict['receiver'].geo.p3.x,
-            cus_l.dict['receiver'].geo.p4.x,
-        )
-        size_x = size_x_max - size_x_min
-        size_y_min = min(
-            cus_l.dict['receiver'].geo.p1.y,
-            cus_l.dict['receiver'].geo.p2.y,
-            cus_l.dict['receiver'].geo.p3.y,
-            cus_l.dict['receiver'].geo.p4.y,
-        )
-        size_y_max = max(
-            cus_l.dict['receiver'].geo.p1.y,
-            cus_l.dict['receiver'].geo.p2.y,
-            cus_l.dict['receiver'].geo.p3.y,
-            cus_l.dict['receiver'].geo.p4.y,
-        )
-        size_y = size_y_max - size_y_min
-        n_cx = int(size_x / tc)
-        n_cy = int(size_y / tc)
+        n_cx, n_cy = _receiver_grid(cus_l.dict['receiver'])
         lobj_gpu['mvRx'][n_obj] = cus_l.dict['receiver'].transformation.rotx
         lobj_gpu['mvRy'][n_obj] = cus_l.dict['receiver'].transformation.roty
         lobj_gpu['mvRz'][n_obj] = cus_l.dict['receiver'].transformation.rotz
@@ -5939,35 +5912,14 @@ def _init_obj(
                 surf_lph += surf_lph_bis
         elif lobj[i].name == "receiver":
             lobj_gpu['type'][i] = 2
-            tc = lobj[i].tc
-            size_x_min = min(
-                lobj[i].geo.p1.x,
-                lobj[i].geo.p2.x,
-                lobj[i].geo.p3.x,
-                lobj[i].geo.p4.x,
-            )
-            size_x_max = max(
-                lobj[i].geo.p1.x,
-                lobj[i].geo.p2.x,
-                lobj[i].geo.p3.x,
-                lobj[i].geo.p4.x,
-            )
-            size_x = size_x_max - size_x_min
-            size_y_min = min(
-                lobj[i].geo.p1.y,
-                lobj[i].geo.p2.y,
-                lobj[i].geo.p3.y,
-                lobj[i].geo.p4.y,
-            )
-            size_y_max = max(
-                lobj[i].geo.p1.y,
-                lobj[i].geo.p2.y,
-                lobj[i].geo.p3.y,
-                lobj[i].geo.p4.y,
-            )
-            size_y = size_y_max - size_y_min
-            n_cx = int(size_x / tc)
-            n_cy = int(size_y / tc)
+            # all the receivers share one flux map, so one grid
+            grid = (lobj[i].tc, *_receiver_grid(lobj[i]))
+            if ind_robj and grid != (tc, n_cx, n_cy):
+                raise ValueError(
+                    "The receivers share one flux map: they must have "
+                    "the same size and the same cell size tc"
+                )
+            tc, n_cx, n_cy = grid
             ind_robj.append(i)
         elif lobj[i].name == "environment":
             lobj_gpu['type'][i] = 3
@@ -6011,6 +5963,57 @@ def _init_obj(
         lobj_spect,
         n_cos,
     )
+
+
+def _receiver_grid(receiver: Entity) -> tuple[int, int]:
+    """Return the number of cells of a receiver along x and y.
+
+    The kernel bins the hits of a receiver on a grid of cells of side
+    tc, centred on the origin of the receiver, so the rectangle must
+    be centred on its origin and its sides must be multiples of tc.
+
+    Parameters
+    ----------
+    receiver : Entity
+        A receiver with a Plane geometry.
+
+    Returns
+    -------
+    tuple of int
+        The number of cells along x and y.
+
+    Raises
+    ------
+    TypeError
+        If the receiver is not a Plane.
+    ValueError
+        If the rectangle is not centred on the origin of the receiver,
+        or if a side is not a multiple of tc.
+    """
+    geo = receiver.geo
+    if not isinstance(geo, Plane):
+        raise TypeError("A receiver must have a Plane geometry")
+    tc = receiver.tc
+    cells = []
+    for axis, low, high in (
+        ("x", float(geo.p1.x), float(geo.p2.x)),
+        ("y", float(geo.p1.y), float(geo.p3.y)),
+    ):
+        size = high - low
+        if abs(high + low) > 1e-9 * size:
+            raise ValueError(
+                f"The receiver spans {low:g} to {high:g} km along {axis}: "
+                "it must be centred on its origin, placed by its "
+                "transformation"
+            )
+        n_cells = size / tc
+        if abs(n_cells - round(n_cells)) > 1e-6 * n_cells:
+            raise ValueError(
+                f"The receiver size along {axis}, {size:g} km, is not a "
+                f"multiple of its cell size tc = {tc:g} km"
+            )
+        cells.append(round(n_cells))
+    return cells[0], cells[1]
 
 
 def _check_object_roles(
