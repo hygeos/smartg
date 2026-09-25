@@ -750,6 +750,15 @@ final `v2.0.0` release.
   - Fix the receiver tallies of the 3D objects in double precision on the
     GPUs older than compute capability 6.0: the category weights lost
     their wavelength, and category 7 never added its weight
+  - Fix the optical losses at the heliostats of a solar tower power run
+    over several wavelengths: `wLoss` and `wLoss2` summed the weights of
+    all the wavelengths, and now carry a `wavelength` axis, as `wPhCats`
+    does. `nopt_view` weights each band by its share of `mtoa` (equally
+    when `None`) in the numerators and denominators alike; it took the
+    `powc_H` of the first band and the unweighted loss weights before.
+    Single wavelength runs are unchanged. The kernel also wrote the 7
+    loss weights of a forward run with heliostats and no receiver into a
+    one element array
   - Fix the phase matrix of a profile layer straddling two `pfgrid` layers:
     it took the `pfgrid` layer it overlapped most, possibly one where its
     particles are absent (a thin cloud low in a layer whose upper part lies

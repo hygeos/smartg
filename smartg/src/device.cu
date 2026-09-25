@@ -6712,14 +6712,16 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
     
 	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
 	{
-		atomicAddW(wPhLossC, w_I); atomicAddW(wPhLossC2, w_I*w_I);
-		atomicAddW(wPhLossC+1, w_rhoM); atomicAddW(wPhLossC2+1, w_rhoM*w_rhoM);
+		// the 7 weights of the photon wavelength, in a (7, NLAMd) table
+		int il = ph->ilam;
+		atomicAddW(wPhLossC+il, w_I); atomicAddW(wPhLossC2+il, w_I*w_I);
+		atomicAddW(wPhLossC+NLAMd+il, w_rhoM); atomicAddW(wPhLossC2+NLAMd+il, w_rhoM*w_rhoM);
 		#ifndef BACK
-		atomicAddW(wPhLossC+2, w_rhoP); atomicAddW(wPhLossC2+2, w_rhoP*w_rhoP);
-		atomicAddW(wPhLossC+3, w_BM); atomicAddW(wPhLossC2+3, w_BM*w_BM);
-		atomicAddW(wPhLossC+4, w_BP); atomicAddW(wPhLossC2+4, w_BP*w_BP);
-		atomicAddW(wPhLossC+5, w_SM); atomicAddW(wPhLossC2+5, w_SM*w_SM);
-		atomicAddW(wPhLossC+6, w_SP); atomicAddW(wPhLossC2+6, w_SP*w_SP);
+		atomicAddW(wPhLossC+2*NLAMd+il, w_rhoP); atomicAddW(wPhLossC2+2*NLAMd+il, w_rhoP*w_rhoP);
+		atomicAddW(wPhLossC+3*NLAMd+il, w_BM); atomicAddW(wPhLossC2+3*NLAMd+il, w_BM*w_BM);
+		atomicAddW(wPhLossC+4*NLAMd+il, w_BP); atomicAddW(wPhLossC2+4*NLAMd+il, w_BP*w_BP);
+		atomicAddW(wPhLossC+5*NLAMd+il, w_SM); atomicAddW(wPhLossC2+5*NLAMd+il, w_SM*w_SM);
+		atomicAddW(wPhLossC+6*NLAMd+il, w_SP); atomicAddW(wPhLossC2+6*NLAMd+il, w_SP*w_SP);
 		#endif // END BACK
 	}
 }

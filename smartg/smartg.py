@@ -2620,8 +2620,11 @@ def _finalize(
         Receiver visualization matrix (3D-object mode).
     dic_stp : dict | None, optional
         Solar Tower Power parameters (3D-object mode).
-    mat_cats, mat_loss : np.ndarray | None, optional
-        Receiver category and optical-loss matrices (3D-object mode).
+    mat_cats : np.ndarray | None, optional
+        Receiver category matrix (3D-object mode).
+    mat_loss : np.ndarray | None, optional
+        Optical-loss weights at the heliostats (3D-object mode), of
+        shape (2, 7, wavelength): the weights, then their squares.
     w_ph_cats, w_ph_cats2 : np.ndarray | None, optional
         Receiver photon weights (and their squares) per category.
     no_aer_output : bool, optional
@@ -3062,12 +3065,11 @@ def _finalize(
     if mat_loss is not None:
         assert dic_stp is not None
         assert prof_atm is not None
-        _add_variable(
-            ds, 'wLoss', np.array(mat_loss[:, 0], dtype=np.float64), ['index']
-        )
-        _add_variable(
-            ds, 'wLoss2', np.array(mat_loss[:, 1], dtype=np.float64), ['index']
-        )
+        axe_loss = ['index']
+        if n_lam > 1:
+            axe_loss.append('wavelength')
+        _add_variable(ds, 'wLoss', mat_loss[0][:, ilam], axe_loss)
+        _add_variable(ds, 'wLoss2', mat_loss[1][:, ilam], axe_loss)
         ds.attrs['n_cos'] = str(dic_stp["n_cos"])
 
         # To consider also the multispectral case
@@ -4398,6 +4400,12 @@ def _loop_kernel(
     else:
         fdtype = np.float32
 
+    # Weights of the optical losses at the heliostats, per wavelength:
+    # the kernel counts them at every heliostat hit, with or without a
+    # receiver
+    w_ph_loss = gpuzeros((7, n_lam), dtype=fdtype)
+    w_ph_loss2 = gpuzeros((7, n_lam), dtype=fdtype)
+
     # If a receiver object is used then: initialize matrix and vectors
     # for gains and losses
     if receiver_cell_size is not None:
@@ -4413,8 +4421,6 @@ def _loop_kernel(
         )  # squared photon weights per category
         w_ph_cat2_tot = gpuzeros((8, n_lam), dtype=fdtype)
         tab_obj_info = gpuzeros((9, n_cx, n_cy), dtype=fdtype)
-        w_ph_loss = gpuzeros(7, dtype=fdtype)
-        w_ph_loss2 = gpuzeros(7, dtype=fdtype)
         tab_mat_recep = np.zeros((9, n_cx, n_cy), dtype=np.float64)
 
         # Matrix where lines: l0 = sumCats, l1=cat1, l2=cat2, ...
@@ -4423,17 +4429,16 @@ def _loop_kernel(
         # c4=errAbs, c5=err%
         mat_cats = np.zeros((9, 6), dtype=np.float64)
 
-        # Matrix where: M[0,0]=W_I, M[1,0]=W_rhoM, ..., M[6,0]=W_SP
-        # and: M[0,1]=W_I^2, M[1,1]=W_rhoM^2, ..., M[6,1]=W_SP^2
-        mat_loss = np.zeros((7, 2), dtype=np.float64)
+        # Matrix where: M[0,0,l]=W_I, M[0,1,l]=W_rhoM, ...,
+        # M[0,6,l]=W_SP and: M[1,0,l]=W_I^2, ..., M[1,6,l]=W_SP^2, at
+        # the wavelength l
+        mat_loss = np.zeros((2, 7, n_lam), dtype=np.float64)
     else:
         n_ph_cat = gpuzeros((1, 1), dtype=np.uint64)
         w_ph_cat = gpuzeros((1, 1), dtype=fdtype)
         w_ph_cat2 = gpuzeros((1, 1), dtype=fdtype)
         w_ph_cat_tot = gpuzeros((1, 1), dtype=fdtype)
         w_ph_cat2_tot = gpuzeros((1, 1), dtype=fdtype)
-        w_ph_loss = gpuzeros(1, dtype=fdtype)
-        w_ph_loss2 = gpuzeros(1, dtype=fdtype)
         tab_obj_info = gpuzeros((1, 1, 1), dtype=fdtype)
         tab_mat_recep = None
         mat_cats = None
@@ -4687,8 +4692,8 @@ def _loop_kernel(
             tab_mat_recep += tab_obj_info[:, :, :].get()
             # Fill loss matrix with photon weights used for loss
             # estimates.
-            mat_loss[:, 0] += w_ph_loss[:].get()
-            mat_loss[:, 1] += w_ph_loss2[:].get()
+            mat_loss[0] += w_ph_loss.get()
+            mat_loss[1] += w_ph_loss2.get()
             # Fill category matrix.
             mat_cats[0, 1] += np.sum(w_ph_cat[:, :].get())
             mat_cats[0, 2] += np.sum(w_ph_cat2[:, :].get())

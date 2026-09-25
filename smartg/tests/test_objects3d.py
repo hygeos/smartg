@@ -5,7 +5,9 @@ reflecting the sun on a receiver over a desert aerosol and a
 Lambertian ground, run in the restricted forward (RF) mode at two
 wavelengths. The tests check the bookkeeping of the receiver: the
 receiver image of each photon category against the category weights,
-per wavelength and summed. The slow tier runs them again with the
+per wavelength and summed, and the weights of the optical losses at
+the heliostats, per wavelength, down to the efficiencies of
+nopt_view. The slow tier runs them again with the
 DatomicAdd fallback of the GPUs without a double precision atomicAdd,
 forced on the current GPU.
 """
@@ -31,6 +33,7 @@ from smartg.objects3d import (
 )
 from smartg.smartg import Smartg
 from smartg.surface import LambSurface
+from smartg.view import nopt_view
 
 SEED = 1234
 XBLOCK = 256
@@ -62,7 +65,7 @@ def _plane(w_x: float, w_y: float) -> Plane:
     )
 
 
-def _scene(reflectivity: float = 0.88) -> list[Entity]:
+def _scene(reflectivity: float | np.ndarray = 0.88) -> list[Entity]:
     """Return the four heliostats and the receiver of the scene."""
     objects = [
         Entity(
@@ -93,19 +96,29 @@ def _scene(reflectivity: float = 0.88) -> list[Entity]:
     return objects
 
 
-def _run(sg: Smartg, wavelength: float | np.ndarray) -> xr.Dataset:
-    """Run the scene at the given wavelengths."""
+def _run(
+    sg: Smartg,
+    wavelength: float | np.ndarray,
+    atmosphere: Atm1D | None = None,
+    reflectivity: float | np.ndarray = 0.88,
+) -> xr.Dataset:
+    """Run the scene at the given wavelengths.
+
+    Over a desert aerosol by default.
+    """
     w2 = 0.5
-    atmosphere = Atm1D(
-        "afglms", comp=[AerOPAC("desert", 0.25, 550.0)], p0=877, tcwp=1.2
-    )
+    if atmosphere is None:
+        atmosphere = Atm1D(
+            "afglms", comp=[AerOPAC("desert", 0.25, 550.0)], p0=877,
+            tcwp=1.2,
+        )
     return sg.run(
         wavelength=wavelength,
         atmosphere=atmosphere,
         surface=LambSurface(alb=AlbedoCst(0.25)),
         th_deg=SZA,
         n_photons=N_PHOTONS,
-        my_objects=_scene(),
+        my_objects=_scene(reflectivity),
         interval=[[-w2, -w2, -0.005], [w2, w2, 0.125]],
         cus_l=CusForward(mode="RF"),
         seed=SEED,
@@ -178,3 +191,77 @@ def test_every_counted_category_is_weighted(two_bands: xr.Dataset) -> None:
     # the DatomicAdd fallback used to count without its weight
     assert counts[7] > 0
     np.testing.assert_array_equal(weights[counts > 0] > 0.0, True)
+
+
+def _check_loss_identities(
+    w_loss: np.ndarray, reflectivity: float | np.ndarray
+) -> None:
+    """Check the loss weights of one wavelength against each other.
+
+    The incident weight splits into the absorbed and the reflected
+    ones, the reflected one into the blocked and the unblocked ones,
+    and the absorbed share is 1 - reflectivity for every photon.
+    """
+    w_i, w_rho_m, w_rho_p, w_b_m, w_b_p = w_loss[:5]
+    np.testing.assert_allclose(w_rho_m + w_rho_p, w_i, rtol=1e-9)
+    np.testing.assert_allclose(w_b_m + w_b_p, w_rho_p, rtol=1e-9)
+    np.testing.assert_allclose(1.0 - w_rho_m / w_i, reflectivity, rtol=1e-6)
+
+
+def test_loss_weights_single_band(sg: Smartg) -> None:
+    """A single wavelength keeps the flat loss weights."""
+    ds = _run(sg, 550.0)
+    assert ds["wLoss"].dims == ("index",)
+    assert ds["wLoss"].shape == (7,)
+    _check_loss_identities(ds["wLoss"].values, 0.88)
+
+
+def test_loss_weights_per_band(two_bands: xr.Dataset) -> None:
+    """Each wavelength has its own loss weights."""
+    w_loss = two_bands["wLoss"]
+    assert w_loss.dims == ("index", "wavelength")
+    assert w_loss.shape == (7, WAVELENGTHS.size)
+    assert two_bands["wLoss2"].dims == ("index", "wavelength")
+    for ilam in range(WAVELENGTHS.size):
+        _check_loss_identities(w_loss.values[:, ilam], 0.88)
+
+
+def _efficiencies(text: str) -> dict[str, float]:
+    """Read the efficiencies nopt_view printed."""
+    values = {}
+    for line in text.splitlines():
+        name, _, rest = line.partition(" =")
+        if rest and name.startswith("n"):
+            values[name] = float(rest.split(",")[0])
+    return values
+
+
+def test_nopt_view_weights_the_bands(
+    sg: Smartg, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """nopt_view weights the loss weights of each band by mtoa.
+
+    The mirrors reflect 0.9 and 0.5 of the two wavelengths, so the
+    reflection efficiency is the mean of the two, each weighted by
+    the mtoa share and by the mean incident weight of its photons.
+    Over a molecular atmosphere, the latter differ between the bands.
+    """
+    reflectivity = np.array([0.9, 0.5])
+    ds = _run(sg, WAVELENGTHS, Atm1D("afglt"), reflectivity)
+    w_loss = ds["wLoss"].values
+    for ilam in range(WAVELENGTHS.size):
+        _check_loss_identities(w_loss[:, ilam], reflectivity[ilam])
+    incident = w_loss[0] / ds["norm_npho"].values
+
+    def nref(mtoa: np.ndarray) -> float:
+        share = mtoa / mtoa.sum() * incident
+        return float(np.sum(share * reflectivity) / np.sum(share))
+
+    capsys.readouterr()
+    for mtoa in (np.array([3.0, 1.0]), None):
+        nopt_view(ds, mtoa=mtoa)
+        printed = _efficiencies(capsys.readouterr().out)
+        expected = nref(np.ones(2) if mtoa is None else mtoa)
+        np.testing.assert_allclose(printed["nref"], expected, atol=2e-6)
+    with pytest.raises(ValueError, match="mtoa"):
+        nopt_view(ds, mtoa=np.array([1.0, 2.0, 3.0]))

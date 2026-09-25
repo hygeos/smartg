@@ -4227,10 +4227,13 @@ def nopt_view(
         - "99.99%" (4 sigma)
         Default: "68%"
     mtoa : None, ndarray, DataArray, or LUT, optional
-        Solar flux at TOA for each wavelength band. If None, uses the
-        total power. If provided, pass a 1D array and the computation
-        is weighted by flux per band. A legacy LUT is converted to a
-        DataArray and emits a deprecation warning. Default: None
+        Solar flux at TOA of each wavelength band, one value per
+        wavelength of the run. The photons of each band are weighted
+        by its share of mtoa, the loss and receiver weights as the
+        power collected by the heliostats, so that every efficiency is
+        a ratio of band-integrated powers. If None, the bands weigh
+        equally. A legacy LUT is converted to a DataArray and emits a
+        deprecation warning. Default: None
     natm_approx : bool, optional
         If True, calculate and display the analytic approximation of
         atmospheric transmission (natm_approx) in backward mode. Ignored
@@ -4278,15 +4281,42 @@ def nopt_view(
     # n/(n-1)
     nbis = nph / (nph - 1)
 
+    # The sums of the photon weights (and of their squares) of the
+    # losses at the heliostats and of the receiver (category 2), and
+    # the power collected by the heliostats. With several wavelengths,
+    # the photons of each band are weighted by c = m * N / N_band, so
+    # that the band counts for its share m of mtoa (equal shares when
+    # None), as in cat_view, and the bands are summed: every
+    # efficiency is then a ratio of band-integrated powers
+    powc_h_band = np.asarray(ds["powc_H"].values, dtype=np.float64)
+    powc_h_band = powc_h_band.reshape(-1)
+    n_band = powc_h_band.size
     if mtoa is None:
-        powc_h_values = np.asarray(ds["powc_H"].values)
-        powc_h = float(powc_h_values.reshape(-1)[0])
+        m_band = np.ones(n_band)
     else:
-        powc_h = 0.0
-        for i in range(len(mtoa)):
-            powc_h += ds["powc_H"].values[i] * mtoa[i]
-        powc_h /= np.sum(mtoa)
-        powc_h = float(powc_h)
+        m_band = np.asarray(mtoa, dtype=np.float64).reshape(-1)
+        if m_band.size != n_band:
+            raise ValueError(
+                f"mtoa has {m_band.size} values for {n_band} wavelengths"
+            )
+    m_band = m_band / np.sum(m_band)
+    if "wavelength" in ds["wLoss"].dims:
+        npho_band = np.asarray(ds["norm_npho"].values, dtype=np.float64)
+        c_band = xr.DataArray(
+            m_band * np.sum(npho_band) / npho_band, dims="wavelength"
+        )
+        w_loss = (ds["wLoss"] * c_band).sum("wavelength").values
+        w_loss2 = (ds["wLoss2"] * c_band**2).sum("wavelength").values
+        w_rec = float((ds["wPhCats"].isel(Categories=2) * c_band).sum())
+        w_rec2 = float(
+            (ds["wPhCats2"].isel(Categories=2) * c_band**2).sum()
+        )
+    else:
+        w_loss = ds["wLoss"].values
+        w_loss2 = ds["wLoss2"].values
+        w_rec = float(ds["cat_w"].values[2])
+        w_rec2 = float(ds["cat_w2"].values[2])
+    powc_h = float(np.sum(powc_h_band * m_band))
 
     k = float(ds.attrs["n_cte"]) / powc_h
 
@@ -4312,23 +4342,13 @@ def nopt_view(
         # Sum of weights
         # w0=wI, w1=wrhoM, w2=wrhoP, w3=wBM, w4=wBP, w5=wSM, w6=wSP
         # w7=wREC
-        w0 = ds["wLoss"].values[0]
-        w1 = ds["wLoss"].values[1]
-        w2 = ds["wLoss"].values[2]
-        w3 = ds["wLoss"].values[3]
-        w4 = ds["wLoss"].values[4]
-        w5 = ds["wLoss"].values[5]
-        w6 = ds["wLoss"].values[6]
-        w7 = ds["cat_w"].values[2]
+        w0, w1, w2, w3, w4, w5, w6 = (float(w) for w in w_loss)
+        w7 = w_rec
         # Sum of (weights²)
-        w0_2 = ds["wLoss2"].values[0]
-        w1_2 = ds["wLoss2"].values[1]
-        w2_2 = ds["wLoss2"].values[2]
-        w3_2 = ds["wLoss2"].values[3]
-        w4_2 = ds["wLoss2"].values[4]
-        w5_2 = ds["wLoss2"].values[5]
-        w6_2 = ds["wLoss2"].values[6]
-        w7_2 = ds["cat_w2"].values[2]
+        w0_2, w1_2, w2_2, w3_2, w4_2, w5_2, w6_2 = (
+            float(w) for w in w_loss2
+        )
+        w7_2 = w_rec2
         # (Sum of weights)² divided by the number of photons
         sum_z_bar2 = [
             (w0 * w0) / nph,
@@ -4423,13 +4443,13 @@ def nopt_view(
     else:  # Backward mode ->
         # Sum of weights
         # w0=wI, w1=wrhoM, w2=wREC
-        w0 = float(ds["wLoss"].values[0])
-        w1 = float(ds["wLoss"].values[1])
-        w2 = float(ds["cat_w"].values[2])
+        w0 = float(w_loss[0])
+        w1 = float(w_loss[1])
+        w2 = w_rec
         # Sum of (weights²)
-        w0_2 = ds["wLoss2"].values[0]
-        w1_2 = ds["wLoss2"].values[1]
-        w2_2 = ds["cat_w2"].values[2]
+        w0_2 = float(w_loss2[0])
+        w1_2 = float(w_loss2[1])
+        w2_2 = w_rec2
         # (Sum of weights)² divided by the number of photons
         sum_z_bar2 = [(w0 * w0) / nph, (w1 * w1) / nph, (w2 * w2) / nph]
         # Sum of (weights²)
@@ -4489,13 +4509,8 @@ def nopt_view(
         )
 
         if natm_approx:
-            if mtoa is None:
-                naatm = ds["n_aatm"].values
-            else:
-                naatm = 0.0
-                for i in range(len(mtoa)):
-                    naatm += ds["n_aatm"].values[i] * mtoa[i]
-                naatm /= np.sum(mtoa)
+            naatm = np.asarray(ds["n_aatm"].values, dtype=np.float64)
+            naatm = float(np.sum(naatm.reshape(-1) * m_band))
             print("naatm =", str_acc % naatm, " -> analytic approx of natm")
 
 
