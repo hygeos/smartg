@@ -349,3 +349,30 @@ def test_receiver_view_log_scale_needs_a_lit_cell() -> None:
     with pytest.raises(ValueError, match="log_color_scale"):
         receiver_view(ds, log_color_scale=True)
     plt.close("all")
+
+
+def test_nopt_view_backward_nsbsa_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The error of nsbsa propagates the error of each of its weights.
+
+    nsbsa = k w2 / (ncos (1 - w1 / w0)): the w0 term missed its dw[0].
+    """
+    nopt_view(_stp_dataset(1), back=True, acc=10)
+    printed = {
+        line.split(" =")[0]: line
+        for line in capsys.readouterr().out.splitlines()
+        if " =" in line
+    }
+    err_abs = float(printed["nsbsa"].split("errAbs =")[1].split(",")[0])
+    w0, w1, w2 = W_LOSS[0], W_LOSS[1], W_REC
+    w_sq = np.array([W_LOSS2[0], W_LOSS2[1], W_REC2])
+    w = np.array([w0, w1, w2])
+    dw = N_PHOTONS / (N_PHOTONS - 1) * np.sqrt(w_sq - w**2 / N_PHOTONS)
+    k, ncos, rho = 1.5 / POWC_H, 0.9, 1.0 - w1 / w0
+    expected = (
+        k / (ncos * rho) * dw[2]
+        + k * w2 / (ncos * w0 * rho**2) * dw[1]
+        + k * w2 * w1 / (ncos * w0**2 * rho**2) * dw[0]
+    )
+    np.testing.assert_allclose(err_abs, expected, rtol=1e-8)

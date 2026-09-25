@@ -4588,6 +4588,7 @@ def nopt_view(
             abs(k / (ncos * (1 - (w1 / w0)))) * dw[2]
             + abs((k * w2) / (ncos * w0 * (1 - (w1 / w0)) ** 2)) * dw[1]
             + abs((-k * w2 * w1) / (ncos * w0 * w0 * (1 - (w1 / w0)) ** 2))
+            * dw[0]
         )
 
         print(
