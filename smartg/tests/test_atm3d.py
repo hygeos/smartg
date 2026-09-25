@@ -888,3 +888,42 @@ def test_truncated_1d_component_with_forced_arrays() -> None:
     ext = np.zeros((1, grid3.NZ + 1))
     with pytest.raises(ValueError, match="aer_ext_1d"):
         Atm3D(atm_1d=atm_1d, grid_3d=grid3, aer_ext_1d=ext)
+
+
+# ===================================================================
+# Grid3D neighbours
+# ===================================================================
+
+
+def test_periodic_single_cell_axis_wraps_onto_itself() -> None:
+    """A periodic axis of one cell is its own neighbour, not a wall.
+
+    The +Y and -Y faces of the 4 x 1 x 3 periodic grid were absorbing
+    boundaries (-5), which kill every photon crossing them. The other
+    faces are unchanged, and so is a non-periodic grid.
+    """
+    grid3 = _build_grid()
+    cells = np.arange(grid3.NCELL)
+    np.testing.assert_array_equal(grid3.neigh[2], cells)
+    np.testing.assert_array_equal(grid3.neigh[3], cells)
+    # +X of the last x cell wraps onto the first one
+    last = np.ravel_multi_index((3, 0, 1), (grid3.NX, grid3.NY, grid3.NZ))
+    first = np.ravel_multi_index((0, 0, 1), (grid3.NX, grid3.NY, grid3.NZ))
+    assert grid3.neigh[0, last] == first
+    # the top and the bottom stay the TOA (-1) and the BOA (-2)
+    assert set(grid3.neigh[4, grid3.idz == grid3.NZ - 1]) == {-1}
+    assert set(grid3.neigh[5, grid3.idz == 0]) == {-2}
+
+    column = Grid3D(
+        np.array([0.0, 1.0]), np.array([0.0, 1.0]),
+        np.array([0.0, 1.0, 2.0, 3.0]), periodic=True,
+    )
+    for face in range(4):
+        np.testing.assert_array_equal(column.neigh[face], np.arange(3))
+
+    closed = Grid3D(
+        np.array([0.0, 1.0, 2.0, 3.0, 4.0]), np.array([0.0, 1.0]),
+        np.array([0.0, 1.0, 3.0, 4.0]),
+    )
+    assert set(closed.neigh[2]) == {-5} and set(closed.neigh[3]) == {-5}
+    assert closed.neigh[0, last] == -5

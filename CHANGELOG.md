@@ -1009,6 +1009,11 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix the periodic `Grid3D` with a single cell along x or y (a 2-D
+    (x, z) field, or a horizontally uniform column): the faces of that
+    axis were absorbing boundaries, which killed every photon crossing
+    them, instead of wrapping the cell onto itself. The other grids are
+    unchanged
   - Fix `extract_split`, which raised a `ValueError` on every `Smartg.run`
     output holding phase matrices: it indexed them along `iphase`, which
     the run output names `phase_index_atm`. It takes the first dimension

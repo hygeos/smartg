@@ -220,11 +220,17 @@ def get_3d_cells_neighbours(
             (neigh_idx, neigh_idy, neigh_idz),
             dims=(nx, ny, nz), mode=('clip', 'clip', 'clip'),
         )
-    # boundaries neighbouring
-    # with 'clip' mode, if outside the domain then the neighbour
-    # index is the same as the cell index
-    cells = np.arange(nx * ny * nz, dtype=np.int32)
-    neigh[np.equal(neigh, cells)] = boundary_abs
+    # boundaries neighbouring: the faces leaving the domain, at its
+    # bottom and top, and on its sides unless it is periodic. A
+    # periodic axis of a single cell wraps onto the cell itself, which
+    # is its neighbour and not a boundary
+    outside = (neigh_idz < 0) | (neigh_idz >= nz)
+    if not periodic:
+        outside |= (
+            (neigh_idx < 0) | (neigh_idx >= nx)
+            | (neigh_idy < 0) | (neigh_idy >= ny)
+        )
+    neigh[outside] = boundary_abs
     # by definition -Z neighbour at the domain boundary is BOA
     neigh[5, np.where(neigh[5, :] == boundary_abs)] = boundary_boa
     # by definition +Z neighbour at the domain boundary is TOA
