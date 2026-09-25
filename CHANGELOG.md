@@ -920,6 +920,11 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.view.profile_view` and `input_view`, which since
+    v2.0.0dev1 sliced the wavelength axis of the phase matrix index: the
+    index axis was left empty, or showed one line per wavelength when
+    there were as many wavelengths as levels. It shows again the index
+    profile of wavelength `iw`
   - Fix `smartg.view.camera_view`, and so the IPRT phase B camera plots,
     which raised a `ValueError` for a panel whose values are all zero
     (for instance V of a Rayleigh scene) or all NaN. Given `matrices`,

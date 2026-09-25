@@ -24,6 +24,7 @@ from smartg.view import (
     cat_view,
     nopt_view,
     plot_polar_iquv,
+    profile_view,
 )
 
 N_PHOTONS = 1000
@@ -231,3 +232,35 @@ def test_camera_view_needs_one_stokes_per_matrix() -> None:
             matrices=_camera_matrices()[:2],
         )
     plt.close("all")
+
+
+def test_profile_view_phase_index_of_the_wavelength() -> None:
+    """The phase index axis shows the profile of wavelength iw."""
+    z = np.array([100.0, 50.0, 20.0, 10.0, 0.0])
+    od = np.array([[0.0, 0.1, 0.2, 0.3, 0.4], [0.0, 0.2, 0.4, 0.6, 0.8]])
+    iphase = np.array([[0, 1, 1, 2, 2], [0, 3, 3, 4, 4]])
+    dims = ("wavelength", "z_atm")
+    ds = xr.Dataset(
+        {
+            name: (dims, od)
+            for name in ("OD_atm", "OD_sca_atm", "OD_r", "OD_p")
+        }
+        | {
+            "OD_abs_atm": (dims, 0.1 * od),
+            "OD_g": (dims, 0.1 * od),
+            "ssa_p_atm": (dims, np.full(od.shape, 0.9)),
+            "iphase_atm": (dims, iphase),
+        },
+        coords={"wavelength": [500.0, 600.0], "z_atm": z},
+    )
+
+    # the extinction per km is infinite at the top level
+    with np.errstate(all="raise"):
+        fig, ax = profile_view(ds, iw=1)
+
+    ax2 = fig.axes[-1]
+    assert ax2 is not ax
+    (line,) = ax2.get_lines()
+    np.testing.assert_array_equal(line.get_xdata(), iphase[1, 1:])
+    np.testing.assert_array_equal(line.get_ydata(), z[1:])
+    plt.close(fig)

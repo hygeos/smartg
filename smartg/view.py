@@ -1749,21 +1749,24 @@ def profile_view(
     ax.grid()
     ax.legend()
 
-    try:
-        ax2 = ax.twiny()
-        nf = ds_sg["iphase_" + kind].values
-        z_vals = ds_sg.coords[z_key].values
-        ax2.plot(nf[1:], z_vals[1:], "m-", drawstyle="steps-post", label="i")
-        ax2.set_xlabel("Phase Matrix index", color="m")
-        ax2.tick_params("x", colors="m")
-        ax2.xaxis.set_major_formatter(FormatStrFormatter("%i"))
-        return fig, ax
-
     # no phase index variable, or a phase index that does not line
     # up with the profile levels (the ocean profile of the histories
     # notebook): the figure is returned without the index axis
-    except (KeyError, ValueError):
+    if "iphase_" + kind not in ds_sg:
         return fig, ax
+    da_nf = ds_sg["iphase_" + kind]
+    if "wavelength" in da_nf.dims:
+        da_nf = da_nf.isel(wavelength=iw)
+    nf = da_nf.values
+    z_vals = ds_sg.coords[z_key].values
+    if nf.shape != z_vals.shape:
+        return fig, ax
+    ax2 = ax.twiny()
+    ax2.plot(nf[1:], z_vals[1:], "m-", drawstyle="steps-post", label="i")
+    ax2.set_xlabel("Phase Matrix index", color="m")
+    ax2.tick_params("x", colors="m")
+    ax2.xaxis.set_major_formatter(FormatStrFormatter("%i"))
+    return fig, ax
 
 
 def input_view(
