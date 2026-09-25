@@ -696,3 +696,35 @@ def test_desert_one_wavelength(request: pytest.FixtureRequest) -> None:
             rtol=1e-3,
         )
     ), "Problem with desert one wavelength phase function"
+
+
+# ************************* component inputs ***************************
+Z_LEVELS = np.linspace(100.0, 0.0, 101)
+WAVELENGTHS = np.array([440.0, 550.0, 1020.0])
+
+
+@pytest.mark.parametrize(
+    "tau_ref",
+    [[0.1], (0.1,), np.array([0.1]), np.array(0.1)],
+    ids=["list", "tuple", "array", "0-d"],
+)
+def test_tau_ref_holding_one_value(tau_ref: object) -> None:
+    """An array holding one optical thickness is taken as a number.
+
+    It was silently ignored, the component keeping the optical
+    thickness of the OPAC number densities.
+    """
+    ref, _ = AerOPAC("continental_clean", 0.1, 550.0).dtau_ssa(
+        WAVELENGTHS, Z_LEVELS, 50.0
+    )
+    dtau, _ = AerOPAC("continental_clean", tau_ref, 550.0).dtau_ssa(
+        WAVELENGTHS, Z_LEVELS, 50.0
+    )
+    np.testing.assert_array_equal(dtau, ref)
+    assert np.isclose(dtau[1].sum(), 0.1, rtol=1e-5)
+
+
+def test_tau_ref_of_several_values_refused() -> None:
+    """An array of several optical thicknesses has no meaning."""
+    with pytest.raises(TypeError, match="tau_ref"):
+        AerOPAC("continental_clean", np.array([0.1, 0.2]), 550.0)

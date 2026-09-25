@@ -189,6 +189,36 @@ def _common_theta_grid(
     return theta, True
 
 
+def _as_tau_ref(
+    tau_ref: float | NumericArrayLike | xr.DataArray | LUT | None,
+) -> float | xr.DataArray | None:
+    """Normalize the `tau_ref` of an aerosol or cloud component.
+
+    A number, or an array holding a single one, becomes a float, the
+    optical thickness at the reference wavelength. A DataArray, which
+    forces the optical thickness at every wavelength, is kept, a
+    legacy LUT converted into one, and None kept.
+
+    Raises
+    ------
+    TypeError
+        If `tau_ref` is an array of several values, which no branch
+        of `AerOPAC.dtau_ssa` would use.
+    """
+    if tau_ref is None or isinstance(tau_ref, xr.DataArray):
+        return tau_ref
+    if isinstance(tau_ref, LUT):
+        return tau_ref.to_xarray()
+    values = np.asarray(tau_ref, dtype=np.float64)
+    if values.size != 1:
+        raise TypeError(
+            "tau_ref must be a number, the optical thickness at w_ref, "
+            "or a DataArray over wavelength forcing it at every "
+            f"wavelength; got an array of {values.size} values."
+        )
+    return float(values.ravel()[0])
+
+
 def _on_theta_grid(
     pha: xr.DataArray, theta: NDArray[np.float64], dim: str = "theta_atm"
 ) -> xr.DataArray:
@@ -215,8 +245,14 @@ class AerOPAC:
         maritime_clean,
         maritime_polluted, mineral_transported, maritime_tropical and
         urban
-    tau_ref : float or array_like or DataArray or LUT or None
-        Optical thickness at reference wavelength w_ref
+    tau_ref : float or DataArray or LUT or None
+        Optical thickness at the reference wavelength `w_ref`; an array
+        holding a single value is taken as that value, and one of
+        several values is refused. A DataArray (or LUT) over wavelength
+        in nm forces instead the optical thickness at every wavelength
+        of the calculation, interpolated linearly and held constant
+        beyond its ends, `w_ref` being then ignored. None keeps the
+        optical thickness of the OPAC number densities.
     w_ref : float
         Wavelength in nanometers at reference optical depth tau_ref
     h_mix_min : float, optional
@@ -341,9 +377,7 @@ class AerOPAC:
     ) -> None:
 
         self.truncation = as_truncation(truncation)
-        self.tau_ref = (
-            tau_ref.to_xarray() if isinstance(tau_ref, LUT) else tau_ref
-        )
+        self.tau_ref = _as_tau_ref(tau_ref)
         if np.isscalar(w_ref) or (
             isinstance(w_ref, np.ndarray) and w_ref.ndim == 0
         ):
@@ -1261,7 +1295,7 @@ class Cloud(AerOPAC):
                 f"zmin={zmin} and zmax={zmax}."
             )
         self.reff = reff
-        self.tau_ref = tau_ref
+        self.tau_ref = _as_tau_ref(tau_ref)
         if np.isscalar(w_ref) or (
             isinstance(w_ref, np.ndarray) and w_ref.ndim == 0
         ):
