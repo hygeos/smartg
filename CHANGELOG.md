@@ -1131,12 +1131,24 @@ final `v2.0.0` release.
     the leading factor of the Edlén equation: `n_atm - 1` was 100 times
     too small, so that the runs with `refraction=True` hardly refracted.
     Their results change
+  - Fix the particle backscattering of the phase matrices `Hydrosol`,
+    `HydrosolPR` and `HydrosolZhai` derive from the backscattering ratio:
+    the forward peak of the Fournier-Forand mixture their angular grid
+    does not resolve was spread over all the angles, so that the
+    backscattering coefficient missed `bbp_ratio * bp` by +10 % to +51 %
+    (-6 % for `HydrosolZhai`). As in v1.2.0, that peak is now counted as
+    unscattered: the scattering coefficient is scaled by the resolved
+    fraction of the mixture (0.72 for a ratio of 0.01 on the 721 angles of
+    `Hydrosol`, 0.91 for `HydrosolPR(chl=0.5)` on its 72001), times
+    `1 - f` with a truncation. Without truncation, the backscattering is
+    now right to 0.2 %
   - Fix `HydrosolPR` and `HydrosolZhai`, which halved their particle
     scattering coefficient whenever the phase matrices were calculated, as
     in every `Smartg.run`, but not with `Water1D.calc(phase=False)`: they
-    now scatter their whole `bp`, scaled by the truncation factor only, as
-    `Hydrosol` does. Their results change: the particle scattering is twice
-    that of 2.0.0b1 and v1.2.0, where the factor 0.5 dated from 2017
+    now scale `bp` as `Hydrosol` does, by the factor of their phase
+    matrices only. Their results change: the particle scattering is twice
+    that of 2.0.0b1 and v1.2.0, where the factor 0.5 dated from 2017, times
+    the resolved fraction above
   - Fix `smartg.objects3d.extract_points`: it dropped the first line of
     coordinates when no blank line followed the comments, misread the
     numbers written with an exponent, and printed a message and returned

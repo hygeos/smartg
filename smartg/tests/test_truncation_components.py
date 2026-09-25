@@ -268,15 +268,18 @@ WATER_GRID = [0.0, -10.0]
 WATER_WAV = np.array([550.0])
 
 
-def _ff_phase() -> xr.DataArray:
+def _ff_phase() -> tuple[xr.DataArray, float]:
     """Return the untruncated Fournier-Forand mixture of a hydrosol.
 
     Derived from a backscattering ratio of 0.01, at 550 nm, on a single
-    depth, in the shape the `phase` parameter of Hydrosol accepts.
+    depth, in the shape the `phase` parameter of Hydrosol accepts, with
+    the fraction of its forward peak the grid resolves.
     """
     h = Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=7201)
-    pha, _ = h.calc_phase(WATER_WAV, np.array([0.0]), np.full((1, 1), 0.01))
-    return pha
+    pha, resolved = h.calc_phase(
+        WATER_WAV, np.array([0.0]), np.full((1, 1), 0.01)
+    )
+    return pha, resolved.item()
 
 
 def test_hydrosol_supplied_phase_truncated_when_asked() -> None:
@@ -285,12 +288,15 @@ def test_hydrosol_supplied_phase_truncated_when_asked() -> None:
     Given the untruncated Fournier-Forand mixture a backscattering
     ratio derives, a hydrosol given the same truncation gives the
     profile of the hydrosol that derives it: the same truncated matrix,
-    the same scattering scaled by 1 - f.
+    the same scattering scaled by 1 - f. The derived one also scales
+    its scattering by the fraction of the forward peak its grid
+    resolves, which the supplied table does not carry.
     """
     trunc = DEFAULT_WATER_TRUNC
+    pha, resolved = _ff_phase()
     supplied = Water1D(
         grid=WATER_GRID,
-        comp=[Hydrosol(phase=_ff_phase(), bp=0.1, truncation=trunc)],
+        comp=[Hydrosol(phase=pha, bp=0.1, truncation=trunc)],
     ).calc(WATER_WAV)
     derived = Water1D(
         grid=WATER_GRID,
@@ -302,7 +308,8 @@ def test_hydrosol_supplied_phase_truncated_when_asked() -> None:
         rtol=1e-12, atol=1e-12,
     )
     np.testing.assert_allclose(
-        supplied["OD_p_oc"].values, derived["OD_p_oc"].values, rtol=1e-12
+        supplied["OD_p_oc"].values * resolved, derived["OD_p_oc"].values,
+        rtol=1e-12,
     )
     # GT with a fraction of 0.3: 70 % of bp is left
     np.testing.assert_allclose(
@@ -312,7 +319,7 @@ def test_hydrosol_supplied_phase_truncated_when_asked() -> None:
 
 def test_hydrosol_supplied_phase_untruncated_by_default() -> None:
     """Without a truncation, a supplied phase is kept as it is."""
-    pha = _ff_phase()
+    pha, _ = _ff_phase()
     pro = Water1D(
         grid=WATER_GRID, comp=[Hydrosol(phase=pha, bp=0.1)]
     ).calc(WATER_WAV)

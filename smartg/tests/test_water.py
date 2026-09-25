@@ -602,9 +602,10 @@ def test_hydrosol_calc_phase_truncation() -> None:
 
     The phase matrices derived from the backscattering ratio must be
     normalized to 2, non-negative, with only F11 and F22 = F11
-    non-null, and the truncation factor must be 1 - f (1 without
-    truncation). Configurations yielding a negative truncated phase
-    must be rejected.
+    non-null, and the scattering factor must be the fraction of the
+    forward peak the grid resolves, times 1 - f with a truncation.
+    Configurations yielding a negative truncated phase must be
+    rejected.
     """
     wavelength = np.array([440.0, 550.0])
     z = np.array([0.0, -10.0])
@@ -624,11 +625,15 @@ def test_hydrosol_calc_phase_truncation() -> None:
         assert (p[:, :, [1, 2, 3, 5], :] == 0.0).all()
         return coef.values
 
-    # no truncation by default
-    np.testing.assert_array_equal(calc(), 1.0)
+    # no truncation by default: the 721 angles resolve 72 % of the
+    # forward peak of the mixture
+    resolved = calc()
+    np.testing.assert_allclose(resolved, 0.722, atol=1e-3)
 
-    # the recommended GT truncation: coef_trunc = 1 - trunc_frac
-    np.testing.assert_allclose(calc(truncation=DEFAULT_WATER_TRUNC), 0.7)
+    # the recommended GT truncation: 1 - trunc_frac of the resolved part
+    np.testing.assert_allclose(
+        calc(truncation=DEFAULT_WATER_TRUNC), 0.7 * resolved, rtol=1e-12
+    )
 
     # GT truncation with a searched truncation angle
     coef = calc(
@@ -636,7 +641,7 @@ def test_hydrosol_calc_phase_truncation() -> None:
             trunc_frac=0.5, theta_tol=30.0, lobatto_optimization=True
         )
     )
-    np.testing.assert_allclose(coef, 0.5)
+    np.testing.assert_allclose(coef, 0.5 * resolved, rtol=1e-12)
 
     # a truncation fraction larger than the energy of the truncated
     # peak gives a negative truncated phase, as does the Legendre
@@ -695,3 +700,75 @@ def test_chlorophyll_hydrosols_scatter_their_whole_bp() -> None:
             pro_pr[var].values, pro_user[var].values, rtol=1e-12,
             err_msg=var,
         )
+
+
+def _backscattered_fraction(
+    f11: NDArray[np.float64], theta_deg: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Return the backscattered fraction of tabulated phase functions.
+
+    The mass of each angular bin is the one the kernel samples, F11
+    linear in theta between the nodes times the true sin(theta), see
+    `smartg.smartg._cdf_of_table`. The grid must hold 90 degrees.
+    """
+    ang = np.deg2rad(theta_deg)
+    th0, th1 = ang[:-1], ang[1:]
+    f0 = f11[..., :-1]
+    df = f11[..., 1:] - f0
+    mass = f0 * (np.cos(th0) - np.cos(th1)) + df * (
+        (np.sin(th1) - np.sin(th0)) / (th1 - th0) - np.cos(th1)
+    )
+    back = theta_deg[:-1] >= 90.0
+    return mass[..., back].sum(axis=-1) / mass.sum(axis=-1)
+
+
+@pytest.mark.parametrize("truncation", [None, DEFAULT_WATER_TRUNC])
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda t: Hydrosol(bp=0.1, bbp_ratio=0.005, truncation=t),
+        lambda t: Hydrosol(bp=0.1, bbp_ratio=0.02, truncation=t),
+        lambda t: HydrosolPR(chl=0.5, truncation=t),
+        lambda t: HydrosolZhai(chl_surf=0.5, truncation=t),
+    ],
+    ids=["Hydrosol-0.005", "Hydrosol-0.02", "HydrosolPR", "HydrosolZhai"],
+)
+def test_derived_phase_backscattering(
+    make: Any, truncation: GTTrunc | None
+) -> None:
+    """The derived phase gives the requested particle backscattering.
+
+    The scattering coefficient of the profile times the backscattered
+    fraction of the phase matrix the kernel samples must be
+    `bbp_ratio * bp`, at the default `n_theta` of each class, with and
+    without truncation. The forward peak the angular grid does not
+    resolve is counted as unscattered: it used to be spread over all
+    the angles, backscattering included, by +10 % to +51 %.
+
+    The tolerance covers the Park & Ruddick weights, derived from
+    backscattered fractions of 0.030 and 0.002 where the two
+    Fournier-Forand functions have 0.029963 and 0.0019976: -0.12 %.
+    The GT truncation of `DEFAULT_WATER_TRUNC` adds a bias of its own
+    on a coarse grid, see the tolerance below.
+    """
+    hydrosol = make(truncation)
+    rtol = 2e-3
+    if truncation is not None and hydrosol.n_theta < 7201:
+        # GT integrates its plateau as a step up to theta_tr and the
+        # kernel as a ramp over the last bin before it, so that the
+        # truncated fraction of the table exceeds f: +2.3 % of
+        # backscattering at 721 angles (+0.2 % at 7201) for a ratio
+        # of 0.005
+        rtol = 3e-2
+    wavelength = np.array([443.0, 550.0])
+    grid = np.array([0.0, -5.0, -10.0])
+    pro = Water1D(grid=grid, comp=[hydrosol]).calc(wavelength)
+    iop = hydrosol.iop(wavelength, grid)
+    assert iop["bbp_ratio"] is not None
+    frac = _backscattered_fraction(
+        pro["phase_oc"].values[:, 0, :], pro["theta_oc"].values
+    )[pro["iphase_oc"].values]
+    bb = hydrosol.coeffs(wavelength, grid)["bp"] * frac
+    np.testing.assert_allclose(
+        bb[:, 1:], (iop["bbp_ratio"] * iop["bp"])[:, 1:], rtol=rtol
+    )

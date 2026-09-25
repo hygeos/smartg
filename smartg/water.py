@@ -222,7 +222,11 @@ class Hydrosol:
     -----
     When `phase` is not provided, the phase matrices are derived from
     the backscattering ratio `bbp_ratio` following Park & Ruddick
-    (2005), as a mixture of two Fournier-Forand phase functions.
+    (2005), as a mixture of two Fournier-Forand phase functions. The
+    angular grid resolves only part of their forward peak: `bp` is
+    scaled by the resolved fraction, so that the particle
+    backscattering coefficient is `bbp_ratio * bp` whatever `n_theta`
+    (see `calc_phase`).
 
     Whether supplied or derived, their forward peak is truncated as
     configured by `truncation`, and the scattering coefficient `bp` is
@@ -295,7 +299,7 @@ class Hydrosol:
 
             - 'ap' : particle absorption coefficient in m-1
             - 'bp' : particle scattering coefficient in m-1, before the
-              truncation correction
+              scaling by the factor of the phase matrices
             - 'acdom' : CDOM absorption coefficient in m-1
             - 'bbp_ratio' : backscattering ratio (dimensionless), or
               None if none was provided
@@ -348,16 +352,27 @@ class Hydrosol:
         bbp_ratio: NDArray,
     ) -> tuple[xr.DataArray, xr.DataArray]:
         """
-        Calculate the phase matrices and their truncation factor.
+        Calculate the phase matrices and their scattering factor.
 
         They are a mixture of two Fournier-Forand phase functions
-        weighted by the backscattering ratio.
+        weighted by the backscattering ratio. Only the F11 (and F22 =
+        F11) terms are non-null: the mixture is treated as a scalar
+        phase function.
 
-        The forward peak is truncated with pytrunc as configured by
-        `truncation` (nothing is truncated when it is None), and the
-        phase matrices are normalized to 2 over the angular grid. Only
-        the F11 (and F22 = F11) terms are non-null: the mixture is
-        treated as a scalar phase function.
+        The two functions are normalized analytically, to 2 over the
+        cosine of the scattering angle, and diverge in the forward
+        direction: the angular grid resolves only part of their forward
+        peak, whose first bin is flattened. The part it misses is
+        counted as unscattered, as a truncated peak is: the phase
+        matrices are normalized to 2 over the grid, and the scattering
+        coefficient is scaled by the resolved fraction, the integral of
+        the mixture over the grid divided by 2. The particle
+        backscattering coefficient is thus the backscattering ratio
+        times the scattering coefficient, whatever `n_theta`.
+
+        The normalized phase matrices are then truncated with pytrunc
+        as configured by `truncation` (nothing is truncated when it is
+        None).
 
         Parameters
         ----------
@@ -376,11 +391,15 @@ class Hydrosol:
             Phase matrices with dimensions [wavelength_phase,
             z_phase, nphamat, theta_oc].
         coef_trunc : DataArray
-            Truncation factor `1 - f` with dimensions [wavelength_phase,
+            Scattering factor with dimensions [wavelength_phase,
             z_phase], by which the scattering coefficient must be
-            scaled to compensate for the truncated peak (`f` is the
-            truncated fraction of the scattered energy). All ones when
-            `truncation` is None.
+            scaled: the resolved fraction of the mixture, times `1 - f`
+            when `truncation` is set (`f` is the truncated fraction of
+            the scattered energy of the normalized phase matrix). The
+            resolved fraction tends to 1 as the grid is refined; it is
+            below 1 up to a backscattering ratio of 0.03, and above
+            beyond, where the mixture weights the second function
+            negatively and is negative in the forward direction.
 
         Raises
         ------
@@ -427,10 +446,15 @@ class Hydrosol:
 
         f11 = r1_uniq[:, None] * ff1 + (1 - r1_uniq[:, None]) * ff2
 
-        # normalize
-        f11 *= 2.0 / integ_phase(ang, f11)[:, None]
+        # the mixture integrates to 2 analytically: what the grid misses
+        # of its forward peak is counted as unscattered, by scaling the
+        # scattering coefficient by the resolved fraction, and the table
+        # is normalized to 2 over the grid, as pytrunc and the kernel
+        # expect
+        resolved = integ_phase(ang, f11) / 2.0
+        f11 /= resolved[:, None]
 
-        coef = np.ones(len(r1_uniq), dtype="float64")
+        coef = resolved
         if self.truncation is not None:
             # only F11 (and F22 = F11) is non-null, so it is truncated
             # alone, as a one-term matrix; the helper refuses a
@@ -439,7 +463,7 @@ class Hydrosol:
                 f11[:, None, :], np.rad2deg(ang), self.truncation
             )
             f11 = f11_tr[:, 0, :]
-            coef = 1.0 - f
+            coef = resolved * (1.0 - f)
 
         pha = np.zeros((n_wavelength, nz, 6, len(ang)), dtype="float64")
         pha[:, :, 0, :] = f11[inv]
@@ -526,7 +550,7 @@ class Hydrosol:
         Compute the phase matrices at the tabulation wavelengths.
 
         They are computed on `wavelength_phase`, along with the
-        associated truncation factor.
+        associated scattering factor (see `calc_phase`).
 
         The result is memoized in `_pha`, `_coef_trunc` and `_bsca`, so
         that the scattering coefficient and the phase matrices stay
@@ -625,7 +649,7 @@ class Hydrosol:
         use_old_calc_iphase: bool = False,
     ) -> NDArray:
         """
-        Map the truncation factor onto the given grids.
+        Map the scattering factor of the phase matrices onto the grids.
 
         It is mapped from the tabulation grid of the phase matrices
         onto the given wavelength and depth grids.
@@ -646,7 +670,7 @@ class Hydrosol:
         Returns
         -------
         ndarray
-            Truncation factor with dimensions [len(wavelength), len(z)].
+            Scattering factor with dimensions [len(wavelength), len(z)].
         """
         # only called once _resolve_truncation has filled the cache
         assert (self._pha is not None) and (self._coef_trunc is not None)
@@ -679,9 +703,9 @@ class Hydrosol:
         -------
         ndarray or None
             Scattering coefficient in m-1 with dimensions
-            [wavelength_phase, z_phase], corrected for the phase
-            matrix truncation. None if the truncation of the derived
-            phase matrices has not been resolved yet.
+            [wavelength_phase, z_phase], scaled by the factor of the
+            phase matrices. None if the derived phase matrices have not
+            been calculated yet.
         """
         if self._phase is None:
             return self._bsca
@@ -704,8 +728,10 @@ class Hydrosol:
         """
         Return the inherent optical properties of the hydrosol.
 
-        The scattering coefficient is corrected for the phase matrix
-        truncation.
+        The scattering coefficient is scaled by the factor of the phase
+        matrices, see `calc_phase`: the truncation factor, and, for the
+        derived phase matrices, the fraction of the forward peak their
+        grid resolves.
 
         Parameters
         ----------
@@ -715,16 +741,16 @@ class Hydrosol:
             Vertical grid of the water column in m. These are z
             coordinates: 0 at the surface, negative downwards.
         phase : bool, optional
-            Whether the phase matrices are calculated. If False, no
-            truncation correction is applied.
+            Whether the phase matrices are calculated. If False, the
+            scattering coefficient is not scaled.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
 
         Returns
         -------
         IOPDict
-            Same as the `iop` method, with 'bp' scaled by the truncation
-            factor.
+            Same as the `iop` method, with 'bp' scaled by the factor of
+            the phase matrices.
 
         Raises
         ------
@@ -792,7 +818,8 @@ class HydrosolPR(Hydrosol):
     coefficient Loisel & Morel (1998), 0.416 chl^0.766 (550 /
     wavelength) in m-1. As in the base class, the phase matrices are
     derived from the backscattering ratio, and the scattering
-    coefficient is scaled by their truncation factor only.
+    coefficient is scaled by their factor only (see
+    `Hydrosol.calc_phase`).
 
     References
     ----------
@@ -976,7 +1003,7 @@ class HydrosolZhai(Hydrosol):
     absorption, for a particle single scattering albedo of 0.68 at
     440 nm. As in the base class, the phase matrices are derived from
     the backscattering ratio, and the scattering coefficient is scaled
-    by their truncation factor only.
+    by their factor only (see `Hydrosol.calc_phase`).
 
     References
     ----------
@@ -1305,8 +1332,8 @@ class Water1D(Water):
             Wavelengths in nm at which to calculate the profile.
         phase : bool, optional
             Whether to calculate the phase matrices. If False, the
-            scattering coefficients are not corrected for the phase
-            matrix truncation either.
+            scattering coefficients are not scaled by the factor of the
+            phase matrices either (see `Hydrosol.coeffs`).
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
 
