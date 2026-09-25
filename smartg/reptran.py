@@ -71,6 +71,13 @@ if TYPE_CHECKING:
 dir_reptran = DIR_AUXDATA / "reptran"
 
 
+def _channel_name(name: str | bytes) -> str:
+    """Return a REPTRAN channel name as text without its spaces."""
+    if isinstance(name, bytes):
+        name = name.decode()
+    return name.replace(" ", "")
+
+
 def reduce_reptran(
     ds: xr.Dataset | MLUT,
     ibands: ReptranIbandList,
@@ -560,7 +567,7 @@ class Reptran:
     cross_section_source : numpy.ndarray
         Molecular absorption-source flags for each internal band.
     band_names : list of str
-        Names of the available sensor channels.
+        Names of the available sensor channels, without their spaces.
     """
 
     def __init__(self, fname: PathType) -> None:
@@ -598,10 +605,12 @@ class Reptran:
             # band
             self.cross_section_source = dataset["cross_section_source"].values
 
-            self.band_names = []
-            # the names of the sensor channels
-            for bname in dataset["band_name"].values:
-                self.band_names.append(str(bname.tobytes()).replace(" ", ""))
+            # the names of the sensor channels, without their spaces
+            # ('band from  119.9976 to  120.0192 nm' becomes
+            # 'bandfrom119.9976to120.0192nm')
+            self.band_names = [
+                _channel_name(bname) for bname in dataset["band_name"].values
+            ]
 
     def nbands(self) -> int:
         """Return the number of sensor channels in the file.
@@ -619,7 +628,8 @@ class Reptran:
         Parameters
         ----------
         band : int or str
-            Zero-based channel index or exact channel name.
+            Zero-based channel index or channel name. The spaces of a
+            name are ignored, as in :attr:`band_names`.
 
         Returns
         -------
@@ -627,7 +637,7 @@ class Reptran:
             The selected sensor channel.
         """
         if isinstance(band, str):
-            return self.band(self.band_names.index(band))
+            return self.band(self.band_names.index(_channel_name(band)))
         else:
             return ReptranBand(self, band)
 

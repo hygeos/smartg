@@ -916,6 +916,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the REPTRAN channel names, which kept the repr of the bytes read
+    from the file (`"b'msg1_seviri_ch006'"`), so that
+    `Reptran.band('msg1_seviri_ch006')` raised a `ValueError`. The names
+    of `Reptran.band_names`, `ReptranBand.name` and
+    `ReptranIbandList.get_names` are now plain text, still without spaces,
+    and `Reptran.band` ignores the spaces of the name it is given
   - Fix the N2O absorption of REPTRAN: `ReptranIband.calc_profile` scaled
     the N2O cross sections by the NO2 density, about 1e4 times smaller in
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was

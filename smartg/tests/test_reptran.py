@@ -202,3 +202,24 @@ def test_calc_profile_scales_each_species_by_its_density(
         f"synthetic.lookup.{species}"
     ]
     np.testing.assert_allclose(kabs, densities[species] * 1e-11)
+
+
+def test_channel_names_are_text() -> None:
+    """Channel names read from a file are text, found by band()."""
+    reptran = Reptran("reptran_solar_msg")
+    band = reptran.band("msg1_seviri_ch006")
+
+    assert reptran.band_names[0] == "msg1_seviri_ch006"
+    assert band.band == 0
+    assert band.name == "msg1_seviri_ch006"
+
+
+def test_channel_name_spaces_are_ignored() -> None:
+    """A libRadtran band name is found with or without its spaces."""
+    reptran = Reptran("reptran_solar_coarse")
+    band = reptran.band(0)
+
+    assert band.name == "bandfrom119.9976to120.0192nm"
+    assert (band.wmin, band.wmax) == (119.9976, 120.0192)
+    assert reptran.band("band from  119.9976 to  120.0192 nm").band == 0
+    assert reptran.band(band.name).band == 0
