@@ -720,3 +720,25 @@ def test_ff_launch_below_toa(sg: Smartg) -> None:
     np.testing.assert_allclose(
         ds["cat_irr"].values[1], area * np.exp(-od), rtol=0.01
     )
+
+
+def test_receiver_cells_tile_the_receiver(sg: Smartg) -> None:
+    """Every hit of a receiver lands in one of its cells.
+
+    0.0006 / 0.0001 truncated to 5 cells: the hits past them got the
+    index -1, written before the flux map or into the previous
+    category. The 6 x 6 cells share the sun evenly.
+    """
+    half = 0.0003
+    receiver = _receiver(half, (0.0, 0.0, 0.0), tc=0.0001)
+    ds = _run_ff(sg, [receiver], _transparent(), 4 * half)
+    image = ds["C_Receiver"]
+    assert image.shape == (9, 6, 6)
+    np.testing.assert_allclose(
+        image.sum(("X_Cell_Index", "Y_Cell_Index")).values,
+        ds["cat_irr"].values,
+        rtol=1e-8,
+    )
+    area = (2 * half * 1e3) ** 2
+    np.testing.assert_allclose(ds["cat_irr"].values[0], area, rtol=0.01)
+    np.testing.assert_allclose(image.values[0], area / 36, rtol=0.1)
