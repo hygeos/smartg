@@ -1310,6 +1310,13 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix `get_histories`, which read a history record as if it started
+    with the atmospheric path lengths: the ocean ones come first, so with
+    a water body the distances, Stokes vector and scattering corrections
+    were shifted. The layer counts are now read from the new output
+    attributes 'ALIS n_oce_abs' and 'ALIS n_atm_abs'. `Alis(hist=True)`
+    with a water body now raises a `ValueError`: the histories
+    post-processing leaves out the absorption in the ocean
   - Fix the photon histories of `Alis(hist=True)` with several local
     estimate directions or sensors, or without a local estimate: the
     kernel wrote each record with the stride of a single direction, so

@@ -41,6 +41,41 @@ from luts.luts import MLUT
 from numpy.typing import NDArray
 
 
+def _alis_layers(m: MLUT | xr.Dataset) -> tuple[int, int]:
+    """
+    Return the numbers of ocean and atmosphere absorbing layers.
+
+    A history record and the 'cdist_layer' axis hold the ocean layers
+    first, then the atmospheric ones.
+
+    Parameters
+    ----------
+    m : MLUT or xarray.Dataset
+        A Smartg output with the ALIS option.
+
+    Returns
+    -------
+    n_oce_abs, n_atm_abs : int
+        The numbers of ocean and atmosphere absorbing layers, from the
+        'ALIS n_oce_abs' and 'ALIS n_atm_abs' attributes of the output,
+        or, for an older output, from its z_oc and z_atm axes.
+    """
+    attrs = getattr(m, 'attrs', {})
+    if 'ALIS n_atm_abs' in attrs:
+        return int(attrs['ALIS n_oce_abs']), int(attrs['ALIS n_atm_abs'])
+    if isinstance(m, xr.Dataset):
+        axes = {name: m[name].size for name in m.coords}
+    else:
+        # MLUT.axes exists at runtime; missing from the stub.
+        axes = {
+            name: np.size(axis)
+            for name, axis in m.axes.items()  # type: ignore
+        }
+    return (
+        max(axes.get('z_oc', 0) - 1, 0), max(axes.get('z_atm', 0) - 1, 0)
+    )
+
+
 def get_histories(
     m: MLUT | xr.Dataset,
     level: int = 0,
@@ -88,7 +123,9 @@ def get_histories(
     s : ndarray of shape (NLE, 4)
         The 4 Stokes components of the virtual photons.
     d : ndarray of shape (NLE, NL)
-        The cumulative distances traveled in each layer.
+        The cumulative distances traveled in each atmospheric
+        absorbing layer. An older output recorded with a water body
+        also holds the ocean distances, which are left out.
     w : ndarray of shape (NLE, NLR)
         The corrective scattering weights for the different LR
         wavelengths.
@@ -118,11 +155,10 @@ def get_histories(
     IndexError
         If idir or isensor is out of the range of the histories.
     """
-    if isinstance(m, xr.Dataset):
-        nl = m['z_atm'].size - 1
-    else:
-        # LUT.axis().size works at runtime; missing from the stub.
-        nl = m.axis('z_atm').size - 1  # type: ignore
+    # a record: [ocean distances][atmosphere distances][I Q U V]
+    # [scattering corrections][7 flags]
+    n_oc, nl = _alis_layers(m)
+    i_s = n_oc + nl
     # (level, photon, record, theta, sensor, phi): each record fills
     # the fields of its own direction and sensor only
     hist = np.asarray(m['histories'].data)
@@ -138,7 +174,7 @@ def get_histories(
     tab_hist = tab_hist_[level, :, :]
     if verbose:
         print(tab_hist.shape)
-    w0 = tab_hist[:, nl + 4:-7]
+    w0 = tab_hist[:, i_s + 4:-7]
     # d0      = tab_hist[:,0]
     good = w0[:, 0] != 0
     ngood = np.sum(good)
@@ -150,7 +186,7 @@ def get_histories(
         saturated = n_records > max_hist
     else:
         # an older output: the slots used by either level
-        n_records = int(np.sum((tab_hist_[:, :, nl + 4] != 0).any(axis=0)))
+        n_records = int(np.sum((tab_hist_[:, :, i_s + 4] != 0).any(axis=0)))
         saturated = n_records >= max_hist
     if saturated:
         # Use print rather than warnings.warn: Python's default
@@ -167,9 +203,9 @@ def get_histories(
     n = m['Nphotons_in'].data[0, 0]
     ###################
     s = np.zeros((ngood, 4), dtype=np.float32)
-    d = tab_hist[good, :nl]
-    s[:, :4] = tab_hist[good, nl:nl + 4]
-    w = tab_hist[good, nl + 4:-7]
+    d = tab_hist[good, n_oc:i_s]
+    s[:, :4] = tab_hist[good, i_s:i_s + 4]
+    w = tab_hist[good, i_s + 4:-7]
     nrrs = tab_hist[good, -7]
     nref = tab_hist[good, -6]
     nsif = tab_hist[good, -5]

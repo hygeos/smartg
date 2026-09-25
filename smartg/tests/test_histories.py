@@ -33,11 +33,15 @@ HIST_DIMS = (
 
 
 def _record(
-    d: list[float], s: list[float], w: list[float], nref: float = 0.0
+    d: list[float],
+    s: list[float],
+    w: list[float],
+    nref: float = 0.0,
+    d_oc: tuple[float, ...] = (),
 ) -> np.ndarray:
     """Return one history record, laid out as the kernel writes it."""
     flags = [0.0, nref, 0.0, 0.0, 0.0, 1.0, 0.0]
-    return np.array([*d, *s, *w, *flags], dtype=np.float32)
+    return np.array([*d_oc, *d, *s, *w, *flags], dtype=np.float32)
 
 
 def _output(
@@ -143,3 +147,30 @@ def test_get_histories_direction_invalid() -> None:
     ds = _output(_alternating(4), 10, {"hist records": "4"})
     with pytest.raises(IndexError, match="idir=1"):
         get_histories(ds, idir=1)
+
+
+@pytest.mark.parametrize(
+    "attrs",
+    [{"ALIS n_oce_abs": "2", "ALIS n_atm_abs": "3"}, None],
+    ids=["attributes", "old-output"],
+)
+def test_get_histories_ocean_columns(attrs: dict[str, str] | None) -> None:
+    """Check that the ocean path lengths, first in a record, are left.
+
+    The distances used to be read from the start of the record, so the
+    Stokes vector and the weights were read shifted.
+    """
+    record = _record(
+        [1.0, 2.0, 3.0],
+        [0.5, 0.1, 0.0, 0.0],
+        [0.9, 0.8],
+        nref=1.0,
+        d_oc=(7.0, 8.0),
+    )
+    ds = _output([(0, record)], 4, attrs)
+    ds.coords["z_oc"] = [0.0, -10.0, -20.0]
+    _, s, d, w, _, nref, *_ = get_histories(ds)
+    np.testing.assert_allclose(d, [[1.0, 2.0, 3.0]])
+    np.testing.assert_allclose(s, [[0.5, 0.1, 0.0, 0.0]], rtol=1e-6)
+    np.testing.assert_allclose(w, [[0.9, 0.8]], rtol=1e-6)
+    np.testing.assert_allclose(nref, [1.0])

@@ -370,8 +370,16 @@ def sg_alis() -> Smartg:
             },
             "the atmosphere has 250",
         ),
+        (
+            {
+                "alis_options": Alis(n_low=3, hist=True),
+                "surface": RoughSurface(),
+                "water": Water1D(comp=[HydrosolPR(chl=1.0)]),
+            },
+            "water body",
+        ),
     ],
-    ids=["no-options", "n_low", "layers"],
+    ids=["no-options", "n_low", "layers", "hist-water"],
 )
 def test_alis_run_invalid(
     sg_alis: Smartg, kwargs: dict[str, Any], match: str

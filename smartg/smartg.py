@@ -416,7 +416,8 @@ class Alis:
         last point take its correction, and the run warns.
     hist : bool, optional
         Activate the recording of the photon histories, which the
-        `smartg.histories` module post-processes. Default False.
+        `smartg.histories` module post-processes. Not supported with a
+        water body. Default False.
     max_hist : int, optional
         The maximum number of recorded histories, over all the kernel
         launches and shared by the TOA and 0+ levels, only used if
@@ -2166,6 +2167,23 @@ class Smartg:
 
         if self.alis:
             _check_alis_layers(n_atm_abs, n_oce_abs)
+            if hist and n_oce > 0:
+                raise ValueError(
+                    'Alis(hist=True) does not support a water body: the '
+                    'post-processing of the photon histories only '
+                    'accounts for the atmospheric absorption.'
+                )
+            # The layout of the histories and cdist outputs, for their
+            # post-processing: the low resolution wavelengths are the
+            # indices k * step, k < n_low, and the ocean layers come
+            # first
+            n_lam_ref = n_lam // (n_jac + 1) if n_jac_abs else n_lam
+            attrs['ALIS n_low'] = n_low
+            attrs['ALIS wavelength step'] = (
+                (n_lam_ref - 1) // (n_low - 1) if n_low > 1 else 0
+            )
+            attrs['ALIS n_atm_abs'] = int(n_atm_abs)
+            attrs['ALIS n_oce_abs'] = int(n_oce_abs)
 
         #
         # albedo and adjacency effect
