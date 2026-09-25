@@ -8521,9 +8521,7 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				   is a rotation then the coordinate system change (x || y || z axis) !!! */
 
 				// If a value in x, y || z is diff of 0 then there is a translation
-				if ( (ObjT[IND+j].mvTx>VALMIN && ObjT[IND+j].mvTx<-VALMIN) ||
-					 (ObjT[IND+j].mvTy>VALMIN && ObjT[IND+j].mvTy>-VALMIN) ||
-					 (ObjT[IND+j].mvTz>VALMIN && ObjT[IND+j].mvTz>-VALMIN)) {
+				if (ObjT[IND+j].mvTx != 0 || ObjT[IND+j].mvTy != 0 || ObjT[IND+j].mvTz != 0) {
 					Transform<float> TmT;
 					TmT = Tj.Translate(make_float3(ObjT[IND+j].mvTx, ObjT[IND+j].mvTy,
 												   ObjT[IND+j].mvTz));
@@ -8641,9 +8639,7 @@ __device__ bool geoTestMir(float3 o, float3 dir, struct IObjets *ObjT, struct GO
 				   is a rotation then the coordinate system change (x || y || z axis) !!! */
 
 				// If a value in x, y || z is diff of 0 then there is a translation
-				if ( (ObjT[IND+j].mvTx>VALMIN && ObjT[IND+j].mvTx<-VALMIN) ||
-					 (ObjT[IND+j].mvTy>VALMIN && ObjT[IND+j].mvTy>-VALMIN) ||
-					 (ObjT[IND+j].mvTz>VALMIN && ObjT[IND+j].mvTz>-VALMIN)) {
+				if (ObjT[IND+j].mvTx != 0 || ObjT[IND+j].mvTy != 0 || ObjT[IND+j].mvTz != 0) {
 					Transform<float> TmT;
 					TmT = Tj.Translate(make_float3(ObjT[IND+j].mvTx, ObjT[IND+j].mvTy,
 												   ObjT[IND+j].mvTz));
@@ -8704,9 +8700,7 @@ __device__ bool geoTestRec(float3 o, float3 dir, struct IObjets *ObjT)
 		   is a rotation then the coordinate system change (x || y || z axis) !!! */
 
 		// If a value in x, y || z is diff of 0 then there is a translation
-		if ( (ObjT[i].mvTx>VALMIN && ObjT[i].mvTx<-VALMIN) ||
-			 (ObjT[i].mvTy>VALMIN && ObjT[i].mvTy>-VALMIN) ||
-			 (ObjT[i].mvTz>VALMIN && ObjT[i].mvTz>-VALMIN)) {
+		if (ObjT[i].mvTx != 0 || ObjT[i].mvTy != 0 || ObjT[i].mvTz != 0) {
 			Transform<float> TmT;
 			TmT = Ti.Translate(make_float3(ObjT[i].mvTx, ObjT[i].mvTy,
 										   ObjT[i].mvTz));

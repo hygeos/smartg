@@ -341,3 +341,16 @@ def test_transparent_atmosphere(sg: Smartg) -> None:
     _check_loss_identities(w_loss, 0.88)
     np.testing.assert_allclose(ds["cat_w"].values[2], w_loss[6], rtol=1e-6)
 
+
+def test_translation_along_x_only(sg: Smartg) -> None:
+    """An object translated along x only is intersected where it is.
+
+    The kernel applied the translation of an object only when its y or
+    its z translation was positive: this receiver on the ground was
+    intersected at the origin, out of the launch field.
+    """
+    half = 0.002
+    receiver = _receiver(half, (0.05, 0.0, 0.0))
+    ds = _run_ff(sg, [receiver], _transparent(), 4 * half, (0.05, 0.0))
+    area = (2 * half * 1e3) ** 2
+    np.testing.assert_allclose(ds["cat_irr"].values[0], area, rtol=0.01)

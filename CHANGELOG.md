@@ -1143,6 +1143,11 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the intersection of the 3D objects, which applied the translation
+    of an object only when its y or its z translation was positive: an
+    object on or below the ground in the half-plane y <= 0, such as a flat
+    mirror or panel at z = 0 or the bottom face of a `generate_box`, was
+    intersected at the origin with its rotation only
   - Fix the 3D objects in an atmosphere with a layer that does not scatter,
     for instance `Atm1D(tau_r=0., no2=False, tco3=0., tcwp=0.)`: with the
     default `beer=1`, the absorption up to an object took the fraction of
