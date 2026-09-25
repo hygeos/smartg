@@ -744,6 +744,9 @@ final `v2.0.0` release.
     each cell took the aerosol of the layer below its own, and a cell in
     the bottom layer raised an `IndexError`. It now takes the aerosol of
     its own layer, as the molecular properties already did
+  - Fix the phase matrices of a single 3D component of `Atm3D` over a 1D
+    aerosol at several phase wavelengths: every wavelength but the first
+    pointed at the matrices of another wavelength, or of other cells
   - Fix the phase matrix of a profile layer straddling two `pfgrid` layers:
     it took the `pfgrid` layer it overlapped most, possibly one where its
     particles are absent (a thin cloud low in a layer whose upper part lies

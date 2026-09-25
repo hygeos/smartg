@@ -683,6 +683,52 @@ def test_1d_aerosol_of_the_cell_layer(n_comp: int) -> None:
     assert not np.isclose(backgrounds[0], backgrounds[1], rtol=1e-3)
 
 
+@pytest.mark.parametrize("n_comp", [1, 2], ids=["one", "two"])
+def test_1d_aerosol_phase_indices_per_wavelength(n_comp: int) -> None:
+    """Each wavelength points at the phase matrices of its own.
+
+    Over a 1D aerosol, a profile computed at two wavelengths must give
+    every cell, at each wavelength, the phase matrix of the profile
+    computed at that wavelength alone.
+    """
+    grid3 = _build_grid()
+
+    def components() -> list[Cloud3D | Aer3D]:
+        comp_3d: list[Cloud3D | Aer3D] = [_layer_cloud()]
+        if n_comp == 2:
+            comp_3d.append(_build_aerosol(
+                ext_ref=np.array([0.1]), rh=np.array([70.0]),
+                cell_indices=np.array([[1, 1, 3]]),
+            ))
+        return comp_3d
+
+    wavelengths = np.array([550.0, 670.0])
+    both = _profile_over_1d_aerosol(components(), wavelengths)
+    iopt = both["iopt_atm"].values
+    for i, wavelength in enumerate(wavelengths):
+        alone = _profile_over_1d_aerosol(
+            components(), np.array([wavelength])
+        )
+        np.testing.assert_array_equal(alone["iopt_atm"].values, iopt)
+        for icell in range(grid3.NCELL):
+            k = iopt[icell]
+            pha = both["phase_atm"].values[both["iphase_atm"].values[i, k]]
+            ref = alone["phase_atm"].values[
+                alone["iphase_atm"].values[0, k]
+            ]
+            np.testing.assert_allclose(pha, ref, rtol=1e-6, atol=1e-10)
+    # the two wavelengths differ, so that a wavelength pointing at the
+    # matrices of the other one is caught
+    k = iopt[np.ravel_multi_index(
+        LAYER_CELLS[0], (grid3.NX, grid3.NY, grid3.NZ)
+    )]
+    iphase = both["iphase_atm"].values[:, k]
+    assert not np.allclose(
+        both["phase_atm"].values[iphase[0]],
+        both["phase_atm"].values[iphase[1]],
+    )
+
+
 # ===================================================================
 # Truncation carried by a component
 # ===================================================================

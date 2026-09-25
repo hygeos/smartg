@@ -4526,6 +4526,7 @@ class Atm3D(Atmosphere):
             phase_glob_indices_w0 = np.concatenate(
                 [np.zeros(nbz, dtype=np.int32), cell_pha_idx[:]]
             )
+            stride = n_unique
         else:  # case list of 1d aer is given
             # bring the 1d aerosol and the component phase matrices
             # onto the union of their scattering angle grids, so that
@@ -4546,7 +4547,9 @@ class Atm3D(Atmosphere):
             # cell, as for the molecular properties
             idz_atm = nz - self._cell_indices[:, 2]
 
-            # First plan parallel phase
+            # the phase matrices, wavelength by wavelength: the 1D
+            # aerosol of each level, then the mixture of each cell,
+            # weighted by the extinctions at the phase wavelengths
             assert ipha_aer_1d is not None
             phases = []
             for i_wavelength in range(len(wavelength_pha)):
@@ -4556,10 +4559,6 @@ class Atm3D(Atmosphere):
                             iphase=ipha_aer_1d[i_wavelength, iz]
                         )
                     )
-
-            # Second 3d mix phase, weighted by the extinctions at the
-            # phase wavelengths
-            for i_wavelength in range(len(wavelength_pha)):
                 ssa_aer_tmp = ssa_aer_1d[i_wavelength, idz_atm]
                 ext_aer_tmp = ext_aer_1d[i_wavelength, idz_atm]
                 ext_mix_tmp = ext_aer_tmp + ext_3d_pha[i_wavelength, :]
@@ -4602,6 +4601,7 @@ class Atm3D(Atmosphere):
             phase_glob_indices_w0 = np.arange(
                 nbz + n_cell, dtype=np.int32
             )
+            stride = nbz + n_cell
 
         # Create a table with only the component properties but in
         # global shape i.e. for each cells not sharing the same opt
@@ -4610,18 +4610,14 @@ class Atm3D(Atmosphere):
         ext_glob = np.concatenate([ext_aer_1d, ext_mix_3d], axis=1)
         ssa_glob = np.concatenate([ssa_aer_1d[:, :], ssa_mix_3d], axis=1)
 
-        # Now consider the wavelength dimension
-        # NB: with a 1D aerosol the per-wavelength stride in `phases`
-        # is nbz + n_cell, not n_unique, so the offset below is only
-        # correct when len(wavelength_pha) == 1 (the only exercised
-        # case;
-        # kept as-is for consistency with the saved references)
+        # Now consider the wavelength dimension, with the
+        # per-wavelength stride of the `phases` layout above
         ipha3d = np.zeros(
             (len(wavelength_pha), phase_glob_indices_w0.size), dtype=np.int32
         )
         for i_wavelength in range(len(wavelength_pha)):
             ipha3d[i_wavelength, :] = phase_glob_indices_w0[:] + (
-                i_wavelength * n_unique
+                i_wavelength * stride
             )
 
         return ext_glob, ssa_glob, (ipha3d, phases)
