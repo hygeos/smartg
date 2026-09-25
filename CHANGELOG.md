@@ -102,6 +102,10 @@ final `v2.0.0` release.
   - `smartg.iprt.phase3`: the `nphotons` parameter of every `case_*`
     function is now `n_photons`, the spelling `Smartg.run` and the rest
     of the package use
+  - `smartg.iprt.phase3`: the `earth_r` parameter of `run_sim` and of
+    the sensor helpers (`get_d1_to_e5_boa_sensors`,
+    `get_d1_to_e5_toa_sensors`, `get_d1_to_e5_toa_sensors_old`,
+    `get_e6_toa_sensors`) is now `earth_radius`, as in `Smartg.run`
   - The `filename` parameter is now `fname`, as in the spectral modules,
     in `AerOPAC`, `Cloud`, `read_i3rc_aerosol`, `read_i3rc_cloud`,
     `AlbedoSpeclib`, `Hydrosol`, `HydrosolPR`, `HydrosolZhai` and

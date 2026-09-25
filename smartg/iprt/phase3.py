@@ -162,7 +162,7 @@ def _coords(point: gc.Point) -> tuple[float, float, float]:
 def get_d1_to_e5_boa_sensors(
     vza: np.ndarray,
     phi: np.ndarray,
-    earth_r: float,
+    earth_radius: float,
 ) -> list[Sensor]:
     """Return the ground sensors of the cases D1 to E5.
 
@@ -173,7 +173,7 @@ def get_d1_to_e5_boa_sensors(
     phi : ndarray
         The viewing azimuth angles, in degrees, in the SMART-G
         convention.
-    earth_r : float
+    earth_radius : float
         The altitude of the ground from the center of the Earth, in
         km: the Earth radius, or 0 in plane parallel geometry.
 
@@ -189,14 +189,14 @@ def get_d1_to_e5_boa_sensors(
         if vza_boa == 90.0:
             vza_boa = 89.9999
         for phi_boa in phi:
-            sensors.append(_sensor((0.0, 0.0, earth_r), vza_boa, phi_boa))
+            sensors.append(_sensor((0.0, 0.0, earth_radius), vza_boa, phi_boa))
     return sensors
 
 
 def get_d1_to_e5_toa_sensors_old(
     vza: np.ndarray,
     phi: np.ndarray,
-    earth_r: float,
+    earth_radius: float,
     z: np.ndarray,
 ) -> list[Sensor]:
     """Return TOA sensors of the cases D1 to E5, an older version.
@@ -210,7 +210,7 @@ def get_d1_to_e5_toa_sensors_old(
     ----------
     vza, phi : ndarray
         The viewing zenith and azimuth angles, in degrees.
-    earth_r : float
+    earth_radius : float
         The Earth radius, in km.
     z : ndarray
         The altitudes of the atmosphere, in km.
@@ -223,8 +223,8 @@ def get_d1_to_e5_toa_sensors_old(
     sensors = []
     zeros = np.zeros(len(phi), dtype=np.float64)
     origin = gc.Point(zeros, zeros,
-                      np.full(len(phi), earth_r, dtype=np.float64))
-    toa_layer = gc.Sphere(earth_r + np.max(z))
+                      np.full(len(phi), earth_radius, dtype=np.float64))
+    toa_layer = gc.Sphere(earth_radius + np.max(z))
     vza_bis = vza.copy()
     vza_bis[vza_bis == 90.0] = 89.9999
     vza_toa = 180.0 - vza_bis
@@ -251,7 +251,7 @@ def get_d1_to_e5_toa_sensors_old(
 def get_d1_to_e5_toa_sensors(
     vza: np.ndarray,
     phi: np.ndarray,
-    earth_r: float,
+    earth_radius: float,
     z: np.ndarray,
 ) -> list[Sensor]:
     """Return the TOA sensors of the cases D1 to E5.
@@ -263,7 +263,7 @@ def get_d1_to_e5_toa_sensors(
     ----------
     vza, phi : ndarray
         The viewing zenith and azimuth angles, in degrees.
-    earth_r : float
+    earth_radius : float
         The altitude of the ground from the center of the Earth, in
         km.
     z : ndarray
@@ -275,7 +275,7 @@ def get_d1_to_e5_toa_sensors(
         One sensor per (vza, phi) pair, vza varying slowest.
     """
     return [
-        _sensor((0.0, 0.0, earth_r + np.max(z)), 180.0 - vza_i,
+        _sensor((0.0, 0.0, earth_radius + np.max(z)), 180.0 - vza_i,
                 phi_i + 180.0)
         for vza_i in vza
         for phi_i in phi
@@ -285,7 +285,7 @@ def get_d1_to_e5_toa_sensors(
 def get_e6_toa_sensors(
     vza: np.ndarray,
     phi: np.ndarray,
-    earth_r: float,
+    earth_radius: float,
     z: np.ndarray,
 ) -> list[Sensor]:
     """Return the TOA sensors of the first version of the E6 case.
@@ -298,7 +298,7 @@ def get_e6_toa_sensors(
     vza, phi : ndarray
         The viewing zenith and azimuth angles of the camera, in
         degrees.
-    earth_r : float
+    earth_radius : float
         The Earth radius, in km.
     z : ndarray
         The altitudes of the atmosphere, in km.
@@ -312,7 +312,7 @@ def get_e6_toa_sensors(
     zeros = np.zeros(len(phi), dtype=np.float64)
     origin = gc.Point(zeros, zeros,
                       np.full(len(phi), CAMERA_E6, dtype=np.float64))
-    toa_layer = gc.Sphere(earth_r + np.max(z))
+    toa_layer = gc.Sphere(earth_radius + np.max(z))
     vza_toa = 180.0 - vza
     phi_toa = phi + 180.0
     for ivza in range(len(vza)):
@@ -635,7 +635,7 @@ def run_sim(
     pro: xr.Dataset,
     n_photons: float,
     depol: float = DEPOL,
-    earth_r: float = EARTH_RADIUS,
+    earth_radius: float = EARTH_RADIUS,
     n_icdf: int = 18001,
     pp: bool = False,
     is_e6: bool = False,
@@ -666,7 +666,7 @@ def run_sim(
         Number of photons per viewing direction.
     depol : float
         The depolarisation factor.
-    earth_r : float
+    earth_radius : float
         The altitude of the ground from the center of the Earth, in
         km: the Earth radius, or 0 in plane parallel geometry.
     n_icdf : int
@@ -680,24 +680,24 @@ def run_sim(
     seed : int
         Seed of the random numbers, -1 for one taken from the clock.
     """
-    sg, earth_radius = (S1DB_PP, EARTH_RADIUS) if pp else (S1DB, earth_r)
+    sg, run_radius = (S1DB_PP, EARTH_RADIUS) if pp else (S1DB, earth_radius)
     # The IPRT azimuth angles are anti-clockwise
     phi = -vaa
     common = {"n_directions": len(vza) * len(vaa), "n_photons": n_photons,
               "wavelength": wavelength, "le": le, "surface": surface,
-              "pro": pro, "depol": depol, "earth_radius": earth_radius,
+              "pro": pro, "depol": depol, "earth_radius": run_radius,
               "n_icdf": n_icdf, "theta_grid": theta_grid, "seed": seed,
               "angles": (sza, vaa, vza)}
 
     if boa_path is not None and not is_e6:
-        sensors = get_d1_to_e5_boa_sensors(vza, phi, earth_r)
+        sensors = get_d1_to_e5_boa_sensors(vza, phi, earth_radius)
         _run_and_save(sg, boa_path, sensors, **common)
 
     if toa_path is not None:
         if is_e6:
-            sensors = get_e6_toa_sensors(vza, phi, earth_r, z)
+            sensors = get_e6_toa_sensors(vza, phi, earth_radius, z)
         else:
-            sensors = get_d1_to_e5_toa_sensors(vza, phi, earth_r, z)
+            sensors = get_d1_to_e5_toa_sensors(vza, phi, earth_radius, z)
         _run_and_save(sg, toa_path, sensors, **common)
 
 
@@ -972,7 +972,7 @@ def _run_spherical_case(
     seed: int,
     sza: np.ndarray = SZA,
     vza: np.ndarray = VZA,
-    earth_r: float = EARTH_RADIUS,
+    earth_radius: float = EARTH_RADIUS,
     pp: bool = False,
     theta_grid: str | None = None,
 ) -> None:
@@ -997,7 +997,7 @@ def _run_spherical_case(
         Seed of the random numbers, -1 for one taken from the clock.
     sza, vza : ndarray
         The sun and viewing zenith angles, in degrees.
-    earth_r : float
+    earth_radius : float
         The altitude of the ground from the center of the Earth, in
         km.
     pp : bool
@@ -1019,8 +1019,9 @@ def _run_spherical_case(
                            count_level=np.zeros_like(sza, dtype=np.int32))
         run_sim(boa_path if run_boa else None,
                 toa_path if run_toa else None, sza, vza, VAA, z,
-                wavelength, le, surface, pro, n_photons, earth_r=earth_r,
-                pp=pp, theta_grid=theta_grid, seed=seed)
+                wavelength, le, surface, pro, n_photons,
+                earth_radius=earth_radius, pp=pp, theta_grid=theta_grid,
+                seed=seed)
 
     to_iprt_output(case_name, sza, SAA, vza, VAA, z, overwrite=overwrite,
                    output_dir=output_dir)
@@ -1362,7 +1363,7 @@ def case_d6_pp(n_photons: float = 1e8, overwrite: bool = True,
     # The ground altitude in plane parallel geometry is 0
     _run_spherical_case("d6_pp", build, Z_ONE_LAYER, n_photons, overwrite,
                         output_dir, seed, sza=SZA[:4].copy(),
-                        vza=VZA[:-1].copy(), earth_r=0.0, pp=True)
+                        vza=VZA[:-1].copy(), earth_radius=0.0, pp=True)
 
 
 def case_e1(n_photons: float = 1e8, overwrite: bool = True,
