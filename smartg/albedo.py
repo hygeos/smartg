@@ -200,7 +200,7 @@ class AlbedoMap:
     cell of the grid references one entry from a list of ``Albedo``
     objects (``AlbedoCst``, ``AlbedoSpectrum`` or
     ``AlbedoSpeclib``). The number of distinct spectral albedos is
-    limited to ``MAX_NREF = 10`` but could be extended.
+    limited to ``MAX_NREF = 100`` but could be extended.
 
     The horizontal grid is rectangular. The ``x`` and ``y`` boundaries
     on the surface (in km) are encoded in monotonic ``np.ndarray`` whose
@@ -303,7 +303,7 @@ class AlbedoMap:
 #: Any of the albedo objects of this module, i.e. any object exposing
 #: the common ``get(wavelength)`` interface. Use it to annotate the
 #: parameters that accept a spectral albedo, such as the ``alb`` of
-#: ``smartg.water.Water1D`` or the ``ALB`` of the surfaces of
+#: ``smartg.water.Water1D`` or the ``alb`` of the surfaces of
 #: ``smartg.surface``. ``typing.get_args(AlbedoLike)`` gives the
 #: corresponding tuple of classes, suitable for an ``isinstance`` check.
 AlbedoLike: TypeAlias = AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap

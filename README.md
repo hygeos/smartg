@@ -48,6 +48,15 @@ Mathieu Compiègne
 
 ## 2. Installation
 
+SMART-G supports Python 3.11 to 3.14 and runs on NVIDIA GPUs: `pycuda`
+needs the NVIDIA driver and the CUDA toolkit, see
+[section 3](#3-nvidia-driver-and-cuda).
+
+**Upgrading from 1.x**: version 2.0 renames many classes, functions and
+parameters to follow PEP 8 (e.g. `AtmAFGL` → `Atm1D`, `NBPHOTONS` →
+`n_photons`). The breaking changes are listed in the
+[CHANGELOG](https://github.com/hygeos/smartg/blob/master/CHANGELOG.md).
+
 ### 2.1 PyPI
 
 To install SMART-G from PyPI:
@@ -59,7 +68,7 @@ pip install smartg
 To include extra dependencies use instead:
 
 ```bash
-pip install smartg[extra]
+pip install "smartg[extra]"
 ```
 
 
@@ -109,6 +118,7 @@ If you need extra dependencies (jax with cuda) we recommend the installation wit
   ```bash
   conda env create -n smartg-env -f environment.yml
   conda activate smartg-env
+  pip install --no-deps -e .
   ```
 
   For a full installation (extra dependencies), replace `environment.yml` by `environment-extra.yml`.
@@ -175,7 +185,8 @@ For example, in the `.bashrc` / `.zshrc` file the following can be added:
 export SMARTG_DIR_AUXDATA="dir/path/where/to/save/data/"
 ```
 
-or (not recommended) in a `.env` file in the SMART-G root directory:
+or (not recommended) in a `.env` file in the SMART-G root directory,
+the parent of the `smartg` package, which only exists in a git clone:
 
 ```
 SMARTG_DIR_AUXDATA=dir/path/where/to/save/data/
@@ -204,14 +215,14 @@ The first call compiles the CUDA kernel; subsequent runs reuse it.
 
 ## 6. Examples
 
-Sample notebooks are provided in the [notebooks](smartg/notebooks) folder, and [jupyter notebook](http://jupyter.org) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Good entry points are:
+Sample notebooks are provided in the [notebooks](https://github.com/hygeos/smartg/tree/master/smartg/notebooks) folder, and [jupyter notebook](http://jupyter.org) has nice possibilities for interactive development and visualization, in particular if you are using a remote cuda computer. Good entry points are:
 
-* [`demo_notebook.py`](smartg/notebooks/demo_notebook.py) — general usage: atmosphere, ocean, surface, outputs and visualization
-* [`demo_notebook_objects.py`](smartg/notebooks/demo_notebook_objects.py) — simulations involving 3D objects, e.g., solar power towers
-* [`demo_notebook_photons_histories.py`](smartg/notebooks/demo_notebook_photons_histories.py) — tracking the photon paths (needs the extra dependencies, e.g. `pixi shell --environment extra`)
-* [`validation_smartg_iprt_phase_a.py`](smartg/notebooks/validation_smartg_iprt_phase_a.py) — the 1D cases of the IPRT phase A, compared with MYSTIC
-* [`validation_smartg_iprt_phase_b_c2.py`](smartg/notebooks/validation_smartg_iprt_phase_b_c2.py) — the cubic cloud (C2) of the IPRT phase B, in 3D mode, compared with MYSTIC
-* [`validation_smartg_iprt_phase3.py`](smartg/notebooks/validation_smartg_iprt_phase3.py) — the spherical cases D1 to E6 of the IPRT phase 3
+* [`demo_notebook.py`](https://github.com/hygeos/smartg/blob/master/smartg/notebooks/demo_notebook.py) — general usage: atmosphere, ocean, surface, outputs and visualization
+* [`demo_notebook_objects.py`](https://github.com/hygeos/smartg/blob/master/smartg/notebooks/demo_notebook_objects.py) — simulations involving 3D objects, e.g., solar power towers
+* [`demo_notebook_photons_histories.py`](https://github.com/hygeos/smartg/blob/master/smartg/notebooks/demo_notebook_photons_histories.py) — tracking the photon paths (needs the extra dependencies, e.g. `pixi shell --environment extra`)
+* [`validation_smartg_iprt_phase_a.py`](https://github.com/hygeos/smartg/blob/master/smartg/notebooks/validation_smartg_iprt_phase_a.py) — the 1D cases of the IPRT phase A, compared with MYSTIC
+* [`validation_smartg_iprt_phase_b_c2.py`](https://github.com/hygeos/smartg/blob/master/smartg/notebooks/validation_smartg_iprt_phase_b_c2.py) — the cubic cloud (C2) of the IPRT phase B, in 3D mode, compared with MYSTIC
+* [`validation_smartg_iprt_phase3.py`](https://github.com/hygeos/smartg/blob/master/smartg/notebooks/validation_smartg_iprt_phase3.py) — the spherical cases D1 to E6 of the IPRT phase 3
 
 ### 6.1 Notebooks as percent scripts
 
@@ -268,7 +279,7 @@ The arguments `--html=test_report.html --self-contained-html` generate an html r
 
 ### 7.1 The IPRT tests
 
-Four files compare SMART-G with the [IPRT](https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=start) (International Polarized Radiative Transfer) model intercomparison, one per phase of the benchmark. The durations below were measured on a Ryzen 9 5950X with a GeForce RTX 5070 Ti.
+Four files compare SMART-G with the [IPRT](https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=start) (International Polarized Radiative Transfer) model intercomparison: one for phase A, two for phase B and one for phase 3. The durations below were measured on a Ryzen 9 5950X with a GeForce RTX 5070 Ti.
 
 **Phase A** — `test_quick_iprt_phase_a.py` runs the 1D cases A1 (a Rayleigh layer), A2 (a Rayleigh layer over a Lambertian surface) and A5 (a water cloud, in the principal plane and in the almucantar), and compares them with MYSTIC. Four tests, about 2 min 30, no slow tier.
 
@@ -320,7 +331,7 @@ The use of GPUs before 10xx series (Pascal) is deprecated as of SMART-G 1.0.0
 
 ## 10. Licensing information
 
-This software is available under the SMART-G license v1.0, available in the [LICENSE.TXT](LICENSE.TXT) file. It can be used for free for non-commercial purposes; for commercial use, please [contact HYGEOS](https://hygeos.com/en/contact/).
+This software is available under the SMART-G license v1.0, available in the [LICENSE.TXT](https://github.com/hygeos/smartg/blob/master/LICENSE.TXT) file. It can be used for free for non-commercial purposes; for commercial use, please [contact HYGEOS](https://hygeos.com/en/contact/).
 
 ## 11. Referencing
 
@@ -336,6 +347,6 @@ When acknowledging the use of SMART-G for scientific papers, reports etc please 
 
 ## 12. Getting help
 
-* Changes between versions: [CHANGELOG.md](CHANGELOG.md)
+* Changes between versions: [CHANGELOG.md](https://github.com/hygeos/smartg/blob/master/CHANGELOG.md)
 * Bug reports and feature requests: [github issues](https://github.com/hygeos/smartg/issues)
 * Anything else: [contact HYGEOS](https://hygeos.com/en/contact/)

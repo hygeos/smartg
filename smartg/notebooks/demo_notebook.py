@@ -1180,7 +1180,7 @@ for platform in ['1', '2', '3', '4']:
     ibands = SEVIRI_THERMAL.to_smartg(include='msg' + platform)
     atmosphere = Atm1D('afglt', grid=np.linspace(50, 0, num=51))
     prof_atm = atmosphere.calc(ibands.l)
-    # DIRECT option activated i.e direct transmitted radiance form
+    # direct option activated i.e direct transmitted radiance from
     # source to receiver counted
     # (as opposite to solar computation where the direct light is not
     # counted)
@@ -1443,7 +1443,7 @@ surface = RoughSurface(wind=5., brdf=True)
 vza = 30.
 env_radius = 1.0e6  # (km)
 # The Environement object creates a disk of ocean surface with radius
-# ENV_SIZE
+# env_size
 # centred on X0,Y0 , surrounded by lambertian reflector of albedo alb
 environment = Environment(env=1,
                   # radius of the circle with ocean surface condition

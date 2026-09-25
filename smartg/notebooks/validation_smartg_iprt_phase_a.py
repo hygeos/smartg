@@ -242,7 +242,7 @@ sza = 30.0
 saa = 65.0
 # SMART-G anticlockwise converted to be consistent with MYSTIC
 phi_0 = 180. - saa
-# stdev_lim = StdevLim(err_rel_min=1e-2, format=".2e", verbose=True)
+# stdev_lim = StdevLim(err_rel_min=1e-2, fmt=".2e", verbose=True)
 m_a1f_dep01 = s_1df.run(th_deg=sza, ph_deg=phi_0, wavelength=wavelength,
                         n_photons=NB_PH, n_loop=min(1e6, round(NB_PH / 10.)),
                         atmosphere=pro_a1, output_layers=7, le=le,
