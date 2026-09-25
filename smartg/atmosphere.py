@@ -423,10 +423,10 @@ class AerOPAC:
         Force the particle single scattering albedo. Default None.
 
         - a float: the same value at every wavelength and altitude;
-        - a 1-D array_like: one value per wavelength the component is
-          evaluated at, those of `Atm1D.calc`, which excludes the
-          `wavelength_phase` of `Atm1D`, at which its phase matrices
-          are mixed;
+        - a 1-D array_like: one value per wavelength of `Atm1D.calc`.
+          The phase matrices are mixed at the `wavelength_phase` of
+          `Atm1D` when it is given, which the values then follow in
+          order: a different number of them is refused;
         - a 2-D ndarray: one value per wavelength and per level of the
           grid the component is evaluated on, which works only when
           all its evaluations share that grid: with `phase=False` in
@@ -1430,10 +1430,10 @@ class Cloud(AerOPAC):
         Force the particle single scattering albedo. Default None.
 
         - a float: the same value at every wavelength and altitude;
-        - a 1-D array_like: one value per wavelength the component is
-          evaluated at, those of `Atm1D.calc`, which excludes the
-          `wavelength_phase` of `Atm1D`, at which its phase matrices
-          are mixed;
+        - a 1-D array_like: one value per wavelength of `Atm1D.calc`.
+          The phase matrices are mixed at the `wavelength_phase` of
+          `Atm1D` when it is given, which the values then follow in
+          order: a different number of them is refused;
         - a 2-D ndarray: one value per wavelength and per level of the
           grid the component is evaluated on, which works only when
           all its evaluations share that grid: with `phase=False` in
