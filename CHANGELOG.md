@@ -920,6 +920,10 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.environ.modified_environ` with a value that is not a
+    string, which raised a misleading `KeyError` on exit: it now raises a
+    `TypeError` naming the variable before changing the environment. Its
+    docstring no longer says that the values are converted to strings
   - Fix the terminal progress bar of `Smartg.run`, which never showed its
     messages (photons launched, error estimate, received fraction): they
     went to a copy of the label that progressbar2 does not draw. A `%` in

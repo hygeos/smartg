@@ -40,11 +40,10 @@ modified_environ
 import contextlib
 import os
 from collections.abc import Iterator
-from typing import Any
 
 
 @contextlib.contextmanager
-def modified_environ(*remove: str, **update: Any) -> Iterator[None]:
+def modified_environ(*remove: str, **update: str) -> Iterator[None]:
     """Temporarily update ``os.environ`` in-place.
 
     The environment is modified in-place so that the change is visible
@@ -60,14 +59,20 @@ def modified_environ(*remove: str, **update: Any) -> Iterator[None]:
         ignored.
     **update : str
         Environment variables to set or override, given as keyword
-        arguments (e.g. ``LD_LIBRARY_PATH='/my/path'``). Values are
-        converted to strings by :meth:`os.environ.update`.
+        arguments (e.g. ``LD_LIBRARY_PATH='/my/path'``). Values must
+        be strings, as in :data:`os.environ`.
 
     Yields
     ------
     None
         No value is yielded; the context only provides the side effect
         of a modified environment.
+
+    Raises
+    ------
+    TypeError
+        If a value of ``update`` is not a string. The environment is
+        left unchanged.
 
     Notes
     -----
@@ -85,6 +90,12 @@ def modified_environ(*remove: str, **update: Any) -> Iterator[None]:
     env = os.environ
     update = update or {}
     remove = remove or ()
+    for key, value in update.items():
+        if not isinstance(value, str):
+            raise TypeError(
+                f"the value of the environment variable {key} must be a "
+                f"str, got {type(value).__name__}."
+            )
 
     # List of environment variables being updated or removed.
     stomped = (set(update.keys()) | set(remove)) & set(env.keys())
@@ -99,4 +110,4 @@ def modified_environ(*remove: str, **update: Any) -> Iterator[None]:
         yield
     finally:
         env.update(update_after)
-        [env.pop(k) for k in remove_after]
+        [env.pop(k, None) for k in remove_after]
