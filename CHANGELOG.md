@@ -427,6 +427,8 @@ final `v2.0.0` release.
     any more, the profile holding only the (truncated) matrices the
     simulation uses. Plot the profile computed without truncation and the
     truncated one on the same axes instead (`fig` and `axarr` arguments)
+  - The `force_4stk` option of `smartg.view.phase_view` is now
+    `force_4stokes`, following the `stk` → `stokes` renames
   - The declared dependencies have been trimmed and bounded. `pyarrow`,
     `pyhdf` and `statsmodels` are no longer declared, as no module nor
     notebook imports them (`pyhdf` still comes in as a dependency of

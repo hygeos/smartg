@@ -1302,7 +1302,7 @@ def phase_view(
     axarr: np.ndarray[Any, Any] | None = None,
     iw: int = 0,
     kind: str = "atm",
-    force_4stk: bool = False,
+    force_4stokes: bool = False,
 ) -> tuple[Figure, np.ndarray[Any, Any]]:
     """
     Visualization of SMART-G phase function.
@@ -1327,7 +1327,7 @@ def phase_view(
     kind : {'atm', 'oc'}, optional
         Phase function type: 'atm' for atmospheric, 'oc' for oceanic.
         Default is 'atm'.
-    force_4stk : bool, optional
+    force_4stokes : bool, optional
         If True, forces 2x2 subplot layout even for 6-stokes. Default is
         False.
 
@@ -1380,7 +1380,7 @@ def phase_view(
     nstk = phase.shape[1]
 
     if axarr is None:
-        if nstk == 4 or force_4stk:
+        if nstk == 4 or force_4stokes:
             fig, axarr = subplots(2, 2)
             fig.set_size_inches(10, 6)
         elif nstk == 6:
@@ -1508,7 +1508,7 @@ def phase_view(
             axarr[1, 0].grid()
             axarr[1, 0].set_xlim([0, 180])
             axarr[1, 0].set_xticks([0, 30, 60, 90, 120, 150, 180])
-            if force_4stk:
+            if force_4stokes:
                 axarr[1, 0].set_xlabel(r"$\theta$")
 
             if np.max(p_11[:]) > 0.0:
@@ -1517,10 +1517,10 @@ def phase_view(
             axarr[1, 1].grid()
             axarr[1, 1].set_xlim([0, 180])
             axarr[1, 1].set_xticks([0, 30, 60, 90, 120, 150, 180])
-            if force_4stk:
+            if force_4stokes:
                 axarr[1, 1].set_xlabel(r"$\theta$")
 
-            if not force_4stk:
+            if not force_4stokes:
                 if np.max(p_11[:]) > 0.0:
                     axarr[2, 0].plot(ang, p_22 / p_11)
                 axarr[2, 0].set_title(r"$P_{22}/P_{11}$")
