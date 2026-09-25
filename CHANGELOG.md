@@ -30,9 +30,12 @@ final `v2.0.0` release.
     - New `smartg.postprocess` module regrouping the irradiance
       post-processing, with PEP 8 names: `Irr` → `plane_irr`,
       `SpherIrr` → `spherical_irr`, `reduce_Irr` → `irradiance_ds` (which
-      now returns an `xr.Dataset`)
+      now returns an `xr.Dataset`), and their parameters: `L` /
+      `azimuth` / `zenith` → `da_refl` / `azimuth_name` / `zenith_name`,
+      and `m` → `ds_rad`
     - `diff1` has been moved from `smartg.atmosphere` into the new
-      `smartg.diff` module, next to the new `diff1_end`; the new
+      `smartg.diff` module, next to the new `diff1_end`, and its `A`
+      parameter is now `a`; the new
       `expand_phase_4_to_6` is in `smartg.phase` and the new `AlbedoLike`
       alias in `smartg.albedo`
   - The `visualizegeo` module has been renamed to `smartg.objects3d`, with
@@ -100,30 +103,39 @@ final `v2.0.0` release.
       `Kdis.get_weight`, which returned five LUTs, is now
       `Kdis.get_weights` and returns the six values of
       `KdisIbandList.get_weights` (the bandwidth-weighted norm added),
-      and both return `xr.DataArray` objects instead of LUTs
+      and both return `xr.DataArray` objects instead of LUTs;
+      `skipcomment` → `skip_comment`; the parameters: `l` → `ibands` in
+      `KdisIbandList`, `mlut` → `ds` in `reduce_kdis`, `kdis_emission`
+      and `kdis_avg_emission`, `f` → `file_handle` in `skip_comment`
     - reptran: `REPTRAN` → `Reptran`, `REPTRAN_BAND` → `ReptranBand`,
       `REPTRAN_IBAND` → `ReptranIband`,
       `REPTRAN_IBAND_LIST` → `ReptranIbandList`, `Reptran_Emission` /
       `Reptran_Avg_Emission` → `reptran_emission` / `reptran_avg_emission`,
       `filename` → `fname`; `ReptranIbandList.get_weights` returns
       `xr.DataArray` objects instead of LUTs, and `reduce_reptran` /
-      `reptran_emission` now return xarray objects
+      `reptran_emission` now return xarray objects; the parameters: `l` →
+      `ibands` in `ReptranIbandList`, `mlut` → `ds` in `reduce_reptran`,
+      `reptran_emission` and `reptran_avg_emission`
     - rrs: `Fk_N2` / `Fk_O2` → `fk_n2` / `fk_o2`, `Epsilon_N2` /
       `Epsilon_O2` / `Epsilon_air` → `epsilon_n2` / `epsilon_o2` /
       `epsilon_air`, `f0_N2` / `f0_O2` → `f0_n2` / `f0_o2`, `K` →
       `k_ratio`, `bjp` / `bjm` → `bjm_plus` / `bjm_minus`, `L_O2` /
       `L_N2` / `L` → `l_o2` / `l_n2` / `l_air`, `L2d` / `L2d_inv` →
-      `l2d` / `l2d_inv`; `is_odd` has been removed
+      `l2d` / `l2d_inv`, and their parameters `T` → `t` and `J` → `j`;
+      `is_odd` has been removed
     - vrs: `Gauss` → `gaussian_peak`, `fR` → `raman_response`, `V2d` /
-      `V2d_inv` → `raman_forward` / `raman_inverse`
-    - cdf: `ICDF` → `icdf`, `ICDF2D` → `icdf_2d`
+      `V2d_inv` → `raman_forward` / `raman_inverse`, and their parameters
+      `Aj` / `Dkj` → `aj` / `dkj` and `Nl` → `nl`
+    - cdf: `ICDF` → `icdf`, `ICDF2D` → `icdf_2d`, and their parameters
+      `P` / `N` → `pdf` / `n`
     - progress: `Progress` → `progress`, `Progress_notebook` →
       `ProgressNotebook`, `Progress_invisible` → `ProgressInvisible`,
       `Progress_progressbar` → `ProgressProgressbar` and
       `Progress_progressbar2` → `ProgressProgressbar2`
     - albedo: `Albedo_cst` → `AlbedoCst`, `Albedo_speclib` →
       `AlbedoSpeclib`, `Albedo_spectrum` → `AlbedoSpectrum`,
-      `Albedo_map` → `AlbedoMap`
+      `Albedo_map` → `AlbedoMap`, and their parameters: `R` → `r` in
+      `AlbedoSpectrum`, `Ai` / `Alist` → `ai` / `alist` in `AlbedoMap`
     - bandset: the `Raman` parameter is now `raman`
     - iprt: `seclect_iprt_IQUV` → `select_iprt_iquv` (the typo
       included), `convert_SGout_to_IPRTout` →
@@ -169,7 +181,8 @@ final `v2.0.0` release.
         `n_icdf`
     - histories: `Si` → `si`, `Si2` → `si2`, `BigSum` → `big_sum`, and
       their parameters (`Dij` → `dij`, `Ki` → `ki`, `S` → `s`,
-      `only_I` → `only_i`); the `LEVEL` and `IDIR` parameters of
+      `only_I` → `only_i`, `lam_lr_grid` → `wavelength_lr_grid`); the
+      `LEVEL` and `IDIR` parameters of
       `get_histories` are now `level` and `idir`
   - The IPRT tools are split into one module per phase of the
     `smartg.iprt` package: `smartg.iprt.iprt` becomes
@@ -310,6 +323,14 @@ final `v2.0.0` release.
     - `ma`               → `m_dry_air`
     - `n300` / `n_air`   → `n_air_co2_300` / `n_air_co2`
     - `RH` method        → `relative_humidity`
+    - their parameters and those of the other functions follow PEP 8:
+      `P` / `T` → `p` / `t` in `refractivity` (and `P` → `p` in
+      `rayleigh_od`), `Z` / `H_min` / `H_max` → `z` / `h_min` / `h_max`
+      in `get_aer_dist_integral`, `Z` → `z` in `AerOPAC.phase` and
+      `AerOPAC.dtau_ssa`, `wl_max` → `wavelength_max` in
+      `artdeco_to_smartg_cld`, `m` → `ds_sg` in `extract_split` and
+      `smartg.smartg.reduce_diff`, and `wav_full` → `wavelength_full` in
+      `smartg.phase.calc_iphase`
     - `Profile_base`     → `ProfileBase`, with PEP 8 parameters:
       `atm_filename` → `fname`, `O3` → `tco3`, `H2O` → `tcwp`, `NO2` →
       `tcno2`, `P0` → `p0`, `RH_cst` → `rh_cst`, `O3_H2O_alt` →
@@ -484,7 +505,8 @@ final `v2.0.0` release.
     `DM_trunc(nb_streams)` and `aer2smartg(nb_theta)` is gone, they are now
     `n_loop_min`, `n_streams` and `n_theta`
   - `StdevLim(stk)` → `StdevLim(stokes)`, the spelling of the rest of the
-    package, and its `dict` key with it
+    package, and its `dict` key with it; `StdevLim(format)` →
+    `StdevLim(fmt)`, its `dict` key staying `'format'`
   - The abbreviated parameters of `Smartg.run` have been given their full
     name: `atm` → `atmosphere`, `surf` → `surface` and `env` → `environment`
   - `THVDEG` and `PHVDEG` of `Smartg.run` became `th_deg` and `ph_deg`,
