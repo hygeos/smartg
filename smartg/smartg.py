@@ -1243,7 +1243,7 @@ class Smartg:
         earth_radius: float = 6371.0,
         wavelength_proba: np.ndarray | None = None,
         sensor_proba: np.ndarray | None = None,
-        cell_proba: NDArray[np.int64] | Literal['auto'] | None = None,
+        cell_proba: NDArray[np.integer] | Literal['auto'] | None = None,
         n_theta: int = 45,
         n_phi: int = 90,
         n_icdf: float = 1e6,

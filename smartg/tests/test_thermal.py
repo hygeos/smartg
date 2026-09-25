@@ -5,6 +5,8 @@ samples are checked against the Planck law written out here, and the
 layer sampling table of ``cell_proba`` against the kernel indexing.
 """
 
+from typing import Literal
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -67,7 +69,9 @@ def _kernel_layers(table: np.ndarray) -> np.ndarray:
 
 
 @pytest.mark.parametrize("order", ["C", "F"])
-def test_cell_proba_table_follows_the_kernel_indexing(order: str) -> None:
+def test_cell_proba_table_follows_the_kernel_indexing(
+    order: Literal["C", "F"],
+) -> None:
     """Each wavelength draws its layers from its own row of icdf_2d."""
     # wavelength 0 emits from layer 1, wavelength 1 from layer 3
     proba = np.array([[0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]])
