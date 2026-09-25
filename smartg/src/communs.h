@@ -277,7 +277,7 @@ public:
     /* STANDARD Move Mode */
     float cdist_atm[MAX_NLAYER]; // Table of cumulative distance per layer
     float cdist_oc[MAX_NLAYER];
-    short int last_scatter_layer; // Layer index of last scattering event (-1 = none)
+    int last_scatter_layer; // Absorbing layer index of the last atmospheric scattering (-1 = none)
     #endif
 
     float weight_sca[MAX_NLOW]; // Table of scattering weigths for Importance Sampling correction

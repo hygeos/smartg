@@ -425,6 +425,33 @@ def test_alis_datomicadd(sg_alis_datomicadd: Smartg) -> None:
     np.testing.assert_allclose(mean_path[0], mean_path[1], rtol=0.03)
 
 
+def test_alis_scatter_class_layer() -> None:
+    """Check that a single scattering in layer k falls in class k.
+
+    With one class per absorbing layer, the photons scattered once in
+    layer k, counted from 0 at the top, travel in the layers 0 to k
+    only. The class used to be the 1-based layer index, so class 0
+    held no scattered photon and the two bottom layers shared a class.
+    """
+    n_layer = 5
+    sg = Smartg(alis=True, alt_pp=True, nscl=n_layer)
+    m = sg.run(
+        np.array([500.0, 510.0]),
+        atmosphere=Atm1D("afglt", grid=np.linspace(50.0, 0.0, n_layer + 1)),
+        le=LocalEstimate(th_deg=[0.0], phi_deg=[0.0]),
+        alis_options=Alis(n_low=2),
+        s_max=1,
+        n_photons=1e5,
+        seed=1,
+    )
+    # (cdist_layer, iSCL, iAMF)
+    cdist = np.squeeze(m["cdist_up (TOA)"].values)
+    for k in range(n_layer):
+        path = cdist[:, k, 1]
+        assert path[k] > 0.0, k
+        np.testing.assert_array_equal(path[k + 1:], 0.0)
+
+
 class _ErrorCount:
     """Stand for the GPU error counters of a run."""
 

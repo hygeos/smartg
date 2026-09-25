@@ -147,8 +147,10 @@ def get_histories(
     nint : ndarray of shape (NLE,)
         The number of reflections or scatterings.
     nlscl : ndarray of shape (NLE,)
-        The last-scattering layer index (-1 for surface/unscattered
-        photons).
+        The index of the atmospheric absorbing layer of the last
+        atmospheric scattering, counted from 0 at the top as on the
+        'cdist_layer' axis (-1 for the photons that never scattered in
+        the atmosphere).
 
     Raises
     ------
@@ -415,8 +417,8 @@ def compute_cdist_hist(
     nint_h : ndarray of shape (NLE,)
         Scattering order (total interaction count), integer-valued.
     nlscl_h : ndarray of shape (NLE,)
-        Last-scattering layer index (-1 for surface/none),
-        integer-valued.
+        The index of the atmospheric layer of the last atmospheric
+        scattering, from 0 at the top (-1 for none), integer-valued.
     wavelength_lr_r : ndarray of shape (NLR,)
         The LR wavelength axis (nm).
     wavelength_ref : float

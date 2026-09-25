@@ -4446,9 +4446,18 @@ __device__ void choose_scatterer(Photon* ph,
     #endif
     //#endif
 
-    // Track last scattering layer for AMF scatter-class decomposition (Approach 2)
+    // Track last scattering layer for AMF scatter-class decomposition (Approach 2):
+    // the index n, from 0 at the top, of the atmospheric absorbing layer on the
+    // cdist_layer axis, whose path length is cdist_atm[n+1]. A scattering in the
+    // ocean keeps the last atmospheric one, as a surface reflection does
     #if defined(ALIS) && (defined(SPHERIQUE) || defined(ALT_PP))
-    ph->last_scatter_layer = ph->layer;
+    if (ph->loc == ATMOS) {
+        #ifdef OPT3D
+        ph->last_scatter_layer = cell_atm[ph->layer].iabs - 1;
+        #else
+        ph->last_scatter_layer = ph->layer - 1;
+        #endif
+    }
     #endif
   
 	float pmol;
@@ -7582,7 +7591,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           tabCount3[LL2]= (float)(ph->nint);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+6;
           LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+6)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
-          tabCount3[LL2]= (float)(ph->last_scatter_layer); /* index of last scattering layer (-1 = surface/unscattered) */
+          tabCount3[LL2]= (float)(ph->last_scatter_layer); /* absorbing layer of the last atmospheric scattering (-1 = none) */
        } // HISTd==1
 
        // Compute scatter class index (Approach 2)
