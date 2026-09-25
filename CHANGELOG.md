@@ -759,6 +759,11 @@ final `v2.0.0` release.
     Single wavelength runs are unchanged. The kernel also wrote the 7
     loss weights of a forward run with heliostats and no receiver into a
     one element array
+  - Fix the sign of U and V on the 180-360 degree half of the polar plots
+    of `plot_polar_iquv(sym=True)` (the IPRT phase A figures): the half is
+    the mirror image of the computed one about the principal plane, where
+    U and V are odd. Azimuth angles that are not symmetric about 90
+    degrees, which could not be mirrored, now raise a `ValueError`
   - Fix the phase matrix of a profile layer straddling two `pfgrid` layers:
     it took the `pfgrid` layer it overlapped most, possibly one where its
     particles are absent (a thin cloud low in a layer whose upper part lies

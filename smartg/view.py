@@ -2769,6 +2769,52 @@ def plot_polar(
     return fig
 
 
+def _mirror_azimuths(
+    iquv: Sequence[np.ndarray],
+    phis: np.ndarray,
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """Extend Stokes matrices from 0-180 to 0-360 degrees of azimuth.
+
+    The added half is the mirror image of the given one about the
+    principal plane: the azimuth angle phi + 180 takes the values at
+    180 - phi, those of I and Q unchanged and those of U and V with
+    their sign changed, since U and V are odd under the reflection.
+
+    Parameters
+    ----------
+    iquv : sequence of ndarray
+        The I, Q, U and V matrices, each of shape (ntheta, nphi).
+    phis : ndarray
+        Azimuth angles of the columns, in degrees, from 0 to 180 and
+        symmetric about 90.
+
+    Returns
+    -------
+    phis : ndarray
+        The azimuth angles, then the same angles plus 180.
+    iquv : list of ndarray
+        The I, Q, U and V matrices of shape (ntheta, 2 * nphi).
+
+    Raises
+    ------
+    ValueError
+        If the azimuth angles are not symmetric about 90 degrees, so
+        that the mirrored columns would not fall at phis + 180.
+    """
+    phis = np.asarray(phis, dtype=np.float64)
+    if not np.allclose(phis[::-1], 180.0 - phis):
+        raise ValueError(
+            "sym=True needs azimuth angles symmetric about 90 degrees, "
+            f"got {phis}"
+        )
+    signs = (1.0, 1.0, -1.0, -1.0)
+    mirrored = [
+        np.concatenate((values, sign * values[:, ::-1]), axis=1)
+        for values, sign in zip(iquv, signs, strict=True)
+    ]
+    return np.concatenate((phis, phis + 180.0)), mirrored
+
+
 def plot_polar_iquv(
     iquv: Sequence[np.ndarray],
     thetas: np.ndarray,
@@ -2823,17 +2869,16 @@ def plot_polar_iquv(
         format, e.g. save_fig='myFigName.png'.
     sym : bool
         The azimuth angles cover 0 to 180 degrees, as in the IPRT
-        cases; also plot the symmetrical results from 180 to 360
-        degrees.
+        cases; also plot, from 180 to 360 degrees, their mirror image
+        about the principal plane, where I and Q are even and U and V
+        odd. The azimuth angles must be symmetric about 90 degrees.
     """
     val_i, val_q, val_u, val_v = (
         np.asarray(values, dtype=np.float64) for values in iquv
     )
     if sym:
-        phis = np.concatenate((phis, phis + 180))
-        val_i, val_q, val_u, val_v = (
-            np.concatenate((values, values[:, ::-1]), axis=1)
-            for values in (val_i, val_q, val_u, val_v)
+        phis, (val_i, val_q, val_u, val_v) = _mirror_azimuths(
+            (val_i, val_q, val_u, val_v), phis
         )
 
     plt.rcParams.update({'font.size': 13})

@@ -315,8 +315,9 @@ def select_and_plot_polar_iprt(
         Save the figure at this path, the extension giving the
         format, e.g. save_fig='myFigName.png'.
     sym : bool
-        The IPRT azimuth angles cover 0 to 180 degrees; also plot the
-        symmetrical results from 180 to 360 degrees.
+        The IPRT azimuth angles cover 0 to 180 degrees; also plot, from
+        180 to 360 degrees, their mirror image about the principal
+        plane, with the sign of U and V changed.
     i_index : int
         Column index where I is found. Q, U and V must follow it in
         that order, and their standard deviations right after them.
