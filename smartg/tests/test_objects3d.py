@@ -153,6 +153,58 @@ def _run_ff(
     )
 
 
+def _mirror(
+    half: float,
+    translation: tuple[float, float, float],
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    reflectivity: float = 1.0,
+    corner_z: float = 0.0,
+) -> Entity:
+    """Return a square heliostat of the given half-width.
+
+    Its corners are at corner_z in its own frame.
+    """
+    return Entity(
+        name="reflector",
+        material_front=Mirror(reflectivity=reflectivity),
+        material_back=Matte(),
+        geo=Plane(
+            p1=gc.Point(-half, -half, corner_z),
+            p2=gc.Point(half, -half, corner_z),
+            p3=gc.Point(-half, half, corner_z),
+            p4=gc.Point(half, half, corner_z),
+        ),
+        transformation=Transformation(
+            rotation=np.array(rotation), translation=np.array(translation)
+        ),
+    )
+
+
+def _run_rf(
+    sg: Smartg,
+    objects: list[Entity],
+    th_deg: float = 0.0,
+    n_photons: float = 1e6,
+) -> xr.Dataset:
+    """Run a scene in the RF mode in a transparent atmosphere.
+
+    Over a black ground.
+    """
+    return sg.run(
+        wavelength=550.0,
+        atmosphere=_transparent(),
+        surface=LambSurface(alb=AlbedoCst(0.0)),
+        th_deg=th_deg,
+        n_photons=n_photons,
+        my_objects=objects,
+        cus_l=CusForward(mode="RF"),
+        seed=SEED,
+        xblock=XBLOCK,
+        xgrid=XGRID,
+        progress=False,
+    )
+
+
 def _run(
     sg: Smartg,
     wavelength: float | np.ndarray,
@@ -382,3 +434,19 @@ def test_run_without_objects_after_objects(sg: Smartg) -> None:
     assert np.all(np.isfinite(after))
     assert after.mean() > 0.0
     np.testing.assert_allclose(after.mean(), before.mean(), rtol=0.02)
+
+
+def test_rf_reflector_on_the_ground(sg: Smartg) -> None:
+    """The RF launch aims at a heliostat at z = 0 too.
+
+    The offset from the heliostat up to TOA was computed only for a
+    heliostat with a z translation: at z = 0, the launch positions were
+    left uninitialised in double precision.
+    """
+    mirror = _mirror(0.002, (0.05, 0.02, 0.0))
+    receiver = _receiver(0.002, (0.05, -0.3, 0.05))
+    ds = _run_rf(sg, [mirror, receiver], th_deg=30.0, n_photons=1e5)
+    # every photon reaches the heliostat, but for the rounding of the
+    # float launch positions 70 km away along the sun direction
+    incident = ds["wLoss"].values[0] / float(ds["norm_npho"].sum())
+    assert 0.99 < incident <= 1.0 + 1e-9

@@ -1995,12 +1995,14 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			// add rotation transformation
 			Tid = DaddRotAndParseOrder(Tid, objP);
 
-			if (objP.mvTz != 0) { // si diff de 0 alors il y a une translation en z
-				double timeOned;
-				timeOned = (tab_sensor[ph->is].POSZ-objP.mvTz)/vdouble.z;
-				posxd = timeOned*vdouble.x;
-				posyd = timeOned*vdouble.y;
-			} // Les Translations en x et y sont prises en compte à la fin
+			// Horizontal offset from the reflector centre up to the
+			// launch altitude, along the direction of this photon (a
+			// reflector at z = 0 included). Les Translations en x et y
+			// sont prises en compte à la fin
+			double timeOned;
+			timeOned = (tab_sensor[ph->is].POSZ-objP.mvTz)/vdouble.z;
+			posxd = timeOned*vdouble.x;
+			posyd = timeOned*vdouble.y;
 
 			// Si l'objet plan est un rectangle avec p0 le point min et p3 le point max, nous pouvons faire ce qui suit
 			double xMinPd = objP.p0x, yMinPd = objP.p0y, xMaxPd = objP.p3x, yMaxPd = objP.p3y;
@@ -2030,12 +2032,14 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			// add rotation transformation
 			Ti = addRotAndParseOrder(Ti, objP);
 
-			if (objP.mvTz != 0) { // si diff de 0 alors il y a une translation en z
-				float timeOne;
-				timeOne = (tab_sensor[ph->is].POSZ-objP.mvTz)/ph->v.z;
-				ph->pos.x = timeOne*ph->v.x;
-				ph->pos.y = timeOne*ph->v.y;
-			} // Les Translations en x et y sont prises en compte à la fin			
+			// Horizontal offset from the reflector centre up to the
+			// launch altitude, along the direction of this photon (a
+			// reflector at z = 0 included). Les Translations en x et y
+			// sont prises en compte à la fin
+			float timeOne, posx, posy;
+			timeOne = (tab_sensor[ph->is].POSZ-objP.mvTz)/ph->v.z;
+			posx = timeOne*ph->v.x;
+			posy = timeOne*ph->v.y;
 
 			// Si l'objet plan est un rectangle avec p0 le point min et p3 le point max, nous pouvons faire ce qui suit
 			float xMinP = objP.p0x, yMinP = objP.p0y, xMaxP = objP.p3x, yMaxP = objP.p3y;
@@ -2053,8 +2057,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			posTrans.y -= timeTwo*ph->v.y;
 
 			// On veut lancer les photons depuis TOA + prise en compte des transfos de translation en x et y
-			posTrans.x +=  ph->pos.x + objP.mvTx;
-			posTrans.y +=  ph->pos.y + objP.mvTy;			
+			posTrans.x +=  posx + objP.mvTx;
+			posTrans.y +=  posy + objP.mvTy;			
 			posTrans.z = tab_sensor[ph->is].POSZ;
 			
 			// mise à jour de la position finale du photon

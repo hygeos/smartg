@@ -1143,6 +1143,12 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the RF launch toward a reflector at z = 0, such as the default
+    position of `generate_h_p`: the offset from the reflector up to TOA
+    was computed only for a reflector with a z translation, so that in
+    double precision (the default) its launch positions were left
+    uninitialised, and in single precision they took the central sun
+    direction, off the reflector with a sun disc or a sun azimuth
   - Fix a run without 3D objects on a `Smartg(obj3d=True)` that has already
     run with objects: the object constants of the kernel, which persist in
     the compiled module, kept their values, so that the kernel looked for
