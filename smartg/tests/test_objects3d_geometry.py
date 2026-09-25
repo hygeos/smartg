@@ -22,6 +22,7 @@ from smartg.objects3d import (
     generate_h_p,
     rotate_vector,
 )
+from smartg.smartg import _od_at_altitude
 
 
 def _xyz(point: gc.Vector | gc.Point) -> np.ndarray:
@@ -161,3 +162,32 @@ def test_generators_default_optics() -> None:
     mirror = heliostat.material_front
     assert isinstance(mirror, Mirror)
     assert (mirror.reflectivity, mirror.roughness) == (1.0, 0.0)
+
+
+def test_od_at_altitude_interpolates_the_layer() -> None:
+    """The optical depth to the heliostats is linear in their layer.
+
+    Between the levels around them, whatever the altitude of the level
+    below; an altitude on a level gives its optical depth.
+    """
+    z_atm = np.array([100.0, 10.0, 2.0, 1.0, 0.0])
+    od_atm = np.array(
+        [[0.0, 0.05, 0.15, 0.2, 0.3], [0.0, 0.1, 0.3, 0.4, 0.6]]
+    )
+    for altitude, expected in (
+        (1.5, [0.175, 0.35]),
+        (0.5, [0.25, 0.5]),
+        (2.0, od_atm[:, 2]),
+    ):
+        np.testing.assert_allclose(
+            _od_at_altitude(z_atm, od_atm, altitude), expected
+        )
+    np.testing.assert_allclose(_od_at_altitude(z_atm, od_atm[:1], 0.0), [0.3])
+
+
+def test_od_at_altitude_outside_the_profile() -> None:
+    """Heliostats below the bottom of the profile raise ValueError."""
+    z_atm = np.array([100.0, 50.0, 20.0, 10.0, 5.0, 3.4])
+    od_atm = np.linspace(0.0, 0.3, z_atm.size)[None, :]
+    with pytest.raises(ValueError, match="outside the atmosphere profile"):
+        _od_at_altitude(z_atm, od_atm, 0.005)

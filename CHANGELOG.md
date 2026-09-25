@@ -1143,6 +1143,14 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the STP extinction from TOA to the mean heliostat altitude, which
+    gives the `n_tr` and `powc_H` outputs and so every efficiency of
+    `nopt_view`: it interpolated the optical depth as if the level below
+    the heliostats were at z = 0, and raised an `IndexError` after the run
+    when the profile ended above them. It interpolates between the two
+    levels around the heliostats, and a `ValueError` is raised before the
+    run when they are outside the profile. Profiles whose level below the
+    heliostats is at z = 0, such as the AFGL ones, are not affected
   - Fix `generate_h_p` and `generate_h_a` with a `heliostat_type`, which
     took its facets and sizes but silently dropped its reflectivity and
     roughness: the heliostats were perfect mirrors. Their `reflectivity`

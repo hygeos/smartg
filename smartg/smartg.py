@@ -1802,6 +1802,22 @@ class Smartg:
         if prof_atm is not None and hasattr(prof_atm, 'to_xarray'):
             prof_atm = prof_atm.to_xarray()
 
+        if (
+            n_h > 0
+            and z_alt_h is not None
+            and tc is not None
+            and cus_l is not None
+            and prof_atm is not None
+            and 'z_atm' in prof_atm.coords
+        ):
+            # the STP extinction to the heliostats needs them inside the
+            # profile: fail before the run rather than after
+            _od_at_altitude(
+                prof_atm.coords['z_atm'].to_numpy(),
+                prof_atm['OD_atm'].to_numpy(),
+                z_alt_h / n_h,
+            )
+
         if prof_atm is None:
             z_toa = 120.0
         elif 'z_atm' in prof_atm.coords:
@@ -3335,25 +3351,21 @@ def _finalize(
         tr_tau = np.zeros(n_wavelength, dtype=np.float64)
         p_pyt = np.zeros(n_wavelength, dtype=np.float64)
 
-        # find the atm layer where the mean heliostats z altitude is
-        # located
+        # the optical depth from TOA down to the mean heliostat
+        # altitude
         if 'z_atm' not in prof_atm.coords:
             raise ValueError(
                 "the STP optical efficiencies require a 1D "
                 "atmosphere profile (the 3D profile has no z_atm "
                 "axis)"
             )
-        ci = 0
-        zatm = prof_atm.coords['z_atm'].to_numpy()
-        od_atm = prof_atm['OD_atm'].to_numpy()
-        while zatm[ci] > dic_stp["MZAlt_H"]:
-            ci += 1
+        tau_ext[:] = _od_at_altitude(
+            prof_atm.coords['z_atm'].to_numpy(),
+            prof_atm['OD_atm'].to_numpy(),
+            dic_stp["MZAlt_H"],
+        )[:n_wavelength]
 
         for i in range(n_wavelength):
-            tau_ext[i] = (od_atm[i, ci] - od_atm[i, ci - 1]) * (
-                dic_stp["MZAlt_H"] / zatm[ci - 1]
-            )
-            tau_ext[i] = od_atm[i, ci] - tau_ext[i]
             # Beer-Lamber law to find the transmisttance
             tr_tau[i] = np.exp(-abs(tau_ext[i] / -dic_stp["vSun"].z))
             # theoric computation of the total power collected by all
@@ -6125,6 +6137,52 @@ def _normalize_rec(
         raise ValueError('Unknown launching mode!')
 
     return c_mat_visu_recep, mat_cats, norm_c
+
+
+def _od_at_altitude(
+    z_atm: NDArray[np.floating],
+    od_atm: NDArray[np.floating],
+    altitude: float,
+) -> NDArray[np.float64]:
+    """Return the optical depth from TOA down to an altitude.
+
+    The cumulated optical depth is linear with the altitude inside a
+    layer, so it is interpolated linearly between the two levels
+    around the altitude.
+
+    Parameters
+    ----------
+    z_atm : 1-D ndarray
+        Altitudes of the levels of the profile in km, from TOA down.
+    od_atm : 2-D ndarray
+        Cumulated optical depth from TOA at each level, of shape
+        (wavelength, level).
+    altitude : float
+        Altitude in km.
+
+    Returns
+    -------
+    1-D ndarray
+        The optical depth from TOA down to the altitude, one per
+        wavelength.
+
+    Raises
+    ------
+    ValueError
+        If the altitude is outside the levels of the profile.
+    """
+    z_atm = np.asarray(z_atm, dtype=np.float64)
+    if not z_atm[-1] <= altitude <= z_atm[0]:
+        raise ValueError(
+            f"The mean heliostat altitude {altitude:g} km is outside the "
+            f"atmosphere profile, from {z_atm[-1]:g} to {z_atm[0]:g} km: "
+            "the 3D objects stand on a ground at z = 0, the bottom level "
+            "of the profile"
+        )
+    od_atm = np.atleast_2d(np.asarray(od_atm, dtype=np.float64))
+    return np.array(
+        [np.interp(altitude, z_atm[::-1], od[::-1]) for od in od_atm]
+    )
 
 
 def _find_extinction(
