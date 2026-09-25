@@ -11,7 +11,7 @@ of cat_view on synthetic REPTRAN internal bands.
 import importlib
 import warnings
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -316,4 +316,36 @@ def test_receiver_view_reads_the_sizes() -> None:
     image = plt.gci()
     assert isinstance(image, AxesImage)
     np.testing.assert_allclose(image.get_extent(), [1.5, -1.5, -1.0, 1.0])
+    plt.close("all")
+
+
+@pytest.mark.parametrize("flux_unit", ["W", "kW"])
+def test_receiver_view_log_scale_spans_the_irradiance(
+    flux_unit: Literal["W", "kW"],
+) -> None:
+    """The log colour scale spans the displayed irradiance.
+
+    Of the lit cells, in the unit shown and per m², where it spanned
+    the weights times mtoa: with 0.5 m cells in W most of the map
+    saturated, and in kW all of it was below the scale.
+    """
+    weights = np.array([[0.0, 1e-4], [4e-4, 1e-3]])
+    ds = _receiver_dataset(weights, 0.0005)
+    receiver_view(ds, log_color_scale=True, mtoa=1000.0, flux_unit=flux_unit)
+    image = plt.gci()
+    assert isinstance(image, AxesImage)
+    scale = {"W": 1.0, "kW": 1e-3}[flux_unit] * 1000.0 / 0.5**2
+    norm = image.norm
+    assert norm.vmin is not None and norm.vmax is not None
+    np.testing.assert_allclose(
+        [norm.vmin, norm.vmax], [1e-4 * scale, 1e-3 * scale]
+    )
+    plt.close("all")
+
+
+def test_receiver_view_log_scale_needs_a_lit_cell() -> None:
+    """A dark receiver cannot be drawn on a log scale."""
+    ds = _receiver_dataset(np.zeros((2, 2)), 0.0005)
+    with pytest.raises(ValueError, match="log_color_scale"):
+        receiver_view(ds, log_color_scale=True)
     plt.close("all")

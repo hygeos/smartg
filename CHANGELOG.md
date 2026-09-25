@@ -1143,6 +1143,13 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the log colour scale of `receiver_view(log_color_scale=True)`,
+    which spanned the receiver weights times `mtoa` instead of the
+    irradiance it displays, in `flux_unit` per m²: with the 0.5 m cells of
+    the demo notebook in W, every cell above a quarter of the maximum
+    saturated, and in kW or MW the whole map fell below the scale. It
+    spans the lit cells of the displayed map; a receiver without any
+    raises a `ValueError`
   - Fix `receiver_view`, which read the grid sizes through the deprecated
     mapping of `Dataset.dims`: it warned on every call, and would raise a
     `TypeError` once xarray returns a set of dimension names

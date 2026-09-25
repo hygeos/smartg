@@ -3287,11 +3287,13 @@ def receiver_view(
     else:
         raise NameError("Unknown argument for unit!")
 
+    irradiance = (unit_scale * m * mtoa) / cell_area
+
     plt.figure()
 
     if not log_color_scale:
         im = plt.imshow(
-            (unit_scale * m * mtoa) / cell_area,
+            irradiance,
             cmap=plt.get_cmap("jet"),
             interpolation=interpolation,
             vmin=vmin,
@@ -3299,11 +3301,18 @@ def receiver_view(
             extent=extent,
         )
     else:
-        log_vmin = max(np.amin(m), 1e-05)
+        # the range of the displayed irradiance, the empty cells left
+        # blank
+        lit = irradiance[irradiance > 0.0]
+        if lit.size == 0:
+            raise ValueError(
+                "log_color_scale needs a receiver with a positive "
+                "irradiance in at least one cell"
+            )
         im = plt.imshow(
-            (unit_scale * m * mtoa) / cell_area,
+            irradiance,
             cmap=plt.get_cmap("jet"),
-            norm=mcolors.LogNorm(vmin=log_vmin * mtoa, vmax=np.amax(m * mtoa)),
+            norm=mcolors.LogNorm(vmin=np.amin(lit), vmax=np.amax(lit)),
             interpolation=interpolation,
             extent=extent,
         )
