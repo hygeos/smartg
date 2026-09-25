@@ -674,11 +674,13 @@ def test_sun_disc_boxes_of_every_level() -> None:
     the disc instead of the one of the box, which divides it by 2 pi.
     Where the disc lies inside the box, 2 pi times the radiance must
     match the one of the whole box, at the top of the atmosphere as at
-    the surface.
+    the surface. The molecular atmosphere has no aureole, whose peak
+    would make the radiance at the centre of a box differ from its
+    mean over the box.
     """
     sg = Smartg()
     kwargs: dict[str, Any] = {
-        "atmosphere": Atm1D("afglt", comp=[AerOPAC("desert", 0.3, 550.0)]),
+        "atmosphere": Atm1D("afglt"),
         "surface": LambSurface(alb=AlbedoCst(0.2)),
         "th_deg": 30.0,
         "n_theta": 9,
