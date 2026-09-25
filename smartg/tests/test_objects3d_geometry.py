@@ -14,6 +14,7 @@ from smartg.objects3d import (
     Entity,
     GroupE,
     Heliostat,
+    Mirror,
     Plane,
     Spheric,
     Transformation,
@@ -23,13 +24,16 @@ from smartg.objects3d import (
 )
 
 
+def _xyz(point: gc.Vector | gc.Point) -> np.ndarray:
+    """Return the coordinates of a geoclide vector or point."""
+    return np.array([point.x, point.y, point.z], dtype=np.float64)
+
+
 @pytest.mark.parametrize("order", ["XYZ", "xyz", "zyx", "ZxY"])
 def test_rotate_vector_accepts_either_case(order: str) -> None:
     """The rotation order is read in upper or lower case."""
     rotated = rotate_vector(gc.Vector(0.0, 0.0, 1.0), 90.0, 0.0, 0.0, order)
-    np.testing.assert_allclose(
-        [rotated.x, rotated.y, rotated.z], [0.0, -1.0, 0.0], atol=1e-12
-    )
+    np.testing.assert_allclose(_xyz(rotated), [0.0, -1.0, 0.0], atol=1e-12)
 
 
 def test_rotate_vector_default_order() -> None:
@@ -37,9 +41,7 @@ def test_rotate_vector_default_order() -> None:
     vector = gc.Vector(1.0, 2.0, 3.0)
     default = rotate_vector(vector, 10.0, 20.0, 30.0)
     xyz = rotate_vector(vector, 10.0, 20.0, 30.0, "XYZ")
-    np.testing.assert_allclose(
-        [default.x, default.y, default.z], [xyz.x, xyz.y, xyz.z]
-    )
+    np.testing.assert_allclose(_xyz(default), _xyz(xyz))
 
 
 def test_rotate_vector_unknown_order() -> None:
@@ -96,12 +98,8 @@ def test_spheric_bbox_holds_the_rotated_sphere(rotation: list[float]) -> None:
     moved = Entity(geo=Spheric(radius=radius))
     moved.set_transformation(transformation)
     for sphere in (entity, moved):
-        pmin = np.array([sphere.bbox_pmin.x, sphere.bbox_pmin.y,
-                         sphere.bbox_pmin.z])
-        pmax = np.array([sphere.bbox_pmax.x, sphere.bbox_pmax.y,
-                         sphere.bbox_pmax.z])
-        assert np.all(pmin <= centre - radius + 1e-12)
-        assert np.all(pmax >= centre + radius - 1e-12)
+        assert np.all(_xyz(sphere.bbox_pmin) <= centre - radius + 1e-12)
+        assert np.all(_xyz(sphere.bbox_pmax) >= centre + radius - 1e-12)
 
 
 def _facet_mirrors(objects: list) -> list:
@@ -124,13 +122,16 @@ def test_generators_take_the_optics_of_heliostat_type(generator: str) -> None:
     )
     receiver = gc.Point(0.0, 0.0, 0.1)
 
-    def generate(**kwargs: float) -> list:
+    def generate(
+        reflectivity: float | None = None, roughness: float | None = None
+    ) -> list:
         if generator == "h_p":
             return generate_h_p(
                 heliostat_pos_list=[gc.Point(0.1, 0.0, 0.005)],
                 receiver_pos=receiver,
                 heliostat_type=template,
-                **kwargs,
+                reflectivity=reflectivity,
+                roughness=roughness,
             )
         return generate_h_a(
             receiver_pos=receiver,
@@ -138,7 +139,8 @@ def test_generators_take_the_optics_of_heliostat_type(generator: str) -> None:
             max_ang_deg=0.0,
             n_heliostats=1,
             heliostat_type=template,
-            **kwargs,
+            reflectivity=reflectivity,
+            roughness=roughness,
         )
 
     mirrors = _facet_mirrors(generate())
@@ -157,4 +159,5 @@ def test_generators_default_optics() -> None:
     )
     assert isinstance(heliostat, Entity)
     mirror = heliostat.material_front
+    assert isinstance(mirror, Mirror)
     assert (mirror.reflectivity, mirror.roughness) == (1.0, 0.0)
