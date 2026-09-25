@@ -722,7 +722,9 @@ class AerOPAC:
             properties
         rh : float or array-like, optional
             Relative humidity (0-100). Only used with AerOPAC class;
-            ignored for Cloud.
+            ignored for Cloud. It is clamped to the humidity range of
+            the tables (0-99 % for OPAC), as Aer3D does, since a
+            profile may be supersaturated.
             Also ignored for specific vertical layers if their
             corresponding layer-specific
             humidity values (rh_mix, rh_free, rh_stra) are set to
@@ -737,7 +739,16 @@ class AerOPAC:
         ssa : ndarray
             Single scattering albedo with shape (len(wavelength),
             len(z))
+
+        Raises
+        ------
+        ValueError
+            If a wavelength, or the reference wavelength of a scalar
+            `tau_ref`, lies outside the wavelengths of the tables.
         """
+        self._check_wavelengths(wavelength)
+        if isinstance(self.tau_ref, float):
+            self._check_wavelengths(self.w_ref, "reference wavelength")
         dtau = np.zeros((len(wavelength), len(z)), dtype=np.float32)
         dtau_ref = np.zeros((1, len(z)), dtype=np.float32)
         ssa = np.zeros_like(dtau)
@@ -905,6 +916,33 @@ class AerOPAC:
             ssa[:, :] = _forced_ssa(self.ssa, wavelength, z)
         return dtau, ssa
 
+    def _check_wavelengths(
+        self, wavelength: NumericArrayLike, what: str = "wavelengths"
+    ) -> None:
+        """Refuse wavelengths outside the tables of the component.
+
+        The lookups would hold the optical properties of the ends of
+        the tables beyond them, which the 3D components refuse too.
+
+        Raises
+        ------
+        ValueError
+            If a wavelength lies outside the wavelength range of a
+            vertical content.
+        """
+        values = np.atleast_1d(np.asarray(wavelength, dtype=np.float64))
+        for cont in self.vert_content:
+            wav = cont.coords["wav"].values.astype(np.float64)
+            # a relative margin for the float32 axes of the files
+            lo, hi = wav.min() * (1 - 1e-6), wav.max() * (1 + 1e-6)
+            out = values[(values < lo) | (values > hi)]
+            if out.size:
+                raise ValueError(
+                    f"{_grid_label(self)} is tabulated from "
+                    f"{wav.min():g} to {wav.max():g} nm, which excludes "
+                    f"the {what} {out.tolist()} nm."
+                )
+
     def native_theta(self) -> NDArray[np.float64]:
         """Return the scattering angles the component's tables carry.
 
@@ -1069,6 +1107,7 @@ class AerOPAC:
                 "has a zero or negative thickness); cannot compute "
                 "its phase matrix."
             )
+        self._check_wavelengths(wavelength)
 
         theta = (
             self.native_theta() if is_native_theta(n_theta)
@@ -1354,7 +1393,9 @@ class Cloud(AerOPAC):
         Available auxdata clouds: wc, ic_baum_ghm, ic_baum_asc and
         ic_baum_sc
     reff : float
-        Effective radius in micrometers
+        Effective radius in micrometers, within the range of the file
+        (5-30 for wc, 5-60 for the ic_baum clouds), which is not
+        extrapolated
     zmin : float,
         Minimum altitude of the cloud
     zmax : float,
@@ -1491,6 +1532,17 @@ class Cloud(AerOPAC):
         self.fname = fname
 
         self.ds_mix = xr.open_dataset(self.fname)
+        # the tables are not extrapolated, as Cloud3D refuses to
+        reff_axis = self.ds_mix.coords["reff"].values.astype(np.float64)
+        lo, hi = reff_axis.min(), reff_axis.max()
+        if not (
+            lo * (1 - 1e-6) <= reff <= hi * (1 + 1e-6)
+            or np.isclose(reff, lo)
+        ):
+            raise ValueError(
+                f"The effective radius {reff:g} um lies outside the "
+                f"[{lo:g}, {hi:g}] um range of {fname.name}."
+            )
         # check if reff dim size == 1 (to avoid interpolation/indexing
         # crash)
         if self.ds_mix.sizes["reff"] == 1:
@@ -6411,12 +6463,17 @@ def atm_pro_from_aeronet(
         pf_wavelength = b_wavelength_unique
     else:
         pf_wavelength = wavelength_phase
+    # the aerosol is tabulated at the wavelengths of the profile and at
+    # those of its phase matrices, which it is not extrapolated to
+    wavelength_aer = np.union1d(
+        b_wavelength_unique, np.atleast_1d(pf_wavelength)
+    )
 
     fv_time = "extrapolate"
     aod_lut = aod_lut.interp(
         {
             "Day_of_Year(Fraction)": day_year_frac,
-            "wavelength": b_wavelength_unique,
+            "wavelength": wavelength_aer,
         },
         method="linear",
         kwargs={"fill_value": fv_time},
@@ -6424,7 +6481,7 @@ def atm_pro_from_aeronet(
     ssa_lut = ssa_lut.interp(
         {
             "Day_of_Year(Fraction)": day_year_frac,
-            "wavelength": b_wavelength_unique,
+            "wavelength": wavelength_aer,
         },
         method="linear",
         kwargs={"fill_value": fv_time},
@@ -6432,7 +6489,7 @@ def atm_pro_from_aeronet(
     pfn_lut = pfn_lut.interp(
         {
             "Day_of_Year(Fraction)": day_year_frac,
-            "wavelength": b_wavelength_unique,
+            "wavelength": wavelength_aer,
         },
         method="linear",
         kwargs={"fill_value": fv_time},

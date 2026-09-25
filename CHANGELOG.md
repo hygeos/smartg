@@ -1009,6 +1009,15 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - `Cloud` refuses an effective radius outside the range of its file,
+    and `AerOPAC` and `Cloud` refuse a wavelength, or the reference
+    wavelength of a scalar `tau_ref`, outside the wavelengths of their
+    tables, with a `ValueError`, as `Cloud3D` does and as v1.2.0 did for
+    the wavelengths: they silently took the optical properties of the
+    end of the tables (`Cloud('wc', 50., ...)` those of 30 um, a
+    thermal infrared run those of 4.4 um). The relative humidity is
+    still clamped to the tables, as in `Aer3D`. `atm_pro_from_aeronet`
+    tabulates the aerosol at its `wavelength_phase` as well
   - Fix `Atm1D.calc_split(phase=False)`, and `calc_split` on an atmosphere
     without any component, which raised a `KeyError` on `iphase_atm`: the
     phase profile is then returned as None, which `Atm1D(prof_phases=...)`

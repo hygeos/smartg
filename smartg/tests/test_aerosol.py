@@ -17,6 +17,7 @@ from smartg.atmosphere import (
     AerOPAC,
     AerUser,
     Atm1D,
+    Cloud,
     atm_pro_from_aeronet,
     read_aeronet_pfn,
 )
@@ -891,3 +892,29 @@ def test_opac_list_holds_mixtures_only() -> None:
     assert "desert" in names and "mineral_transported" in names
     for name in ("free_troposphere", "stratosphere", "waso", "inso"):
         assert name not in names
+
+
+def test_out_of_range_reff_and_wavelengths_refused() -> None:
+    """The 1D components refuse what their tables do not cover.
+
+    An effective radius or a wavelength beyond the ends of the tables
+    silently took the optical properties of the end, where Cloud3D
+    refuses them. The humidity is still clamped, as in Aer3D.
+    """
+    with pytest.raises(ValueError, match="effective radius 50"):
+        Cloud("wc", 50.0, 2.0, 3.0, 10.0, 550.0)
+    cld = Cloud("wc", 10.0, 2.0, 3.0, 10.0, 550.0)
+    with pytest.raises(ValueError, match=r"excludes the wavelengths \[10000"):
+        cld.dtau_ssa(np.array([550.0, 10000.0]), Z_LEVELS, 50.0)
+    with pytest.raises(ValueError, match="excludes the wavelengths"):
+        Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)]).calc(200.0)
+    aer = AerOPAC("desert", 0.1, 100.0)
+    with pytest.raises(ValueError, match="reference wavelength"):
+        aer.dtau_ssa(np.array([550.0]), Z_LEVELS, 50.0)
+    dry, _ = AerOPAC("desert", 0.1, 550.0).dtau_ssa(
+        np.array([550.0]), Z_LEVELS, 99.0
+    )
+    wet, _ = AerOPAC("desert", 0.1, 550.0).dtau_ssa(
+        np.array([550.0]), Z_LEVELS, 120.0
+    )
+    np.testing.assert_array_equal(wet, dry)
