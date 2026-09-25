@@ -128,6 +128,28 @@ def test_truncate_phase_refuses_negative_result() -> None:
                        GTTrunc(trunc_frac=0.9, theta_tr=10.0))
 
 
+@pytest.mark.parametrize(
+    "theta_tr", [0.0, -5.0, float("nan"), 180.0, 200.0, True]
+)
+def test_gttrunc_refuses_theta_tr_outside_the_angles(
+    theta_tr: float,
+) -> None:
+    """A truncation angle outside ]0; 180[ is refused."""
+    with pytest.raises(ValueError, match="theta_tr"):
+        GTTrunc(trunc_frac=0.3, theta_tr=theta_tr)
+
+
+def test_truncate_phase_refuses_theta_tr_below_the_resolution() -> None:
+    """An angle on the first node of the grid would truncate nothing.
+
+    pytrunc then gives back F11 unchanged but still reports f, so the
+    component would only lose a fraction f of its scattering.
+    """
+    with pytest.raises(ValueError, match="resolution"):
+        truncate_phase(_hg_matrix(0.85), THETA,
+                       GTTrunc(trunc_frac=0.3, theta_tr=0.05))
+
+
 def test_truncate_phase_rejects_unknown_config() -> None:
     """Anything else than DMTrunc or GTTrunc is refused."""
     with pytest.raises(TypeError, match="not recognized"):

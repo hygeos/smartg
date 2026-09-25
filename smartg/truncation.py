@@ -158,9 +158,11 @@ class GTTrunc:
         Search the truncated angle between 0 and theta_tol
         (in degrees).
     theta_tr : None or float, optional
-        Directly provide the truncated angle (in degrees). If provided,
-        theta_tol is ignored; trunc_frac is still used as the truncation
-        fraction, only the search of the truncation angle is skipped.
+        Directly provide the truncated angle (in degrees), in ]0; 180[
+        and not below half the first angle step of the phase matrix.
+        If provided, theta_tol is ignored; trunc_frac is still used as
+        the truncation fraction, only the search of the truncation
+        angle is skipped.
     lobatto_optimization : bool, optional
         If True, use the optimized Lobatto quadrature for the integral.
         Reduces significantly the computational time in case theta_tr
@@ -210,6 +212,17 @@ class GTTrunc:
         ):
             raise ValueError(
                 "The theta_tol parameter must be a scalar in the "
+                + "interval ]0; 180[."
+            )
+        if theta_tr is not None and (
+            isinstance(theta_tr, bool)
+            or not isinstance(
+                theta_tr, (int, float, np.integer, np.floating)
+            )
+            or not (0.0 < theta_tr < 180.0)
+        ):
+            raise ValueError(
+                "The theta_tr parameter must be a scalar in the "
                 + "interval ]0; 180[."
             )
         if not isinstance(lobatto_optimization, bool):
@@ -311,8 +324,10 @@ def truncate_phase(
     TypeError
         If the truncation configuration is not recognized.
     ValueError
-        If F11 does not integrate to a positive value, or if the
-        truncated F11 is negative, which happens when the truncation
+        If the GT truncation angle ``theta_tr`` is nearer to the first
+        angle of the grid than to the second one, if F11 does not
+        integrate to a positive value, or if the truncated F11 is
+        negative, which happens when the truncation
         removes more energy than the forward peak holds: a GT
         truncation fraction larger than that energy (with the
         truncation angle imposed, or on a phase function without a
@@ -349,6 +364,17 @@ def truncate_phase(
             ),
         )
     else:
+        # pytrunc takes the angle of the grid nearest to theta_tr; at
+        # the first one it truncates nothing but still reports f
+        if truncation.theta_tr is not None and np.argmin(
+            np.abs(theta_deg - truncation.theta_tr)
+        ) == 0:
+            raise ValueError(
+                f"theta_tr = {truncation.theta_tr:g} degree is below the "
+                "resolution of the phase matrix, whose first angles are "
+                f"{theta_deg[0]:g} and {theta_deg[1]:g} degree: nothing "
+                "would be truncated."
+            )
         ds_pha = cast(
             xr.Dataset,
             gt_phase_approx(

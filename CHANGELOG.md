@@ -920,6 +920,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `GTTrunc`, which accepted any `theta_tr`: 0, a negative or NaN
+    angle, or one below half the first angle step of the phase matrix,
+    left the phase matrix unchanged but still removed `trunc_frac` of the
+    scattering, and 180 or more gave an unrelated pytrunc error. `GTTrunc`
+    now requires `theta_tr` in ]0; 180[ and `truncate_phase` refuses an
+    angle nearest to the first angle of the grid, with a `ValueError`
   - Fix `smartg.cdf.icdf` with `n=None`, which raised an `OverflowError`
     when a probability after the first one was zero, and sized `n`
     without the first probability, which could then get no sample.
