@@ -920,6 +920,14 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.postprocess.plane_irr` and `spherical_irr`, and so
+    `irradiance_ds`, which applied the trapezoid rule to the bin centres
+    of a run without `le` and dropped half a zenith bin at each end and
+    one azimuth bin: the irradiances were 1.2 % and 2.9 % low with the
+    default 45 x 90 bins. Each bin is now weighted by its exact solid
+    angle, which gives back the flux of the counted photons; other grids,
+    such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
+    no longer integrates the `I_stdev_*` standard deviations as radiances
   - Fix `BandSet`, and so the `wavelength` of `Smartg.run`, `Atm1D.calc`
     and `Water1D.calc`, which refused an integer, a NumPy integer or
     `float32` scalar, a tuple or a DataArray with a bare `AssertionError`.
