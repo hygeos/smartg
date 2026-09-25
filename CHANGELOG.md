@@ -1143,6 +1143,12 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the 3D objects in an atmosphere with a layer that does not scatter,
+    for instance `Atm1D(tau_r=0., no2=False, tco3=0., tcwp=0.)`: with the
+    default `beer=1`, the absorption up to an object took the fraction of
+    the layer above the hit from its scattering optical depth, 0/0, so that
+    every photon reaching an object got a NaN weight, the loss weights were
+    NaN and the receiver got nothing. The fraction is taken from altitudes
   - Fix the flux map of a receiver, whose number of cells truncated its
     size over `tc` (0.0006 / 0.0001 gave 5 cells) and ignored where the
     rectangle lies: the hits past the grid got a cell index of -1, which

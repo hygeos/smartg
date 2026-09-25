@@ -96,6 +96,63 @@ def _scene(reflectivity: float | np.ndarray = 0.88) -> list[Entity]:
     return objects
 
 
+def _transparent() -> Atm1D:
+    """Return an atmosphere that neither scatters nor absorbs."""
+    return Atm1D("afglt", tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0)
+
+
+def _receiver(
+    half: float,
+    translation: tuple[float, float, float],
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    tc: float = 0.001,
+) -> Entity:
+    """Return a black square receiver of the given half-width."""
+    return Entity(
+        name="receiver",
+        tc=tc,
+        material_front=Matte(reflectivity=0.0),
+        material_back=Matte(reflectivity=0.0),
+        geo=_plane(half, half),
+        transformation=Transformation(
+            rotation=np.array(rotation), translation=np.array(translation)
+        ),
+    )
+
+
+def _run_ff(
+    sg: Smartg,
+    objects: list[Entity],
+    atmosphere: Atm1D,
+    field: float,
+    centre: tuple[float, float] = (0.0, 0.0),
+    wavelength: float = 550.0,
+    **kwargs: Any,
+) -> xr.Dataset:
+    """Run a scene in the FF mode, zenith sun and black ground.
+
+    The photons are launched over a square of side field centred on
+    centre, and the direct ones are counted by the receivers.
+    """
+    return sg.run(
+        wavelength=wavelength,
+        atmosphere=atmosphere,
+        surface=LambSurface(alb=AlbedoCst(0.0)),
+        th_deg=0.0,
+        n_photons=1e6,
+        my_objects=objects,
+        cus_l=CusForward(
+            cfx=field, cfy=field, cftx=centre[0], cfty=centre[1], mode="FF"
+        ),
+        direct=True,
+        seed=SEED,
+        xblock=XBLOCK,
+        xgrid=XGRID,
+        progress=False,
+        **kwargs,
+    )
+
+
 def _run(
     sg: Smartg,
     wavelength: float | np.ndarray,
@@ -265,3 +322,22 @@ def test_nopt_view_weights_the_bands(
         np.testing.assert_allclose(printed["nref"], expected, atol=2e-6)
     with pytest.raises(ValueError, match="mtoa"):
         nopt_view(ds, mtoa=np.array([1.0, 2.0, 3.0]))
+
+
+def test_transparent_atmosphere(sg: Smartg) -> None:
+    """Without extinction the scene has finite weights, and no losses.
+
+    A layer that does not scatter made the weight of every photon
+    reaching an object NaN: the fraction of the layer above the hit was
+    computed from its scattering optical depth, 0/0.
+    """
+    ds = _run(sg, 550.0, _transparent())
+    w_loss = ds["wLoss"].values
+    assert np.all(np.isfinite(w_loss))
+    # nearly every photon launched toward a heliostat reaches one with
+    # its full weight, and every one reflected toward the receiver
+    # reaches it
+    assert w_loss[0] > 0.9 * float(ds["norm_npho"].sum())
+    _check_loss_identities(w_loss, 0.88)
+    np.testing.assert_allclose(ds["cat_w"].values[2], w_loss[6], rtol=1e-6)
+

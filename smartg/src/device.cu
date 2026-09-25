@@ -3752,10 +3752,12 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				else
 				{ // We compute the cumulated absorption OT at the new postion of the photon
 					// see move photon paper eq 11
-					tauBis =  get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)]) - (prev_tau + tauHit * ph->v.z);
-					delta_i= fabs(get_OD(BEERd, prof_atm[ilayer2+ph->ilam*(NATMd+1)]) - get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)]));
-					delta= fabs(tauBis - get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)])) ;
-					epsilon = __fdividef(delta, delta_i);
+					// The fraction of the layer above the hit, from its
+					// altitude: the one from the scattering optical depth
+					// is 0/0 in a layer that does not scatter
+					epsilon = __fdividef(prof_atm[ilayer2-1].z - phit.z,
+					                     prof_atm[ilayer2-1].z - prof_atm[ilayer2].z);
+					epsilon = clamp(epsilon, 0.F, 1.F);
 					
 					float ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
 						(epsilon * (prof_atm[ilayer2+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs) +
