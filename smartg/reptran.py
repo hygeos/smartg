@@ -805,14 +805,18 @@ class ReptranIbandList:
         Returns
         -------
         list of str
-            Unique sensor channel names.
+            Unique sensor channel names, sorted by channel central
+            wavelength, the order of the ``wavelength`` axis of
+            :func:`reduce_reptran`. Channels with the same central
+            wavelength keep their order in the list.
         """
-        names = []
-
+        centres: dict[str, np.float32] = {}
         for iband in self.l:
-            names.append(iband.band.name)
+            centres.setdefault(
+                iband.band.name, np.float32(np.mean(iband.band.awvl))
+            )
 
-        return list(set(names))
+        return sorted(centres, key=centres.__getitem__)
 
 
 class ReadCrs:

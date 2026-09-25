@@ -223,3 +223,21 @@ def test_channel_name_spaces_are_ignored() -> None:
     assert (band.wmin, band.wmax) == (119.9976, 120.0192)
     assert reptran.band("band from  119.9976 to  120.0192 nm").band == 0
     assert reptran.band(band.name).band == 0
+
+
+def test_get_names_follow_the_reduced_axis() -> None:
+    """Name i labels channel i of the reduce_reptran output."""
+    reptran = Reptran("reptran_solar_msg")
+    ibands = reptran.to_smartg(include="msg1")
+    wavelength = np.array([iband.w for iband in ibands.l], dtype=np.float32)
+    dataset = xr.Dataset(
+        {"I_test": (("wavelength",), np.ones(wavelength.size))},
+        coords={"wavelength": wavelength},
+    )
+    reduced = reduce_reptran(dataset, ibands)
+    names = ibands.get_names()
+    centres = [np.mean(reptran.band(name).awvl) for name in names]
+
+    assert len(names) == reduced.sizes["wavelength"] > 2
+    np.testing.assert_allclose(centres, reduced.wavelength, rtol=1e-6)
+    assert ReptranIbandList(ibands.l[::-1]).get_names() == names

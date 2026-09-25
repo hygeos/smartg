@@ -916,6 +916,11 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the order of `ReptranIbandList.get_names`, which changed from one
+    Python process to the next (it came from a `set`), so the demo
+    notebook labelled the reduced channels with the wrong names. The names
+    are now sorted by channel central wavelength, the order of the
+    `wavelength` axis of `reduce_reptran`
   - Fix the REPTRAN channel names, which kept the repr of the bytes read
     from the file (`"b'msg1_seviri_ch006'"`), so that
     `Reptran.band('msg1_seviri_ch006')` raised a `ValueError`. The names
