@@ -46,8 +46,6 @@ extract_points
 
 from __future__ import annotations
 
-import re
-from itertools import dropwhile
 from pathlib import Path
 from typing import Literal, overload
 from warnings import warn
@@ -2045,8 +2043,6 @@ def generate_h_a(
     else:
         n_rings = int(total_positions / n_heliostats) + 1
 
-    print("Total number of Heliostats = ", n_rings * n_heliostats)
-
     heliostat_positions = []
     current_ang_deg = min_ang_deg
 
@@ -2345,12 +2341,9 @@ def extract_points(fname: str | Path) -> list[gc.Point]:
     Reads a file and extracts the (x, y, z) coordinates of each
     heliostat, returning them as geoclide Point objects.
 
-    The input file must follow this format:
-
-    - First line: comment line beginning with '#'
-    - Second line: empty line
-    - Subsequent lines: x, y, and z coordinates of each heliostat,
-      separated by commas
+    The input file holds one heliostat per line, its x, y and z
+    coordinates separated by commas. Lines starting with '#' are
+    comments, and blank lines are skipped.
 
     Parameters
     ----------
@@ -2362,37 +2355,21 @@ def extract_points(fname: str | Path) -> list[gc.Point]:
     out : list
         List of geoclide.Point objects, each containing the x, y, and z
         coordinates of a heliostat.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist.
+    ValueError
+        If a line does not hold three comma separated numbers.
     """
-    # First check if fname is an str type
-    file_content = ""
-    try:
-        with open(fname, "r") as file:
-            for _curline in dropwhile(is_comment, file):
-                file_content = file.read()
-    except FileNotFoundError:
-        print(str(fname) + " has been not found")
-    except OSError:
-        print("Enter/Exit error with " + str(fname))
-
-    # Looking for a float and fill it in values
-    values = re.findall(r"-?[0-9]+\.?[0-9]*", file_content)
-
-    # Number of dimension and number of heliostats
-    n_dims = 3  # x, y and z --> 3 dim
-    n_heliostats = int(len(values) / n_dims)
-
-    # # Fill the x, y and z coordinates into a list of Point classes
-    points = []
-    for i in range(n_heliostats):
-        points.append(
-            gc.Point(
-                float(values[i * n_dims]),
-                float(values[(i * n_dims) + 1]),
-                float(values[(i * n_dims) + 2]),
-            )
+    coords = np.loadtxt(fname, delimiter=",", comments="#", ndmin=2)
+    if coords.shape[1] != 3:
+        raise ValueError(
+            f"{fname} must hold 3 comma separated coordinates per line, "
+            f"got {coords.shape[1]}"
         )
-
-    return points
+    return [gc.Point(float(x), float(y), float(z)) for x, y, z in coords]
 
 
 class CusForward:

@@ -6146,7 +6146,6 @@ def atm_pro_from_aeronet(
         / n_sec_day
     )
     day_year_frac = pd_date.day_of_year + day_frac
-    print("day_year_frac =", day_year_frac)
     year = int(pd_date.year)
 
     if isinstance(aod_file, xr.DataArray):

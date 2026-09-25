@@ -4619,17 +4619,6 @@ def _loop_kernel(
             (2, max_hist, _n_cols_hist, n_sensor, n_theta, n_phi),
             dtype=np.float32,
         )
-        _hist_bytes = int(cast('int', tab_hist_tot.nbytes))
-        print(
-            f"[ALIS hist] tabHist allocated — "
-            f"shape: (2, {max_hist:,}, {_n_cols_hist}, {n_sensor}, "
-            f"{n_theta}, {n_phi})  "
-            f"| record: {_n_cols_hist} float32 "
-            f"({n_atm_abs + n_oce_abs} path-lengths + {n_pstk} Stokes "
-            f"+ {n_low} ALIS weights + 7 scalars)  "
-            f"| GPU: {_hist_bytes / 1024**2:.1f} MB  "
-            f"| CPU (on transfer): {_hist_bytes / 1024**2:.1f} MB"
-        )
     else:
         tab_hist_tot = gpuzeros((1), dtype=np.float32)
 

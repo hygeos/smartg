@@ -770,6 +770,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.objects3d.extract_points`: it dropped the first line of
+    coordinates when no blank line followed the comments, misread the
+    numbers written with an exponent, and printed a message and returned
+    no point for a missing file, which now raises a `FileNotFoundError`
+  - `atm_pro_from_aeronet`, the ALIS histories allocation and
+    `generate_h_a` no longer print unconditionally
   - Fix `Smartg.run(cell_proba=...)` given a 2-D array, its documented
     type, which always raised a `ValueError`: the array was compared with
     the string `'auto'`
