@@ -1143,6 +1143,10 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix `smartg.objects3d.rotate_vector`, which raised a `NameError` with
+    its default `rotation_order='xyz'` and with every lower case order its
+    docstring shows. The order is read in either case, the default is
+    `'XYZ'`, and an unknown order raises a `ValueError`
   - Fix `BandSet`, and so the `wavelength` of `Smartg.run`, `Atm1D.calc`
     and `Water1D.calc`, which refused an integer, a NumPy integer or
     `float32` scalar, a tuple or a DataArray with a bare `AssertionError`.

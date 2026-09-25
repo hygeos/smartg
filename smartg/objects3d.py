@@ -2227,7 +2227,7 @@ def rotate_vector(
     rot_x: float,
     rot_y: float,
     rot_z: float,
-    rotation_order: str = "xyz",
+    rotation_order: str = "XYZ",
 ) -> gc.Vector:
     """Rotate a vector by angles about the x, y and z axes.
 
@@ -2245,17 +2245,24 @@ def rotate_vector(
     rot_x, rot_y, rot_z : float
         Rotations about x, y and z, in degrees.
     rotation_order : str, optional
-        Order of the rotations, e.g. 'xyz' or 'zxy'.
+        Order of the rotations, e.g. 'XYZ' or 'ZXY', in upper or lower
+        case. Default: 'XYZ'.
 
     Returns
     -------
     gc.Vector
         The rotated, normalized direction.
+
+    Raises
+    ------
+    ValueError
+        If rotation_order is not a permutation of 'XYZ'.
     """
     tt = gc.Transform()
     tr_x = gc.get_rotate_x_tf(rot_x)
     tr_y = gc.get_rotate_y_tf(rot_y)
     tr_z = gc.get_rotate_z_tf(rot_z)
+    rotation_order = rotation_order.upper()
     if rotation_order == "XYZ":
         tt = tr_x * tr_y * tr_z
     elif rotation_order == "XZY":
@@ -2269,7 +2276,10 @@ def rotate_vector(
     elif rotation_order == "ZYX":
         tt = tr_z * tr_y * tr_x
     else:
-        raise NameError("Unknown rotation_order value!")
+        raise ValueError(
+            f"Unknown rotation_order {rotation_order!r}: expected a "
+            "permutation of 'XYZ'"
+        )
     rotated_vector = tt(vector)
     rotated_vector = gc.Vector(gc.normalize(rotated_vector))
 
