@@ -1171,9 +1171,11 @@ class Smartg:
             The total number of photons used for the simulation. Default
             1e9.
         depol : float, optional
-            The Rayleigh depolarization factor (air). Default 0.0279.
+            The Rayleigh depolarization factor (air), positive or zero.
+            Default 0.0279.
         depol_water : float, optional
-            The Rayleigh depolarization factor (water). Default 0.0906.
+            The Rayleigh depolarization factor (water), positive or
+            zero. Default 0.0906.
         th_deg : float, optional
             The sun/viewing zenith angle in forward/backward mode, in
             degrees. This parameter is ignored if the parameter `sensor`
@@ -1458,6 +1460,12 @@ class Smartg:
             raise ValueError(
                 "Ocean + spherical atm is not allowed! Still in progress..."
             )
+
+        for name, value in (('depol', depol), ('depol_water', depol_water)):
+            if value < 0:
+                raise ValueError(
+                    f"{name} must be positive or zero, got {value}"
+                )
 
         if output_layers not in (np.arange(9, dtype=np.int32) - 1):
             raise ValueError(
@@ -3347,8 +3355,10 @@ def _isotropic(
     """
     Build the isotropic phase-function lookup table.
 
-    Computes a uniform phase matrix with cumulative distribution
-    function sampling over scattering angles.
+    Computes the phase matrix of an isotropic scattering, which does
+    not polarize: F11 = 1 and the other terms zero in the IQUV
+    convention, that is P11 = P12 = P22 = 1/2 and P33 = P43 = P44 = 0
+    in the Iparallel/Iperpendicular one of the kernel.
 
     Parameters
     ----------
@@ -3357,6 +3367,9 @@ def _isotropic(
         In CUDA, phase values are sampled over this angular
         discretization. A finer angular discretization improves sampling
         precision but increases GPU memory usage.
+    ang_a : ndarray, optional
+        Scattering angle grid in radians. Unused: the matrix is the
+        same at every angle.
 
     Returns
     -------
@@ -3364,34 +3377,11 @@ def _isotropic(
         Array of shape ``(n_theta,)`` and dtype ``TYPE_PHASE``. Contains
         the isotropic phase-function lookup table ready to be indexed by
         phase lookup routines.
-
-    Warnings
-    --------
-    This function has not been validated yet.
     """
     phase_host = np.zeros(n_theta, dtype=TYPE_PHASE, order='C')
-    angles = np.linspace(
-        0.0, pi, int(n_theta), endpoint=True, dtype=np.float64
-    )
-    norm = 0.5
-    phase = np.zeros((4, n_theta), dtype='float64')
-    phase[0, :] = 0.5 / norm
-    phase[1, :] = 0.5 / norm
-    phase[2, :] = 0.5 / norm
-    phase[3, :] = 0.5 / norm
-
-    ang = _uniform_angles(n_theta) if ang_a is None else ang_a
-    f1 = interp1d(angles, phase[0, :])
-    f2 = interp1d(angles, phase[1, :])
-    f3 = interp1d(angles, phase[2, :])
-    f4 = interp1d(angles, phase[3, :])
-
-    # parameters equally spaced in scattering angle [0, 180]
-    phase_host['a_P11'][:] = f1(ang)  # I par P11
-    phase_host['a_P22'][:] = f2(ang)  # I per P22
-    phase_host['a_P33'][:] = f3(ang)  # U P33
-    phase_host['a_P43'][:] = f4(ang)  # V P43
-    phase_host['a_P44'][:] = f3(ang)  # V P44=P33
+    phase_host['a_P11'][:] = 0.5
+    phase_host['a_P12'][:] = 0.5
+    phase_host['a_P22'][:] = 0.5
 
     return phase_host
 
@@ -3721,8 +3711,7 @@ def _calc_phase_host(
         phase_host[0, :] = _rayleigh(
             n_theta, depol, polarization=polarization, ang_a=ang_a
         )
-    # no polarization switch in isotropic because the function needs
-    # first to be corrected
+    # no polarization switch in isotropic, which does not polarize
     else:
         phase_host[0, :] = _isotropic(n_theta, ang_a=ang_a)
     if 'theta_' + kind in profile.coords:

@@ -1015,6 +1015,12 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix `Smartg.run` with a negative `depol` or `depol_water`, an
+    undocumented switch to an unvalidated "isotropic" molecular phase
+    matrix, which kept Q and multiplied U and V by sqrt(2) at every
+    scattering: both now raise a `ValueError`. The isotropic matrix of the
+    internal phase tables now keeps the intensity and does not polarize.
+    The error was already in v1.2.0
   - Fix the `device` parameter of `Smartg`, ignored with `autoinit=False`,
     whose context went to the default device, and, silently, by every
     `autoinit` Smartg after the first of the process, which all run on

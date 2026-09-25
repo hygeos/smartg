@@ -16,6 +16,7 @@ from smartg.smartg import (
     _check_albedo_map_codes,
     _check_forward_raster,
     _impact_init,
+    _isotropic,
 )
 
 
@@ -129,3 +130,16 @@ def test_impact_point_aims_at_the_origin(
         np.cross(to_origin, v), 0.0, atol=1e-5 * np.linalg.norm(to_origin)
     )
     np.testing.assert_allclose(trans, trans_0)
+
+
+def test_isotropic_matrix_does_not_polarize() -> None:
+    """Check the phase matrix of an isotropic scattering.
+
+    In the Iparallel/Iperpendicular convention of the kernel, it turns
+    any Stokes vector into (I/2, I/2, 0, 0): the intensity is kept and
+    the polarization lost.
+    """
+    table = _isotropic(5)
+    for name, value in [("a_P11", 0.5), ("a_P12", 0.5), ("a_P22", 0.5),
+                        ("a_P33", 0.0), ("a_P43", 0.0), ("a_P44", 0.0)]:
+        np.testing.assert_array_equal(table[name], value)

@@ -278,6 +278,8 @@ INVALID_RUNS = [
     ({"cell_proba": "automatic"}, ValueError, "unknown cell_proba"),
     ({"cell_proba": "auto"}, ValueError, "forward thermal"),
     ({"cell_proba": np.zeros((3, 5))}, ValueError, "one column"),
+    ({"depol": -1.0}, ValueError, "depol must be positive"),
+    ({"depol_water": -1.0}, ValueError, "depol_water must be positive"),
 ]
 
 
@@ -287,7 +289,7 @@ INVALID_RUNS = [
     ids=[
         "flux", "flux-le", "alis", "environment", "wavelength_proba",
         "sensor_proba", "cell_proba-name", "cell_proba-auto",
-        "cell_proba-shape",
+        "cell_proba-shape", "depol", "depol_water",
     ],
 )
 def test_run_invalid(
