@@ -662,3 +662,25 @@ def test_rough_mirror_back_face_reflects(sg: Smartg) -> None:
     ds = _run_ff(sg, [plane, receiver], _transparent(), 0.012)
     power = ds["cat_irr"].values[0]
     assert 0.95 * projected < power < 1.005 * projected
+
+
+@pytest.mark.parametrize("beer", [0, 1])
+def test_direct_sun_on_a_receiver_in_absorbing_air(
+    sg: Smartg, beer: int
+) -> None:
+    """The direct sun reaches a receiver attenuated by exp(-tau).
+
+    With either treatment of the absorption. With beer=0 a photon
+    reaching an object before any collision was still multiplied by
+    the single scattering albedo of its layer, 0.81 at the ground in
+    this urban aerosol.
+    """
+    atmosphere = Atm1D("afglt", comp=[AerOPAC("urban", 0.5, 550.0)])
+    od = atmosphere.calc(550.0)["OD_atm"].values.ravel()[-1]
+    half = 0.002
+    receiver = _receiver(half, (0.0, 0.0, 0.0))
+    ds = _run_ff(sg, [receiver], atmosphere, 4 * half, beer=beer)
+    area = (2 * half * 1e3) ** 2
+    np.testing.assert_allclose(
+        ds["cat_irr"].values[1], area * np.exp(-od), rtol=0.015
+    )

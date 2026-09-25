@@ -1143,6 +1143,12 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the 3D objects with `beer=0` in an absorbing atmosphere: a photon
+    reaching an object before any collision was still multiplied by the
+    single scattering albedo of its layer, the survival factor of a
+    collision, so that every object hit was too weak by that factor (0.81
+    at the ground in an urban aerosol), and a heliostat to receiver path
+    by its square
   - Fix the reflection on the back face of an object and on a sphere. The
     front material of a `Spheric` entity was never used, its base normal
     being left at zero: every hit took its back material, and a sphere

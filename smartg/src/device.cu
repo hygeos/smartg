@@ -3750,8 +3750,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			if (tauHit < tauR)
 			{
 				ph->layer = ilayer2;
-				if (BEERd == 0) ph->weight *= prof_atm[ph->layer+ph->ilam*(NATMd+1)].ssa;
-				else
+				// With BEERd == 0 the photon reached the object before a
+				// collision, so without the survival factor ssa of one
+				if (BEERd == 1)
 				{ // We compute the cumulated absorption OT at the new postion of the photon
 					// see move photon paper eq 11
 					// The fraction of the layer above the hit, from its
