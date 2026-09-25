@@ -1055,7 +1055,9 @@ final `v2.0.0` release.
     layout: it resampled every entry of the file before interpolating at
     `wavelength_phase` and `z_rh_reff`, 8.8 GB for the IPRT ice cloud file
     at the default angles. Only the entries around the targets are
-    resampled now, with the same result
+    resampled now, with the same result; a `z_rh_reff` outside the radii
+    or humidities of the file raises a `ValueError` giving its range, as
+    a `wavelength_phase` does
   - Fix the panel titles of `smartg.view.compare`, garbled since
     v2.0.0dev1 (`$^{\downarrow}_{}I$` for `I_up (TOA)`): they are built
     from the compared variable again, for instance `$I^{\uparrow}_{TOA}$`

@@ -157,6 +157,43 @@ def test_cdf_refuses_a_wavelength_outside_the_file(
         read_phase_cdf(DESERT_CDF, wavelength_phase=wavelength_phase)
 
 
+@pytest.mark.parametrize(
+    ("z_rh_reff", "pfgrid"),
+    [(100.0, None), (0.01, None), ([30.0, 40.0], [5.0, 2.0, 0.0])],
+    ids=["above", "below", "profile-above"],
+)
+def test_cdf_refuses_a_radius_outside_the_file(
+    z_rh_reff: float | list[float], pfgrid: list[float] | None
+) -> None:
+    """Check that a radius outside the file raises, not the end one.
+
+    Only the entries around the targets are resampled: targets all
+    beyond one end kept that end alone, which was then used without
+    interpolation, so without its bounds error.
+    """
+    with pytest.raises(ValueError, match="1 to 25"):
+        read_phase_cdf(
+            WC_CDF, n_theta=181, z_rh_reff=z_rh_reff, pfgrid=pfgrid
+        )
+
+
+def test_cdf_takes_the_radii_at_the_ends_of_the_file() -> None:
+    """Check that the first and last radii of the file work."""
+    table = read_phase_cdf(
+        WC_CDF, n_theta=181, output_sg_ready=False, normalize=False
+    )
+    profile = read_phase_cdf(
+        WC_CDF, n_theta=181, z_rh_reff=[1.0, 25.0], pfgrid=[5.0, 2.0, 0.0],
+        normalize=False,
+    )
+    np.testing.assert_array_equal(
+        profile.values[:, 0], table.sel(reff=1.0).values
+    )
+    np.testing.assert_array_equal(
+        profile.values[:, 1], table.sel(reff=25.0).values
+    )
+
+
 def test_cdf_takes_the_wavelengths_at_the_ends_of_the_file() -> None:
     """Check that the first and last wavelengths of the file work."""
     profile = read_phase_cdf(

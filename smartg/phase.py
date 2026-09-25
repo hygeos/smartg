@@ -1089,18 +1089,27 @@ def _normalize_p11(
             data[i_wavelength, irhreff, :, :] *= 2.0 / abs(norm)
 
 
-def _wavelength_in_file(
-    wavelength_file: NDArray[np.floating[Any]],
-    wavelength_phase: NDArray[np.float32],
+def _in_file_range(
+    values: NDArray[np.floating[Any]],
+    targets: NDArray[np.floating[Any]],
+    name: str,
+    axis: str,
+    unit: str = "",
 ) -> NDArray[np.float64]:
-    """Return the wavelength targets, checked against the file range.
+    """Return the targets of an axis, checked against the file range.
 
     Parameters
     ----------
-    wavelength_file : ndarray
-        Wavelengths of the phase file, in nm.
-    wavelength_phase : ndarray
-        Wavelengths to interpolate the phase matrix at, in nm.
+    values : ndarray
+        Values of the axis in the phase file.
+    targets : ndarray
+        Values to interpolate the phase matrix at.
+    name : str
+        Name of the argument giving the targets, for the message.
+    axis : str
+        Name of the axis, for the message.
+    unit : str, optional
+        Unit of the axis, for the message.
 
     Returns
     -------
@@ -1111,20 +1120,35 @@ def _wavelength_in_file(
     Raises
     ------
     ValueError
-        If a target is outside the wavelength range of the file,
-        where the interpolation would give NaN.
+        If a target is outside the range of the file, where the
+        interpolation would give NaN or a bounds error.
     """
-    lo = float(np.min(wavelength_file))
-    hi = float(np.max(wavelength_file))
+    lo = float(np.min(values))
+    hi = float(np.max(values))
     tol = 1e-6 * max(abs(lo), abs(hi))
-    targets = wavelength_phase.astype(np.float64)
+    targets = np.asarray(targets, dtype=np.float64)
     outside = targets[(targets < lo - tol) | (targets > hi + tol)]
     if outside.size:
         raise ValueError(
-            f"wavelength_phase {outside.tolist()} is outside the "
-            f"wavelength range of the phase file, {lo:g} to {hi:g} nm."
+            f"{name} {outside.tolist()} is outside the {axis} range of "
+            f"the phase file, {lo:g} to {hi:g}{unit}."
         )
     return np.clip(targets, lo, hi)
+
+
+def _wavelength_in_file(
+    wavelength_file: NDArray[np.floating[Any]],
+    wavelength_phase: NDArray[np.float32],
+) -> NDArray[np.float64]:
+    """Return the wavelength targets, checked against the file range.
+
+    See `_in_file_range`, whose `values` and `targets` are here
+    `wavelength_file` and `wavelength_phase`, in nm.
+    """
+    return _in_file_range(
+        wavelength_file, wavelength_phase, "wavelength_phase",
+        "wavelength", " nm",
+    )
 
 
 def _bracketing_indices(
@@ -1153,7 +1177,7 @@ def _to_profile_layout(
     rh_or_reff: str,
     wavelength_phase: NDArray[np.float32] | None,
     pfgrid: NDArray[np.float32] | None,
-    z_rh_reff: NDArray[np.float32] | None,
+    z_rh_reff: NDArray[np.floating[Any]] | None,
 ) -> xr.DataArray:
     """Lay a phase table on the profile.
 
@@ -1430,7 +1454,13 @@ def read_phase_cdf(
                 _wavelength_in_file(wavelength, wavelength_phase),
             )
         index_rh_reff = np.arange(n_rh_reff)
-        if n_rh_reff > 1:
+        if n_rh_reff > 1 and z_rh_reff is not None:
+            # checked here, as only the entries around the targets are
+            # kept: beyond the axis, a single entry would be kept and
+            # used without interpolation
+            z_rh_reff = _in_file_range(
+                rh_reff, z_rh_reff, "z_rh_reff", rh_or_reff
+            )
             index_rh_reff = _bracketing_indices(rh_reff, z_rh_reff)
         ds = ds.isel({
             ds["wavelen"].dims[0]: index_wavelength,
