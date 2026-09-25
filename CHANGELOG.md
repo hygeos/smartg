@@ -442,6 +442,11 @@ final `v2.0.0` release.
     `int64`, an unknown `cell_proba` string, `cell_proba='auto'` outside
     the forward thermal mode and a `cell_proba` array without one column
     per wavelength. Some were assertions, the others went unnoticed
+  - `smartg.kdis` raises a `FileNotFoundError` for a missing file and a
+    `ValueError` for an unsorted or incompatible table, where it printed
+    the problem and called `sys.exit()`, which also shut down the Jupyter
+    kernel. An h5 file with unsorted wavelengths claimed that the h5
+    format was not implemented for concentration dependent species
   - The declared dependencies have been trimmed and bounded. `pyarrow`,
     `pyhdf` and `statsmodels` are no longer declared, as no module nor
     notebook imports them (`pyhdf` still comes in as a dependency of

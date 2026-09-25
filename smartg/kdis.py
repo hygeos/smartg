@@ -35,7 +35,6 @@ kdis_avg_emission
 from __future__ import annotations
 
 import glob
-import sys
 import warnings
 from collections.abc import Iterator, Sequence
 from itertools import product
@@ -574,9 +573,7 @@ class Kdis:
         if format == "ascii":
             fname = dir_data / f"kdis_{model}_def.dat"
             if not fname.is_file():
-                print("(kdis_coef) ERROR")
-                print("            Missing file:", fname)
-                sys.exit()
+                raise FileNotFoundError(f"missing KDIS file {fname}")
             with open(fname, "r") as definition_file:
                 skip_comment(definition_file)
                 line = definition_file.readline()
@@ -624,12 +621,10 @@ class Kdis:
                         and self.wvlband[0, wavelength_index]
                         < self.wvlband[0, wavelength_index - 1]
                     ):
-                        print(" kdis_coeff ERROR")
-                        print(
-                            "            wavelengths must be sorted in "
-                            "increasing order"
+                        raise ValueError(
+                            "the KDIS wavelengths must be sorted "
+                            "in increasing order"
                         )
-                        sys.exit()
                 skip_comment(definition_file)
                 line = definition_file.readline()
                 skip_comment(definition_file)
@@ -641,12 +636,10 @@ class Kdis:
                     if (pressure_index > 0
                             and self.p[pressure_index]
                             < self.p[pressure_index - 1]):
-                        print(" kdis_coeff ERROR")
-                        print(
-                            "            pressure must be sorted in "
-                            "increasing order"
+                        raise ValueError(
+                            "the KDIS pressure must be sorted "
+                            "in increasing order"
                         )
-                        sys.exit()
                 skip_comment(definition_file)
                 line = definition_file.readline()
                 skip_comment(definition_file)
@@ -660,12 +653,10 @@ class Kdis:
                         and self.t[temperature_index]
                         < self.t[temperature_index - 1]
                     ):
-                        print(" kdis_coeff ERROR")
-                        print(
-                            "            temperature must be sorted in "
-                            "increasing order"
+                        raise ValueError(
+                            "the KDIS temperature must be sorted "
+                            "in increasing order"
                         )
-                        sys.exit()
                 if self.nsp_c > 0:
                     skip_comment(definition_file)
                     line = definition_file.readline()
@@ -680,12 +671,10 @@ class Kdis:
                             and self.c[concentration_index]
                             < self.c[concentration_index - 1]
                         ):
-                            print(" kdis_coeff ERROR")
-                            print(
-                                "            concentration must be sorted in "
-                                "increasing order"
+                            raise ValueError(
+                                "the KDIS concentration must be sorted "
+                                "in increasing order"
                             )
-                            sys.exit()
             if self.nsp > 0:
                 self.nai = np.zeros((self.nsp, self.nwvl), dtype="int")
                 self.ki = np.zeros(
@@ -711,9 +700,7 @@ class Kdis:
                     / f"kdis_{model}_{self.species[species_index]}.dat"
                 )
                 if not fname.is_file():
-                    print("(kdis_coef) ERROR")
-                    print("            Missing file:", fname)
-                    sys.exit()
+                    raise FileNotFoundError(f"missing KDIS file {fname}")
                 with open(fname, "r") as species_file:
                     skip_comment(species_file)
                     for wavelength_index in range(self.nwvl):
@@ -759,9 +746,7 @@ class Kdis:
                     / f"kdis_{model}_{self.species_c[species_index]}.dat"
                 )
                 if not fname.is_file():
-                    print("(kdis_coef) ERROR")
-                    print("            Missing file:", fname)
-                    sys.exit()
+                    raise FileNotFoundError(f"missing KDIS file {fname}")
                 with open(fname, "r") as species_file:
                     skip_comment(species_file)
                     for wavelength_index in range(self.nwvl):
@@ -805,9 +790,7 @@ class Kdis:
             if not fname.is_file():
                 fname = dir_data / f"solrad_kdis_{model}_thuillier2003.dat"
                 if not fname.is_file():
-                    print("(kdis_coef) ERROR")
-                    print("            Missing file:", fname)
-                    sys.exit()
+                    raise FileNotFoundError(f"missing KDIS file {fname}")
             with open(fname, "r") as solar_file:
                 skip_comment(solar_file)
                 line = solar_file.readline()
@@ -815,8 +798,10 @@ class Kdis:
                 line = solar_file.readline()
                 band_count = float(line.split()[0])
                 if band_count != self.nwvl:
-                    print(" solar flux and kdis have uncompatible band number")
-                    sys.exit()
+                    raise ValueError(
+                        f"the KDIS solar flux file has {band_count:g} bands, "
+                        f"the KDIS model {self.nwvl}"
+                    )
                 skip_comment(solar_file)
                 self.solarflux = np.zeros(self.nwvl)
                 skip_comment(solar_file)
@@ -890,34 +875,27 @@ class Kdis:
                     self.c_desc = str(concentration_description)
                 self.nc = len(self.c)
                 if not is_sorted(self.c):
-                    print(" kdis_coeff ERROR")
-                    print(
-                        "            concentration must be sorted in "
-                        "increasing order"
+                    raise ValueError(
+                        "the KDIS concentration must be sorted "
+                        "in increasing order"
                     )
-                    sys.exit()
             else:
                 self.c_desc = "none"
             if not is_sorted(self.wvlband[0, :]):
-                print(" kdis_coeff ERROR")
-                print(
-                    "            (h5 format) read NOT implemented for "
-                    "concentration dependent species"
+                raise ValueError(
+                    "the KDIS wavelengths must be sorted "
+                    "in increasing order"
                 )
-                sys.exit()
             if not is_sorted(self.p):
-                print(" kdis_coeff ERROR")
-                print(
-                    "            pressure must be sorted in increasing order"
+                raise ValueError(
+                    "the KDIS pressure must be sorted "
+                    "in increasing order"
                 )
-                sys.exit()
             if not is_sorted(self.t):
-                print(" kdis_coeff ERROR")
-                print(
-                    "            temperature must be sorted in increasing "
-                    "order"
+                raise ValueError(
+                    "the KDIS temperature must be sorted "
+                    "in increasing order"
                 )
-                sys.exit()
             if self.nsp > 0:
                 self.nai = np.zeros((self.nsp, self.nwvl), dtype="int")
                 self.ki = np.zeros(

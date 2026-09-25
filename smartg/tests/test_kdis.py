@@ -1,12 +1,20 @@
 """Focused unit tests for KDIS channel utilities."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import numpy as np
+import pytest
 import xarray as xr
 
-from smartg.kdis import KdisIband, KdisIbandList, kdis_emission, reduce_kdis
+from smartg.kdis import (
+    Kdis,
+    KdisIband,
+    KdisIbandList,
+    kdis_emission,
+    reduce_kdis,
+)
 
 
 def _iband(**fields: Any) -> KdisIband:
@@ -116,3 +124,9 @@ def test_kdis_emission_returns_xarray_data_array() -> None:
     )
     np.testing.assert_array_equal(emission.z_atm.to_numpy(), [0.0, 1000.0])
     assert emission.shape == (3, 2)
+
+
+def test_missing_model_raises(tmp_path: Path) -> None:
+    """A missing KDIS file raises instead of exiting the interpreter."""
+    with pytest.raises(FileNotFoundError, match="kdis_nomodel_def.dat"):
+        Kdis("nomodel", dir_data=tmp_path)
