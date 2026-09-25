@@ -1009,6 +1009,10 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix `refractivity`, which took the pressure in hPa instead of Pa in
+    the leading factor of the Edlén equation: `n_atm - 1` was 100 times
+    too small, so that the runs with `refraction=True` hardly refracted.
+    Their results change
   - Fix `smartg.objects3d.extract_points`: it dropped the first line of
     coordinates when no blank line followed the comments, misread the
     numbers written with an exponent, and printed a message and returned

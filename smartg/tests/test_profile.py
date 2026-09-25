@@ -8,7 +8,13 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from smartg.atmosphere import AerOPAC, Atm1D, Cloud
+from smartg.atmosphere import (
+    AerOPAC,
+    Atm1D,
+    Cloud,
+    n_air_co2,
+    refractivity,
+)
 
 Wavelength = float | list[float] | NDArray[np.float64]
 
@@ -111,3 +117,22 @@ def test_profile6() -> None:
         grid=[100, 20, 0.0],
         comp=[AerOPAC("urban", 0.1, 550.0, ssa=[0.76, 0.77, 0.78])],
     ).calc([400.0, 500.0, 600.0])
+
+
+def test_refractivity_of_standard_air() -> None:
+    """Check the refractive index of air at 15 °C and 1013.25 hPa.
+
+    The updated Edlén equation (Birch and Downs 1993) is written so
+    that n - 1 at these standard conditions is the standard value of
+    `n_air_co2`, about 2.78e-4 at 550 nm. A pressure taken in hPa
+    instead of Pa makes it 100 times too small.
+    """
+    n = refractivity(0.55, 1013.25, 288.15, 400.0)
+    assert 2.7e-4 < n[0, 0] - 1.0 < 2.9e-4
+    np.testing.assert_allclose(
+        n - 1.0, n_air_co2(0.55, 400.0) - 1.0, rtol=1e-4
+    )
+    # the profile carries it: the US standard surface is close to
+    # the standard conditions
+    pro = Atm1D("afglus").calc(550.0)
+    assert 2.7e-4 < pro["n_atm"].values[0, -1] - 1.0 < 2.9e-4

@@ -5698,10 +5698,25 @@ def refractivity(
     ndarray
         Refractive index of air at the given conditions, shape (N, M)
 
+    Notes
+    -----
+    The refractivity of standard air (15 °C, 101325 Pa), `n_air_co2`,
+    is scaled to the pressure and temperature with the updated Edlén
+    equation of Birch and Downs [2]_::
+
+        (n - 1)_tp = (n - 1)_s * p * (1 + p (60.1 - 0.972 t) 1e-10)
+                     / (96095.43 (1 + 0.003661 t))
+
+    with p in Pa and t in °C, so that n - 1 equals the standard value
+    at 15 °C and 1013.25 hPa, about 2.78e-4 at 550 nm.
+
     References
     ----------
     .. [1] Edlén, B. (1966). The refractive index of air. Metrologia,
     2(2), 71-80.
+    .. [2] Birch, K. P., & Downs, M. J. (1993). An updated Edlén
+       equation for the refractive index of air. Metrologia, 30(3),
+       155-162.
     """
     wavelength = np.atleast_1d(wavelength)
     p = np.atleast_1d(p)  # input pressure in hPa
@@ -5714,9 +5729,10 @@ def refractivity(
             "Input arrays p, t, and co2 must have the same shape."
         )
 
+    # the equation takes the pressure in Pa, in both of its factors
     p_pa = p * 100.0
     t_c = t - 273.15
-    ntp = 1 + (n_air_co2(wavelength[:], co2) - 1) * p * (
+    ntp = 1 + (n_air_co2(wavelength[:], co2) - 1) * p_pa * (
         1.0 + p_pa * (60.1 - 0.972 * t_c) * 1e-10
     ) / (96095.43 * (1 + 0.003661 * t_c))
     return ntp
