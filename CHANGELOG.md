@@ -35,12 +35,62 @@ final `v2.0.0` release.
       module, `expand_phase_4_to_6` into `smartg.phase` and the
       `AlbedoLike` alias into `smartg.albedo`
   - The `visualizegeo` module has been renamed to `smartg.objects3d`, with
-    PEP 8 function names (`findRots` → `find_rots`,
-    `generateMTF` → `generate_mtf`, `generateLEfH` → `generate_le_h`,
-    `generateBox` → `generate_box`, `generateHfP` → `generate_h_p`,
-    `generateHfA` → `generate_h_a`, `Ref_Fresnel` → `ref_fresnel`,
-    `convertLGtoLE` → `convert_lg_to_le`, ...); `visualize_entity` has been
-    moved to the view module
+    PEP 8 names:
+    - functions: `findRots` → `find_rots`, `generateMTF` →
+      `generate_mtf`, `generateLEfH` → `generate_le_h`, `generateBox` →
+      `generate_box`, `generateHfP` → `generate_h_p`, `generateHfA` →
+      `generate_h_a`, `Ref_Fresnel` → `ref_fresnel`, `convertLGtoLE` →
+      `convert_lg_to_le` and `extractPoints` → `extract_points`;
+      `visualize_entity`, `receiver_view`, `cat_view` and `nopt_view`
+      have been moved to the view module
+    - the classes keep their names, not their parameters and
+      attributes: `Transformation`: `rotationOrder` → `rotation_order`
+      (attribute `rotOrder` → `rot_order`); `Entity`: `TC` → `tc`,
+      `materialAV` → `material_front`, `materialAR` → `material_back`,
+      `bboxGPmin` / `bboxGPmax` → `bbox_pmin` / `bbox_pmax`, parameters
+      and attributes alike; `GroupE`: `LE` → `entities`, `BBOX` →
+      `bbox`, and the `bboxGPmin` / `bboxGPmax` attributes →
+      `bbox_pmin` / `bbox_pmax`; `Heliostat`: `POS` → `pos`, `SPX` /
+      `SPY` → `n_facets_x` / `n_facets_y`, `HSX` / `HSY` →
+      `helio_size_x` / `helio_size_y`, `CURVE_FL` →
+      `curve_focal_length`, `REF` → `reflectivity`, `ROUGH` →
+      `roughness`, and the `sPx` / `sPy` / `hSx` / `hSy` / `curveFL`
+      attributes → `n_facets_x` / `n_facets_y` / `helio_size_x` /
+      `helio_size_y` / `curve_focal_length`
+    - the parameters of the functions, in the same order: `find_rots`:
+      `UI` / `UO` / `vecNF` → `dir_in` / `dir_out` / `normal`;
+      `generate_mtf` and `generate_le_h`: `HELIO` → `heliostat`, `PR` →
+      `receiver_pos`, `THEDEG` / `PHIDEG` → `theta_deg` / `phi_deg`,
+      `MTF` → `facet_transforms`; `generate_box`: `dimXYZ` →
+      `dim_xyz`, `matAV` → `material_front`, `ref` → `reflectivity`,
+      `rough` → `roughness`, `rotZ` → `rot_z`; `ref_fresnel`:
+      `dirEnt` / `geoTrans` → `dir_in` / `geo_transform`;
+      `generate_h_p` and `generate_h_a`: `THEDEG` / `PHIDEG` →
+      `theta_deg` / `phi_deg`, `PH` → `heliostat_pos_list`, `PR` →
+      `receiver_pos`, `MINANG` / `MAXANG` / `GAPDEG` → `min_ang_deg` /
+      `max_ang_deg` / `gap_ang_deg`, `FDRH` → `first_dist`, `NBH` →
+      `n_heliostats`, `GAPDIST` → `gap_dist`, `HSX` / `HSY` →
+      `helio_size_x` / `helio_size_y`, `PILLH` → `pillar_height`,
+      `REF` → `reflectivity`, `ROUGH` → `roughness`, `HTYPE` →
+      `heliostat_type`, `LMTF` → `facet_transforms_list`, `RLPH` →
+      `return_positions`; `convert_lg_to_le`: `LGOBJ` → `obj_list`;
+      `rotate_vector`: `rot_order` → `rotation_order`;
+      `interpolate_refls_from_wls`: `wls` / `refls` / `wls_new` →
+      `wavelengths` / `reflectivities` / `new_wavelengths`;
+      `is_comment`: `s` → `line`
+    - the parameters of the functions moved to the view module, in the
+      same order: `visualize_entity`: `ENTITY` → `entities`, `THEDEG` /
+      `PHIDEG` → `theta_deg` / `phi_deg`, `PLANEDM` → `draw_method`,
+      `RAYCOLOR` → `ray_color`, `SR_VIEW` → `sr_view`; `receiver_view`:
+      `SMLUT` → `ds_sg_out`, `CAT` → `cat`, `LOG_I` →
+      `log_color_scale`, `NAME_FILE` → `save_path`, `MTOA` → `mtoa`,
+      `VMIN` / `VMAX` → `vmin` / `vmax`, `INT` → `interpolation`,
+      `W_VIEW` → `flux_unit`; `cat_view`: `SMLUT` → `ds`, `MTOA` →
+      `mtoa`, `NCL` → `ncl`, `UNIT` → `output_unit`, `W_VIEW` →
+      `flux_unit`, `M_VIEW` → `length_unit`, `PRINT` →
+      `print_results`, `ACC` → `accuracy`; `nopt_view`: `SMLUT` →
+      `ds`, `BACK` → `back`, `ACC` → `acc`, `NCL` → `ncl`, `fl_TOA` →
+      `mtoa`, `NAATM` → `natm_approx`
   - PEP 8 renames of the spectral and utility modules:
     - kdis: `KDIS` → `Kdis`, `KDIS_BAND` → `KdisBand`,
       `KDIS_IBAND` → `KdisIband`, `KDIS_IBAND_LIST` → `KdisIbandList`,
@@ -58,7 +108,9 @@ final `v2.0.0` release.
       `epsilon_air`, `f0_N2` / `f0_O2` → `f0_n2` / `f0_o2`, `K` → `k_ratio`
     - cdf: `ICDF` → `icdf`, `ICDF2D` → `icdf_2d`
     - progress: `Progress` → `progress`, `Progress_notebook` →
-      `ProgressNotebook`, `Progress_invisible` → `ProgressInvisible`, ...
+      `ProgressNotebook`, `Progress_invisible` → `ProgressInvisible`,
+      `Progress_progressbar` → `ProgressProgressbar` and
+      `Progress_progressbar2` → `ProgressProgressbar2`
     - albedo: `Albedo_cst` → `AlbedoCst`, `Albedo_speclib` →
       `AlbedoSpeclib`, `Albedo_spectrum` → `AlbedoSpectrum`,
       `Albedo_map` → `AlbedoMap`
@@ -68,16 +120,43 @@ final `v2.0.0` release.
       `convert_sgout_to_iprtout`, `compute_deltam_IPRTout` →
       `compute_deltam_iprtout`, `groupIQUV` → `group_iquv`,
       `plot_iprt_radiances` → `smartg.view.plot_iquv_comparison`, and
-      their keyword arguments (`lSZA` → `szas`, `lI` → `i_list`, ...);
-      in `smartg.iprt.phase3`, `case_D1` ... `case_E6_v3` →
-      `case_d1` ... `case_e6_v3`, the parameters of `plot_polar_iprt`
-      (`I` → `i`, `change_Q_sign` → `change_q_sign`, `maxI` → `max_i`,
-      `cmapI` → `cmap_i`, `minI` → `min_i`, ...) and of
-      `plot_camera_iprt` (`I` → `i`, `I_min` → `i_min`, `I_max` →
-      `i_max`, `I_cmap` → `i_cmap`). `run_sim` now takes the paths of
-      the BOA and TOA runs, None skipping a run, instead of the
-      overwrite flag and the existence of the files, and it and the
-      `get_*_sensors` helpers no longer take `nvza` and `nvaa`
+      their keyword arguments:
+      - `select_iprt_iquv`: `change_U_sign` → `change_u_sign`,
+        `I_index` → `i_index`
+      - `select_and_plot_polar_iprt`: `change_Q_sign` / `change_U_sign`
+        / `change_V_sign` → `change_q_sign` / `change_u_sign` /
+        `change_v_sign`, `maxI` / `maxQ` / `maxU` / `maxV` → `max_i` /
+        `max_q` / `max_u` / `max_v`, `cmapI` / `cmapQ` / `cmapU` /
+        `cmapV` → `cmap_i` / `cmap_q` / `cmap_u` / `cmap_v`,
+        `forceIQUV` → `force_iquv`, `I_index` → `i_index`,
+        `outputIQUV` → `output_iquv`, `outputIQUVstd` →
+        `output_iquv_std`
+      - `convert_sgout_to_iprtout`: `lm` → `datasets`, `lU_sign` →
+        `u_signs`, `ldepol` → `depols`, `lalt` → `altitudes`, `lSZA` /
+        `lSAA` / `lVZA` / `lVAA` → `szas` / `saas` / `vzas` / `vaas`,
+        `file_name` → `fname`
+      - `compute_deltam_iprtout`: `I_obs_id` / `I_mod_id` →
+        `i_obs_id` / `i_mod_id`
+      - `group_iquv`: `lI` / `lQ` / `lU` / `lV` → `i_list` / `q_list` /
+        `u_list` / `v_list`
+      - `plot_iquv_comparison`: `IQUV_obs` / `IQUV_mod` → `iquv_obs` /
+        `iquv_mod`, `IQUVstd_obs` / `IQUVstd_mod` → `iquv_std_obs` /
+        `iquv_std_mod`, `IQUVyMin` / `IQUVyMax` → `iquv_ymin` /
+        `iquv_ymax`
+      - in `smartg.iprt.phase3`, `case_D1` ... `case_E6_v3` →
+        `case_d1` ... `case_e6_v3`; `plot_polar_iprt`: `I` / `Q` / `U`
+        / `V` → `i` / `q` / `u` / `v`, `minI` → `min_i` and the
+        `change_*_sign`, `max*` and `cmap*` renames of
+        `select_and_plot_polar_iprt`; `plot_camera_iprt`: `I` / `Q` /
+        `U` / `V` → `i` / `q` / `u` / `v`, `I_min` / `I_max` /
+        `I_cmap` → `i_min` / `i_max` / `i_cmap`; `aer2smartg`:
+        `filename` → `fname`. `run_sim` now takes the paths of the BOA
+        and TOA runs, None skipping a run, instead of the overwrite flag
+        and the existence of the files; it no longer takes `phi`, it and
+        the `get_*_sensors` helpers no longer take `nvza` and `nvaa`,
+        and its `nphotons`, `wl`, `surf`, `dep` and `ntheta` parameters
+        are now `n_photons`, `wavelength`, `surface`, `depol` and
+        `n_icdf`
     - histories: `Si` → `si`, `Si2` → `si2`, `BigSum` → `big_sum`, and
       their parameters (`Dij` → `dij`, `Ki` → `ki`, `S` → `s`,
       `only_I` → `only_i`); the `LEVEL` and `IDIR` parameters of
@@ -141,11 +220,13 @@ final `v2.0.0` release.
     has been moved to `smartg/obselete_files/`
   - `saturation_pressure` now returns Pa instead of hPa
   - The internal data structures have been migrated from the legacy
-    LUT/MLUT objects to xarray across the package (atmosphere, smartg,
-    water, reptran, postprocess, views); the new `smartg.xarray` module
-    provides `dataarray_to_lut` / `dataset_to_mlut` converters for
-    backward compatibility, and `drop_axes`, the equivalent of the
-    `MLUT.dropaxis` method
+    LUT/MLUT objects to xarray in most of the package (atmosphere,
+    smartg, water, reptran, postprocess, views); the albedo classes
+    (their `data` and `map` attributes) and the solar spectrum returned
+    by `smartg.bandset.spectral_grids` are still LUTs. The new
+    `smartg.xarray` module provides `dataarray_to_lut` /
+    `dataset_to_mlut` converters for backward compatibility, and
+    `drop_axes`, the equivalent of the `MLUT.dropaxis` method
   - The tracked notebooks and tests no longer use LUT/MLUT either: the
     demo notebook selects and plots straight from the run Dataset
     instead of converting it back with `dataset_to_mlut`, and the phase
@@ -163,9 +244,10 @@ final `v2.0.0` release.
     `NameError` on invalid inputs
   - The `phase` module has been moved from `smartg/tools/` to `smartg/`
     -> import from `smartg.phase` instead of `smartg.tools.phase`
-  - The `read_phase`, `read_phase_dat`, `read_phase_nc`, `read_phase_cdf` and
-    `convert_phase_to_iparper` functions have been moved from `smartg.atmosphere`
-    to `smartg.phase`
+  - `read_phase` and `convert_phase_to_iparper` (formerly
+    `pha2Iparperconv`) have been moved from `smartg.atmosphere` to
+    `smartg.phase`, where the new `read_phase_dat`, `read_phase_nc` and
+    `read_phase_cdf` readers live too
   - `read_phase_dat`, `read_phase_nc` and `read_phase_cdf` now always return a
     4-D `xr.DataArray` (dims: `wavelength_phase`, `z_phase`, `nphamat`,
     `theta_atm/oc`). The `nphamat` dimension is no longer squeezed when its
@@ -192,8 +274,9 @@ final `v2.0.0` release.
     and `read_phase_cdf` has been renamed to `fname` (positional usage is
     unaffected, keyword usage must be updated).
   - The `conv_Iparper` parameter has been removed from `AerOPAC.phase()`,
-    `Cloud.phase()` and `Atm1D.calc()`. The IQ → Ipar/Iper conversion is now
-    performed automatically inside the `run()` method (only for atmospheric phases).
+    `Cloud.phase()` and `Atm1D.calc()`. The IQ → Ipar/Iper conversion is
+    now performed automatically inside the `run()` method (only for
+    atmospheric phases).
   - Several functions in `smartg.atmosphere` have been renamed for consistency:
     - `pha2Iparperconv`  → `convert_phase_to_iparper`
     - `BPlanck`          → `blackbody_radiance`
@@ -204,18 +287,39 @@ final `v2.0.0` release.
     - `ma`               → `m_dry_air`
     - `n300` / `n_air`   → `n_air_co2_300` / `n_air_co2`
     - `RH` method        → `relative_humidity`
-  - `atm_pro_from_aeronet` takes `p0`, `o3`, `h2o` and `o3_h2o_alt`
-    (were `P0`, `O3`, `H2O` and `O3_H2O_alt`), and `blackbody_radiance`
-    takes `temperature` (was `T`)
-  - Several functions in `smartg.tools.smartg_view` have been renamed:
-    - `plot_polar_xr`    → `plot_polar`
-    - `transect2D_xr`    → `transect_2d` (via `transect2D`)
-    - `ds_out` parameter → `ds_sg` in `smartg_view`
+  - The Aeronet readers of `smartg.atmosphere` follow PEP 8:
+    `read_Aeronet_AOD` → `read_aeronet_aod`, `read_Aeronet_SSA` →
+    `read_aeronet_ssa` and `read_Aeronet_PFN` → `read_aeronet_pfn`
+    (they now return an `xr.DataArray`, see New features)
+  - `atm_pro_from_aeronet` has been rewritten: `b_wav` →
+    `b_wavelength`, `pfwav` → `wavelength_phase`, `z_profil` → `grid`,
+    `P0` / `O3` / `H2O` / `O3_H2O_alt` → `p0` / `o3` / `h2o` /
+    `o3_h2o_alt`; the `dens` aerosol profile is replaced by the new
+    `h_mix_min`, `h_mix_max` and `z_mix` of the `AerUser` component it
+    builds, and `fill_value_time` is gone. The
+    `atm_pro_from_aeronet_opti` and `atm_pro_from_aeronet_opti2`
+    variants have been removed
+  - `blackbody_radiance` takes `temperature` (was `T`)
+  - Several functions of `smartg.tools.smartg_view` have been renamed or
+    replaced:
+    - `transect2D` → `transect_2d`, which takes an `xr.DataArray`
+    - `plot_polar`, which was the LUT function of `luts` imported there,
+      is now an own function taking an `xr.DataArray`
+    - their parameters follow PEP 8: `mlut` → `ds_sg` (`mref` →
+      `ds_ref` in `compare`, `lut` → `da` in `transect_2d` and
+      `spectrum`), `logI` → `log_i` (in `mdesc` too), `QU` → `qu`,
+      `Circ` → `circ`, `Imin` / `Imax` / `Pmin` / `Pmax` → `i_min` /
+      `i_max` / `p_min` / `p_max` (which the new `interp_dict`
+      parameter of `smartg_view` now precedes), and in `compare`
+      `U_sign` → `u_sign`, `same_U_convention` → `same_u_conv`,
+      `U_symetry` → `u_symetry`, `Nparam` → `nparam`,
+      `same_azimuth_convention` → `same_azi_conv` and `SZA_MAX` →
+      `sza_max`
   - The `smartg.tools.smartg_view` module (then `smartg.smartg_view`) has
     been renamed to `smartg.view`
-  - `smartg_view`, `transect_view`, `spectrum_view`, `profile_view` and `phase_view`
-    now expect an `xr.Dataset` instead of an MLUT (MLUT still accepted with a
-    deprecation warning)
+  - `smartg_view`, `transect_view`, `spectrum_view`, `profile_view` and
+    `phase_view` now expect an `xr.Dataset` instead of an MLUT (MLUT
+    still accepted with a deprecation warning)
   - The `new_atm` parameter of `Atm1D` (formerly `AtmAFGL`) has been removed
   - The 3D atmosphere construction API has been reworked (see New features):
     - The `Atm3D` and `Cloud3D` classes of `smartg.libATM3D` and their
@@ -244,12 +348,15 @@ final `v2.0.0` release.
       - The helpers `OOMFormatter`, `find_order`, `find_order_or_none`,
         `get_tv`, `find_id` and `get_sensors_pos_icells_from_3Dgrid` are now
         private
-    - `Grid3D` and the voxel geometry helpers (`Get_3Dcells`,
-      `locate_voxel_index`, ...) have been moved from `smartg.libATM3D` to the
-      new `smartg.grid3d` module. The helpers are now `get_3d_cells`,
-      `get_3d_cells_indices`, `get_3d_cells_neighbours` and
-      `locate_3d_regular_cells`, with lowercase parameters (`nx`, `ny`,
-      `nz`, `dx`, `dy`, `dz`, `boundary_abs`, `boundary_boa`,
+    - `Grid3D` and the grid helpers of `smartg.libATM3D` (`is_sorted`,
+      `is_same_cell_size`, `create_1d_grid`, `extend_1d_grid`,
+      `Get_3Dcells`, `Get_3Dcells_indices`, `Get_3Dcells_neighbours` and
+      `locate_3Dregular_cells`) have been moved to the new
+      `smartg.grid3d` module, which also holds the new
+      `locate_voxel_index`. The voxel geometry helpers are now
+      `get_3d_cells`, `get_3d_cells_indices`, `get_3d_cells_neighbours`
+      and `locate_3d_regular_cells`, with lowercase parameters (`nx`,
+      `ny`, `nz`, `dx`, `dy`, `dz`, `boundary_abs`, `boundary_boa`,
       `boundary_toa`, `horiz_extent_length`, `sat_altitude`); the
       `Grid3D` attributes keep their names
     - The constant-theta readers `read_cld_nth_cte` of `smartg.libATM3D`
@@ -281,43 +388,58 @@ final `v2.0.0` release.
       computing garbage from that index axis
   - The `Sensor` class, the `get_sensor` function (formerly `Get_Sensor`)
     and the `LOC_CODE` constant have been moved from `smartg.smartg` to the
-    new `smartg.sensor` module; they are still re-exported by
-    `smartg.smartg`, so existing imports keep working. The `type`
-    parameter of `get_sensor` has been renamed to `sensor_type`
+    new `smartg.sensor` module. Only `Sensor` can still be imported from
+    `smartg.smartg`: the imports of `get_sensor` and `LOC_CODE` must be
+    updated. The parameters of `get_sensor` follow PEP 8: `VZA_lev` →
+    `vza_level`, `LEVEL` → `level`, `VAA` → `vaa`, `RTER` →
+    `earth_radius`, `H` → `height_toa`, `FOV` → `fov`, `TYPE` →
+    `sensor_type` and `PP` → `pp`
   - The surface classes `FlatSurface`, `RoughSurface`, `LambSurface`,
     `RTLSSurface`, `RPVSurface` and `Environment` have been moved from
     `smartg.smartg` to the new `smartg.surface` module; they are NOT
-    re-exported by `smartg.smartg`, so imports must be updated. The albedo
-    classes (`AlbedoCst`, ...) are no longer re-exported by `smartg.smartg`
-    either: import them from `smartg.albedo`. The constructor parameters of
-    the surface classes and `Environment` have been renamed to snake case
-    (`WIND` → `wind`, `ALB` → `alb`, `ENV_SIZE` → `env_size`, ...), and the
+    re-exported by `smartg.smartg` (which imports `Environment` for its
+    own use only), so imports must be updated. The albedo classes
+    (`AlbedoCst`, `AlbedoSpeclib`, `AlbedoSpectrum` and `AlbedoMap`) are
+    no longer re-exported by `smartg.smartg` either (which imports
+    `AlbedoMap` for its own use only): import them from
+    `smartg.albedo`. The constructor parameters of the surface classes
+    and `Environment` have been renamed to snake case (`SUR` → `sur`,
+    `NH2O` → `nh2o`, `WIND` → `wind`, `WAVE_SHADOW` → `wave_shadow`,
+    `BRDF` → `brdf`, `SINGLE` → `single`, `ALB` → `alb`, `ENV` → `env`,
+    `ENV_SIZE` → `env_size`, `X0` → `x0`, `Y0` → `y0`, `NENV` → `nenv`,
+    `NXENVMAP` → `nxenvmap` and `NYENVMAP` → `nyenvmap`; those of
+    `RTLSSurface` and `RPVSurface` were already lower case), and the
     `Environment` attributes `NENV`/`NXENVMAP`/`NYENVMAP` are now
     `nenv`/`nxenvmap`/`nyenvmap`
   - The `CusForward` and `CusBackward` launching-mode classes have been
     moved from `smartg.smartg` to `smartg.objects3d`; they are NOT
     re-exported by `smartg.smartg`, so imports must be updated. Their
-    constructor parameters have been renamed to snake case (`CFX` → `cfx`,
-    `LMODE` → `lmode`, `POS` → `pos`, `REC` → `rec`, ...), with
-    `TYPE` → `sampling` (`type` would shadow the builtin)
-    - The `CusBackward` parameters have been renamed further, to spell out
-      what they carry: `pos` → `position`, `thdeg` → `th_deg`,
-      `phdeg` → `ph_deg`, `v` → `normal`, `aldeg` → `receiver_fov`,
-      `rec` → `receiver` and `lmode` → `mode`, which `CusForward` follows
-      (`lmode` → `mode` there too). `normal` also accepts a `Normal` now,
-      converted to a `Vector`
+    constructor parameters have been renamed to snake case, with `TYPE`
+    → `sampling` (`type` would shadow the builtin), and those of
+    `CusBackward` spell out what they carry:
+    - `CusForward`: `CFX` → `cfx`, `CFY` → `cfy`, `CFTX` → `cftx`,
+      `CFTY` → `cfty`, `CFTZ` → `cftz`, `FOV` → `fov`, `TYPE` →
+      `sampling`, `LMODE` → `mode`, `LPH` → `lph` and `LPR` → `lpr`
+    - `CusBackward`: `POS` → `position`, `THDEG` → `th_deg`, `PHDEG` →
+      `ph_deg`, `V` → `normal`, `ALDEG` → `receiver_fov`, `REC` →
+      `receiver`, `TYPE` → `sampling`, `LMODE` → `mode`, `LPH` → `lph`
+      and `LPR` → `lpr`. `normal` also accepts a `Normal` now, converted
+      to a `Vector`
     - The keys of the `dict` attribute of both classes are snake case now,
-      and named after the constructor parameters they carry: `POS` →
-      `position`, `THDEG` → `th_deg`, `PHDEG` → `ph_deg`,
-      `VSUN` → `v_sun`, `SFOV` → `sun_fov`, `ALDEG` → `receiver_fov`,
-      `REC` → `receiver`,
-      `LMODE` → `mode`, `CFX` → `cfx`, `FOV` → `fov`, ..., with
-      `TYPE` → `sampling_code` (it holds the code, not the `sampling`
-      string). The `ALDEG` attribute of the output dataset keeps its name
+      and named after the constructor parameters they carry: `CFX` →
+      `cfx`, `CFY` → `cfy`, `CFTX` → `cftx`, `CFTY` → `cfty`, `CFTZ` →
+      `cftz`, `FOV` → `fov`, `POS` → `position`, `THDEG` → `th_deg`,
+      `PHDEG` → `ph_deg`, `ALDEG` → `receiver_fov`, `REC` →
+      `receiver`, `LMODE` → `mode`, `LPH` → `lph` and `LPR` → `lpr`,
+      with `TYPE` → `sampling_code` (it holds the code, not the
+      `sampling` string); `CusBackward` also has the `v_sun` and
+      `sun_fov` keys of its new parameters. The `ALDEG` attribute of the
+      output dataset keeps its name
   - The parameters of `Smartg` and `Smartg.run` follow PEP 8. Constructor:
     `obj3D` → `obj3d` and `opt3D` → `opt3d`. `run`:
     - `NBPHOTONS` → `n_photons`, `NBLOOP` → `n_loop`,
-      `NBTHETA` → `n_theta`, `NBPHI` → `n_phi`, `NF` → `n_icdf`
+      `NBTHETA` → `n_theta`, `NBPHI` → `n_phi`, `NF` → `n_icdf`,
+      `wl_proba` → `wavelength_proba`
     - `THVDEG` → `th_deg`, `PHVDEG` → `ph_deg`, `SEED` → `seed`,
       `RTER` → `earth_radius`, `DEPO` → `depol`, `DEPO_WATER` → `depol_water`
     - `OUTPUT_LAYERS` → `output_layers`, `XBLOCK` → `xblock`,
@@ -338,20 +460,17 @@ final `v2.0.0` release.
     package, and its `dict` key with it
   - The abbreviated parameters of `Smartg.run` have been given their full
     name: `atm` → `atmosphere`, `surf` → `surface` and `env` → `environment`
-  - The `th_v_deg` and `ph_v_deg` angles of `Smartg.run` are now `th_deg` and
-    `ph_deg`: they are the sun angles in forward mode and the viewing angles
-    in backward mode, so the `v` of the viewing direction did not belong in
-    their name
-  - The `n_f` parameter of `Smartg.run` is now `n_icdf`, after the `icdf` and
-    `icdf_2d` helpers: it is the number of points of the inverted functions
-    it sizes (the phase functions and the wavelength probability)
-  - The `r_r` and `weight_r_r` parameters of `Smartg.run` are now spelled out
-    as `russian_roulette` and `russian_roulette_weight`
+  - `THVDEG` and `PHVDEG` of `Smartg.run` became `th_deg` and `ph_deg`,
+    without the `v` of a viewing direction: they are the sun angles in
+    forward mode and the viewing angles in backward mode
+  - `NF` of `Smartg.run` became `n_icdf`, after the `icdf` and `icdf_2d`
+    helpers: it is the number of points of the inverted functions it
+    sizes (the phase functions and the wavelength probability)
   - The depolarization is spelled `depol` throughout, the physics term and
-    the spelling the `smartg.iprt` modules already used: the `depo` and
-    `depo_water` parameters of `Smartg.run` are now `depol` and
-    `depol_water`, as are the `depo` parameters of the internal
-    `_rayleigh`, `_calc_phase_host` and `_calc_phase_gpu` helpers
+    the spelling the `smartg.iprt` modules already used: `DEPO` and
+    `DEPO_WATER` of `Smartg.run` are now `depol` and `depol_water`, as are
+    the depolarization parameters of the internal `_rayleigh`,
+    `_calc_phase_host` and `_calc_phase_gpu` helpers
   - The `pol_off` parameter of `Smartg.run` has become `polarization`, with
     the opposite meaning and a `True` default: polarized light is considered
     unless `polarization=False` is passed. The `pol_off` parameter of the
@@ -364,20 +483,40 @@ final `v2.0.0` release.
     `Sensor.dict` record and the fields of the `TYPE_SENSOR` numpy dtype
     they fill follow the same naming. The `Sensor` class is now type
     hinted, and its docstring documents every parameter
-  - The internal helpers of the smartg module are now private
-    (`finalize` → `_finalize`, `calc_solid_angles` → `_calc_solid_angles`,
-    `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`,
-    `loop_kernel` → `_loop_kernel`), and its module-level constants follow
-    PEP 8 (`type_Phase` → `TYPE_PHASE`, `type_IObjets` → `TYPE_IOBJECTS`,
-    `dir_src` → `DIR_SRC`, ...); the unused `LOC_CODE`, `get_sensor` and
-    `LUT` re-exports and the unused `src_kernel2` path have been removed
-  - The `change_altitude_grid` external function has been removed (use `str2grid_arr`)
-  - The deprecated `lib3D` module and legacy geometric modules have been removed
-  - Several obsolete utility functions removed: `average`, `isiterable`, `isnumeric`,
-    `vapor_pressure`, `lut_to_xr`, `compare_spectrum`, `convertVtoAngles`,
-    `convertAnglestoV`, `Analyse_create_entity`, `trapzinterp`
-  - The `fournier_forand` function has been removed from `smartg.phase`
-    -> use `pytrunc.phase.fournier_forand` (pytrunc >= 2)
+  - The internal helpers of the smartg module are now private:
+    `finalize` → `_finalize`, `calcOmega` → `_calc_solid_angles`,
+    `isotropic` → `_isotropic`, `rayleigh` → `_rayleigh`, `calculF` →
+    `_calc_phase_gpu`, `InitConst` → `_init_const`, `init_profile` →
+    `_init_profile`, `loop_kernel` → `_loop_kernel`, `get_git_attrs` →
+    `_get_git_attrs`, `impactInit` → `_impact_init`, `init_rng` →
+    `_init_rng`, `RNG_PHILOX` → `_RngPhilox`, `RNG_CURAND_PHILOX` →
+    `_RngCurandPhilox`, `initObj` → `_init_obj`, `normalizeRecIrr` →
+    `_normalize_rec` and `findExtinction` → `_find_extinction`. Its
+    module-level constants follow PEP 8: `dir_src` → `DIR_SRC`,
+    `src_device` → `SRC_DEVICE`, `type_Phase` → `TYPE_PHASE`,
+    `type_Spectrum` → `TYPE_SPECTRUM`, `type_EnvMap` → `TYPE_ENV_MAP`,
+    `type_Profile` → `TYPE_PROFILE`, `type_Cell` → `TYPE_CELL`,
+    `type_Sensor` → `TYPE_SENSOR`, `type_Spectrum_obj` →
+    `TYPE_SPECTRUM_OBJ`, `type_IObjets` → `TYPE_IOBJECTS` and
+    `type_GObj` → `TYPE_GOBJ`. The `LUT` re-export and the unused
+    `src_kernel2` path have been removed
+  - A `grid` given to `Atm1D` as a string is now converted by the new
+    `smartg.atmosphere.strgrid_to_numpy`, whose docstring gives the
+    format, instead of the external `change_altitude_grid` function,
+    which only an unshipped `smartg.tools.third_party_utils` module
+    provided
+  - The unused `lib3D` module, a copy of the 3D grid helpers of
+    `smartg.libATM3D`, has been removed
+  - Several obsolete utility functions removed: `average`, `isiterable`,
+    `isnumeric`, `vapor_pressure` and `trapzinterp` of
+    `smartg.atmosphere`, `compare_spectrum` of `smartg.tools.smartg_view`,
+    and `convertVtoAngles`, `convertAnglestoV`, `Analyse_create_entity`,
+    `random_equal_area_geometries` and `packed_geometries` of
+    `visualizegeo`
+  - The `fournierForand`, `fournierForandB` and `henyeyGreenstein`
+    functions of `smartg.tools.phase` have been removed -> use
+    `pytrunc.phase.fournier_forand` and `pytrunc.phase.henyey_greenstein`
+    (pytrunc >= 2)
   - The `theta_trunc` parameter of `Hydrosol`, `HydrosolPR` and `HydrosolZhai`
     has been replaced by `truncation` (`DMTrunc | GTTrunc | None`): the water
     phase functions are truncated with pytrunc like the atmospheric ones, and
@@ -455,7 +594,8 @@ final `v2.0.0` release.
     now capped at their next major version (`numpy>=2,<3`,
     `jupytext>=1.16,<2`, `geoclide>=4.0.0,<5`, `pytrunc>=2.0.0,<3`,
     `gatiab>=1.1.2,<2`), and the supported Python versions are
-    `>=3.11,<3.15`, which is what the classifiers already announced
+    `>=3.11,<3.15`: Python 3.10, which v1.2.0 supported
+    (`requires-python >= 3.10`), is no longer supported
 
 * New features
   - New `smartg.truncation.truncate_phase`, `truncate_phase_set` and
@@ -619,20 +759,22 @@ final `v2.0.0` release.
       are summed, the single scattering albedos are extinction-weighted and
       the phase matrices are weighted by the scattering coefficients
     - New `Aer3D` 3D aerosol component: bulk optical properties from the
-      OPAC aerosol mixtures or species ('desert', 'continental_clean',
-      'waso', ...) as a function of the relative humidity; the 3D
-      distribution (extinction at `w_ref` and per-cell rh, clamped to the
-      file's humidity range as in the 1D `AerOPAC`) follows the same three
-      routes as `Cloud3D` (dense dataset with `rh(z, y, x)`, raw arrays,
-      ASCII files via the new `read_i3rc_aerosol` function), with the
-      `rh_acc`/`rh_min`/`rh_max`, `phase` and `ssa_cst` options
+      OPAC aerosol mixtures or species (such as 'desert',
+      'continental_clean' or 'waso') as a function of the relative
+      humidity; the 3D distribution (extinction at `w_ref` and per-cell
+      rh, clamped to the file's humidity range as in the 1D `AerOPAC`)
+      follows the same three routes as `Cloud3D` (dense dataset with
+      `rh(z, y, x)`, raw arrays, ASCII files via the new
+      `read_i3rc_aerosol` function), with the `rh_acc`/`rh_min`/`rh_max`,
+      `phase` and `ssa_cst` options
   - New `AerUser` class in `smartg.atmosphere` to define custom aerosol / cloud
     optical properties (extinction, SSA, phase matrix) from user-supplied data
-  - New `get_prof_phases` utility function to easily extract phase matrices from
-    an existing simulation profile
+  - New `get_prof_phases` utility function to easily extract phase
+    matrices from an existing simulation profile
   - `prof_phases` parameter of `Atm1D` now also accepts `xr.DataArray` objects
     in addition to LUT objects
-  - New `read_phase` dispatcher function accepting `.dat`, `.nc` and `.cdf` files
+  - `read_phase` is now a dispatcher accepting `.dat`, `.nc` and `.cdf`
+    files
   - New `read_phase_nc` function to read phase matrices from NetCDF files
   - New `read_phase_cdf` function to read phase matrices from libRadtran-style
     CDF files, with optional wavelength / altitude sub-selection
@@ -685,8 +827,8 @@ final `v2.0.0` release.
   - Updated dependency requirements: geoclide >= 4 (the 3D object code has
     been adapted to the geoclide 4 API), pytrunc >= 2, gatiab >= 1.1.2
   - `MAX_NREF` increased from 10 to 100
-  - Aeronet read functions (`read_Aeronet_PFN`, etc.) now return `xr.DataArray`
-    instead of LUT objects
+  - The Aeronet readers `read_aeronet_aod`, `read_aeronet_ssa` and
+    `read_aeronet_pfn` now return an `xr.DataArray` instead of a LUT
   - Push to PyPI workflow added
   - The notebooks are tracked, and shipped in the source distribution, as
     jupytext percent scripts (`.py`) instead of `.ipynb` files. jupytext
@@ -697,8 +839,8 @@ final `v2.0.0` release.
   - `smartg.auxdata` rewritten around `AuxData`, `Dataset` and source
     classes (`NextcloudSource`, `HttpArchiveSource`):
     - `download` skips the datasets already on disk (`force=True` to
-      download them again), accepts a list of keys, and `dname` defaults
-      to `SMARTG_DIR_AUXDATA`
+      download them again), accepts a list of keys, and its `savepath`
+      parameter is now `dname`, which defaults to `SMARTG_DIR_AUXDATA`
     - new `check_update`: compares the data on disk with the remote
       versions (WebDAV ETag of the HYGEOS shares, HTTP ETag of the
       libRadtran archive) without downloading anything, prints a table
@@ -720,8 +862,12 @@ final `v2.0.0` release.
     - the reptran reference moves to the libRadtran 2024 archive
       (`reptran_2024_all.tar.gz`, the 2017 link is dead), the HYGEOS
       mirror stays the fallback
-    - `AUXDATA_DICT`, the `*_URL` constants and `safe_download` are
-      removed
+    - `AUXDATA_DICT`, `safe_download` and the per-dataset `*_URL`
+      constants (`AER_URL`, `ACS_URL`, `ATM_URL`, `STP_URL`,
+      `VALID_URL`, `WATER_URL`, `KDIS_URL`, `CLOUD_URL`, `IPRT_URL`,
+      `REPTRAN_URL` and `REPTRAN_URL_HYG`) are removed: the datasets are
+      described by `DATASETS`, and the new `LIBRADTRAN_REPTRAN_URL`
+      holds the address of the libRadtran reptran archive
   - A ruff configuration in `pyproject.toml`: a line length of 79 and the
     PEP 8, naming, numpy docstring and annotation rules on top of the
     default ones, for the whole package, which passes them along with
@@ -902,7 +1048,7 @@ final `v2.0.0` release.
     `CusForward` requires `back=False`. Only the deprecated `B` mode was
     checked, so the launching code of the three other modes (which the
     kernel compiles only for the matching mode) was silently ignored.
-    Similarly `my_objects` now requires `obj3d=True`, the `lmode` value is
+    Similarly `my_objects` now requires `obj3d=True`, the `mode` value is
     validated by the `CusForward` and `CusBackward` constructors, and a
     `cus_l` which is neither of these two classes is refused
   - The cone of the local estimate (`le_fov`) is now sampled around every
@@ -939,7 +1085,8 @@ final `v2.0.0` release.
     strictly-increasing coordinate requirement of `make_interp_spline`
   - The `ipha` parameter of `phase_view` in `smartg_view` is now flexible:
     accepts an `int`, an `xr.DataArray` scalar, or a 1-D ndarray of indices;
-    validation against the correct wavelength slice of `iphase_atm/oc` is performed
+    validation against the correct wavelength slice of `iphase_atm/oc` is
+    performed
   - `compute_deltam_iprtout` raises a `TypeError` instead of a
     `NameError` when its inputs are not arrays
   - `select_iprt_iquv` with `change_u_sign=True` returned the standard
@@ -952,8 +1099,8 @@ final `v2.0.0` release.
   - Removed deprecated modules:
     - `smartg.geometry`
     - `smartg.transform`
-    - deprecated legacy geometric modules replaced by `geoclide`
-    - old deprecated `lib3D` module
+    - `smartg.diffgeom` and `smartg.shape`, the other legacy geometric
+      modules, all replaced by `geoclide`
 
 
 ## v1.2.0
