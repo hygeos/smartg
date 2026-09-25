@@ -27,7 +27,7 @@ from smartg.config import DIR_AUXDATA
 SEED = 1234
 
 # Every case runs in two tiers. The slow one uses the photon count of
-# the saved results, 1e8 per viewing direction, about 3.8 hours for
+# the saved results, 1e8 per viewing direction, about 6.7 hours for
 # the 11 cases, and is deselected by default (see conftest.py). The
 # fast one, 1e6 per viewing direction, takes about 5 minutes for the
 # file and is the one that runs routinely.

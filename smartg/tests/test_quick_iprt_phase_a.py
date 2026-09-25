@@ -37,7 +37,9 @@ from smartg.view import plot_iquv_comparison
 from smartg.xarray import drop_axes
 
 # *********************** Global variable(s) ***************************
-SEED = -1
+# a fixed seed, with the launch geometry pinned in each run, so that a
+# run repeats its noise realization rather than drawing a new one
+SEED = 1234
 STDFAC = 4
 ROOT_PATH = Path(__file__).resolve().parent.parent
 # **********************************************************************

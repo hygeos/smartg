@@ -77,8 +77,9 @@ N_ICDF = 18001
 # Every test runs in two tiers. The slow one uses the photon counts of
 # the IPRT benchmark and validates against MYSTIC: it is what the
 # reference delta_m values below were measured with, and it is
-# deselected by default (see pytest.ini). The fast one divides every
-# photon count by PHOTON_DIVIDER and is the one that runs routinely.
+# deselected by default (see tests/conftest.py). The fast one divides
+# every photon count by PHOTON_DIVIDER and is the one that runs
+# routinely.
 TIERS = ["fast", pytest.param("slow", marks=pytest.mark.slow)]
 PHOTON_DIVIDER = {"fast": 30, "slow": 1}
 

@@ -283,11 +283,11 @@ Both files together take 6 min in the fast tier and 1 h 23 in the slow one. C3 b
 
 The fast tier detects a 5 % error on the cloud optical properties, the slow one 1 %: run it before a release, or after a change to the 3D kernel, to the phase matrices or to the truncation.
 
-**Phase 3** — `test_iprt_phase3.py` checks the spherical geometry (`pp=False`) on the one-layer cases D1 to D6 and the vertically inhomogeneous cases E1 to E5, against saved SMART-G results computed with 1e8 photons per viewing direction. It has the same two tiers: the fast one uses 1e6 photons per direction and takes about 5 min for the file, the slow one reproduces the 1e8 of the references and takes about 3 h 50 for the 11 cases. E6, the camera at 300 000 km, is not covered yet.
+**Phase 3** — `test_iprt_phase3.py` checks the spherical geometry (`pp=False`) on the one-layer cases D1 to D6 and the vertically inhomogeneous cases E1 to E5, against saved SMART-G results computed with 1e8 photons per viewing direction. It has the same two tiers: the fast one uses 1e6 photons per direction and takes about 5 min for the file, the slow one reproduces the 1e8 of the references and takes about 6 h 40 for the 11 cases. E6, the camera at 300 000 km, is not covered yet.
 
 ```bash
 pytest smartg/tests/test_iprt_phase3.py           # fast, ~5 min
-pytest -m slow smartg/tests/test_iprt_phase3.py   # slow, ~3 h 50
+pytest -m slow smartg/tests/test_iprt_phase3.py   # slow, ~6 h 40
 ```
 
 Because a GPU run is not reproducible bit for bit, the phase 3 comparison is statistical: the tolerances on the mean bias and on the fraction of directions beyond three combined standard deviations were measured per tier rather than taken from a normal distribution.

@@ -189,12 +189,13 @@ WATER_GRID = [0, -9990, -10000]  # metres; sea bottom at 10 km ≈ ∞
 SEED = 1234
 
 
-def _build_water_iop() -> Water1D:
+def _build_water_iop(pure_water_path: Path) -> Water1D:
     """Build a custom pure-water IOP profile for SMART-G.
 
     Pure water is treated as a general scatterer with the analytic
     phase function from Mobley (*Light and Water*, ch. 3, eq. 3.30)
-    on top of the Petzold tabulation, and zero absorption.
+    on top of the Petzold tabulation, and zero absorption. The phase
+    function is written to pure_water_path, out of the auxdata.
     """
     hydrolight_dir = DIR_AUXDATA / "validation" / "HYDROLIGHT"
 
@@ -218,7 +219,6 @@ def _build_water_iop() -> Water1D:
 
     # Read Petzold tabulation, overwrite with Mobley analytic phase
     petzold_path = hydrolight_dir / "petzold.dat"
-    pure_water_path = hydrolight_dir / "pure_water.dat"
 
     data = np.loadtxt(petzold_path)
     theta = np.radians(data[:, 0])
@@ -236,8 +236,9 @@ def _build_water_iop() -> Water1D:
 
 
 @pytest.fixture(scope="module")
-def _water_iop() -> Water1D:
-    return _build_water_iop()
+def _water_iop(tmp_path_factory: pytest.TempPathFactory) -> Water1D:
+    pure_water_path = tmp_path_factory.mktemp("hydrolight") / "pure_water.dat"
+    return _build_water_iop(pure_water_path)
 
 
 @pytest.fixture(scope="module")

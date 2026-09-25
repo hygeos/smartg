@@ -59,8 +59,8 @@ N_LOOP = 1e7
 # Every test runs in two tiers. The slow one uses the photon count
 # above, a tenth of the IPRT benchmark, and is what the reference
 # delta_m values below were measured with: it is deselected by default
-# (see pytest.ini). The fast one divides it by PHOTON_DIVIDER and is
-# the one that runs routinely.
+# (see tests/conftest.py). The fast one divides it by PHOTON_DIVIDER
+# and is the one that runs routinely.
 #
 # Dividing the photons multiplies the MC noise, and delta_m is then
 # dominated by it: a small systematic bias would hide inside the
