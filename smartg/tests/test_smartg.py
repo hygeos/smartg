@@ -26,6 +26,7 @@ from smartg.smartg import (
     _alis_n_low,
     _check_alis_kernel,
     _check_alis_layers,
+    _finalize,
 )
 from smartg.surface import Environment, LambSurface, RoughSurface
 from smartg.view import smartg_view
@@ -341,6 +342,85 @@ def test_alis_uneven_n_low(sg_alis: Smartg) -> None:
     assert np.all(np.isfinite(i_up))
     np.testing.assert_allclose(i_up[10], i_up[9], rtol=1e-5)
     np.testing.assert_allclose(i_up[11], i_up[9], rtol=1e-5)
+
+
+class _ErrorCount:
+    """Stand for the GPU error counters of a run."""
+
+    def get(self) -> NDArray[np.uint64]:
+        """Return no error."""
+        return np.zeros(32, dtype=np.uint64)
+
+
+@pytest.mark.parametrize(
+    ("n_sensor", "n_th", "zip_le", "n_layer", "n_scl", "dims", "shape"),
+    [
+        (1, 3, True, 3, 1, ("Zenith angles",), (3, 3)),
+        (2, 3, True, 3, 1, ("sensor index", "Zenith angles"), (3, 2, 3)),
+        (1, 1, True, 3, 1, ("Zenith angles",), (3, 1)),
+        (1, 3, True, 1, 1, ("Zenith angles",), (1, 3)),
+        (
+            2, 3, True, 3, 2,
+            ("sensor index", "Zenith angles", "iSCL"), (3, 2, 3, 2),
+        ),
+        (
+            2, 3, False, 3, 1,
+            ("sensor index", "Azimuth angles", "Zenith angles"),
+            (3, 2, 2, 3),
+        ),
+    ],
+    ids=["zip", "zip-sensors", "zip-one-dir", "zip-one-layer",
+         "zip-sensors-scl", "sensors"],
+)
+def test_alis_finalize_cdist(
+    n_sensor: int,
+    n_th: int,
+    zip_le: bool,
+    n_layer: int,
+    n_scl: int,
+    dims: tuple[str, ...],
+    shape: tuple[int, ...],
+) -> None:
+    """Check the cdist output of the zipped directions.
+
+    With several sensors, a single direction or a single layer, the
+    squeezed cdist of the zipped directions no longer matched its
+    dimension names, and the output stage raised a ValueError.
+    """
+    le = LocalEstimate(
+        th_deg=np.linspace(0.0, 60.0, n_th),
+        phi_deg=np.linspace(0.0, 90.0, n_th) if zip_le else [0.0, 90.0],
+        zip=zip_le,
+    )
+    n_lam = 2
+    n_phi = 1 if zip_le else 2
+    photons = np.ones((6, 4, n_sensor, n_lam, n_th, n_phi))
+    n_out = np.ones((6, n_sensor, n_lam, n_th, n_phi), dtype=np.uint64)
+    ds = _finalize(
+        tab_photons_tot=photons,
+        tab_photons_tot_no_aer=photons,
+        tab_dist_tot=np.ones(
+            (6, n_layer, n_sensor, n_th, n_phi, n_scl, 2)
+        ),
+        tab_hist_tot=None,
+        wavelength=np.array([500.0, 600.0]),
+        n_photons_in_tot=np.full((n_sensor, n_lam), 10, dtype=np.uint64),
+        errorcount=_ErrorCount(),  # pyright: ignore[reportArgumentType]
+        n_photons_out_tot=n_out,
+        n_photons_out_tot_no_aer=n_out,
+        output_layers=0,
+        tab_trans_dir=np.zeros((n_sensor, n_lam)),
+        tab_trans_dir_analytic=None,
+        attrs={},
+        prof_atm=None,
+        prof_oc=None,
+        sigma=None,
+        horiz=0,
+        le=le,
+    )
+    cdist = ds["cdist_up (TOA)"]
+    assert cdist.dims == ("cdist_layer", *dims, "iAMF")
+    assert cdist.shape == (*shape, 2)
 
 
 def test_alis_layers() -> None:

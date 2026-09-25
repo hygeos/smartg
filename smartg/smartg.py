@@ -2952,10 +2952,11 @@ def _add_level_output(
         )
     if len(tab_dist_final) > 1:
         if zip_flag:
+            # the zipped directions leave a single azimuth
             _add_variable(
                 ds,
                 f'cdist_{direction}',
-                np.squeeze(tab_dist_final[lvl, :, isen]),
+                tab_dist_final[lvl, :, isen, 0],
                 cdist_axnames_zip,
             )
         else:
@@ -3199,22 +3200,15 @@ def _finalize(
     else:
         _has_scl = False
 
-    if _has_scl:
-        cdist_axnames_zip = ['cdist_layer', 'Zenith angles', 'iSCL', 'iAMF']
-        cdist_axnames_full = ['cdist_layer']
-        if n_sensor > 1:
-            cdist_axnames_full.append('sensor index')
-        cdist_axnames_full.extend(
-            ['Azimuth angles', 'Zenith angles', 'iSCL', 'iAMF']
-        )
-    else:
-        cdist_axnames_zip = ['cdist_layer', 'Zenith angles', 'iAMF']
-        cdist_axnames_full = ['cdist_layer']
-        if n_sensor > 1:
-            cdist_axnames_full.append('sensor index')
-        cdist_axnames_full.extend(
-            ['Azimuth angles', 'Zenith angles', 'iAMF']
-        )
+    cdist_axnames_zip = ['cdist_layer']
+    if n_sensor > 1:
+        cdist_axnames_zip.append('sensor index')
+    cdist_axnames_full = [*cdist_axnames_zip, 'Azimuth angles']
+    for names in (cdist_axnames_zip, cdist_axnames_full):
+        names.append('Zenith angles')
+        if _has_scl:
+            names.append('iSCL')
+        names.append('iAMF')
 
     level_kwargs = {
         'axnames': axnames,

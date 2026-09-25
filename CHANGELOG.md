@@ -1310,6 +1310,12 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix the output of an ALIS run with zipped local estimate directions
+    (`LocalEstimate(zip=True)`) and several sensors, a single direction
+    or a single absorbing layer: the cdist variables were squeezed out of
+    their dimension names, so the run raised a `ValueError` after the
+    whole simulation. They now keep every axis, with a 'sensor index'
+    for several sensors as without zip
   - Fix `smartg.histories.compute_amf`, new in 2.0: on a hist=False output
     with several sensors, it averaged them and presented them as scatter
     classes, and with a water body it failed on the ocean layers of the
