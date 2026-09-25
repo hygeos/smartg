@@ -429,7 +429,8 @@ heliostat.material_front = Mirror(reflectivity=0.88, roughness=0.1,
 # Creation of the sensor
 # the sensor direction is described by a vector
 v_sensor = gc.Vector(helio_pos[0] - p_sensor)
-sensor = Sensor(pos_x=p_sensor.x, pos_y=p_sensor.y, pos_z=p_sensor.z,
+sensor = Sensor(pos_x=float(p_sensor.x), pos_y=float(p_sensor.y),
+                pos_z=float(p_sensor.z),
                 loc='ATMOS', fov=0., sensor_type=0,
                 direction=v_sensor)
 

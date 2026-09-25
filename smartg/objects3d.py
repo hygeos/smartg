@@ -52,6 +52,7 @@ from warnings import warn
 
 import geoclide as gc
 import numpy as np
+from numpy.typing import NDArray
 from scipy import interpolate
 
 
@@ -66,8 +67,9 @@ class Mirror:
 
     Attributes
     ----------
-    reflectivity : float, optional
-        Albedo (reflectance) of the object. Must be between 0 and 1.
+    reflectivity : float or ndarray, optional
+        Albedo (reflectance) of the object, between 0 and 1: one
+        value, or one per wavelength of the run.
         Default: 1.0
     roughness : float, optional
         Surface roughness parameter (alpha) according to Walter et
@@ -95,7 +97,7 @@ class Mirror:
 
     def __init__(
         self,
-        reflectivity: float = 1.0,
+        reflectivity: float | NDArray[np.floating] = 1.0,
         roughness: float = 0.0,
         shadow: bool = False,
         nind: float | None = None,
@@ -145,13 +147,16 @@ class LambMirror:
 
     Parameters
     ----------
-    reflectivity : float, optional
-        Albedo (reflectance) of the object. Must be between 0 and 1.
+    reflectivity : float or ndarray, optional
+        Albedo (reflectance) of the object, between 0 and 1: one
+        value, or one per wavelength of the run.
         Controls the fraction of incident light that is reflected.
         Default: 0.5
     """
 
-    def __init__(self, reflectivity: float = 0.5) -> None:
+    def __init__(
+        self, reflectivity: float | NDArray[np.floating] = 0.5
+    ) -> None:
         self.reflectivity = reflectivity
 
     def __str__(self) -> str:
@@ -170,8 +175,9 @@ class Matte:
 
     Parameters
     ----------
-    reflectivity : float, optional
-        Albedo (reflectance) of the object. Must be between 0 and 1.
+    reflectivity : float or ndarray, optional
+        Albedo (reflectance) of the object, between 0 and 1: one
+        value, or one per wavelength of the run.
         Default: 0.0
     roughness : float, optional
         Surface roughness parameter.
@@ -186,7 +192,9 @@ class Matte:
     """
 
     def __init__(
-        self, reflectivity: float = 0.0, roughness: float = 0.0
+        self,
+        reflectivity: float | NDArray[np.floating] = 0.0,
+        roughness: float = 0.0,
     ) -> None:
         self.reflectivity = reflectivity
         self.roughness = roughness

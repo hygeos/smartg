@@ -265,7 +265,7 @@ with (warnings.catch_warnings(),
             pressure=float(p_mid[k]) * 1e-3,   # hPa → bar
             mole_fraction=vmr_k,
         )
-        wn_out, sigma_k = s.get('xsection')
+        wn_out, sigma_k = s.get('xsection')[:2]
         wavelength_out_k = 1e7 / wn_out[::-1]          # ascending wavelength
         sigma_k = sigma_k[::-1]                # align with wavelength_out_k
         if _wl_ref is None:
@@ -739,14 +739,14 @@ with (warnings.catch_warnings(),
 
         s0 = sfac.eq_spectrum(Tgas=float(t_mid[k_idx]), pressure=p_bar,
                               mole_fraction=vmr_k)
-        wn0, x0 = s0.get('xsection')
+        wn0, x0 = s0.get('xsection')[:2]
         wavelength_s0 = 1e7 / wn0[::-1]
         kabs_t[:, k_idx] = np.interp(
             wavelength_hr, wavelength_s0, x0[::-1]) * n_k * 1e5
 
         s1 = sfac.eq_spectrum(Tgas=float(t_mid[k_idx]) + delta_t,
                               pressure=p_bar, mole_fraction=vmr_k)
-        wn1, x1 = s1.get('xsection')
+        wn1, x1 = s1.get('xsection')[:2]
         wavelength_s1 = 1e7 / wn1[::-1]
         kabs_t_dt[:, k_idx] = np.interp(
             wavelength_hr, wavelength_s1, x1[::-1]) * n_k * 1e5
@@ -857,7 +857,7 @@ with (warnings.catch_warnings(),
         s0 = sfac.eq_spectrum(Tgas=float(t_mid[k_idx]),
                               pressure=float(p_mid[k_idx]) * 1e-3,
                               mole_fraction=vmr_k)
-        wn_s0, sig0 = s0.get('xsection')
+        wn_s0, sig0 = s0.get('xsection')[:2]
         wavelength_s0 = 1e7 / wn_s0[::-1]
         kabs_p[:, k_idx] = np.interp(
             wavelength_hr, wavelength_s0, sig0[::-1]) * n_k * 1e5
@@ -865,7 +865,7 @@ with (warnings.catch_warnings(),
         s1 = sfac.eq_spectrum(Tgas=float(t_mid[k_idx]),
                               pressure=(float(p_mid[k_idx]) + delta_p) * 1e-3,
                               mole_fraction=vmr_k)
-        wn_s1, sig1 = s1.get('xsection')
+        wn_s1, sig1 = s1.get('xsection')[:2]
         wavelength_s1 = 1e7 / wn_s1[::-1]
         kabs_p_dp[:, k_idx] = np.interp(wavelength_hr, wavelength_s1,
                                         sig1[::-1]) * n_k * 1e5

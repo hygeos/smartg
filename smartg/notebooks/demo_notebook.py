@@ -111,7 +111,7 @@ print(stk_i.interp({'Azimuth angles': 90., 'Zenith angles': 45.}).values)
 # calculate polarized light
 # use operations between DataArrays, and apply sqrt
 stk_q, stk_u = m['Q_up (TOA)'], m['U_up (TOA)']
-lp = np.sqrt(stk_q * stk_q + stk_u * stk_u).rename('Lp_up (TOA)')
+lp = ((stk_q * stk_q + stk_u * stk_u) ** 0.5).rename('Lp_up (TOA)')
 
 # %%
 # 2D visualization (azimuth vs zenith map)
@@ -276,17 +276,17 @@ print(mz)
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='polar')
 stk_i, stk_q, stk_u = m['I_up (0-)'], m['Q_up (0-)'], m['U_up (0-)']
-dolp = np.sqrt((stk_q * stk_q + stk_u * stk_u) / (stk_i * stk_i) * 100)
+dolp = ((stk_q * stk_q + stk_u * stk_u) / (stk_i * stk_i) * 100) ** 0.5
 rad, theta = np.meshgrid(m['Zenith angles'].values,
                          m['Azimuth angles'].values / 180 * np.pi)
-ax.scatter(theta.ravel(), rad.ravel(), c=np.log10(stk_i.data.ravel()),
-           s=dolp.data.ravel() * 50, cmap='jet', alpha=0.5, vmin=-2.5, vmax=-1.)
+ax.scatter(theta.ravel(), rad.ravel(), c=np.log10(stk_i.values.ravel()),
+           s=dolp.values.ravel() * 50, cmap='jet', alpha=0.5, vmin=-2.5, vmax=-1.)
 
 stk_i, stk_q, stk_u = mz['I_up (0-)'], mz['Q_up (0-)'], mz['U_up (0-)']
-dolp = np.sqrt((stk_q * stk_q + stk_u * stk_u) / (stk_i * stk_i) * 100)
-ax.set_ylim([0, 90])
+dolp = ((stk_q * stk_q + stk_u * stk_u) / (stk_i * stk_i) * 100) ** 0.5
+ax.set_ylim(0, 90)
 ax.scatter(mz['Azimuth angles'].values / 180 * np.pi, mz['Zenith angles'].values,
-           c=np.log10(stk_i.data), s=dolp.data * 50, cmap='jet', alpha=0.5,
+           c=np.log10(stk_i.values), s=dolp.values * 50, cmap='jet', alpha=0.5,
            vmin=-2.5, vmax=-1., marker='s', edgecolors='k')
 
 # %% [markdown]
@@ -822,7 +822,7 @@ for col, th0 in zip(['r', 'g', 'b', 'k'], [0., 30., 60., 75.]):
     stk_q = m2r_ssa['Q_up (TOA)']
     stk_u = m2r_ssa['U_up (TOA)']
 
-    lp = np.sqrt(stk_q * stk_q + stk_u * stk_u).rename('LP')
+    lp = ((stk_q * stk_q + stk_u * stk_u) ** 0.5).rename('LP')
     lp.plot.line('.-' + col, label=str(th0))
 plt.ylim(0, 0.15)
 plt.legend(loc='best')
@@ -933,7 +933,7 @@ for b, srf in enumerate(SRF):
         dydw = dfdw(w_srf)
 
         # detect edges for SRFs with a threshold on first derivative
-        ok = np.where(abs(dydw) > 0.0001)
+        ok = np.where(np.abs(dydw) > 0.0001)
         plt.plot(w_srf[ok], srf_band[ok])
         # store boundaries of filter for further reptran, add a 2 nm
         # margin

@@ -200,7 +200,8 @@ def plot_case_camera(case_name: str,
                       "i_cmap": "coolwarm"}
         title = (f"IPRT case {label} - depol = {DEPOL} - lat = 0 - "
                  f"lon = {lon[ilon]:.0f} - z = {zout:.0f}km - {MOD_NAME}")
-        plot_camera_iprt(*stokes, title=title, **scales)
+        plot_camera_iprt(stokes[0], stokes[1], stokes[2], stokes[3],
+                         title=title, **scales)
 
 
 # %% [markdown]

@@ -1193,7 +1193,8 @@ n_theta = cld_phase.shape[-1]
 # are ignored,
 # but zmin, zmax, tau_ref and ssa are used to define the cloud vertical
 # profile
-cld = Cloud('wc', reff=10., zmin=2., zmax=3., tau_ref=5., w_ref=wavelength,
+cld = Cloud('wc', reff=10., zmin=2., zmax=3., tau_ref=5.,
+            w_ref=float(wavelength[0]),
             ssa=0.999979, phase=cld_phase)
 
 # atmosphere profil
