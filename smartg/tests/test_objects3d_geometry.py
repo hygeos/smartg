@@ -10,7 +10,7 @@ import geoclide as gc
 import numpy as np
 import pytest
 
-from smartg.objects3d import Entity, rotate_vector
+from smartg.objects3d import Entity, Plane, rotate_vector
 
 
 @pytest.mark.parametrize("order", ["XYZ", "xyz", "zyx", "ZxY"])
@@ -44,3 +44,27 @@ def test_entity_copy_keeps_alpha_color() -> None:
     copy = Entity(entity)
     assert copy.color == "red"
     assert copy.alpha_color == 0.1
+
+
+@pytest.mark.parametrize(
+    ("corners", "message"),
+    [
+        # a trapezoid with every corner on its side of the axes
+        (
+            {"p3": gc.Point(-0.5, 0.5, 0.0), "p4": gc.Point(0.5, 0.7, 0.0)},
+            "rectangle",
+        ),
+        # a rectangle below the x axis
+        (
+            {"p3": gc.Point(-0.5, -0.2, 0.0), "p4": gc.Point(0.5, -0.2, 0.0)},
+            r"p3\.y > 0, p4\.y > 0",
+        ),
+        ({"p4": gc.Point(-0.5, 0.5, 0.0)}, r"p4\.x > 0$"),
+    ],
+)
+def test_plane_names_the_violated_condition(
+    corners: dict[str, gc.Point], message: str
+) -> None:
+    """An invalid Plane raises a ValueError naming what is wrong."""
+    with pytest.raises(ValueError, match=message):
+        Plane(**corners)

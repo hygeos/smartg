@@ -225,6 +225,14 @@ class Plane:
         Top-right corner point (x positive, y positive).
         Default: gc.Point(0.5, 0.5, 0.)
 
+    Raises
+    ------
+    TypeError
+        If a corner is not a gc.Point.
+    ValueError
+        If a corner is on the wrong side of an axis, or if the corners
+        do not form a rectangle.
+
     Notes
     -----
     The plane geometry requires:
@@ -249,43 +257,42 @@ class Plane:
             p3 = gc.Point(-0.5, 0.5, 0.0)
         if p4 is None:
             p4 = gc.Point(0.5, 0.5, 0.0)
-        if (
-            isinstance(p1, gc.Point)
-            and isinstance(p2, gc.Point)
-            and isinstance(p3, gc.Point)
-            and isinstance(p4, gc.Point)
-        ):
-            if (
-                ((p1.x == p3.x) and (p1.x < 0))
-                and ((p2.x == p4.x) and (p2.x > 0))
-                and ((p1.y == p2.y) and (p1.y < 0))
-                and ((p3.y == p4.y) and (p3.y > 0))
-            ):
-                self.p1 = p1
-                self.p2 = p2
-                self.p3 = p3
-                self.p4 = p4
-            elif (p1.x >= 0) or (p2.x <= 0) or (p1.y >= 0) or (p3.y >= 0):
-                raise NameError(
-                    "Those conditions must be filled! : "
-                    + "p1.x < 0 , p1.y < 0 ,"
-                    + "p2.x > 0 , p2.y < 0 ,"
-                    + "p3.x < 0 , p3.y > 0 ,"
-                    + "p4.x > 0 , p4.y > 0"
-                )
-            elif (
-                (p1.x != p3.x)
-                or (p2.x != p4.x)
-                or (p1.y != p2.y)
-                or (p3.y != p4.y)
-            ):
-                raise NameError(
-                    "Your plane geometry must be at leat a rectangle!"
-                )
-            else:
-                raise ValueError("Unknown error in Plane class!")
-        else:
+        if not all(isinstance(p, gc.Point) for p in (p1, p2, p3, p4)):
             raise TypeError("All arguments must be Point type!")
+        # the side of the axes of each corner, then the rectangle
+        wrong_side = [
+            condition
+            for condition, holds in (
+                ("p1.x < 0", p1.x < 0),
+                ("p1.y < 0", p1.y < 0),
+                ("p2.x > 0", p2.x > 0),
+                ("p2.y < 0", p2.y < 0),
+                ("p3.x < 0", p3.x < 0),
+                ("p3.y > 0", p3.y > 0),
+                ("p4.x > 0", p4.x > 0),
+                ("p4.y > 0", p4.y > 0),
+            )
+            if not holds
+        ]
+        if wrong_side:
+            raise ValueError(
+                "The corners of a Plane must satisfy "
+                + ", ".join(wrong_side)
+            )
+        if (
+            (p1.x != p3.x)
+            or (p2.x != p4.x)
+            or (p1.y != p2.y)
+            or (p3.y != p4.y)
+        ):
+            raise ValueError(
+                "The corners of a Plane must form a rectangle: p1.x == "
+                "p3.x, p2.x == p4.x, p1.y == p2.y and p3.y == p4.y"
+            )
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.p4 = p4
 
     def __str__(self) -> str:
         """Return a readable description of the Plane."""

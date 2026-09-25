@@ -1143,6 +1143,10 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the validation of `Plane`, which blamed the signs of the corners of
+    any invalid plane with a positive `p3.y`, and reported an "Unknown
+    error" for a rectangle below the x axis. It raises a `ValueError`
+    naming the violated condition, where it raised a `NameError`
   - Fix the copy of an `Entity` (`Entity(entity)`), which reset its
     `alpha_color` to 0.5 instead of copying it
   - Fix `smartg.objects3d.rotate_vector`, which raised a `NameError` with
