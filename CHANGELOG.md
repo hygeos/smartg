@@ -1009,6 +1009,12 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix the `ssa` of `AerOPAC` and `Cloud` forced by a DataArray over the
+    wavelength and the altitude, as documented, which always raised: it is
+    now interpolated onto every grid the component is evaluated on. A 1-D
+    or 2-D array that does not match that grid (the `wavelength_phase` or
+    the `pfgrid` of `Atm1D`) raises a `ValueError` saying so instead of a
+    broadcasting error, and the docstrings say which form works where
   - Fix the aerosol phase matrix of `atm_pro_from_aeronet`, which was
     flipped in angle and not physical. `read_aeronet_pfn` returned the
     angles from 180 to 0 degrees, as the files list them, and `AerUser`

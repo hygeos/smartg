@@ -812,3 +812,52 @@ def test_aer_user_sorts_its_angles() -> None:
     )
     with pytest.raises(ValueError, match="distinct"):
         AerUser(*args, phase, hum, wavelength, np.full(181, 90.0))
+
+
+GRID = np.array([100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0])
+
+
+def test_forced_ssa_over_wavelength_and_altitude() -> None:
+    """A forced ssa DataArray over (wavelength, z) is interpolated.
+
+    Onto every grid Atm1D evaluates the component on: the profile, the
+    pfgrid of the phase matrices and their union.
+    """
+    wavelength = np.array([500.0, 700.0])
+    values = 0.8 + 0.01 * GRID[None, :] / 100.0 + 0.1 * np.array(
+        [[0.0], [1.0]]
+    )
+    ssa = xr.DataArray(
+        values, coords={"wavelength": wavelength, "z": GRID}
+    )
+    pro = Atm1D(
+        "afglt",
+        comp=[AerOPAC("continental_clean", 0.1, 550.0, ssa=ssa)],
+        grid=GRID,
+        pfgrid=[100.0, 1.5, 0.0],
+    ).calc(np.array([500.0, 600.0]))
+    expected = np.stack([values[0], 0.5 * (values[0] + values[1])])
+    scatters = np.diff(pro["OD_p"].values, axis=1, prepend=0.0) > 0.0
+    np.testing.assert_allclose(
+        pro["ssa_p_atm"].values[scatters], expected[scatters], rtol=1e-6
+    )
+
+
+def test_forced_ssa_arrays_off_the_grid_refused() -> None:
+    """A forced ssa array not matching the grid gives a clear error.
+
+    A 1-D array holds one value per wavelength of the calculation, and
+    a 2-D one per wavelength and level of the profile grid, neither of
+    which the phase matrices are mixed on here.
+    """
+    aer = AerOPAC("continental_clean", 0.1, 550.0, ssa=[0.9, 0.8])
+    atm = Atm1D("afglt", comp=[aer], wavelength_phase=[600.0])
+    with pytest.raises(ValueError, match="DataArray over wavelength"):
+        atm.calc([500.0, 700.0])
+    aer = AerOPAC(
+        "continental_clean", 0.1, 550.0, ssa=np.full((2, GRID.size), 0.9)
+    )
+    atm = Atm1D("afglt", comp=[aer], grid=GRID)
+    atm.calc([500.0, 700.0], phase=False)
+    with pytest.raises(ValueError, match="wavelength and the altitude"):
+        atm.calc([500.0, 700.0])

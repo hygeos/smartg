@@ -219,6 +219,97 @@ def _as_tau_ref(
     return float(values.ravel()[0])
 
 
+def _check_forced_ssa(ssa: Any) -> None:
+    """Refuse a forced ssa DataArray that cannot be interpolated.
+
+    See the `ssa` parameter of `AerOPAC`.
+    """
+    if not isinstance(ssa, xr.DataArray):
+        return
+    if ssa.ndim not in (1, 2):
+        raise ValueError(
+            "A forced ssa DataArray must lie over the wavelength, or "
+            f"the wavelength and the altitude, got {ssa.ndim} "
+            "dimensions."
+        )
+    missing = [dim for dim in ssa.dims if dim not in ssa.coords]
+    if missing:
+        raise ValueError(
+            "A forced ssa DataArray must carry the coordinates of its "
+            f"dimensions, missing: {missing}."
+        )
+
+
+def _interp_clamped(
+    x_new: NDArray[np.float64],
+    x: NDArray[np.float64],
+    values: NDArray[np.float64],
+    axis: int,
+) -> NDArray[np.float64]:
+    """Interpolate `values` linearly along `axis`, as np.interp does.
+
+    Held constant beyond the ends of `x`, which may be in any order.
+    """
+    order = np.argsort(x)
+    return np.apply_along_axis(
+        lambda v: np.interp(x_new, x[order], v[order]), axis, values
+    )
+
+
+def _forced_ssa(
+    ssa: Any, wavelength: NumericArrayLike, z: NumericArrayLike
+) -> NDArray[np.float64]:
+    """Return a forced ssa over [wavelength, z].
+
+    See the `ssa` parameter of `AerOPAC`.
+
+    Raises
+    ------
+    ValueError
+        If an array does not match the grid.
+    """
+    wavelength = np.atleast_1d(np.asarray(wavelength, dtype=np.float64))
+    z = np.atleast_1d(np.asarray(z, dtype=np.float64))
+    shape = (len(wavelength), len(z))
+    if isinstance(ssa, xr.DataArray):
+        axes = [
+            np.asarray(ssa.coords[dim].values, dtype=np.float64)
+            for dim in ssa.dims
+        ]
+        values = _interp_clamped(
+            wavelength, axes[0], np.asarray(ssa.values, np.float64), 0
+        )
+        if ssa.ndim == 1:
+            return np.broadcast_to(values[:, None], shape)
+        return _interp_clamped(z, axes[1], values, 1)
+
+    values = np.asarray(ssa, dtype=np.float64)
+    if values.ndim == 0:
+        return np.full(shape, float(values))
+    if values.ndim == 1:
+        if len(values) != len(wavelength):
+            raise ValueError(
+                f"The forced ssa holds {len(values)} values, one per "
+                f"wavelength, but the component is evaluated at "
+                f"{len(wavelength)} wavelengths here, such as the "
+                "wavelength_phase of Atm1D, at which its phase matrices "
+                "are mixed. Give the ssa as a DataArray over wavelength "
+                "to have it interpolated."
+            )
+        return np.broadcast_to(values[:, None], shape)
+    if values.shape != shape:
+        raise ValueError(
+            f"The forced ssa of shape {values.shape} gives one value "
+            "per wavelength and level of a grid, but the component is "
+            f"evaluated on {shape[0]} wavelengths and {shape[1]} "
+            "levels here: Atm1D evaluates it on the profile grid, on "
+            "pfgrid for its phase matrices and on their union where "
+            "they straddle. Give the ssa as a DataArray over the "
+            "wavelength and the altitude to have it interpolated."
+        )
+    return values
+
+
 def _on_theta_grid(
     pha: xr.DataArray, theta: NDArray[np.float64], dim: str = "theta_atm"
 ) -> xr.DataArray:
@@ -273,22 +364,27 @@ class AerOPAC:
         Force scale height (see notes) of the free troposphere
     z_stra : float, optional
         Force scale height (see notes) of the stratosphere
-    ssa : array_like or DataArray or None, optional
-        Force particle single scattering albedo. Default None.
+    ssa : float or array_like or DataArray or None, optional
+        Force the particle single scattering albedo. Default None.
 
-        - if float -> same value for all wavelengths and altitudes
-        - if sequence of int or float -> it will be converted into a 1-D
-          ndarray.
-        - if 1-D ndarray -> only wavelength dependence is considered
-        - if 2-D ndarray -> wavelength and altitude dependence is
-          considered
-        - if DataArray -> wavelength and altitude dependence is
-          considered
+        - a float: the same value at every wavelength and altitude;
+        - a 1-D array_like: one value per wavelength the component is
+          evaluated at, those of `Atm1D.calc`, which excludes the
+          `wavelength_phase` of `Atm1D`, at which its phase matrices
+          are mixed;
+        - a 2-D ndarray: one value per wavelength and per level of the
+          grid the component is evaluated on, which works only when
+          all its evaluations share that grid: with `phase=False` in
+          `Atm1D.calc`, or a `pfgrid` equal to the profile grid;
+        - a DataArray over the wavelength in nm, or over the wavelength
+          and the altitude in km, in that order, each dimension
+          carrying its coordinate: interpolated linearly onto whatever
+          grid the component is evaluated on, and held constant beyond
+          its ends. This is the form to give a spectral or vertical
+          dependence.
 
-        Note that DataArray is more flexible since it allows
-        interpolation if wavelengths
-        in calc method are different (but not the case for the altitude
-        axis).
+        An array that does not match the grid it is evaluated on raises
+        a ValueError.
     phase : None or DataArray, optional
         Phase matrix F as function of wavelength, altitude, stoke
         components and scattering angle
@@ -417,6 +513,7 @@ class AerOPAC:
                     "The ssa variable must a scalar, a list, an ndarray of "
                     + "dim <= 2, or an xr.DataArray."
                 )
+            _check_forced_ssa(self.ssa)
 
         fname = Path(fname)
         if fname.parent == Path("."):  # no directory given
@@ -748,27 +845,7 @@ class AerOPAC:
 
         # force ssa
         if self.ssa is not None:
-            if np.isscalar(self.ssa):  # scalar
-                ssa[:, :] = float(cast(float, self.ssa))
-            # ndarray with dim <= 2
-            elif isinstance(self.ssa, np.ndarray):
-                if self.ssa.ndim == 0:
-                    ssa[:, :] = self.ssa
-                elif self.ssa.ndim == 1:
-                    # if 1d array -> only wavelength variability
-                    ssa[:, :] = self.ssa[:, None]
-                elif self.ssa.ndim == 2:
-                    ssa[:, :] = self.ssa[:, :]
-            elif isinstance(self.ssa, xr.DataArray):  # xr.DataArray
-                wavelength_axis = self.ssa.coords[
-                    self.ssa.dims[0]
-                ].values.astype(np.float64)
-                ssa_interp = np.interp(
-                    np.asarray(wavelength, dtype=np.float64),
-                    wavelength_axis,
-                    self.ssa.values,
-                )
-                ssa[:, :] = ssa_interp[:, None]
+            ssa[:, :] = _forced_ssa(self.ssa, wavelength, z)
         return dtau, ssa
 
     def native_theta(self) -> NDArray[np.float64]:
@@ -1216,22 +1293,27 @@ class Cloud(AerOPAC):
         Optical thickness at reference wavelength w_ref
     w_ref : float
         Wavelength in nanometers at reference optical thickness tau_ref
-        ssa : None or float or list or 1-D ndarray or 2-D ndarray or
-            DataArray, optional
-        Force particle single scattering albedo.
+    ssa : float or array_like or DataArray or None, optional
+        Force the particle single scattering albedo. Default None.
 
-        - if float -> same value for all wavelengths and altitudes
-        - if list -> it will be converted into a 1-D ndarray.
-        - if 1-D ndarray -> only wavelength dependence is considered
-        - if 2-D ndarray -> wavelength and altitude dependence is
-          considered
-        - if DataArray -> wavelength and altitude dependence is
-          considered
+        - a float: the same value at every wavelength and altitude;
+        - a 1-D array_like: one value per wavelength the component is
+          evaluated at, those of `Atm1D.calc`, which excludes the
+          `wavelength_phase` of `Atm1D`, at which its phase matrices
+          are mixed;
+        - a 2-D ndarray: one value per wavelength and per level of the
+          grid the component is evaluated on, which works only when
+          all its evaluations share that grid: with `phase=False` in
+          `Atm1D.calc`, or a `pfgrid` equal to the profile grid;
+        - a DataArray over the wavelength in nm, or over the wavelength
+          and the altitude in km, in that order, each dimension
+          carrying its coordinate: interpolated linearly onto whatever
+          grid the component is evaluated on, and held constant beyond
+          its ends. This is the form to give a spectral or vertical
+          dependence.
 
-        Note that DataArray is more flexible since it allows
-        interpolation if wavelengths
-        in calc method are different (but not the case for the altitude
-        axis).
+        An array that does not match the grid it is evaluated on raises
+        a ValueError.
     phase : None or DataArray, optional
         Phase matrix F as function of wavelength, altitude, stoke
         components and scattering angle
@@ -1318,9 +1400,10 @@ class Cloud(AerOPAC):
                 self.ssa = ssa
             else:
                 raise ValueError(
-                    "The ssa variable must a scalar, a list, an ndarray"
-                    + " of dim <= 2, or an xr.DataArray."
+                    "The ssa variable must a scalar, a list, an ndarray of "
+                    + "dim <= 2, or an xr.DataArray."
                 )
+            _check_forced_ssa(self.ssa)
 
         fname = Path(fname)
         if fname.parent == Path("."):  # no directory given
