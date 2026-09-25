@@ -1131,6 +1131,14 @@ final `v2.0.0` release.
     the leading factor of the Edlén equation: `n_atm - 1` was 100 times
     too small, so that the runs with `refraction=True` hardly refracted.
     Their results change
+  - Fix `Water1D` given several scattering hydrosols tabulated on different
+    grids, which it refused with an error suggesting a remedy that did not
+    work: a hydrosol constant with depth with one that varies (`HydrosolPR`
+    with `HydrosolZhai`), hydrosols of different `n_theta` (their defaults
+    differ) or `wavelength_phase`, or a `Hydrosol` given its phase and a `bp`
+    array. Their phase matrices are now averaged on a common grid, holding
+    the angles of all of them, with unchanged results where they already
+    shared one
   - Fix a `Hydrosol` given its coefficients as arrays over the wavelengths
     of the profile and a `wavelength_phase`: the arrays were refused, or
     paired by position with the tabulation wavelengths when these were as

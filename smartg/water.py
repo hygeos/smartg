@@ -54,7 +54,7 @@ WaterRw
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, TypedDict
 
 import numpy as np
 import xarray as xr
@@ -105,6 +105,38 @@ def _refuse_albedo_map(alb: object) -> None:
             "(AlbedoCst, AlbedoSpeclib or AlbedoSpectrum): an AlbedoMap "
             "is only accepted as the alb of an Environment."
         )
+
+
+def _interp_theta(
+    values: NDArray, theta: NDArray, theta_new: NDArray
+) -> NDArray:
+    """
+    Interpolate phase matrices linearly in angle.
+
+    The kernel reads a phase matrix as linear in angle between the
+    nodes of its grid, so that on a grid holding all the nodes of
+    `theta` the interpolated matrices are the same functions.
+
+    Parameters
+    ----------
+    values : ndarray
+        Phase matrices, the angle being the last axis.
+    theta : ndarray
+        Increasing angles in degrees of `values`, from 0 to 180.
+    theta_new : ndarray
+        Angles in degrees to interpolate at, from 0 to 180.
+
+    Returns
+    -------
+    ndarray
+        The matrices at `theta_new`, same leading shape as `values`.
+    """
+    i = np.clip(
+        np.searchsorted(theta, theta_new, side="right") - 1,
+        0, len(theta) - 2,
+    )
+    t = (theta_new - theta[i]) / (theta[i + 1] - theta[i])
+    return values[..., i] * (1.0 - t) + values[..., i + 1] * t
 
 
 class IOPDict(TypedDict):
@@ -790,9 +822,6 @@ class Hydrosol:
 
         It is given on the tabulation grid of the phase matrices.
 
-        Used to weight the hydrosols when averaging their phase matrices
-        in `Water1D.phase`.
-
         Parameters
         ----------
         pha : DataArray
@@ -818,6 +847,45 @@ class Hydrosol:
         self._resolve_user_truncation()
         assert self._coef_trunc is not None
         return bp * self._coef_trunc.values
+
+    def _scattering_on(
+        self,
+        wavelength_tab: NDArray,
+        wavelength: NDArray,
+        z: NDArray,
+        use_old_calc_iphase: bool = False,
+    ) -> NDArray:
+        """
+        Return the scattering coefficient at other wavelengths, in m-1.
+
+        Used to weight the hydrosols when averaging their phase matrices
+        in `Water1D.phase`. Must be called after `phase`.
+
+        Parameters
+        ----------
+        wavelength_tab : ndarray
+            Wavelengths in nm at which the coefficient is returned.
+        wavelength : ndarray
+            Wavelengths in nm of the profile.
+        z : ndarray
+            Vertical grid of the water column in m. These are z
+            coordinates: 0 at the surface, negative downwards.
+        use_old_calc_iphase : bool, optional
+            Use the old way to compute iphase (deprecated).
+
+        Returns
+        -------
+        ndarray
+            Scattering coefficient in m-1 with dimensions
+            [len(wavelength_tab), len(z)], scaled by the factor of the
+            phase matrix each wavelength and depth is given.
+        """
+        bp = self._iop_on(wavelength_tab, wavelength, z)["bp"]
+        if self._phase is not None and self.truncation is None:
+            return bp
+        return bp * self._coef_trunc_on(
+            wavelength_tab, z, use_old_calc_iphase
+        )
 
     def coeffs(
         self,
@@ -1369,7 +1437,8 @@ class Water1D(Water):
         that the first item of the grid is not used.
     comp : list, optional
         Hydrosols to consider, i.e. a list of Hydrosol, HydrosolPR
-        or/and HydrosolZhai objects.
+        or/and HydrosolZhai objects. The phase matrices of several
+        scattering hydrosols are averaged, see `phase`.
     aw : None or 2-D ndarray, optional
         Force the pure water absorption coefficient in m-1, with
         dimensions [n_wavelength, nz]. If None, it is read from the
@@ -1642,10 +1711,16 @@ class Water1D(Water):
         Calculate the phase matrices averaged over the hydrosols.
 
         They are weighted by the scattering coefficient of each
-        hydrosol.
+        hydrosol, scaled by the factor of its phase matrices.
 
-        The depths are those of `grid`. When a single hydrosol scatters,
-        its phase matrices are returned unchanged.
+        When a single hydrosol scatters, its phase matrices are returned
+        unchanged. Otherwise they are averaged on a common grid: the
+        `wavelength_phase` of the hydrosols if they share it, the
+        wavelengths of the profile otherwise; their `z_phase` if they
+        share it and no weight varies with depth, the depths of `grid`
+        otherwise; their angles if they share them, all of their angles
+        otherwise, each phase matrix being interpolated linearly in
+        angle, as the kernel reads it.
 
         Parameters
         ----------
@@ -1660,13 +1735,6 @@ class Water1D(Water):
             The phase matrices with dimensions [wavelength_phase,
             z_phase, nphamat, theta_oc], or None if no hydrosol
             scatters.
-
-        Raises
-        ------
-        ValueError
-            If several hydrosols scatter but their phase matrices are
-            not tabulated on the same `wavelength_phase`, `z_phase` and
-            `theta_oc` grids, so that they cannot be averaged.
         """
         z = self.grid
 
@@ -1683,38 +1751,74 @@ class Water1D(Water):
         if len(phases) == 1:
             return phases[0][1]
 
-        ref = phases[0][1]
-        for _, pha in phases[1:]:
-            for dim in ["wavelength_phase", "z_phase", "theta_oc"]:
-                if not np.array_equal(
-                    pha.coords[dim].values, ref.coords[dim].values
-                ):
-                    raise ValueError(
-                        "The phase matrices of the hydrosols must share the "
-                        + f"same {dim} grid to be averaged. Use a common "
-                        + "wavelength_phase, or provide the phase "
-                        + "matrices directly."
-                    )
+        def shared(dim: str) -> NDArray | None:
+            """Return the `dim` coordinate if all phases share it."""
+            ref = phases[0][1].coords[dim].values
+            for _, pha in phases[1:]:
+                if not np.array_equal(pha.coords[dim].values, ref):
+                    return None
+            return ref
 
-        pha_tot: xr.DataArray | float = 0.0
-        bsca: xr.DataArray | float = 0.0
-        for comp, pha in phases:
-            # weight each hydrosol by its scattering coefficient, on the
-            # tabulation grid of its phase matrices
-            bsca_ = xr.DataArray(
-                comp.scattering(pha),
-                dims=["wavelength_phase", "z_phase"],
-                coords={
-                    "wavelength_phase": pha.coords["wavelength_phase"].values,
-                    "z_phase": pha.coords["z_phase"].values,
-                },
+        # the common grid of the average, see the docstring
+        wavelength = np.asarray(wavelength, dtype="float")
+        wavelength_c = shared("wavelength_phase")
+        if wavelength_c is None:
+            wavelength_c = wavelength
+        weights = [
+            comp._scattering_on(
+                wavelength_c, wavelength, z, use_old_calc_iphase
             )
-            bsca = bsca + bsca_
-            pha_tot = pha_tot + pha * bsca_
+            for comp, _ in phases
+        ]
+        z_c = shared("z_phase")
+        if z_c is not None and not np.array_equal(z_c, z):
+            if all(np.allclose(w, w[:, :1]) for w in weights):
+                weights = [
+                    np.repeat(w[:, :1], len(z_c), axis=1) for w in weights
+                ]
+            else:
+                z_c = None
+        if z_c is None:
+            z_c = z
+        theta_c = shared("theta_oc")
+        if theta_c is None:
+            theta_c = np.unique(
+                np.concatenate(
+                    [pha.coords["theta_oc"].values for _, pha in phases]
+                )
+            )
+
+        pha_tot: NDArray | float = 0.0
+        bsca: NDArray | float = 0.0
+        for (_, pha), weight in zip(phases, weights, strict=True):
+            if np.array_equal(
+                pha.coords["wavelength_phase"].values, wavelength_c
+            ) and np.array_equal(pha.coords["z_phase"].values, z_c):
+                values = pha.values
+            else:
+                # the phase matrix each wavelength and depth of the
+                # common grid is given, as calc_iphase gives the profile
+                flat, ipha = calc_iphase(
+                    pha, wavelength_c, z_c, use_old_calc_iphase
+                )
+                values = flat[ipha]
+            theta = pha.coords["theta_oc"].values
+            if not np.array_equal(theta, theta_c):
+                values = _interp_theta(values, theta, theta_c)
+            bsca = bsca + weight
+            pha_tot = pha_tot + values * weight[:, :, None, None]
 
         with np.errstate(divide="ignore", invalid="ignore"):
-            pha_tot = pha_tot / bsca
-        return cast(xr.DataArray, pha_tot).fillna(0.0)
+            pha_tot = pha_tot / np.asarray(bsca)[:, :, None, None]
+        return xr.DataArray(
+            np.where(np.isnan(pha_tot), 0.0, pha_tot),
+            dims=["wavelength_phase", "z_phase", "nphamat", "theta_oc"],
+            coords={
+                "wavelength_phase": wavelength_c,
+                "z_phase": z_c,
+                "theta_oc": theta_c,
+            },
+        )
 
 
 class WaterRw(Water):

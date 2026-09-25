@@ -824,3 +824,89 @@ def test_hydrosol_arrays_interpolated_onto_wavelength_phase() -> None:
         pro_ref["OD_p_oc"].values * np.array([[1.0], [2.0]]),
         rtol=1e-12,
     )
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: [
+            HydrosolPR(chl=1.0, n_theta=721),
+            HydrosolZhai(chl_surf=1.0, n_theta=721),
+        ],
+        lambda: [
+            HydrosolPR(chl=1.0, n_theta=7201),
+            Hydrosol(bp=0.1, bbp_ratio=0.01),
+        ],
+        lambda: [
+            HydrosolPR(chl=1.0, n_theta=721, wavelength_phase=[500.0]),
+            HydrosolPR(chl=0.2, n_theta=721),
+        ],
+    ],
+    ids=["z_phase", "theta_oc", "wavelength_phase"],
+)
+def test_water1d_mixes_hydrosols_of_other_grids(make: Any) -> None:
+    """Hydrosols tabulated on different grids are mixed.
+
+    A hydrosol constant with depth, tabulated on a single depth, with
+    one that varies, hydrosols of different `n_theta` or
+    `wavelength_phase`: Water1D used to refuse to mix them. At each
+    wavelength and depth, the mixed phase matrix must be the average of
+    the phase matrices of the hydrosols alone, weighted by their
+    scattering coefficients, each interpolated linearly onto the
+    angles of the mixture.
+    """
+    wavelength = np.array([443.0, 550.0])
+    grid = np.array([0.0, -5.0, -10.0])
+    pro = Water1D(grid=grid, comp=make()).calc(wavelength)
+    theta = pro["theta_oc"].values
+
+    total: Any = 0.0
+    bsca: Any = 0.0
+    for hydrosol in make():
+        alone = Water1D(grid=grid, comp=[hydrosol]).calc(wavelength)
+        pha = alone["phase_oc"].values[alone["iphase_oc"].values]
+        pha = np.apply_along_axis(
+            lambda row, t=alone["theta_oc"].values: np.interp(theta, t, row),
+            -1, pha,
+        )
+        bp = hydrosol.coeffs(wavelength, grid)["bp"]
+        total = total + pha * bp[:, :, None, None]
+        bsca = bsca + bp
+    np.testing.assert_allclose(
+        pro["phase_oc"].values[pro["iphase_oc"].values],
+        total / bsca[:, :, None, None],
+        rtol=1e-12, atol=1e-12,
+    )
+
+
+def test_water1d_mixes_a_hydrosol_given_arrays() -> None:
+    """A Hydrosol given its phase and an array bp is mixed.
+
+    Its scattering coefficient, given over the wavelengths and depths
+    of the profile, weights its phase matrix at the tabulation
+    wavelength of the mixture and at every depth; it used to be
+    evaluated on the single wavelength and depth of the phase matrix,
+    and refused.
+    """
+    wavelength = np.array([443.0, 550.0])
+    grid = np.array([0.0, -5.0, -10.0])
+    pha, _ = Hydrosol(bp=0.1, bbp_ratio=0.015, n_theta=721).calc_phase(
+        np.array([550.0]), np.array([0.0]), np.full((1, 1), 0.015)
+    )
+    bp = np.array([[0.1, 0.1, 0.1], [0.2, 0.3, 0.4]])
+    chl = HydrosolPR(chl=0.5, n_theta=721, wavelength_phase=[550.0])
+    pro = Water1D(
+        grid=grid, comp=[Hydrosol(phase=pha, bp=bp), chl]
+    ).calc(wavelength)
+
+    # both are tabulated at 550 nm, which weights every wavelength
+    alone = Water1D(grid=grid, comp=[chl]).calc(wavelength)
+    pha_chl = alone["phase_oc"].values[alone["iphase_oc"].values[1]]
+    bp_chl = chl.coeffs(wavelength, grid)["bp"][1][:, None, None]
+    expected = (pha.values[0, 0] * bp[1][:, None, None]
+                + pha_chl * bp_chl) / (bp[1][:, None, None] + bp_chl)
+    for i in range(len(wavelength)):
+        np.testing.assert_allclose(
+            pro["phase_oc"].values[pro["iphase_oc"].values[i]], expected,
+            rtol=1e-12, atol=1e-12,
+        )
