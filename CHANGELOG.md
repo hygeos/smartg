@@ -1310,6 +1310,14 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix `Smartg(alis=True)` with the default fast plane parallel move mode,
+    which the documentation excluded but nothing refused: its ALIS gas
+    absorption was wrong (none between two events of the same layer, the
+    event depths mirrored within their layer), so the radiances came out
+    too bright. It now raises a `ValueError` asking for `alt_pp=True` or
+    `pp=False`.
+    `sif=True`, which only compiled with `alis=True` in these modes,
+    raises one too instead of a CUDA compilation error
   - Fix `BandSet`, and so the `wavelength` of `Smartg.run`, `Atm1D.calc`
     and `Water1D.calc`, which refused an integer, a NumPy integer or
     `float32` scalar, a tuple or a DataArray with a bare `AssertionError`.

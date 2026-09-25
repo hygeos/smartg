@@ -489,6 +489,42 @@ class Alis:
         )
 
 
+def _check_alis_kernel(
+    alis: bool, pp: bool, alt_pp: bool, opt3d: bool, sif: bool
+) -> None:
+    """
+    Refuse the ALIS and SIF kernels the move mode cannot honour.
+
+    ALIS needs the photons followed layer by layer, as the alternative
+    plane parallel (alt_pp, also set by opt3d) and spherical (pp=False)
+    move modes do: the fast plane parallel path computes the gas
+    absorption of the ALIS method wrongly. SIF uses the photon fields
+    of these ALIS modes and does not compile without them.
+
+    Parameters
+    ----------
+    alis, pp, alt_pp, opt3d, sif : bool
+        The compilation options of the same name of `Smartg`.
+
+    Raises
+    ------
+    ValueError
+        If alis or sif is set with the fast plane parallel move mode,
+        or sif without alis.
+    """
+    layer_by_layer = alt_pp or opt3d or not pp
+    if alis and not layer_by_layer:
+        raise ValueError(
+            'alis=True needs alt_pp=True or pp=False: the fast plane '
+            'parallel move mode does not compute the ALIS gas absorption'
+        )
+    if sif and not (alis and layer_by_layer):
+        raise ValueError(
+            'sif=True needs alis=True, together with alt_pp=True or '
+            'pp=False'
+        )
+
+
 def _le_angles(
     rad: NumericArrayLike | None,
     deg: NumericArrayLike | None,
@@ -664,8 +700,8 @@ class Smartg:
         Accumulate photons table in double precision (default double).
     alis : bool, optional
         Use the ALIS method (Emde et al. 2010) for treating gaseous
-        absorption and perturbed profile. The parameter alt_pp must be
-        set to True.
+        absorption and perturbed profile. Needs alt_pp=True or
+        pp=False.
     back : bool, optional
         Activate backward mode (else forward)
     bias : bool, optional
@@ -690,7 +726,8 @@ class Smartg:
         called on the previous Smartg. Without autoinit, each Smartg
         creates its own context on its device.
     sif : bool, optional
-        Include the Sun Induced Fluorescence
+        Include the Sun Induced Fluorescence, an experimental option.
+        Needs alis=True, together with alt_pp=True or pp=False.
     thermal : bool, optional
         Still in dev...
     rng : str, optional
@@ -760,9 +797,12 @@ class Smartg:
     Raises
     ------
     ValueError
-        If opt3d=True is used with pp=False. If amf_variance=True is
-        used without alis=True. If nscl>1 is used without alis=True.
-        If scatter_classes is not one of the accepted values. If
+        If opt3d=True is used with pp=False. If alis=True or sif=True
+        is used with the fast plane parallel move mode (pp=True without
+        alt_pp or opt3d), or sif=True without alis=True. If
+        amf_variance=True is used without alis=True. If nscl>1 is used
+        without alis=True. If scatter_classes is not one of the accepted
+        values. If
         scatter_classes='scattering_order_per_layer' and norders < 1.
     """
 
@@ -791,6 +831,8 @@ class Smartg:
         scatter_classes: str | list = 'last_scattering_layer',
         norders: int = 1,
     ) -> None:
+        # before the GPU context: nothing to release when it refuses
+        _check_alis_kernel(alis, pp, alt_pp, opt3d, sif)
         if (device is not None) and ('CUDA_DEVICE' in os.environ):
             raise ValueError(
                 "Can not use the 'device' option while the CUDA_DEVICE "

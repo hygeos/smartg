@@ -18,7 +18,13 @@ from smartg.atmosphere import AerOPAC, Atm1D, Atm3D, Cloud
 from smartg.grid3d import Grid3D
 from smartg.reptran import Reptran, reduce_reptran
 from smartg.sensor import Sensor, get_sensors_grid
-from smartg.smartg import Alis, LocalEstimate, Smartg, StdevLim
+from smartg.smartg import (
+    Alis,
+    LocalEstimate,
+    Smartg,
+    StdevLim,
+    _check_alis_kernel,
+)
 from smartg.surface import Environment, LambSurface, RoughSurface
 from smartg.view import smartg_view
 from smartg.water import HydrosolPR, Water1D
@@ -224,6 +230,52 @@ def test_alis_invalid(kwargs: dict[str, Any]) -> None:
         Alis(**kwargs)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"alis": True}, "alt_pp"),
+        ({"sif": True}, "sif=True"),
+        ({"sif": True, "alis": True}, "alt_pp"),
+        ({"sif": True, "alt_pp": True}, "sif=True"),
+        ({"sif": True, "pp": False}, "sif=True"),
+    ],
+)
+def test_alis_kernel_invalid(kwargs: dict[str, Any], match: str) -> None:
+    """Check that ALIS and SIF refuse the fast plane parallel mode."""
+    options = {
+        "alis": False, "pp": True, "alt_pp": False, "opt3d": False,
+        "sif": False, **kwargs,
+    }
+    with pytest.raises(ValueError, match=match):
+        _check_alis_kernel(**options)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"alis": True, "alt_pp": True},
+        {"alis": True, "pp": False},
+        {"alis": True, "opt3d": True},
+        {"alis": True, "alt_pp": True, "sif": True},
+        {"alis": True, "pp": False, "sif": True},
+    ],
+)
+def test_alis_kernel_valid(kwargs: dict[str, Any]) -> None:
+    """Check that ALIS and SIF accept the layer by layer modes."""
+    options = {
+        "alis": False, "pp": True, "alt_pp": False, "opt3d": False,
+        "sif": False, **kwargs,
+    }
+    _check_alis_kernel(**options)
+
+
+def test_alis_fast_pp_refused() -> None:
+    """Check that Smartg refuses ALIS before compiling the kernel."""
+    with pytest.raises(ValueError, match="alt_pp"):
+        Smartg(alis=True)
+
+
 def test_le_dict_deprecated(sg: Smartg) -> None:
     """Check that the legacy le dict runs, warns and is kept."""
     le = {
@@ -245,7 +297,7 @@ def test_le_dict_deprecated(sg: Smartg) -> None:
 def test_alis_options_dict_deprecated() -> None:
     """Check that the legacy alis_options map onto Alis."""
     with pytest.warns(DeprecationWarning, match="Alis"):
-        Smartg(alis=True).run(
+        Smartg(alis=True, alt_pp=True).run(
             np.array([400.0, 600.0]),
             atmosphere=Atm1D("afglt"),
             surface=RoughSurface(),
