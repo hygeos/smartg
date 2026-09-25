@@ -953,6 +953,14 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the local estimate refracted into the water through a
+    `RoughSurface`, which also counted the wave facets the photon reaches
+    from behind, where no light crosses. The downwelling radiance below
+    the surface (`I_down (0-)` with `le`) was too high under a diffuse
+    sky: 0.5 % for an isotropic sky under a 2 m/s wind, and for a
+    Rayleigh sky seen 40 degrees from the zenith 1.5 % at 2 m/s and 2.4 %
+    at 5 m/s. The radiance leaving the water is unchanged. The error was
+    already in v1.2.0
   - Fix the backward mode (`back=True`) at the air-water interface of a
     `RoughSurface` with `water`. A backward photon carries a radiance, which
     the interface divides by n^2 when the photon enters the water and

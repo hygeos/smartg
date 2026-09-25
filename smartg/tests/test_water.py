@@ -809,7 +809,7 @@ def test_backward_radiance_crosses_the_interface(
         assert abs(value - ref) < 4 * sd + 5e-3 * ref, msg
 
 
-@pytest.mark.parametrize("wind", [0.0])
+@pytest.mark.parametrize("wind", [0.0, 2.0, 5.0])
 def test_backward_sky_seen_from_under_water(wind: float) -> None:
     """Forward and backward agree on the sky seen from under water.
 
@@ -819,7 +819,10 @@ def test_backward_sky_seen_from_under_water(wind: float) -> None:
     from the sun, is sky light only. The backward photons leave the
     water to scatter in the atmosphere, and the interface multiplies
     their radiance by n^2: without it the backward radiance was
-    1 / n^2 = 0.57 times the forward one.
+    1 / n^2 = 0.57 times the forward one. Under a wind, the forward
+    local estimate refracted into the water also counted the wave
+    facets the photon reaches from behind, 1.9 % too high at 2 m/s and
+    2.3 % at 5 m/s.
     """
     common: dict[str, Any] = {
         "atmosphere": Atm1D("afglt"),

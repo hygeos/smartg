@@ -4775,6 +4775,16 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
      no=normalize(half);
      //no=normalize(no);
 
+     // A refraction crosses the facet: the incident and the refracted
+     // directions both go against its normal, else the photon would
+     // reach the facet from behind and there is no transmission
+     if (((ph->loc==SURF0P) && (count_level==DOWN0M) ||
+          (ph->loc==SURF0M) && (count_level==UP0P)) &&
+         ((dot(no, ph->v) >= 0.F) || (dot(no, v) >= 0.F))) {
+         ph->weight = 0.;
+         return;
+     }
+
      // Incidence angle
      cTh = fabs(-dot(no, ph->v));
      theta = acosf( fmin(1.00F-VALMIN, fmax( -(1.F-VALMIN), cTh ) ));
