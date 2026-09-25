@@ -2016,9 +2016,7 @@ def compare(
                 # Fallback: use first dimension coordinate
                 th = s.coords[next(iter(s.dims))].values
 
-            # Extract description from attributes
-            desc = s.attrs.get("latex_name", stokes[i])
-            desc = mdesc(str(desc))
+            desc = mdesc(stokes[i] + "_" + field)
 
             if errb:
                 e = cast(
@@ -2046,10 +2044,7 @@ def compare(
                 (np.sqrt(qref * qref + uref * uref) / iref) * 100,
             )
 
-            # Get description
-            i_desc = stk_i.attrs.get("latex_name", "I")
-            desc = "DoLP" + i_desc[1:]
-            desc = mdesc(str(desc))
+            desc = mdesc("DoLP_" + field)
 
             # Determine azimuth coordinate
             if "Azimuth angles" in s.dims:

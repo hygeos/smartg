@@ -22,6 +22,7 @@ from smartg.view import (
     _mirror_azimuths,
     camera_view,
     cat_view,
+    compare,
     nopt_view,
     plot_polar_iquv,
     profile_view,
@@ -263,4 +264,30 @@ def test_profile_view_phase_index_of_the_wavelength() -> None:
     (line,) = ax2.get_lines()
     np.testing.assert_array_equal(line.get_xdata(), iphase[1, 1:])
     np.testing.assert_array_equal(line.get_ydata(), z[1:])
+    plt.close(fig)
+
+
+def test_compare_panel_titles() -> None:
+    """The panels are titled after the compared output variables."""
+    phi = np.arange(0.0, 360.0, 30.0)
+    th = np.linspace(1.0, 89.0, 45)
+    dims = ("Azimuth angles", "Zenith angles")
+    stokes = np.ones((phi.size, th.size))
+    ds = xr.Dataset(
+        {
+            f"{stk}_up (TOA)": (dims, factor * stokes)
+            for stk, factor in zip("IQUV", (1.0, 0.1, 0.05, 0.01))
+        },
+        coords={"Azimuth angles": phi, "Zenith angles": th},
+    )
+
+    fig = compare(ds, ds)
+
+    titles = [ax.get_title() for ax in fig.axes[:4]]
+    assert titles == [
+        r"$I^{\uparrow}_{TOA}$",
+        r"$Q^{\uparrow}_{TOA}$",
+        r"$U^{\uparrow}_{TOA}$",
+        r"$DoLP^{\uparrow}_{TOA}$",
+    ]
     plt.close(fig)

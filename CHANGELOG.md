@@ -920,6 +920,9 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the panel titles of `smartg.view.compare`, garbled since
+    v2.0.0dev1 (`$^{\downarrow}_{}I$` for `I_up (TOA)`): they are built
+    from the compared variable again, for instance `$I^{\uparrow}_{TOA}$`
   - Fix `smartg.view.profile_view` and `input_view`, which since
     v2.0.0dev1 sliced the wavelength axis of the phase matrix index: the
     index axis was left empty, or showed one line per wavelength when
