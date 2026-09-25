@@ -12,13 +12,13 @@ DatomicAdd fallback of the GPUs without a double precision atomicAdd,
 forced on the current GPU.
 """
 
-from collections.abc import Iterator
 from typing import Any
 
 import geoclide as gc
 import numpy as np
 import pytest
 import xarray as xr
+from pycuda.compiler import SourceModule
 
 import smartg.smartg as smartg_mod
 from smartg.albedo import AlbedoCst
@@ -284,11 +284,15 @@ def _run(
     scope="module",
     params=["native", pytest.param("datomicadd", marks=pytest.mark.slow)],
 )
-def sg(request: pytest.FixtureRequest) -> Iterator[Smartg]:
-    """Compile the kernel, natively or with the DatomicAdd fallback."""
+def sg(request: pytest.FixtureRequest) -> Smartg:
+    """Compile the kernel, natively or with the DatomicAdd fallback.
+
+    The kernel is compiled when the Smartg is built, so the compiler
+    is patched for that alone, and never while a native one is built.
+    """
     if request.param == "native":
-        yield Smartg(double=True, obj3d=True)
-        return
+        assert smartg_mod.SourceModule is SourceModule
+        return Smartg(double=True, obj3d=True)
     source_module = smartg_mod.SourceModule
 
     def forced(*args: Any, **kwargs: Any) -> Any:
@@ -299,7 +303,8 @@ def sg(request: pytest.FixtureRequest) -> Iterator[Smartg]:
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(smartg_mod, "SourceModule", forced)
-        yield Smartg(double=True, obj3d=True)
+        sg = Smartg(double=True, obj3d=True)
+    return sg
 
 
 @pytest.fixture(scope="module")

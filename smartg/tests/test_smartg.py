@@ -6,13 +6,13 @@ the outputs and the arguments the run accepts.
 """
 
 import math
-from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
 import pytest
 import xarray as xr
 from numpy.typing import NDArray
+from pycuda.compiler import SourceModule
 
 import smartg.smartg as smartg_mod
 from smartg import conftest
@@ -385,8 +385,13 @@ def test_alis_cdist_ocean(sg_alis: Smartg) -> None:
 
 
 @pytest.fixture(scope="module")
-def sg_alis_datomicadd() -> Iterator[Smartg]:
-    """Build an ALIS Smartg on the DatomicAdd fallback of old GPUs."""
+def sg_alis_datomicadd() -> Smartg:
+    """Build an ALIS Smartg on the DatomicAdd fallback of old GPUs.
+
+    The kernel is compiled when the Smartg is built, so the compiler
+    is patched for that alone: the Smartg objects built afterwards, the
+    native reference of test_alis_datomicadd first, stay native.
+    """
     source_module = smartg_mod.SourceModule
 
     def forced(*args: Any, **kwargs: Any) -> Any:
@@ -397,7 +402,8 @@ def sg_alis_datomicadd() -> Iterator[Smartg]:
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(smartg_mod, "SourceModule", forced)
-        yield Smartg(alis=True, alt_pp=True, amf_variance=True)
+        sg = Smartg(alis=True, alt_pp=True, amf_variance=True)
+    return sg
 
 
 def test_alis_datomicadd(sg_alis_datomicadd: Smartg) -> None:
@@ -418,6 +424,8 @@ def test_alis_datomicadd(sg_alis_datomicadd: Smartg) -> None:
         "seed": 1,
     }
     forced = sg_alis_datomicadd.run(**kwargs)
+    # the fixture no longer patches the compiler
+    assert smartg_mod.SourceModule is SourceModule
     native = Smartg(alis=True, alt_pp=True, amf_variance=True).run(**kwargs)
     np.testing.assert_allclose(
         forced["I_up (TOA)"].values, native["I_up (TOA)"].values, rtol=0.03
