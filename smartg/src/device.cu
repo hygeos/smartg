@@ -4704,8 +4704,12 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
         while (theta >= DEMIPI) {
            iter++;
            if (iter >= 100) {
-                ph->loc = NONE;
-                break;
+                // At least half of the facets face a photon coming
+                // from its side of the interface: this photon comes
+                // from the other side. It is terminated, and counted
+                // so that the run ends
+                ph->loc = ABSORBED;
+                return;
            }
            beta = atanf( sig*sqrtf(-__logf(RAND)) );
            alpha = DEUXPI * RAND;

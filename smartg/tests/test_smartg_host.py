@@ -18,6 +18,7 @@ from smartg.smartg import (
     _check_albedo_map_codes,
     _check_flat_surface_le,
     _check_forward_raster,
+    _check_sensor_directions,
     _impact_init,
     _isotropic,
     _RatioStdev,
@@ -102,6 +103,55 @@ def test_forward_raster_refused(case: str) -> None:
         sensors[2].cell_size = 0.5
     with pytest.raises(ValueError, match="forward run in a 3D atmosphere"):
         _check_forward_raster(sensors, 0.0, 5.0, 3, 2)
+
+
+# (loc, th_deg, sensor_type, fov) of the sensors that look at the
+# interface they stand on, or that stand in a medium
+LOOKING_AT_IT = [
+    ("SURF0P", 150.0, 0, 0.0),
+    ("SURF0P", 180.0, 1, 90.0),
+    ("SURF0M", 40.0, 0, 0.0),
+    ("SURF0M", 0.0, 2, 90.0),
+    ("SEAFLOOR", 180.0, 0, 0.0),
+    ("ATMOS", 40.0, 0, 0.0),
+    ("OCEAN", 150.0, 0, 0.0),
+]
+LOOKING_AWAY = [
+    ("SURF0P", 0.0, 0, 0.0),
+    ("SURF0P", 90.0, 0, 0.0),
+    ("SURF0P", 150.0, 1, 90.0),
+    ("SURF0M", 150.0, 0, 0.0),
+    ("SURF0M", 30.0, 1, 90.0),
+    ("SEAFLOOR", 30.0, 0, 0.0),
+]
+
+
+def _sensor(loc: str, th_deg: float, sensor_type: int, fov: float) -> Sensor:
+    """Return a sensor of the given localization and direction."""
+    return Sensor(loc=loc, th_deg=th_deg, sensor_type=sensor_type, fov=fov)
+
+
+@pytest.mark.parametrize("case", LOOKING_AT_IT)
+def test_sensor_directions_accepted(
+    case: tuple[str, float, int, float],
+) -> None:
+    """Check the sensors that look at the interface they stand on."""
+    _check_sensor_directions([_sensor(*case)])
+
+
+@pytest.mark.parametrize("case", LOOKING_AWAY)
+def test_sensor_directions_refused(
+    case: tuple[str, float, int, float],
+) -> None:
+    """Check the sensors on an interface that look away from it.
+
+    Their photons meet the interface all the same, and are lost: a
+    sensor at 'SURF0P' looking up measured 0, and one at 'SURF0M'
+    looking down hung the kernel.
+    """
+    sensors = [_sensor("ATMOS", 40.0, 0, 0.0), _sensor(*case)]
+    with pytest.raises(ValueError, match=f"sensor 1 at '{case[0]}'"):
+        _check_sensor_directions(sensors)
 
 
 def test_flat_surface_refused_with_le() -> None:

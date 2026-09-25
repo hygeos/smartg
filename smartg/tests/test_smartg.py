@@ -680,6 +680,8 @@ INVALID_RUNS = [
         ValueError,
         "FlatSurface",
     ),
+    ({"sensor": Sensor(th_deg=30.0, loc="SURF0P")}, ValueError, "SURF0P"),
+    ({"sensor": Sensor(th_deg=150.0, loc="SURF0M")}, ValueError, "SURF0M"),
 ]
 
 
@@ -690,6 +692,7 @@ INVALID_RUNS = [
         "flux", "flux-le", "alis", "environment", "wavelength_proba",
         "sensor_proba", "cell_proba-name", "cell_proba-auto",
         "cell_proba-shape", "depol", "depol_water", "flat-le",
+        "surf0p-up", "surf0m-down",
     ],
 )
 def test_run_invalid(
@@ -1466,3 +1469,56 @@ def test_rough_surface_at_grazing_incidence(th_deg: float) -> None:
         np.sum(mirror["flux_up (TOA)"].values), 1.0, rtol=3e-3
     )
 
+
+# The sensors on either side of the surface, with the level and the
+# zenith angle of the forward local estimate they must match
+SURFACE_SENSORS = {
+    "SURF0P": ({"th_deg": 150.0, "loc": "SURF0P"}, "up (0+)", 0),
+    "OCEAN": ({"th_deg": 150.0, "loc": "OCEAN"}, "up (0-)", 0),
+    "SURF0M": ({"th_deg": 40.0, "loc": "SURF0M"}, "down (0-)", 1),
+    "ATMOS": ({"th_deg": 40.0, "loc": "ATMOS"}, "down (0+)", 1),
+}
+
+
+@pytest.mark.parametrize("alt_pp", [False, True])
+@pytest.mark.parametrize("name", list(SURFACE_SENSORS))
+def test_sensor_on_either_side_of_the_surface(name: str, alt_pp: bool) -> None:
+    """Check the backward sensors just above and below the surface.
+
+    Under a Rayleigh atmosphere, over clear water and a seafloor of
+    albedo 0.5, they see what the forward local estimate sees there:
+    looking down from 'SURF0P' or from 'OCEAN' at pos_z=0, and up from
+    'SURF0M' or from 'ATMOS' at pos_z=0. The Sensor docstring gave
+    'SURF0P' and 'SURF0M' the other directions, which measured 0 and
+    hung the kernel.
+    """
+    sensor, level, i = SURFACE_SENSORS[name]
+    common: dict[str, Any] = {
+        "atmosphere": Atm1D("afglt"),
+        "surface": RoughSurface(wind=2.0),
+        "water": _clear_water(0.5),
+        "n_photons": 1e7,
+        "stdev": True,
+        "progress": False,
+    }
+    fw = Smartg(alt_pp=alt_pp).run(
+        450.0,
+        th_deg=30.0,
+        output_layers=3,
+        le=LocalEstimate(th_deg=[30.0, 40.0], phi_deg=[90.0]),
+        seed=141,
+        **common,
+    )
+    bw = Smartg(back=True, alt_pp=alt_pp).run(
+        450.0,
+        sensor=Sensor(ph_deg=0.0, **sensor),
+        le=LocalEstimate(th_deg=[30.0], phi_deg=[90.0], count_level=[0]),
+        seed=142,
+        **common,
+    )
+    a = fw[f"I_{level}"].values.ravel()[i]
+    sa = fw[f"I_stdev_{level}"].values.ravel()[i]
+    b = bw["I_up (TOA)"].values.ravel()[0]
+    sb = bw["I_stdev_up (TOA)"].values.ravel()[0]
+    assert b > 0.1
+    assert abs(a - b) < 5 * np.hypot(sa, sb), (name, a, sa, b, sb)

@@ -75,7 +75,7 @@ from smartg.objects3d import (
 from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
 from smartg.phase import theta_grid as _make_theta_grid
 from smartg.progress import progress as make_progress
-from smartg.sensor import Sensor
+from smartg.sensor import LOC_CODE, Sensor
 from smartg.surface import Environment, FlatSurface, SurfaceLike
 from smartg.typing import BandLike, NumericArrayLike
 from smartg.water import Water
@@ -1510,7 +1510,8 @@ class Smartg:
             parameter of CusBackward, which applies only without le.
         sensor : None | Sensor | list, optional
             The light source / sensor (Sensor object or list of Sensor
-            objects) in forward / backward mode.
+            objects) in forward / backward mode. A sensor on an
+            interface must look at it, see `Sensor`.
         refraction : bool, optional
             If True include atmospheric refraction.
         reflectance : bool, optional
@@ -2078,6 +2079,8 @@ class Smartg:
                 'sensor must be a Sensor class, a list or Sensor '
                 'classes or equal to None!'
             )
+        if sensor is not None:
+            _check_sensor_directions(sensor2)
 
         n_sensor = len(sensor2)
 
@@ -2758,6 +2761,49 @@ def _check_forward_raster(
                 f"the sensor {i} of a forward run in a 3D atmosphere is "
                 f"not the cell ({x}, {y}) of their raster of {cell_size} "
                 "km cells, x varying first (see get_sensors_grid)"
+            )
+
+
+def _check_sensor_directions(sensors: Sequence[Sensor]) -> None:
+    """Check that the sensors on an interface look at it.
+
+    The photons of a sensor at 'SURF0P', 'SURF0M' or 'SEAFLOOR' start
+    on that interface and meet it at once, whatever their direction:
+    they must go towards it, down from 'SURF0P' and 'SEAFLOOR', up
+    from 'SURF0M'. The photons of a flux sensor spread over a cone of
+    half angle fov around its direction.
+
+    Parameters
+    ----------
+    sensors : sequence of Sensor
+        The sensors of the run.
+
+    Raises
+    ------
+    ValueError
+        If a sensor on an interface does not look at it.
+    """
+    for i, sensor in enumerate(sensors):
+        loc = LOC_CODE[int(sensor.dict['loc'])]
+        th_deg = float(sensor.dict['th_deg'])
+        fov = float(sensor.dict['fov']) if sensor.dict['sensor_type'] else 0.
+        if loc in ('SURF0P', 'SEAFLOOR'):
+            if th_deg > 90. and th_deg - fov >= 90.:
+                continue
+            other = ("loc='ATMOS' at pos_z=0" if loc == 'SURF0P'
+                     else "loc='OCEAN' just above the seafloor")
+            raise ValueError(
+                f"the sensor {i} at {loc!r} looks at the interface "
+                f"below it, with th_deg - fov >= 90 and th_deg > 90, "
+                f"got th_deg={th_deg} and fov={fov}: a sensor looking "
+                f"up from there is {other}"
+            )
+        if loc == 'SURF0M' and not (th_deg < 90. and th_deg + fov <= 90.):
+            raise ValueError(
+                f"the sensor {i} at 'SURF0M' looks at the surface above "
+                f"it, with th_deg + fov <= 90 and th_deg < 90, got "
+                f"th_deg={th_deg} and fov={fov}: a sensor looking down "
+                "from there is loc='OCEAN' at pos_z=0"
             )
 
 

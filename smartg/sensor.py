@@ -60,14 +60,22 @@ class Sensor:
     loc : str, optional
         Localization of the sensor. Possibilities are:
 
-        * 'SURF0P' -> Start from the surface looking upward, at TOA
-          (air side). Default value.
-        * 'SURF0M' -> Start from the surface looking downward, at
-          ocean surface (water side).
-        * 'ATMOS' -> Start from the atmosphere.
-        * 'OCEAN' -> Start from the ocean.
-        * 'SEAFLOOR' -> Start from the sea floor.
+        * 'SURF0P' -> Just above the surface (air side), looking down
+          at it (th_deg > 90). Default value.
+        * 'SURF0M' -> Just below the surface (water side), looking up
+          at it (th_deg < 90).
+        * 'ATMOS' -> In the atmosphere, looking in any direction. At
+          pos_z=0 it looks up from just above the surface.
+        * 'OCEAN' -> In the ocean, looking in any direction. At
+          pos_z=0 it looks down from just below the surface.
+        * 'SEAFLOOR' -> On the sea floor, looking down at it
+          (th_deg > 90).
         * 'OBJSURF' -> Start from a 3d object surface.
+
+        The photons of a sensor on an interface ('SURF0P', 'SURF0M'
+        or 'SEAFLOOR') meet it at once, so the sensor must look at
+        it, with the whole cone of a flux sensor: `Smartg.run`
+        refuses it otherwise.
     fov : float, optional
         The field of view in degrees. Only for a flux sensor, it is
         forced to 0 for a radiance one. Default 0.
