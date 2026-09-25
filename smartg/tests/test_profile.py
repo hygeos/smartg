@@ -16,6 +16,7 @@ from smartg.atmosphere import (
     Atm1D,
     Cloud,
     ProfileBase,
+    extract_split,
     n_air_co2,
     refractivity,
     strgrid_to_numpy,
@@ -293,3 +294,33 @@ def test_profile_absorption_on_the_given_profile() -> None:
     ref = Atm1D("afglt", grid=grid).profile([_KdisLikeBand()])
     np.testing.assert_allclose(pro["OD_g"].values, ref["OD_g"].values)
     assert pro["OD_g"].values[0, -1] > 0.0
+
+
+def test_extract_split_of_a_run_output() -> None:
+    """extract_split reads the profile of a Smartg.run output back.
+
+    The run renames the phase index dimension phase_index_atm and the
+    term one nphamat_atm (see smartg._finalize), which extract_split
+    did not expect: it raised on every run output. The profile it
+    extracts rebuilds the original one.
+    """
+    comp = [AerOPAC("continental_clean", 0.2, 550.0)]
+    pro = Atm1D("afglt", comp=comp).calc([550.0])
+    run = pro[["OD_p", "OD_r", "OD_g", "ssa_p_atm", "iphase_atm"]]
+    run["phase_atm"] = (
+        ["phase_index_atm", "nphamat_atm", "theta_atm"],
+        pro["phase_atm"].values,
+    )
+    prof_abs, prof_ray, prof_aer, prof_phases = extract_split(run)
+    assert prof_phases is not None
+    rebuilt = Atm1D(
+        "afglt", prof_abs=prof_abs, prof_ray=prof_ray, prof_aer=prof_aer,
+        prof_phases=prof_phases,
+    ).calc([550.0], phase=False)
+    np.testing.assert_allclose(
+        rebuilt["OD_p"].values, pro["OD_p"].values, rtol=1e-5
+    )
+    np.testing.assert_array_equal(
+        rebuilt["phase_atm"].values, pro["phase_atm"].values
+    )
+    assert extract_split(run.drop_vars(["phase_atm", "iphase_atm"]))[3] is None

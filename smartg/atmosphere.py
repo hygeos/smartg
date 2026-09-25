@@ -6908,7 +6908,7 @@ def extract_split(
     np.ndarray,
     np.ndarray,
     tuple[np.ndarray, np.ndarray],
-    tuple[np.ndarray, list[xr.DataArray]],
+    tuple[np.ndarray, list[xr.DataArray]] | None,
 ]:
     r"""Compute the optical properties from SMART-G run results.
 
@@ -6922,15 +6922,17 @@ def extract_split(
     ----------
     ds_sg : Dataset
         SMART-G run results containing the atmospheric optical
-        properties.
+        properties, or the profile returned by `Atm1D.calc`.
         Must include the following datasets:
 
         - OD_p: particulate optical depth
         - OD_r: Rayleigh optical depth
         - OD_g: gaseous optical depth
         - ssa_p_atm: single scattering albedo of particles
-        - iphase_atm: phase function indices
-        - phase_atm: phase matrix function
+        - iphase_atm: phase function indices, if phase_atm is there
+        - phase_atm: phase matrix function, optional, whose first
+          dimension is the phase index (``phase_index_atm`` in the run
+          results, ``iphase`` in a profile)
 
     Returns
     -------
@@ -6943,12 +6945,14 @@ def extract_split(
 
         - prof_aer[0]: Aerosol optical depth profile
         - prof_aer[1]: Single scattering albedo profile of aerosols
-    prof_phase : tuple of (ndarray, list)
+    prof_phase : tuple of (ndarray, list) or None
         Tuple containing:
 
         - prof_phase[0]: Phase function indices (iphase_atm)
         - prof_phase[1]: List of phase matrix DataArray objects for each
           index
+
+        None when `ds_sg` holds no phase matrix.
 
     Examples
     --------
@@ -6971,9 +6975,15 @@ def extract_split(
     pro_abs = diff1(
         ds_sg["OD_g"].to_numpy().astype(np.float32, copy=False), axis=1
     )
+    if "phase_atm" not in ds_sg:
+        return pro_abs, pro_ray, (pro_aer, ssa_aer), None
     pro_iphase = ds_sg["iphase_atm"].to_numpy()
+    # Smartg.run names the phase index dimension phase_index_atm, and
+    # a profile iphase
+    phase = ds_sg["phase_atm"]
+    index_dim = phase.dims[0]
     pro_phases = [
-        ds_sg["phase_atm"].isel(iphase=i, drop=True)
+        phase.isel({index_dim: i}, drop=True)
         for i in range(int(pro_iphase.max()) + 1)
     ]
 
