@@ -772,3 +772,16 @@ def test_derived_phase_backscattering(
     np.testing.assert_allclose(
         bb[:, 1:], (iop["bbp_ratio"] * iop["bp"])[:, 1:], rtol=rtol
     )
+
+
+def test_hydrosol_zhai_warns_nothing() -> None:
+    """HydrosolZhai evaluates without a floating point warning.
+
+    Its non-algal particles, whose concentration is null, used to take
+    the logarithm of 0.
+    """
+    with np.errstate(all="raise"):
+        iop = HydrosolZhai(chl_surf=1.0).iop(
+            np.array([443.0, 550.0]), np.array([0.0, -5.0, -10.0])
+        )
+    assert np.isfinite(iop["bp"]).all()

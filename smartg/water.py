@@ -1215,17 +1215,16 @@ class HydrosolZhai(Hydrosol):
         s_cdom = 0.02
         acdom = acdm440 * np.exp(-s_cdom * (wavelength_2 - 440))
 
-        # non-algal particles backscattering
+        # non-algal particles backscattering, none here (spm = 0)
         spm = 0.0  # g/m3
-        gamma = 0.5
-        bbpnap650 = 10 ** (
-            1.03 * np.log10(spm) - 2.06
-        )  # Neukermans et al 2012
-        bbpnap = bbpnap650 * (wavelength_2 / 650.0) ** (-gamma)
-        bbp_ratio_nap = np.zeros_like(aphy)
-        bbp_ratio_nap[:] = 0.04
-        bpnap = bbpnap / bbp_ratio_nap
-        bp += bpnap
+        bbp_ratio_nap = np.full_like(aphy, 0.04)
+        if spm > 0.0:
+            gamma = 0.5
+            bbpnap650 = 10 ** (
+                1.03 * np.log10(spm) - 2.06
+            )  # Neukermans et al 2012
+            bbpnap = bbpnap650 * (wavelength_2 / 650.0) ** (-gamma)
+            bp += bbpnap / bbp_ratio_nap
 
         return {
             "ap": aphy,

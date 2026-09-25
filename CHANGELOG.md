@@ -1131,6 +1131,9 @@ final `v2.0.0` release.
     the leading factor of the Edlén equation: `n_atm - 1` was 100 times
     too small, so that the runs with `refraction=True` hardly refracted.
     Their results change
+  - `HydrosolZhai` no longer warns of a division by zero in `log10` on
+    every evaluation: its null concentration of non-algal particles is
+    skipped instead of taken to the logarithm
   - Fix the particle backscattering of the phase matrices `Hydrosol`,
     `HydrosolPR` and `HydrosolZhai` derive from the backscattering ratio:
     the forward peak of the Fournier-Forand mixture their angular grid
