@@ -3275,7 +3275,8 @@ def _finalize(
         ds.attrs['S_Receiver'] = str(
             dic_stp["SREC"]
         )  # Receiver surface in km²
-        ds.attrs['S_Cell'] = str(dic_stp["TC"])  # Cell surface in km²
+        # side length of a receiver cell in km, not its surface
+        ds.attrs['S_Cell'] = str(dic_stp["TC"])
         # half-angle of the receiver solid angle
         if back:
             ds.attrs['ALDEG'] = str(dic_stp["receiver_fov"])

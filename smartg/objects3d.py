@@ -750,10 +750,10 @@ class Heliostat:
         >= 1 (total facets >= 2).
         Default: 2
     helio_size_x : float, optional
-        Heliostat size in the x direction (meters).
+        Heliostat size in the x direction (kilometers).
         Default: 0.02
     helio_size_y : float, optional
-        Heliostat size in the y direction (meters).
+        Heliostat size in the y direction (kilometers).
         Default: 0.02
     curve_focal_length : float | None, optional
         Focal length (in km) for curvature. If None, the focal length
@@ -910,9 +910,9 @@ def find_rots(
         A list containing rotation information:
 
         - **list[0]** : rot_y_deg (float)
-            Rotation angle around Y-axis in radians
+            Rotation angle around Y-axis in degrees
         - **list[1]** : rot_z_deg (float)
-            Rotation angle around Z-axis in radians
+            Rotation angle around Z-axis in degrees
         - **list[2]** : combined_tf (gc.Transform)
             Combined rotation transformation (geoclide.Transform
             object) that applies both rotations to orient the surface
@@ -1124,10 +1124,11 @@ def generate_le_h(
         A Heliostat class object representing the heliostat to be
         converted.
         Default is Heliostat().
-    receiver_pos : gc.Point, optional
-        Position of the receiver as a geoclide.Point object. Used to
-        orient facets toward the target. If None, a default point is
-        used. Default is None.
+    receiver_pos : gc.Point
+        Position of the receiver as a geoclide.Point object, used to
+        orient the heliostat toward the target. Required, even when the
+        focal length or facet_transforms is given: None raises a
+        TypeError.
     theta_deg : float, optional
         Solar zenith angle in degrees. Default is 0.
     phi_deg : float, optional
