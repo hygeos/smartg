@@ -1,8 +1,8 @@
 """Configuration shared by the tests of this directory.
 
 It declares the slow marker that separates the two tiers of the
-IPRT phase B and phase 3 tests, and leaves the slow one out unless
-it is asked for.
+IPRT phase B and phase 3 tests, and of the 3D object tests, and
+leaves the slow one out unless it is asked for.
 """
 
 
@@ -13,7 +13,8 @@ def pytest_configure(config: pytest.Config) -> None:
     """Declare the slow marker so that pytest does not warn."""
     config.addinivalue_line(
         "markers",
-        "slow: full photon count IPRT benchmark reproduction against MYSTIC",
+        "slow: full photon count IPRT benchmark reproduction against "
+        "MYSTIC, and the 3D objects with the DatomicAdd fallback",
     )
 
 

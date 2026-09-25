@@ -6657,6 +6657,25 @@ __device__ void Obj3DRoughSurf(Photon* ph, int le, float* tabthv, float* tabphi,
     }
 } // FUNCTION OBJ3DROUGHSURF
 
+// Add a weight to a receiver or loss tally: the native atomicAdd, or
+// DatomicAdd for the doubles of the GPUs without a double precision
+// atomicAdd (FORCE_DATOMICADD selects it on any GPU, for the tests)
+__device__ __forceinline__ void atomicAddW(float* address, float val)
+{
+	atomicAdd(address, val);
+}
+
+#ifdef DOUBLE
+__device__ __forceinline__ void atomicAddW(double* address, double val)
+{
+	#if __CUDA_ARCH__ >= 600 && !defined(FORCE_DATOMICADD)
+	atomicAdd(address, val);
+	#else
+	DatomicAdd(address, val);
+	#endif
+}
+#endif
+
 __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
 {
 	#ifdef DOUBLE
@@ -6693,27 +6712,15 @@ __device__ void countLoss(Photon* ph, IGeo* geoS, void *wPhLoss, void *wPhLoss2)
     
 	if (ph->H < 2) // If this is the first time that a photon is reaching a heliostat
 	{
-		#if !defined(DOUBLE) || (defined(DOUBLE) && (__CUDA_ARCH__ >= 600))
-	    atomicAdd(wPhLossC, w_I); atomicAdd(wPhLossC2, w_I*w_I);
-		atomicAdd(wPhLossC+1, w_rhoM); atomicAdd(wPhLossC2+1, w_rhoM*w_rhoM);
+		atomicAddW(wPhLossC, w_I); atomicAddW(wPhLossC2, w_I*w_I);
+		atomicAddW(wPhLossC+1, w_rhoM); atomicAddW(wPhLossC2+1, w_rhoM*w_rhoM);
 		#ifndef BACK
-		atomicAdd(wPhLossC+2, w_rhoP); atomicAdd(wPhLossC2+2, w_rhoP*w_rhoP);
-		atomicAdd(wPhLossC+3, w_BM); atomicAdd(wPhLossC2+3, w_BM*w_BM);
-		atomicAdd(wPhLossC+4, w_BP); atomicAdd(wPhLossC2+4, w_BP*w_BP);
-		atomicAdd(wPhLossC+5, w_SM); atomicAdd(wPhLossC2+5, w_SM*w_SM);
-		atomicAdd(wPhLossC+6, w_SP); atomicAdd(wPhLossC2+6, w_SP*w_SP);
-        #endif // END BACK
-        #else // double && old nvidia card
-		DatomicAdd(wPhLossC, w_I); DatomicAdd(wPhLossC2, w_I*w_I);
-		DatomicAdd(wPhLossC+1, w_rhoM); DatomicAdd(wPhLossC2+1, w_rhoM*w_rhoM);
-		#ifndef BACK
-		DatomicAdd(wPhLossC+2, w_rhoP); DatomicAdd(wPhLossC2+2, w_rhoP*w_rhoP);
-		DatomicAdd(wPhLossC+3, w_BM); DatomicAdd(wPhLossC2+3, w_BM*w_BM);
-		DatomicAdd(wPhLossC+4, w_BP); DatomicAdd(wPhLossC2+4, w_BP*w_BP);
-		DatomicAdd(wPhLossC+5, w_SM); DatomicAdd(wPhLossC2+5, w_SM*w_SM);
-		DatomicAdd(wPhLossC+6, w_SP); DatomicAdd(wPhLossC2+6, w_SP*w_SP);
+		atomicAddW(wPhLossC+2, w_rhoP); atomicAddW(wPhLossC2+2, w_rhoP*w_rhoP);
+		atomicAddW(wPhLossC+3, w_BM); atomicAddW(wPhLossC2+3, w_BM*w_BM);
+		atomicAddW(wPhLossC+4, w_BP); atomicAddW(wPhLossC2+4, w_BP*w_BP);
+		atomicAddW(wPhLossC+5, w_SM); atomicAddW(wPhLossC2+5, w_SM*w_SM);
+		atomicAddW(wPhLossC+6, w_SP); atomicAddW(wPhLossC2+6, w_SP*w_SP);
 		#endif // END BACK
-        #endif // END !defined(DOUBLE) || (defined(DOUBLE) && (__CUDA_ARCH__ >= 600))
 	}
 }
 
@@ -6847,115 +6854,60 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
     weight2 = weight * weight;
 	if(isnan(weight)){printf("Care weight is nan !! \n");return;}
 
-    #if !defined(DOUBLE) || (defined(DOUBLE) && __CUDA_ARCH__ >= 600)
 	// All the beams reaching a receiver
-	atomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);	
+	atomicAddW(tabCountObj+(nbCy*indI)+indJ, weight);	
 
 	// Les huit catégories
 	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
 	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-		atomicAdd(wPhCatC+(0*NLAMd)+ph->ilam, weight); atomicAdd(wPhCatC2+(0*NLAMd)+ph->ilam, weight2);// comptage poids
+		atomicAddW(wPhCatC+(0*NLAMd)+ph->ilam, weight); atomicAddW(wPhCatC2+(0*NLAMd)+ph->ilam, weight2);// comptage poids
 		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
-		atomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
+		atomicAddW(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
 	{ // CAT 2 : only H avant de toucher le R.
-		atomicAdd(wPhCatC+(1*NLAMd)+ph->ilam, weight); atomicAdd(wPhCatC2+(1*NLAMd)+ph->ilam, weight2);
+		atomicAddW(wPhCatC+(1*NLAMd)+ph->ilam, weight); atomicAddW(wPhCatC2+(1*NLAMd)+ph->ilam, weight2);
 		atomicAdd(nbPhCat+1, 1);
-		atomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAddW(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 3 : only E avant de toucher le R.
-		atomicAdd(wPhCatC+(2*NLAMd)+ph->ilam, weight); atomicAdd(wPhCatC2+(2*NLAMd)+ph->ilam, weight2);
+		atomicAddW(wPhCatC+(2*NLAMd)+ph->ilam, weight); atomicAddW(wPhCatC2+(2*NLAMd)+ph->ilam, weight2);
 		atomicAdd(nbPhCat+2, 1);
-		atomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAddW(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 4 : only S avant de toucher le R.
-		atomicAdd(wPhCatC+(3*NLAMd)+ph->ilam, weight); atomicAdd(wPhCatC2+(3*NLAMd)+ph->ilam, weight2);
+		atomicAddW(wPhCatC+(3*NLAMd)+ph->ilam, weight); atomicAddW(wPhCatC2+(3*NLAMd)+ph->ilam, weight2);
 		atomicAdd(nbPhCat+3, 1);
-		atomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAddW(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
 	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		atomicAdd(wPhCatC+(4*NLAMd)+ph->ilam, weight); atomicAdd(wPhCatC2+(4*NLAMd)+ph->ilam, weight2);
+		atomicAddW(wPhCatC+(4*NLAMd)+ph->ilam, weight); atomicAddW(wPhCatC2+(4*NLAMd)+ph->ilam, weight2);
 		atomicAdd(nbPhCat+4, 1);
-		atomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAddW(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}
 	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
 	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		atomicAdd(wPhCatC+(5*NLAMd)+ph->ilam, weight); atomicAdd(wPhCatC2+(5*NLAMd)+ph->ilam, weight2);
+		atomicAddW(wPhCatC+(5*NLAMd)+ph->ilam, weight); atomicAddW(wPhCatC2+(5*NLAMd)+ph->ilam, weight2);
 		atomicAdd(nbPhCat+5, 1);
-		atomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAddW(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
 		//=(%f,%f)
 	}
 	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		atomicAdd(wPhCatC+(6*NLAMd)+ph->ilam, weight); atomicAdd(wPhCatC2+(6*NLAMd)+ph->ilam, weight2);
+		atomicAddW(wPhCatC+(6*NLAMd)+ph->ilam, weight); atomicAddW(wPhCatC2+(6*NLAMd)+ph->ilam, weight2);
 		atomicAdd(nbPhCat+6, 1);
-		atomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAddW(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}	
 	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
 	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		atomicAdd(wPhCatC+(7*NLAMd)+ph->ilam, weight); atomicAdd(wPhCatC2+(7*NLAMd)+ph->ilam, weight2);
+		atomicAddW(wPhCatC+(7*NLAMd)+ph->ilam, weight); atomicAddW(wPhCatC2+(7*NLAMd)+ph->ilam, weight2);
 		atomicAdd(nbPhCat+7, 1);
-		atomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
+		atomicAddW(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
 	}		
-    #else // If DOUBLE && not a new nvidia card
-	DatomicAdd(tabCountObj+(nbCy*indI)+indJ, weight);
-
-	// Les huit catégories
-	if (ph->H == 0 && ph->E == 0 && ph->S == 0) 
-	{ // CAT 1 : aucun changement de trajectoire avant de toucher le R.
-		DatomicAdd(wPhCatC, weight); DatomicAdd(wPhCatC2, weight2);// comptage poids
-		atomicAdd(nbPhCat, 1);     // comptage nombre de photons
-		DatomicAdd(tabCountObj+(nbCy*nbCx)+(nbCy*indI)+indJ, weight); // distri
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S == 0)
-	{ // CAT 2 : only H avant de toucher le R.
-		DatomicAdd(wPhCatC+1, weight); DatomicAdd(wPhCatC2+1, weight2);
-		atomicAdd(nbPhCat+1, 1);
-		DatomicAdd(tabCountObj+(2*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S == 0)
-	{ // CAT 3 : only E avant de toucher le R.
-		DatomicAdd(wPhCatC+2, weight); DatomicAdd(wPhCatC2+2, weight2);
-		atomicAdd(nbPhCat+2, 1);
-		DatomicAdd(tabCountObj+(3*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H == 0 && ph->E == 0 && ph->S > 0)
-	{ // CAT 4 : only S avant de toucher le R.
-		DatomicAdd(wPhCatC+3, weight); DatomicAdd(wPhCatC2+3, weight2);
-		atomicAdd(nbPhCat+3, 1);
-		DatomicAdd(tabCountObj+(4*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H > 0 && ph->E == 0 && ph->S > 0)
-	{ // CAT 5 : 2 proc. H et S avant de toucher le R.
-		DatomicAdd(wPhCatC+4, weight); DatomicAdd(wPhCatC2+4, weight2);
-		atomicAdd(nbPhCat+4, 1);
-		DatomicAdd(tabCountObj+(5*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-	else if ( ph->H > 0 && ph->E > 0 && ph->S == 0)
-	{ // CAT 6 : 2 proc. H et E avant de toucher le R.
-		DatomicAdd(wPhCatC+5, weight); DatomicAdd(wPhCatC2+5, weight2);
-		atomicAdd(nbPhCat+5, 1);
-		DatomicAdd(tabCountObj+(6*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-		//printf("H = %d, E = %d, S = %d", ph->H, ph->E, ph->S);
-	}
-	else if ( ph->H == 0 && ph->E > 0 && ph->S > 0)
-	{ // CAT 7 : 2 proc. E et S avant de toucher le R.
-		atomicAdd(nbPhCat+6, 1);
-		DatomicAdd(tabCountObj+(7*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}	
-	else if ( ph->H > 0 && ph->E > 0 && ph->S > 0)
-	{ // CAT 8 : 3 proc. H, E et S avant de toucher le R.
-		DatomicAdd(wPhCatC+7, weight); DatomicAdd(wPhCatC2+7, weight2);
-		atomicAdd(nbPhCat+7, 1);
-		DatomicAdd(tabCountObj+(8*nbCy*nbCx)+(nbCy*indI)+indJ, weight);
-	}
-    #endif // End of !defined(DOUBLE) || (defined(DOUBLE) && defined(NEW_CARDS))
 }
 #endif // End OBJ3D
 
@@ -8469,7 +8421,7 @@ __device__ unsigned int randomPhilox4x32_7uint(philox4x32_ctr_t* ctr, philox4x32
 }
 #endif
 
-#if defined(DOUBLE) && !(__CUDA_ARCH__ >= 600)
+#if defined(DOUBLE) && (!(__CUDA_ARCH__ >= 600) || defined(FORCE_DATOMICADD))
 __device__ double DatomicAdd(double* address, double val)
 {
         unsigned long long int* address_as_ull =

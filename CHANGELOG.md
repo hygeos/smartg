@@ -747,6 +747,9 @@ final `v2.0.0` release.
   - Fix the phase matrices of a single 3D component of `Atm3D` over a 1D
     aerosol at several phase wavelengths: every wavelength but the first
     pointed at the matrices of another wavelength, or of other cells
+  - Fix the receiver tallies of the 3D objects in double precision on the
+    GPUs older than compute capability 6.0: the category weights lost
+    their wavelength, and category 7 never added its weight
   - Fix the phase matrix of a profile layer straddling two `pfgrid` layers:
     it took the `pfgrid` layer it overlapped most, possibly one where its
     particles are absent (a thin cloud low in a layer whose upper part lies
