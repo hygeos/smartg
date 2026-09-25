@@ -1755,7 +1755,8 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
         dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
     } 
     else {
-        ph->layer = __float2uint_rz(RAND * NATMd);
+        // uniform choice of the emitting layer, numbered 1 to NATM
+        ph->layer = 1 + __float2uint_rz(RAND * NATMd);
         dz  = fabs(prof_atm[ph->layer-1].z - prof_atm[ph->layer].z);
         float kabs= fabs(prof_atm[ph->layer-1+ph->ilam*(NATMd+1)].OD_abs 
                        - prof_atm[ph->layer  +ph->ilam*(NATMd+1)].OD_abs); 

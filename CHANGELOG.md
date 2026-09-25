@@ -1015,6 +1015,11 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the forward thermal emission without `cell_proba`
+    (`Smartg(thermal=True)`, still in development): the emitting layer
+    was drawn among the layers 0 to NATM-1 instead of 1 to NATM, so that
+    the bottom layer never emitted and about one photon in NATM read the
+    profile before its first level. The error was already in v1.2.0
   - Fix `Smartg(rng='CURAND_PHILOX')`: `curand_uniform` returns exactly 1
     for about 3e-8 of its draws, which made the sensor, wavelength or
     icdf index one past the end of its array (a misplaced count, a NaN or
