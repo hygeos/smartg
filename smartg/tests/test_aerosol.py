@@ -873,6 +873,12 @@ def test_opac_file_without_default_heights() -> None:
     """
     with pytest.raises(ValueError, match="h_mix_min, h_mix_max and z_mix"):
         AerOPAC("mineral_transported", 0.1, 550.0)
+    # the other layers alone would leave the mixture out
+    with pytest.raises(ValueError, match="h_mix_min, h_mix_max and z_mix"):
+        AerOPAC(
+            "mineral_transported", 0.1, 550.0,
+            h_free_min=2.0, h_free_max=12.0, z_free=8.0,
+        )
     with pytest.raises(ValueError, match="z_mix"):
         AerOPAC(
             "mineral_transported", 0.1, 550.0, h_mix_min=1.5, h_mix_max=3.5

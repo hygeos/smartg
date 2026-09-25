@@ -602,7 +602,8 @@ class AerOPAC:
 
         # the heights and scale height of each layer, as given or from
         # the file; a layer the file gives no height to ('None') is
-        # absent unless all three are given
+        # absent unless all three are given, which the mixture itself
+        # must be
         layers: dict[str, tuple[float, float, float]] = {}
         absent = []
         for layer, given in [
@@ -633,11 +634,11 @@ class AerOPAC:
                 layers[layer] = cast(
                     tuple[float, float, float], tuple(values)
                 )
-        if len(absent) == len(layers):
+        if "mix" in absent:
             raise ValueError(
                 f"{self.fname.name} gives no default heights to its "
-                "layers: pass h_mix_min, h_mix_max and z_mix (and those "
-                "of the free troposphere or the stratosphere to add "
+                "mixture layer: pass h_mix_min, h_mix_max and z_mix (and "
+                "those of the free troposphere or the stratosphere to add "
                 "them)."
             )
         h_mix_min, h_mix_max, z_mix = layers["mix"]

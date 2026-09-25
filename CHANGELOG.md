@@ -1650,10 +1650,11 @@ final `v2.0.0` release.
   - Fix `AerOPAC('mineral_transported')`, documented as available, which
     failed on `float('None')`: its file gives no default layer heights.
     They must now be passed (`h_mix_min`, `h_mix_max` and `z_mix`), which
-    the error says; a layer whose heights the file does not give is
-    absent unless they are all passed. `AerOPAC.list` no longer returns
-    the single OPAC species and the free troposphere and stratosphere
-    layers, which lie in the same folder but are not mixtures
+    the error says, even with the heights of the other layers; the free
+    troposphere or stratosphere layer whose heights the file does not
+    give is absent unless they are all passed. `AerOPAC.list` no longer
+    returns the single OPAC species and the free troposphere and
+    stratosphere layers, which lie in the same folder but are not mixtures
   - Fix the `ssa` of `AerOPAC` and `Cloud` forced by a DataArray over the
     wavelength and the altitude, as documented, which always raised: it is
     now interpolated onto every grid the component is evaluated on. A 1-D
