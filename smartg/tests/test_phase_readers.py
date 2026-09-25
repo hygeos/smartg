@@ -32,6 +32,8 @@ from smartg.phase import (
 OPT_PROP = DIR_AUXDATA / "IPRT" / "phaseB" / "opt_prop"
 WC_CDF = OPT_PROP / "watercloud_670.mie.cdf"
 WASO_CDF = OPT_PROP / "waso_670.mie.cdf"
+# 400 to 700 nm by steps of 50 nm
+DESERT_CDF = DIR_AUXDATA / "IPRT" / "phase3" / "opt_prop" / "desert.cdf"
 DESERT_NC = DIR_AUXDATA / "aerosols" / "OPAC" / "mixtures" / "desert_sol.nc"
 WC_NC = DIR_AUXDATA / "clouds" / "wc_sol.nc"
 
@@ -122,6 +124,47 @@ def test_cdf_multi_reff_file_needs_a_target() -> None:
     """Check that a file of several radii demands a target."""
     with pytest.raises(ValueError, match="z_rh_reff"):
         read_phase_cdf(WC_CDF)
+
+
+def test_cdf_resamples_only_the_entries_of_the_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check that the entries around the targets alone are resampled."""
+    resample = smartg.phase._resample_cdf_phase
+    sizes = []
+
+    def spy(ds: xr.Dataset, theta: NDArray[np.float64]) -> Any:
+        sizes.append(ds["phase"].shape[:2])
+        return resample(ds, theta)
+
+    table = read_phase_cdf(DESERT_CDF, n_theta=721, output_sg_ready=False)
+    monkeypatch.setattr(smartg.phase, "_resample_cdf_phase", spy)
+    profile = read_phase_cdf(
+        DESERT_CDF, n_theta=721, wavelength_phase=[450.0, 520.0]
+    )
+    # 400 is below the first target, 550 above the second
+    assert sizes == [(4, 1)]
+    expected = table.interp(wavelength_phase=[450.0, 520.0])
+    np.testing.assert_array_equal(profile.values, expected.values)
+
+
+@pytest.mark.parametrize("wavelength_phase", [350.0, [500.0, 710.0]])
+def test_cdf_refuses_a_wavelength_outside_the_file(
+    wavelength_phase: float | list[float],
+) -> None:
+    """Check that a wavelength outside the file raises, not NaN."""
+    with pytest.raises(ValueError, match="400 to 700 nm"):
+        read_phase_cdf(DESERT_CDF, wavelength_phase=wavelength_phase)
+
+
+def test_cdf_takes_the_wavelengths_at_the_ends_of_the_file() -> None:
+    """Check that the first and last wavelengths of the file work."""
+    profile = read_phase_cdf(
+        DESERT_CDF, n_theta=721, wavelength_phase=[400.0, 700.0]
+    )
+    assert not np.isnan(profile.values).any()
+    np.testing.assert_allclose(profile.coords["wavelength_phase"],
+                               [400.0, 700.0])
 
 
 def test_cdf_automatic_grid_is_the_finest_step_of_the_file() -> None:
@@ -246,6 +289,12 @@ def test_nc_profile_layout_is_the_table_interpolated() -> None:
     assert profile.shape == (1, 1, 6, 1801)
     expected = table.interp(wavelength_phase=[550.0], hum=[70.0])
     np.testing.assert_allclose(profile.values, expected.values)
+
+
+def test_nc_refuses_a_wavelength_outside_the_file() -> None:
+    """Check that a netCDF wavelength outside the file raises."""
+    with pytest.raises(ValueError, match="outside the wavelength range"):
+        read_phase_nc(DESERT_NC, wavelength_phase=5000.0, z_rh_reff=50.0)
 
 
 def test_nc_table_layout_refuses_the_profile_targets() -> None:

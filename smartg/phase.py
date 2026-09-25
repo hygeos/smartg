@@ -951,17 +951,18 @@ def _resample_cdf_phase(
         (n_wavelength, n_rh_reff, nphamat, ntheta).
     """
     phase = ds["phase"][:, :, :, :].data
+    # ntheta (wavelength, rh/reff, nphamat)
+    ntheta = ds["ntheta"][:, :, :].data
+    # theta (wavelength, rh/reff, nphamat, ntheta)
+    theta_file = ds["theta"][:, :, :, :].data
     n_wavelength, n_rh_reff, n_stk = phase.shape[:3]
 
     data = np.zeros((n_wavelength, n_rh_reff, n_stk, theta.size))
     for i_wavelength in range(n_wavelength):
         for irhreff in range(n_rh_reff):
             for istk in range(n_stk):
-                # ntheta (wavelength, rh/reff, nphamat)
-                nth = ds["ntheta"][i_wavelength, irhreff, istk].data
-
-                # theta (wavelength, rh/reff, nphamat, ntheta)
-                th = ds["theta"][i_wavelength, irhreff, istk, :].data
+                nth = ntheta[i_wavelength, irhreff, istk]
+                th = theta_file[i_wavelength, irhreff, istk, :]
 
                 data[i_wavelength, irhreff, istk, :] = np.interp(
                     theta,
@@ -1088,6 +1089,65 @@ def _normalize_p11(
             data[i_wavelength, irhreff, :, :] *= 2.0 / abs(norm)
 
 
+def _wavelength_in_file(
+    wavelength_file: NDArray[np.floating[Any]],
+    wavelength_phase: NDArray[np.float32],
+) -> NDArray[np.float64]:
+    """Return the wavelength targets, checked against the file range.
+
+    Parameters
+    ----------
+    wavelength_file : ndarray
+        Wavelengths of the phase file, in nm.
+    wavelength_phase : ndarray
+        Wavelengths to interpolate the phase matrix at, in nm.
+
+    Returns
+    -------
+    ndarray
+        The targets in float64, those within a relative 1e-6 of the
+        range of the file, a float32 rounding, moved onto it.
+
+    Raises
+    ------
+    ValueError
+        If a target is outside the wavelength range of the file,
+        where the interpolation would give NaN.
+    """
+    lo = float(np.min(wavelength_file))
+    hi = float(np.max(wavelength_file))
+    tol = 1e-6 * max(abs(lo), abs(hi))
+    targets = wavelength_phase.astype(np.float64)
+    outside = targets[(targets < lo - tol) | (targets > hi + tol)]
+    if outside.size:
+        raise ValueError(
+            f"wavelength_phase {outside.tolist()} is outside the "
+            f"wavelength range of the phase file, {lo:g} to {hi:g} nm."
+        )
+    return np.clip(targets, lo, hi)
+
+
+def _bracketing_indices(
+    values: NDArray[np.floating[Any]],
+    targets: NDArray[np.floating[Any]] | None,
+) -> NDArray[np.intp]:
+    """Return the indices of an axis needed to interpolate at targets.
+
+    They are those of the values from the largest one below the
+    smallest target to the smallest one above the largest target, so
+    that a linear interpolation picks the same two values as on the
+    whole axis, even at a target equal to a value. All of them without
+    targets.
+    """
+    if targets is None:
+        return np.arange(values.size)
+    below = values[values < np.min(targets)]
+    above = values[values > np.max(targets)]
+    lo = np.max(below) if below.size else np.min(values)
+    hi = np.min(above) if above.size else np.max(values)
+    return np.flatnonzero((values >= lo) & (values <= hi))
+
+
 def _to_profile_layout(
     da_pha: xr.DataArray,
     rh_or_reff: str,
@@ -1101,8 +1161,13 @@ def _to_profile_layout(
     values, and its rh/reff axis is renamed into the ``z_phase``
     altitudes of *pfgrid*, or ``[0.]`` without one.
     """
-    if da_pha.sizes["wavelength_phase"] > 1:
-        da_pha = da_pha.interp(wavelength_phase=wavelength_phase)
+    if da_pha.sizes["wavelength_phase"] > 1 and wavelength_phase is not None:
+        targets = _wavelength_in_file(
+            da_pha["wavelength_phase"].values, wavelength_phase
+        )
+        da_pha = da_pha.interp(wavelength_phase=targets).assign_coords(
+            wavelength_phase=wavelength_phase
+        )
 
     if da_pha.sizes[rh_or_reff] > 1:
         da_pha = da_pha.interp(
@@ -1353,6 +1418,23 @@ def read_phase_cdf(
             n_wavelength, n_rh_reff, rh_or_reff,
             wavelength_phase, pfgrid, z_rh_reff,
         )
+        # only the entries around the targets are resampled; the
+        # automatic and native angle grids are those of the whole file
+        index_wavelength = np.arange(n_wavelength)
+        if n_wavelength > 1 and wavelength_phase is not None:
+            index_wavelength = _bracketing_indices(
+                wavelength,
+                _wavelength_in_file(wavelength, wavelength_phase),
+            )
+        index_rh_reff = np.arange(n_rh_reff)
+        if n_rh_reff > 1:
+            index_rh_reff = _bracketing_indices(rh_reff, z_rh_reff)
+        ds = ds.isel({
+            ds["wavelen"].dims[0]: index_wavelength,
+            ds[rh_or_reff].dims[0]: index_rh_reff,
+        })
+        rh_reff = rh_reff[index_rh_reff]
+        wavelength = wavelength[index_wavelength]
 
     da_pha = xr.DataArray(
         _resample_cdf_phase(ds, theta),

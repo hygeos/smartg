@@ -920,6 +920,16 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.phase.read_phase_cdf`, `read_phase_nc` and `read_phase`
+    with a `wavelength_phase` outside the wavelengths of a file that has
+    several: they returned an all-NaN matrix, which `Atm1D` turned into a
+    null phase matrix while keeping the optical depth of the component.
+    They now raise a `ValueError` giving the range of the file
+  - Fix the memory use of `smartg.phase.read_phase_cdf` with the profile
+    layout: it resampled every entry of the file before interpolating at
+    `wavelength_phase` and `z_rh_reff`, 8.8 GB for the IPRT ice cloud file
+    at the default angles. Only the entries around the targets are
+    resampled now, with the same result
   - Fix the panel titles of `smartg.view.compare`, garbled since
     v2.0.0dev1 (`$^{\downarrow}_{}I$` for `I_up (TOA)`): they are built
     from the compared variable again, for instance `$I^{\uparrow}_{TOA}$`
