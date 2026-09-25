@@ -2169,7 +2169,7 @@ class Smartg:
             n_oce_abs = 0
 
         if self.alis:
-            _check_alis_layers(n_atm_abs, n_oce_abs)
+            _check_alis_layers(int(n_atm_abs), int(n_oce_abs))
             if hist and n_oce > 0:
                 raise ValueError(
                     'Alis(hist=True) does not support a water body: the '

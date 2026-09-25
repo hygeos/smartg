@@ -238,7 +238,7 @@ def _hist_amf_output(n_lam: int, n_low: int, step: int) -> xr.Dataset:
     The reflected photons travel 3 km in each layer, the others 1 km,
     and the scattering corrections grow with the wavelength.
     """
-    w = list(np.arange(1.0, n_low + 1.0))
+    w = [float(k) for k in range(1, n_low + 1)]
     records = [
         (0, _record([1.0 + 2.0 * (i % 2)] * N_ATM, [1.0, 0, 0, 0], w,
                     nref=float(i % 2)))
