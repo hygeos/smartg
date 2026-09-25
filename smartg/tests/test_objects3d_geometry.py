@@ -66,6 +66,20 @@ def test_entity_copy_keeps_alpha_color() -> None:
     assert copy.alpha_color == 0.1
 
 
+def test_plane_corners_share_their_z() -> None:
+    """The corners may be off the xy plane, all at the same z."""
+    corners = {
+        "p1": gc.Point(-0.5, -0.5, 0.1),
+        "p2": gc.Point(0.5, -0.5, 0.1),
+        "p3": gc.Point(-0.5, 0.5, 0.1),
+        "p4": gc.Point(0.5, 0.5, 0.1),
+    }
+    assert Plane(**corners).p4.z == 0.1
+    corners["p4"] = gc.Point(0.5, 0.5, 0.2)
+    with pytest.raises(ValueError, match="same z"):
+        Plane(**corners)
+
+
 @pytest.mark.parametrize(
     ("corners", "message"),
     [

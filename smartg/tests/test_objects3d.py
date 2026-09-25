@@ -467,14 +467,22 @@ def test_run_without_objects_after_objects(sg: Smartg) -> None:
     np.testing.assert_allclose(after.mean(), before.mean(), rtol=0.02)
 
 
-def test_rf_reflector_on_the_ground(sg: Smartg) -> None:
+@pytest.mark.parametrize(
+    ("height", "corner_z"),
+    [(0.0, 0.0), (0.005, 0.01)],
+    ids=["ground", "raised corners"],
+)
+def test_rf_reflector_on_the_ground(
+    sg: Smartg, height: float, corner_z: float
+) -> None:
     """The RF launch aims at a heliostat at z = 0 too.
 
     The offset from the heliostat up to TOA was computed only for a
     heliostat with a z translation: at z = 0, the launch positions were
-    left uninitialised in double precision.
+    left uninitialised in double precision. The launch also aims at the
+    corners of a heliostat raised in its own frame.
     """
-    mirror = _mirror(0.002, (0.05, 0.02, 0.0))
+    mirror = _mirror(0.002, (0.05, 0.02, height), corner_z=corner_z)
     receiver = _receiver(0.002, (0.05, -0.3, 0.05))
     ds = _run_rf(sg, [mirror, receiver], th_deg=30.0, n_photons=1e5)
     # every photon reaches the heliostat, but for the rounding of the
@@ -515,3 +523,32 @@ def test_cosine_efficiency_weighs_the_heliostat_areas(sg: Smartg) -> None:
         np.sum(areas * cosines) / np.sum(areas),
         rtol=1e-6,
     )
+
+
+def test_plane_corners_above_their_origin(sg: Smartg) -> None:
+    """A plane is intersected at the z of its corners.
+
+    The kernel dropped the z of the corners: this blocker, 15 m high
+    with its corners 10 m above its origin, was intersected 5 m high,
+    below the receiver it shades.
+    """
+    receiver = _receiver(0.002, (0.0, 0.0, 0.01))
+    half = 0.004
+    blocker = Entity(
+        name="environment",
+        material_front=Matte(reflectivity=0.0),
+        material_back=Matte(reflectivity=0.0),
+        geo=Plane(
+            p1=gc.Point(-half, -half, 0.01),
+            p2=gc.Point(half, -half, 0.01),
+            p3=gc.Point(-half, half, 0.01),
+            p4=gc.Point(half, half, 0.01),
+        ),
+        transformation=Transformation(
+            translation=np.array([0.0, 0.0, 0.005])
+        ),
+    )
+    lit = _run_ff(sg, [receiver], _transparent(), 2 * half)
+    shaded = _run_ff(sg, [receiver, blocker], _transparent(), 2 * half)
+    np.testing.assert_allclose(lit["cat_irr"].values[0], 16.0, rtol=0.01)
+    assert shaded["cat_irr"].values[0] == 0.0

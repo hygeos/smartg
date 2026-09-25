@@ -5694,6 +5694,8 @@ def _init_obj(
         lobj_gpu = np.zeros(n_obj + 1, dtype=TYPE_IOBJECTS, order='C')
         tc = cus_l.dict['receiver'].tc
         n_cx, n_cy = _receiver_grid(cus_l.dict['receiver'])
+        # the launch positions are drawn on the plane of the receiver
+        lobj_gpu['p0z'][n_obj] = cus_l.dict['receiver'].geo.p1.z
         lobj_gpu['mvRx'][n_obj] = cus_l.dict['receiver'].transformation.rotx
         lobj_gpu['mvRy'][n_obj] = cus_l.dict['receiver'].transformation.roty
         lobj_gpu['mvRz'][n_obj] = cus_l.dict['receiver'].transformation.rotz

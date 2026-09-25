@@ -787,7 +787,7 @@ TriangleMesh<T,TF,TP>::TriangleMesh(const Transform<U_1> *o2w, const Transform<U
 	Point<TP> pbis;
 	for (int i = 0; i < nverts; ++i)
 	{
-		pbis.x = p[i].x; pbis.y = p[i].y; pbis.y = p[i].y;
+		pbis.x = p[i].x; pbis.y = p[i].y; pbis.z = p[i].z;
 		(*this->ObjectToWorld)(pbis, &p[i]);
 	}
 }

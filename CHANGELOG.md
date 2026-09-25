@@ -1143,6 +1143,11 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix a `Plane` whose corners have a z coordinate: the kernel intersected
+    it as if they were at z = 0 in its frame, while `visualize_entity` drew
+    it at their z, so that such a plane was hit, blocked light and
+    reflected at the wrong height. The corners must now share one z, which
+    the intersections, the RF launch and the BR receiver all use
   - Fix the cosine efficiency `n_cos` of a heliostat field, and so the
     `ncos` and `nsha` of `nopt_view`, which was the plain mean of the
     cosines of the heliostats: it weighs each one by its area, as the

@@ -2006,7 +2006,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			double xMinPd = objP.p0x, yMinPd = objP.p0y, xMaxPd = objP.p3x, yMaxPd = objP.p3y;
 			
 			// Tirer aléatoirement une position sur la surface du miroir dans sa position initiale
-			double3 posTransd = make_double3(   (  ( (xMaxPd-xMinPd)*double(RAND) ) + xMinPd  ), (  ( (yMaxPd-yMinPd)*double(RAND) ) + yMinPd  ), 0.  );
+			double3 posTransd = make_double3(   (  ( (xMaxPd-xMinPd)*double(RAND) ) + xMinPd  ), (  ( (yMaxPd-yMinPd)*double(RAND) ) + yMinPd  ), double(objP.p0z)  );
 			
 			// Application des transfos de rot du miroir à cette entité	
 			posTransd = Tid(Pointd(posTransd));
@@ -2043,7 +2043,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 			float xMinP = objP.p0x, yMinP = objP.p0y, xMaxP = objP.p3x, yMaxP = objP.p3y;
 			
 			// Tirer aléatoirement une position sur la surface du miroir dans sa position initiale
-			float3 posTrans = make_float3(   (  ( (xMaxP-xMinP)*RAND ) + xMinP  ), (  ( (yMaxP-yMinP)*RAND ) + yMinP  ), 0.  );
+			float3 posTrans = make_float3(   (  ( (xMaxP-xMinP)*RAND ) + xMinP  ), (  ( (yMaxP-yMinP)*RAND ) + yMinP  ), objP.p0z  );
 			
 			// Application des transfos de rot du miroir à cette entité
 			posTrans = Ti(Pointf(posTrans));
@@ -2201,7 +2201,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		TR = addRotAndParseOrder(TR, objP); //see the function
 
 		float sizeX = nbCx*TCd; float sizeY = nbCy*TCd;
-		Pointf p_t(sizeX*0.5 - (RAND*sizeX), sizeY*0.5 - (RAND*sizeY), 0.);
+		Pointf p_t(sizeX*0.5 - (RAND*sizeX), sizeY*0.5 - (RAND*sizeY), objP.p0z);
 		ph->posIni = make_float3(p_t.x, p_t.y, p_t.z);
 		
 		// Apply transfo && update the value of the photon position

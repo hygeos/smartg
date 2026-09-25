@@ -230,8 +230,8 @@ class Plane:
     TypeError
         If a corner is not a gc.Point.
     ValueError
-        If a corner is on the wrong side of an axis, or if the corners
-        do not form a rectangle.
+        If a corner is on the wrong side of an axis, if the corners do
+        not form a rectangle, or if they have different z.
 
     Notes
     -----
@@ -240,6 +240,8 @@ class Plane:
     - p2 and p4 have the same positive x-coordinate
     - p1 and p2 have the same negative y-coordinate
     - p3 and p4 have the same positive y-coordinate
+    - the four corners have the same z-coordinate, which offsets the
+      plane along the z axis of its frame
     """
 
     def __init__(
@@ -288,6 +290,12 @@ class Plane:
             raise ValueError(
                 "The corners of a Plane must form a rectangle: p1.x == "
                 "p3.x, p2.x == p4.x, p1.y == p2.y and p3.y == p4.y"
+            )
+        if not p1.z == p2.z == p3.z == p4.z:
+            raise ValueError(
+                "The corners of a Plane must have the same z: the plane "
+                "is parallel to the xy plane of its frame, and is tilted "
+                "by the transformation of its Entity"
             )
         self.p1 = p1
         self.p2 = p2
