@@ -433,8 +433,10 @@ def test_hydrolight(
 
 RW_ALBEDO = 0.5
 
-# Variables the CUDA kernel reads from a water profile, see the
-# prof_oc handling in Smartg.run
+# Variables of a water profile that Smartg.run requires and copies to
+# its output, see the ocean profile in `smartg.smartg._finalize`. The
+# kernel also receives pine_oc and FQY1_oc, left out: WaterRw sets them
+# to 1 where Water1D gives 0, harmless in a layer of null thickness
 KERNEL_WATER_VARS = [
     "T_oc",
     "OD_w",
@@ -455,8 +457,8 @@ def test_waterrw_profile_matches_water1d() -> None:
     WaterRw is a fast path for a lambertian reflector placed just
     below the air-water interface.  It is the degenerate case of a
     Water1D profile holding no hydrosol and no water column, and must
-    stay numerically identical to it for every variable the kernel
-    reads.
+    stay numerically identical to it for every variable of
+    KERNEL_WATER_VARS.
     """
     alb = AlbedoCst(RW_ALBEDO)
     pro_rw = WaterRw(alb=alb).calc(WAVELENGTHS)
