@@ -8598,7 +8598,12 @@ __device__ bool geoTest(float3 o, float3 dir, float3* phit, IGeo *GeoV, struct I
 				// keep the nearest object from the initial point of the photon
 				if (myBj & (myT > myTj))
 				{
-					tempPhit = R1(myTj);
+					// On a plane, the hit from the barycentric coordinates of
+					// its triangle: along the ray it is off by a float ulp of
+					// the distance travelled, a hundred km from TOA, more
+					// than the tolerance on the altitude of a hit at z = 0
+					if (ObjT[IND+j].geo == 2) tempPhit = myDgj.p;
+					else tempPhit = R1(myTj);
 					myB = true;
 					myT = myTj;
 					myDg = myDgj;

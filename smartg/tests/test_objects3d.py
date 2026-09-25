@@ -195,6 +195,7 @@ def _run_rf(
     objects: list[Entity],
     th_deg: float = 0.0,
     n_photons: float = 1e6,
+    sun_disc: float = 0.0,
 ) -> xr.Dataset:
     """Run a scene in the RF mode in a transparent atmosphere.
 
@@ -212,6 +213,7 @@ def _run_rf(
         xblock=XBLOCK,
         xgrid=XGRID,
         progress=False,
+        sun_disc=sun_disc,
     )
 
 
@@ -478,23 +480,27 @@ def test_run_without_objects_after_objects(sg: Smartg) -> None:
 
 
 @pytest.mark.parametrize(
-    ("height", "corner_z"),
-    [(0.0, 0.0), (0.005, 0.01)],
-    ids=["ground", "raised corners"],
+    ("height", "corner_z", "sun_disc"),
+    [(0.0, 0.0, 0.0), (0.005, 0.01, 0.0), (0.0, 0.0, 0.266)],
+    ids=["ground", "raised corners", "ground sun disc"],
 )
 def test_rf_reflector_on_the_ground(
-    sg: Smartg, height: float, corner_z: float
+    sg: Smartg, height: float, corner_z: float, sun_disc: float
 ) -> None:
     """The RF launch aims at a heliostat at z = 0 too.
 
     The offset from the heliostat up to TOA was computed only for a
     heliostat with a z translation: at z = 0, the launch positions were
     left uninitialised in double precision. The launch also aims at the
-    corners of a heliostat raised in its own frame.
+    corners of a heliostat raised in its own frame. With the sun disc,
+    12 % of the hits at z = 0 were lost: the hit, computed along the
+    ray from TOA, came out below the ground tolerance.
     """
     mirror = _mirror(0.002, (0.05, 0.02, height), corner_z=corner_z)
     receiver = _receiver(0.002, (0.05, -0.3, 0.05))
-    ds = _run_rf(sg, [mirror, receiver], th_deg=30.0, n_photons=1e5)
+    ds = _run_rf(
+        sg, [mirror, receiver], th_deg=30.0, n_photons=1e5, sun_disc=sun_disc
+    )
     # every photon reaches the heliostat, but for the rounding of the
     # float launch positions 70 km away along the sun direction
     incident = ds["wLoss"].values[0] / float(ds["norm_npho"].sum())

@@ -1143,6 +1143,12 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the hits of the 3D objects at the ground: the hit point was taken
+    along the ray, off by a float ulp of the distance travelled, which
+    from TOA exceeds the 5 mm below the ground that a hit may reach, so
+    that up to a third of the hits on a plane at z = 0 were lost, for
+    instance 12 % in the RF mode with the sun disc. The hit on a plane is
+    taken from its triangle
   - Fix the intersection of a `Spheric` entity with a ray from far away,
     such as a photon launched from TOA: the quadratic of the intersection
     lost the squared radius against the squared distance in single
