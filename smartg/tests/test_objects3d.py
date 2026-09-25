@@ -354,3 +354,31 @@ def test_translation_along_x_only(sg: Smartg) -> None:
     ds = _run_ff(sg, [receiver], _transparent(), 4 * half, (0.05, 0.0))
     area = (2 * half * 1e3) ** 2
     np.testing.assert_allclose(ds["cat_irr"].values[0], area, rtol=0.01)
+
+
+def test_run_without_objects_after_objects(sg: Smartg) -> None:
+    """A run with objects leaves no trace in a run without objects.
+
+    The object constants of the module stayed from one run to the next:
+    after the RF run, a run without objects kept looking for objects in
+    its empty tables, and killed every photon leaving TOA unhit.
+    """
+
+    def clear_sky() -> xr.Dataset:
+        return sg.run(
+            wavelength=550.0,
+            atmosphere=Atm1D("afglt"),
+            th_deg=SZA,
+            n_photons=1e5,
+            seed=SEED,
+            xblock=XBLOCK,
+            xgrid=XGRID,
+            progress=False,
+        )
+
+    before = clear_sky()["I_up (TOA)"].values
+    _run(sg, 550.0)
+    after = clear_sky()["I_up (TOA)"].values
+    assert np.all(np.isfinite(after))
+    assert after.mean() > 0.0
+    np.testing.assert_allclose(after.mean(), before.mean(), rtol=0.02)

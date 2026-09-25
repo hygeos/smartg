@@ -1143,6 +1143,12 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix a run without 3D objects on a `Smartg(obj3d=True)` that has already
+    run with objects: the object constants of the kernel, which persist in
+    the compiled module, kept their values, so that the kernel looked for
+    the objects of the previous run in empty tables and kept its launching
+    mode (after an RF run, every photon leaving TOA was killed). They are
+    reset to no objects
   - Fix the intersection of the 3D objects, which applied the translation
     of an object only when its y or its z translation was positive: an
     object on or below the ground in the half-plane y <= 0, such as a flat

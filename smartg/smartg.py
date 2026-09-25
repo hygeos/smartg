@@ -4068,10 +4068,11 @@ def _init_const(
     no_aer_output : bool
         Add output where only photons not scattered by aerosols are
         considered. Default False.
-    obj3d : bool
-        Whether the kernel is compiled with the 3D objects, which
-        read the altitude of the top of the atmosphere even without
-        any object. Default False.
+    obj3d : bool, optional
+        True when the module is compiled for the 3D objects: the kernel
+        then reads the altitude of the top of the atmosphere even
+        without any object, and a run without objects resets the object
+        constants of a previous run. Default False.
 
     Returns
     -------
@@ -4230,6 +4231,13 @@ def _init_const(
             copy_to_device('LMODEd', 4, np.int32)
         if cus_l is None:
             copy_to_device('LMODEd', 0, np.int32)
+    elif obj3d:
+        # the constants persist in the module between runs: a run
+        # without objects must not see those of a run with objects
+        copy_to_device('nObj', 0, np.int32)
+        copy_to_device('nGObj', 0, np.int32)
+        copy_to_device('nRObj', 0, np.int32)
+        copy_to_device('LMODEd', 0, np.int32)
 
 
 def _init_profile(
