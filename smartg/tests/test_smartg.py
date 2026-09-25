@@ -309,6 +309,40 @@ def test_alis_n_low_invalid(alis: Alis, n_lam: int, match: str) -> None:
         _alis_n_low(alis, n_lam)
 
 
+def test_alis_n_low_uneven_warns() -> None:
+    """Check that an n_low missing the last wavelength warns."""
+    with pytest.warns(UserWarning, match="index 9, and the 2 wavelengths"):
+        assert _alis_n_low(Alis(n_low=4), 12) == 4
+
+
+def test_alis_uneven_n_low(sg_alis: Smartg) -> None:
+    """Check the corrections past the last low resolution point.
+
+    With 12 wavelengths and n_low=4, the low resolution points are
+    the wavelengths 0, 3, 6 and 9: the wavelengths 10 and 11 take the
+    correction of the wavelength 9. Wavelength 10 used to be
+    interpolated towards an uninitialised correction. Without gas
+    absorption, the three wavelengths get the same radiance.
+    """
+    atmosphere = Atm1D(
+        "afglt", grid=np.linspace(50.0, 0.0, 11), prof_abs=np.zeros((12, 11))
+    )
+    with pytest.warns(UserWarning, match="does not divide"):
+        m = sg_alis.run(
+            np.linspace(500.0, 511.0, 12),
+            atmosphere=atmosphere,
+            surface=LambSurface(alb=AlbedoCst(0.2)),
+            le=LocalEstimate(th_deg=[30.0], phi_deg=[0.0]),
+            alis_options=Alis(n_low=4),
+            n_photons=N_PHOTONS,
+            seed=1,
+        )
+    i_up = np.squeeze(m["I_up (TOA)"].values)
+    assert np.all(np.isfinite(i_up))
+    np.testing.assert_allclose(i_up[10], i_up[9], rtol=1e-5)
+    np.testing.assert_allclose(i_up[11], i_up[9], rtol=1e-5)
+
+
 def test_alis_layers() -> None:
     """Check the layer count an ALIS photon can hold."""
     _check_alis_layers(199, 199)

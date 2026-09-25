@@ -410,6 +410,10 @@ class Alis:
         2 and at most the number of wavelengths of the run, or -1 to
         select every wavelength. With n_jac_abs, these bounds apply
         to the reference group of n_lam / (n_jac + 1) wavelengths.
+        The corrections are computed every DL = (n_lam - 1) //
+        (n_low - 1) wavelengths and interpolated in between: when
+        n_low - 1 does not divide n_lam - 1, the wavelengths past the
+        last point take its correction, and the run warns.
     hist : bool, optional
         Activate the recording of the photon histories, which the
         `smartg.histories` module post-processes. Default False.
@@ -539,7 +543,9 @@ def _alis_n_low(alis_options: Alis, n_lam: int) -> int:
     at the wavelength indices k * DL, k < n_low, with DL = (n_lam_ref
     - 1) // (n_low - 1), where n_lam_ref is the number of wavelengths
     of the reference group: n_lam, or n_lam / (n_jac + 1) with
-    n_jac_abs. An n_low of -1 stands for n_lam_ref.
+    n_jac_abs. An n_low of -1 stands for n_lam_ref. It warns when
+    n_low - 1 does not divide n_lam_ref - 1: the wavelengths past the
+    last low resolution point then take its correction.
 
     Parameters
     ----------
@@ -577,6 +583,17 @@ def _alis_n_low(alis_options: Alis, n_lam: int) -> int:
         raise ValueError(
             f'Alis(n_low={n_low}) exceeds the {MAX_NLOW} low spectral '
             'resolution computations the kernel supports.'
+        )
+    if n_low > 1 and (n_lam_ref - 1) % (n_low - 1) != 0:
+        last = (n_low - 1) * ((n_lam_ref - 1) // (n_low - 1))
+        warn(
+            f'Alis(n_low={n_low}) does not divide the {n_lam_ref} '
+            'wavelengths evenly: the last low resolution point is the '
+            f'wavelength of index {last}, and the '
+            f'{n_lam_ref - 1 - last} wavelengths after it take its '
+            'scattering correction. Choose n_low - 1 dividing '
+            f'{n_lam_ref - 1} to end on the last wavelength.',
+            stacklevel=3,
         )
     return n_low
 

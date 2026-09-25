@@ -4357,6 +4357,22 @@ __device__ void scatter(Photon* ph,
 	
 }
 
+#ifdef ALIS
+// Scattering correction of the ALIS method at the wavelength of index
+// il_ref of the reference group, interpolated between the low
+// resolution points of indices k*DL, k < NLOWd. Past the last point,
+// which falls short of the last wavelength when DL does not divide
+// NLAM_REF-1, it keeps the correction of that point, as the linear
+// interpolation of the histories post-processing does
+__device__ __forceinline__ float interp_weight_sca(const float *weight_sca, int il_ref, int DL)
+{
+    if (il_ref >= (NLOWd-1)*DL) return weight_sca[NLOWd-1];
+    int ik = il_ref/DL;
+    return __fdividef((il_ref-ik*DL)*1.0f,DL*1.0f) * (weight_sca[ik+1] - weight_sca[ik]) +
+           weight_sca[ik];
+}
+#endif
+
 #ifdef SIF
 __device__ void choose_emitter(Photon* ph,
         struct Profile *prof_atm, struct Profile *prof_oc,
@@ -4375,12 +4391,13 @@ __device__ void choose_emitter(Photon* ph,
 			ph->emitter = SIF_EM; // SIF index
             ph->nsif = 1;
 		    /* Compute fluorescence power*/
-            // PAR
+            // PAR: the scattering corrections summed over the
+            // wavelengths of the reference group within 400-700 nm
             float PAR=0.F;
-            int il=0;
-            while ( spectrum[il].lambda <= 700.){
-                if (spectrum[il].lambda >= 400.) PAR += ph->weight_sca[il];
-                il++;
+            int DL = NJACABSd ? (NLAMd/(NJACd+1)-1)/(NLOWd-1) : (NLAMd-1)/(NLOWd-1);
+            for (int il=0; il<NLAMd/(NJACd+1); il++){
+                if ((spectrum[il].lambda >= 400.) && (spectrum[il].lambda <= 700.))
+                    PAR += interp_weight_sca(ph->weight_sca, il, DL);
             }
 	        ph->weight *= PAR * fluo_p;
             // reinitialization
@@ -7326,11 +7343,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           int il_ref = NJACABSd ? il % NLAM_REF : il;
 
           // Linear interpolation upon wavelength of the scattering correction
-          int ik=il_ref/DL;
-          float wsca;
-          if (il_ref != NLAM_REF-1) wsca = __fdividef((il_ref-ik*DL)*1.0f,DL*1.0f) * (weight_sca[ik+1] - weight_sca[ik]) +
-                          weight_sca[ik]; 
-          else wsca = weight_sca[NLOWd-1];
+          float wsca = interp_weight_sca(weight_sca, il_ref, DL);
           
           //  OR Polynomial fit for scattering correction, !!DEV
           /* 
@@ -7609,14 +7622,8 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
        //unsigned long long KK  = K*(NATM_ABSd+NOCE_ABSd);
 
        // Compute wsca at reference wavelength (ph->ilam) for cdist weighting
-       float wsca_ref;
-       {
-           int ik_ref = ph->ilam / DL;
-           if (ph->ilam != NLAMd-1)
-               wsca_ref = __fdividef((ph->ilam - ik_ref*DL)*1.0f, DL*1.0f) * (weight_sca[ik_ref+1] - weight_sca[ik_ref]) + weight_sca[ik_ref];
-           else
-               wsca_ref = weight_sca[NLOWd-1];
-       }
+       // (ph->ilam lies in the reference group)
+       float wsca_ref = interp_weight_sca(weight_sca, ph->ilam, DL);
 
        #ifdef CDIST_WABS
        // Compute absorption weight for the reference wavelength (ph->ilam)

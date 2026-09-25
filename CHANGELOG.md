@@ -1310,6 +1310,15 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix the ALIS spectra when `n_low - 1` does not divide `n_lam - 1`
+    (for instance `Alis(n_low=5)` over 100 wavelengths): the wavelengths
+    past the last low resolution point were interpolated towards an
+    uninitialised scattering correction, giving NaN or biased radiances.
+    They now take the correction of that point, as the photon histories
+    post-processing does, and `Smartg.run` warns. The SIF emission of
+    `sif=True` read the corrections by wavelength index, past those
+    computed and past the end of the spectrum; it now sums the
+    interpolated corrections of the wavelengths within 400-700 nm
   - Fix `Smartg.run` with the ALIS kernel, which silently returned wrong
     spectra without `alis_options` (uninitialised scattering corrections,
     n_lam times fewer photons), with an `Alis(n_low)` above the number of
