@@ -958,9 +958,10 @@ final `v2.0.0` release.
     at once, so that it looks down from `'SURF0P'` and up from `'SURF0M'`,
     and down from `'SEAFLOOR'`: looking away, a sensor at `'SURF0P'`
     measured 0 and one at `'SURF0M'` hung the kernel. `Smartg.run` now
-    refuses them, the default `Sensor()` included, and the kernel ends such
-    photons. A sensor looking up from just above the surface is
-    `loc='ATMOS'` at `pos_z=0`, and one looking down from just below it
+    refuses them, and the kernel ends such photons. The default `th_deg`
+    of `Sensor` is now 180 (nadir), so that the default `Sensor()`, at
+    `'SURF0P'`, looks down. A sensor looking up from just above the surface
+    is `loc='ATMOS'` at `pos_z=0`, and one looking down from just below it
     `loc='OCEAN'` at `pos_z=0`
   - Fix the `FlatSurface`, whose `WINDSPEED` of -999 gave a negative slope
     variance, and through its shadowing term a NaN weight to every photon

@@ -52,8 +52,8 @@ class Sensor:
     th_deg : float, optional
         The source (forward mode) or viewing (backward mode) zenith
         angle, in degrees. Greater than 90 for a downward looking
-        direction, smaller than 90 for an upward one. Default 0
-        (zenith).
+        direction, smaller than 90 for an upward one. Default 180
+        (nadir), the direction the default loc 'SURF0P' needs.
     ph_deg : float, optional
         The source (forward mode) or viewing (backward mode) azimuth
         angle, in degrees. Default 180.
@@ -138,7 +138,7 @@ class Sensor:
         pos_x: float = 0.,
         pos_y: float = 0.,
         pos_z: float = 0.,
-        th_deg: float = 0.,
+        th_deg: float = 180.,
         ph_deg: float = 180.,
         loc: str = 'SURF0P',
         fov: float = 0.,
