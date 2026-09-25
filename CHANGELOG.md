@@ -916,6 +916,10 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `smartg.bandset.spectral_grids` with 131 or more scattering
+    wavelengths (for instance 150 nm at `dls=1`): the interpolation
+    indices were `int8`, so NumPy 2 raised an `OverflowError`, and NumPy 1
+    silently wrapped the indices above 127. They are now `int32`
   - Fix `smartg.vrs.raman_response` for a scalar wavenumber, which raised
     a `ValueError` since v2.0.0dev2, and for integer wavenumbers, which
     raised a `UFuncTypeError`; it returns an array of at least one

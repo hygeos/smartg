@@ -202,7 +202,7 @@ def spectral_grids(
     NDArray[np.floating],
     NDArray[np.floating],
     LUT,
-    NDArray[np.int8],
+    NDArray[np.int32],
     NDArray[np.float32],
 ]:
     """Build spectral grids for absorption and scattering computations.
@@ -263,7 +263,7 @@ def spectral_grids(
         Solar irradiance look-up table over the union of
         ``wavelengths`` and ``wavelength_rs`` ranges, indexed by
         wavelength.
-    i_wavelengths_in : ndarray of int8
+    i_wavelengths_in : ndarray of int32
         Index of the lower ``wavelengths`` value used to linearly
         interpolate each ``wavelength`` onto the low-resolution grid.
     w_wavelengths_in : ndarray of float32
@@ -321,7 +321,7 @@ def spectral_grids(
         f = interp1d(wavelengths, np.linspace(0, nws - 1, num=nws))
         iw = f(wavelength)
         # Index of the lower wavelengths value in the wavelengths array
-        i_wavelengths_in = np.floor(iw).astype(np.int8)
+        i_wavelengths_in = np.floor(iw).astype(np.int32)
         # Floating-point proportion between i_wavelengths_in and
         # i_wavelengths_in + 1
         w_wavelengths_in = (iw - i_wavelengths_in).astype(np.float32)
@@ -330,7 +330,7 @@ def spectral_grids(
         i_wavelengths_in[ii] = nws - 2
         w_wavelengths_in[ii] = 1.0
     else:
-        i_wavelengths_in = np.array([0], dtype=np.int8)
+        i_wavelengths_in = np.array([0], dtype=np.int32)
         w_wavelengths_in = np.array([0], dtype=np.float32)
 
     return (
