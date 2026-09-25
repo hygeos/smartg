@@ -433,6 +433,15 @@ final `v2.0.0` release.
     truncated one on the same axes instead (`fig` and `axarr` arguments)
   - The `force_4stk` option of `smartg.view.phase_view` is now
     `force_4stokes`, following the `stk` → `stokes` renames
+  - `Smartg.run` refuses, with a `ValueError` or a `TypeError` saying
+    why, the arguments it used to ignore or misread: an unknown `flux`
+    (it then counted radiances), `flux` together with `le` (the local
+    estimate was dropped), `alis_options` on a `Smartg` built without
+    `alis=True` (they had no effect), an `environment` without a
+    `surface`, `wavelength_proba` or `sensor_proba` arrays that are not
+    `int64`, an unknown `cell_proba` string, `cell_proba='auto'` outside
+    the forward thermal mode and a `cell_proba` array without one column
+    per wavelength. Some were assertions, the others went unnoticed
   - The declared dependencies have been trimmed and bounded. `pyarrow`,
     `pyhdf` and `statsmodels` are no longer declared, as no module nor
     notebook imports them (`pyhdf` still comes in as a dependency of
@@ -756,6 +765,9 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `Smartg.run(cell_proba=...)` given a 2-D array, its documented
+    type, which always raised a `ValueError`: the array was compared with
+    the string `'auto'`
   - Fix the 1D aerosol mixed into the cells of a 3D component of `Atm3D`:
     each cell took the aerosol of the layer below its own, and a cell in
     the bottom layer raised an `IndexError`. It now takes the aerosol of

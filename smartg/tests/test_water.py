@@ -18,7 +18,7 @@ from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
 from smartg.phase import integ_phase, read_phase
-from smartg.smartg import Alis, LocalEstimate, Smartg
+from smartg.smartg import LocalEstimate, Smartg
 from smartg.surface import RoughSurface
 from smartg.truncation import DMTrunc, GTTrunc
 from smartg.water import DEFAULT_WATER_TRUNC, Hydrosol, Water1D, WaterRw
@@ -285,7 +285,6 @@ def _smartg_run(
         seed=SEED,
         xblock=64,
         xgrid=1024,
-        alis_options=Alis(n_low=-1, n_jac=0),
         output_layers=3,
         flux="planar",
     )
@@ -311,7 +310,6 @@ def _smartg_run(
         seed=SEED,
         xblock=64,
         xgrid=1024,
-        alis_options=Alis(n_low=-1, n_jac=0),
         output_layers=4,
         n_icdf=1e3,
         le=local_est,

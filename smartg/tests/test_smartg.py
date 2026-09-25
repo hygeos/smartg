@@ -17,7 +17,7 @@ from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D, Cloud
 from smartg.reptran import Reptran, reduce_reptran
 from smartg.smartg import Alis, LocalEstimate, Smartg
-from smartg.surface import LambSurface, RoughSurface
+from smartg.surface import Environment, LambSurface, RoughSurface
 from smartg.view import smartg_view
 from smartg.water import HydrosolPR, Water1D
 from smartg.xarray import dataset_to_mlut
@@ -240,15 +240,64 @@ def test_le_dict_deprecated(sg: Smartg) -> None:
     assert sorted(le) == ["phi_deg", "th_deg"]
 
 
-def test_alis_options_dict_deprecated(sg: Smartg) -> None:
+def test_alis_options_dict_deprecated() -> None:
     """Check that the legacy alis_options map onto Alis."""
     with pytest.warns(DeprecationWarning, match="Alis"):
-        sg.run(
+        Smartg(alis=True).run(
             np.array([400.0, 600.0]),
             atmosphere=Atm1D("afglt"),
             surface=RoughSurface(),
             alis_options={"nlow": -1, "njac": 0},
             n_photons=N_PHOTONS,
+        )
+
+
+@pytest.fixture(scope="module")
+def sg_forward() -> Smartg:
+    """Build the default Smartg, forward and without ALIS."""
+    return Smartg()
+
+
+INVALID_RUNS = [
+    ({"flux": "planer"}, ValueError, "unknown flux"),
+    (
+        {"flux": "planar", "le": LocalEstimate(th_deg=[0.0], phi_deg=[0.0])},
+        ValueError,
+        "flux and le",
+    ),
+    ({"alis_options": Alis(n_low=-1)}, ValueError, "alis=True"),
+    ({"environment": Environment(env=1)}, ValueError, "needs a surface"),
+    (
+        {"wavelength_proba": np.zeros(4, dtype=np.int32)},
+        TypeError,
+        "int64",
+    ),
+    ({"sensor_proba": np.zeros(4, dtype=np.int32)}, TypeError, "int64"),
+    ({"cell_proba": "automatic"}, ValueError, "unknown cell_proba"),
+    ({"cell_proba": "auto"}, ValueError, "forward thermal"),
+    ({"cell_proba": np.zeros((3, 5))}, ValueError, "one column"),
+]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error", "match"),
+    INVALID_RUNS,
+    ids=[
+        "flux", "flux-le", "alis", "environment", "wavelength_proba",
+        "sensor_proba", "cell_proba-name", "cell_proba-auto",
+        "cell_proba-shape",
+    ],
+)
+def test_run_invalid(
+    sg_forward: Smartg,
+    kwargs: dict[str, Any],
+    error: type[Exception],
+    match: str,
+) -> None:
+    """Check that the run refuses the arguments it would ignore."""
+    with pytest.raises(error, match=match):
+        sg_forward.run(
+            500.0, atmosphere=Atm1D("afglt"), n_photons=N_PHOTONS, **kwargs
         )
 
 

@@ -1270,10 +1270,11 @@ class Smartg:
             is not required to be present. If th/phi are not provided,
             th_deg/phi_deg must be given.
         flux : None | str, optional
-            Activate the flux mode (instead of radiance). Only 2
-            choices:
+            Activate the flux mode (instead of radiance), which cannot
+            be used together with `le`. The choices are:
                 - 'planar'
                 - 'spherical'
+                - 'tilted planar'
         stdev : bool, optional
             Activate the calculation of the standard deviation (between
             each kernel run).
@@ -1672,6 +1673,11 @@ class Smartg:
         n_jac = 0
         n_jac_abs = 0
         if alis_options is not None:
+            if not self.alis:
+                raise ValueError(
+                    "alis_options needs the ALIS kernel: create the "
+                    "Smartg object with alis=True"
+                )
             if alis_options.hist:
                 hist = True
                 max_hist = np.int64(alis_options.max_hist)
@@ -1683,7 +1689,12 @@ class Smartg:
             else:
                 n_low = alis_options.n_low
             beer = 1
-            assert n_low <= max_nlow
+            if n_low > max_nlow:
+                raise ValueError(
+                    f"alis_options.n_low={n_low} exceeds the {max_nlow} "
+                    "low spectral resolution computations the kernel "
+                    "supports"
+                )
 
         if hist:
             hist_code = 1
@@ -1962,7 +1973,10 @@ class Smartg:
             else:
                 spectrum['alb_surface'] = -999.0
         else:
-            assert surface is not None
+            if surface is None:
+                raise ValueError(
+                    "an environment (adjacency effect) needs a surface"
+                )
             if surface.alb is not None:
                 spectrum['alb_surface'] = surface.alb.get(wavelength[:])
             elif surface.kp is not None:
@@ -2012,16 +2026,26 @@ class Smartg:
 
         flux_code = 0
         if flux is not None:
-            le_code = 0
-            if flux == 'planar':
-                flux_code = 1
-            if flux == 'spherical':
-                flux_code = 2
-            if flux == 'tilted planar':
-                flux_code = 3
+            flux_codes = {'planar': 1, 'spherical': 2, 'tilted planar': 3}
+            if flux not in flux_codes:
+                raise ValueError(
+                    f"unknown flux {flux!r}, expected one of "
+                    f"{list(flux_codes)}"
+                )
+            if le is not None:
+                raise ValueError(
+                    "flux and le cannot be used together: the flux mode "
+                    "counts irradiances, not the radiances of the local "
+                    "estimate directions"
+                )
+            flux_code = flux_codes[flux]
 
         if wavelength_proba is not None:
-            assert wavelength_proba.dtype == 'int64'
+            if wavelength_proba.dtype != np.int64:
+                raise TypeError(
+                    "wavelength_proba must be an int64 array, the "
+                    "inverse CDF of icdf(proba, n)"
+                )
             wavelength_proba_icdf = to_gpu(wavelength_proba)
             n_wavelength_proba = len(wavelength_proba_icdf)
         else:
@@ -2029,15 +2053,30 @@ class Smartg:
             n_wavelength_proba = 0
 
         if sensor_proba is not None:
-            assert sensor_proba.dtype == 'int64'
+            if sensor_proba.dtype != np.int64:
+                raise TypeError(
+                    "sensor_proba must be an int64 array, the inverse "
+                    "CDF of icdf(proba, n)"
+                )
             sensor_proba_icdf = to_gpu(sensor_proba)
             n_sensor_proba = len(sensor_proba_icdf)
         else:
             sensor_proba_icdf = gpuzeros(1, dtype='int64')
             n_sensor_proba = 0
 
+        if isinstance(cell_proba, str):
+            if cell_proba != 'auto':
+                raise ValueError(
+                    f"unknown cell_proba {cell_proba!r}, expected 'auto' "
+                    "or an array"
+                )
+            if self.back or not self.thermal:
+                raise ValueError(
+                    "cell_proba='auto' needs the forward thermal mode "
+                    "(Smartg(thermal=True, back=False))"
+                )
         if cell_proba is not None:
-            if (cell_proba == 'auto') and not self.back and self.thermal:
+            if isinstance(cell_proba, str):
                 assert prof_atm is not None
                 if 'z_atm' not in prof_atm.coords:
                     raise ValueError(
@@ -2061,8 +2100,12 @@ class Smartg:
                 cell_proba_icdf = to_gpu(icdf_2d(p_emission.to_numpy()).T)
                 n_cell_proba = cell_proba_icdf.shape[0]
             else:
-                assert not isinstance(cell_proba, str)
-                assert cell_proba.shape[1] == n_lam
+                if cell_proba.ndim != 2 or cell_proba.shape[1] != n_lam:
+                    raise ValueError(
+                        "cell_proba must be a 2-D array with one column "
+                        f"per wavelength ({n_lam}), got the shape "
+                        f"{cell_proba.shape}"
+                    )
                 cell_proba_icdf = to_gpu(cell_proba)
                 n_cell_proba = cell_proba.shape[0]
         else:
