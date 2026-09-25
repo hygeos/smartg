@@ -114,6 +114,10 @@ UP0M = 4
 DOWNB = 5
 
 MAX_NREF = 100
+# The low resolution wavelengths and the layers per medium an ALIS
+# photon holds (MAX_NLOW and MAX_NLAYER in src/communs.h)
+MAX_NLOW = 801
+MAX_NLAYER = 200
 
 #
 # type definitions (should match cuda struct definitions)
@@ -403,7 +407,9 @@ class Alis:
     ----------
     n_low : int
         The number of low spectral resolution computations, at least
-        2, or -1 to select every wavelength.
+        2 and at most the number of wavelengths of the run, or -1 to
+        select every wavelength. With n_jac_abs, these bounds apply
+        to the reference group of n_lam / (n_jac + 1) wavelengths.
     hist : bool, optional
         Activate the recording of the photon histories, which the
         `smartg.histories` module post-processes. Default False.
@@ -523,6 +529,83 @@ def _check_alis_kernel(
             'sif=True needs alis=True, together with alt_pp=True or '
             'pp=False'
         )
+
+
+def _alis_n_low(alis_options: Alis, n_lam: int) -> int:
+    """
+    Return the number of low resolution wavelengths of an ALIS run.
+
+    The kernel computes the scattering correction of the ALIS method
+    at the wavelength indices k * DL, k < n_low, with DL = (n_lam_ref
+    - 1) // (n_low - 1), where n_lam_ref is the number of wavelengths
+    of the reference group: n_lam, or n_lam / (n_jac + 1) with
+    n_jac_abs. An n_low of -1 stands for n_lam_ref.
+
+    Parameters
+    ----------
+    alis_options : Alis
+        The ALIS options of the run.
+    n_lam : int
+        The number of wavelengths of the run.
+
+    Returns
+    -------
+    int
+        The number of low resolution wavelengths, -1 resolved.
+
+    Raises
+    ------
+    ValueError
+        If the wavelengths do not split into the n_jac + 1 groups of
+        the Jacobians, or if n_low exceeds the wavelengths of the
+        reference group, which makes DL zero, or MAX_NLOW.
+    """
+    n_jac = alis_options.n_jac
+    if n_lam % (n_jac + 1) != 0:
+        raise ValueError(
+            f'The {n_lam} wavelengths do not split into the '
+            f'n_jac + 1 = {n_jac + 1} groups of the Jacobians.'
+        )
+    n_lam_ref = n_lam // (n_jac + 1) if alis_options.n_jac_abs else n_lam
+    n_low = n_lam_ref if alis_options.n_low == -1 else alis_options.n_low
+    if n_low > n_lam_ref:
+        raise ValueError(
+            f'Alis(n_low={n_low}) exceeds the {n_lam_ref} wavelengths '
+            'of the reference group of the run.'
+        )
+    if n_low > MAX_NLOW:
+        raise ValueError(
+            f'Alis(n_low={n_low}) exceeds the {MAX_NLOW} low spectral '
+            'resolution computations the kernel supports.'
+        )
+    return n_low
+
+
+def _check_alis_layers(n_atm_abs: int, n_oce_abs: int) -> None:
+    """
+    Refuse more absorbing layers than an ALIS photon holds.
+
+    An ALIS photon accumulates its path length in each absorbing layer
+    of the atmosphere and of the ocean in arrays of MAX_NLAYER floats,
+    indexed from 1: more layers would overwrite its other fields.
+
+    Parameters
+    ----------
+    n_atm_abs, n_oce_abs : int
+        The numbers of absorbing layers of the atmosphere and of the
+        ocean.
+
+    Raises
+    ------
+    ValueError
+        If either number reaches MAX_NLAYER.
+    """
+    for medium, n_abs in (('atmosphere', n_atm_abs), ('ocean', n_oce_abs)):
+        if n_abs >= MAX_NLAYER:
+            raise ValueError(
+                f'The ALIS method handles at most {MAX_NLAYER - 1} '
+                f'absorbing layers per medium, the {medium} has {n_abs}.'
+            )
 
 
 def _le_angles(
@@ -1188,8 +1271,11 @@ class Smartg:
             The environment (adjacency effect) profile. If None, there
             is no environment.
         alis_options : None | Alis | dict, optional
-            The options of the ALIS method, see `Alis`. The
-            compilation option alis must be set to True.
+            The options of the ALIS method, see `Alis`: required
+            when the Smartg object was compiled with alis=True, and
+            refused otherwise. The number of low resolution
+            wavelengths n_low may not exceed the wavelengths of the
+            run (of its reference group with n_jac_abs).
 
             Passing a dictionary is deprecated and will be removed in
             one of the next release. Its keys, spelled out by the
@@ -1737,11 +1823,9 @@ class Smartg:
         # warning! values defined in communs.h should be < LVL
         n_lvl = 6
 
-        # warning! values defined in communs.h
         # Maximum number of photons histories (alis=True and
         # Alis(hist=True)), otherwise 0 (no histories)
         max_hist = np.int64(1)
-        max_nlow = 801
 
         # number of Stokes parameters of the radiation field
         n_pstk = 4
@@ -1778,17 +1862,13 @@ class Smartg:
             n_jac = alis_options.n_jac
             if alis_options.n_jac_abs:
                 n_jac_abs = 1
-            if alis_options.n_low == -1:
-                n_low = n_lam
-            else:
-                n_low = alis_options.n_low
+            n_low = _alis_n_low(alis_options, n_lam)
             beer = 1
-            if n_low > max_nlow:
-                raise ValueError(
-                    f"alis_options.n_low={n_low} exceeds the {max_nlow} "
-                    "low spectral resolution computations the kernel "
-                    "supports"
-                )
+        elif self.alis:
+            raise ValueError(
+                "The ALIS kernel needs the options of the method: pass "
+                "alis_options=Alis(...)"
+            )
 
         if hist:
             hist_code = 1
@@ -2063,6 +2143,9 @@ class Smartg:
             cell_oc_gpu = to_gpu(np.zeros(1, dtype=TYPE_CELL))
             n_oce = 0
             n_oce_abs = 0
+
+        if self.alis:
+            _check_alis_layers(n_atm_abs, n_oce_abs)
 
         #
         # albedo and adjacency effect

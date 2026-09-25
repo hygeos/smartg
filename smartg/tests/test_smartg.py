@@ -23,7 +23,9 @@ from smartg.smartg import (
     LocalEstimate,
     Smartg,
     StdevLim,
+    _alis_n_low,
     _check_alis_kernel,
+    _check_alis_layers,
 )
 from smartg.surface import Environment, LambSurface, RoughSurface
 from smartg.view import smartg_view
@@ -274,6 +276,78 @@ def test_alis_fast_pp_refused() -> None:
     """Check that Smartg refuses ALIS before compiling the kernel."""
     with pytest.raises(ValueError, match="alt_pp"):
         Smartg(alis=True)
+
+
+@pytest.mark.parametrize(
+    ("alis", "n_lam", "n_low"),
+    [
+        (Alis(n_low=-1), 5, 5),
+        (Alis(n_low=3), 5, 3),
+        (Alis(n_low=5), 5, 5),
+        (Alis(n_low=-1, n_jac=3), 40, 40),
+        (Alis(n_low=-1, n_jac=3, n_jac_abs=True), 40, 10),
+        (Alis(n_low=4, n_jac=3, n_jac_abs=True), 40, 4),
+    ],
+)
+def test_alis_n_low(alis: Alis, n_lam: int, n_low: int) -> None:
+    """Check that n_low=-1 stands for the wavelengths it may use."""
+    assert _alis_n_low(alis, n_lam) == n_low
+
+
+@pytest.mark.parametrize(
+    ("alis", "n_lam", "match"),
+    [
+        (Alis(n_low=10), 5, "exceeds the 5 wavelengths"),
+        (Alis(n_low=-1, n_jac=3, n_jac_abs=True), 41, "groups"),
+        (Alis(n_low=20, n_jac=3, n_jac_abs=True), 40, "exceeds the 10"),
+        (Alis(n_low=900), 1000, "exceeds the 801"),
+    ],
+)
+def test_alis_n_low_invalid(alis: Alis, n_lam: int, match: str) -> None:
+    """Check that an n_low without a kernel wavelength step fails."""
+    with pytest.raises(ValueError, match=match):
+        _alis_n_low(alis, n_lam)
+
+
+def test_alis_layers() -> None:
+    """Check the layer count an ALIS photon can hold."""
+    _check_alis_layers(199, 199)
+    with pytest.raises(ValueError, match="the atmosphere has 200"):
+        _check_alis_layers(200, 0)
+    with pytest.raises(ValueError, match="the ocean has 250"):
+        _check_alis_layers(50, 250)
+
+
+@pytest.fixture(scope="module")
+def sg_alis() -> Smartg:
+    """Build an ALIS Smartg, in the alternative plane parallel mode."""
+    return Smartg(alis=True, alt_pp=True)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({}, "alis_options"),
+        ({"alis_options": Alis(n_low=10)}, "exceeds the 5 wavelengths"),
+        (
+            {
+                "alis_options": Alis(n_low=3),
+                "atmosphere": Atm1D("afglt", grid=np.linspace(100, 0, 251)),
+            },
+            "the atmosphere has 250",
+        ),
+    ],
+    ids=["no-options", "n_low", "layers"],
+)
+def test_alis_run_invalid(
+    sg_alis: Smartg, kwargs: dict[str, Any], match: str
+) -> None:
+    """Check that an ALIS run refuses what the kernel cannot honour."""
+    kwargs = {"atmosphere": Atm1D("afglt"), **kwargs}
+    with pytest.raises(ValueError, match=match):
+        sg_alis.run(
+            np.linspace(500.0, 520.0, 5), n_photons=N_PHOTONS, **kwargs
+        )
 
 
 def test_le_dict_deprecated(sg: Smartg) -> None:

@@ -1310,6 +1310,14 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix `Smartg.run` with the ALIS kernel, which silently returned wrong
+    spectra without `alis_options` (uninitialised scattering corrections,
+    n_lam times fewer photons), with an `Alis(n_low)` above the number of
+    wavelengths (a zero wavelength step in the kernel), with `n_low=-1`
+    and `n_jac_abs`, and with 200 absorbing layers or more in the
+    atmosphere or the ocean, which overflowed the path lengths of the
+    photon. Each case now raises a `ValueError`, and with `n_jac_abs`,
+    `n_low=-1` stands for the wavelengths of the reference group
   - Fix `Smartg(alis=True)` with the default fast plane parallel move mode,
     which the documentation excluded but nothing refused: its ALIS gas
     absorption was wrong (none between two events of the same layer, the
