@@ -5,6 +5,7 @@ surface and water in the combinations the code allows, and check
 the outputs and the arguments the run accepts.
 """
 
+import math
 from collections.abc import Iterator
 from typing import Any
 
@@ -1330,3 +1331,77 @@ def test_stdev_of_sensors_missed_by_some_loops(sg_forward: Smartg) -> None:
         progress=False,
     )
     assert not np.any(np.isnan(m["I_stdev_up (TOA)"].values))
+
+
+def _cox_munk_reflected_up(th_deg: float, wind: float, nh2o: float) -> float:
+    """Return the part of a beam a rough sea reflects up at once.
+
+    The beam of zenith angle th_deg meets the facets of the isotropic
+    Cox-Munk slope distribution, of variance sig2 = 0.003 + 0.00512
+    wind, in proportion to the area they show it, normalized by the
+    Smith shadowing (Ross et al. 2005), and each facet reflects the
+    unpolarized Fresnel coefficient.
+    """
+    sig2 = 0.003 + 0.00512 * wind
+    z = np.linspace(-7.0, 7.0, 801) * np.sqrt(sig2)
+    zx, zy = np.meshgrid(z, z, indexing="ij")
+    mu = np.cos(np.radians(th_deg))
+    norm = np.sqrt(1.0 + zx**2 + zy**2)
+    # cosines of the incidence on the facet of normal (-zx, -zy, 1)
+    # and of the reflected zenith angle, for a beam (sin, 0, -mu)
+    c_th = (np.sin(np.radians(th_deg)) * zx + mu) / norm
+    c_up = 2.0 * c_th / norm - mu
+    a = mu / np.sqrt((1.0 - mu * mu) * sig2)
+    shadow = 0.5 * (np.exp(-a * a) / (a * np.sqrt(np.pi)) - math.erfc(a))
+    c_ok = np.clip(c_th, 1e-9, 1.0)
+    cot = np.sqrt(1.0 - (1.0 - c_ok**2) / nh2o**2)
+    r_par = (nh2o * c_ok - cot) / (nh2o * c_ok + cot)
+    r_per = (c_ok - nh2o * cot) / (c_ok + nh2o * cot)
+    q = (
+        np.exp(-(zx**2 + zy**2) / sig2) / (np.pi * sig2)
+        * c_ok * norm / (mu * (1.0 + shadow))
+    )
+    up = (c_th > 0.0) & (c_up > 0.0)
+    step = z[1] - z[0]
+    return float(np.sum(q * 0.5 * (r_par**2 + r_per**2) * up) * step**2)
+
+
+@pytest.mark.parametrize("th_deg", [30.0, 80.0, 85.0])
+def test_rough_surface_at_grazing_incidence(th_deg: float) -> None:
+    """Check the facets of a rough surface met at grazing incidence.
+
+    The facets are drawn from the slope distribution restricted to
+    those facing the photon, a part of it that falls to 0.86 at 80
+    degrees and 0.70 at 85 degrees for a wind of 10 m/s, which the
+    weight did not account for: the light reflected once was 1.166
+    and 1.424 times the analytic one, and a surface reflecting every
+    facet sent back 1.196 and 1.444 times the light it received.
+    """
+    common: dict[str, Any] = {
+        "th_deg": th_deg,
+        "flux": "planar",
+        "n_photons": 1e6,
+        "progress": False,
+    }
+    once = Smartg().run(
+        450.0,
+        surface=RoughSurface(wind=10.0, sur=1, single=True),
+        seed=131,
+        **common,
+    )
+    np.testing.assert_allclose(
+        np.sum(once["flux_up (TOA)"].values),
+        _cox_munk_reflected_up(th_deg, 10.0, 1.33),
+        rtol=5e-3,
+    )
+    # a huge refractive index reflects nearly everything
+    mirror = Smartg().run(
+        450.0,
+        surface=RoughSurface(wind=10.0, sur=1, nh2o=1e6),
+        seed=132,
+        **common,
+    )
+    np.testing.assert_allclose(
+        np.sum(mirror["flux_up (TOA)"].values), 1.0, rtol=3e-3
+    )
+

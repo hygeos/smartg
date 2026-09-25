@@ -5156,13 +5156,20 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
     LambdaR  =  LambdaM(fabs(vzn),sig2*0.5);
 
     if (!le) {
-        if (WAVE_SHADOWd) ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
-        else              ph->weight *= __fdividef(fabs(cTh), cBeta * (1.F + LambdaS) * avz );
         // Ross et al 2005, Ross && Dion, 2007, Zeisse 1995
         // Slope sampling bias correction using the normalized interaction PDF q
         // weight has to be multiplied by q/p, where p is the slope PDF
         // Coefficient Lambda for normalization of q taking into acount slope shadowing && hiding
         // Including wave shadows is performed at the end after the outgoing direction is calculated
+        // The rejection above draws the facets from p restricted to
+        // those facing the photon, a fraction visible of p, which is
+        // 1 - erfc(cot(theta)/sig)/2 for the slopes of variance
+        // sig2/2 along any direction: it draws from p / visible
+        float visible = 1.F;
+        if ((DIOPTREd != 0) && (avz < 1.F))
+            visible = 1.F - 0.5F * erfcf(avz * rsqrtf(1.F - avz*avz) / sig);
+        if (WAVE_SHADOWd) ph->weight *= __fdividef(visible * fabs(cTh), cBeta * (1.F + LambdaS + LambdaR) * avz );
+        else              ph->weight *= __fdividef(visible * fabs(cTh), cBeta * (1.F + LambdaS) * avz );
 
 		if (RRd==1){
 			/* Russian roulette for propagating photons **/

@@ -953,6 +953,20 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the weight of the photons meeting a `RoughSurface` at grazing
+    incidence. The facet is drawn among those facing the photon, a part
+    of the slope distribution that falls to 0.86 at 80 degrees and 0.70 at
+    85 degrees for a wind of 10 m/s, which the weight ignored: the light a
+    10 m/s sea reflects once was 1.17 and 1.42 times the Cox-Munk value, and
+    a sea reflecting every facet sent back 1.20 and 1.44 times the light it
+    received. Every run over a `RoughSurface` changes, through the diffuse
+    light meeting it at grazing angles: under a Rayleigh atmosphere over a
+    5 m/s sea, 90 degrees from the sun in azimuth, the TOA radiance drops by
+    0.3 % for the sun and the view at 30 degrees, by 1.0 % for the sun at 80
+    degrees (0.3 % backward), and the downwelling radiance 40 degrees from
+    the zenith below a 2 m/s sea by 0.3 %; with `wave_shadow=True` forward
+    and backward now agree at 80 degrees, 0.5 % apart before. The error was
+    already in v1.2.0
   - Fix the local estimate refracted into the water through a
     `RoughSurface`, which also counted the wave facets the photon reaches
     from behind, where no light crosses. The downwelling radiance below
