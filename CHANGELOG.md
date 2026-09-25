@@ -1315,6 +1315,15 @@ final `v2.0.0` release.
     required: the standard deviation, estimated from the spread of the
     launches, came out as zero. The `_stdev_` outputs are now NaN, and
     the run warns
+  - Fix the Monte Carlo standard deviation of the radiances rebuilt from
+    the ALIS photon histories: the recipe of the tests summed `si2` over
+    the records, but with a local estimate a photon leaves one record
+    per scattering, so the variance came out too small, and often
+    negative (NaN). Each record now holds the index of its photon, which
+    the new `smartg.histories.get_photon_index` returns, and the new
+    `photon_mean_std` sums the records of each photon before the
+    variance. `get_histories(isensor=...)` also returned the photon
+    count of the first sensor
   - Fix the ALIS scatter classes of `Smartg(nscl>1)` in the
     'last_scattering_layer' and 'scattering_order_per_layer' modes, new
     in 2.0: the layer of the last scattering was 1-based, so with one

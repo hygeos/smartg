@@ -5011,7 +5011,8 @@ def _loop_kernel(
             tab_dist = gpuzeros((1), dtype=np.float32)
 
     if hist:
-        _n_cols_hist = n_atm_abs + n_oce_abs + n_pstk + n_low + 7
+        # the photon index and 7 flags close each record
+        _n_cols_hist = n_atm_abs + n_oce_abs + n_pstk + n_low + 8
         tab_hist_tot = gpuzeros(
             (2, max_hist, _n_cols_hist, n_sensor, n_theta, n_phi),
             dtype=np.float32,
@@ -5045,7 +5046,10 @@ def _loop_kernel(
         if not hist:
             n_photons_out.fill(0)
         n_photons_out_no_aer.fill(0)
-        n_photons_in.fill(0)
+        # With histories, the launched photons number each one in its
+        # records: they run over the launches too
+        if not hist:
+            n_photons_in.fill(0)
         counter.fill(0)
         tab_obj_info.fill(0)
         w_ph_cat.fill(0)
@@ -5137,12 +5141,16 @@ def _loop_kernel(
                 mat_cats[i + 1, 1] += np.sum(w_ph_cat[i, :].get())
                 mat_cats[i + 1, 2] += np.sum(w_ph_cat2[i, :].get())
 
-        launched_last = n_photons_in
-        n_photons_in_tot += launched_last
-
         if hist:
+            # (on the host: pycuda subtracts unsigned arrays with a
+            # factor -1 that it cannot pass)
+            launched_now = n_photons_in.get()
+            launched_last = to_gpu(launched_now - n_photons_in_tot.get())
+            n_photons_in_tot = to_gpu(launched_now)
             n_photons_out_tot = n_photons_out.copy()
         else:
+            launched_last = n_photons_in
+            n_photons_in_tot += launched_last
             n_photons_out_tot += n_photons_out
         sum_weights = tab_photons
 

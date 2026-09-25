@@ -1852,7 +1852,14 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     /* ----------------------------------------------------------------------------------------- */
     #ifdef ALIS
     // a photon launched in ALIS represent all the wavelengths, so increment all wavelength boxes
+    #if defined(ALT_PP) || defined(SPHERIQUE)
+    // the photons of the sensor launched before it, over the whole run in
+    // hist mode, identify it in its history records
+    ph->hist_id = (unsigned int)atomicAdd(NPhotonsIn + NLAMd*ph->is, 1);
+    for (int k=1; k<NLAMd; k++) atomicAdd(NPhotonsIn + NLAMd*ph->is + k, 1);
+    #else
     for (int k=0; k<NLAMd; k++) atomicAdd(NPhotonsIn + NLAMd*ph->is + k, 1);
+    #endif
     #else
     // in general increment the randomly chosen particular wavelength box
     atomicAdd(NPhotonsIn + NLAMd*ph->is + ph->ilam, 1);
@@ -7532,7 +7539,7 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);
           if (counter2 >= MAX_HIST) return;
-          unsigned long long KK2 = NATM_ABSd+NOCE_ABSd+4+NLOWd+7; /* Number of information per local estmate photon (Record length): +7 = nrrs,nref,nsif,nvrs,nenv,nint,last_scatter_layer */
+          unsigned long long KK2 = NATM_ABSd+NOCE_ABSd+4+NLOWd+8; /* Number of information per local estmate photon (Record length): +8 = hist_id,nrrs,nref,nsif,nvrs,nenv,nint,last_scatter_layer */
           //unsigned long long KK2 = K*(NATM_ABSd+NOCE_ABSd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           //unsigned long long KK2 = K*(NATMd+NOCEd+4+NLOWd+5); /* Number of information per local estmate photon (Record length)*/
           unsigned long long KKK2  = K*KK2 * MAX_HIST;/* Number of individual information per vertical Level (Number of Records)*/
@@ -7571,26 +7578,29 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
                 LL2 = RR +  (n+NATM_ABSd+NOCE_ABSd+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
                 tabCount3[LL2]= weight_sca[n];
           }
-          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+0;
+          // the photon index, its bits stored as they are in the float record
           LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+0)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          tabCount3[LL2]= __uint_as_float(ph->hist_id);
+          //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+0;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nrrs>=1);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+1;
-          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+1)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nref);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+2;
-          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+2)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nsif);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+3;
-          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+3)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nvrs>=1);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+4;
-          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+4)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+5)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nenv);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+5;
-          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+5)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+6)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->nint);
           //LL2 = counter2*KK2 +  NLOWd+NATM_ABSd+NOCE_ABSd+4+6;
-          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+6)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
+          LL2 = RR +   (NLOWd+NATM_ABSd+NOCE_ABSd+4+7)*K + is*NBPHId*NBTHETAd + ith*NBPHId + iphi;
           tabCount3[LL2]= (float)(ph->last_scatter_layer); /* absorbing layer of the last atmospheric scattering (-1 = none) */
        } // HISTd==1
 
@@ -8152,6 +8162,7 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     //for (k=0; k<(NOCEd+1); k++) ph_le->cdist_oc[k]  = ph->cdist_oc[k];
     for (k=0; k<(NOCE_ABSd+1); k++) ph_le->cdist_oc[k]  = ph->cdist_oc[k];
     ph_le->last_scatter_layer = ph->last_scatter_layer;
+    ph_le->hist_id = ph->hist_id;
     #endif
     for (k=0; k<NLOWd; k++) ph_le->weight_sca[k] = ph->weight_sca[k];
     ph_le->nsif = ph->nsif;

@@ -34,7 +34,13 @@ from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D, od2k
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
-from smartg.histories import big_sum, get_histories, si, si2
+from smartg.histories import (
+    big_sum,
+    get_histories,
+    get_photon_index,
+    photon_mean_std,
+    si,
+)
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import LambSurface
 from smartg.view import mdesc
@@ -178,31 +184,22 @@ def test_smartg_jax2(
             n, s, d, w, _, nref, _, _, _, _, _ = get_histories(
                 m, level=level, verbose=False
             )
-            stk_i = (
-                np.array(
-                    big_sum(si, only_i=True)(
-                        wavelength_abs, sigma, alb, s[:, 0], w, d,
-                        nref, wavelength_sca
-                    ).sum(axis=0)
+            values = np.array(
+                big_sum(si, only_i=True)(
+                    wavelength_abs, sigma, alb, s[:, 0], w, d,
+                    nref, wavelength_sca
                 )
-                / n
             )
-            stk_i2 = (
-                np.array(
-                    big_sum(si2, only_i=True)(
-                        wavelength_abs, sigma, alb, s[:, 0], w, d,
-                        nref, wavelength_sca
-                    ).sum(axis=0)
-                )
-                / n
-            )
+        # the records of a photon are summed before the variance
+        stk_i, std = photon_mean_std(
+            values, get_photon_index(m, level=level), n
+        )
         i_direct = m0["I_up (TOA)"].to_numpy()
         max_rel_diff.append(float(np.max(np.abs(stk_i / i_direct - 1))))
         logger.info(
             f"jax2 AOD {aod:.1f}: replay vs direct run, max relative "
             f"difference {max_rel_diff[-1]:.2e}"
         )
-        std = np.sqrt((stk_i2 - stk_i**2) / n)
         upper = stk_i + 1.95 * std
         lower = stk_i - 1.95 * std
         p = plt.plot(
@@ -213,7 +210,7 @@ def test_smartg_jax2(
             f"NBHIST={int(max_hist):.0e}",
         )
         col = p[0].get_color()
-        print(stk_i2, std)
+        print(stk_i, std)
         plt.fill_between(
             wavelength_abs,
             lower,
@@ -267,6 +264,9 @@ def test_histories_several_loops(n_photons: float = 5e4) -> None:
         "le": LocalEstimate(th_deg=[0.0, 30.0], phi_deg=[0.0]),
         "atmosphere": atmosphere,
         "n_photons": n_photons,
+        # few enough threads for several loops of n_photons / 5
+        "xblock": 64,
+        "xgrid": 16,
     }
     max_hist = int(1e6)
     sg = Smartg(alis=True, alt_pp=True)
@@ -289,21 +289,27 @@ def test_histories_several_loops(n_photons: float = 5e4) -> None:
             n, s, d, w, _, nref, _, _, _, _, _ = get_histories(
                 m_hist, idir=idir
             )
-            stk_i = (
-                np.array(
-                    big_sum(si, only_i=True)(
-                        wavelength, kabs, np.ones_like(wavelength),
-                        s[:, 0], w, d, nref, wavelength
-                    ).sum(axis=0)
+            values = np.array(
+                big_sum(si, only_i=True)(
+                    wavelength, kabs, np.ones_like(wavelength),
+                    s[:, 0], w, d, nref, wavelength
                 )
-                / n
             )
+        # the photons are numbered over all the loops
+        index = get_photon_index(m_hist, idir=idir)
+        assert index.max() < n
+        stk_i, std = photon_mean_std(values, index, n)
         rel_diff = np.max(np.abs(stk_i / i_ref[:, idir] - 1))
+        n_sigma = np.max(np.abs(stk_i - i_ref[:, idir]) / std)
         logger.info(
             f"several loops, direction {idir}: max rel diff = "
-            f"{rel_diff:.4f}"
+            f"{rel_diff:.4f}, {n_sigma:.2f} std, rel std "
+            f"{np.max(std / stk_i):.4f}"
         )
         np.testing.assert_allclose(stk_i, i_ref[:, idir], rtol=0.05)
+        # the reference has about the same noise as the histories
+        assert np.all(np.isfinite(std)) and np.all(std > 0.0)
+        assert n_sigma < 6.0 * np.sqrt(2.0)
 
 
 def test_validation_artdeco(

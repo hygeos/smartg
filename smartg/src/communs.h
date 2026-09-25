@@ -278,6 +278,7 @@ public:
     float cdist_atm[MAX_NLAYER]; // Table of cumulative distance per layer
     float cdist_oc[MAX_NLAYER];
     int last_scatter_layer; // Absorbing layer index of the last atmospheric scattering (-1 = none)
+    unsigned int hist_id; // Index of the photon among those of its sensor, in its history records
     #endif
 
     float weight_sca[MAX_NLOW]; // Table of scattering weigths for Importance Sampling correction

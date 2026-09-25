@@ -18,7 +18,13 @@ pytest.importorskip(
     "jax", reason="cannot test this since the jax package is not installed."
 )
 
-from smartg.histories import amf_from_cdist, compute_amf, get_histories
+from smartg.histories import (
+    amf_from_cdist,
+    compute_amf,
+    get_histories,
+    get_photon_index,
+    photon_mean_std,
+)
 
 N_ATM = 3
 N_LOW = 2
@@ -38,10 +44,21 @@ def _record(
     w: list[float],
     nref: float = 0.0,
     d_oc: tuple[float, ...] = (),
+    index: int | None = None,
 ) -> np.ndarray:
-    """Return one history record, laid out as the kernel writes it."""
-    flags = [0.0, nref, 0.0, 0.0, 0.0, 1.0, 0.0]
-    return np.array([*d_oc, *d, *s, *w, *flags], dtype=np.float32)
+    """
+    Return one history record, laid out as the kernel writes it.
+
+    Without a photon index, the record has the layout written before
+    SMART-G 2.0.0.
+    """
+    flags = np.array([0.0, nref, 0.0, 0.0, 0.0, 1.0, 0.0], dtype=np.float32)
+    head = np.array([*d_oc, *d, *s, *w], dtype=np.float32)
+    if index is None:
+        return np.concatenate([head, flags])
+    # the kernel stores the bits of the index in the float record
+    bits = np.array([index], dtype=np.uint32).view(np.float32)
+    return np.concatenate([head, bits, flags])
 
 
 def _output(
@@ -71,7 +88,7 @@ def _output(
     ds["histories"] = (HIST_DIMS, hist)
     ds["Nphotons_in"] = (
         ("sensor_in", "wavelength_in"),
-        np.full((1, N_LOW), 1000, dtype=np.uint64),
+        np.full((shape[1], N_LOW), 1000, dtype=np.uint64),
     )
     ds.coords["z_atm"] = np.linspace(3.0, 0.0, N_ATM + 1)
     ds.attrs.update(attrs or {})
@@ -290,3 +307,52 @@ def test_amf_from_cdist_keys() -> None:
     assert set(two) == keys_cls
     three = amf_from_cdist(np.ones((N_ATM, 4, 3)), thick)
     assert set(three) == keys_cls | {"var_within", "var_between"}
+
+
+def test_get_photon_index() -> None:
+    """Check the photon index and the fields around it."""
+    indices = [0, 7, 7, 2**24 + 1, 3]
+    records = [
+        (0, _record([1.0] * N_ATM, [1.0, 0.0, 0.0, 0.0], [0.5, 0.25],
+                    nref=2.0, index=i))
+        for i in indices
+    ]
+    ds = _output(records, 8, {"ALIS n_low": str(N_LOW), "hist records": "5"})
+    _, _, _, w, _, nref, *_ = get_histories(ds)
+    np.testing.assert_array_equal(w, [[0.5, 0.25]] * 5)
+    np.testing.assert_array_equal(nref, [2.0] * 5)
+    index = get_photon_index(ds)
+    assert index.dtype == np.uint32
+    np.testing.assert_array_equal(index, indices)
+
+
+def test_get_photon_index_old_output() -> None:
+    """Check that histories without a photon index are refused."""
+    with pytest.raises(ValueError, match="no photon index"):
+        get_photon_index(_output(_alternating(4), 8))
+
+
+def test_photon_mean_std() -> None:
+    """Check the variance of the photon sums, not of the records.
+
+    Each photon leaves several records: the sum of the squares of the
+    records underestimated the second moment, down to a negative
+    variance.
+    """
+    rng = np.random.default_rng(0)
+    n = 200
+    index = np.repeat(np.arange(150), 3)
+    values = rng.uniform(0.5, 1.5, (index.size, 2))
+    mean, std = photon_mean_std(values, index, n)
+    sums = np.zeros((n, 2))
+    np.add.at(sums, index, values)
+    np.testing.assert_allclose(mean, sums.mean(axis=0))
+    np.testing.assert_allclose(std, sums.std(axis=0) / np.sqrt(n))
+    # the former recipe, from the records one by one
+    per_record = (values**2).sum(axis=0) / n - mean**2
+    assert np.all(per_record < 0.0)
+    # the order of the records does not matter
+    shuffle = rng.permutation(index.size)
+    mean_s, std_s = photon_mean_std(values[shuffle], index[shuffle], n)
+    np.testing.assert_allclose(mean_s, mean)
+    np.testing.assert_allclose(std_s, std)

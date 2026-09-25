@@ -9,6 +9,10 @@ Key Functions
 -------------
 get_histories
     Return the main outputs of the recorded photon histories.
+get_photon_index
+    Return the photon index of the records of `get_histories`.
+photon_mean_std
+    Return the mean over the photons and its standard deviation.
 si
     Beer-Lambert weight of one Stokes component, one virtual
     photon and one high-resolution wavelength.
@@ -38,7 +42,7 @@ import numpy as np
 import xarray as xr
 from jax import jit, value_and_grad, vmap
 from luts.luts import MLUT
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 
 def _alis_layers(m: MLUT | xr.Dataset) -> tuple[int, int]:
@@ -74,6 +78,64 @@ def _alis_layers(m: MLUT | xr.Dataset) -> tuple[int, int]:
     return (
         max(axes.get('z_oc', 0) - 1, 0), max(axes.get('z_atm', 0) - 1, 0)
     )
+
+
+class _HistRecords:
+    """
+    The history records of one level, direction and sensor.
+
+    A record holds the ocean path lengths, the atmospheric ones, the
+    Stokes vector, the n_low scattering corrections, the photon index
+    (since 2.0.0) and 7 flags. Each record fills the fields of its own
+    direction and sensor only.
+
+    Parameters
+    ----------
+    m : MLUT or xarray.Dataset
+        A Smartg output with the ALIS option and hist=True set.
+    level : int
+        The output level: 0 for TOA (up), 1 for downward at 0+.
+    idir : int
+        The index of the output direction, see `get_histories`.
+    isensor : int
+        The index of the sensor.
+
+    Raises
+    ------
+    IndexError
+        If idir or isensor is out of the range of the histories.
+    """
+
+    def __init__(
+        self, m: MLUT | xr.Dataset, level: int, idir: int, isensor: int
+    ) -> None:
+        self.n_oc, n_atm = _alis_layers(m)
+        self.i_s = self.n_oc + n_atm
+        # (level, photon, record, theta, sensor, phi)
+        hist = np.asarray(m['histories'].data)
+        n_theta, n_sensor, n_phi = hist.shape[3:]
+        if not (0 <= idir < n_theta * n_phi and 0 <= isensor < n_sensor):
+            raise IndexError(
+                f'get_histories: idir={idir} and isensor={isensor} must '
+                f'lie below the {n_theta * n_phi} directions and '
+                f'{n_sensor} sensors of the histories.'
+            )
+        ith, iphi = divmod(idir, n_phi)
+        tab_hist_ = hist[:, :, :, ith, isensor, iphi]
+        self.tab_hist = tab_hist_[level, :, :]
+        n_cols = self.tab_hist.shape[1]
+        attrs = getattr(m, 'attrs', {})
+        if 'ALIS n_low' in attrs:
+            self.n_low = int(attrs['ALIS n_low'])
+        else:
+            # an older output, without the photon index
+            self.n_low = n_cols - self.i_s - 4 - 7
+        self.has_index = n_cols - self.i_s - 4 - self.n_low == 8
+        # a recorded photon has a non zero first scattering correction
+        i_w = self.i_s + 4
+        self.good = self.tab_hist[:, i_w] != 0
+        # the slots used by either level
+        self.used = (tab_hist_[:, :, i_w] != 0).any(axis=0)
 
 
 def get_histories(
@@ -157,28 +219,10 @@ def get_histories(
     IndexError
         If idir or isensor is out of the range of the histories.
     """
-    # a record: [ocean distances][atmosphere distances][I Q U V]
-    # [scattering corrections][7 flags]
-    n_oc, nl = _alis_layers(m)
-    i_s = n_oc + nl
-    # (level, photon, record, theta, sensor, phi): each record fills
-    # the fields of its own direction and sensor only
-    hist = np.asarray(m['histories'].data)
-    n_theta, n_sensor, n_phi = hist.shape[3:]
-    if not (0 <= idir < n_theta * n_phi and 0 <= isensor < n_sensor):
-        raise IndexError(
-            f'get_histories: idir={idir} and isensor={isensor} must lie '
-            f'below the {n_theta * n_phi} directions and {n_sensor} '
-            'sensors of the histories.'
-        )
-    ith, iphi = divmod(idir, n_phi)
-    tab_hist_ = hist[:, :, :, ith, isensor, iphi]
-    tab_hist = tab_hist_[level, :, :]
+    rec = _HistRecords(m, level, idir, isensor)
+    tab_hist, good, i_s = rec.tab_hist, rec.good, rec.i_s
     if verbose:
         print(tab_hist.shape)
-    w0 = tab_hist[:, i_s + 4:-7]
-    # d0      = tab_hist[:,0]
-    good = w0[:, 0] != 0
     ngood = np.sum(good)
     max_hist = tab_hist.shape[0]
     attrs = getattr(m, 'attrs', {})
@@ -188,7 +232,7 @@ def get_histories(
         saturated = n_records > max_hist
     else:
         # an older output: the slots used by either level
-        n_records = int(np.sum((tab_hist_[:, :, i_s + 4] != 0).any(axis=0)))
+        n_records = int(np.sum(rec.used))
         saturated = n_records >= max_hist
     if saturated:
         # Use print rather than warnings.warn: Python's default
@@ -202,12 +246,12 @@ def get_histories(
             "will be biased. "
             "→ Increase max_hist.\033[0m"
         )
-    n = m['Nphotons_in'].data[0, 0]
+    n = m['Nphotons_in'].data[isensor, 0]
     ###################
     s = np.zeros((ngood, 4), dtype=np.float32)
-    d = tab_hist[good, n_oc:i_s]
+    d = tab_hist[good, rec.n_oc:i_s]
     s[:, :4] = tab_hist[good, i_s:i_s + 4]
-    w = tab_hist[good, i_s + 4:-7]
+    w = tab_hist[good, i_s + 4:i_s + 4 + rec.n_low]
     nrrs = tab_hist[good, -7]
     nref = tab_hist[good, -6]
     nsif = tab_hist[good, -5]
@@ -220,10 +264,113 @@ def get_histories(
             'Number of photons in : {}\n'
             'Number of LE photons : {}\n'
             'Number of LR wavelengths : {}\n'
-            'Number of Layers : {}'.format(n, *w.shape, nl)
+            'Number of Layers : {}'.format(n, *w.shape, i_s - rec.n_oc)
         )
 
     return n, s, d, w, nrrs, nref, nsif, nvrs, nenv, nint, nlscl
+
+
+def get_photon_index(
+    m: MLUT | xr.Dataset,
+    level: int = 0,
+    idir: int = 0,
+    isensor: int = 0,
+) -> NDArray[np.uint32]:
+    """Return the photon index of the records of `get_histories`.
+
+    A photon leaves one record per local estimate event: the records
+    of the same index come from the same photon, which the Monte
+    Carlo variance of a rebuilt quantity needs, see
+    `photon_mean_std`.
+
+    Parameters
+    ----------
+    m : MLUT or xarray.Dataset
+        A Smartg output with the ALIS option and hist=True set.
+    level, idir, isensor : int, optional
+        The level, direction and sensor, as for `get_histories`.
+        Default 0.
+
+    Returns
+    -------
+    ndarray of shape (NLE,), uint32
+        The index of the photon of each record, in the order of the
+        records returned by `get_histories`.
+
+    Raises
+    ------
+    ValueError
+        If the histories were recorded before SMART-G 2.0.0, without
+        the photon index.
+    IndexError
+        If idir or isensor is out of the range of the histories.
+    """
+    rec = _HistRecords(m, level, idir, isensor)
+    if not rec.has_index:
+        raise ValueError(
+            'get_photon_index: these histories hold no photon index, '
+            'recorded before SMART-G 2.0.0.'
+        )
+    column = np.ascontiguousarray(
+        rec.tab_hist[rec.good, rec.i_s + 4 + rec.n_low], dtype=np.float32
+    )
+    # the kernel stores the bits of the index in the float record
+    return column.view(np.uint32)
+
+
+def photon_mean_std(
+    values: ArrayLike,
+    photon_index: ArrayLike,
+    n: int,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Return the mean over the photons and its standard deviation.
+
+    The values of the records of one photon, one per local estimate
+    event, are summed before the variance is taken: the sum of the
+    squares of the records, as `si2` gives it, underestimates the
+    variance as soon as a photon leaves several records, and can make
+    it negative.
+
+    Parameters
+    ----------
+    values : array_like of shape (NLE, ...)
+        A value per record, for instance the Stokes component rebuilt
+        by `big_sum` before its sum over the records.
+    photon_index : array_like of shape (NLE,)
+        The photon index of each record, from `get_photon_index`.
+    n : int
+        The number of photons launched, from `get_histories`,
+        including those without any record.
+
+    Returns
+    -------
+    mean : ndarray of shape values.shape[1:]
+        The sum of the values over the records divided by n.
+    std : ndarray of shape values.shape[1:]
+        The standard deviation of the mean.
+
+    Examples
+    --------
+    >>> mean, std = photon_mean_std(
+    ...     [1.0, 2.0, 3.0], np.array([0, 0, 1]), 4
+    ... )
+    >>> float(mean), round(float(std), 4)
+    (1.5, 0.75)
+    """
+    x = np.asarray(values)
+    index = np.asarray(photon_index)
+    if x.shape[0] == 0:
+        zero = np.zeros(x.shape[1:])
+        return zero, zero
+    order = np.argsort(index, kind='stable')
+    sorted_index = index[order]
+    starts = np.flatnonzero(
+        np.r_[True, sorted_index[1:] != sorted_index[:-1]]
+    )
+    sums = np.add.reduceat(x[order], starts, axis=0, dtype=np.float64)
+    mean = sums.sum(axis=0) / n
+    var = np.maximum((sums * sums).sum(axis=0) / n - mean * mean, 0.0)
+    return mean, np.sqrt(var / n)
 
 
 def si(
@@ -288,9 +435,11 @@ def si2(
     """Square of `si`, the Beer-Lambert weighted Stokes component.
 
     JAX based computation, for one virtual photon, one Stokes
-    component and one high-resolution wavelength. Used to
-    accumulate the second moment needed for the Monte-Carlo
-    variance.
+    component and one high-resolution wavelength. Its sum over the
+    records is the second moment of the Monte Carlo variance only
+    when each photon leaves a single record: with a local estimate,
+    a photon leaves one per scattering, and `photon_mean_std` must
+    sum the `si` of its records first.
 
     Parameters
     ----------
