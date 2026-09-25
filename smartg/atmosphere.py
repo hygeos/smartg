@@ -348,6 +348,19 @@ def _forced_ssa(
     return values
 
 
+def _nearest_index(
+    values: NumericArrayLike, targets: NumericArrayLike
+) -> NDArray[np.intp]:
+    """Return the index of the target nearest to each value.
+
+    The first one of equally near targets, as `calc_iphase` maps the
+    wavelengths of a profile onto those of its phase matrices.
+    """
+    values = np.atleast_1d(np.asarray(values, dtype=np.float64))
+    targets = np.atleast_1d(np.asarray(targets, dtype=np.float64))
+    return np.abs(targets[None, :] - values[:, None]).argmin(axis=1)
+
+
 def _on_theta_grid(
     pha: xr.DataArray, theta: NDArray[np.float64], dim: str = "theta_atm"
 ) -> xr.DataArray:
@@ -4340,10 +4353,11 @@ class Atm3D(Atmosphere):
         the scattering coefficients.
         If None or empty, the 3D atmosphere is horizontally uniform.
     wavelength_phase : array_like or None, optional
-        The wavelengths over which the phase matrices are calculated.
-        Then use the nearest wavelength during cuda simulation. Useful
-        to reduce the memory. If None, compute the phase matrices at
-        all wavelengths.
+        The wavelengths over which the phase matrices are calculated,
+        each wavelength of the profile using those of the nearest one,
+        the 1D aerosols being mixed into the cells at the profile
+        wavelength nearest to it. Useful to reduce the memory. If
+        None, compute the phase matrices at all wavelengths.
     mol_sca_1d : 2-D ndarray or None, optional
         Force the 1D molecular scattering (Rayleigh) coefficients in
         km-1, with the shape (nwavelength, NZ + 1) where NZ is the
@@ -4762,16 +4776,10 @@ class Atm3D(Atmosphere):
         ]
         f_cell = f.reshape(len(wavelength_pha), n_unique)[:, cell_pha_idx]
         ext_pha, ssa_pha = truncated_ext_ssa(ext_pha, ssa_pha, f_cell)
-        # the i-th phase block serves the i-th profile wavelength (see
-        # the phase indices of `_glob_particles`); fall back on the
-        # nearest phase wavelength otherwise
-        if len(wavelength_pha) == len(wavelengths):
-            iw = np.arange(len(wavelengths))
-        else:
-            iw = np.abs(
-                np.asarray(wavelength_pha)[None, :]
-                - np.asarray(wavelengths)[:, None]
-            ).argmin(axis=1)
+        # each profile wavelength takes the phase block of the
+        # nearest phase wavelength (see the phase indices of
+        # `_glob_particles`)
+        iw = _nearest_index(wavelengths, wavelength_pha)
         ext, ssa = truncated_ext_ssa(ext, ssa, f_cell[iw])
         return ext, ssa, ext_pha, ssa_pha, (phases, cell_pha_idx, n_unique)
 
@@ -4792,10 +4800,18 @@ class Atm3D(Atmosphere):
         """Merge the 1D aerosols and a 3D component into global arrays.
 
         The (n_wavelength, n_opt) particle extinction and single
-        scattering albedo arrays, and the global phase matrix set.
+        scattering albedo arrays, and the global phase matrix set: one
+        block of matrices per phase wavelength, which the phase
+        indices of each profile wavelength point into at the nearest
+        phase wavelength. The 1D aerosols of a block are those of the
+        profile wavelength nearest to its phase wavelength.
         """
         nz = self.grid_3d.NZ
         nbz = nz + 1
+        # the phase block of each profile wavelength, and the profile
+        # wavelength of the 1D aerosols of each phase block
+        block = _nearest_index(wavelengths, wavelength_pha)
+        row_1d = _nearest_index(wavelength_pha, wavelengths)
 
         if not self.comp_3d:
             if pha_aer_1d is None:
@@ -4805,13 +4821,13 @@ class Atm3D(Atmosphere):
             for i_wavelength in range(len(wavelength_pha)):
                 for iz in range(nbz):
                     phases.append(
-                        pha_aer_1d.isel(iphase=ipha_aer_1d[i_wavelength, iz])
+                        pha_aer_1d.isel(
+                            iphase=ipha_aer_1d[row_1d[i_wavelength], iz]
+                        )
                     )
-            ipha3d = np.zeros((len(wavelength_pha), nbz), dtype=np.int32)
-            for i_wavelength in range(len(wavelength_pha)):
-                ipha3d[i_wavelength, :] = np.arange(nbz, dtype=np.int32) + (
-                    i_wavelength * nbz
-                )
+            ipha3d = (
+                np.arange(nbz)[None, :] + block[:, None] * nbz
+            ).astype(np.int32)
             return ext_aer_1d, ssa_aer_1d, (ipha3d, phases)
 
         if len(self.comp_3d) > 1:
@@ -4876,14 +4892,13 @@ class Atm3D(Atmosphere):
             assert ipha_aer_1d is not None
             phases = []
             for i_wavelength in range(len(wavelength_pha)):
+                row = row_1d[i_wavelength]
                 for iz in range(nbz):
                     phases.append(
-                        phase_aer_1d.isel(
-                            iphase=ipha_aer_1d[i_wavelength, iz]
-                        )
+                        phase_aer_1d.isel(iphase=ipha_aer_1d[row, iz])
                     )
-                ssa_aer_tmp = ssa_aer_1d[i_wavelength, idz_atm]
-                ext_aer_tmp = ext_aer_1d[i_wavelength, idz_atm]
+                ssa_aer_tmp = ssa_aer_1d[row, idz_atm]
+                ext_aer_tmp = ext_aer_1d[row, idz_atm]
                 ext_mix_tmp = ext_aer_tmp + ext_3d_pha[i_wavelength, :]
 
                 for icell in range(n_cell):
@@ -4891,7 +4906,7 @@ class Atm3D(Atmosphere):
                         i_wavelength * n_unique + cell_pha_idx[icell]
                     ]
                     pha_aer_tmp = phase_aer_1d.isel(
-                        iphase=ipha_aer_1d[i_wavelength, idz_atm[icell]]
+                        iphase=ipha_aer_1d[row, idz_atm[icell]]
                     )
                     pha_tot = (
                         (
@@ -4933,15 +4948,12 @@ class Atm3D(Atmosphere):
         ext_glob = np.concatenate([ext_aer_1d, ext_mix_3d], axis=1)
         ssa_glob = np.concatenate([ssa_aer_1d[:, :], ssa_mix_3d], axis=1)
 
-        # Now consider the wavelength dimension, with the
-        # per-wavelength stride of the `phases` layout above
-        ipha3d = np.zeros(
-            (len(wavelength_pha), phase_glob_indices_w0.size), dtype=np.int32
-        )
-        for i_wavelength in range(len(wavelength_pha)):
-            ipha3d[i_wavelength, :] = phase_glob_indices_w0[:] + (
-                i_wavelength * stride
-            )
+        # Now consider the wavelength dimension: each profile
+        # wavelength points into the block of its phase wavelength,
+        # with the per-wavelength stride of the `phases` layout above
+        ipha3d = (
+            phase_glob_indices_w0[None, :] + block[:, None] * stride
+        ).astype(np.int32)
 
         return ext_glob, ssa_glob, (ipha3d, phases)
 
@@ -4975,6 +4987,10 @@ class Atm3D(Atmosphere):
         assert self._cell_indices is not None
         assert self._comp_cell_pos is not None
         n_cell = self._cell_indices.shape[0]
+        # the phase block of each profile wavelength, and the profile
+        # wavelength of the 1D aerosols of each phase block
+        block = _nearest_index(wavelengths, wavelength_pha)
+        row_1d = _nearest_index(wavelength_pha, wavelengths)
 
         # per-component optical properties and phase matrix sets,
         # each component truncated alone if it carries a truncation
@@ -5048,13 +5064,12 @@ class Atm3D(Atmosphere):
         # optimization)
         phases = []
         for i_wavelength in range(len(wavelength_pha)):
+            row = row_1d[i_wavelength]
             if phase_aer_1d is not None:
                 assert ipha_aer_1d is not None
                 for iz in range(nbz):
                     phases.append(
-                        phase_aer_1d.isel(
-                            iphase=ipha_aer_1d[i_wavelength, iz]
-                        )
+                        phase_aer_1d.isel(iphase=ipha_aer_1d[row, iz])
                     )
             for icell in range(n_cell):
                 pha_tot = None
@@ -5064,13 +5079,12 @@ class Atm3D(Atmosphere):
                     assert ipha_aer_1d is not None
                     idz = idz_atm[icell]
                     pha_first = phase_aer_1d.isel(
-                        iphase=ipha_aer_1d[i_wavelength, idz]
+                        iphase=ipha_aer_1d[row, idz]
                     )
                     pha_tot = pha_first * (
-                        ext_aer_1d[i_wavelength, idz]
-                        * ssa_aer_1d[i_wavelength, idz]
+                        ext_aer_1d[row, idz] * ssa_aer_1d[row, idz]
                     )
-                    ext_tot += ext_aer_1d[i_wavelength, idz]
+                    ext_tot += ext_aer_1d[row, idz]
                 for icomp in range(len(self.comp_3d)):
                     iloc = local_pos[icomp, icell]
                     if iloc < 0:
@@ -5099,8 +5113,9 @@ class Atm3D(Atmosphere):
                     pha_tot = pha_first
                 phases.append(pha_tot)
 
-        # the phase matrix indices, with the per-wavelength stride of
-        # the `phases` layout above
+        # the phase matrix indices: each profile wavelength points into
+        # the block of its phase wavelength, with the per-wavelength
+        # stride of the `phases` layout above
         if phase_aer_1d is not None:
             stride = nbz + n_cell
             phase_glob_indices_w0 = np.arange(
@@ -5114,11 +5129,9 @@ class Atm3D(Atmosphere):
                     np.arange(n_cell, dtype=np.int32),
                 ]
             )
-        ipha3d = np.zeros((len(wavelength_pha), nbz + n_cell), dtype=np.int32)
-        for i_wavelength in range(len(wavelength_pha)):
-            ipha3d[i_wavelength, :] = phase_glob_indices_w0[:] + (
-                i_wavelength * stride
-            )
+        ipha3d = (
+            phase_glob_indices_w0[None, :] + block[:, None] * stride
+        ).astype(np.int32)
 
         ext_glob = np.concatenate([ext_aer_1d, ext_mix_3d], axis=1)
         ssa_glob = np.concatenate([ssa_aer_1d, ssa_mix_3d], axis=1)

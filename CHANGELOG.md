@@ -1013,6 +1013,12 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - Fix `Atm3D(wavelength_phase=...)` with a number of phase wavelengths
+    other than the number of profile wavelengths, which raised a
+    `CoordinateValidationError` whenever the profile carried phase
+    matrices: each profile wavelength now takes the matrices of the
+    nearest phase wavelength, as documented and as in `Atm1D`, where it
+    took those of the phase wavelength of the same rank
   - Fix the periodic `Grid3D` with a single cell along x or y (a 2-D
     (x, z) field, or a horizontally uniform column): the faces of that
     axis were absorbing boundaries, which killed every photon crossing

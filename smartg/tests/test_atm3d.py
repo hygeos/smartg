@@ -945,3 +945,52 @@ def test_grid3d_invalid_arguments_raise_value_error() -> None:
         create_1d_grid(3, 1.0, loc=[1])  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="type"):
         extend_1d_grid(x, 1.0, type="foo")
+
+
+# ===================================================================
+# Phase wavelengths
+# ===================================================================
+
+
+@pytest.mark.parametrize(
+    "n_comp, aer_1d",
+    [(0, True), (1, False), (1, True), (2, True)],
+    ids=["1d-only", "one", "one-over-1d", "two-over-1d"],
+)
+def test_fewer_phase_wavelengths_than_profile_ones(
+    n_comp: int, aer_1d: bool
+) -> None:
+    """Every profile wavelength takes the nearest phase wavelength.
+
+    With one phase wavelength for three profile ones, calc raised a
+    CoordinateValidationError: the phase indices had one row per phase
+    wavelength. Each wavelength must get the matrices of the profile
+    computed at the phase wavelength alone.
+    """
+    grid3 = _build_grid()
+
+    def profile(wavelength: list[float]) -> xr.Dataset:
+        comp = [AerOPAC("continental_clean", 0.2, 550.0)] if aer_1d else []
+        atm_1d = Atm1D(
+            "afglt", comp=comp, tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0
+        )
+        comp_3d: list[Cloud3D | Aer3D] = [_layer_cloud()][:n_comp]
+        if n_comp == 2:
+            comp_3d.append(_build_aerosol(
+                ext_ref=np.array([0.1]), rh=np.array([70.0]),
+                cell_indices=np.array([[2, 1, 2]]),
+            ))
+        atm3 = Atm3D(atm_1d=atm_1d, grid_3d=grid3, comp_3d=comp_3d,
+                     wavelength_phase=[550.0])
+        return atm3.calc(np.array(wavelength), n_theta=NTH)
+
+    three = profile([500.0, 550.0, 600.0])
+    alone = profile([550.0])
+    assert three["iphase_atm"].shape[0] == 3
+    for iopt in range(alone.sizes["iopt"]):
+        ref = alone["phase_atm"].values[alone["iphase_atm"].values[0, iopt]]
+        for iw in range(3):
+            pha = three["phase_atm"].values[
+                three["iphase_atm"].values[iw, iopt]
+            ]
+            np.testing.assert_allclose(pha, ref, rtol=1e-6, atol=1e-10)
