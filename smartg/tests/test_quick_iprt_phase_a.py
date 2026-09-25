@@ -55,12 +55,14 @@ STDFAC = 4
 # added. It is about 1 for a run that only differs by its Monte Carlo
 # noise. The floor absorbs the 1e-3 by which GPU runs of the same seed
 # differ from one process to the next, which reaches twice the
-# standard deviation of the I of A1 and A2: without it, the z_rms of
-# that I went from 1.31 to 1.75 between two runs. Measured on gpu4 on
+# standard deviation of the I of A2: without it, the z_rms of an I
+# went from 1.31 to 1.75 between two runs. Measured on gpu4 on
 # 2026-09-25, three runs: 0.38 to 1.22 for every Stokes component of
-# every case. The bound of 2 then fails an I scaled by 0.3 % in A1 and
-# A2 and by 1.2 % in A5, a Q or U of the A5 almucantar scaled by 12 %
-# (the band above accepted 15 to 23 %), zeroed or of the wrong sign.
+# every case, A1 then drawing a clock seed at each run; on SEED since,
+# 0.55 to 0.82 in A1. The bound of 2 then fails an I scaled by 0.3 %
+# in A1 and A2 and by 1.2 % in A5, a Q or U of the A5 almucantar
+# scaled by 12 % (the band above accepted 15 to 23 %), zeroed or of
+# the wrong sign.
 # The U and V of A5 in the principal plane, and its V in the
 # almucantar, are pure noise at this photon count and cannot be
 # checked beyond their level.
