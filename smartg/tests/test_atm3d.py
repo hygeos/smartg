@@ -1060,3 +1060,35 @@ def test_3d_molecular_share_is_exact() -> None:
     np.testing.assert_allclose(
         pro["pmol_atm"].values[:, 1:], ray / sca, rtol=1e-6
     )
+
+
+@pytest.mark.parametrize("n_comp", [1, 2], ids=["one", "two"])
+def test_no_phase_no_truncation_in_3d(n_comp: int) -> None:
+    """Atm3D.calc(phase=False) skips the phase matrices, as Atm1D does.
+
+    It computed them all and truncated the components anyway. Without
+    them, the profile carries the untruncated extinctions and albedos,
+    the 1D aerosols mixed into the cells as with phase=True.
+    """
+    grid3 = _build_grid()
+
+    def profile(truncation: GTTrunc | None, phase: bool) -> xr.Dataset:
+        cld1, _ = _build_clouds(truncation=truncation)
+        comp_3d: list[Cloud3D | Aer3D] = [cld1]
+        if n_comp == 2:
+            comp_3d.append(_build_aerosol())
+        atm_1d = Atm1D(
+            "afglt", comp=[AerOPAC("continental_clean", 0.2, 550.0)],
+            tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0,
+        )
+        return Atm3D(atm_1d, grid3, comp_3d).calc(
+            WAV, phase=phase, n_theta=NTH
+        )
+
+    full = profile(None, True)
+    bare = profile(GT, False)
+    assert "phase_atm" not in bare and "iphase_atm" not in bare
+    for name in ("OD_p", "ssa_p_atm", "OD_r", "OD_g", "pmol_atm"):
+        np.testing.assert_allclose(
+            bare[name].values, full[name].values, rtol=1e-12
+        )

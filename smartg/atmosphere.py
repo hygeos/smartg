@@ -4554,7 +4554,10 @@ class Atm3D(Atmosphere):
         wavelength : array_like or BandSet
             Wavelengths in nm.
         phase : bool, optional
-            If True (default), compute the phase matrices.
+            If True (default), compute the phase matrices. With False,
+            as in `Atm1D.calc`, no phase matrix is computed and nothing
+            is truncated: the profile carries the untruncated
+            extinctions and single scattering albedos alone.
         n_theta : int, str or array_like, optional
             The number of equally spaced scattering angles of the
             phase matrices, the angles themselves in degrees, or
@@ -4595,7 +4598,12 @@ class Atm3D(Atmosphere):
         #
         # 1D background optical properties on the 3D vertical grid
         #
-        pha_1d = len(self.atm_1d.comp) > 0
+        # the cells mix in the 1D aerosols when they carry a phase
+        # matrix, computed or forced
+        with_aer_1d = (
+            len(self.atm_1d.comp) > 0 or self.aer_phase_1d is not None
+        )
+        pha_1d = phase and len(self.atm_1d.comp) > 0
         ipha_aer_1d = None
         pha_aer_1d = None
         mol_sca_1d = self.mol_sca_1d
@@ -4628,7 +4636,7 @@ class Atm3D(Atmosphere):
         assert mol_sca_1d is not None and mol_abs_1d is not None
         assert ext_aer_1d is not None and ssa_aer_1d is not None
 
-        if self.aer_phase_1d is not None:
+        if phase and self.aer_phase_1d is not None:
             ipha_aer_1d = self.aer_phase_1d[0]
             pha_aer_1d = self.aer_phase_1d[1]
 
@@ -4671,15 +4679,21 @@ class Atm3D(Atmosphere):
         #
         mol_sca_glob = self._glob_molecular(mol_sca_1d)
         mol_abs_glob = self._glob_molecular(mol_abs_1d)
-        ext_glob, ssa_glob, prof_phases = self._glob_particles(
-            wavelengths,
-            wavelength_pha,
-            n_theta,
-            ext_aer_1d,
-            ssa_aer_1d,
-            ipha_aer_1d,
-            pha_aer_1d,
-        )
+        if phase:
+            ext_glob, ssa_glob, prof_phases = self._glob_particles(
+                wavelengths,
+                wavelength_pha,
+                n_theta,
+                ext_aer_1d,
+                ssa_aer_1d,
+                ipha_aer_1d,
+                pha_aer_1d,
+            )
+        else:
+            ext_glob, ssa_glob = self._glob_ext_ssa(
+                wavelengths, ext_aer_1d, ssa_aer_1d, with_aer_1d
+            )
+            prof_phases = None
 
         #
         # assemble the profile dataset
@@ -4985,6 +4999,47 @@ class Atm3D(Atmosphere):
         ).astype(np.int32)
 
         return ext_glob, ssa_glob, (ipha3d, phases)
+
+    def _glob_ext_ssa(
+        self,
+        wavelengths: NDArray[np.floating],
+        ext_aer_1d: NDArray[np.floating],
+        ssa_aer_1d: NDArray[np.floating],
+        with_aer_1d: bool,
+    ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
+        """Merge the particle extinctions and albedos alone.
+
+        The (n_wavelength, n_opt) arrays `_glob_particles` gives, for
+        ``calc(phase=False)``: without the phase matrices, and without
+        truncating the components. In each cell the extinctions are
+        summed, with those of the 1D aerosols if `with_aer_1d`, and
+        the single scattering albedos extinction-weighted.
+        """
+        if not self.comp_3d:
+            return ext_aer_1d, ssa_aer_1d
+        assert self._cell_indices is not None
+        assert self._comp_cell_pos is not None
+        n_cell = self._cell_indices.shape[0]
+        idz_atm = self.grid_3d.NZ - self._cell_indices[:, 2]
+        ext_mix_3d = np.zeros((len(wavelengths), n_cell), dtype=np.float64)
+        sca_mix_3d = np.zeros_like(ext_mix_3d)
+        for comp, pos in zip(self.comp_3d, self._comp_cell_pos, strict=True):
+            ext = comp.get_ext(wavelengths)
+            ext_mix_3d[:, pos] += ext
+            sca_mix_3d[:, pos] += ext * comp.get_ssa(wavelengths)
+        if with_aer_1d:
+            ext_mix_3d += ext_aer_1d[:, idz_atm]
+            sca_mix_3d += ext_aer_1d[:, idz_atm] * ssa_aer_1d[:, idz_atm]
+        ssa_mix_3d = np.divide(
+            sca_mix_3d,
+            ext_mix_3d,
+            out=np.ones_like(sca_mix_3d),
+            where=ext_mix_3d > 0.0,
+        )
+        return (
+            np.concatenate([ext_aer_1d, ext_mix_3d], axis=1),
+            np.concatenate([ssa_aer_1d, ssa_mix_3d], axis=1),
+        )
 
     def _glob_particles_multi(
         self,

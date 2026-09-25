@@ -1013,6 +1013,10 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - `Atm3D.calc(phase=False)` no longer computes the phase matrices and
+    no longer truncates the components, as `Atm1D.calc(phase=False)`,
+    which its docstring refers to: the flag had no effect, so the call
+    cost the full phase construction and returned truncated extinctions
   - Fix the molecular share of the scattering (`pmol_atm`) of the `Atm3D`
     cells, which came from a float32 cumulated sum of the Rayleigh
     coefficients over every cell, differentiated back: its error grew
