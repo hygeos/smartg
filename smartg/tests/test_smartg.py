@@ -727,35 +727,47 @@ def test_run_invalid(
 def test_cell_proba_array_matches_auto() -> None:
     """Check that the documented icdf_2d table samples as 'auto' does.
 
-    The two wavelengths emit from different levels (a water vapour
-    band and the window), so a table read with its wavelengths
-    interleaved would move both fluxes.
+    Over a SEVIRI water vapour band, whose emission never reaches the
+    top of the atmosphere, and the window, whose emission from the
+    lowest layers partly does: each wavelength must draw its layers
+    from its own row. With the rows swapped, as a table read with its
+    wavelengths interleaved would mix them, the upward flux of the
+    window at the top moves by about 30 %.
     """
-    wavelength = np.array([6250.0, 10800.0])
-    prof_atm = Atm1D("afglt", grid=np.linspace(50, 0, num=11)).calc(
-        wavelength
-    )
+    reptran = Reptran("reptran_thermal_msg")
+    ibands = [
+        reptran.to_smartg(include=f"msg1_seviri_{channel}").l[0]
+        for channel in ("ch062", "ch108")
+    ]
+    wavelength = np.array([iband.w for iband in ibands])
+    prof_atm = Atm1D("afglt", grid=np.linspace(50, 0, num=11)).calc(ibands)
     table = icdf_2d(_emission_proba(prof_atm, wavelength))
     sg = Smartg(thermal=True, alt_pp=True, back=False)
     kwargs: dict[str, Any] = {
-        "wavelength": wavelength,
+        "wavelength": ibands,
         "atmosphere": prof_atm,
         "flux": "planar",
         "direct": True,
-        "n_photons": 1e5,
+        "output_layers": 1,
+        "n_photons": 1e6,
         "seed": 1,
         "xblock": 64,
         "xgrid": 64,
+        "progress": False,
     }
 
     auto = sg.run(cell_proba="auto", **kwargs)
     user = sg.run(cell_proba=table, **kwargs)
+    swapped = sg.run(cell_proba=np.ascontiguousarray(table[::-1]), **kwargs)
 
     for name in ("flux_up (TOA)", "flux_down (0+)"):
-        assert np.all(auto[name].values > 0)
         np.testing.assert_allclose(
-            user[name].values, auto[name].values, rtol=1e-2
+            user[name].values, auto[name].values, rtol=0.05, atol=1e-4
         )
+    window = float(auto["flux_up (TOA)"].values.ravel()[1])
+    assert window > 0.01
+    moved = float(swapped["flux_up (TOA)"].values.ravel()[1]) / window
+    assert abs(moved - 1.0) > 0.1
 
 
 def test_dataset_to_mlut_roundtrip() -> None:
