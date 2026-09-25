@@ -1173,7 +1173,11 @@ final `v2.0.0` release.
     fraction of the mixture (0.72 for a ratio of 0.01 on the 721 angles of
     `Hydrosol`, 0.91 for `HydrosolPR(chl=0.5)` on its 72001), times
     `1 - f` with a truncation. Without truncation, the backscattering is
-    now right to 0.2 %
+    now right to 0.2 %. The mixture is also clipped at zero: with a ratio of
+    0.04, beyond the 0.03 of the Park & Ruddick weights, that of
+    `HydrosolZhai` was negative below 0.1 degree on its 7201 angles, a
+    density the kernel cannot sample; `HydrosolZhai` now scatters 1.5 %
+    more (a resolved fraction of 1.080 instead of 1.064)
   - Fix `HydrosolPR` and `HydrosolZhai`, which halved their particle
     scattering coefficient whenever the phase matrices were calculated, as
     in every `Smartg.run`, but not with `Water1D.calc(phase=False)`: they

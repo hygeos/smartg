@@ -745,7 +745,10 @@ def test_derived_phase_backscattering(
     `bbp_ratio * bp`, at the default `n_theta` of each class, with and
     without truncation. The forward peak the angular grid does not
     resolve is counted as unscattered: it used to be spread over all
-    the angles, backscattering included, by +10 % to +51 %.
+    the angles, backscattering included, by +10 % to +51 %. The phase
+    matrix must be non-negative, which the mixture of HydrosolZhai,
+    whose ratio of 0.04 weights a Fournier-Forand function negatively,
+    was not close to 0 deg.
 
     The tolerance covers the Park & Ruddick weights, derived from
     backscattered fractions of 0.030 and 0.002 where the two
@@ -765,6 +768,7 @@ def test_derived_phase_backscattering(
     wavelength = np.array([443.0, 550.0])
     grid = np.array([0.0, -5.0, -10.0])
     pro = Water1D(grid=grid, comp=[hydrosol]).calc(wavelength)
+    assert (pro["phase_oc"].values >= 0.0).all()
     iop = hydrosol.iop(wavelength, grid)
     assert iop["bbp_ratio"] is not None
     frac = _backscattered_fraction(

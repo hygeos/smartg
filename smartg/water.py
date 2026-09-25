@@ -507,6 +507,13 @@ class Hydrosol:
         backscattering coefficient is thus the backscattering ratio
         times the scattering coefficient, whatever `n_theta`.
 
+        Beyond a backscattering ratio of 0.03, the mixture weights the
+        second function negatively and turns negative close to the
+        forward direction, on a fine enough grid (e.g. the 7201 angles
+        of HydrosolZhai, whose ratio is 0.04): it is clipped at zero
+        before its resolved fraction is computed, so that the phase
+        matrices are never negative.
+
         The normalized phase matrices are then truncated with pytrunc
         as configured by `truncation` (nothing is truncated when it is
         None).
@@ -535,8 +542,7 @@ class Hydrosol:
             the scattered energy of the normalized phase matrix). The
             resolved fraction tends to 1 as the grid is refined; it is
             below 1 up to a backscattering ratio of 0.03, and above
-            beyond, where the mixture weights the second function
-            negatively and is negative in the forward direction.
+            beyond, where the clipped mixture integrates to more than 2.
 
         Raises
         ------
@@ -582,6 +588,9 @@ class Hydrosol:
         inv = inv.reshape(n_wavelength, nz)
 
         f11 = r1_uniq[:, None] * ff1 + (1 - r1_uniq[:, None]) * ff2
+        # a ratio above 0.03 weights ff2 negatively, and the mixture
+        # turns negative close to 0 deg: a phase function cannot be
+        np.maximum(f11, 0.0, out=f11)
 
         # the mixture integrates to 2 analytically: what the grid misses
         # of its forward peak is counted as unscattered, by scaling the
