@@ -227,13 +227,15 @@ final `v2.0.0` release.
     `Water1D` / `WaterRw` and `Hydrosol` / `HydrosolPR` / `HydrosolZhai`
     class hierarchy, with PEP 8 parameter names; the legacy water folder
     has been moved to `smartg/obselete_files/`
-  - The relative humidity of the profiles (`relative_humidity`, formerly
-    the `RH` method), and so the hygroscopic growth of the OPAC
-    aerosols, is computed with the new `saturation_pressure` (Huang
-    2018, in Pa), which takes the saturation over ice below 0 °C, where
-    v1.2.0 took it over liquid water at every temperature. The humidity
-    is unchanged above 0 °C and higher below: in `afglsw`, 81 → 94 % at
-    the surface and 24 → 39 % at 8 km; in `afglus`, 51 → 73 % at 8 km
+  - The relative humidity of the `Atm1D` profiles (`relative_humidity`,
+    formerly the `RH` method), which sets the hygroscopic growth of the
+    OPAC aerosols, is computed with the new `saturation_pressure` (Huang
+    2018), over ice below 0 °C, where v1.2.0 took the saturation over
+    liquid water at every temperature. The humidity is unchanged above
+    0 °C and higher below: in `afglsw`, 80.7 → 94.4 % at the surface and
+    23.7 → 39.0 % at 8 km, and the column single scattering albedo of
+    `continental_average` at 550 nm goes from 0.919 to 0.946; in
+    `afglus`, 50.6 → 72.5 % at 8 km
   - The internal data structures have been migrated from the legacy
     LUT/MLUT objects to xarray in most of the package (atmosphere,
     smartg, water, reptran, postprocess, views); the albedo classes
@@ -861,6 +863,9 @@ final `v2.0.0` release.
   - `MAX_NREF` increased from 10 to 100
   - The Aeronet readers `read_aeronet_aod`, `read_aeronet_ssa` and
     `read_aeronet_pfn` now return an `xr.DataArray` instead of a LUT
+  - New `smartg.atmosphere.saturation_pressure`, the saturation vapour
+    pressure in Pa of Huang (2018), over liquid water above 0 °C and
+    over ice below, used by `relative_humidity`
   - Push to PyPI workflow added
   - The notebooks are tracked, and shipped in the source distribution, as
     jupytext percent scripts (`.py`) instead of `.ipynb` files. jupytext
