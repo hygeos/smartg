@@ -1143,6 +1143,11 @@ final `v2.0.0` release.
     do, and with them the adjacency effect of an `Environment` and the
     runs with 3D objects and an atmosphere (`obj3d=True`). The error was
     already in v1.2.0
+  - Fix the intersection of a `Spheric` entity rotated about x or y by an
+    angle that is not a multiple of 90 degrees: the kernel bounded its
+    transformed box by 5 of its 8 corners, so that the rays crossing only
+    the part left out (up to 27 % of the shadow of a sphere rotated by 30
+    degrees about y under a zenith sun) went through it
   - Fix the default drawing (`draw_method='SM'`) of `visualize_entity`,
     which drew each object from its first two triangles and chose the
     surface by exact float equality: a vertical plane, such as a tower

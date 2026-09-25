@@ -26,9 +26,11 @@ from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.objects3d import (
     CusForward,
     Entity,
+    MaterialType,
     Matte,
     Mirror,
     Plane,
+    Spheric,
     Transformation,
 )
 from smartg.smartg import Smartg
@@ -552,3 +554,46 @@ def test_plane_corners_above_their_origin(sg: Smartg) -> None:
     shaded = _run_ff(sg, [receiver, blocker], _transparent(), 2 * half)
     np.testing.assert_allclose(lit["cat_irr"].values[0], 16.0, rtol=0.01)
     assert shaded["cat_irr"].values[0] == 0.0
+
+
+def _sphere_shadow(
+    sg: Smartg,
+    rotation: tuple[float, float, float],
+    front: MaterialType,
+    back: MaterialType,
+) -> tuple[float, float]:
+    """Return the power on a receiver under a sphere, and its expected.
+
+    A sphere of radius 2 m, 10 m high, over a 6 m square receiver 1 m
+    high, under a zenith sun: the receiver gets the sun but for the
+    shadow of the sphere, a disc of radius 2 m, when the sphere absorbs
+    or reflects all it intercepts upward or aside.
+    """
+    radius, half = 0.002, 0.003
+    sphere = Entity(
+        name="environment",
+        material_front=front,
+        material_back=back,
+        geo=Spheric(radius=radius),
+        transformation=Transformation(
+            rotation=np.array(rotation), translation=np.array([0, 0, 0.01])
+        ),
+    )
+    receiver = _receiver(half, (0.0, 0.0, 0.001))
+    ds = _run_ff(sg, [sphere, receiver], _transparent(), 2 * half)
+    expected = (2 * half * 1e3) ** 2 - np.pi * (radius * 1e3) ** 2
+    return float(ds["cat_irr"].values[0]), expected
+
+
+def test_rotated_sphere_casts_its_whole_shadow(sg: Smartg) -> None:
+    """A sphere rotated about y is intersected on its whole surface.
+
+    The kernel bounded the transformed box of a sphere by 5 of its 8
+    corners: rotated by 30 degrees about y, the part of the sphere
+    beyond 0.37 of its radius along x was never tested, 27 % of its
+    shadow under a zenith sun.
+    """
+    power, expected = _sphere_shadow(
+        sg, (0.0, 30.0, 0.0), Matte(reflectivity=0.0), Matte(reflectivity=0.0)
+    )
+    np.testing.assert_allclose(power, expected, rtol=5e-3)

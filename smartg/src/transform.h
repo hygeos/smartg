@@ -378,11 +378,12 @@ BBox<T> Transform<T>::operator()(const BBox<U> &b) const
 	ret = ret.Union(ret, P+V2);
 	ret = ret.Union(ret, P+V1+V2);
 
-	// A point in z is enough (symetry)
+	// And the opposite face: under a rotation about x or y, the
+	// extremes of the box can be at any of its eight corners
 	ret = ret.Union(ret, P+V3);
-	/* ret = ret.Union(ret, P+V1+V3); */
-	/* ret = ret.Union(ret, P+V2+V3); */
-	/* ret = ret.Union(ret, P+V1+V2+V3); */
+	ret = ret.Union(ret, P+V1+V3);
+	ret = ret.Union(ret, P+V2+V3);
+	ret = ret.Union(ret, P+V1+V2+V3);
     return ret;
 }
 #endif
