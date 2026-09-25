@@ -1009,6 +1009,12 @@ final `v2.0.0` release.
     the AFGL profiles (and zero with `no2=False`), so N2O absorption was
     practically missing from the SWIR and thermal bands (already so in
     v1.2.0)
+  - `Atm1D` refuses a `grid` that does not decrease strictly, from TOA to
+    BOA, with a `ValueError`: an increasing one went through and gave NaN
+    particle optical thicknesses. Such a `pfgrid` raises a `ValueError`
+    instead of a bare `AssertionError`, and the parse errors of
+    `strgrid_to_numpy` give a TOA to BOA example instead of an
+    increasing one
   - `Cloud` refuses an effective radius outside the range of its file,
     and `AerOPAC` and `Cloud` refuse a wavelength, or the reference
     wavelength of a scalar `tau_ref`, outside the wavelengths of their

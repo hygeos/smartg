@@ -14,6 +14,7 @@ from smartg.atmosphere import (
     Cloud,
     n_air_co2,
     refractivity,
+    strgrid_to_numpy,
 )
 
 Wavelength = float | list[float] | NDArray[np.float64]
@@ -161,3 +162,25 @@ def test_calc_split_without_phase_matrices() -> None:
         np.testing.assert_allclose(
             rebuilt[name].values, pro[name].values, rtol=1e-5, atol=1e-8
         )
+
+
+@pytest.mark.parametrize(
+    "grid", ["0[1]100", np.arange(0.0, 101.0), [100.0, 2.0, 5.0, 0.0]],
+    ids=["string", "array", "unsorted"],
+)
+def test_grid_not_decreasing_refused(grid: object) -> None:
+    """A grid that does not run from TOA to BOA is refused.
+
+    It went through and gave NaN particle optical thicknesses.
+    """
+    with pytest.raises(ValueError, match="grid must decrease strictly"):
+        Atm1D("afglus", comp=[AerOPAC("desert", 0.1, 550.0)], grid=grid)
+    if not isinstance(grid, str):
+        with pytest.raises(ValueError, match="pfgrid must decrease"):
+            Atm1D("afglus", pfgrid=grid)
+
+
+def test_strgrid_error_gives_a_toa_to_boa_example() -> None:
+    """The parse error of strgrid_to_numpy shows a TOA to BOA grid."""
+    with pytest.raises(ValueError, match=r'"500\[10\]100\[1\]0"'):
+        strgrid_to_numpy("100")

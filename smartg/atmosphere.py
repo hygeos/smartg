@@ -2802,7 +2802,11 @@ class Atm1D(Atmosphere):
         self.pfgrid = (
             np.array([100.0, 0.0]) if pfgrid is None else np.asarray(pfgrid)
         )
-        assert (np.diff(self.pfgrid) < 0.0).all()
+        if not (np.diff(self.pfgrid) < 0.0).all():
+            raise ValueError(
+                "pfgrid must decrease strictly, from TOA to BOA, got "
+                f"{self.pfgrid.tolist()}."
+            )
         self.prof_abs = prof_abs
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
@@ -2818,6 +2822,12 @@ class Atm1D(Atmosphere):
         if isinstance(grid, str):
             grid = strgrid_to_numpy(grid)
         grid = np.asarray(grid) if grid is not None else None
+        if grid is not None and not (np.diff(grid) < 0.0).all():
+            raise ValueError(
+                "grid must decrease strictly, from TOA to BOA as "
+                f"'100[1]0' does, got a grid from {grid[0]:g} to "
+                f"{grid[-1]:g} km that does not."
+            )
         fname = Path(fname)
 
         #
@@ -6990,7 +7000,7 @@ def strgrid_to_numpy(str_grid: str) -> np.ndarray:
         raise ValueError(
             f'Cannot parse grid specification: "{str_grid}"\n'
             "Expected format: start[step]stop[step]stop...\n"
-            'Example: "0[1]100[10]500"'
+            'Example: "500[10]100[1]0", from TOA to BOA'
         )
 
     # Extract numbers (at even indices) and steps (at odd indices)
@@ -7002,7 +7012,7 @@ def strgrid_to_numpy(str_grid: str) -> np.ndarray:
         raise ValueError(
             f'Cannot parse grid specification: "{str_grid}"\n'
             "Expected format: start[step]stop[step]stop...\n"
-            'Example: "0[1]100[10]500"'
+            'Example: "500[10]100[1]0", from TOA to BOA'
         )
 
     # Convert to floats
