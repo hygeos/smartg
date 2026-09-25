@@ -610,8 +610,9 @@ final `v2.0.0` release.
     `alis=True` (they had no effect), an `environment` without a
     `surface`, `wavelength_proba` or `sensor_proba` arrays that are not
     `int64`, an unknown `cell_proba` string, `cell_proba='auto'` outside
-    the forward thermal mode and a `cell_proba` array without one column
-    per wavelength. Some were assertions, the others went unnoticed
+    the forward thermal mode and a `cell_proba` array that is not an
+    `int64` table with one row per wavelength. Some were assertions, the
+    others went unnoticed
   - `smartg.kdis` raises a `FileNotFoundError` for a missing file and a
     `ValueError` for an unsorted or incompatible table, where it printed
     the problem and called `sys.exit()`, which also shut down the Jupyter
@@ -1736,7 +1737,9 @@ final `v2.0.0` release.
     `generate_h_a` no longer print unconditionally
   - Fix `Smartg.run(cell_proba=...)` given a 2-D array, its documented
     type, which always raised a `ValueError`: the array was compared with
-    the string `'auto'`
+    the string `'auto'`. The array is the `int64` table that
+    `icdf_2d(proba, n)` returns, one row of layer indices per wavelength,
+    and is uploaded in the order the kernel reads it
   - Fix the 1D aerosol mixed into the cells of a 3D component of `Atm3D`:
     each cell took the aerosol of the layer below its own, and a cell in
     the bottom layer raised an `IndexError`. It now takes the aerosol of

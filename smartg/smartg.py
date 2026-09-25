@@ -47,7 +47,7 @@ import pycuda.driver as cuda
 import xarray as xr
 from luts.luts import MLUT
 from numpy import pi
-from numpy.typing import DTypeLike, NDArray
+from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pycuda import gpuarray
 from pycuda.compiler import SourceModule
 from pycuda.gpuarray import GPUArray, to_gpu
@@ -1240,7 +1240,7 @@ class Smartg:
         earth_radius: float = 6371.0,
         wavelength_proba: np.ndarray | None = None,
         sensor_proba: np.ndarray | None = None,
-        cell_proba: NDArray[np.floating] | Literal['auto'] | None = None,
+        cell_proba: NDArray[np.int64] | Literal['auto'] | None = None,
         n_theta: int = 45,
         n_phi: int = 90,
         n_icdf: float = 1e6,
@@ -1363,10 +1363,14 @@ class Smartg:
            The inversed cumulative distribution function for sensor
            selection. It is for example the result of function
            icdf(proba, n).
-        cell_proba : None | 2-D ndarray, optional
+        cell_proba : None | 'auto' | 2-D ndarray of int64, optional
             The inversed cumulative distribution function for cell
-            selection. It is for example the result of function
-            icdf_2d(proba, n).
+            selection, of shape ``(n_lam, n)``: one row of ``n`` layer
+            indices per wavelength. It is for example the result of
+            function icdf_2d(proba, n), with ``proba`` of shape
+            ``(n_lam, n_layers)``. 'auto' builds it from the thermal
+            emission of the atmosphere layers (forward thermal mode
+            only).
         n_theta : int, optional
             The number of viewing/sun zenith angles in forward/backward
             for the cone sampling. This parameter is ignored if the
@@ -2329,17 +2333,11 @@ class Smartg:
                         "and no temperature profile)"
                     )
                 p_emission = _emission_proba(prof_atm, wavelength[:])
-                cell_proba_icdf = to_gpu(icdf_2d(p_emission).T)
-                n_cell_proba = cell_proba_icdf.shape[0]
+                table = _cell_proba_table(icdf_2d(p_emission), n_lam)
             else:
-                if cell_proba.ndim != 2 or cell_proba.shape[1] != n_lam:
-                    raise ValueError(
-                        "cell_proba must be a 2-D array with one column "
-                        f"per wavelength ({n_lam}), got the shape "
-                        f"{cell_proba.shape}"
-                    )
-                cell_proba_icdf = to_gpu(cell_proba)
-                n_cell_proba = cell_proba.shape[0]
+                table = _cell_proba_table(cell_proba, n_lam)
+            cell_proba_icdf = to_gpu(table)
+            n_cell_proba = table.shape[1]
         else:
             cell_proba_icdf = gpuzeros(1, dtype='int64')
             n_cell_proba = 0
@@ -2901,6 +2899,56 @@ def _emission_proba(
     )
     emission = kabs * b_planck
     return emission / emission.sum(axis=1, keepdims=True)
+
+
+def _cell_proba_table(
+    cell_proba: ArrayLike, n_lam: int
+) -> NDArray[np.int64]:
+    """Return the layer sampling table in the order the kernel reads.
+
+    The kernel draws the layer of a photon of wavelength index ``ilam``
+    as ``cell_proba_icdf[k + ilam * NCELLPROBA]``, from a buffer that
+    keeps the memory order of the host array. The table is therefore
+    uploaded row-major, one row per wavelength, as
+    :func:`smartg.cdf.icdf_2d` returns it, and ``NCELLPROBA`` is its
+    number of columns.
+
+    Parameters
+    ----------
+    cell_proba : array_like of int64
+        Inverse CDF of the layer emission probabilities, of shape
+        ``(n_lam, n)``: one row of ``n`` layer indices per wavelength,
+        for example ``icdf_2d(proba, n)``.
+    n_lam : int
+        Number of wavelengths of the run.
+
+    Returns
+    -------
+    ndarray of int64
+        C-contiguous table of shape ``(n_lam, n)``.
+
+    Raises
+    ------
+    TypeError
+        If `cell_proba` does not hold int64 values, which the kernel
+        reads as layer indices.
+    ValueError
+        If `cell_proba` is not 2-D with one row per wavelength and at
+        least one column.
+    """
+    table = np.asarray(cell_proba)
+    if table.dtype != np.int64:
+        raise TypeError(
+            "cell_proba must be an int64 array, the inverse CDF of "
+            f"icdf_2d(proba, n), got the dtype {table.dtype}"
+        )
+    if table.ndim != 2 or table.shape[0] != n_lam or table.shape[1] < 1:
+        raise ValueError(
+            "cell_proba must be a 2-D array with one row per wavelength "
+            f"({n_lam}), as icdf_2d(proba, n) returns it, got the shape "
+            f"{table.shape}"
+        )
+    return np.ascontiguousarray(table)
 
 
 def _calc_solid_angles(

@@ -18,6 +18,7 @@ import smartg.smartg as smartg_mod
 from smartg import conftest
 from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.atmosphere import AerOPAC, Atm1D, Atm3D, Cloud
+from smartg.cdf import icdf_2d
 from smartg.grid3d import Grid3D
 from smartg.reptran import Reptran, reduce_reptran
 from smartg.sensor import Sensor, get_sensors_grid
@@ -29,6 +30,7 @@ from smartg.smartg import (
     _alis_n_low,
     _check_alis_kernel,
     _check_alis_layers,
+    _emission_proba,
     _finalize,
 )
 from smartg.surface import (
@@ -669,7 +671,12 @@ INVALID_RUNS = [
     ({"sensor_proba": np.zeros(4, dtype=np.int32)}, TypeError, "int64"),
     ({"cell_proba": "automatic"}, ValueError, "unknown cell_proba"),
     ({"cell_proba": "auto"}, ValueError, "forward thermal"),
-    ({"cell_proba": np.zeros((3, 5))}, ValueError, "one column"),
+    ({"cell_proba": np.zeros((1, 5))}, TypeError, "int64"),
+    (
+        {"cell_proba": np.zeros((5, 1), dtype=np.int64)},
+        ValueError,
+        "one row",
+    ),
     ({"depol": -1.0}, ValueError, "depol must be positive"),
     ({"depol_water": -1.0}, ValueError, "depol_water must be positive"),
     (
@@ -691,7 +698,8 @@ INVALID_RUNS = [
     ids=[
         "flux", "flux-le", "alis", "environment", "wavelength_proba",
         "sensor_proba", "cell_proba-name", "cell_proba-auto",
-        "cell_proba-shape", "depol", "depol_water", "flat-le",
+        "cell_proba-dtype", "cell_proba-shape", "depol", "depol_water",
+        "flat-le",
         "surf0p-up", "surf0m-down",
     ],
 )
@@ -705,6 +713,40 @@ def test_run_invalid(
     with pytest.raises(error, match=match):
         sg_forward.run(
             500.0, atmosphere=Atm1D("afglt"), n_photons=N_PHOTONS, **kwargs
+        )
+
+
+def test_cell_proba_array_matches_auto() -> None:
+    """Check that the documented icdf_2d table samples as 'auto' does.
+
+    The two wavelengths emit from different levels (a water vapour
+    band and the window), so a table read with its wavelengths
+    interleaved would move both fluxes.
+    """
+    wavelength = np.array([6250.0, 10800.0])
+    prof_atm = Atm1D("afglt", grid=np.linspace(50, 0, num=11)).calc(
+        wavelength
+    )
+    table = icdf_2d(_emission_proba(prof_atm, wavelength))
+    sg = Smartg(thermal=True, alt_pp=True, back=False)
+    kwargs: dict[str, Any] = {
+        "wavelength": wavelength,
+        "atmosphere": prof_atm,
+        "flux": "planar",
+        "direct": True,
+        "n_photons": 1e5,
+        "seed": 1,
+        "xblock": 64,
+        "xgrid": 64,
+    }
+
+    auto = sg.run(cell_proba="auto", **kwargs)
+    user = sg.run(cell_proba=table, **kwargs)
+
+    for name in ("flux_up (TOA)", "flux_down (0+)"):
+        assert np.all(auto[name].values > 0)
+        np.testing.assert_allclose(
+            user[name].values, auto[name].values, rtol=1e-2
         )
 
 
