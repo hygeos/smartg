@@ -2084,20 +2084,8 @@ class Smartg:
                         "profile (the 3D profile has no z_atm axis "
                         "and no temperature profile)"
                     )
-                kabs = od2k(prof_atm, 'OD_abs_atm')
-                z = -prof_atm.coords['z_atm'].to_numpy()
-                b_planck = blackbody_radiance(
-                    wavelength[:][:, None],
-                    prof_atm['T_atm'].to_numpy()[None, :],
-                )
-                emission = xr.DataArray(
-                    kabs * b_planck,
-                    dims=['wavelength', 'z_atm'],
-                    coords={'wavelength': wavelength[:], 'z_atm': z},
-                )
-                norm_emission = (4 * np.pi) * emission.sum(dim='z_atm')
-                p_emission = emission * (4 * np.pi) / norm_emission
-                cell_proba_icdf = to_gpu(icdf_2d(p_emission.to_numpy()).T)
+                p_emission = _emission_proba(prof_atm, wavelength[:])
+                cell_proba_icdf = to_gpu(icdf_2d(p_emission).T)
                 n_cell_proba = cell_proba_icdf.shape[0]
             else:
                 if cell_proba.ndim != 2 or cell_proba.shape[1] != n_lam:
@@ -2423,6 +2411,38 @@ class Smartg:
             clear_context_caches()
 
         return output
+
+
+def _emission_proba(
+    prof_atm: xr.Dataset, wavelength: NDArray[np.floating]
+) -> NDArray[np.float64]:
+    """Return the probability of each level to emit a thermal photon.
+
+    The emission of a level is its absorption coefficient times the
+    Planck radiance at its temperature, normalised over the levels at
+    each wavelength. It is the table sampled by ``cell_proba='auto'``.
+
+    Parameters
+    ----------
+    prof_atm : Dataset
+        1D atmosphere profile with ``OD_abs_atm``, ``T_atm`` and the
+        ``z_atm`` axis.
+    wavelength : ndarray
+        Wavelengths in nm.
+
+    Returns
+    -------
+    ndarray
+        Probabilities of shape ``(len(wavelength), len(z_atm))``, which
+        sum to one over the levels.
+    """
+    kabs = od2k(prof_atm, 'OD_abs_atm')
+    b_planck = blackbody_radiance(
+        np.asarray(wavelength)[:, None] * 1e-9,  # m
+        prof_atm['T_atm'].to_numpy()[None, :],
+    )
+    emission = kabs * b_planck
+    return emission / emission.sum(axis=1, keepdims=True)
 
 
 def _calc_solid_angles(

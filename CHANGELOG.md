@@ -916,6 +916,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix `Smartg.run(cell_proba='auto')` (forward thermal mode): the
+    probability of each level to emit took the Planck function at the
+    wavelength in nm read as metres, where it is proportional to the
+    temperature, so the levels emitted in proportion to k_abs T instead of
+    k_abs B(lambda, T): the warm low levels were under-sampled and the
+    cold high ones over-sampled (already so in v1.2.0)
   - Fix the KDIS models whose concentration axis is a density (the ascii
     models with a concentration dependent species, and the h5 ones whose
     `rho` is described as `density`): clipping the density to the axis
