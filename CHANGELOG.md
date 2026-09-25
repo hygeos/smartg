@@ -1389,8 +1389,10 @@ final `v2.0.0` release.
     two bottom layers shared the last class; a scattering in the ocean
     stored its ocean layer, and in a 3D atmosphere the cell index. The
     class is now the absorbing layer of the last atmospheric scattering,
-    from 0 at the top as on the 'cdist_layer' axis, which the `nlscl`
-    column of the photon histories holds too. The total AMF is unchanged
+    from 0 at the top of the atmosphere (index `n_oce_abs + n` on the
+    'cdist_layer' axis, which holds the ocean layers first), which the
+    `nlscl` column of the photon histories holds too. The total AMF is
+    unchanged
   - Fix the ALIS counts in double precision on the GPUs older than the
     GTX 1000 series (deprecated): their fallback without a double
     `atomicAdd` added the no-aerosol counts through an unset pointer and

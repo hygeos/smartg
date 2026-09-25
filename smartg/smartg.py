@@ -884,9 +884,12 @@ class Smartg:
         * ``'last_scattering_layer'`` — photons are classified by the
           atmospheric layer in which their last atmospheric scattering
           event occurred (original Approach 2 behaviour): class index
-          ``layer * nscl // NATM_ABS``, the layers counted from 0 at
-          the top as on the ``cdist_layer`` axis. The photons that
-          never scattered in the atmosphere go to class 0.
+          ``layer * nscl // NATM_ABS``, the atmospheric absorbing
+          layers counted from 0 at the top of the atmosphere. On the
+          ``cdist_layer`` axis, which holds the ocean layers first,
+          atmospheric layer ``n`` sits at index ``n_oce_abs + n``
+          (attribute 'ALIS n_oce_abs'). The photons that never
+          scattered in the atmosphere go to class 0.
         * ``'scattering_order'`` — photons are classified by their total
           number of scattering events (``ph->nint``). Class index is
           ``min(nint, nscl) - 1``, so the last class collects all

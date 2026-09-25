@@ -210,9 +210,10 @@ def get_histories(
         The number of reflections or scatterings.
     nlscl : ndarray of shape (NLE,)
         The index of the atmospheric absorbing layer of the last
-        atmospheric scattering, counted from 0 at the top as on the
-        'cdist_layer' axis (-1 for the photons that never scattered in
-        the atmosphere).
+        atmospheric scattering, counted from 0 at the top of the
+        atmosphere (-1 for the photons that never scattered in the
+        atmosphere). On the 'cdist_layer' axis, which holds the ocean
+        layers first, layer n sits at index n_oce_abs + n.
 
     Raises
     ------
