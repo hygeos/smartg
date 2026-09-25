@@ -1,4 +1,3 @@
 recursive-include smartg/src *
-include smartg/notebooks/demo_notebook*.py
 recursive-include smartg/tests *
 global-exclude *.py[cod]

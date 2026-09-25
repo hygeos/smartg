@@ -74,7 +74,21 @@ extra = [
 Source = "https://github.com/hygeos/smartg"
 
 [tool.setuptools]
-packages = ["smartg", "smartg.iprt"]
+# The CUDA sources, the demo notebooks and the tests ship as package
+# data (see MANIFEST.in); setuptools only keeps the data of the listed
+# packages, so their folders are listed too
+packages = [
+    "smartg",
+    "smartg.iprt",
+    "smartg.notebooks",
+    "smartg.src",
+    "smartg.src.incRNGs.Random123",
+    "smartg.src.incRNGs.Random123.conventional",
+    "smartg.src.incRNGs.Random123.features",
+    "smartg.tests",
+    "smartg.tests.aer_auxdata_ref",
+    "smartg.tests.logs",
+]
 
 # **** pixi configuration ****
 [tool.pixi.workspace]
