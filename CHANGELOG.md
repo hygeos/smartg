@@ -920,6 +920,12 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Fix the terminal progress bar of `Smartg.run`, which never showed its
+    messages (photons launched, error estimate, received fraction): they
+    went to a copy of the label that progressbar2 does not draw. A `%` in
+    a message is now shown as is. A terminal IPython shell is no longer
+    taken for a notebook, where the widget was printed once and never
+    updated
   - Fix `smartg.postprocess.plane_irr` and `spherical_irr`, and so
     `irradiance_ds`, which applied the trapezoid rule to the bin centres
     of a run without `le` and dropped half a zenith bin at each end and

@@ -41,8 +41,8 @@ mode: str
 try:
     from IPython.core.getipython import get_ipython
 
-    cfg = get_ipython()
-    if cfg is None:
+    # a terminal IPython shell has no kernel to display widgets
+    if getattr(get_ipython(), "kernel", None) is None:
         raise NameError("Not running inside an IPython kernel")
     from IPython.display import display
     from ipywidgets import Box, FloatProgress, Label, Layout
@@ -184,10 +184,9 @@ class ProgressProgressbar2:
             Maximum value shown by the progress bar.
         """
         self.max = max
-        self.label = FormatLabel("")  # type: ignore
         self.pbar = ProgressBar(
             widgets=[
-                self.label,
+                FormatLabel(""),  # type: ignore
                 " ",
                 Percentage(),  # type: ignore
                 Bar(),  # type: ignore
@@ -195,6 +194,8 @@ class ProgressProgressbar2:
             ],
             max_value=max,
         ).start()
+        # the bar renders a copy of the widgets it is given
+        self.label = self.pbar.widgets[0]
 
     def update(self, value: RealNumber, message: str = "") -> None:
         """Update progress value and message for ``progressbar2``.
@@ -207,7 +208,7 @@ class ProgressProgressbar2:
             Text rendered by the label widget.
         """
         value = min(value, self.max)  # don't exceed max
-        self.label.format = message
+        self._set_label(message)
         self.pbar.update(value)
 
     def finish(self, message: str = "") -> None:
@@ -218,8 +219,12 @@ class ProgressProgressbar2:
         message : str, optional
             Final status message.
         """
+        self._set_label(message)
         self.pbar.finish()
-        self.label.format = message
+
+    def _set_label(self, message: str) -> None:
+        """Show message as is in the label, which %-formats its text."""
+        self.label.format = message.replace("%", "%%")
 
 
 class ProgressProgressbar:
@@ -279,5 +284,5 @@ class ProgressProgressbar:
         message : str, optional
             Final status message.
         """
-        self.pbar.finish()
         self.custom.set(message)
+        self.pbar.finish()
