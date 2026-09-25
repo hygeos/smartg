@@ -18,7 +18,7 @@ pytest.importorskip(
     "jax", reason="cannot test this since the jax package is not installed."
 )
 
-from smartg.histories import get_histories
+from smartg.histories import amf_from_cdist, compute_amf, get_histories
 
 N_ATM = 3
 N_LOW = 2
@@ -174,3 +174,119 @@ def test_get_histories_ocean_columns(attrs: dict[str, str] | None) -> None:
     np.testing.assert_allclose(s, [[0.5, 0.1, 0.0, 0.0]], rtol=1e-6)
     np.testing.assert_allclose(w, [[0.9, 0.8]], rtol=1e-6)
     np.testing.assert_allclose(nref, [1.0])
+
+
+def _cdist_output(
+    amf: list[float], n_oce_abs: int = 0, zip_le: bool = False
+) -> xr.Dataset:
+    """
+    Return a hist=False ALIS output, one AMF per sensor.
+
+    The layers are 1 km thick, and the ocean rows, first on the
+    'cdist_layer' axis, hold path lengths of 100 km.
+    """
+    n_sensor = len(amf)
+    cdist = np.ones((n_oce_abs + N_ATM, n_sensor, 1, 2))
+    cdist[:n_oce_abs, :, :, 1] = 100.0
+    cdist[n_oce_abs:, :, :, 1] = np.asarray(amf)[None, :, None]
+    ds = xr.Dataset()
+    if zip_le:
+        dims = ["cdist_layer", "sensor index", "Zenith angles", "iAMF"]
+    else:
+        cdist = cdist[:, :, None]
+        dims = [
+            "cdist_layer",
+            "sensor index",
+            "Azimuth angles",
+            "Zenith angles",
+            "iAMF",
+        ]
+    ds["cdist_up (TOA)"] = (dims, cdist)
+    ds.coords["z_atm"] = np.linspace(3.0, 0.0, N_ATM + 1)
+    ds.attrs.update(
+        {"ALIS n_oce_abs": str(n_oce_abs), "ALIS n_atm_abs": str(N_ATM)}
+    )
+    return ds
+
+
+@pytest.mark.parametrize("zip_le", [False, True])
+@pytest.mark.parametrize("isensor", [0, 1])
+def test_compute_amf_sensor(isensor: int, zip_le: bool) -> None:
+    """Check that the sensor axis is not read as scatter classes.
+
+    With two sensors of AMF 1 and 3, the AMF used to be their mean,
+    with the sensors presented as scatter classes.
+    """
+    amf, _, cdist = compute_amf(
+        _cdist_output([1.0, 3.0], zip_le=zip_le), isensor=isensor
+    )
+    assert cdist.shape == (N_ATM, 2)
+    np.testing.assert_allclose(amf["AMF"], [1.0 + 2.0 * isensor] * N_ATM)
+    assert "AMF_cls" not in amf
+
+
+def test_compute_amf_ocean_rows() -> None:
+    """Check that the ocean layers of the cdist output are left out."""
+    amf, _, cdist = compute_amf(_cdist_output([2.0], n_oce_abs=2))
+    assert cdist.shape == (N_ATM, 2)
+    np.testing.assert_allclose(amf["AMF"], [2.0] * N_ATM)
+
+
+def _hist_amf_output(n_lam: int, n_low: int, step: int) -> xr.Dataset:
+    """Return a hist=True output: half the photons reflected once.
+
+    The reflected photons travel 3 km in each layer, the others 1 km,
+    and the scattering corrections grow with the wavelength.
+    """
+    w = list(np.arange(1.0, n_low + 1.0))
+    records = [
+        (0, _record([1.0 + 2.0 * (i % 2)] * N_ATM, [1.0, 0, 0, 0], w,
+                    nref=float(i % 2)))
+        for i in range(10)
+    ]
+    ds = _output(records, 20, {"hist records": "10"})
+    ds.coords["wavelength"] = np.linspace(500.0, 520.0, n_lam)
+    ds.attrs["ALIS wavelength step"] = str(step)
+    return ds
+
+
+def test_compute_amf_default_wavelength_lr() -> None:
+    """Check the default low resolution grid, n_low < n_lam.
+
+    The default was every wavelength of the run, which jnp.interp
+    refused against the n_low corrections of each history.
+    """
+    ds = _hist_amf_output(21, 5, 5)
+    amf, *_ = compute_amf(ds, alb_ref=0.5)
+    wavelength_lr = ds["wavelength"].values[::5]
+    expected, *_ = compute_amf(
+        ds, alb_ref=0.5, wavelength_lr_r=wavelength_lr
+    )
+    np.testing.assert_allclose(amf["AMF"], expected["AMF"])
+    # median of the LR grid, whose correction is 3 for every photon
+    np.testing.assert_allclose(amf["W"], [5 * 3 * (1 + 0.5)] * N_ATM)
+
+
+@pytest.mark.parametrize(
+    ("alb_ref", "amf_expected"), [(0.0, 1.0), (1.0, 2.0), (1e-6, 1.0)]
+)
+def test_compute_amf_black_surface(
+    alb_ref: float, amf_expected: float
+) -> None:
+    """Check that alb_ref=0 drops the reflected photons.
+
+    alb_ref=0 was taken for a white surface, alb_ref=1.
+    """
+    amf, *_ = compute_amf(_hist_amf_output(3, 3, 1), alb_ref=alb_ref)
+    np.testing.assert_allclose(amf["AMF"], [amf_expected] * N_ATM, rtol=1e-5)
+
+
+def test_amf_from_cdist_keys() -> None:
+    """Check the keys of scatter classes with and without variance."""
+    keys_cls = {"AMF", "W", "mean_dist", "std_AMF", "AMF_cls", "W_cls",
+                "std_AMF_cls"}
+    thick = np.ones(N_ATM)
+    two = amf_from_cdist(np.ones((N_ATM, 4, 2)), thick)
+    assert set(two) == keys_cls
+    three = amf_from_cdist(np.ones((N_ATM, 4, 3)), thick)
+    assert set(three) == keys_cls | {"var_within", "var_between"}

@@ -1310,6 +1310,16 @@ final `v2.0.0` release.
     its default `rotation_order='xyz'` and with every lower case order its
     docstring shows. The order is read in either case, the default is
     `'XYZ'`, and an unknown order raises a `ValueError`
+  - Fix `smartg.histories.compute_amf`, new in 2.0: on a hist=False output
+    with several sensors, it averaged them and presented them as scatter
+    classes, and with a water body it failed on the ocean layers of the
+    cdist output; it now reads the sensor `isensor` and the direction
+    `idir` (new keyword arguments, 0 by default) of the atmospheric
+    layers. On a hist=True output, its default low resolution wavelengths
+    were all those of the run, which failed when `n_low` is smaller, and
+    `alb_ref=0` was taken for a white surface; the default is now the
+    wavelengths of the ALIS low resolution points, and `alb_ref=0` drops
+    the photons reflected by the surface
   - Fix `get_histories`, which read a history record as if it started
     with the atmospheric path lengths: the ocean ones come first, so with
     a water body the distances, Stokes vector and scattering corrections

@@ -423,7 +423,8 @@ def compute_cdist_hist(
         The reference wavelength (nm) used to evaluate the
         scattering-correction weight.
     alb_ref : float
-        The surface albedo at wavelength_ref.
+        The surface albedo at wavelength_ref, applied to the histories
+        recorded over a white surface as alb_ref ** nref.
     natm_abs : int
         The number of atmospheric absorption layers.
     amf_variance : bool, optional
@@ -481,10 +482,14 @@ def compute_cdist_hist(
         t_abs = jnp.ones(nle, dtype=jnp.float32)
 
     # 3. Effective photon weight  w_n = S_I · wsca · alb^Ki · Tabs
-    safe_alb = jnp.float32(alb_ref if float(alb_ref) > 0. else 1.)
+    # (the histories are recorded with a white surface; a black one,
+    # alb_ref = 0, leaves the photons without reflection, 0^0 = 1)
     nref_j = jnp.array(nref_h, dtype=jnp.float32)
     s_h_j = jnp.array(s_h, dtype=jnp.float32)
-    w_n = s_h_j[:, 0] * w_scalar * jnp.power(safe_alb, nref_j) * t_abs
+    w_n = (
+        s_h_j[:, 0] * w_scalar * jnp.power(jnp.float32(alb_ref), nref_j)
+        * t_abs
+    )
 
     # 4. Scatter class index (mirrors SCL_MODE in device.cu)
     nint_np = np.asarray(nint_h, dtype=np.int32)
@@ -581,9 +586,13 @@ def amf_from_cdist(
         'AMF_cls' : ndarray of shape (NL, nscl)
             The per-class AMF.
         'std_AMF_cls' : ndarray of shape (NL, nscl)
-            The per-class standard deviation of the AMF.
+            The per-class standard deviation of the AMF (zeros when
+            niamf < 3).
         'W_cls' : ndarray of shape (NL, nscl)
             The per-class weight.
+
+        and, only when besides niamf == 3:
+
         'var_within' : ndarray of shape (NL,)
             The within-class variance.
         'var_between' : ndarray of shape (NL,)
@@ -637,6 +646,37 @@ def amf_from_cdist(
     return result
 
 
+def _wavelength_lr(m: xr.Dataset, n_low: int) -> NDArray[np.floating]:
+    """
+    Return the low resolution wavelengths of an ALIS run.
+
+    The kernel computes the scattering corrections at the wavelength
+    indices k * step, k < n_low, with the step of the 'ALIS wavelength
+    step' attribute, or (n_lam - 1) // (n_low - 1) for an older output
+    (without n_jac_abs).
+
+    Parameters
+    ----------
+    m : xarray.Dataset
+        A Smartg output with the ALIS option.
+    n_low : int
+        The number of low resolution wavelengths.
+
+    Returns
+    -------
+    ndarray of shape (n_low,)
+        The low resolution wavelengths.
+    """
+    wavelength = np.atleast_1d(m['wavelength'].values)
+    if n_low < 2:
+        return wavelength[:1]
+    if 'ALIS wavelength step' in m.attrs:
+        step = int(m.attrs['ALIS wavelength step'])
+    else:
+        step = (wavelength.size - 1) // (n_low - 1)
+    return wavelength[:(n_low - 1) * step + 1:step]
+
+
 def compute_amf(
     m: MLUT | xr.Dataset,
     *,
@@ -650,6 +690,8 @@ def compute_amf(
     norders: int = 1,
     cdist_wabs: bool = False,
     kabs_ref: NDArray[np.floating] | None = None,
+    idir: int = 0,
+    isensor: int = 0,
 ) -> tuple[
     dict[str, NDArray[np.float64]], NDArray[np.float64], NDArray[np.float64]
 ]:
@@ -660,7 +702,12 @@ def compute_amf(
 
     * 'histories' present -> hist=True: calls compute_cdist_hist.
     * 'cdist_up (TOA)' present -> hist=False: reads the GPU tabDist
-      directly.
+      directly, whose moments and scatter classes follow the
+      amf_variance, nscl and scatter_classes options of the Smartg
+      object, not the arguments of the same name.
+
+    Either way, the AMF is that of one direction and one sensor, and
+    of the atmospheric layers only.
 
     Parameters
     ----------
@@ -668,8 +715,11 @@ def compute_amf(
         A Smartg.run() output. MLUT input is deprecated and
         converted with `to_xarray`.
     wavelength_lr_r : ndarray of shape (NLR,), optional
-        The LR wavelength axis (nm). Defaults to
-        m['wavelength'].values.
+        The LR wavelength axis (nm). Defaults to the wavelengths of
+        the low resolution points of the run, the indices k * step,
+        k < n_low, of m['wavelength'], with the step of the 'ALIS
+        wavelength step' attribute, or (n_lam - 1) // (n_low - 1) for
+        an older output.
     wavelength_ref : float, optional
         The reference wavelength (nm). Defaults to the median of
         wavelength_lr_r.
@@ -677,8 +727,9 @@ def compute_amf(
         The surface albedo at wavelength_ref. Required for the
         hist=True path.
     natm_abs : int, optional
-        The number of atmospheric absorption layers. Defaults to
-        m['z_atm'].size - 1.
+        The number of atmospheric absorption layers. Defaults to the
+        'ALIS n_atm_abs' attribute, or m['z_atm'].size - 1 for an
+        older output.
     amf_variance : bool, optional
         If True, include the 3rd moment Σ d²·w, for σ(AMF).
         Default True.
@@ -698,14 +749,20 @@ def compute_amf(
     kabs_ref : ndarray of shape (natm_abs,), optional
         The absorption coefficient (km⁻¹) at wavelength_ref, used
         when cdist_wabs is True.
+    idir : int, optional
+        The index of the direction, ith * n_phi + iphi over the zenith
+        and azimuth axes of the output (n_phi is 1 for zipped local
+        estimate directions), see `get_histories`. Default 0.
+    isensor : int, optional
+        The index of the sensor. Default 0.
 
     Returns
     -------
     amf_dict : dict
         The output of `amf_from_cdist`. Keys always present:
         'AMF', 'std_AMF', 'W', 'mean_dist'. Extra keys when
-        nscl > 1: 'AMF_cls', 'std_AMF_cls', 'W_cls', 'var_within',
-        'var_between'.
+        nscl > 1: 'AMF_cls', 'std_AMF_cls', 'W_cls', and, with the
+        third moment (amf_variance), 'var_within' and 'var_between'.
     thick : ndarray of shape (NL,)
         The layer thicknesses (km).
     cdist : ndarray of shape (NL, niamf) or (NL, nscl, niamf)
@@ -729,12 +786,9 @@ def compute_amf(
     thick = np.abs(np.diff(m['z_atm'].values))
 
     # Auto-fill optional parameters from the output
-    if wavelength_lr_r is None:
-        wavelength_lr_r = m['wavelength'].values
-    if wavelength_ref is None:
-        wavelength_ref = float(np.median(wavelength_lr_r))
+    n_oce_abs, n_atm_abs = _alis_layers(m)
     if natm_abs is None:
-        natm_abs = int(m['z_atm'].size) - 1
+        natm_abs = n_atm_abs
 
     # Dispatch on the output content.
     # Check for 'histories' FIRST: a hist=True run also stores a basic
@@ -753,7 +807,13 @@ def compute_amf(
                 "compute_amf: alb_ref is required for the hist=True path "
                 "(m contains 'histories')."
             )
-        _, s, d, w, _, nref, _, _, _, nint, nlscl = get_histories(m)
+        _, s, d, w, _, nref, _, _, _, nint, nlscl = get_histories(
+            m, idir=idir, isensor=isensor
+        )
+        if wavelength_lr_r is None:
+            wavelength_lr_r = _wavelength_lr(m, w.shape[1])
+        if wavelength_ref is None:
+            wavelength_ref = float(np.median(wavelength_lr_r))
         cdist = compute_cdist_hist(
             d, s, w, nref, nint, nlscl,
             wavelength_lr_r, wavelength_ref, alb_ref, natm_abs,
@@ -773,12 +833,16 @@ def compute_amf(
                 "compute_amf: m contains neither 'histories' (hist=True) "
                 "nor 'cdist_up (TOA)' (hist=False)."
             ) from err
-        names = list(da.dims)
-        arr = da.data
-        idx = [slice(None)] * arr.ndim
-        for i, nm in enumerate(names):
-            if nm in ('Azimuth angles', 'Zenith angles'):
-                idx[i] = 0
-        cdist = arr[tuple(idx)]                        # (NL, [nscl,] niamf)
+        ith, iphi = divmod(idir, da.sizes.get('Azimuth angles', 1))
+        index = {
+            'sensor index': isensor,
+            'Zenith angles': ith,
+            'Azimuth angles': iphi,
+        }
+        da = da.isel({k: v for k, v in index.items() if k in da.dims})
+        # (NL, [nscl,] niamf), the ocean layers first
+        axes = ['cdist_layer', 'iSCL', 'iAMF']
+        da = da.transpose(*[ax for ax in axes if ax in da.dims])
+        cdist = da.values[n_oce_abs:]
 
     return amf_from_cdist(cdist, thick), thick, cdist
