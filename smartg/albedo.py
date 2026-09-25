@@ -300,10 +300,18 @@ class AlbedoMap:
         ).astype(int)
 
 
+#: The albedo objects of this module that describe a single spectral
+#: albedo, whose ``get(wavelength)`` returns one value per wavelength.
+#: Use it to annotate the parameters that accept a spectral albedo, such
+#: as the ``alb`` of ``smartg.water.Water1D`` or the ``alb`` and the
+#: BRDF coefficients of the surfaces of ``smartg.surface``.
+#: ``typing.get_args(SpectralAlbedoLike)`` gives the corresponding tuple
+#: of classes, suitable for an ``isinstance`` check.
+SpectralAlbedoLike: TypeAlias = AlbedoCst | AlbedoSpeclib | AlbedoSpectrum
+
 #: Any of the albedo objects of this module, i.e. any object exposing
-#: the common ``get(wavelength)`` interface. Use it to annotate the
-#: parameters that accept a spectral albedo, such as the ``alb`` of
-#: ``smartg.water.Water1D`` or the ``alb`` of the surfaces of
-#: ``smartg.surface``. ``typing.get_args(AlbedoLike)`` gives the
-#: corresponding tuple of classes, suitable for an ``isinstance`` check.
-AlbedoLike: TypeAlias = AlbedoCst | AlbedoSpeclib | AlbedoSpectrum | AlbedoMap
+#: the common ``get(wavelength)`` interface: a spectral albedo, or an
+#: ``AlbedoMap``, which gives one spectral albedo per entry of its map
+#: and is only accepted as the ``alb`` of an
+#: ``smartg.surface.Environment``.
+AlbedoLike: TypeAlias = SpectralAlbedoLike | AlbedoMap

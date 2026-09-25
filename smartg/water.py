@@ -62,7 +62,7 @@ from luts.luts import LUT
 from numpy.typing import NDArray
 from pytrunc.phase import fournier_forand
 
-from smartg.albedo import AlbedoCst, AlbedoLike
+from smartg.albedo import AlbedoCst, AlbedoMap, SpectralAlbedoLike
 from smartg.bandset import BandSet
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
@@ -88,6 +88,23 @@ from smartg.typing import NumericArrayLike, PathType
 #: (larger fractions make the truncated phase function negative for the
 #: most forward-peaked Fournier-Forand mixtures).
 DEFAULT_WATER_TRUNC = GTTrunc(trunc_frac=0.3, theta_tr=5.0)
+
+
+def _refuse_albedo_map(alb: object) -> None:
+    """Refuse an AlbedoMap as the albedo of a water profile.
+
+    Raises
+    ------
+    TypeError
+        If `alb` is an AlbedoMap, which gives one spectral albedo per
+        entry of its map where the profile needs a single one.
+    """
+    if isinstance(alb, AlbedoMap):
+        raise TypeError(
+            "The alb of a water profile must be a spectral albedo "
+            "(AlbedoCst, AlbedoSpeclib or AlbedoSpectrum): an AlbedoMap "
+            "is only accepted as the alb of an Environment."
+        )
 
 
 class IOPDict(TypedDict):
@@ -1277,7 +1294,7 @@ class Water1D(Water):
         Force the pure water scattering coefficient in m-1, with
         dimensions [n_wavelength, nz]. If None, it is computed as
         19.3e-4*(wavelength/550)**-4.3.
-    alb : albedo object, optional
+    alb : AlbedoCst or AlbedoSpeclib or AlbedoSpectrum, optional
         Albedo of the sea floor, i.e. of the reflector placed at the
         bottom of the water column, at the deepest level of `grid`. This
         is the reflectance of the sea bottom seen from within the water,
@@ -1288,6 +1305,11 @@ class Water1D(Water):
         the `albedo_seafloor` variable of the profile returned by
         `calc()`. If None, a black (non-reflecting) sea floor is used,
         i.e. `AlbedoCst(0.)`.
+
+    Raises
+    ------
+    TypeError
+        If `alb` is an AlbedoMap, which only an Environment accepts.
 
     Examples
     --------
@@ -1301,8 +1323,9 @@ class Water1D(Water):
         comp: list[Hydrosol] | None = None,
         aw: NDArray | None = None,
         bw: NDArray | None = None,
-        alb: AlbedoLike | None = None,
+        alb: SpectralAlbedoLike | None = None,
     ) -> None:
+        _refuse_albedo_map(alb)
         self.grid = np.array(grid, dtype="float")
         self.comp = [] if comp is None else comp
         self.aw = aw
@@ -1620,7 +1643,7 @@ class WaterRw(Water):
 
     Parameters
     ----------
-    alb : albedo object
+    alb : AlbedoCst or AlbedoSpeclib or AlbedoSpectrum
         Albedo of the lambertian reflector, i.e. the water reflectance
         just below the surface. Although it is passed as an albedo (it
         is implemented as a lambertian reflector), the quantity to
@@ -1630,6 +1653,11 @@ class WaterRw(Water):
         level, and the air-water transmission would then be counted
         twice (see notes). Use an AlbedoSpectrum object to supply a
         spectrally varying R(0-).
+
+    Raises
+    ------
+    TypeError
+        If `alb` is an AlbedoMap, which only an Environment accepts.
 
     Notes
     -----
@@ -1666,7 +1694,8 @@ class WaterRw(Water):
     >>> water = WaterRw(alb=AlbedoCst(0.05))
     """
 
-    def __init__(self, alb: AlbedoLike) -> None:
+    def __init__(self, alb: SpectralAlbedoLike) -> None:
+        _refuse_albedo_map(alb)
         self.alb = alb
 
     def calc(self, wavelength: NumericArrayLike | BandSet) -> xr.Dataset:

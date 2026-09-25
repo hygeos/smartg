@@ -18,18 +18,48 @@ Environment
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from copy import deepcopy
 from typing import TypeAlias, get_args
 from warnings import warn
 
-from smartg.albedo import AlbedoCst, AlbedoLike
+from smartg.albedo import (
+    AlbedoCst,
+    AlbedoLike,
+    AlbedoMap,
+    SpectralAlbedoLike,
+)
 
 
-def _albedo_str(alb: AlbedoLike) -> str:
+def _albedo_str(alb: SpectralAlbedoLike) -> str:
     """Compact display of a spectral albedo model."""
     if isinstance(alb, AlbedoCst):
         return str(alb.alb)
     return type(alb).__name__
+
+
+def _refuse_albedo_map(albs: Sequence[object], owner: str) -> None:
+    """Refuse an AlbedoMap where a spectral albedo is expected.
+
+    Parameters
+    ----------
+    albs : sequence
+        The albedo objects given to the surface.
+    owner : str
+        Name of the surface, for the error message.
+
+    Raises
+    ------
+    TypeError
+        If one of `albs` is an AlbedoMap, which gives one spectral
+        albedo per entry of its map.
+    """
+    if any(isinstance(alb, AlbedoMap) for alb in albs):
+        raise TypeError(
+            f"The coefficients of {owner} must be spectral albedos "
+            "(AlbedoCst, AlbedoSpeclib or AlbedoSpectrum): an AlbedoMap "
+            "is only accepted as the alb of an Environment."
+        )
 
 
 class FlatSurface:
@@ -61,8 +91,8 @@ class FlatSurface:
             'BRDF': 0,
             'SINGLE': 1,
         }
-        self.alb: AlbedoLike | None = None
-        self.kp: tuple[AlbedoLike, ...] | None = None
+        self.alb: SpectralAlbedoLike | None = None
+        self.kp: tuple[SpectralAlbedoLike, ...] | None = None
 
     def __str__(self) -> str:
         """Return the identifier of the flat surface."""
@@ -112,8 +142,8 @@ class RoughSurface:
             'BRDF': 1 if brdf else 0,
             'SINGLE': 1 if single else 0,
         }
-        self.alb: AlbedoLike | None = None
-        self.kp: tuple[AlbedoLike, ...] | None = None
+        self.alb: SpectralAlbedoLike | None = None
+        self.kp: tuple[SpectralAlbedoLike, ...] | None = None
 
     def __str__(self) -> str:
         """Return the identifier of the rough surface."""
@@ -128,21 +158,29 @@ class LambSurface:
 
     Parameters
     ----------
-    alb : AlbedoLike, optional
+    alb : SpectralAlbedoLike, optional
         The albedo spectral model. Default AlbedoCst(0.5).
+
+    Raises
+    ------
+    TypeError
+        If `alb` is not an AlbedoCst, an AlbedoSpeclib or an
+        AlbedoSpectrum (an AlbedoMap is only accepted as the `alb` of
+        an Environment).
     """
 
     def __init__(
         self,
-        alb: AlbedoLike | None = None,
+        alb: SpectralAlbedoLike | None = None,
     ) -> None:
         if alb is None:
             alb = AlbedoCst(0.5)
-        if not isinstance(alb, get_args(AlbedoLike)):
+        if not isinstance(alb, get_args(SpectralAlbedoLike)):
             raise TypeError(
                 'The parameter alb must be one of the following '
-                'objects: AlbedoCst, AlbedoSpeclib, AlbedoSpectrum '
-                'or AlbedoMap.')
+                'objects: AlbedoCst, AlbedoSpeclib or AlbedoSpectrum '
+                '(an AlbedoMap is only accepted as the alb of an '
+                'Environment).')
         self.dict = {
             'SUR': 1,
             'DIOPTRE': 3,
@@ -152,7 +190,7 @@ class LambSurface:
             'BRDF': 1,
             'SINGLE': 1,
         }
-        self.alb: AlbedoLike = alb
+        self.alb: SpectralAlbedoLike = alb
 
     def __str__(self) -> str:
         """Return the identifier of the lambertian surface."""
@@ -169,24 +207,30 @@ class RTLSSurface:
         The Ross-Thick Li-Sparse coefficients (deprecated, see
         notes). Form of the tuple:
 
-        * k0 : AlbedoLike
+        * k0 : SpectralAlbedoLike
             -> The spectral albedo of the isotropic (lambertian)
                kernel
-        * k1p : AlbedoLike
+        * k1p : SpectralAlbedoLike
             -> The relative weight of the F1 (geometric) kernel
                (=K1/K0)
-        * k2p : AlbedoLike
+        * k2p : SpectralAlbedoLike
             -> The relative weight of the F2 (volumetric) kernel
                (=K2/K0)
-    k0 : None | AlbedoLike, optional
+    k0 : None | SpectralAlbedoLike, optional
         The spectral albedo of the isotropic (lambertian) kernel.
         Default AlbedoCst(0.5).
-    k1p : None | AlbedoLike, optional
+    k1p : None | SpectralAlbedoLike, optional
         The relative weight of the F1 (geometric) kernel (=K1/K0).
         Default AlbedoCst(0.0).
-    k2p : None | AlbedoLike, optional
+    k2p : None | SpectralAlbedoLike, optional
         The relative weight of the F2 (volumetric) kernel
         (=K2/K0). Default AlbedoCst(0.0).
+
+    Raises
+    ------
+    TypeError
+        If a coefficient is an AlbedoMap, which only an Environment
+        accepts.
 
     Notes
     -----
@@ -197,12 +241,14 @@ class RTLSSurface:
 
     def __init__(
         self,
-        kp: tuple[AlbedoLike, AlbedoLike, AlbedoLike] | None = None,
-        k0: AlbedoLike | None = None,
-        k1p: AlbedoLike | None = None,
-        k2p: AlbedoLike | None = None,
+        kp: tuple[
+            SpectralAlbedoLike, SpectralAlbedoLike, SpectralAlbedoLike,
+        ] | None = None,
+        k0: SpectralAlbedoLike | None = None,
+        k1p: SpectralAlbedoLike | None = None,
+        k2p: SpectralAlbedoLike | None = None,
     ) -> None:
-        kp_bis: list[AlbedoLike] = [
+        kp_bis: list[SpectralAlbedoLike] = [
             AlbedoCst(0.5), AlbedoCst(0.0), AlbedoCst(0.0)]
         if kp is not None:
             warn(
@@ -221,6 +267,7 @@ class RTLSSurface:
             kp_bis[1] = k1p
         if k2p is not None:
             kp_bis[2] = k2p
+        _refuse_albedo_map(kp_bis, 'RTLSSurface')
 
         self.dict = {
             'SUR': 1,
@@ -231,9 +278,9 @@ class RTLSSurface:
             'BRDF': 1,
             'SINGLE': 1,
         }
-        self.kp: tuple[AlbedoLike, ...] = (
+        self.kp: tuple[SpectralAlbedoLike, ...] = (
             (*tuple(kp_bis), AlbedoCst(0.0)))
-        self.alb: AlbedoLike | None = None
+        self.alb: SpectralAlbedoLike | None = None
 
     def __str__(self) -> str:
         """Return the identifier of the RTLS surface."""
@@ -251,23 +298,29 @@ class RPVSurface:
         The RPV coefficients (deprecated, see notes). Form of the
         tuple:
 
-        * r0 : AlbedoLike
+        * r0 : SpectralAlbedoLike
             -> Normalization.
-        * k : AlbedoLike
+        * k : SpectralAlbedoLike
             -> Minnaert exponent.
-        * bt : AlbedoLike
+        * bt : SpectralAlbedoLike
             -> Henyey-Greenstein asymetry parameter.
-        * rc : AlbedoLike
+        * rc : SpectralAlbedoLike
             -> Hotspot parameter.
-    r0 : None | AlbedoLike, optional
+    r0 : None | SpectralAlbedoLike, optional
         Normalization. Default AlbedoCst(0.5).
-    k : None | AlbedoLike, optional
+    k : None | SpectralAlbedoLike, optional
         Minnaert exponent. Default AlbedoCst(0.0).
-    bt : None | AlbedoLike, optional
+    bt : None | SpectralAlbedoLike, optional
         Henyey-Greenstein asymetry parameter. Default
         AlbedoCst(0.0).
-    rc : None | AlbedoLike, optional
+    rc : None | SpectralAlbedoLike, optional
         Hotspot parameter. Default AlbedoCst(0.0).
+
+    Raises
+    ------
+    TypeError
+        If a coefficient is an AlbedoMap, which only an Environment
+        accepts.
 
     Notes
     -----
@@ -286,14 +339,15 @@ class RPVSurface:
     def __init__(
         self,
         kp: tuple[
-            AlbedoLike, AlbedoLike, AlbedoLike, AlbedoLike,
+            SpectralAlbedoLike, SpectralAlbedoLike, SpectralAlbedoLike,
+            SpectralAlbedoLike,
         ] | None = None,
-        r0: AlbedoLike | None = None,
-        k: AlbedoLike | None = None,
-        bt: AlbedoLike | None = None,
-        rc: AlbedoLike | None = None,
+        r0: SpectralAlbedoLike | None = None,
+        k: SpectralAlbedoLike | None = None,
+        bt: SpectralAlbedoLike | None = None,
+        rc: SpectralAlbedoLike | None = None,
     ) -> None:
-        kp_bis: list[AlbedoLike] = [
+        kp_bis: list[SpectralAlbedoLike] = [
             AlbedoCst(0.5), AlbedoCst(0.0), AlbedoCst(0.0),
             AlbedoCst(0.0)]
         if kp is not None:
@@ -315,6 +369,7 @@ class RPVSurface:
             kp_bis[2] = bt
         if rc is not None:
             kp_bis[3] = rc
+        _refuse_albedo_map(kp_bis, 'RPVSurface')
 
         self.dict = {
             'SUR': 1,
@@ -325,8 +380,8 @@ class RPVSurface:
             'BRDF': 1,
             'SINGLE': 1,
         }
-        self.kp: tuple[AlbedoLike, ...] = tuple(kp_bis)
-        self.alb: AlbedoLike | None = None
+        self.kp: tuple[SpectralAlbedoLike, ...] = tuple(kp_bis)
+        self.alb: SpectralAlbedoLike | None = None
 
     def __str__(self) -> str:
         """Return the identifier of the RPV surface."""

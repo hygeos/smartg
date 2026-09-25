@@ -1131,6 +1131,13 @@ final `v2.0.0` release.
     the leading factor of the Edlén equation: `n_atm - 1` was 100 times
     too small, so that the runs with `refraction=True` hardly refracted.
     Their results change
+  - Fix `LambSurface`, `RTLSSurface`, `RPVSurface`, `Water1D` and `WaterRw`,
+    which accepted an `AlbedoMap` as albedo or BRDF coefficient, as the
+    `LambSurface` error message and the `AlbedoLike` alias advertised, and
+    then failed in `Smartg.run` or `Water1D.calc`: they now raise a
+    `TypeError`, an `AlbedoMap` being only the `alb` of an `Environment`.
+    The new `smartg.albedo.SpectralAlbedoLike` alias annotates the
+    parameters that take a single spectral albedo
   - `HydrosolZhai` no longer warns of a division by zero in `log10` on
     every evaluation: its null concentration of non-algal particles is
     skipped instead of taken to the logarithm
