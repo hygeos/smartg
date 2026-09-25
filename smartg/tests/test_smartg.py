@@ -838,3 +838,29 @@ def test_few_photons(sg_forward: Smartg) -> None:
         500.0, atmosphere=Atm1D("afglt"), n_photons=10, progress=False
     )
     assert m.attrs["NPhotonIn_sum"] >= 10
+
+
+@pytest.mark.parametrize("double", [True, False])
+def test_direct_transmission_dev_precision(double: bool) -> None:
+    """Check the direct transmission of the kernel in any precision.
+
+    In spherical mode, the local estimate records the optical depth of
+    the path to the top of the atmosphere, below 1 for a scattering
+    inside the atmosphere.
+    """
+    m = Smartg(pp=False, double=double).run(
+        400.0,
+        atmosphere=Atm1D("afglt"),
+        th_deg=30.0,
+        le=LocalEstimate(th_deg=[0.0], phi_deg=[0.0], count_level=[0]),
+        n_photons=1e5,
+        seed=81,
+        progress=False,
+    )
+    assert float(m["direct transmission (dev)"].values) < 0.9999
+
+
+def test_spherical_3d_atmosphere_refused() -> None:
+    """Check that the 3D atmosphere refuses the spherical geometry."""
+    with pytest.raises(ValueError, match="pp=True"):
+        Smartg(pp=False, opt3d=True)

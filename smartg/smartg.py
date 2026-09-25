@@ -673,7 +673,8 @@ class Smartg:
     obj3d : bool, optional
         Allow 3D objects
     opt3d : bool, optional
-        Activate the 3D atmosphere mode
+        Activate the 3D atmosphere mode, in plane parallel geometry
+        only (pp=True).
     device : int | str, optional
         The CUDA device number of the GPU to use, which the command
         `nvidia-smi` lists. By default the one of the environment
@@ -755,10 +756,10 @@ class Smartg:
     Raises
     ------
     ValueError
-        If amf_variance=True is used without alis=True. If nscl>1 is
-        used without alis=True. If scatter_classes is not one of the
-        accepted values. If scatter_classes='scattering_order_per_layer'
-        and norders < 1.
+        If opt3d=True is used with pp=False. If amf_variance=True is
+        used without alis=True. If nscl>1 is used without alis=True.
+        If scatter_classes is not one of the accepted values. If
+        scatter_classes='scattering_order_per_layer' and norders < 1.
     """
 
     def __init__(
@@ -790,6 +791,12 @@ class Smartg:
             raise ValueError(
                 "Can not use the 'device' option while the CUDA_DEVICE "
                 "environment variable is set"
+            )
+        if opt3d and not pp:
+            raise ValueError(
+                "The 3D atmosphere (opt3d=True) needs the plane parallel "
+                "geometry (pp=True): the spherical move does not follow "
+                "its cells"
             )
 
         if device is not None:
@@ -4691,10 +4698,9 @@ def _loop_kernel(
     n_error = 32
     errorcount = gpuzeros(n_error, dtype='uint64')
 
-    if n_atm > 0:
-        tab_trans_dir = gpuzeros((n_sensor, n_lam), dtype=np.float64)
-    else:
-        tab_trans_dir = gpuzeros((1, 1), dtype=np.float64)
+    # The kernel writes one value per sensor and wavelength, with or
+    # without atmosphere, in the precision of its counters
+    tab_trans_dir = gpuzeros((n_sensor, n_lam), dtype=fdtype)
 
     if (n_atm + n_oce > 0) and (n_atm_abs + n_oce_abs < 500) and alis:
         n_iamf = 3 if amf_variance else 2
@@ -5059,7 +5065,7 @@ def _loop_kernel(
         tab_photons_tot_no_aer.get(),
         tab_dist_tot.get(),
         tab_hist_tot.get(),
-        tab_trans_dir.get(),
+        tab_trans_dir.get().astype(np.float64),
         errorcount,
         n_photons_out_tot.get(),
         n_photons_out_tot_no_aer.get(),
@@ -5175,10 +5181,13 @@ def _impact_init(
     x0_gpu : pycuda.gpuarray.GPUArray
         GPU array of shape (3,) containing the cartesian coordinates
         ``[x0, y0, z0]`` (float32) of the atmosphere entry point.
-    tab_trans_dir : numpy.ndarray
+    tab_trans_dir : numpy.ndarray | None
         Array of shape (nlam,) with the direct transmittance
-        ``exp(-tau_total)`` for each wavelength.
+        ``exp(-tau_total)`` for each wavelength. None for a 3D
+        profile, whose OD_atm holds the extinction coefficients of
+        its unique optical properties and no column.
     """
+    three_d = False
     if prof_atm is None:
         h_atm = 0.0
         natm = 0
@@ -5193,10 +5202,11 @@ def _impact_init(
             natm = len(z_atm) - 1
         else:
             # 3D profile: no vertical axis, the iopt axis indexes the
-            # unique optical properties
+            # unique optical properties, and no optical depth column
+            three_d = True
             z_atm = None
             h_atm = 0.0
-            natm = prof_atm.sizes['iopt'] - 1
+            natm = 0
         od_atm = prof_atm['OD_atm'].to_numpy()
 
     cos_phv = np.cos(np.radians(phv_deg))
@@ -5313,7 +5323,10 @@ def _impact_init(
                 # cumulative optical thickness
                 tautot[ilam] += hlay
 
-    return to_gpu(np.array([x0, y0, z0], dtype='float32')), np.exp(-tautot)
+    return (
+        to_gpu(np.array([x0, y0, z0], dtype='float32')),
+        None if three_d else np.exp(-tautot),
+    )
 
 
 def _init_rng(rng: str) -> '_RngPhilox | _RngCurandPhilox':

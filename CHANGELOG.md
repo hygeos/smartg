@@ -1015,6 +1015,17 @@ final `v2.0.0` release.
     angle, which gives back the flux of the counted photons; other grids,
     such as a local estimate's, keep the trapezoid rule. `irradiance_ds`
     no longer integrates the `I_stdev_*` standard deviations as radiances
+  - Fix the `direct transmission (dev)` output with `Smartg(double=False)`:
+    the kernel wrote single precision values into a double precision
+    buffer, read as about 1 whatever the optical depth. The buffer now
+    has the precision of the kernel, and always one value per sensor and
+    wavelength: without atmosphere it held one, which the kernel overran
+    with several sensors or wavelengths. The analytic `direct
+    transmission` is no longer written for a 3D atmosphere, where it was
+    `exp(-k/cos(th_deg))` of the extinction coefficient `k` of its last
+    optical property, and `Smartg(opt3d=True, pp=False)`, which the kernel
+    does not support and which stopped at a bare `AssertionError`, raises
+    a `ValueError`. The errors were already in v1.2.0
   - Fix `multi_profiles`, which shifted the phase matrix indices of each
     profile by the largest index it used plus one instead of by its
     number of phase matrices: when a profile did not use all of its

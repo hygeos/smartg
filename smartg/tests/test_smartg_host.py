@@ -201,3 +201,20 @@ def test_multi_profiles_keeps_each_profile_phases() -> None:
     phase = pro["phase_atm"].values
     np.testing.assert_array_equal(phase[iphase[:2]], 1.0)
     np.testing.assert_array_equal(phase[iphase[2:]], 2.0)
+
+
+def test_no_direct_transmission_of_a_3d_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check that a 3D profile has no analytic direct transmission.
+
+    Its OD_atm holds the extinction coefficients of its unique optical
+    properties, in km-1, and not an optical depth column.
+    """
+    monkeypatch.setattr(sg_module, "to_gpu", np.asarray)
+    profile = xr.Dataset(
+        {"OD_atm": (("wavelength", "iopt"), [[0.0, 0.0, 5.0, 20.0]])},
+        coords={"wavelength": [550.0], "iopt": np.arange(4)},
+    )
+    _, trans = _impact_init(profile, 1, 30.0, 0.0, 6371.0, True)
+    assert trans is None
