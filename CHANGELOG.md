@@ -976,6 +976,10 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Importing `smartg.iprt.phase3` compiled two SMART-G kernels, so that
+    it needed a GPU, and so did collecting the test suite. They are now
+    compiled by the first run that needs them; `S1DB` and `S1DB_PP` remain
+    available as module attributes
   - Fix the radiances of `Smartg.run(sun_disc=...)` with the cone sampling
     (without `le`), 2 pi times too small: the solid angle of the disc was
     counted in sr, and the one of the boxes it replaces as a fraction of

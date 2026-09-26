@@ -9,8 +9,10 @@ them to the IPRT phase 3 netCDF format, iprt_phase3_<case>.nc.
 smartg/tests/test_iprt_phase3.py compares the D1 to E5 results with
 saved ones.
 
-The SMART-G kernels S1DB and S1DB_PP are compiled when the module is
-imported.
+The two backward SMART-G kernels of the runs, spherical and plane
+parallel, are compiled by the first run that needs them, once per
+process, so that importing the module needs no GPU. They remain
+reachable as the module attributes S1DB and S1DB_PP.
 
 Key Functions
 -------------
@@ -31,6 +33,7 @@ plot_camera_iprt
 """
 
 from collections.abc import Callable
+from functools import cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -59,8 +62,36 @@ from smartg.surface import LambSurface, RoughSurface
 from smartg.view import plot_polar_iquv
 from smartg.xarray import drop_axes
 
-S1DB = Smartg(back=True, double=True, bias=True, pp=False)
-S1DB_PP = Smartg(back=True, double=True, bias=True, pp=True, alt_pp=True)
+
+@cache
+def _kernel(pp: bool) -> Smartg:
+    """Return the backward kernel of the runs, compiled on first use.
+
+    Parameters
+    ----------
+    pp : bool
+        The plane parallel kernel (alt_pp) rather than the spherical
+        one.
+
+    Returns
+    -------
+    Smartg
+        The kernel, the same object for every later call.
+    """
+    if pp:
+        return Smartg(back=True, double=True, bias=True, pp=True,
+                      alt_pp=True)
+    return Smartg(back=True, double=True, bias=True, pp=False)
+
+
+def __getattr__(name: str) -> Smartg:
+    """Give S1DB and S1DB_PP, the kernels of former versions, lazily."""
+    if name == "S1DB":
+        return _kernel(False)
+    if name == "S1DB_PP":
+        return _kernel(True)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 OPT_PROP_PATH_PHASE3 = DIR_AUXDATA / "IPRT" / "phase3" / "opt_prop"
 
@@ -672,7 +703,7 @@ def run_sim(
     n_icdf : int
         The n_icdf argument of Smartg.run.
     pp : bool
-        Run in plane parallel geometry, with S1DB_PP.
+        Run in plane parallel geometry, with the alt_pp kernel.
     is_e6 : bool
         Run the TOA sensors of the first version of E6.
     theta_grid : str, optional
@@ -680,7 +711,8 @@ def run_sim(
     seed : int
         Seed of the random numbers, -1 for one taken from the clock.
     """
-    sg, run_radius = (S1DB_PP, EARTH_RADIUS) if pp else (S1DB, earth_radius)
+    sg = _kernel(pp)
+    run_radius = EARTH_RADIUS if pp else earth_radius
     # The IPRT azimuth angles are anti-clockwise
     phi = -vaa
     common = {"n_directions": len(vza) * len(vaa), "n_photons": n_photons,
@@ -1716,7 +1748,7 @@ def case_e6_v1(n_photons: float = 1e8, overwrite: bool = True,
             sensors.append(_sensor(_coords(phit), th, ph))
 
     if overwrite or not toa_path.exists():
-        _run_e6(S1DB, sensors, toa_path, n_photons, pro, surface,
+        _run_e6(_kernel(False), sensors, toa_path, n_photons, pro, surface,
                 wavelength, seed)
 
     to_iprt_output_e6_v1("e6_v1", SZA_E6, SAA, nx, ny, is_sens, vecs,
@@ -1762,7 +1794,7 @@ def case_e6_v3(n_photons: float = 1e8, overwrite: bool = True,
                output_dir: str | Path = "./", seed: int = -1) -> None:
     """Run the IPRT camera case E6, the atmosphere up to the camera.
 
-    As case_e6_v2, with the spherical kernel S1DB, the atmosphere
+    As case_e6_v2, with the spherical backward kernel, the atmosphere
     being extended up to the camera.
 
     Parameters
@@ -1785,7 +1817,7 @@ def case_e6_v3(n_photons: float = 1e8, overwrite: bool = True,
     ]
 
     if overwrite or not toa_path.exists():
-        _run_e6(S1DB, sensors, toa_path, n_photons, pro, surface,
+        _run_e6(_kernel(False), sensors, toa_path, n_photons, pro, surface,
                 wavelength, seed)
 
     # The v2 conversion applies to v3

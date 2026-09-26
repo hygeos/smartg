@@ -1,6 +1,9 @@
 """GPU-free tests of the reference checks of the IPRT phase B tests."""
 
 import logging
+import os
+import subprocess
+import sys
 
 import numpy as np
 
@@ -42,3 +45,17 @@ def test_check_deltam_refuses_a_map_of_zeros() -> None:
     )
     assert len(errors) == 1
     assert "Q has lost its signal" in errors[0]
+
+
+def test_phase3_imports_without_a_gpu() -> None:
+    """Importing smartg.iprt.phase3 compiles no kernel.
+
+    The import runs in a subprocess that sees no CUDA device, where
+    building a Smartg would fail.
+    """
+    env = dict(os.environ, CUDA_VISIBLE_DEVICES="")
+    result = subprocess.run(
+        [sys.executable, "-c", "import smartg.iprt.phase3"],
+        capture_output=True, text=True, env=env, check=False,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
