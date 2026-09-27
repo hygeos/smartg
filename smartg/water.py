@@ -76,6 +76,7 @@ from smartg.phase import (
     expand_phase_4_to_6,
     integ_phase,
     is_native_theta,
+    theta_grid,
     union_theta_grid,
 )
 from smartg.truncation import (
@@ -93,6 +94,15 @@ from smartg.typing import NumericArrayLike, PathType, ThetaLike
 #: (larger fractions make the truncated phase function negative for the
 #: most forward-peaked Fournier-Forand mixtures).
 DEFAULT_WATER_TRUNC = GTTrunc(trunc_frac=0.3, theta_tr=5.0)
+
+#: Default scattering angles of the phase matrices HydrosolPR derives:
+#: 7201 angles clustered towards the forward and backward directions
+#: (`smartg.phase.theta_grid` kind 'peak'), in steps of 0.0035 deg up to
+#: 5 deg. They resolve 90 % of the forward peak of its Fournier-Forand
+#: mixture, as the 72001 equally spaced angles of the former default
+#: did (91 %), with a tenth of the size. Read-only.
+DEFAULT_PR_THETA = theta_grid(7201, "peak")
+DEFAULT_PR_THETA.setflags(write=False)
 
 
 def _refuse_albedo_map(alb: object) -> None:
@@ -1088,11 +1098,11 @@ class HydrosolPR(Hydrosol):
         Number of equally spaced angles of the derived phase matrices,
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
-        forward and backward directions. Default 72001. The
-        derived phase function is analytic and has no grid of its
-        own, so 'native' is refused. A `Water1D` asked for another
-        grid (see `Water1D.calc`) derives the phase matrices on that
-        one.
+        forward and backward directions. None, the default, is the
+        7201 clustered angles of `DEFAULT_PR_THETA`. The derived
+        phase function is analytic and has no grid of its own, so
+        'native' is refused. A `Water1D` asked for another grid (see
+        `Water1D.calc`) derives the phase matrices on that one.
     truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None, the default, disables the truncation;
@@ -1133,13 +1143,14 @@ class HydrosolPR(Hydrosol):
     def __init__(
         self,
         chl: float,
-        n_theta: NumericArrayLike = 72001,
+        n_theta: NumericArrayLike | None = None,
         truncation: DMTrunc | GTTrunc | None = None,
         wavelength_phase: NumericArrayLike | None = None,
         fqyc: float = 0.0,
     ) -> None:
         super().__init__(
-            n_theta=n_theta, truncation=truncation,
+            n_theta=DEFAULT_PR_THETA if n_theta is None else n_theta,
+            truncation=truncation,
             wavelength_phase=wavelength_phase,
         )
         self.chl = chl
@@ -1915,8 +1926,9 @@ class Water1D(Water):
         whose `bp` follows the chlorophyll profile, mixed with any
         other hydrosol, holds one float64 matrix of 6 terms per
         wavelength and level, on the union of the angles: 48 bytes per
-        angle each. With the 72001 angles of `HydrosolPR`, 10
-        wavelengths and 51 levels, this is 1.8 GB, and `Smartg.run`
+        angle each. With the 14359 angles of the union of the default
+        grids of `HydrosolPR` and `HydrosolZhai`, 10 wavelengths and 51
+        levels, this is 0.35 GB, and `Smartg.run`
         then samples each of these matrices on `n_icdf` angles. Giving
         the hydrosols a common, coarser `n_theta` (or asking for one
         here), a common `wavelength_phase` or fewer levels reduces it.

@@ -30,6 +30,7 @@ from smartg.smartg import LocalEstimate, Smartg, _resolve_agrid
 from smartg.surface import Environment, RoughSurface
 from smartg.truncation import DMTrunc, GTTrunc
 from smartg.water import (
+    DEFAULT_PR_THETA,
     DEFAULT_WATER_TRUNC,
     Hydrosol,
     HydrosolPR,
@@ -1029,7 +1030,7 @@ def test_derived_phase_backscattering(
     """
     hydrosol = make(truncation)
     rtol = 2e-3
-    if truncation is not None and hydrosol.n_theta < 7201:
+    if truncation is not None and len(hydrosol.native_theta()) < 7201:
         # GT integrates its plateau as a step up to theta_tr and the
         # kernel as a ramp over the last bin before it, so that the
         # truncated fraction of the table exceeds f: +2.3 % of
@@ -1154,13 +1155,16 @@ def test_water1d_mixes_hydrosols_of_other_grids(make: Any) -> None:
     )
 
 
-def test_water1d_mixes_the_default_grids_on_their_union() -> None:
+def test_water1d_mixes_the_default_grids_on_their_union(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """HydrosolPR and HydrosolZhai mix on the union of their angles.
 
-    Their default grids of 72001 and 7201 angles round-trip through
-    radians, which leaves some shared nodes a few ulp apart. Kept as
-    two nodes, they made the angles of the mixture non-increasing in
-    radians, and Smartg.run(theta_grid='phase') refused the profile.
+    Their default grids, 7201 clustered and 7201 equally spaced
+    angles, round-trip through radians, which leaves some shared nodes
+    a few ulp apart. Kept as two nodes, they made the angles of the
+    mixture non-increasing in radians, and
+    Smartg.run(theta_grid='phase') refused the profile.
     """
     wavelength = np.array([443.0, 550.0])
     grid = np.array([0.0, -5.0, -10.0])
@@ -1168,11 +1172,15 @@ def test_water1d_mixes_the_default_grids_on_their_union() -> None:
         grid=grid, comp=[HydrosolPR(chl=0.5), HydrosolZhai(chl_surf=0.5)]
     ).calc(wavelength)
 
+    union = union_theta_grid([DEFAULT_PR_THETA, as_theta_grid(7201)])
     np.testing.assert_allclose(
-        pro["theta_oc"].values, as_theta_grid(72001), rtol=0, atol=1e-9
+        pro["theta_oc"].values, union, rtol=0, atol=1e-9
     )
+    # the clustered grid is tabulated on the device (mode 1): keep its
+    # copy on the host, so that the test needs no GPU
+    monkeypatch.setattr("smartg.smartg.to_gpu", lambda ang: ang)
     n, mode, _ = _resolve_agrid("phase", 1000, pro, "oc")[1]
-    assert (n, mode) == (72001, 0)
+    assert (n, mode) == (len(union), 1)
 
 
 def _user_phase() -> xr.DataArray:

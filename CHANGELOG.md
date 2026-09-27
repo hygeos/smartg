@@ -45,6 +45,15 @@ final `v2.0.0` release.
     does: 1e-4 on the moments) and in the angle search, and within 0.6 %
     on the Delta-M `f` of a coarse table, where the Lobatto rule is off
     by as much. Pass `integral_method='lobatto'` for the former rule
+  - `HydrosolPR` derives its phase matrices on 7201 angles clustered
+    towards the forward and backward directions, the new
+    `smartg.water.DEFAULT_PR_THETA` (`theta_grid(7201, 'peak')`, 0.0035
+    degree steps up to 5 degrees), in place of 72001 equally spaced ones:
+    a tenth of the size for the same forward peak resolved (90 % against
+    91 %). Measured on the demo ocean (5 m, chl 0.5, GT truncation), the
+    downwelling radiance at the bottom moves by -0.34 %, the upwelling
+    radiance and the irradiance just below the surface by less than
+    0.01 %. Pass `n_theta=72001` for the former grid
   - The `smartg/tools/` folder has been dissolved: the `interp`, `progress`
     and `cdf` modules have been moved to `smartg/`, `modified_environ` has
     been moved and renamed to `smartg.environ`, and the remaining legacy
@@ -1783,10 +1792,10 @@ final `v2.0.0` release.
     array. Their phase matrices are now averaged on a common grid, holding
     the angles of all of them, with unchanged results where they already
     shared one. A mixture that varies with depth holds one matrix per
-    wavelength and level on that grid: 1.8 GB for `HydrosolPR` (72001
-    angles) with `HydrosolZhai` over 10 wavelengths and 51 levels; a
-    common coarser `n_theta`, a common `wavelength_phase` or fewer levels
-    reduce it
+    wavelength and level on that grid: 0.35 GB for `HydrosolPR` with
+    `HydrosolZhai` over 10 wavelengths and 51 levels (14359 angles; 1.8 GB
+    with the former 72001 of `HydrosolPR`); a common coarser `n_theta`, a
+    common `wavelength_phase` or fewer levels reduce it
   - Fix a `Hydrosol` given its coefficients as arrays over the wavelengths
     of the profile and a `wavelength_phase`: the arrays were refused, or
     paired by position with the tabulation wavelengths when these were as
@@ -1809,7 +1818,7 @@ final `v2.0.0` release.
     (-6 % for `HydrosolZhai`). As in v1.2.0, that peak is now counted as
     unscattered: the scattering coefficient is scaled by the resolved
     fraction of the mixture (0.72 for a ratio of 0.01 on the 721 angles of
-    `Hydrosol`, 0.91 for `HydrosolPR(chl=0.5)` on its 72001), times
+    `Hydrosol`, 0.90 for `HydrosolPR(chl=0.5)` on its 7201 clustered), times
     `1 - f` with a truncation. Without truncation, the backscattering is
     now right to 0.2 %. The mixture is also clipped at zero: with a ratio of
     0.04, beyond the 0.03 of the Park & Ruddick weights, that of
