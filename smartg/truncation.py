@@ -96,8 +96,8 @@ class DMTrunc:
         Integration method to use for computing the moments.
         Choices are:
 
-        - 'lobatto' -> use Lobatto quadrature (default)
-        - 'trapezoid' -> use scypi.integrate.trapezoid method
+        - 'lobatto' -> use Lobatto quadrature
+        - 'trapezoid' -> use scipy.integrate.trapezoid method (default)
         - 'simpson' -> use scipy.integrate.simpson method
     pha_scale_method : int, optional
         Scaling method to use for the truncated phase matrix.
@@ -120,7 +120,7 @@ class DMTrunc:
     def __init__(
         self,
         n_streams: int,
-        integral_method: str = "lobatto",
+        integral_method: str = "trapezoid",
         pha_scale_method: int = 1,
         n_theta_integral: int = 721,
     ) -> None:
@@ -170,8 +170,8 @@ class GTTrunc:
         Integration method to use for computing the moments.
         Choices are:
 
-        - 'lobatto' ->  use Lobatto quadrature (default)
-        - 'trapezoid' ->  use scypi.integrate.trapezoid method
+        - 'lobatto' ->  use Lobatto quadrature
+        - 'trapezoid' ->  use scipy.integrate.trapezoid method (default)
         - 'simpson' ->  use scipy.integrate.simpson method
     theta_tol : None or float, optional
         Search the truncated angle between 0 and theta_tol
@@ -207,7 +207,7 @@ class GTTrunc:
     def __init__(
         self,
         trunc_frac: float,
-        integral_method: str = "lobatto",
+        integral_method: str = "trapezoid",
         theta_tol: float | None = None,
         theta_tr: float | None = None,
         lobatto_optimization: bool = False,

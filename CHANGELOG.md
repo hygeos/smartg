@@ -34,6 +34,17 @@ final `v2.0.0` release.
     keeps resampling its GPU tables onto `n_icdf` angles unless
     `theta_grid='phase'`. A truncated component keeps integrating on
     its grid and 721 equally spaced angles (`n_theta_integral`)
+  - `DMTrunc` and `GTTrunc` integrate with the trapezoid rule by default
+    (`integral_method='trapezoid'`, formerly `'lobatto'`). pytrunc builds
+    the Lobatto nodes in a loop whose time grows as the square of their
+    number: 26 s for the 72001 angles of a `HydrosolPR`, paid by the first
+    truncated water of each session, against 0.2 s now, with identical
+    radiances (within 0.1 sigma of the Monte Carlo noise for the demo
+    ocean). Measured against a dense integration, the trapezoid rule is
+    as precise with the angle imposed (`theta_tr`, as `DEFAULT_WATER_TRUNC`
+    does: 1e-4 on the moments) and in the angle search, and within 0.6 %
+    on the Delta-M `f` of a coarse table, where the Lobatto rule is off
+    by as much. Pass `integral_method='lobatto'` for the former rule
   - The `smartg/tools/` folder has been dissolved: the `interp`, `progress`
     and `cdf` modules have been moved to `smartg/`, `modified_environ` has
     been moved and renamed to `smartg.environ`, and the remaining legacy
