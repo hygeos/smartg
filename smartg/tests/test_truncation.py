@@ -66,28 +66,43 @@ def _count_calls(
     return calls
 
 
-@pytest.mark.parametrize("truncation", [GT, DM], ids=["GT", "DM"])
-def test_truncate_phase_matches_pytrunc(
+def _pytrunc(
+    f11: NDArray[np.float64],
+    theta: NDArray[np.float64],
     truncation: DMTrunc | GTTrunc,
-) -> None:
-    """F11 and f are pytrunc's; the other terms keep their F11 ratio."""
-    pha = _hg_matrix(0.85)
-    pha_tr, f = truncate_phase(pha, THETA, truncation)
-
+) -> xr.Dataset:
+    """Truncate F11 with pytrunc directly, as `truncation` asks."""
     if isinstance(truncation, GTTrunc):
-        ds = cast(xr.Dataset, gt_phase_approx(
-            pha[0], THETA, truncation.trunc_frac,
+        return cast(xr.Dataset, gt_phase_approx(
+            f11, theta, truncation.trunc_frac,
             method=truncation.integral_method,
             th_tol=truncation.theta_tol, th_f=truncation.theta_tr,
             lobatto_optimization=truncation.lobatto_optimization,
         ))
-    else:
-        ds = cast(xr.Dataset, delta_m_phase_approx(
-            pha[0], THETA, truncation.m_max,
-            method=truncation.integral_method,
-        ))
+    return cast(xr.Dataset, delta_m_phase_approx(
+        f11, theta, truncation.m_max,
+        method=truncation.integral_method,
+    ))
+
+
+@pytest.mark.parametrize("truncation", [GT, DM], ids=["GT", "DM"])
+def test_truncate_phase_matches_pytrunc(
+    truncation: DMTrunc | GTTrunc,
+) -> None:
+    """F11 and f are pytrunc's; the other terms keep their F11 ratio.
+
+    pytrunc is given F11 on the integration grid, the 1801 angles of
+    the matrix and the 721 of `n_theta_integral` that it lacks, and
+    its result is read back on the 1801 angles.
+    """
+    pha = _hg_matrix(0.85)
+    pha_tr, f = truncate_phase(pha, THETA, truncation)
+
+    theta_int, nodes = trunc_mod._integration_grid(THETA, 721)
+    assert nodes is not None
+    ds = _pytrunc(np.interp(theta_int, THETA, pha[0]), theta_int, truncation)
     assert f == pytest.approx(float(ds["f"].values), rel=0, abs=0)
-    np.testing.assert_array_equal(pha_tr[0], ds["phase_tr"].values)
+    np.testing.assert_array_equal(pha_tr[0], ds["phase_tr"].values[nodes])
     beta = pha_tr[0] / pha[0]
     np.testing.assert_allclose(pha_tr[1:], pha[1:] * beta, rtol=1e-14)
     assert 0.0 < f < 1.0
@@ -202,6 +217,96 @@ def test_truncate_phase_set(monkeypatch: pytest.MonkeyPatch) -> None:
     np.testing.assert_array_equal(pha_tr[1, 0], pha_a)
     np.testing.assert_array_equal(pha_tr[0, 1], pha_b)
     np.testing.assert_array_equal(pha_tr[1, 1], zero)
+
+
+#: native-like grid: 0.01 degree steps through the forward peak, 3
+#: degree ones beyond, as the OPAC and cloud tables carry
+COARSE = np.concatenate(
+    [np.linspace(0.0, 5.0, 501), np.arange(8.0, 180.0, 3.0), [180.0]]
+)
+
+
+@pytest.mark.parametrize("n", [721, 7201, 18001, 72001])
+def test_integration_grid_of_a_grid_holding_its_angles(n: int) -> None:
+    """Equally spaced grids holding the 721 angles are kept as such."""
+    theta = theta_grid(n)
+    theta_int, nodes = trunc_mod._integration_grid(theta, 721)
+    assert nodes is None
+    assert theta_int is theta
+
+
+@pytest.mark.parametrize(
+    "theta",
+    [THETA, COARSE, np.linspace(0.0, 179.5, 360)],
+    ids=["1801", "coarse", "short"],
+)
+def test_integration_grid_keeps_the_angles_and_adds_equal_ones(
+    theta: NDArray[np.float64],
+) -> None:
+    """The angles of the matrix are kept, those of the grid added.
+
+    Within their range only: a table stopping short of 180 degrees is
+    not extrapolated.
+    """
+    theta_int, nodes = trunc_mod._integration_grid(theta, 721)
+    assert nodes is not None
+    np.testing.assert_array_equal(theta_int[nodes], theta)
+    assert np.all(np.diff(theta_int) > 0.0)
+    assert theta_int[0] == theta[0] and theta_int[-1] == theta[-1]
+    uniform = theta_grid(721)
+    inside = uniform[(uniform >= theta[0]) & (uniform <= theta[-1])]
+    gap = np.abs(theta_int[:, None] - inside[None, :]).min(axis=0)
+    assert gap.max() <= 1e-6
+
+
+@pytest.mark.parametrize("truncation", [GT, DM], ids=["GT", "DM"])
+def test_truncation_on_a_grid_holding_the_angles_is_pytrunc_s(
+    truncation: DMTrunc | GTTrunc,
+) -> None:
+    """A table holding the 721 angles is truncated on its own ones."""
+    theta = theta_grid(7201)
+    mu = np.cos(np.deg2rad(theta))
+    f11 = (1.0 - 0.85**2) / (1.0 + 0.85**2 - 2.0 * 0.85 * mu) ** 1.5
+    f11 *= 2.0 / integ_phase(np.deg2rad(theta), f11)
+    pha_tr, f = truncate_phase(f11[None, :], theta, truncation)
+    ds = _pytrunc(f11, theta, truncation)
+    assert f == float(ds["f"].values)
+    np.testing.assert_array_equal(pha_tr[0], ds["phase_tr"].values)
+
+
+def test_coarse_grid_is_truncated_on_the_integration_grid() -> None:
+    """The integration grid brings a coarse table near a dense result.
+
+    On 3 degree steps, the 64 stream moments of a Delta-M truncation
+    are poorly integrated: with the 721 equally spaced angles added,
+    `f` and the truncated F11 get closer to their values on 18001
+    added angles than without any (n_theta_integral=2 adds none, the
+    former behaviour).
+    """
+    mu = np.cos(np.deg2rad(COARSE))
+    f11 = (1.0 - 0.85**2) / (1.0 + 0.85**2 - 2.0 * 0.85 * mu) ** 1.5
+    f11 = (f11 * 2.0 / integ_phase(np.deg2rad(COARSE), f11))[None, :]
+    res = {
+        n: truncate_phase(f11, COARSE, DMTrunc(64, n_theta_integral=n))
+        for n in (2, 721, 18001)
+    }
+    (pha_2, f_2), (pha_721, f_721), (pha_ref, f_ref) = (
+        res[2], res[721], res[18001]
+    )
+    assert abs(f_721 - f_ref) < abs(f_2 - f_ref)
+    err_721 = np.abs(pha_721[0] - pha_ref[0]).max()
+    err_2 = np.abs(pha_2[0] - pha_ref[0]).max()
+    assert err_721 < err_2
+    assert pha_721.shape == f11.shape
+
+
+@pytest.mark.parametrize("value", [1, 0, -5, True, 721.0, "721"])
+def test_n_theta_integral_is_checked(value: Any) -> None:
+    """Anything but an integer of at least 2 is refused."""
+    with pytest.raises(ValueError, match="n_theta_integral"):
+        GTTrunc(0.3, n_theta_integral=value)
+    with pytest.raises(ValueError, match="n_theta_integral"):
+        DMTrunc(64, n_theta_integral=value)
 
 
 def test_truncated_ext_ssa() -> None:

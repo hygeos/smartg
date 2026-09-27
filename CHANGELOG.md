@@ -667,6 +667,18 @@ final `v2.0.0` release.
     - `as_truncation` returns the `truncation` given to a component once
       checked, raising a `TypeError` for anything else than a `DMTrunc`, a
       `GTTrunc` or `None`
+    - A truncation integrates on its own angles: those of the phase matrix
+      and the `n_theta_integral` equally spaced ones, a new parameter of
+      `DMTrunc` and `GTTrunc` (721 by default). pytrunc takes one
+      quadrature node per angle it is given, and the Legendre moments of
+      a truncation need dense ones: a table with 3 degree steps through
+      the middle, as a native grid can be, integrated them poorly (the
+      GT cases of the IPRT C2 tier were 8 to 70 % further from MYSTIC on
+      it). F11 is interpolated linearly in angle onto the union, and the
+      truncated matrix returned on its own angles. Tables holding the 721
+      angles (721, 7201, 18001 or 72001 equally spaced ones) are
+      truncated exactly as before; others move slightly, towards a dense
+      integration, and `n_theta_integral=2` gives the former results
   - The scattering angles of a phase matrix no longer have to be equally
     spaced. Clustering them towards the forward and backward directions
     resolves the diffraction peak of large particles (desert aerosols,

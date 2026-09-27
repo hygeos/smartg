@@ -82,7 +82,7 @@ import xarray as xr
 from numpy.typing import ArrayLike, NDArray
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 
-from smartg.phase import integ_phase
+from smartg.phase import integ_phase, theta_grid
 
 
 class DMTrunc:
@@ -106,6 +106,15 @@ class DMTrunc:
         - 1 -> use Eq. 5 in Waquet et al. 2019 (Default)
         - 2 -> use ARTDECO way (same as 1, but with different rescalling
           for F21 and F34)
+    n_theta_integral : int, optional
+        Number of equally spaced scattering angles added to those of
+        the phase matrix for the integrals of the truncation, 721 by
+        default (0.25 degree steps). pytrunc integrates on as many
+        nodes as it is given angles, and its Legendre moments need
+        dense ones whatever the table: a matrix tabulated on few angles
+        through the middle of the range, as a native grid can be, is
+        truncated on the union of both grids, see `truncate_phase`. A
+        grid that already holds these angles is truncated as it is.
     """
 
     def __init__(
@@ -113,6 +122,7 @@ class DMTrunc:
         n_streams: int,
         integral_method: str = "lobatto",
         pha_scale_method: int = 1,
+        n_theta_integral: int = 721,
     ) -> None:
         # check parameter values
         if (
@@ -133,11 +143,20 @@ class DMTrunc:
             raise ValueError(
                 "Choices for pha_scale_method parameter are: 1 or 2."
             )
+        if (
+            isinstance(n_theta_integral, bool)
+            or not isinstance(n_theta_integral, (int, np.integer))
+            or n_theta_integral < 2
+        ):
+            raise ValueError(
+                "The n_theta_integral parameter must be an integer >= 2."
+            )
 
         self.tr_method = "DM"
         self.m_max = n_streams
         self.integral_method = integral_method
         self.pha_scale_method = pha_scale_method
+        self.n_theta_integral = int(n_theta_integral)
 
 
 class GTTrunc:
@@ -174,6 +193,15 @@ class GTTrunc:
         - 1 -> use Eq. 5 in Waquet et al. 2019 (Default)
         - 2 -> use ARTDECO way (same as 1, but with different rescalling
           for F21 and F34)
+    n_theta_integral : int, optional
+        Number of equally spaced scattering angles added to those of
+        the phase matrix for the integrals of the truncation, 721 by
+        default (0.25 degree steps). pytrunc integrates on as many
+        nodes as it is given angles, and its Legendre moments need
+        dense ones whatever the table: a matrix tabulated on few angles
+        through the middle of the range, as a native grid can be, is
+        truncated on the union of both grids, see `truncate_phase`. A
+        grid that already holds these angles is truncated as it is.
     """
 
     def __init__(
@@ -184,6 +212,7 @@ class GTTrunc:
         theta_tr: float | None = None,
         lobatto_optimization: bool = False,
         pha_scale_method: int = 1,
+        n_theta_integral: int = 721,
     ) -> None:
         # check parameter values
         if (
@@ -233,6 +262,14 @@ class GTTrunc:
             raise ValueError(
                 "Choices for pha_scale_method parameter are: 1 or 2."
             )
+        if (
+            isinstance(n_theta_integral, bool)
+            or not isinstance(n_theta_integral, (int, np.integer))
+            or n_theta_integral < 2
+        ):
+            raise ValueError(
+                "The n_theta_integral parameter must be an integer >= 2."
+            )
 
         self.tr_method = "GT"
         self.trunc_frac = trunc_frac
@@ -241,6 +278,7 @@ class GTTrunc:
         self.theta_tr = theta_tr
         self.lobatto_optimization = lobatto_optimization
         self.pha_scale_method = pha_scale_method
+        self.n_theta_integral = int(n_theta_integral)
 
 
 def as_truncation(
@@ -275,6 +313,42 @@ def as_truncation(
     )
 
 
+def _integration_grid(
+    theta_deg: NDArray[np.float64], n_theta_integral: int
+) -> tuple[NDArray[np.float64], NDArray[np.intp] | None]:
+    """Return the angles a truncation integrates a phase matrix on.
+
+    The angles of the matrix, every one of them kept as it is, and the
+    `n_theta_integral` equally spaced ones that lie within their range
+    and are not within 1e-6 degree of one of them.
+
+    Parameters
+    ----------
+    theta_deg : ndarray
+        Strictly increasing angles of the matrix, in degrees.
+    n_theta_integral : int
+        Number of equally spaced angles from 0 to 180 degrees.
+
+    Returns
+    -------
+    theta_int : ndarray
+        The angles to integrate on, in degrees, strictly increasing.
+    nodes : ndarray or None
+        The index in `theta_int` of each angle of `theta_deg`, or None
+        when no angle is added and `theta_int` is `theta_deg`.
+    """
+    extra = theta_grid(n_theta_integral)
+    extra = extra[(extra > theta_deg[0]) & (extra < theta_deg[-1])]
+    j = np.searchsorted(theta_deg, extra)
+    gap = np.minimum(extra - theta_deg[j - 1], theta_deg[j] - extra)
+    extra = extra[gap > 1e-6]
+    if extra.size == 0:
+        return theta_deg, None
+    theta_int = np.concatenate([theta_deg, extra])
+    order = np.argsort(theta_int, kind="stable")
+    return theta_int[order], np.flatnonzero(order < len(theta_deg))
+
+
 def truncate_phase(
     pha: ArrayLike,
     theta_deg: ArrayLike,
@@ -299,6 +373,15 @@ def truncate_phase(
     to 2: an F11 normalized otherwise, by more than 1 % (to 4 pi, or a
     volume scattering function), is normalized before the truncation,
     and the truncated matrix comes back in the normalization of `pha`.
+
+    pytrunc integrates on the angles it is given, one quadrature node
+    per angle, and the Legendre moments of the truncation need dense
+    nodes whatever the table. F11 is therefore truncated on its angles
+    and the `n_theta_integral` equally spaced ones of `truncation`
+    (721 by default), interpolated linearly in angle, as the kernel
+    reads it, and the truncated F11 is returned on its own angles. A
+    table that already holds those angles, such as 721, 7201, 18001 or
+    72001 equally spaced ones, is truncated on its angles alone.
 
     Parameters
     ----------
@@ -342,6 +425,11 @@ def truncate_phase(
     if not f11.any():
         return pha.copy(), 0.0
 
+    theta_int, nodes = _integration_grid(
+        theta_deg, truncation.n_theta_integral
+    )
+    f11_int = f11 if nodes is None else np.interp(theta_int, theta_deg, f11)
+    # the normalization is the table's, on its own angles
     norm = float(integ_phase(np.deg2rad(theta_deg), f11))
     if not norm > 0.0:
         raise ValueError(
@@ -357,8 +445,8 @@ def truncate_phase(
         ds_pha = cast(
             xr.Dataset,
             delta_m_phase_approx(
-                f11 * scale,
-                theta_deg,
+                f11_int * scale,
+                theta_int,
                 truncation.m_max,
                 method=truncation.integral_method,
             ),
@@ -367,19 +455,19 @@ def truncate_phase(
         # pytrunc takes the angle of the grid nearest to theta_tr; at
         # the first one it truncates nothing but still reports f
         if truncation.theta_tr is not None and np.argmin(
-            np.abs(theta_deg - truncation.theta_tr)
+            np.abs(theta_int - truncation.theta_tr)
         ) == 0:
             raise ValueError(
                 f"theta_tr = {truncation.theta_tr:g} degree is below the "
                 "resolution of the phase matrix, whose first angles are "
-                f"{theta_deg[0]:g} and {theta_deg[1]:g} degree: nothing "
+                f"{theta_int[0]:g} and {theta_int[1]:g} degree: nothing "
                 "would be truncated."
             )
         ds_pha = cast(
             xr.Dataset,
             gt_phase_approx(
-                f11 * scale,
-                theta_deg,
+                f11_int * scale,
+                theta_int,
                 truncation.trunc_frac,
                 method=truncation.integral_method,
                 th_tol=truncation.theta_tol,
@@ -398,6 +486,8 @@ def truncate_phase(
             "(theta_tr=None), raise n_streams, or do not truncate a "
             "phase function without a marked forward peak."
         )
+    if nodes is not None:
+        f11_tr = f11_tr[nodes]
 
     pha_tr = np.empty_like(pha)
     pha_tr[0] = f11_tr
