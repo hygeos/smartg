@@ -98,6 +98,8 @@ from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.grid3d import Grid3D, create_1d_grid
 from smartg.phase import (
+    _common_theta_grid,
+    _grid_label,
     as_theta_grid,
     calc_iphase,
     expand_phase_4_to_6,
@@ -144,66 +146,6 @@ _OPAC_NOT_MIXTURES = frozenset(
         "suso", "waso",
     }
 )
-
-
-def _grid_label(comp: object) -> str:
-    """Name a component in a message about its scattering angle grid.
-
-    By its class and the stem of the file it was read from, if any.
-    """
-    name = getattr(comp, "fname", None)
-    cls = type(comp).__name__
-    if name is None or str(name) == "none":
-        return cls
-    return f"{cls}({Path(name).stem})"
-
-
-def _common_theta_grid(
-    grids: Sequence[NDArray[np.floating]], labels: Sequence[str]
-) -> tuple[NDArray[np.float64], bool]:
-    """Return the angle grid a set of phase matrices is mixed on.
-
-    When every matrix carries the same grid, that grid. Otherwise the
-    union of the grids, on which mixing the matrices is exact (see
-    :func:`smartg.phase.union_theta_grid`), announced by a warning
-    naming the components and the grids involved, since the mixture
-    then lives on a grid nobody asked for explicitly.
-
-    Parameters
-    ----------
-    grids : sequence of ndarray
-        The scattering angles of each phase matrix, in degrees.
-    labels : sequence of str
-        What to call each matrix in the warning, one per grid.
-
-    Returns
-    -------
-    theta : ndarray
-        The common grid, in degrees.
-    resampled : bool
-        Whether the grids differ, i.e. whether *theta* is their union
-        and the matrices have to be resampled onto it.
-    """
-    ref = np.asarray(grids[0], dtype=np.float64)
-    if all(np.array_equal(g, ref) for g in grids[1:]):
-        return ref, False
-
-    theta = union_theta_grid(grids)
-    # one entry per distinct grid, so that a long list of matrices
-    # sharing a few grids stays readable
-    seen: list[tuple[str, int]] = []
-    for label, grid in zip(labels, grids, strict=True):
-        entry = (label, len(grid))
-        if entry not in seen:
-            seen.append(entry)
-    described = ", ".join(f"{label} ({n} angles)" for label, n in seen)
-    warnings.warn(
-        f"The components {described} carry different phase angle "
-        "grids; their phase matrices are mixed on the union of those "
-        f"grids ({len(theta)} angles).",
-        stacklevel=3,
-    )
-    return theta, True
 
 
 def _opac_height(

@@ -721,6 +721,17 @@ final `v2.0.0` release.
       they are mixed on, whether the union was asked for with
       `'native'` or forced by a user phase matrix, which keeps its own
       grid whatever `n_theta`
+    - `Water1D.calc` and `Water1D.phase` take the same `n_theta`.
+      `'native'`, the default and their former behaviour, keeps the
+      angles of each hydrosol and mixes several on their union,
+      silently. A number of angles or the angles themselves replace
+      the `n_theta` of every hydrosol that derives its phase matrices,
+      and with it the fraction of the forward peak that scales its
+      `bp`; a supplied phase matrix keeps its own grid, as in the
+      atmosphere, with the same warning. `Hydrosol` and `Water1D` get
+      `native_theta()`. The derived Fournier-Forand phase function is
+      analytic and has no native grid: `n_theta='native'` without a
+      `phase` raises a `ValueError`
   - The phase matrix file readers return either of two layouts, chosen
     by the new `output_sg_ready` parameter of `read_phase`,
     `read_phase_nc` and `read_phase_cdf`: True (the default, and the

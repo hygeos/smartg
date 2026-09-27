@@ -6,6 +6,7 @@ phase matrices.
 """
 
 import logging
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,12 @@ from numpy.typing import NDArray
 from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.config import DIR_AUXDATA
-from smartg.phase import as_theta_grid, integ_phase, read_phase
+from smartg.phase import (
+    as_theta_grid,
+    integ_phase,
+    read_phase,
+    union_theta_grid,
+)
 from smartg.sensor import Sensor
 from smartg.smartg import LocalEstimate, Smartg, _resolve_agrid
 from smartg.surface import Environment, RoughSurface
@@ -1167,6 +1173,131 @@ def test_water1d_mixes_the_default_grids_on_their_union() -> None:
     )
     n, mode, _ = _resolve_agrid("phase", 1000, pro, "oc")[1]
     assert (n, mode) == (72001, 0)
+
+
+def _user_phase() -> xr.DataArray:
+    """Return derived phase matrices on 1801 angles, to be supplied."""
+    return Hydrosol(bp=0.1, bbp_ratio=0.012, n_theta=1801).calc_phase(
+        np.array([500.0]), np.array([0.0]), np.array([[0.012]])
+    )[0]
+
+
+def test_water1d_native_is_the_default_grid() -> None:
+    """Water1D.calc keeps the angles of each hydrosol by default.
+
+    It is n_theta='native': hydrosols on different grids are mixed on
+    the union of their angles, without a warning, as asked.
+    """
+    wavelength = np.array([500.0])
+    water = Water1D(
+        grid=[0.0, -5.0],
+        comp=[
+            HydrosolPR(chl=0.5, n_theta=7201),
+            Hydrosol(phase=_user_phase(), bp=0.1),
+        ],
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        default = water.calc(wavelength)
+    xr.testing.assert_identical(
+        default, water.calc(wavelength, n_theta="native")
+    )
+    theta = default["theta_oc"].values
+    np.testing.assert_allclose(
+        theta, water.native_theta(), rtol=0, atol=1e-9
+    )
+    assert len(theta) == len(
+        union_theta_grid([as_theta_grid(7201), as_theta_grid(1801)])
+    )
+
+
+def test_water1d_derives_the_phases_on_the_asked_grid() -> None:
+    """A grid asked of Water1D replaces the n_theta of the hydrosols.
+
+    The profile, the scattering coefficient scaled by the fraction of
+    the peak the grid resolves included, is the one of the hydrosol
+    built on that grid; the hydrosol's own grid comes back after.
+    """
+    wavelength = np.array([500.0])
+    hydrosol = HydrosolPR(chl=0.5, n_theta=7201)
+    water = Water1D(grid=[0.0, -5.0], comp=[hydrosol])
+    own = water.calc(wavelength)
+    asked = water.calc(wavelength, n_theta=721)
+    built = Water1D(
+        grid=[0.0, -5.0], comp=[HydrosolPR(chl=0.5, n_theta=721)]
+    ).calc(wavelength)
+
+    xr.testing.assert_identical(asked, built)
+    assert asked.sizes["theta_oc"] == 721
+    # fewer angles resolve less of the forward peak
+    assert (asked["OD_sca_oc"] > own["OD_sca_oc"]).sel(z_oc=-5.0).all()
+    xr.testing.assert_identical(water.calc(wavelength), own)
+
+
+def test_water1d_mixes_a_supplied_phase_on_the_union_and_says_so() -> None:
+    """A supplied phase keeps its angles when another grid is asked.
+
+    The derived phase is on the asked grid, the supplied one on its
+    own: they are mixed on the union, and a warning says so.
+    """
+    user = _user_phase()
+    water = Water1D(
+        grid=[0.0, -5.0],
+        comp=[
+            HydrosolPR(chl=0.5),
+            Hydrosol(phase=user, bp=0.1, n_theta="native"),
+        ],
+    )
+    with pytest.warns(UserWarning, match="different phase angle grids"):
+        pro = water.calc(np.array([500.0]), n_theta=721)
+    np.testing.assert_allclose(
+        pro["theta_oc"].values,
+        union_theta_grid([as_theta_grid(721), user["theta_oc"].values]),
+        rtol=0,
+        atol=1e-9,
+    )
+
+
+def test_water1d_native_theta_is_the_union_of_the_hydrosols() -> None:
+    """Water1D.native_theta is the union of the hydrosols' grids."""
+    user = _user_phase()
+    water = Water1D(
+        comp=[
+            HydrosolZhai(chl_surf=0.5, n_theta=721),
+            Hydrosol(phase=user, bp=0.1),
+        ]
+    )
+    np.testing.assert_array_equal(
+        water.native_theta(),
+        union_theta_grid([as_theta_grid(721), user["theta_oc"].values]),
+    )
+    with pytest.raises(ValueError, match="no hydrosol"):
+        Water1D().native_theta()
+
+
+NATIVE: Any = "native"
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=NATIVE),
+        lambda: HydrosolPR(chl=0.5, n_theta=NATIVE),
+        lambda: HydrosolZhai(chl_surf=0.5, n_theta=NATIVE),
+    ],
+    ids=["Hydrosol", "HydrosolPR", "HydrosolZhai"],
+)
+def test_derived_phase_has_no_native_grid(make: Any) -> None:
+    """The analytic Fournier-Forand phase refuses n_theta='native'."""
+    with pytest.raises(ValueError, match="no native angle grid"):
+        make()
+
+
+def test_water1d_refuses_an_unknown_grid() -> None:
+    """A string other than 'native' is not a grid."""
+    water = Water1D(grid=[0.0, -5.0], comp=[HydrosolPR(chl=0.5)])
+    with pytest.raises(TypeError):
+        water.calc(np.array([500.0]), n_theta=NATIVE + "x")
 
 
 def test_water1d_mixes_a_hydrosol_given_arrays() -> None:

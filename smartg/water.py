@@ -68,10 +68,14 @@ from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.interp import interp_1d_coord
 from smartg.phase import (
+    NATIVE_THETA,
+    _common_theta_grid,
+    _grid_label,
     as_theta_grid,
     calc_iphase,
     expand_phase_4_to_6,
     integ_phase,
+    is_native_theta,
     union_theta_grid,
 )
 from smartg.truncation import (
@@ -80,7 +84,7 @@ from smartg.truncation import (
     as_truncation,
     truncate_phase_set,
 )
-from smartg.typing import NumericArrayLike, PathType
+from smartg.typing import NumericArrayLike, PathType, ThetaLike
 
 #: Recommended truncation of the Fournier-Forand phase functions the
 #: hydrosols derive, to be asked for explicitly (the hydrosols truncate
@@ -138,6 +142,22 @@ def _interp_theta(
     )
     t = (theta_new - theta[i]) / (theta[i + 1] - theta[i])
     return values[..., i] * (1.0 - t) + values[..., i + 1] * t
+
+
+def _requested_theta(n_theta: ThetaLike) -> str | NDArray[np.float64]:
+    """Resolve the `n_theta` asked of a Water1D once for its hydrosols.
+
+    'native' as such, any other request as the angles it gives.
+
+    Raises
+    ------
+    TypeError, ValueError
+        If `n_theta` is neither 'native' nor a valid grid, see
+        `smartg.phase.as_theta_grid`.
+    """
+    if is_native_theta(n_theta):
+        return NATIVE_THETA
+    return as_theta_grid(n_theta)
 
 
 class IOPDict(TypedDict):
@@ -247,11 +267,15 @@ class Hydrosol:
     bbp_ratio : array_like or None, optional
         Backscattering ratio (dimensionless), same shape rules as `bp`.
         Only used if `phase` is not provided.
-    n_theta : int or array_like, optional
+    n_theta : int, array_like or 'native', optional
         Number of equally spaced angles of the derived phase matrices,
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
-        forward and backward directions.
+        forward and backward directions. Default 721. The derived
+        phase function is analytic and has no grid of its own, so
+        'native' is only accepted along with `phase`, which always
+        keeps its own angles. A `Water1D` asked for another grid (see
+        `Water1D.calc`) derives the phase matrices on that one.
     truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the phase matrices, the ones
         supplied through `phase` as well as the derived ones, performed
@@ -273,6 +297,8 @@ class Hydrosol:
     TypeError
         If `phase` is neither a DataArray, a LUT nor None, or if
         `truncation` is neither a DMTrunc, a GTTrunc nor None.
+    ValueError
+        If `n_theta` is 'native' and no `phase` is given.
 
     Notes
     -----
@@ -307,7 +333,7 @@ class Hydrosol:
         ap: NumericArrayLike | None = None,
         acdom: NumericArrayLike | None = None,
         bbp_ratio: NumericArrayLike | None = None,
-        n_theta: int = 721,
+        n_theta: ThetaLike = 721,
         truncation: DMTrunc | GTTrunc | None = None,
         wavelength_phase: NumericArrayLike | None = None,
     ) -> None:
@@ -316,6 +342,14 @@ class Hydrosol:
         self.acdom = acdom
         self.bbp_ratio = bbp_ratio
         self._phase = expand_phase_4_to_6(phase)
+        if self._phase is None and is_native_theta(n_theta):
+            raise ValueError(
+                f"{type(self).__name__} derives its phase matrices from "
+                "Fournier-Forand functions, which are analytic and have "
+                "no native angle grid: give n_theta a number of angles "
+                "or the angles themselves, e.g. "
+                "smartg.phase.theta_grid(n, 'peak')."
+            )
         self.n_theta = n_theta
         self.truncation = as_truncation(truncation)
         self.wavelength_phase = (
@@ -326,9 +360,48 @@ class Hydrosol:
         self._pha: xr.DataArray | None = None
         self._coef_trunc: xr.DataArray | None = None
         self._bsca: NDArray | None = None
-        # the wavelengths and depths the cache above was tabulated for,
-        # and the wavelengths the supplied arrays were given over
-        self._tab_grid: tuple[NDArray, NDArray, NDArray] | None = None
+        # the wavelengths, depths and angles the cache above was
+        # tabulated for, and the wavelengths the supplied arrays were
+        # given over
+        self._tab_grid: (
+            tuple[NDArray, NDArray, NDArray, NDArray] | None
+        ) = None
+
+    def native_theta(self) -> NDArray[np.float64]:
+        """Return the angles of the hydrosol's phase matrices.
+
+        Those of the supplied `phase`, else the `n_theta` grid the
+        derived ones are calculated on: the grid a `Water1D` mixes
+        this hydrosol on when it is asked for ``n_theta='native'``.
+
+        Returns
+        -------
+        ndarray
+            Strictly increasing angles in degrees, from 0 to 180.
+        """
+        if self._phase is not None:
+            return as_theta_grid(
+                self._phase.coords[self._phase.dims[-1]].values
+            )
+        return self._derived_theta(NATIVE_THETA)
+
+    def _derived_theta(self, n_theta: ThetaLike) -> NDArray[np.float64]:
+        """Return the angles the derived phase matrices are built on.
+
+        Parameters
+        ----------
+        n_theta : int, array_like or 'native'
+            The grid asked for; 'native' is the `n_theta` of the
+            hydrosol.
+
+        Returns
+        -------
+        ndarray
+            Strictly increasing angles in degrees, from 0 to 180.
+        """
+        return as_theta_grid(
+            self.n_theta if is_native_theta(n_theta) else n_theta
+        )
 
     def iop(self, wavelength: NDArray, z: NDArray) -> IOPDict:
         """
@@ -488,6 +561,7 @@ class Hydrosol:
         wavelength: NDArray,
         z: NDArray,
         bbp_ratio: NDArray,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> tuple[xr.DataArray, xr.DataArray]:
         """
         Calculate the phase matrices and their scattering factor.
@@ -529,6 +603,10 @@ class Hydrosol:
         bbp_ratio : 2-D ndarray
             Backscattering ratio (dimensionless), dimensions
             [len(wavelength), len(z)].
+        n_theta : int, array_like or 'native', optional
+            Angles to calculate the phase matrices on, as the
+            `n_theta` of the hydrosol; 'native', the default, is that
+            `n_theta`.
 
         Returns
         -------
@@ -567,7 +645,7 @@ class Hydrosol:
         # see Park & Ruddick, 05
         # https://odnature.naturalsciences.be/downloads/publications/park_appliedoptics_2005.pdf
         # angle in radians
-        ang = np.deg2rad(as_theta_grid(self.n_theta))
+        ang = np.deg2rad(self._derived_theta(n_theta))
         # pytrunc's raw Fournier-Forand integrates to 1/(4*pi) over the
         # sphere: scale by 4*pi to normalize to 4*pi as before
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -638,14 +716,16 @@ class Hydrosol:
         wavelength: NDArray,
         z: NDArray,
         use_old_calc_iphase: bool = False,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> xr.DataArray | None:
         """
         Phase matrices of the hydrosol.
 
         The phase matrices supplied at construction time are returned
         truncated as configured by `truncation` (as such when it is
-        None); otherwise they are derived from the backscattering ratio
-        (see `calc_phase`). Both are memoized.
+        None), on their own angles whatever `n_theta`; otherwise they
+        are derived from the backscattering ratio (see `calc_phase`).
+        Both are memoized.
 
         Parameters
         ----------
@@ -656,6 +736,9 @@ class Hydrosol:
             coordinates: 0 at the surface, negative downwards.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
+        n_theta : int, array_like or 'native', optional
+            Angles of the derived phase matrices, as the `n_theta` of
+            the hydrosol; 'native', the default, is that `n_theta`.
 
         Returns
         -------
@@ -684,7 +767,9 @@ class Hydrosol:
                 "No phase function nor bbp_ratio has been provided, but bp>0"
             )
 
-        self._resolve_truncation(wavelength, z, use_old_calc_iphase)
+        self._resolve_truncation(
+            wavelength, z, use_old_calc_iphase, n_theta
+        )
         return self._pha
 
     def _resolve_truncation(
@@ -692,6 +777,7 @@ class Hydrosol:
         wavelength: NDArray,
         z: NDArray,
         use_old_calc_iphase: bool = False,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> None:
         """
         Compute the phase matrices at the tabulation wavelengths.
@@ -702,11 +788,11 @@ class Hydrosol:
         The result is memoized in `_pha`, `_coef_trunc` and `_bsca`, so
         that the scattering coefficient and the phase matrices stay
         consistent whichever is requested first. Returns immediately if
-        the cache already holds the tabulation of these wavelengths and
-        depths, and computes it again otherwise, e.g. for a hydrosol
-        reused at other wavelengths or on another grid. A single depth
-        is tabulated when the backscattering ratio does not vary
-        vertically.
+        the cache already holds the tabulation of these wavelengths,
+        depths and angles, and computes it again otherwise, e.g. for a
+        hydrosol reused at other wavelengths or on another grid. A
+        single depth is tabulated when the backscattering ratio does
+        not vary vertically.
 
         Parameters
         ----------
@@ -720,6 +806,8 @@ class Hydrosol:
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated). Currently
             unused.
+        n_theta : int, array_like or 'native', optional
+            Angles of the phase matrices, see `calc_phase`.
 
         Raises
         ------
@@ -733,6 +821,7 @@ class Hydrosol:
             dtype="float",
         )
         z = np.asarray(z, dtype="float")
+        theta = self._derived_theta(n_theta)
         # the supplied arrays are interpolated from the wavelengths of
         # the profile, which the tabulation then depends on
         wavelength_src = np.asarray(
@@ -745,10 +834,11 @@ class Hydrosol:
             and np.array_equal(self._tab_grid[0], wavelength_pha)
             and np.array_equal(self._tab_grid[1], z)
             and np.array_equal(self._tab_grid[2], wavelength_src)
+            and np.array_equal(self._tab_grid[3], theta)
         ):
             return
         self._tab_grid = (
-            wavelength_pha.copy(), z.copy(), wavelength_src.copy()
+            wavelength_pha.copy(), z.copy(), wavelength_src.copy(), theta
         )
 
         iop = self._iop_on(wavelength_pha, wavelength, z)
@@ -767,7 +857,7 @@ class Hydrosol:
             sl = slice(None)
 
         self._pha, self._coef_trunc = self.calc_phase(
-            wavelength_pha, z[sl], bbp_ratio[:, sl]
+            wavelength_pha, z[sl], bbp_ratio[:, sl], theta
         )
         self._bsca = bp[:, sl] * self._coef_trunc.values
 
@@ -916,6 +1006,7 @@ class Hydrosol:
         z: NDArray,
         phase: bool = True,
         use_old_calc_iphase: bool = False,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> IOPDict:
         """
         Return the inherent optical properties of the hydrosol.
@@ -937,6 +1028,9 @@ class Hydrosol:
             scattering coefficient is not scaled.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
+        n_theta : int, array_like or 'native', optional
+            Angles of the derived phase matrices, whose resolved
+            fraction scales the scattering coefficient, see `phase`.
 
         Returns
         -------
@@ -962,7 +1056,9 @@ class Hydrosol:
                 )
             if not phase:
                 return iop
-            self._resolve_truncation(wavelength, z, use_old_calc_iphase)
+            self._resolve_truncation(
+                wavelength, z, use_old_calc_iphase, n_theta
+            )
         else:
             if not phase or self.truncation is None:
                 return iop
@@ -992,7 +1088,11 @@ class HydrosolPR(Hydrosol):
         Number of equally spaced angles of the derived phase matrices,
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
-        forward and backward directions.
+        forward and backward directions. Default 72001. The
+        derived phase function is analytic and has no grid of its
+        own, so 'native' is refused. A `Water1D` asked for another
+        grid (see `Water1D.calc`) derives the phase matrices on that
+        one.
     truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None, the default, disables the truncation;
@@ -1033,7 +1133,7 @@ class HydrosolPR(Hydrosol):
     def __init__(
         self,
         chl: float,
-        n_theta: int = 72001,
+        n_theta: NumericArrayLike = 72001,
         truncation: DMTrunc | GTTrunc | None = None,
         wavelength_phase: NumericArrayLike | None = None,
         fqyc: float = 0.0,
@@ -1158,7 +1258,11 @@ class HydrosolZhai(Hydrosol):
         Number of equally spaced angles of the derived phase matrices,
         or the angles themselves in degrees, which
         `smartg.phase.theta_grid` can build clustered towards the
-        forward and backward directions.
+        forward and backward directions. Default 7201. The
+        derived phase function is analytic and has no grid of its
+        own, so 'native' is refused. A `Water1D` asked for another
+        grid (see `Water1D.calc`) derives the phase matrices on that
+        one.
     truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices
         (see `Hydrosol`). None, the default, disables the truncation;
@@ -1212,7 +1316,7 @@ class HydrosolZhai(Hydrosol):
     def __init__(
         self,
         chl_surf: float,
-        n_theta: int = 7201,
+        n_theta: NumericArrayLike = 7201,
         truncation: DMTrunc | GTTrunc | None = None,
         wavelength_phase: NumericArrayLike | None = None,
         euphotic_depth: float | None = None,
@@ -1510,11 +1614,38 @@ class Water1D(Water):
 
         self.aw_table = _read_aw(DIR_AUXDATA)
 
+    def native_theta(self) -> NDArray[np.float64]:
+        """Return the union of the hydrosols' scattering angles.
+
+        What ``n_theta='native'`` mixes the phase matrices on (see
+        `Hydrosol.native_theta` and
+        :func:`smartg.phase.union_theta_grid`). A run mixes only the
+        hydrosols that scatter at its wavelengths, on the union of
+        their grids, which this grid then holds.
+
+        Returns
+        -------
+        ndarray
+            Strictly increasing angles in degrees, from 0 to 180.
+
+        Raises
+        ------
+        ValueError
+            If the profile has no hydrosol.
+        """
+        if len(self.comp) == 0:
+            raise ValueError(
+                "The water profile has no hydrosol, so no native "
+                "scattering angle grid."
+            )
+        return union_theta_grid([comp.native_theta() for comp in self.comp])
+
     def calc(
         self,
         wavelength: NumericArrayLike | BandSet,
         phase: bool = True,
         use_old_calc_iphase: bool = False,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> xr.Dataset:
         """
         Profile and phase matrix calculation at the given wavelengths.
@@ -1534,6 +1665,9 @@ class Water1D(Water):
             phase matrices either (see `Hydrosol.coeffs`).
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
+        n_theta : int, array_like or 'native', optional
+            Scattering angles of the phase matrices, see `phase`.
+            'native', the default, keeps the angles of each hydrosol.
 
         Returns
         -------
@@ -1552,6 +1686,7 @@ class Water1D(Water):
         if not isinstance(wavelength, BandSet):
             wavelength = BandSet(wavelength)
         wavelength = np.array(wavelength)
+        theta_req = _requested_theta(n_theta)
 
         z = self.grid
         shp = (len(wavelength), len(z))
@@ -1582,7 +1717,8 @@ class Water1D(Water):
         for comp in self.comp:
             iop = comp.coeffs(
                 wavelength, z, phase=phase,
-                use_old_calc_iphase=use_old_calc_iphase
+                use_old_calc_iphase=use_old_calc_iphase,
+                n_theta=theta_req,
             )
             ap += iop["ap"]
             bp += iop["bp"]
@@ -1607,7 +1743,8 @@ class Water1D(Water):
         #
         if phase:
             pha = self.phase(
-                wavelength, use_old_calc_iphase=use_old_calc_iphase
+                wavelength, use_old_calc_iphase=use_old_calc_iphase,
+                n_theta=theta_req,
             )
 
             if pha is not None:
@@ -1729,6 +1866,7 @@ class Water1D(Water):
         self,
         wavelength: NDArray,
         use_old_calc_iphase: bool = False,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> xr.DataArray | None:
         """
         Calculate the phase matrices averaged over the hydrosols.
@@ -1752,6 +1890,17 @@ class Water1D(Water):
             Wavelengths in nm.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (deprecated).
+        n_theta : int, array_like or 'native', optional
+            Scattering angles of the phase matrices. 'native', the
+            default, keeps the angles of each hydrosol (see
+            `native_theta`). A number of equally spaced angles, or the
+            angles themselves in degrees, is the grid the derived
+            phase matrices are calculated on, and their resolved
+            fraction with it, in place of the `n_theta` of each
+            hydrosol. Supplied phase matrices keep their own angles:
+            mixed with others on another grid, they are all mixed on
+            the union of the grids, and a warning says so, as in
+            `smartg.atmosphere.Atm1D.phase`.
 
         Returns
         -------
@@ -1769,15 +1918,17 @@ class Water1D(Water):
         angle each. With the 72001 angles of `HydrosolPR`, 10
         wavelengths and 51 levels, this is 1.8 GB, and `Smartg.run`
         then samples each of these matrices on `n_icdf` angles. Giving
-        the hydrosols a common, coarser `n_theta`, a common
-        `wavelength_phase` or fewer levels reduces it.
+        the hydrosols a common, coarser `n_theta` (or asking for one
+        here), a common `wavelength_phase` or fewer levels reduces it.
         """
         z = self.grid
+        theta_req = _requested_theta(n_theta)
 
         phases = []
         for comp in self.comp:
             pha = comp.phase(
-                wavelength, z, use_old_calc_iphase=use_old_calc_iphase
+                wavelength, z, use_old_calc_iphase=use_old_calc_iphase,
+                n_theta=theta_req,
             )
             if pha is not None:
                 phases.append((comp, pha))
@@ -1816,14 +1967,16 @@ class Water1D(Water):
                 z_c = None
         if z_c is None:
             z_c = z
-        theta_c = shared("theta_oc")
-        if theta_c is None:
-            # the angles round-trip through radians in calc_phase, so
-            # two grids can hold the same node a few ulp apart: they
-            # are merged, as the kernel needs strictly increasing angles
-            theta_c = union_theta_grid(
-                [pha.coords["theta_oc"].values for _, pha in phases]
-            )
+        # the angles round-trip through radians in calc_phase, so two
+        # grids can hold the same node a few ulp apart: the union merges
+        # them, as the kernel needs strictly increasing angles. It is
+        # what 'native' asks for; a requested grid only ends up there
+        # through supplied matrices on their own angles
+        theta_c, _ = _common_theta_grid(
+            [pha.coords["theta_oc"].values for _, pha in phases],
+            [_grid_label(comp) for comp, _ in phases],
+            warn=not is_native_theta(theta_req),
+        )
 
         # the average is accumulated in place, one matrix at a time,
         # so that the only full-size array is the result
