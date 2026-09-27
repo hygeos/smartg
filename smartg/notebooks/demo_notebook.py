@@ -180,7 +180,7 @@ water = Water1D(grid=[0., -5.],
 # view results for upwelling and downwelling radiances
 wavelength = 500.
 th0 = 60.
-m = Smartg().run(wavelength, n_photons=1e9, th_deg=th0,
+m = Smartg().run(wavelength, n_photons=1e8, th_deg=th0,
                  output_layers=3, beer=1, atmosphere=atmosphere,
                  surface=surface, water=water)
 fields = ['up (TOA)', 'up (0+)', 'up (0-)', 'down (0+)', 'down (0-)',
@@ -197,7 +197,7 @@ water = Water1D(grid=[0., -5.],
                 comp=[HydrosolPR(chl=0.5, truncation=DEFAULT_WATER_TRUNC)])
 # compute outputs at the surface also, view results for downwelling
 # at bottom of ocean
-fig = smartg_view(Smartg().run(wavelength, n_photons=1e9, th_deg=th0,
+fig = smartg_view(Smartg().run(wavelength, n_photons=1e8, th_deg=th0,
                                output_layers=3, beer=1,
                                atmosphere=None, surface=surface,
                                water=water),
@@ -211,7 +211,7 @@ water = Water1D(grid=[0., -5.],
                 comp=[HydrosolPR(chl=0.5, truncation=DEFAULT_WATER_TRUNC)])
 # compute outputs at the surface also, view results for downwelling
 # at bottom of ocean
-fig = smartg_view(Smartg().run(wavelength, n_photons=1e9, th_deg=th0,
+fig = smartg_view(Smartg().run(wavelength, n_photons=1e8, th_deg=th0,
                                output_layers=3, beer=1,
                                atmosphere=None, surface=surface,
                                water=water),
