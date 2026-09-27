@@ -23,6 +23,17 @@ final `v2.0.0` release.
     - `O3_acs` / `NO2_acs` → `o3_acs` / `no2_acs`
     - the unused `US` parameter has been removed
     - the `NBTHETA` parameter of the profile/phase methods is now `n_theta`
+  - The phase matrices of the atmosphere are mixed on their native angles
+    by default: `n_theta='native'` (see the new features) is the default
+    of the `calc`, `calc_split` and `phase` methods of `Atm1D`, of
+    `Atm3D.calc`, and of the phase methods of `AerOPAC`, `Cloud`,
+    `AerUser`, `Cloud3D` and `Aer3D`, in place of 721 equally spaced
+    angles, which resampled every table (a cloud's forward peak lost
+    99 % below 2 degrees on it). The results move where the tables were
+    resampled. Pass `n_theta=721` for the former grid; `Smartg.run`
+    keeps resampling its GPU tables onto `n_icdf` angles unless
+    `theta_grid='phase'`. A truncated component keeps integrating on
+    its grid and 721 equally spaced angles (`n_theta_integral`)
   - The `smartg/tools/` folder has been dissolved: the `interp`, `progress`
     and `cdf` modules have been moved to `smartg/`, `modified_environ` has
     been moved and renamed to `smartg.environ`, and the remaining legacy
@@ -730,9 +741,10 @@ final `v2.0.0` release.
       angle grid of the aerosol 14% and 1.3%; the 2019 angle union
       reproduces both tables to 1e-13
     - A warning names the components whose grids differ and the union
-      they are mixed on, whether the union was asked for with
-      `'native'` or forced by a user phase matrix, which keeps its own
-      grid whatever `n_theta`
+      they are mixed on when that union was not asked for: a number of
+      angles or explicit angles meeting a user phase matrix, which keeps
+      its own grid whatever `n_theta`. `'native'` asks for the union,
+      and mixes on it silently
     - `Water1D.calc` and `Water1D.phase` take the same `n_theta`.
       `'native'`, the default and their former behaviour, keeps the
       angles of each hydrosol and mixes several on their union,

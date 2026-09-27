@@ -157,13 +157,25 @@ def test_component_native_grids_are_the_file_grids() -> None:
     assert not _contains(cld.native_theta(), aer.native_theta())
 
 
-def test_native_mixture_lives_on_the_union_and_says_so() -> None:
-    """Check that a native mixture takes the union and warns."""
+def _union_warnings(caught: list[warnings.WarningMessage]) -> list[str]:
+    """Return the messages of the union warnings among `caught`."""
+    return [str(w.message) for w in caught if MISMATCH in str(w.message)]
+
+
+def test_native_mixture_lives_on_the_union_silently() -> None:
+    """Check that a native mixture takes the union, without a warning.
+
+    The union is what 'native', the default, asks for.
+    """
     aer, cld = _aerosol(), _cloud()
     atm = _atm([aer, cld])
-    with pytest.warns(UserWarning, match=MISMATCH):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         pha = atm.phase(WAV, n_theta="native")
-    assert pha is not None
+        default = atm.phase(WAV)
+    assert not _union_warnings(caught)
+    assert pha is not None and default is not None
+    xr.testing.assert_identical(pha, default)
     theta = pha.coords["theta_atm"].values
 
     union = union_theta_grid([aer.native_theta(), cld.native_theta()])
@@ -227,14 +239,15 @@ def test_user_matrix_on_its_own_grid_is_mixed_on_the_union() -> None:
     """The regression this module guards against.
 
     A cloud built with its file matrix keeps the file grid whatever
-    ``n_theta``; the aerosol comes back on the 721 default. The sum
-    used to keep only the angles common to both: 175 of them, with
-    nothing said. It is now the union of the two grids.
+    ``n_theta``; the aerosol comes back on the 721 angles asked for.
+    The sum used to keep only the angles common to both: 175 of them,
+    with nothing said. It is now the union of the two grids, which a
+    warning announces since 721 angles were asked for.
     """
     aer = _aerosol()
     cld = _cloud(phase=_file_matrix(_cloud()))
     with pytest.warns(UserWarning, match=MISMATCH):
-        pha = _atm([aer, cld]).phase(WAV)
+        pha = _atm([aer, cld]).phase(WAV, n_theta=721)
     assert pha is not None
     theta = pha.coords["theta_atm"].values
 
@@ -276,8 +289,7 @@ def test_2d_user_matrix_serves_every_wavelength_and_layer() -> None:
     """
     user = _file_matrix(_cloud())
     cld = _cloud(phase=user)
-    with pytest.warns(UserWarning, match=MISMATCH):
-        pha = _atm([_aerosol(), cld]).phase(np.array([500.0, 600.0]))
+    pha = _atm([_aerosol(), cld]).phase(np.array([500.0, 600.0]))
     assert pha is not None and pha.sizes["wavelength_phase"] == 2
 
     pro = Atm1D(
@@ -318,14 +330,32 @@ def test_single_user_matrix_keeps_its_grid() -> None:
 
 
 def test_calc_carries_the_union_to_the_profile() -> None:
-    """Check that the profile takes the union as its angle axis."""
+    """Check that the profile takes the union as its angle axis.
+
+    'native' is the default of calc.
+    """
     aer, cld = _aerosol(), _cloud()
     atm = _atm([aer, cld])
-    with pytest.warns(UserWarning, match=MISMATCH):
-        pro = atm.calc(WAV, n_theta="native")
+    pro = atm.calc(WAV, n_theta="native")
     union = union_theta_grid([aer.native_theta(), cld.native_theta()])
     assert np.array_equal(pro.coords["theta_atm"].values, union)
     assert pro["phase_atm"].shape[-1] == len(union)
+    xr.testing.assert_identical(atm.calc(WAV), pro)
+
+
+def test_molecular_atmosphere_needs_no_native_grid() -> None:
+    """An atmosphere without particles has no grid, and needs none.
+
+    Its default 'native' grid resolves to nothing, and no phase
+    matrix is mixed, in 1D as in 3D.
+    """
+    pro = Atm1D("afglt").calc(WAV)
+    assert "phase_atm" not in pro
+    atm3 = Atm3D(
+        atm_1d=Atm1D("afglt"), grid_3d=_grid3(), comp_3d=[],
+        wavelength_phase=[WAVELENGTH],
+    )
+    atm3.calc(WAV)
 
 
 def test_the_device_table_adopts_the_union_intact() -> None:
@@ -507,8 +537,10 @@ def test_3d_native_mixture_lives_on_the_union() -> None:
         atm_1d=Atm1D("afglt", tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0),
         grid_3d=grid3, comp_3d=[cld, aer], wavelength_phase=[WAVELENGTH],
     )
-    with pytest.warns(UserWarning, match=MISMATCH):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         pro = atm3.calc(WAV, n_theta="native")
+    assert not _union_warnings(caught)
     union = union_theta_grid([cld.native_theta(), aer.native_theta()])
     assert np.array_equal(pro.coords["theta_atm"].values, union)
 

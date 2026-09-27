@@ -78,7 +78,8 @@ import copy
 import re
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -98,6 +99,7 @@ from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.grid3d import Grid3D, create_1d_grid
 from smartg.phase import (
+    NATIVE_THETA,
     _common_theta_grid,
     _grid_label,
     as_theta_grid,
@@ -313,6 +315,24 @@ def _on_theta_grid(
     if np.array_equal(pha.coords[dim].values, theta):
         return pha
     return pha.interp({dim: theta})
+
+
+@contextmanager
+def _native_union(native: bool) -> Iterator[None]:
+    """Silence the union warning where 'native' asked for the union.
+
+    Atm3D resolves 'native' to the union of its 1D and 3D grids once,
+    and passes it on as angles: the mixtures that then meet a
+    user-supplied matrix on its own grid are on the union asked for,
+    and must not warn about it.
+    """
+    with warnings.catch_warnings():
+        if native:
+            warnings.filterwarnings(
+                "ignore", message="The components .* carry different "
+                "phase angle grids", category=UserWarning,
+            )
+        yield
 
 
 class AerOPAC:
@@ -945,7 +965,7 @@ class AerOPAC:
         wavelength: np.ndarray,
         z: np.ndarray,
         rh: np.ndarray,
-        n_theta: ThetaLike = 721,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> xr.DataArray:
         """
         Calculate phase matrix for aerosols and clouds.
@@ -989,7 +1009,7 @@ class AerOPAC:
             ``'native'`` to keep the angles the component's tables
             carry, see `native_theta`. A user-supplied phase matrix
             (the `phase` argument of the constructor) is returned on
-            its own grid whatever `n_theta`. Default is 721.
+            its own grid whatever `n_theta`. Default is 'native'.
 
         Returns
         -------
@@ -1766,7 +1786,7 @@ class Comp3D(ABC):
     def get_phase_set(
         self,
         wavelength_phase: NDArray[np.floating],
-        n_theta: ThetaLike = 721,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> tuple[list[xr.DataArray], NDArray[np.int32], int]:
         """Return the component phase matrices.
 
@@ -1776,8 +1796,8 @@ class Comp3D(ABC):
             The wavelengths of the phase matrices, in nm.
         n_theta : int, str or array_like, optional
             The number of equally spaced scattering angles, the angles
-            themselves in degrees, or ``'native'`` for the angles the
-            component's tables carry.
+            themselves in degrees, or ``'native'``, the default, for
+            the angles the component's tables carry.
 
         Returns
         -------
@@ -2088,7 +2108,7 @@ class _Comp3DFile(Comp3D):
             theta = self.ds_mix.coords["theta"].values
         return union_theta_grid([theta.astype(np.float64)])
 
-    def get_phase(self, n_theta: ThetaLike = 721) -> xr.DataArray:
+    def get_phase(self, n_theta: ThetaLike = NATIVE_THETA) -> xr.DataArray:
         """Return the component phase matrix DataArray.
 
         Its dimensions are ``('wavelength_phase', <parameter>,
@@ -2103,8 +2123,9 @@ class _Comp3DFile(Comp3D):
         ----------
         n_theta : int, str or array_like, optional
             The number of equally spaced scattering angles, the angles
-            themselves in degrees, or ``'native'`` for the angles the
-            component's tables carry, see `native_theta`.
+            themselves in degrees, or ``'native'``, the default, for
+            the angles the component's tables carry, see
+            `native_theta`.
         """
         theta = (
             self.native_theta() if is_native_theta(n_theta)
@@ -2148,7 +2169,7 @@ class _Comp3DFile(Comp3D):
     def get_phase_set(
         self,
         wavelength_phase: NDArray[np.floating],
-        n_theta: ThetaLike = 721,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> tuple[list[xr.DataArray], NDArray[np.int32], int]:
         param_unique = np.unique(self._param)
         n_unique = param_unique.size
@@ -2886,7 +2907,7 @@ class Atm1D(Atmosphere):
         self,
         wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
         phase: bool = True,
-        n_theta: ThetaLike = 721,
+        n_theta: ThetaLike = NATIVE_THETA,
         use_old_calc_iphase: bool = False,
     ) -> xr.Dataset:
         """Calculate the profile and phase matrices at wavelengths.
@@ -2906,10 +2927,10 @@ class Atm1D(Atmosphere):
             the phase matrix, the angles themselves in degrees,
             which `smartg.phase.theta_grid` can build clustered
             towards the forward and backward directions, or
-            ``'native'`` for the union of the angles the components'
-            tables carry, on which their mixture is exact; pass
-            ``theta_grid='phase'`` to `Smartg.run` to keep that grid
-            on the device.
+            ``'native'``, the default, for the union of the angles the
+            components' tables carry, on which their mixture is exact;
+            pass ``theta_grid='phase'`` to `Smartg.run` to keep that
+            grid on the device.
         use_old_calc_iphase : bool, optional
             Use the old way to compute iphase (depracated).
 
@@ -2974,7 +2995,9 @@ class Atm1D(Atmosphere):
             else:
                 wavelength_pha = np.atleast_1d(self.wavelength_phase)
             comp_phases = self._comp_phases(wavelength_pha, n_theta)
-            pha = self._mix_phases(comp_phases)
+            pha = self._mix_phases(
+                comp_phases, warn=not is_native_theta(n_theta)
+            )
             pha_, ipha = calc_iphase(
                 pha,
                 np.atleast_1d(wavelength[:]),
@@ -3772,11 +3795,12 @@ class Atm1D(Atmosphere):
         theta, _ = _common_theta_grid(
             [comp.native_theta() for comp in self.comp],
             [_grid_label(comp) for comp in self.comp],
+            warn=False,
         )
         return theta
 
     def phase(
-        self, wavelength: NumericArrayLike, n_theta: ThetaLike = 721
+        self, wavelength: NumericArrayLike, n_theta: ThetaLike = NATIVE_THETA
     ) -> xr.DataArray | None:
         """Calculate aerosol and cloud phase matrices at wavelengths.
 
@@ -3796,8 +3820,7 @@ class Atm1D(Atmosphere):
             component is resampled on, the angles themselves in
             degrees, or ``'native'`` for the union of the angles the
             components' tables carry, on which the mixture is exact,
-            see `native_theta`. Default is 721, corresponding to
-            equally spaced angles from 0° to 180°.
+            see `native_theta`. Default is 'native'.
 
         Returns
         -------
@@ -3841,7 +3864,8 @@ class Atm1D(Atmosphere):
         grid. When they come back on different grids, which a
         user-supplied phase matrix does since it keeps its own, they
         are resampled onto the union of those grids, which loses no
-        node of any of them, and a warning says so. The
+        node of any of them, and a warning says so, unless that union
+        is what ``n_theta='native'`` asked for. The
         `wavelength_phase` and `z_phase` axes cannot be merged that
         way and must agree.
 
@@ -3854,7 +3878,10 @@ class Atm1D(Atmosphere):
         wavelength = np.atleast_1d(wavelength)
         if len(self.comp) == 0:
             return None
-        return self._mix_phases(self._comp_phases(wavelength, n_theta))
+        return self._mix_phases(
+            self._comp_phases(wavelength, n_theta),
+            warn=not is_native_theta(n_theta),
+        )
 
     def _comp_phases(
         self, wavelength: NDArray[Any], n_theta: ThetaLike
@@ -3950,6 +3977,7 @@ class Atm1D(Atmosphere):
         comp_phases: list[
             tuple[xr.DataArray, xr.DataArray, xr.DataArray | None]
         ],
+        warn: bool = True,
     ) -> xr.DataArray:
         """Mix the phase matrices of the components.
 
@@ -3961,6 +3989,10 @@ class Atm1D(Atmosphere):
         comp_phases : list of tuple
             The (phase, weight, f) triples of the components, as
             `_comp_phases` returns them.
+        warn : bool, optional
+            Whether mixing on the union of different grids is announced
+            by a warning; False for ``n_theta='native'``, which asks for
+            that union.
 
         Returns
         -------
@@ -3990,6 +4022,7 @@ class Atm1D(Atmosphere):
         theta, resampled = _common_theta_grid(
             [p.coords["theta_atm"].values for p in phases],
             [_grid_label(comp) for comp in self.comp],
+            warn=warn,
         )
         if resampled:
             phases = [_on_theta_grid(p, theta) for p in phases]
@@ -4084,7 +4117,7 @@ class Atm1D(Atmosphere):
         self,
         wavelength: NumericArrayLike | BandSet,
         phase: bool = True,
-        n_theta: ThetaLike = 721,
+        n_theta: ThetaLike = NATIVE_THETA,
     ) -> tuple[
         np.ndarray,
         np.ndarray,
@@ -4111,8 +4144,8 @@ class Atm1D(Atmosphere):
             The number of equally spaced scattering angles for phase
             function resampling, the angles themselves in degrees, or
             ``'native'`` for the union of the angles the components'
-            tables carry. Default is 721, corresponding to angles from
-            0° to 180°. Only used if ``phase=True``.
+            tables carry. Default is 'native'. Only used if
+            ``phase=True``.
 
         Returns
         -------
@@ -4499,6 +4532,7 @@ class Atm3D(Atmosphere):
         theta, _ = _common_theta_grid(
             [comp.native_theta() for comp in comps],
             [_grid_label(comp) for comp in comps],
+            warn=False,
         )
         return theta
 
@@ -4506,7 +4540,7 @@ class Atm3D(Atmosphere):
         self,
         wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
         phase: bool = True,
-        n_theta: ThetaLike = 721,
+        n_theta: ThetaLike = NATIVE_THETA,
         use_old_calc_iphase: bool = False,
     ) -> xr.Dataset:
         """Compute the 3D atmospheric profile at given wavelengths.
@@ -4523,9 +4557,9 @@ class Atm3D(Atmosphere):
         n_theta : int, str or array_like, optional
             The number of equally spaced scattering angles of the
             phase matrices, the angles themselves in degrees, or
-            ``'native'`` for the union of the angles the 1D and 3D
-            components' tables carry, on which their mixture is
-            exact, see `native_theta`.
+            ``'native'``, the default, for the union of the angles the
+            1D and 3D components' tables carry, on which their mixture
+            is exact, see `native_theta`.
         use_old_calc_iphase : bool, optional
             Use the old (slower) implementation of calc_iphase.
 
@@ -4552,9 +4586,11 @@ class Atm3D(Atmosphere):
             self.wavelength_phase
             if self.wavelength_phase is not None else wavelengths
         )
-        if is_native_theta(n_theta):
+        native = is_native_theta(n_theta)
+        if native and (self.atm_1d.comp or self.comp_3d):
             # resolved once here, so that the 1D and the 3D components
-            # are all asked for the same grid
+            # are all asked for the same grid; without any, no phase
+            # matrix is mixed and 'native' stays unresolved
             n_theta = self.native_theta()
 
         #
@@ -4583,7 +4619,10 @@ class Atm3D(Atmosphere):
             atm_1d.prof = self.atm_1d._prof_src.regrid(
                 np.asarray(self.grid_3d.zGRID[::-1])
             )
-            ds_1d = atm_1d.calc(wavelength, phase=pha_1d, n_theta=n_theta)
+            with _native_union(native):
+                ds_1d = atm_1d.calc(
+                    wavelength, phase=pha_1d, n_theta=n_theta
+                )
             if mol_sca_1d is None:
                 mol_sca_1d = od2k(ds_1d, "OD_r")
             if mol_abs_1d is None:
@@ -4643,15 +4682,16 @@ class Atm3D(Atmosphere):
         mol_sca_glob = self._glob_molecular(mol_sca_1d)
         mol_abs_glob = self._glob_molecular(mol_abs_1d)
         if phase:
-            ext_glob, ssa_glob, prof_phases = self._glob_particles(
-                wavelengths,
-                wavelength_pha,
-                n_theta,
-                ext_aer_1d,
-                ssa_aer_1d,
-                ipha_aer_1d,
-                pha_aer_1d,
-            )
+            with _native_union(native):
+                ext_glob, ssa_glob, prof_phases = self._glob_particles(
+                    wavelengths,
+                    wavelength_pha,
+                    n_theta,
+                    ext_aer_1d,
+                    ssa_aer_1d,
+                    ipha_aer_1d,
+                    pha_aer_1d,
+                )
         else:
             ext_glob, ssa_glob = self._glob_ext_ssa(
                 wavelengths, ext_aer_1d, ssa_aer_1d, with_aer_1d

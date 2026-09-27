@@ -109,7 +109,9 @@ def test_aer_mixtures(request: pytest.FixtureRequest, mix: str) -> None:
         h_stra_min=0.0,
         h_free_max=0.0,
     )
-    pro = Atm1D("afglt", comp=[aer]).calc(wavelengths)
+    # the reference phase matrices are on the 721 angles of the former
+    # default grid
+    pro = Atm1D("afglt", comp=[aer]).calc(wavelengths, n_theta=721)
 
     ref_fname = (
         DIR_AUXDATA / "aerosols" / "test_ref" / f"atm_afglt_{mix}.nc"
@@ -233,7 +235,9 @@ def test_aer_species(request: pytest.FixtureRequest, spe: str) -> None:
         h_stra_min=0.0,
         h_free_max=0.0,
     )
-    pro = Atm1D("afglt", comp=[aer]).calc(wavelengths)
+    # the reference phase matrices are on the 721 angles of the former
+    # default grid
+    pro = Atm1D("afglt", comp=[aer]).calc(wavelengths, n_theta=721)
 
     ref_fname = (
         DIR_AUXDATA / "aerosols" / "test_ref" / f"atm_afglt_{spe}.nc"
@@ -348,9 +352,11 @@ def test_desert_free_stra(request: pytest.FixtureRequest) -> None:
     """Check the desert mixture with free and stratospheric layers."""
     wavelengths = np.array([400.0, 700.0])
     aer = AerOPAC("desert", 1.0, 550.0)
+    # the reference phase matrices are on the 721 angles of the former
+    # default grid
     pro = Atm1D(
         "afglt", comp=[aer], pfgrid=[100.0, 12.0, 6.0, 0.0]
-    ).calc(wavelengths)
+    ).calc(wavelengths, n_theta=721)
 
     ref_fname = (
         DIR_AUXDATA / "aerosols" / "test_ref" / "atm_afglt_desert_free_stra.nc"
@@ -485,7 +491,11 @@ def test_dd_cc_mixture(request: pytest.FixtureRequest) -> None:
         h_stra_min=0.0,
         h_free_max=0.0,
     )
-    pro = Atm1D("afglt", comp=[aer1, aer2], pfgrid=pfgrid).calc(wavelengths)
+    # the reference phase matrices are on the 721 angles of the former
+    # default grid
+    pro = Atm1D("afglt", comp=[aer1, aer2], pfgrid=pfgrid).calc(
+        wavelengths, n_theta=721
+    )
 
     ref_fname = (
         DIR_AUXDATA
@@ -613,7 +623,9 @@ def test_desert_one_wavelength(request: pytest.FixtureRequest) -> None:
         h_stra_min=0.0,
         h_free_max=0.0,
     )
-    pro = Atm1D("afglt", comp=[aer]).calc(wavelength)
+    # the reference phase matrices are on the 721 angles of the former
+    # default grid
+    pro = Atm1D("afglt", comp=[aer]).calc(wavelength, n_theta=721)
 
     ref_fname = DIR_AUXDATA / "aerosols" / "test_ref" / "atm_afglt_desert.nc"
     pro_ref = xr.open_dataset(ref_fname)
