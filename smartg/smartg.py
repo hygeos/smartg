@@ -459,6 +459,24 @@ class Alis:
         the wavelengths by n_low - 1, or if n_jac_abs is True without
         a positive n_jac.
 
+    Notes
+    -----
+    Each photon is followed at one wavelength, drawn at random among
+    those of the reference group, and weighed at every other one with
+    a scalar: the ratio of their absorption and scattering along its
+    path and of their phase functions at each scattering. It is exact
+    for I, but the Q, U and V of every wavelength carry the
+    polarization of the wavelength drawn, which is only right if the
+    polarizing properties of the medium, such as the share of the
+    molecular scattering, do not change across the band. Over 500 to
+    550 nm below a sea with 0.3 mg/m3 of chlorophyll, the Q and U of
+    the upwelling radiance are off by 5 to 10 % at the ends of the
+    band, while above the water they agree with a standard run within
+    the noise of 1e8 photons (see tests/test_self_consistency.py).
+    The perturbed profiles of n_jac are weighed in the same way: the
+    Jacobians of I are exact, those of Q, U and V only for a
+    perturbation of the absorption.
+
     Examples
     --------
     >>> alis = Alis(n_low=10, n_jac=3, n_jac_abs=True)
