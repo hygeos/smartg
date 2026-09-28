@@ -14,7 +14,7 @@ import xarray as xr
 from numpy.typing import NDArray
 
 from smartg.phase import THETA_GRID_KINDS, as_theta_grid, theta_grid
-from smartg.smartg import _calc_phase_host
+from smartg.smartg import TYPE_PHASE, _bin_masses, _calc_phase_host
 from smartg.typing import NumericArrayLike, ThetaLike
 
 N_TEST = (2, 3, 9, 721, 1801)
@@ -359,6 +359,30 @@ def test_clustered_table_resolves_the_peak_better(n: int) -> None:
     assert error["lobatto"] < error["uniform"] / 5.0
 
 
+def test_the_device_table_is_normalized_as_the_kernel_reads_it() -> None:
+    """Each row integrates to 2 on the interpolation the kernel reads.
+
+    The local estimates weigh a scattering with the table values as
+    they are, whereas the deflections come from its normalized
+    cumulative distribution: a matrix given at another scale, or
+    normalized with another quadrature, must give the same table. A
+    user matrix given at twice its scale used to double the radiances
+    of the local estimates.
+    """
+    grid = theta_grid(721)
+    ang = np.deg2rad(grid)
+    profile = _profile(grid)
+    doubled = profile.copy(deep=True)
+    doubled["phase_atm"] = doubled["phase_atm"] * 2.0
+    phase, _ = _calc_phase_host(profile, len(grid), 0.0279, "atm", ang_a=ang)
+    twice, _ = _calc_phase_host(doubled, len(grid), 0.0279, "atm", ang_a=ang)
+    np.testing.assert_allclose(
+        _bin_masses(phase, ang).sum(axis=1), 2.0, rtol=1e-6
+    )
+    for name, _ in TYPE_PHASE:
+        np.testing.assert_allclose(twice[name], phase[name], rtol=1e-6)
+
+
 def test_adopting_the_matrix_grid_loses_nothing() -> None:
     """On its own grid, the table is the phase matrix, not a resample.
 
@@ -405,7 +429,7 @@ def test_clustered_grid_fixes_the_forward_peak_radiance() -> None:
 
     The tolerances are wide because the kernel is not reproducible from
     one run to the next; the measured seed to seed spread here is 0.2%,
-    against the 11% error this asserts.
+    against the 7 to 9% error this asserts.
     """
     from smartg.atmosphere import Atm1D, Cloud
     from smartg.smartg import LocalEstimate, Smartg
@@ -447,9 +471,12 @@ def test_clustered_grid_fixes_the_forward_peak_radiance() -> None:
     # one is not, for the very same number of table entries
     assert err_uniform[peak].max() > 0.03
     assert err_lobatto[peak].max() < 0.01
-    # away from the peak they are indistinguishable, which is what says
-    # the difference above is the discretisation and not an offset
-    assert err_uniform[control].max() < 0.01
+    # away from the peak the clustered grid is as good; the equally
+    # spaced one is off by the area its coarse peak adds, since the
+    # table is normalized as the kernel reads it: 1.3 % at 20 degrees
+    # (-7 % and +9 % in the peak), where the clustered grid is within
+    # 0.2 % everywhere
+    assert err_uniform[control].max() < 0.02
     assert err_lobatto[control].max() < 0.01
 
 

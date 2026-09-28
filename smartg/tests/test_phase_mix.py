@@ -438,6 +438,37 @@ def test_the_device_table_refuses_a_nan() -> None:
         _calc_phase_host(pro, 181, 0.0279, "atm")
 
 
+def test_the_local_estimates_ignore_the_scale_of_a_user_phase() -> None:
+    """A user matrix at twice its scale gives the same radiances.
+
+    The deflections come from the normalized cumulative distribution
+    and the local estimates read the table, normalized on the kernel's
+    interpolation; they used to read it as given, and doubled with it.
+    The same seed does not give the same walk: the rescaled table
+    differs by its float rounding, and the walks drift apart. They
+    differed by 0.8 % at most at 1e5 photons.
+    """
+    from smartg.smartg import LocalEstimate, Smartg
+
+    user = _file_matrix(_cloud())
+    radiances = []
+    for scale in (1.0, 2.0):
+        atm = Atm1D(
+            "afglt", comp=[_aerosol(phase=user * scale)], grid=GRID,
+            pfgrid=PFGRID, tau_r=0.0, tco3=0.0, no2=False,
+        )
+        m = Smartg(double=True).run(
+            WAVELENGTH, atmosphere=atm, th_deg=30.0,
+            le=LocalEstimate(
+                th_deg=np.array([0.0, 30.0, 60.0]),
+                phi_deg=np.array([0.0, 90.0]),
+            ),
+            n_photons=1e5, seed=1234, progress=False,
+        )
+        radiances.append(m["I_up (TOA)"].values)
+    np.testing.assert_allclose(radiances[1], radiances[0], rtol=0.03)
+
+
 @pytest.mark.parametrize(
     "truncation",
     [

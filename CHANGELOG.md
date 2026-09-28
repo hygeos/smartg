@@ -1038,6 +1038,23 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Normalize the phase tables of the kernel on the interpolation it
+    reads. The deflections are drawn from the normalized cumulative
+    distribution of a table, but the local estimates weighed each
+    scattering with the table values as given: the two agreed only for a
+    table normalized exactly as the kernel reads it, F11 linear in the
+    scattering angle. The water normalized its hydrosol tables, the
+    atmosphere did not: an `AerOPAC`, `Cloud` or `AerUser` matrix given
+    at twice its scale doubled the radiances of the local estimates, the
+    OPAC water cloud resampled to `n_theta=721` weighed them 0.9 % too
+    much, and the cloud matrix of the Kokhanovsky et al. benchmark
+    normalized by `read_phase_dat` 0.09 % too little. On the native grids
+    of the OPAC components the change is below 1e-4. On a grid too coarse
+    for a forward peak, whose table overstates the area of the peak, the
+    rest of the phase function now pays for it: the ice cloud of
+    `test_phase_grid_ice.py` on 451 equally spaced angles went from +3 %
+    to -1.6 % in reflection and from +9 % to +4.1 % in transmission,
+    against a fine grid. The error was already in v1.2.0
   - Refuse phase matrices holding NaN or infinite values. The user tables
     of `AerOPAC`, `Cloud`, `AerUser`, `Cloud3D`, `Aer3D` and `Hydrosol`,
     the `prof_phases` of `Atm1D` and the `aer_phase_1d` of `Atm3D` raise

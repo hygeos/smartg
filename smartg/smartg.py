@@ -4020,6 +4020,15 @@ def _calc_phase_host(
       drawn deflection is therefore distributed exactly as the
       matrix the walk then reads, whatever the grid.
 
+    Each row of the table is normalized to 2 over the cosine of the
+    scattering angle on that same interpolation. The local estimates
+    weigh a scattering with the table values as they are, whereas the
+    deflections come from the cumulative distribution, normalized
+    whatever the table: both describe the same phase function only if
+    the table is normalized as the kernel reads it, which neither a
+    table normalized with another quadrature nor one resampled on a
+    coarse grid is.
+
     The profile phase matrices are first normalized to the internal
     I-parallel/I-perpendicular representation with
     ``convert_phase_to_iparper``. When ``polarization`` is disabled,
@@ -4155,7 +4164,56 @@ def _calc_phase_host(
             phase_host['a_P44'][idx, :] = f6(ang)  # V P44=P33
             # phase_host['a_P33'][idx, :] = f6(ang)  # V P44=P33
 
+    # normalize each row on the interpolation the kernel reads, see the
+    # docstring; a row of zeros, e.g. a VRS entry of a profile that has
+    # none, stays one
+    total = _bin_masses(phase_host, ang).sum(axis=1)
+    scale = np.divide(2.0, total, out=np.ones_like(total), where=total > 0)
+    for name, dtype in TYPE_PHASE:
+        phase_host[name] *= scale[:, None].astype(dtype)
+
     return phase_host, _cdf_of_table(phase_host, ang)
+
+
+def _bin_masses(
+    phase_host: np.ndarray, ang: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Return the integral of each row of a phase table over its bins.
+
+    F11 linear in theta between the two nodes of a bin, times the true
+    sin(theta), integrated exactly: the density the kernel's
+    ``pSample`` inverts in closed form. The table's own float32 values
+    are used, so that the host and the device describe the same
+    function.
+
+    Parameters
+    ----------
+    phase_host : ndarray
+        Table of dtype ``TYPE_PHASE`` and shape ``(nrows, n)``.
+    ang : ndarray
+        The ``n`` angles in radians, from 0 to pi.
+
+    Returns
+    -------
+    ndarray
+        ``(nrows, n - 1)``, the integral of F11 sin(theta) over each
+        bin; a row sums to 2 for a normalized phase function.
+    """
+    f11 = 0.5 * (
+        phase_host['a_P11'].astype(np.float64)
+        + phase_host['a_P22'].astype(np.float64)
+        + 2.0 * phase_host['a_P12'].astype(np.float64)
+    )
+    th0 = ang[:-1]
+    th1 = ang[1:]
+    dth = th1 - th0
+    f0 = f11[:, :-1]
+    df = f11[:, 1:] - f0
+    # int_th0^th1 (f0 + df (th-th0)/dth) sin(th) dth
+    return (
+        f0 * (np.cos(th0) - np.cos(th1))
+        + df * ((np.sin(th1) - np.sin(th0)) / dth - np.cos(th1))
+    )
 
 
 def _cdf_of_table(
@@ -4166,10 +4224,7 @@ def _cdf_of_table(
     At the nodes of its angle grid.
 
     The mass of a bin is the exact integral of the tabulated phase
-    function over it, F11 linear in theta between the two nodes times
-    the true sin(theta), which is the density the kernel's ``pSample``
-    inverts in closed form. The table's own float32 values are used,
-    so that the host and the device describe the same function.
+    function over it, see ``_bin_masses``.
 
     Parameters
     ----------
@@ -4183,21 +4238,7 @@ def _cdf_of_table(
     ndarray
         ``(nrows, n)`` of dtype ``TYPE_PCDF``, each row from 0 to 1.
     """
-    f11 = 0.5 * (
-        phase_host['a_P11'].astype(np.float64)
-        + phase_host['a_P22'].astype(np.float64)
-        + 2.0 * phase_host['a_P12'].astype(np.float64)
-    )
-    th0 = ang[:-1]
-    th1 = ang[1:]
-    dth = th1 - th0
-    f0 = f11[:, :-1]
-    df = f11[:, 1:] - f0
-    # int_th0^th1 (f0 + df (th-th0)/dth) sin(th) dth
-    mass = (
-        f0 * (np.cos(th0) - np.cos(th1))
-        + df * ((np.sin(th1) - np.sin(th0)) / dth - np.cos(th1))
-    )
+    mass = _bin_masses(phase_host, ang)
     cdf = np.zeros(phase_host.shape, dtype=np.float64)
     cdf[:, 1:] = np.cumsum(mass, axis=1)
     total = cdf[:, -1:]

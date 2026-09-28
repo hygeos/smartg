@@ -75,9 +75,12 @@ VZA = np.array([-60.0, -27.5])
 # worst deviation from the saved values was 1.04%, 2.4 sigma of the
 # difference. Four sigma keeps a false failure below 1e-4 per value
 # with a sigma estimated from 10 loops, and still tells apart the
-# grid effects of the study: the coarse uniform-451 grid at +3% in
-# reflection and +9% in transmission, and the +1% of uniform-1801 in
-# transmission at 60 degrees, where the band is 0.6%.
+# grid effects of the study: the coarse uniform-451 grid at -1.6% in
+# reflection and +4.1% in transmission, and the +0.7% of uniform-1801
+# in transmission at 60 degrees, where the band is 0.6%. Before the
+# device table was normalized as the kernel reads it (2026-09-28), the
+# local estimates read the too large peak area of uniform-451 as it
+# was: +3% in reflection and +9% in transmission.
 NSIGMA = 4.0
 
 # The angle grids under test: "kind-n" for the generators of
@@ -105,41 +108,43 @@ REF_18001 = {
 }
 
 # Values measured with the settings above (SEED, XBLOCK, XGRID,
-# N_PHOTONS, N_LOOP), in the order of VZA, per grid. Regenerate them
+# N_PHOTONS, N_LOOP), in the order of VZA, per grid, on an RTX 5070 Ti
+# on 2026-09-28, with the device table normalized as the kernel reads
+# it. Regenerate them
 # from the log with the same settings if the physics legitimately
 # changes.
 SAVED = {
     "uniform-18001": {
-        "I_up (TOA)": (7.837796e-01, 5.031467e-01),
-        "I_down (0+)": (2.571826e01, 5.765969e-01),
+        "I_up (TOA)": (7.839543e-01, 5.031046e-01),
+        "I_down (0+)": (2.572208e01, 5.760129e-01),
     },
     "uniform-451": {
-        "I_up (TOA)": (8.095347e-01, 5.153202e-01),
-        "I_down (0+)": (2.803431e01, 6.122661e-01),
+        "I_up (TOA)": (7.727501e-01, 4.916383e-01),
+        "I_down (0+)": (2.675899e01, 5.850213e-01),
     },
     "uniform-1801": {
-        "I_up (TOA)": (7.861330e-01, 5.025746e-01),
-        "I_down (0+)": (2.598059e01, 5.778464e-01),
+        "I_up (TOA)": (7.829364e-01, 5.003933e-01),
+        "I_down (0+)": (2.588412e01, 5.762252e-01),
     },
     "lobatto-451": {
-        "I_up (TOA)": (7.892513e-01, 5.034006e-01),
-        "I_down (0+)": (2.587028e01, 5.762447e-01),
+        "I_up (TOA)": (7.865730e-01, 5.021092e-01),
+        "I_down (0+)": (2.580961e01, 5.747978e-01),
     },
     "lobatto-1801": {
-        "I_up (TOA)": (7.848452e-01, 5.032166e-01),
-        "I_down (0+)": (2.572425e01, 5.765339e-01),
+        "I_up (TOA)": (7.852458e-01, 5.032760e-01),
+        "I_down (0+)": (2.572123e01, 5.764237e-01),
     },
     "peak-451": {
-        "I_up (TOA)": (7.874768e-01, 5.042025e-01),
-        "I_down (0+)": (2.577740e01, 5.753914e-01),
+        "I_up (TOA)": (7.861152e-01, 5.038531e-01),
+        "I_down (0+)": (2.574103e01, 5.748301e-01),
     },
     "peak-1801": {
-        "I_up (TOA)": (7.845503e-01, 5.036387e-01),
-        "I_down (0+)": (2.572139e01, 5.767912e-01),
+        "I_up (TOA)": (7.851941e-01, 5.038406e-01),
+        "I_down (0+)": (2.571881e01, 5.767806e-01),
     },
     "native": {
-        "I_up (TOA)": (7.845163e-01, 5.029800e-01),
-        "I_down (0+)": (2.571825e01, 5.760760e-01),
+        "I_up (TOA)": (7.840925e-01, 5.034600e-01),
+        "I_down (0+)": (2.572659e01, 5.759803e-01),
     },
 }
 
