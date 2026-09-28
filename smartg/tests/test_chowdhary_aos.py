@@ -13,12 +13,14 @@ four atmosphere-ocean systems:
 - AOS-II: a rough sea over 100 m of pure sea water and a black bottom,
   no atmosphere;
 - AOS-III: both;
-- AOS-IV: AOS-III with forward-peaked hydrosols in the water.
+- AOS-IV: AOS-III with forward-peaked hydrosols in the water;
+- AOS-I*: AOS-I with a Rayleigh optical thickness of 0.5, seen at TOA
+  in the geometry of Natraj et al. (2009), with and without the sea.
 
-The four are run with SMART-G and compared, direction by direction,
-with the testbed values of validation/chowdhary2020_AOS/reference in
-the auxdata, the reflectances of the supplementary Tables S2 to S5 of
-the paper.
+They are run with SMART-G and compared, direction by direction, with
+the testbed values of validation/chowdhary2020_AOS/reference in the
+auxdata, the reflectances of the supplementary Tables S2 to S6 of the
+paper.
 
 Tested with the following GPUs: RTX PRO 6000 Blackwell, RTX 5070 Ti
 """
@@ -51,8 +53,8 @@ SEED = 1234
 # Blackwell), AOS-IV taking most of it.
 TIERS = ["fast", pytest.param("slow", marks=pytest.mark.slow)]
 N_PHOTONS = {
-    "fast": {"I": 1e7, "II": 1e7, "III": 1e7, "IV": 1e6},
-    "slow": {"I": 1e8, "II": 1e8, "III": 1e8, "IV": 1e8},
+    "fast": {"I": 1e7, "II": 1e7, "III": 1e7, "IV": 1e6, "I*": 1e7},
+    "slow": {"I": 1e8, "II": 1e8, "III": 1e8, "IV": 1e8, "I*": 1e8},
 }
 
 AOS_DIR = DIR_AUXDATA / "validation" / "chowdhary2020_AOS"
@@ -97,6 +99,23 @@ DEPTH = 100.0
 # normalizing such a table scales the rest of the matrix by 0.77: the
 # radiance leaving the water came out 16 to 21 % low at 550 and 650 nm.
 PHASE_TABLES = ["Table_S1a.txt", "Table_S1b.txt"]
+
+# AOS-I* (the paper's Table S6): the atmosphere of AOS-I with a Rayleigh
+# optical thickness of TAU_R_I_STAR, over the sea of AOS-I or over none,
+# the sun at MU0_I_STAR, seen at TOA from the 13 view zenith angles, up
+# to 88.9 degrees, of Natraj, Li and Yung (2009), "Rayleigh scattering
+# in planetary atmospheres: corrected tables through accurate
+# computation of X and Y functions", ApJ 691, 1909. Without the sea it
+# is their benchmark, which the paper reproduces to 1e-6 but for the
+# sign of Q. The files hold the reflectances, the paper's table their
+# product with MU0_I_STAR. The files follow the other models'
+# conventions: their azimuths reversed, and the sign of U changed in
+# their 120 degree column (without it U is 1500 standard deviations
+# off there, with it within the noise), although the paper labels that
+# column 120 degrees in the table they copy.
+TAU_R_I_STAR = 0.5
+MU0_I_STAR = 0.6
+I_STAR_REFERENCES = {"sea": "ml_AOS_IStar.nc", "none": "ml0_AOS_IStar.nc"}
 
 # The azimuths of the testbed put the specular plane at 0 degree where
 # SMART-G puts it at 180 degrees: the reference at phi compares with
@@ -179,7 +198,12 @@ VZA_MAX = {
 # 1.5 to 3 % of I and of Q and 2 to 5 % of U in AOS-III and AOS-IV;
 # in AOS-II, which the glint dominates, 1.5 to 2 % of I, but 5 % for
 # the sun at 60 degrees at the fast tier.
-REL_FLOOR = {"I": 1e-3, "II": 5e-3, "III": 5e-3, "IV": 5e-3}
+#
+# AOS-I*, measured on 2026-09-28 on an RTX 5070 Ti: fast tier, three
+# seeds, 0.26 to 1.64 with and without the sea, the mean of I within
+# 0.1 % of the testbed; slow tier 0.07 to 0.69, within 0.02 %. The bound
+# fails an I scaled by 0.3 to 0.5 % at both tiers.
+REL_FLOOR = {"I": 1e-3, "II": 5e-3, "III": 5e-3, "IV": 5e-3, "I*": 1e-3}
 ABS_FLOOR = 1e-5
 Z_RMS_MAX = {"fast": 2.0, "slow": 2.0}
 # **********************************************************************
@@ -292,6 +316,39 @@ def _run_aos(
     )
 
 
+def _z_rms(
+    run: np.ndarray, sd: np.ndarray, testbed: np.ndarray, floor: float,
+    label: str,
+) -> float:
+    """Compare a Stokes parameter with the testbed, see Z_RMS_MAX.
+
+    Parameters
+    ----------
+    run, sd, testbed : ndarray
+        The run, its standard deviation and the testbed values over the
+        compared directions, as 1-D arrays.
+    floor : float
+        The relative floor, REL_FLOOR of the model.
+    label : str
+        The case and the Stokes parameter, for the log.
+
+    Returns
+    -------
+    float
+        The root mean square of the differences in standard deviations,
+        NaN if a standard deviation is.
+    """
+    sigma = np.sqrt(sd**2 + (floor * testbed) ** 2 + ABS_FLOOR**2)
+    z = (run - testbed) / sigma
+    z_rms = float(np.sqrt(np.mean(z**2)))
+    bias = np.mean(run - testbed) / np.mean(np.abs(testbed))
+    logger.info(
+        f"{label}: z_rms={z_rms:.3f}, max |z|={np.max(np.abs(z)):.2f}, "
+        f"rel bias={bias:+.2e}"
+    )
+    return z_rms
+
+
 @pytest.mark.parametrize(
     ("table", "g_paper", "bb_ratio"),
     [(PHASE_TABLES[0], 0.95, 0.0108), (PHASE_TABLES[1], 0.97, 0.0058)],
@@ -351,20 +408,61 @@ def test_aos(s1d: Smartg, model: str, sza: int, tier: str) -> None:
             if stokes == "U":
                 run = run * U_SIGN
             sd = m[f"{stokes}_stdev_{level}"].values[:, ::-1, :][ok]
-            sigma = np.sqrt(
-                sd**2 + (REL_FLOOR[model] * testbed) ** 2 + ABS_FLOOR**2
-            )
-            z = (run[ok] - testbed) / sigma
-            z_rms = float(np.sqrt(np.mean(z**2)))
-            bias = np.mean(run[ok] - testbed) / np.mean(np.abs(testbed))
-            logger.info(
-                f"{label} - {stokes} {level}: z_rms={z_rms:.3f}, "
-                f"max |z|={np.max(np.abs(z)):.2f}, rel bias={bias:+.2e}"
+            z_rms = _z_rms(
+                run[ok], sd, testbed, REL_FLOOR[model],
+                f"{label} - {stokes} {level}",
             )
             # a NaN, from a direction without its standard deviation,
             # would pass a plain comparison
             if not z_rms <= Z_RMS_MAX[tier]:
                 failures.append(f"{stokes} {level}: z_rms {z_rms:.3f}")
+    assert not failures, (
+        f"{label}: above the z_rms bound of {Z_RMS_MAX[tier]}: "
+        + "; ".join(failures)
+    )
+
+
+@pytest.mark.parametrize("tier", TIERS)
+@pytest.mark.parametrize("surface", ["sea", "none"])
+def test_aos_i_star(s1d: Smartg, surface: str, tier: str) -> None:
+    """Compare AOS-I* with the testbed, with or without the sea.
+
+    Without the sea it is the Rayleigh benchmark of Natraj et al.
+    (2009), see TAU_R_I_STAR.
+    """
+    ref = xr.open_dataset(
+        AOS_DIR / "reference" / I_STAR_REFERENCES[surface]
+    )
+    theta = ref["Zenith angles"].values
+    phi = ref["Azimuth angles"].values
+    m = s1d.run(
+        wavelength=370.0, th_deg=float(np.degrees(np.arccos(MU0_I_STAR))),
+        atmosphere=Atm1D(
+            "afglms", tau_r=np.array([TAU_R_I_STAR]), tco3=0.0, no2=False
+        ),
+        surface=(
+            RoughSurface(wind=WIND, nh2o=NH2O, sur=1, brdf=True)
+            if surface == "sea" else None
+        ),
+        le=LocalEstimate(th_deg=theta, phi_deg=phi),
+        n_photons=N_PHOTONS[tier]["I*"], depol=0.0, output_layers=3,
+        stdev=True, seed=SEED, progress=False,
+    )
+    label = f"AOS-I*, {surface}, {tier}"
+    failures = []
+    for stokes in "IQU":
+        # one wavelength: (azimuth, zenith)
+        run = m[f"{stokes}_up (TOA)"].values[::-1, :]
+        if stokes == "U":
+            run = run * U_SIGN[0]
+        sd = m[f"{stokes}_stdev_up (TOA)"].values[::-1, :]
+        z_rms = _z_rms(
+            run.ravel(), sd.ravel(),
+            ref[f"{stokes}_up (TOA)"].values.ravel(), REL_FLOOR["I*"],
+            f"{label} - {stokes} up (TOA)",
+        )
+        if not z_rms <= Z_RMS_MAX[tier]:
+            failures.append(f"{stokes}: z_rms {z_rms:.3f}")
     assert not failures, (
         f"{label}: above the z_rms bound of {Z_RMS_MAX[tier]}: "
         + "; ".join(failures)
