@@ -914,6 +914,8 @@ final `v2.0.0` release.
       components on the union of their grids (`test_phase_mix.py`)
       and the two layouts of the phase file readers
       (`test_phase_readers.py`), mostly GPU-free
+    - The atmosphere-ocean testbed of Chowdhary et al. (2020), AOS-I to
+      AOS-IV, with a fast and a slow tier (`test_chowdhary_aos.py`)
   - New `v_sun` parameter of `CusBackward`: the sun direction of a backward
     object simulation can be given as a vector (for example
     `gc.ang2vec(sza, phi, vec_view='nadir')`) on the launching mode itself,
