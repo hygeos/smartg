@@ -1031,6 +1031,15 @@ final `v2.0.0` release.
     marker
 
 * Corrections
+  - Refuse phase matrices holding NaN or infinite values. The user tables
+    of `AerOPAC`, `Cloud`, `AerUser`, `Cloud3D`, `Aer3D` and `Hydrosol`,
+    the `prof_phases` of `Atm1D` and the `aer_phase_1d` of `Atm3D` raise
+    a `ValueError` naming the angles concerned, and so does `Smartg.run`
+    for a profile given ready-made. The kernel ran on such a table without
+    a word and biased the result: `xr.concat` of two tables on different
+    angles leaves NaN where one misses an angle of the other, which made
+    the AOS-IV case of the Chowdhary et al. (2020) testbed 4 to 12 % too
+    low. v1.2.0 did not check them either
   - Importing `smartg.iprt.phase3` compiled two SMART-G kernels, so that
     it needed a GPU, and so did collecting the test suite. They are now
     compiled by the first run that needs them; `S1DB` and `S1DB_PP` remain

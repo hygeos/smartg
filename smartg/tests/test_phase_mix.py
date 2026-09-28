@@ -378,6 +378,66 @@ def test_the_device_table_adopts_the_union_intact() -> None:
     )
 
 
+def _nan_matrix() -> xr.DataArray:
+    """Return the cloud's own matrix with a NaN at its sixth angle."""
+    user = _file_matrix(_cloud()).copy()
+    user.values[0, 5] = np.nan
+    return user
+
+
+def _nan_cloud3d(user: xr.DataArray) -> Cloud3D:
+    """Build a 3D cloud on a user matrix."""
+    return Cloud3D(
+        "wc", w_ref=WAVELENGTH,
+        ext_ref=np.array([5.0]), reff=np.array([10.0]),
+        cell_indices=np.array([[1, 1, 2]]),
+        phase=user.expand_dims(
+            wavelength_phase=[WAVELENGTH], reff=[10.0]
+        ).transpose("wavelength_phase", "reff", "nphamat", "theta_atm"),
+    )
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda user: _aerosol(phase=user),
+        lambda user: _cloud(phase=user),
+        _nan_cloud3d,
+        lambda user: Atm1D(
+            "afglms", prof_phases=(np.zeros((1, 1), dtype=int), [user])
+        ),
+    ],
+    ids=["AerOPAC", "Cloud", "Cloud3D", "Atm1D"],
+)
+def test_a_user_phase_with_nan_is_refused(build: Any) -> None:
+    """A NaN in a user phase matrix raises where the matrix enters.
+
+    It would not stop the kernel, which samples the scattering angles
+    from the table and weighs the local estimates with it, but bias
+    the run. xr.concat leaves such NaN when it aligns tables on
+    different angles: they made an AOS-IV run of the Chowdhary testbed
+    4 to 12 % too low without a word.
+    """
+    user = _nan_matrix()
+    angle = f"{user['theta_atm'].values[5]:g}"
+    with pytest.raises(
+        ValueError, match=f"infinite, at the scattering angles {angle} "
+    ):
+        build(user)
+
+
+def test_the_device_table_refuses_a_nan() -> None:
+    """A NaN reaching the device table raises, naming the matrix.
+
+    It covers the profiles given ready-made to Smartg.run, which reach
+    the kernel without any component checking their matrices.
+    """
+    pro = _atm([_aerosol()]).calc(WAV)
+    pro["phase_atm"].values[0, 0, 5] = np.nan
+    with pytest.raises(ValueError, match=r"profile \(phase_atm\[0\]\)"):
+        _calc_phase_host(pro, 181, 0.0279, "atm")
+
+
 @pytest.mark.parametrize(
     "truncation",
     [

@@ -69,6 +69,7 @@ from smartg.diff import diff1
 from smartg.interp import interp_1d_coord
 from smartg.phase import (
     NATIVE_THETA,
+    _check_finite_phase,
     _common_theta_grid,
     _grid_label,
     as_theta_grid,
@@ -352,6 +353,8 @@ class Hydrosol:
         self.acdom = acdom
         self.bbp_ratio = bbp_ratio
         self._phase = expand_phase_4_to_6(phase)
+        if self._phase is not None:
+            _check_finite_phase(self._phase, f"the {type(self).__name__}")
         if self._phase is None and is_native_theta(n_theta):
             raise ValueError(
                 f"{type(self).__name__} derives its phase matrices from "

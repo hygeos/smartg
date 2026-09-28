@@ -72,7 +72,11 @@ from smartg.objects3d import (
     Plane,
     Spheric,
 )
-from smartg.phase import THETA_GRID_KINDS, convert_phase_to_iparper
+from smartg.phase import (
+    THETA_GRID_KINDS,
+    _check_finite_phase,
+    convert_phase_to_iparper,
+)
 from smartg.phase import theta_grid as _make_theta_grid
 from smartg.progress import progress as make_progress
 from smartg.sensor import LOC_CODE, Sensor
@@ -4101,6 +4105,12 @@ def _calc_phase_host(
 
         # (ipha, nphamat, theta)
         phase = profile[name_phase][ipha, :, :].to_numpy()
+        _check_finite_phase(
+            phase,
+            f"the {'atmosphere' if kind == 'atm' else 'ocean'} profile "
+            f"({name_phase}[{ipha}])",
+            theta=profile.coords['theta_' + kind].to_numpy(),
+        )
 
         phase = convert_phase_to_iparper(phase)
 

@@ -828,6 +828,19 @@ def test_aer_user_sorts_its_angles() -> None:
         AerUser(*args, phase, hum, wavelength, np.full(181, 90.0))
 
 
+def test_aer_user_refuses_a_phase_with_nan() -> None:
+    """AerUser raises on a NaN in its phase matrix, naming the angle."""
+    theta = np.linspace(0.0, 180.0, 181)
+    pfn = _henyey_greenstein(theta)
+    zeros = np.zeros_like(pfn)
+    phase = np.stack([pfn, zeros, pfn, zeros])[None, None]
+    phase[0, 0, 0, 10] = np.nan
+    args = (np.full((1, 1), 0.2), np.full((1, 1), 0.9))
+    hum, wavelength = np.array([0.0]), np.array([550.0])
+    with pytest.raises(ValueError, match="scattering angles 10 degrees"):
+        AerUser(*args, phase, hum, wavelength, theta)
+
+
 GRID = np.array([100.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.0])
 
 

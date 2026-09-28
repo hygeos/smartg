@@ -1688,6 +1688,68 @@ def read_phase(
         )
 
 
+def _check_finite_phase(
+    phase: xr.DataArray | LUT | NDArray[np.floating[Any]],
+    owner: str,
+    theta: NDArray[np.floating[Any]] | None = None,
+) -> None:
+    """Raise if phase matrices hold NaN or infinite values.
+
+    The kernel samples the scattering angles from the tables and weighs
+    the local estimates with them: a NaN there does not stop a run, it
+    biases it. A table aligned on the angles of another one, as
+    ``xr.concat`` or ``xr.merge`` do with ``join='outer'``, gets NaN
+    wherever its own angles miss one of the other's.
+
+    Parameters
+    ----------
+    phase : DataArray or LUT or ndarray
+        The phase matrices, of any shape.
+    owner : str
+        What the matrices belong to, for the message, e.g.
+        ``"the Hydrosol"``.
+    theta : ndarray, optional
+        The scattering angles in degrees along the last axis of an
+        ndarray `phase`, to name the angles concerned. A DataArray
+        carries its own, on its ``theta*`` dimension.
+
+    Raises
+    ------
+    ValueError
+        If a value of `phase` is NaN or infinite.
+    """
+    if isinstance(phase, LUT):
+        phase = phase.to_xarray()
+    if isinstance(phase, xr.DataArray):
+        values = np.asarray(phase.values, dtype=np.float64)
+        dim = next(
+            (d for d in phase.dims if str(d).startswith("theta")), None
+        )
+        if dim is not None:
+            theta = phase[dim].values
+            values = np.moveaxis(values, phase.dims.index(dim), -1)
+        else:
+            theta = None
+    else:
+        values = np.asarray(phase, dtype=np.float64)
+    bad = ~np.isfinite(values)
+    if not bad.any():
+        return
+    where = ""
+    if theta is not None and np.shape(theta) == values.shape[-1:]:
+        angles = np.asarray(theta)[bad.reshape(-1, bad.shape[-1]).any(0)]
+        shown = ", ".join(f"{a:g}" for a in angles[:5])
+        more = ", ..." if len(angles) > 5 else ""
+        where = f", at the scattering angles {shown}{more} degrees"
+    raise ValueError(
+        f"The phase matrices of {owner} hold {int(bad.sum())} values "
+        f"that are NaN or infinite{where}. A table aligned on the "
+        "angles of another one, as xr.concat or xr.merge do with "
+        "join='outer', gets NaN where its own angles miss one of the "
+        "other's."
+    )
+
+
 def expand_phase_4_to_6(
     phase: xr.DataArray | LUT | None,
 ) -> xr.DataArray | None:

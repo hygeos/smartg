@@ -1190,6 +1190,22 @@ def _user_phase() -> xr.DataArray:
     )[0]
 
 
+def test_hydrosol_refuses_a_phase_with_nan() -> None:
+    """A NaN in a user phase matrix raises, naming the angles.
+
+    xr.concat aligns tables on the union of their angles and leaves
+    NaN where one misses an angle of the other: this made the AOS-IV
+    runs of the Chowdhary testbed 4 to 12 % too low without a word.
+    """
+    full = _user_phase()
+    half = full.isel(theta_oc=slice(None, None, 2))
+    pha = xr.concat(
+        [full, half], dim="wavelength_phase", join="outer"
+    )
+    with pytest.raises(ValueError, match="NaN or infinite, at the"):
+        Hydrosol(phase=pha, bp=0.1)
+
+
 def test_water1d_native_is_the_default_grid() -> None:
     """Water1D.calc keeps the angles of each hydrosol by default.
 

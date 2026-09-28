@@ -100,6 +100,7 @@ from smartg.diff import diff1
 from smartg.grid3d import Grid3D, create_1d_grid
 from smartg.phase import (
     NATIVE_THETA,
+    _check_finite_phase,
     _common_theta_grid,
     _grid_label,
     as_theta_grid,
@@ -515,6 +516,8 @@ class AerOPAC:
         if self._phase is not None and "stk" in self._phase.dims:
             # legacy phase inputs name the term dimension stk
             self._phase = self._phase.rename(stk="nphamat")
+        if self._phase is not None:
+            _check_finite_phase(self._phase, f"the {type(self).__name__}")
 
         if ssa is None:
             self.ssa = None
@@ -1568,6 +1571,8 @@ class Cloud(AerOPAC):
         if self._phase is not None and "stk" in self._phase.dims:
             # legacy phase inputs name the term dimension stk
             self._phase = self._phase.rename(stk="nphamat")
+        if self._phase is not None:
+            _check_finite_phase(self._phase, f"the {type(self).__name__}")
 
     @staticmethod
     def list() -> list[str]:
@@ -1672,6 +1677,7 @@ class AerUser(AerOPAC):
                 "The scattering angles theta must be distinct, got "
                 "the same angle more than once."
             )
+        _check_finite_phase(phase, "the AerUser", theta=theta)
         ext = aod / (
             z_mix * (np.exp(-h_mix_min / z_mix) - np.exp(-h_mix_max / z_mix))
         )
@@ -1973,6 +1979,7 @@ class _Comp3DFile(Comp3D):
             # the readers keep the terms of the file: complete the 4
             # of spherical particles into 6, as the bulk file path of
             # get_phase does
+            _check_finite_phase(phase, f"the {type(self).__name__}")
             self.phase = expand_phase_4_to_6(phase)
 
     def _normalize_param(
@@ -2807,6 +2814,9 @@ class Atm1D(Atmosphere):
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
         self.prof_phases = prof_phases
+        if prof_phases is not None:
+            for pha in prof_phases[1]:
+                _check_finite_phase(pha, "prof_phases")
         # store attribute using lowercase name for consistency
         self.rh_cst = rh_cst
         # 3D mode: only enabled by the private _Atm3DBackend used by
@@ -4256,6 +4266,9 @@ class _Atm3DBackend(Atm1D):
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
         self.prof_phases = prof_phases
+        if prof_phases is not None:
+            for pha in prof_phases[1]:
+                _check_finite_phase(pha, "prof_phases")
         self.rh_cst = None
         self.opt3d = True
         self.cells = cells
@@ -4448,6 +4461,8 @@ class Atm3D(Atmosphere):
         self.aer_ext_1d = aer_ext_1d
         self.aer_ssa_1d = aer_ssa_1d
         self.aer_phase_1d = aer_phase_1d
+        if aer_phase_1d is not None:
+            _check_finite_phase(aer_phase_1d[1], "aer_phase_1d")
 
         if len(comp_3d) == 1:
             # cell indices on the boundary-extended grid
