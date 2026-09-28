@@ -376,6 +376,29 @@ print(' GPU time: ', mc.attrs['kernel time (s)'], 's')
 # The ALIS method is described in <br>
 # Emde, C., Buras, R., and Mayer, B.: ALIS: An efficient method to
 # compute high spectral resolution polarized solar radiances using the Monte Carlo approach, J. Quant. Spectrosc. Ra., 112, 1622–1631, 2011.
+#
+# **Polarization.** ALIS follows each photon at one wavelength, drawn
+# among those of the run, and weighs its path at the other ones with a
+# scalar: the ratio of their absorption and scattering coefficients
+# and of their phase functions. I is exact. Q, U and V keep the
+# polarization of the wavelength drawn: the reweighting of each path
+# by the absorption, which shapes the polarization inside a gas band,
+# is exact, but a change of the polarizing properties of the
+# scatterers across the band (the share of the molecular scattering,
+# the particle phase matrices) is missed. Over the 3 nm of the O2-A
+# band of this notebook they hardly change; over 500 to 550 nm below a
+# sea surface with 0.3 mg/m3 of chlorophyll, Q and U are off by 5 to
+# 10 % at the ends of the band (see
+# `smartg/tests/test_self_consistency.py`). The same holds for the
+# photon histories post-processed below, and for the Jacobians of
+# `n_jac` with respect to a scattering property.
+#
+# A fix, not implemented: carry one Stokes vector per low resolution
+# wavelength (`n_low` of them) in place of the scalar weight, scatter
+# each with the phase matrix of its own wavelength, and count these
+# vectors at the local estimates in place of the Stokes vector of the
+# wavelength drawn times the scalar. It multiplies the photon state
+# and the matrix products of each scattering by `n_low`.
 
 # %%
 # %%time

@@ -321,6 +321,16 @@ def test_equivalence_theorem(
 # 10 % at the ends of the band (up (0-), 2026-09-28), above the water
 # they are not. So I is compared at every level, and Q, U and V above
 # the water only.
+#
+# A fix, not implemented: carry one Stokes vector per low resolution
+# wavelength (n_low of them) in place of the scalar weight_sca, scatter
+# each with the phase matrix of its own wavelength, as the scalar now
+# takes the ratio of their phase functions, and count at the local
+# estimates these vectors, interpolated between the low resolution
+# wavelengths, in place of the Stokes vector of the wavelength drawn
+# times the scalar. It multiplies the photon state and the matrix
+# products of each scattering by n_low. Q, U and V could then be
+# compared at every level.
 ALIS_WAVELENGTHS = np.linspace(500.0, 550.0, 6)
 ALIS_LE = LocalEstimate(th_deg=[0.0, 30.0, 45.0, 60.0],
                         phi_deg=[0.0, 90.0, 180.0])
@@ -384,7 +394,9 @@ def test_alis_with_water(kernels: dict[str, Smartg], tier: str) -> None:
 # compared above the water, for the ozone only: the Jacobians of Q and
 # U with respect to the chlorophyll, which changes the share of the
 # molecular scattering in the water, were 2 to 2.8 standard deviations
-# off above the water at 5e7 photons (2026-09-28).
+# off above the water at 5e7 photons (2026-09-28). The fix proposed in
+# the ALIS section, with one Stokes vector per low resolution
+# wavelength of each profile, would cover the Jacobians as well.
 JACOBIAN_WAVELENGTHS = np.array([500.0, 525.0, 550.0])
 TCO3, D_TCO3 = 300.0, 150.0
 CHL, D_CHL = 0.3, 0.3

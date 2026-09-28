@@ -472,6 +472,12 @@ def test_validation_artdeco(
         )
 
     #####################
+    # Only I is compared. ALIS weighs the other wavelengths with a
+    # scalar, which is exact for I, while Q, U and V keep the
+    # polarization of the wavelength drawn: right as long as the
+    # scattering properties do not change across the band, as over
+    # this O2-A band, where only the absorption does (see
+    # test_self_consistency.py for the limitation and a fix)
     i_valid = data_valid[:, 1]
 
     # Mask for "significant" reference values, where the relative
