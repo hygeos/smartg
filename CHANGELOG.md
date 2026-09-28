@@ -923,6 +923,11 @@ final `v2.0.0` release.
       with a fast and a slow tier (`test_kokhanovsky_natraj.py`)
     - The IPRT cases A3, A4 and A6 and the realistic profiles B1, B2 and
       B3 join A1, A2 and A5 in `test_quick_iprt_phase_a.py`
+    - The self-consistency checks of the validation notebook of the
+      SMART-G paper: the equivalence theorem (`beer=0` against `beer=1`)
+      in the three move modes, ALIS against the standard run with
+      water, and the ALIS Jacobians against finite differences, with a
+      fast and a slow tier (`test_self_consistency.py`)
   - New `v_sun` parameter of `CusBackward`: the sun direction of a backward
     object simulation can be given as a vector (for example
     `gc.ang2vec(sza, phi, vec_view='nadir')`) on the launching mode itself,
