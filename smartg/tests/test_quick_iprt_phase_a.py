@@ -1,16 +1,19 @@
-"""Validation of SMART-G on the 1D cases of the IPRT phase A.
+"""Validation of SMART-G on the 1D cases of the IPRT phases A and B.
 
 The cases A1 (a Rayleigh layer), A2 (a Rayleigh layer on a Lambertian
 surface) and A5 (a water cloud layer, in the principal plane and in
 the almucantar) are run with SMART-G, converted to the IPRT phase A
-ASCII format, and compared with the MYSTIC results.
+ASCII format, and compared with the MYSTIC results; so are A3 and A4
+(aerosol layers), A6 (a Rayleigh layer over a glittering sea) and the
+realistic profiles B1, B2 and B3, see EXTRA_CASES.
 
-Tested with the following GPUs: 3090
+Tested with the following GPUs: 3090, RTX 5070 Ti
 """
 
 import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
@@ -25,14 +28,17 @@ from smartg.atmosphere import Atm1D
 from smartg.config import DIR_AUXDATA
 from smartg.iprt.common import compute_deltam, group_iquv
 from smartg.iprt.phase_a import (
+    PolarView,
+    compare_polar_iprt,
     convert_sgout_to_iprtout,
+    read_iprt_output,
     select_and_plot_polar_iprt,
     select_iprt_iquv,
 )
-from smartg.phase import calc_iphase, read_phase
+from smartg.phase import calc_iphase, get_prof_phases, read_phase
 from smartg.sensor import Sensor
 from smartg.smartg import LocalEstimate, Smartg
-from smartg.surface import LambSurface
+from smartg.surface import LambSurface, RoughSurface
 from smartg.view import plot_iquv_comparison
 from smartg.xarray import drop_axes
 
@@ -1638,3 +1644,248 @@ def test_a5_al(request: pytest.FixtureRequest, s1df: Smartg) -> None:
         )
 
     _check_against_reference(smartg_a5_al, smartg_a5_al_ref, "A5_al")
+
+
+# ***************** the other cases of phase A and B ******************
+# The other 1D cases of the IPRT, in the fast tier: one forward run of
+# 1e7 photons each, as A2. A3 and A4 are aerosol layers, of a
+# spherical particle (waso.mie.cdf) and of spheroids (the six terms of
+# sizedistr_spheroid.cdf); A6 is a Rayleigh layer over the Cox and
+# Munk BRDF of a 2 m/s sea with shadowing; B1, B2 and B3 are realistic
+# profiles: Rayleigh at 450 nm, Rayleigh and absorption at 325 nm, and
+# Rayleigh, absorption and the spheroids at 350 nm. For B the 1 km
+# level and the view zenith angles of 85 and 95 degrees are left out,
+# as in the IPRT paper, and the MYSTIC files label with a
+# depolarization of 0 the runs made with 0.03. B4, a cloud, is noisy
+# at this photon count and is left out. Each case is checked as A2:
+# delta_m against MYSTIC within the band of the saved SMART-G
+# reference, and the z_rms against that reference, which was run with
+# REF_SEED, so that the z_rms measures the Monte Carlo noise rather
+# than repeat it.
+#
+# The glint of A6 makes its noise heavy tailed: over a few local
+# estimates of large weight, the mean radiance of a run of 1e7 photons
+# moves by 0.5 % from one seed to the next, which the standard
+# deviations the run estimates do not show. Its reference is therefore
+# run with EXTRA_REF_PHOTONS, and agrees then with MYSTIC to 0.09 %
+# (I), 0.14 % (Q) and 0.22 % (U), as the IPRT notebook found; the band
+# takes the standard deviation of a run of N_EXTRA photons,
+# sqrt(EXTRA_REF_PHOTONS / N_EXTRA) times that of the reference.
+#
+# Measured on 2026-09-28 on an RTX 5070 Ti, with SEED and two other
+# seeds (five for A6): every delta_m within its band, and the z_rms
+# against the reference below 1.59 (A3), 1.10 (A4), 1.21 (A6), 1.01
+# (B1), 1.12 (B2) and 1.16 (B3). The runs take 50 s of kernel.
+OPT_PROP = DIR_AUXDATA / "IPRT" / "phaseA" / "opt_prop"
+REF_DIR = DIR_AUXDATA / "IPRT" / "phaseA" / "smartg_ref_res"
+REF_SEED = 100_000_000
+N_EXTRA = 1e7
+EXTRA_REF_PHOTONS = {"A6": 1e8}
+EXTRA_CASES = {
+    # sza, depolarization of the run, top of the output, depolarization
+    # of the MYSTIC file
+    "A3": (40.0, 0.0, 1.0, 0.0),
+    "A4": (40.0, 0.0, 1.0, 0.0),
+    "A6": (45.0, 0.03, 1.0, 0.03),
+    "B1": (60.0, 0.03, 30.0, 0.03),
+    "B2": (60.0, 0.03, 30.0, 0.0),
+    "B3": (30.0, 0.03, 30.0, 0.0),
+}
+
+
+def _profile_column(fname: str) -> tuple[np.ndarray, np.ndarray]:
+    """Read an IPRT profile file of opt_prop.
+
+    Returns
+    -------
+    (ndarray, ndarray)
+        The altitudes in km, from the top, and the optical thickness
+        of each layer as a (1, n) array.
+    """
+    table = pd.read_csv(
+        OPT_PROP / fname, header=None, dtype=float, skiprows=1, sep=r"\s+"
+    ).values
+    return table[:, 0], table[:, 1][None, :]
+
+
+def _aerosol_atmosphere(
+    z: np.ndarray, mol_sca: np.ndarray, mol_abs: np.ndarray,
+    aer_ext: np.ndarray, ssa: float, fname: str, wavelength: float,
+    n_theta: int | None,
+) -> tuple[xr.Dataset, int]:
+    """Build a profile with a tabulated aerosol, as the IPRT notebook.
+
+    Returns
+    -------
+    (Dataset, int)
+        The profile, and the number of angles of its phase matrix.
+    """
+    # as the IPRT notebook: the one layer cases read the matrix on their
+    # layer, B3 reads it as the file holds it
+    if z.size == 2:
+        pha = read_phase(
+            fname=OPT_PROP / fname,
+            wavelength_phase=np.array([wavelength]), pfgrid=z,
+        )
+    else:
+        pha = read_phase(fname=OPT_PROP / fname)
+    if n_theta is not None:
+        pha = pha.interp(
+            theta_atm=np.linspace(0.0, 180.0, n_theta), method="linear"
+        )
+    atmosphere = Atm1D(
+        "afglt", grid=z, prof_ray=mol_sca, prof_abs=mol_abs,
+        prof_aer=(aer_ext, np.full_like(aer_ext, ssa)),
+        prof_phases=get_prof_phases(pha, np.array([wavelength]), z),
+    ).calc(np.array([wavelength]), phase=False)
+    return atmosphere, pha.shape[-1]
+
+
+def _extra_setup(case: str) -> dict[str, Any]:
+    """Return the run keywords of an extra case of the IPRT phase A."""
+    layer = np.array([1.0, 0.0])
+    zero = np.zeros((1, 2))
+    kw: dict[str, Any] = {"surface": None, "n_loop": 1e6}
+    if case in ("A3", "A4"):
+        ext = np.array([[0.0, 0.2]])
+        fname, ssa, n_theta = (
+            ("waso.mie.cdf", 0.975683, None) if case == "A3"
+            else ("sizedistr_spheroid.cdf", 0.787581, 18001)
+        )
+        kw["atmosphere"], kw["n_icdf"] = _aerosol_atmosphere(
+            layer, zero, zero, ext, ssa, fname, 350.0, n_theta
+        )
+        kw["wavelength"] = 350.0
+        if case == "A4":
+            kw["n_loop"] = 1e5
+    elif case == "A6":
+        kw["atmosphere"] = Atm1D(
+            "afglt", grid=layer, prof_ray=np.array([[0.0, 0.1]]),
+            prof_abs=zero,
+        ).calc(550.0)
+        kw["surface"] = RoughSurface(
+            wind=2.0, brdf=True, wave_shadow=True, nh2o=1.33
+        )
+        kw["wavelength"] = 550.0
+    elif case in ("B1", "B2"):
+        wavelength = 450.0 if case == "B1" else 325.0
+        z, sca = _profile_column(f"tau_rayleigh_{wavelength:.0f}.dat")
+        absorption = (
+            np.zeros_like(sca) if case == "B1"
+            else _profile_column("tau_molabs_325.dat")[1]
+        )
+        kw["atmosphere"] = Atm1D(
+            "afglt", grid=z, prof_ray=sca, prof_abs=absorption
+        ).calc(wavelength)
+        kw["wavelength"] = wavelength
+    else:  # B3
+        z, sca = _profile_column("tau_rayleigh_350.dat")
+        kw["atmosphere"], _ = _aerosol_atmosphere(
+            z, sca, _profile_column("tau_molabs_350.dat")[1],
+            _profile_column("tau_aerosol.dat")[1], 0.787581,
+            "sizedistr_spheroid.cdf", 350.0, 18001,
+        )
+        kw["wavelength"] = 350.0
+    return kw
+
+
+def _run_extra(
+    smartg: Smartg, case: str, seed: int = SEED,
+    n_photons: float = N_EXTRA, fname: Path | None = None,
+) -> tuple[np.ndarray, xr.Dataset]:
+    """Run an extra case forward and convert it to the IPRT format.
+
+    Parameters
+    ----------
+    smartg : Smartg
+        The forward kernel.
+    case : str
+        A key of EXTRA_CASES.
+    seed : int, optional
+        The seed, REF_SEED for the saved references.
+    n_photons : float, optional
+        The number of photons.
+    fname : Path, optional
+        Where to write the IPRT file, a temporary file by default.
+
+    Returns
+    -------
+    (ndarray, Dataset)
+        The records of the IPRT file and the SMART-G output.
+    """
+    sza, depol, top, _ = EXTRA_CASES[case]
+    vza = np.arange(100.0, 185.0, 5.0)
+    vaa = np.arange(0.0, 185.0, 5.0)
+    th = 180.0 - vza
+    th[th == 0] = 1e-6  # avoid problem due to special case of 0
+    m = smartg.run(
+        th_deg=sza, ph_deg=180.0, n_photons=n_photons,
+        le=LocalEstimate(th_deg=th, phi_deg=-vaa), output_layers=7,
+        xblock=64, xgrid=1024, beer=1, depol=depol, stdev=True,
+        seed=seed, progress=False, **_extra_setup(case),
+    )
+    with TemporaryDirectory() as tmpdir:
+        path = fname if fname is not None else Path(tmpdir) / "run.dat"
+        # (Forward, U must be multiplied by -1)
+        convert_sgout_to_iprtout(
+            datasets=[m, m], u_signs=[-1, -1], case_name=case,
+            depols=[depol, depol], altitudes=[0.0, top], szas=[sza, sza],
+            saas=[0.0, 0.0], vzas=[180.0 - vza, vza], vaas=[vaa, vaa],
+            fname=path, output_layer=["_down (0+)", "_up (TOA)"],
+        )
+        return read_iprt_output(path), m
+
+
+def _extra_views(case: str) -> list[PolarView]:
+    """Return the polar views compared with MYSTIC."""
+    sza, depol, top, _ = EXTRA_CASES[case]
+    vza = np.arange(100.0, 185.0, 5.0)
+    if case.startswith("A"):
+        return [PolarView(0.0, depol, sza, 0.0),
+                PolarView(top, depol, sza, 0.0, inv_thetas=True)]
+    return [PolarView(0.0, depol, sza, 0.0, thetas=np.round(180.0 - vza)),
+            PolarView(top, depol, sza, 0.0, inv_thetas=True,
+                      thetas=np.round(vza))]
+
+
+def _extra_deltam(case: str, mystic: np.ndarray, run: np.ndarray) -> Any:
+    """Return the delta_m of I, Q, U and V of a run against MYSTIC."""
+    return compare_polar_iprt(
+        mystic, run, case, _extra_views(case), change_u_sign=True,
+        change_v_sign=True, ref_depol=EXTRA_CASES[case][3], sym=True,
+        plot_ref=False, plot_mod=False, plot_diff=False, print_res=False,
+    )
+
+
+@pytest.mark.parametrize("case", list(EXTRA_CASES))
+def test_phase_a_b_extra(s1df: Smartg, case: str) -> None:
+    """IPRT A3, A4, A6, B1, B2 and B3, see EXTRA_CASES."""
+    run, _ = _run_extra(s1df, case)
+    mystic = read_iprt_output(
+        DIR_AUXDATA / "IPRT" / "phaseA" / "mystic_res"
+        / f"iprt_case_{case.lower()}_mystic.dat"
+    )
+    ref = read_iprt_output(
+        REF_DIR / "iprt_output_format"
+        / f"iprt_case_{case.lower()}_smartg_ref.dat"
+    )
+    delta_m = _extra_deltam(case, mystic, run)
+    bands = [_extra_deltam(case, mystic, ref)]
+    # the standard deviation of a run of N_EXTRA photons
+    scale = np.sqrt(EXTRA_REF_PHOTONS.get(case, N_EXTRA) / N_EXTRA)
+    for sign in (1.0, -1.0):
+        shifted = ref.copy()
+        shifted[:, 6:10] += sign * STDFAC * scale * ref[:, 10:14]
+        bands.append(_extra_deltam(case, mystic, shifted))
+    band = np.max(bands, axis=0)
+    logger.info(
+        f"{case} - delta_m I={delta_m[0]:.3f}; Q={delta_m[1]:.3f}; "
+        f"U={delta_m[2]:.3f}; V={delta_m[3]:.3f} (band I={band[0]:.3f}; "
+        f"Q={band[1]:.3f}; U={band[2]:.3f}; V={band[3]:.3f})"
+    )
+    for istk, stk in enumerate("IQUV"):
+        assert delta_m[istk] <= band[istk], (
+            f"{case}: delta_m of {stk} {delta_m[istk]:.5f}, above the "
+            f"band of the reference {band[istk]:.5f}"
+        )
+    _check_against_reference(run, ref, case)

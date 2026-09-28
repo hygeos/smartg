@@ -281,7 +281,7 @@ The arguments `--html=test_report.html --self-contained-html` generate an html r
 
 Four files compare SMART-G with the [IPRT](https://www.meteo.physik.uni-muenchen.de/~iprt/doku.php?id=start) (International Polarized Radiative Transfer) model intercomparison: one for phase A, two for phase B and one for phase 3. The durations below were measured on a Ryzen 9 5950X with a GeForce RTX 5070 Ti.
 
-**Phase A** — `test_quick_iprt_phase_a.py` runs the 1D cases A1 (a Rayleigh layer), A2 (a Rayleigh layer over a Lambertian surface) and A5 (a water cloud, in the principal plane and in the almucantar), and compares them with MYSTIC. Four tests, about 2 min 30, no slow tier.
+**Phase A** — `test_quick_iprt_phase_a.py` runs the 1D cases A1 (a Rayleigh layer), A2 (a Rayleigh layer over a Lambertian surface), A3 and A4 (aerosol layers), A5 (a water cloud, in the principal plane and in the almucantar) and A6 (a Rayleigh layer over a glittering sea), with the realistic profiles B1, B2 and B3 of phase B, and compares them with MYSTIC. Ten tests, about 3 min 30, no slow tier.
 
 **Phase B** — `test_iprt_phase_b_c2.py` (cubic cloud) and `test_iprt_phase_b_c3.py` (cumulus cloud with aerosols) check the 3D atmosphere mode (`opt3d=True`) against the MYSTIC reference. Reproducing the benchmark photon counts takes hours, so each of their tests exists in two tiers: a fast one, run by default, and a slow one selected with `-m slow`.
 

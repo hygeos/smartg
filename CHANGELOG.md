@@ -921,6 +921,8 @@ final `v2.0.0` release.
     - The Rayleigh, aerosol and cloud benchmarks of Kokhanovsky et al.
       (2010) and the thick Rayleigh slabs of Natraj and Hovenier (2012),
       with a fast and a slow tier (`test_kokhanovsky_natraj.py`)
+    - The IPRT cases A3, A4 and A6 and the realistic profiles B1, B2 and
+      B3 join A1, A2 and A5 in `test_quick_iprt_phase_a.py`
   - New `v_sun` parameter of `CusBackward`: the sun direction of a backward
     object simulation can be given as a vector (for example
     `gc.ang2vec(sza, phi, vec_view='nadir')`) on the launching mode itself,
