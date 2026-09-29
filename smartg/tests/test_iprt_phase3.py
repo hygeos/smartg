@@ -37,15 +37,23 @@ N_PHOTONS = {"fast": 1e6, "slow": 1e8}
 # The cases, by the suffix of their case_ function in the module and
 # of their output file iprt_phase3_<case>.nc. The aerosol and cloud
 # cases (D3, D4, D5, E3, E4, E5) run on the native scattering angles
-# of their files, the saved results were computed on 18001 equally
-# spaced angles: the two agree within the Monte Carlo noise.
+# of their files; the saved results of D3, D4 and D5 were computed on
+# 18001 equally spaced angles, those of E3, E4 and E5 on the native
+# ones (see REF_DIR): the two agree within the Monte Carlo noise.
 CASE_NAMES = ["d1", "d2", "d3", "d4", "d5", "d6",
               "e1", "e2", "e3", "e4", "e5"]
 
-# Saved results: 1e8 photons per viewing direction, the v4 run of
-# October 2025 (res_iprt_phase3_1e8photons_v4), in the IPRT output
-# format written by to_iprt_output: radiance and std on (zout, sza,
-# saa, vza, vaa, stokes).
+# Saved results: 1e8 photons per viewing direction, in the IPRT
+# output format written by to_iprt_output: radiance and std on (zout,
+# sza, saa, vza, vaa, stokes). D1 to E2 are the v4 run of October 2025
+# (res_iprt_phase3_1e8photons_v4). E3, E4 and E5 were run again on
+# 2026-09-29, at commit 68849f7 with the seed 100 000 000, once the
+# device phase tables were normalized as the kernel reads them
+# (021637e): the local estimates had carried the excess area of their
+# tables on the kernel's interpolation, 0.36 % for the desert of E3
+# and E4 (its forward peak on a 0.5 degree grid) and 1.03 % for the
+# ice of E5 (a file normalized in single precision, and its peak), and
+# I at BOA went down by 0.26, 0.24 and 1.06 %.
 REF_DIR = DIR_AUXDATA / "IPRT" / "phase3" / "smartg_ref_res"
 
 # Both the test run and the saved result estimate their Monte Carlo
@@ -88,16 +96,19 @@ Z_OUTLIER = 3.0
 # 100 times larger than in the Rayleigh cases, and those directions
 # move the mean.
 #
-# Fast tier, measured with SEED and with a second seed (4321). The
-# fractions are the same with both seeds to 0.01: at most 0.099 (E3,
-# E4 and E1 at TOA), 0.109 (D5) and 0.232 (E5 at TOA). The biases are
-# below 7.5e-4 except D5 (1.4e-3), E5 (5.1e-3 on U at TOA) and D6
-# (5.1e-3 on I at TOA with the second seed, 5.7e-4 with SEED: the
+# Fast tier, measured with SEED and with a second seed (4321), last on
+# 2026-09-29 against the E3, E4 and E5 results run again. The
+# fractions are the same with both seeds to 0.01: at most 0.098 (E3,
+# E4 and E1 at TOA), 0.108 (D5) and 0.231 (E5 at TOA). The biases are
+# below 4.5e-4 except D5 (6.8e-4), E5 (5.4e-3 on U at TOA) and D6
+# (5.1e-3 on I at TOA with the second seed, 5.6e-4 with SEED: the
 # glint). The tolerances leave a margin of about 1.5 on the fractions
-# and 3 on the biases. Of the 7.5e-4, D3 keeps -7e-4 with both seeds
-# (mean z -0.27 at BOA): the waso.mie.cdf table has 68 native angles,
-# on which its normalisation integral differs slightly from the one
-# on the 18001 angles of the saved result.
+# and 3 on the biases. D3 kept -7e-4 with both seeds (mean z -0.27 at
+# BOA) until the device phase tables were normalized as the kernel
+# reads them (021637e): its waso.mie.cdf table, normalized with the
+# trapezoidal rule in cos(theta) on its 68 native angles, read 0.066 %
+# light on the kernel's interpolation, where the 18001 angles of the
+# saved result did not. It is now at 1.3e-4 at most.
 #
 # Slow tier, measured on 2026-09-19 over the whole tier, 6h42. The
 # estimate it replaces assumed that an equal photon count on both
@@ -106,32 +117,33 @@ Z_OUTLIER = 3.0
 # below that, at 0.0024 to 0.0055 everywhere but D3, and the biases at
 # 6e-6 to 7.3e-5: the saved results and the run agree much better than
 # the fast tier can show, and the entries below are tightened to match
-# rather than widened. At this photon count the run is converged
-# enough to be machine independent: D3 rerun on the RTX 4090 that
-# produced the saved results gives the same bias to three digits,
-# -6.48e-4 against -6.47e-4, and the same fraction to 0.004. The
-# margins are taken on top of that.
+# rather than widened. Measured again on 2026-09-28 after 021637e,
+# against the E3, E4 and E5 results run again: the fractions at 0.0003
+# to 0.0059 everywhere, D3 included, and the biases at 5e-6 to 7.8e-5,
+# E5 apart (2.5e-3 on I at TOA, 1.0e-3 and 1.9e-3 on two runs before
+# 021637e). At this photon count the run is converged enough to be
+# machine independent: D3 rerun on the RTX 4090 that produced the
+# saved results gave the same bias to three digits, -6.48e-4 against
+# -6.47e-4 before 021637e, and the same fraction to 0.004. The margins
+# are taken on top of that.
 #
-# D3 is the exception and takes its own entries. What it carries is
-# neither skew nor a machine difference but the systematic
-# normalisation difference described above, which a higher photon
-# count resolves instead of averaging away: its bias stays at
-# -6.6e-4, where the fast tier already saw -7e-4, but its sigma
-# shrinks until 0.1998 of the directions sit beyond 3 sigma. D6
-# keeps a wide bias entry although it measured
-# 7.3e-5, because its glint is what moves most between seeds at the
-# fast tier, by a factor 9.
+# D3 took its own entries until 021637e: the normalisation difference
+# described above is systematic, and a higher photon count resolved it
+# instead of averaging it away, a bias of -6.6e-4 with 0.1998 of the
+# directions beyond 3 sigma. It now measures 1.4e-5 and 0.0024 to
+# 0.0059, and takes the default entries. D6 keeps a wide bias entry
+# although it measured 7.3e-5, because its glint is what moves most
+# between seeds at the fast tier, by a factor 9.
 #
-# Margins on the worst measured value: 7 on the default bias, 2.4 to
-# 3.5 on the case ones, 9 on the default fraction and 1.5 on D3.
+# Margins on the worst measured value: 7 on the default bias, 2 (E5)
+# to 27 on the case ones and 8.5 on the default fraction.
 MEAN_TOL = {
     "fast": {"*": 0.003, "d5": 0.005, "d6": 0.015, "e5": 0.015},
-    "slow": {"*": 0.0005, "d3": 0.002, "d5": 0.002, "d6": 0.002,
-             "e5": 0.005},
+    "slow": {"*": 0.0005, "d5": 0.002, "d6": 0.002, "e5": 0.005},
 }
 FRAC_TOL = {
     "fast": {"*": 0.15, "d5": 0.20, "e5": 0.35},
-    "slow": {"*": 0.05, "d3": 0.30},
+    "slow": {"*": 0.05},
 }
 
 # Figures of the html report: the Stokes parameters of the test run at

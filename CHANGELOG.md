@@ -1061,7 +1061,13 @@ final `v2.0.0` release.
     rest of the phase function now pays for it: the ice cloud of
     `test_phase_grid_ice.py` on 451 equally spaced angles went from +3 %
     to -1.6 % in reflection and from +9 % to +4.1 % in transmission,
-    against a fine grid. The error was already in v1.2.0
+    against a fine grid. The error was already in v1.2.0. The IPRT
+    phase 3 cases move with it: D3 loses the -0.07 % its 68 angle table
+    carried against its saved result, and E3, E4 and E5 go down by 0.26,
+    0.24 and 1.06 % at the ground, their tables overstating the forward
+    peak on the kernel's interpolation (the desert of E3 and E4 on its
+    0.5 degree grid, the ice of E5 in a file normalized in single
+    precision); their saved results were run again
   - Refuse phase matrices holding NaN or infinite values. The user tables
     of `AerOPAC`, `Cloud`, `AerUser`, `Cloud3D`, `Aer3D` and `Hydrosol`,
     the `prof_phases` of `Atm1D` and the `aer_phase_1d` of `Atm3D` raise
