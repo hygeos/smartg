@@ -605,6 +605,9 @@ def _run_and_save(
     theta_grid: str | None,
     seed: int,
     angles: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
+    n_loop: float | None = None,
+    xblock: int = 64,
+    xgrid: int = 1024,
 ) -> None:
     """Run SMART-G with the settings of every phase 3 case and save it.
 
@@ -641,11 +644,18 @@ def _run_and_save(
     angles : tuple of 3 ndarray, optional
         The (sza, vaa, vza) angles to reshape the output with
         reshape_sza_vaa_vza. By default the output is saved as is.
+    n_loop : float, optional
+        Number of photons per kernel launch, by default n_photons: one
+        launch per viewing direction.
+    xblock, xgrid : int
+        The number of threads per block and of blocks of a kernel
+        launch.
     """
     m = sg.run(wavelength=wavelength, n_photons=n_directions * n_photons,
-               n_loop=n_photons, atmosphere=pro, sensor=sensors,
-               output_layers=1, le=le, surface=surface, xblock=64,
-               xgrid=1024, beer=1, depol=depol, reflectance=False,
+               n_loop=n_photons if n_loop is None else n_loop,
+               atmosphere=pro, sensor=sensors, output_layers=1, le=le,
+               surface=surface, xblock=xblock, xgrid=xgrid, beer=1,
+               depol=depol, reflectance=False,
                earth_radius=earth_radius, stdev=True, progress=True,
                n_icdf=n_icdf, theta_grid=theta_grid, seed=seed)
     if angles is not None:
@@ -672,6 +682,9 @@ def run_sim(
     is_e6: bool = False,
     theta_grid: str | None = None,
     seed: int = -1,
+    n_loop: float | None = None,
+    xblock: int = 64,
+    xgrid: int = 1024,
 ) -> None:
     """Run the BOA and TOA simulations of a case and save them.
 
@@ -710,6 +723,12 @@ def run_sim(
         The theta_grid argument of Smartg.run.
     seed : int
         Seed of the random numbers, -1 for one taken from the clock.
+    n_loop : float, optional
+        Number of photons per kernel launch, by default n_photons: one
+        launch per viewing direction.
+    xblock, xgrid : int
+        The number of threads per block and of blocks of a kernel
+        launch, see case_d1.
     """
     sg = _kernel(pp)
     run_radius = EARTH_RADIUS if pp else earth_radius
@@ -719,7 +738,8 @@ def run_sim(
               "wavelength": wavelength, "le": le, "surface": surface,
               "pro": pro, "depol": depol, "earth_radius": run_radius,
               "n_icdf": n_icdf, "theta_grid": theta_grid, "seed": seed,
-              "angles": (sza, vaa, vza)}
+              "angles": (sza, vaa, vza), "n_loop": n_loop,
+              "xblock": xblock, "xgrid": xgrid}
 
     if boa_path is not None and not is_e6:
         sensors = get_d1_to_e5_boa_sensors(vza, phi, earth_radius)
@@ -1007,6 +1027,9 @@ def _run_spherical_case(
     earth_radius: float = EARTH_RADIUS,
     pp: bool = False,
     theta_grid: str | None = None,
+    n_loop: float | None = None,
+    xblock: int = 64,
+    xgrid: int = 1024,
 ) -> None:
     """Run one of the cases D1 to E5 and write its IPRT output file.
 
@@ -1036,6 +1059,8 @@ def _run_spherical_case(
         Run in plane parallel geometry.
     theta_grid : str, optional
         The theta_grid argument of Smartg.run.
+    n_loop, xblock, xgrid
+        See case_d1.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1053,7 +1078,7 @@ def _run_spherical_case(
                 toa_path if run_toa else None, sza, vza, VAA, z,
                 wavelength, le, surface, pro, n_photons,
                 earth_radius=earth_radius, pp=pp, theta_grid=theta_grid,
-                seed=seed)
+                seed=seed, n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
     to_iprt_output(case_name, sza, SAA, vza, VAA, z, overwrite=overwrite,
                    output_dir=output_dir)
@@ -1215,7 +1240,9 @@ def _opac_free_and_stratosphere() -> dict[str, float]:
 
 
 def case_d1(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case D1: a Rayleigh layer without surface.
 
     The layer has an optical depth of 0.5, at 550 nm.
@@ -1231,16 +1258,28 @@ def case_d1(n_photons: float = 1e8, overwrite: bool = True,
         iprt_phase3_d1.nc.
     seed : int
         Seed of the random numbers, -1 for one taken from the clock.
+    n_loop : float, optional
+        Number of photons per kernel launch. By default n_photons, one
+        launch per viewing direction, the spread of the launches giving
+        the standard deviation.
+    xblock, xgrid : int
+        The number of threads per block and of blocks of a kernel
+        launch, 64 and 1024 by default. They set the speed of the run,
+        not its expected value; with the seed they pin its noise
+        realisation, which another layout changes.
     """
     def build() -> tuple[xr.Dataset, None, float]:
         return _rayleigh_layer(0.5, 550.0), None, 550.0
 
     _run_spherical_case("d1", build, Z_ONE_LAYER, n_photons, overwrite,
-                        output_dir, seed)
+                        output_dir, seed, n_loop=n_loop, xblock=xblock,
+                        xgrid=xgrid)
 
 
 def case_d2(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case D2: a Rayleigh layer on a Lambertian surface.
 
     The layer has an optical depth of 0.1, at 550 nm, and the surface
@@ -1248,7 +1287,7 @@ def case_d2(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     def build() -> tuple[xr.Dataset, LambSurface, float]:
@@ -1256,11 +1295,14 @@ def case_d2(n_photons: float = 1e8, overwrite: bool = True,
                 LambSurface(alb=AlbedoCst(0.3)), 550.0)
 
     _run_spherical_case("d2", build, Z_ONE_LAYER, n_photons, overwrite,
-                        output_dir, seed)
+                        output_dir, seed, n_loop=n_loop, xblock=xblock,
+                        xgrid=xgrid)
 
 
 def case_d3(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case D3: a layer of spherical aerosols.
 
     Water soluble aerosols, of optical depth 0.2 and single scattering
@@ -1268,7 +1310,7 @@ def case_d3(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     def build() -> tuple[xr.Dataset, None, np.ndarray]:
@@ -1276,11 +1318,14 @@ def case_d3(n_photons: float = 1e8, overwrite: bool = True,
                 None, np.array([350.0]))
 
     _run_spherical_case("d3", build, Z_ONE_LAYER, n_photons, overwrite,
-                        output_dir, seed, theta_grid="phase")
+                        output_dir, seed, theta_grid="phase",
+                        n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
 
 def case_d4(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case D4: a layer of spheroidal aerosols.
 
     Aerosols of optical depth 0.2 and single scattering albedo
@@ -1289,7 +1334,7 @@ def case_d4(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     def build() -> tuple[xr.Dataset, None, np.ndarray]:
@@ -1298,11 +1343,14 @@ def case_d4(n_photons: float = 1e8, overwrite: bool = True,
                 None, np.array([350.0]))
 
     _run_spherical_case("d4", build, Z_ONE_LAYER, n_photons, overwrite,
-                        output_dir, seed, theta_grid="phase")
+                        output_dir, seed, theta_grid="phase",
+                        n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
 
 def case_d4_bis(n_photons: float = 1e8, overwrite: bool = True,
-                output_dir: str | Path = "./", seed: int = -1) -> None:
+                output_dir: str | Path = "./", seed: int = -1,
+                n_loop: float | None = None, xblock: int = 64,
+                xgrid: int = 1024) -> None:
     """Run the IPRT case D4, the aerosols being an AerOPAC component.
 
     The spheroid file is converted with aer2smartg, and the aerosols
@@ -1310,7 +1358,7 @@ def case_d4_bis(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     def build() -> tuple[xr.Dataset, None, np.ndarray]:
@@ -1329,11 +1377,14 @@ def case_d4_bis(n_photons: float = 1e8, overwrite: bool = True,
         return pro, None, wavelength
 
     _run_spherical_case("d4_bis", build, Z_ONE_LAYER, n_photons, overwrite,
-                        output_dir, seed, theta_grid="phase")
+                        output_dir, seed, theta_grid="phase",
+                        n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
 
 def case_d5(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case D5: a water cloud layer.
 
     The cloud has an optical depth of 5 and a single scattering albedo
@@ -1341,7 +1392,7 @@ def case_d5(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     def build() -> tuple[xr.Dataset, None, np.ndarray]:
@@ -1350,7 +1401,8 @@ def case_d5(n_photons: float = 1e8, overwrite: bool = True,
                 None, np.array([800.0]))
 
     _run_spherical_case("d5", build, Z_ONE_LAYER, n_photons, overwrite,
-                        output_dir, seed, theta_grid="phase")
+                        output_dir, seed, theta_grid="phase",
+                        n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
 
 def _ocean_d6() -> RoughSurface:
@@ -1359,7 +1411,9 @@ def _ocean_d6() -> RoughSurface:
 
 
 def case_d6(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case D6: a Rayleigh layer above a rough ocean.
 
     The layer has an optical depth of 0.1, at 550 nm, and the wind
@@ -1367,18 +1421,21 @@ def case_d6(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     def build() -> tuple[xr.Dataset, RoughSurface, float]:
         return _rayleigh_layer(0.1, 550.0), _ocean_d6(), 550.0
 
     _run_spherical_case("d6", build, Z_ONE_LAYER, n_photons, overwrite,
-                        output_dir, seed)
+                        output_dir, seed, n_loop=n_loop, xblock=xblock,
+                        xgrid=xgrid)
 
 
 def case_d6_pp(n_photons: float = 1e8, overwrite: bool = True,
-               output_dir: str | Path = "./", seed: int = -1) -> None:
+               output_dir: str | Path = "./", seed: int = -1,
+               n_loop: float | None = None, xblock: int = 64,
+               xgrid: int = 1024) -> None:
     """Run the IPRT case D6 in plane parallel geometry.
 
     The sun zenith angles stop at 87 degrees and the viewing zenith
@@ -1386,7 +1443,7 @@ def case_d6_pp(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     def build() -> tuple[xr.Dataset, RoughSurface, float]:
@@ -1395,18 +1452,21 @@ def case_d6_pp(n_photons: float = 1e8, overwrite: bool = True,
     # The ground altitude in plane parallel geometry is 0
     _run_spherical_case("d6_pp", build, Z_ONE_LAYER, n_photons, overwrite,
                         output_dir, seed, sza=SZA[:4].copy(),
-                        vza=VZA[:-1].copy(), earth_radius=0.0, pp=True)
+                        vza=VZA[:-1].copy(), earth_radius=0.0, pp=True,
+                        n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
 
 def case_e1(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case E1: a US standard Rayleigh atmosphere.
 
     At 450 nm, without absorption nor surface.
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     z, sca, abs_ = _usstd_profile(450, absorption=False)
@@ -1417,18 +1477,20 @@ def case_e1(n_photons: float = 1e8, overwrite: bool = True,
         return pro, None, 450.0
 
     _run_spherical_case("e1", build, z, n_photons, overwrite, output_dir,
-                        seed)
+                        seed, n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
 
 def case_e2(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case E2: a US standard atmosphere with absorption.
 
     At 320 nm, without surface.
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     z, sca, abs_ = _usstd_profile(320)
@@ -1439,11 +1501,13 @@ def case_e2(n_photons: float = 1e8, overwrite: bool = True,
         return pro, None, 320.0
 
     _run_spherical_case("e2", build, z, n_photons, overwrite, output_dir,
-                        seed)
+                        seed, n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
 
 def case_e3(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case E3: desert aerosols in the boundary layer.
 
     Aerosols of optical depth 0.5 below 3 km, in a US standard
@@ -1451,7 +1515,7 @@ def case_e3(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     z, sca, abs_ = _usstd_profile(450)
@@ -1468,11 +1532,14 @@ def case_e3(n_photons: float = 1e8, overwrite: bool = True,
         return pro, None, wavelength
 
     _run_spherical_case("e3", build, z, n_photons, overwrite, output_dir,
-                        seed, theta_grid="phase")
+                        seed, theta_grid="phase", n_loop=n_loop,
+                        xblock=xblock, xgrid=xgrid)
 
 
 def case_e4(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case E4: desert and sulfate aerosols.
 
     The desert aerosols of E3, and sulfate aerosols of optical depth
@@ -1480,7 +1547,7 @@ def case_e4(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     z, sca, abs_ = _usstd_profile(450)
@@ -1503,11 +1570,14 @@ def case_e4(n_photons: float = 1e8, overwrite: bool = True,
         return pro, None, wavelength
 
     _run_spherical_case("e4", build, z, n_photons, overwrite, output_dir,
-                        seed, theta_grid="phase")
+                        seed, theta_grid="phase", n_loop=n_loop,
+                        xblock=xblock, xgrid=xgrid)
 
 
 def case_e5(n_photons: float = 1e8, overwrite: bool = True,
-            output_dir: str | Path = "./", seed: int = -1) -> None:
+            output_dir: str | Path = "./", seed: int = -1,
+            n_loop: float | None = None, xblock: int = 64,
+            xgrid: int = 1024) -> None:
     """Run the IPRT case E5: an ice cloud in a Rayleigh atmosphere.
 
     The phase matrix of the cloud is kept on the angle grid of the
@@ -1516,7 +1586,7 @@ def case_e5(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     z, sca, abs_ = _usstd_profile(450)
@@ -1544,7 +1614,8 @@ def case_e5(n_photons: float = 1e8, overwrite: bool = True,
 
     # The GPU tables adopt the angles of the phase matrices
     _run_spherical_case("e5", build, z, n_photons, overwrite, output_dir,
-                        seed, theta_grid="phase")
+                        seed, theta_grid="phase", n_loop=n_loop,
+                        xblock=xblock, xgrid=xgrid)
 
 
 def _profile_e6(camera_level: bool = False
@@ -1583,7 +1654,9 @@ def _profile_e6(camera_level: bool = False
 
 
 def case_e6_old(n_photons: float = 1e8, overwrite: bool = True,
-                output_dir: str | Path = "./", seed: int = -1) -> None:
+                output_dir: str | Path = "./", seed: int = -1,
+                n_loop: float | None = None, xblock: int = 64,
+                xgrid: int = 1024) -> None:
     """Run the first version of the IPRT camera case E6.
 
     The camera at 300 000 km is described by the directions (vza, vaa)
@@ -1593,7 +1666,7 @@ def case_e6_old(n_photons: float = 1e8, overwrite: bool = True,
 
     Parameters
     ----------
-    n_photons, overwrite, output_dir, seed
+    n_photons, overwrite, output_dir, seed, n_loop, xblock, xgrid
         See case_d1.
     """
     output_dir = Path(output_dir)
@@ -1608,7 +1681,8 @@ def case_e6_old(n_photons: float = 1e8, overwrite: bool = True,
                            count_level=np.zeros_like(SZA_E6,
                                                      dtype=np.int32))
         run_sim(None, toa_path, SZA_E6, VZA_E6, vaa, z, wavelength, le,
-                surface, pro, n_photons, is_e6=True, seed=seed)
+                surface, pro, n_photons, is_e6=True, seed=seed,
+                n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
     to_iprt_output("e6", SZA_E6, SAA, VZA_E6, vaa, z, overwrite=overwrite,
                    output_dir=output_dir)
@@ -1678,6 +1752,9 @@ def _run_e6(
     surface: RoughSurface,
     wavelength: np.ndarray,
     seed: int,
+    n_loop: float | None = None,
+    xblock: int = 64,
+    xgrid: int = 1024,
 ) -> None:
     """Run and save the camera run of an E6 version.
 
@@ -1701,16 +1778,25 @@ def _run_e6(
         The wavelength, in nm.
     seed : int
         Seed of the random numbers.
+    n_loop : float, optional
+        Number of photons per kernel launch, by default n_photons: one
+        launch per pixel.
+    xblock, xgrid : int
+        The number of threads per block and of blocks of a kernel
+        launch, see case_d1.
     """
     le = LocalEstimate(th_deg=SZA_E6, phi_deg=-SAA,
                        count_level=np.zeros_like(SZA_E6, dtype=np.int32))
     _run_and_save(sg, toa_path, sensors, N_PIXELS_E6 * N_PIXELS_E6,
                   n_photons, wavelength, le, surface, pro, DEPOL,
-                  EARTH_RADIUS, 18001, None, seed)
+                  EARTH_RADIUS, 18001, None, seed, n_loop=n_loop,
+                  xblock=xblock, xgrid=xgrid)
 
 
 def case_e6_v1(n_photons: float = 1e8, overwrite: bool = True,
-               output_dir: str | Path = "./", seed: int = -1) -> None:
+               output_dir: str | Path = "./", seed: int = -1,
+               n_loop: float | None = None, xblock: int = 64,
+               xgrid: int = 1024) -> None:
     """Run the IPRT camera case E6, one direction per pixel center.
 
     The sensors are where the pixel directions meet the top of the
@@ -1722,7 +1808,10 @@ def case_e6_v1(n_photons: float = 1e8, overwrite: bool = True,
         Number of photons per pixel of the camera. The photons of the
         pixels without a sensor go to the others: the 2997 sensors of
         the 3721 pixels receive about 1.24 times n_photons each.
-    overwrite, output_dir, seed
+    n_loop : float, optional
+        Number of photons per kernel launch, by default n_photons: one
+        launch per pixel.
+    overwrite, output_dir, seed, xblock, xgrid
         See case_d1.
     """
     output_dir = Path(output_dir)
@@ -1749,14 +1838,16 @@ def case_e6_v1(n_photons: float = 1e8, overwrite: bool = True,
 
     if overwrite or not toa_path.exists():
         _run_e6(_kernel(False), sensors, toa_path, n_photons, pro, surface,
-                wavelength, seed)
+                wavelength, seed, n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
     to_iprt_output_e6_v1("e6_v1", SZA_E6, SAA, nx, ny, is_sens, vecs,
                          overwrite=overwrite, output_dir=output_dir)
 
 
 def case_e6_v2(n_photons: float = 1e8, overwrite: bool = True,
-               output_dir: str | Path = "./", seed: int = -1) -> None:
+               output_dir: str | Path = "./", seed: int = -1,
+               n_loop: float | None = None, xblock: int = 64,
+               xgrid: int = 1024) -> None:
     """Run the IPRT camera case E6 with a field of view per pixel.
 
     Every pixel is a sensor of type 1 at the camera, with a field of
@@ -1766,7 +1857,10 @@ def case_e6_v2(n_photons: float = 1e8, overwrite: bool = True,
     ----------
     n_photons : float
         Number of photons per pixel.
-    overwrite, output_dir, seed
+    n_loop : float, optional
+        Number of photons per kernel launch, by default n_photons: one
+        launch per pixel.
+    overwrite, output_dir, seed, xblock, xgrid
         See case_d1.
     """
     output_dir = Path(output_dir)
@@ -1784,14 +1878,16 @@ def case_e6_v2(n_photons: float = 1e8, overwrite: bool = True,
     if overwrite or not toa_path.exists():
         sg = Smartg(back=True, double=True, bias=True, pp=False, obj3d=True)
         _run_e6(sg, sensors, toa_path, n_photons, pro, surface,
-                wavelength, seed)
+                wavelength, seed, n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
     to_iprt_output_e6_v2("e6_v2", SZA_E6, SAA, nx, ny, vecs,
                          overwrite=overwrite, output_dir=output_dir)
 
 
 def case_e6_v3(n_photons: float = 1e8, overwrite: bool = True,
-               output_dir: str | Path = "./", seed: int = -1) -> None:
+               output_dir: str | Path = "./", seed: int = -1,
+               n_loop: float | None = None, xblock: int = 64,
+               xgrid: int = 1024) -> None:
     """Run the IPRT camera case E6, the atmosphere up to the camera.
 
     As case_e6_v2, with the spherical backward kernel, the atmosphere
@@ -1801,7 +1897,10 @@ def case_e6_v3(n_photons: float = 1e8, overwrite: bool = True,
     ----------
     n_photons : float
         Number of photons per pixel.
-    overwrite, output_dir, seed
+    n_loop : float, optional
+        Number of photons per kernel launch, by default n_photons: one
+        launch per pixel.
+    overwrite, output_dir, seed, xblock, xgrid
         See case_d1.
     """
     output_dir = Path(output_dir)
@@ -1818,7 +1917,7 @@ def case_e6_v3(n_photons: float = 1e8, overwrite: bool = True,
 
     if overwrite or not toa_path.exists():
         _run_e6(_kernel(False), sensors, toa_path, n_photons, pro, surface,
-                wavelength, seed)
+                wavelength, seed, n_loop=n_loop, xblock=xblock, xgrid=xgrid)
 
     # The v2 conversion applies to v3
     to_iprt_output_e6_v2("e6_v3", SZA_E6, SAA, nx, ny, vecs,

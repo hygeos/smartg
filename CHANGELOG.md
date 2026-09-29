@@ -933,6 +933,13 @@ final `v2.0.0` release.
     `gc.ang2vec(sza, phi, vec_view='nadir')`) on the launching mode itself,
     where it replaces the direction computed from the `th_deg` and
     `ph_deg` angles of `Smartg.run`
+  - New `n_loop`, `xblock` and `xgrid` parameters of the case functions
+    of `smartg.iprt.phase3` (`case_d1` ... `case_e6_v3`) and of
+    `run_sim`, handed to `Smartg.run`. They default to what the runs
+    used so far: `n_photons` per kernel launch, one launch per viewing
+    direction (per pixel for E6), and 64 threads per block on 1024
+    blocks. `xblock` and `xgrid` set the speed of a run, not its
+    expected value, but with the seed they pin its noise realisation
   - New `sun_fov` parameter of `CusBackward`: the angular size of the sun in
     a backward object simulation is carried by the launching mode itself
     (0.266 degree by default, the solar disc) and uploaded as the

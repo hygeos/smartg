@@ -11,7 +11,8 @@ Tested with the following GPUs: 5070 Ti
 import importlib
 import logging
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -23,7 +24,8 @@ from smartg.config import DIR_AUXDATA
 # *********************** Global variable(s) ***************************
 # Fixed seed: seed=-1 would derive it from the clock, giving a new
 # noise realisation at every run. XBLOCK and XGRID, which also pin the
-# noise realisation, are set by run_sim of the module (64 and 1024).
+# noise realisation, keep the defaults of the case functions of the
+# module (64 and 1024).
 SEED = 1234
 
 # Every case runs in two tiers. The slow one uses the photon count of
@@ -445,3 +447,60 @@ def test_phase3(
                     f"below {frac_tol:.2f}"
                 )
     assert not errors, "\n".join(errors)
+
+
+class _RunRecorder:
+    """Stand for the kernel of the runs, recording what they ask for."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def run(self, **kwargs: Any) -> SimpleNamespace:
+        """Record the Smartg.run keywords, return a savable output."""
+        self.calls.append(kwargs)
+        return SimpleNamespace(to_netcdf=lambda path: None)
+
+
+@pytest.mark.parametrize(
+    ("launch", "expected"),
+    [
+        ({}, {"n_loop": 10.0, "xblock": 64, "xgrid": 1024}),
+        ({"n_loop": 5.0, "xblock": 32, "xgrid": 16},
+         {"n_loop": 5.0, "xblock": 32, "xgrid": 16}),
+    ],
+    ids=["defaults", "given"],
+)
+def test_case_hands_launch_parameters_to_the_kernel(
+    phase3: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    launch: dict[str, Any], expected: dict[str, Any],
+) -> None:
+    """Check that a case gives its n_loop, xblock and xgrid to the runs.
+
+    Without a GPU: the kernel is replaced by a recorder, the reshaping
+    of the outputs and their conversion to the IPRT format by no-ops.
+    By default a run keeps the launch layout of the saved results, one
+    launch per viewing direction and 64 threads on 1024 blocks.
+    """
+    recorder = _RunRecorder()
+    monkeypatch.setattr(phase3, "_kernel", lambda pp: recorder)
+    monkeypatch.setattr(phase3, "reshape_sza_vaa_vza", lambda m, *a: m)
+    monkeypatch.setattr(phase3, "to_iprt_output", lambda *a, **k: None)
+    phase3.case_d1(n_photons=10.0, output_dir=tmp_path, **launch)
+    # the BOA and the TOA runs
+    assert len(recorder.calls) == 2
+    n_directions = phase3.VZA.size * phase3.VAA.size
+    for call in recorder.calls:
+        assert call["n_photons"] == n_directions * 10.0
+        assert {key: call[key] for key in expected} == expected
+
+
+def test_e6_hands_launch_parameters_to_the_kernel(
+    phase3: ModuleType, tmp_path: Path
+) -> None:
+    """Check that the E6 camera runs give n_loop, xblock and xgrid."""
+    recorder = _RunRecorder()
+    phase3._run_e6(recorder, [], tmp_path / "e6_toa.nc", 10.0, None, None,
+                   np.array([450.0]), 1, n_loop=5.0, xblock=32, xgrid=16)
+    (call,) = recorder.calls
+    assert call["n_photons"] == phase3.N_PIXELS_E6**2 * 10.0
+    assert (call["n_loop"], call["xblock"], call["xgrid"]) == (5.0, 32, 16)
