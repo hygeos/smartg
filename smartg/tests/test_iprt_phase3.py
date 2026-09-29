@@ -150,13 +150,11 @@ FRAC_TOL = {
 
 # Figures of the html report, at this sun zenith angle, in polar view
 # as the notebook draws them: the Stokes parameters of the test run
-# (radiances times NORM), their difference test - ref in the same
-# units, and the map of z. Each panel of the difference is on a
-# symmetric colour scale of the 99th percentile of its abs(test - ref),
-# since the few directions next to the sun, orders of magnitude
-# brighter and noisier than the rest of the sky, would flatten it
-# otherwise; each panel of z, which divides those by their sigma, on
-# one of its own largest abs(z).
+# (radiances times NORM) and their difference test - ref in the same
+# units. Each panel of the difference is on a symmetric colour scale
+# of the 99th percentile of its abs(test - ref), since the few
+# directions next to the sun, orders of magnitude brighter and noisier
+# than the rest of the sky, would flatten it otherwise.
 PLOT_SZA = 60.0
 NORM = 1.0 / np.pi
 
@@ -305,13 +303,11 @@ def _plot(
     phase3: ModuleType,
     case: str,
     rad: np.ndarray,
-    sig: np.ndarray,
     ref: np.ndarray,
-    sig_ref: np.ndarray,
     coords: dict[str, np.ndarray],
     tier: str,
 ) -> None:
-    """Save the polar views of the run, test - ref and z in the report.
+    """Save the polar views of the run and of test - ref in the report.
 
     One figure of each per output level, at the sun zenith angle
     PLOT_SZA, drawn with plot_polar_iprt as the notebook does: the
@@ -325,10 +321,10 @@ def _plot(
         The smartg.iprt.phase3 module.
     case : str
         The case name, e.g. 'd1'.
-    rad, sig : ndarray
-        The radiances of the test run and their standard deviations.
-    ref, sig_ref : ndarray
-        The same, for the saved result.
+    rad : ndarray
+        The radiances of the test run.
+    ref : ndarray
+        The radiances of the saved result.
     coords : dict of ndarray
         The zout, sza, vza and vaa coordinates.
     tier : str
@@ -338,11 +334,6 @@ def _plot(
     sza = coords["sza"][isza]
     vza = coords["vza"]
     phis = coords["vaa"][::-1] + 180.0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        z = np.nan_to_num(
-            (rad - ref) / np.sqrt(sig**2 + sig_ref**2),
-            nan=0.0, posinf=0.0, neginf=0.0,
-        )
     for iz, zname in enumerate(ZOUT_NAMES):
         zout = coords["zout"][iz]
         head = f"IPRT case {case.upper()} - SZA = {sza:.0f} - {zout:.0f}km"
@@ -361,17 +352,6 @@ def _plot(
             *stokes, thetas=vza, phis=phis, max_i=bounds[0],
             max_q=bounds[1], max_u=bounds[2], max_v=bounds[3],
             cmap_i="RdBu_r", title=f"{head} - test - ref ({zname})",
-        )
-        conftest.savefig(request, bbox_inches="tight")
-
-        stokes = [z[iz, isza, :, :, k] for k in range(4)]
-        # Q, U and V take the largest abs(z) of their panel by default;
-        # I is given its own, so that its scale is symmetric as well
-        phase3.plot_polar_iprt(
-            *stokes, thetas=vza, phis=phis,
-            max_i=max(float(np.max(np.abs(stokes[0]))), 1e-12),
-            cmap_i="RdBu_r",
-            title=f"{head} - z = (test - ref) / sigma ({zname})",
         )
         conftest.savefig(request, bbox_inches="tight")
 
@@ -424,7 +404,7 @@ def test_phase3(
         assert np.array_equal(values, coords_ref[name]), name
     assert rad.shape == ref.shape
 
-    _plot(request, phase3, case, rad, sig, ref, sig_ref, coords, tier)
+    _plot(request, phase3, case, rad, ref, coords, tier)
 
     mean_tol = _tolerance(MEAN_TOL, tier, case)
     frac_tol = _tolerance(FRAC_TOL, tier, case)
