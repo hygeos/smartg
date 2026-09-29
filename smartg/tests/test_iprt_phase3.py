@@ -148,10 +148,15 @@ FRAC_TOL = {
     "slow": {"*": 0.05},
 }
 
-# Figures of the html report: the Stokes parameters of the test run at
-# this sun zenith angle, in polar view as the notebook draws them
-# (radiances times NORM), and the map of z at the same angle, each
-# panel on a symmetric colour scale of its own largest abs(z).
+# Figures of the html report, at this sun zenith angle, in polar view
+# as the notebook draws them: the Stokes parameters of the test run
+# (radiances times NORM), their difference test - ref in the same
+# units, and the map of z. Each panel of the difference is on a
+# symmetric colour scale of the 99th percentile of its abs(test - ref),
+# since the few directions next to the sun, orders of magnitude
+# brighter and noisier than the rest of the sky, would flatten it
+# otherwise; each panel of z, which divides those by their sigma, on
+# one of its own largest abs(z).
 PLOT_SZA = 60.0
 NORM = 1.0 / np.pi
 
@@ -306,7 +311,7 @@ def _plot(
     coords: dict[str, np.ndarray],
     tier: str,
 ) -> None:
-    """Save the polar views of the test run and of z in the html report.
+    """Save the polar views of the run, test - ref and z in the report.
 
     One figure of each per output level, at the sun zenith angle
     PLOT_SZA, drawn with plot_polar_iprt as the notebook does: the
@@ -345,6 +350,17 @@ def _plot(
         phase3.plot_polar_iprt(
             *stokes, thetas=vza, phis=phis,
             title=f"{head} - SMART-G {tier} tier ({zname})",
+        )
+        conftest.savefig(request, bbox_inches="tight")
+
+        stokes = [(rad[iz, isza, :, :, k] - ref[iz, isza, :, :, k]) * NORM
+                  for k in range(4)]
+        bounds = [max(float(np.percentile(np.abs(stk), 99)), 1e-12)
+                  for stk in stokes]
+        phase3.plot_polar_iprt(
+            *stokes, thetas=vza, phis=phis, max_i=bounds[0],
+            max_q=bounds[1], max_u=bounds[2], max_v=bounds[3],
+            cmap_i="RdBu_r", title=f"{head} - test - ref ({zname})",
         )
         conftest.savefig(request, bbox_inches="tight")
 
