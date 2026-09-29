@@ -10,6 +10,11 @@
 #
 # `N_PHOTONS` is the number of photons per viewing direction: 1e5 is
 # enough to check that everything runs, the reference results use 1e8.
+# `N_LOOP` is the number of photons per kernel launch, `N_PHOTONS` when
+# it is `None`: one launch per viewing direction, the spread of the
+# launches giving the standard deviation. `XBLOCK` and `XGRID`, the
+# threads per block and the blocks of a launch, set the speed of the
+# runs, not their expected values.
 # With `OVERWRITE = False` the files already in `OUTPUT_DIR` are reused
 # and no simulation is run again.
 
@@ -31,6 +36,9 @@ from smartg.iprt.phase3 import plot_camera_iprt, plot_polar_iprt
 
 # %%
 N_PHOTONS = 1e5  # photons per viewing direction, 1e8 for the reference results
+N_LOOP = None  # photons per kernel launch, None for N_PHOTONS
+XBLOCK = 64  # threads per block of a kernel launch
+XGRID = 1024  # blocks of a kernel launch
 OVERWRITE = True  # False: reuse the files already in OUTPUT_DIR
 OUTPUT_DIR = Path("./res_iprt_phase3")
 MOD_NAME = "SMART-G"
@@ -212,7 +220,8 @@ def plot_case_camera(case_name: str,
 # Rayleigh layer, optical thickness 0.5 at 550 nm, black surface.
 
 # %%
-p3.case_d1(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_d1(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("d1", iz=0)  # BOA
@@ -226,7 +235,8 @@ plot_case_polar("d1", iz=1)  # TOA
 # surface of albedo 0.3.
 
 # %%
-p3.case_d2(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_d2(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("d2", iz=0)  # BOA
@@ -241,7 +251,8 @@ plot_case_polar("d2", iz=1)  # TOA
 # `prof_phases`. The phase matrix is kept on the 68 angles of the file.
 
 # %%
-p3.case_d3(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_d3(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("d3", iz=0)  # BOA
@@ -257,7 +268,8 @@ plot_case_polar("d3", iz=1)  # TOA
 # the file.
 
 # %%
-p3.case_d4(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_d4(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("d4", iz=0)  # BOA
@@ -271,7 +283,8 @@ plot_case_polar("d4", iz=1)  # TOA
 # `aer2smartg`.
 
 # %%
-p3.case_d4_bis(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_d4_bis(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+               n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("d4_bis", iz=0)  # BOA
@@ -286,7 +299,8 @@ plot_case_polar("d4_bis", iz=1)  # TOA
 # 450 angles of the file.
 
 # %%
-p3.case_d5(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_d5(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("d5", iz=0)  # BOA
@@ -300,7 +314,8 @@ plot_case_polar("d5", iz=1)  # TOA
 # surface (wind speed 2 m/s).
 
 # %%
-p3.case_d6(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_d6(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("d6", iz=0)  # BOA
@@ -314,7 +329,8 @@ plot_case_polar("d6", iz=1)  # TOA
 # 87° and viewing zenith angles up to 89°.
 
 # %%
-p3.case_d6_pp(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_d6_pp(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+              n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("d6_pp", iz=0)  # BOA
@@ -330,7 +346,8 @@ plot_case_polar("d6_pp", iz=1)  # TOA
 # US standard Rayleigh profile at 450 nm.
 
 # %%
-p3.case_e1(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_e1(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("e1", iz=0)  # BOA
@@ -343,7 +360,8 @@ plot_case_polar("e1", iz=1)  # TOA
 # US standard Rayleigh and absorption profiles at 320 nm.
 
 # %%
-p3.case_e2(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_e2(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("e2", iz=0)  # BOA
@@ -358,7 +376,8 @@ plot_case_polar("e2", iz=1)  # TOA
 # the 361 angles of the file.
 
 # %%
-p3.case_e3(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_e3(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("e3", iz=0)  # BOA
@@ -373,7 +392,8 @@ plot_case_polar("e3", iz=1)  # TOA
 # kept on the 361 angles of their files.
 
 # %%
-p3.case_e4(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_e4(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("e4", iz=0)  # BOA
@@ -389,7 +409,8 @@ plot_case_polar("e4", iz=1)  # TOA
 # forward peak.
 
 # %%
-p3.case_e5(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_e5(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+           n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_polar("e5", iz=0)  # BOA
@@ -410,7 +431,8 @@ plot_case_polar("e5", iz=1)  # TOA
 # at 0.
 
 # %%
-p3.case_e6_v1(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_e6_v1(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+              n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_camera("e6_v1")
@@ -421,7 +443,8 @@ plot_case_camera("e6_v1")
 # (`obj3d` kernel).
 
 # %%
-p3.case_e6_v2(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_e6_v2(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+              n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_camera("e6_v2")
@@ -432,7 +455,8 @@ plot_case_camera("e6_v2")
 # 300 000 km.
 
 # %%
-p3.case_e6_v3(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR)
+p3.case_e6_v3(n_photons=N_PHOTONS, overwrite=OVERWRITE, output_dir=OUTPUT_DIR,
+              n_loop=N_LOOP, xblock=XBLOCK, xgrid=XGRID)
 
 # %%
 plot_case_camera("e6_v3")
