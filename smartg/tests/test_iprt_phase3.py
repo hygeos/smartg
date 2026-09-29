@@ -136,11 +136,10 @@ FRAC_TOL = {
 
 # Figures of the html report: the Stokes parameters of the test run at
 # this sun zenith angle, in polar view as the notebook draws them
-# (radiances times NORM), and the map of z at the same angle, on a
-# colour scale of +-Z_SCALE.
+# (radiances times NORM), and the map of z at the same angle, each
+# panel on a symmetric colour scale of its own largest abs(z).
 PLOT_SZA = 60.0
 NORM = 1.0 / np.pi
-Z_SCALE = 4.0
 
 ZOUT_NAMES = ["BOA", "TOA"]
 STOKES = ["I", "Q", "U", "V"]
@@ -336,10 +335,12 @@ def _plot(
         conftest.savefig(request, bbox_inches="tight")
 
         stokes = [z[iz, isza, :, :, k] for k in range(4)]
+        # Q, U and V take the largest abs(z) of their panel by default;
+        # I is given its own, so that its scale is symmetric as well
         phase3.plot_polar_iprt(
             *stokes, thetas=vza, phis=phis,
-            min_i=-Z_SCALE, max_i=Z_SCALE, max_q=Z_SCALE, max_u=Z_SCALE,
-            max_v=Z_SCALE, cmap_i="RdBu_r",
+            max_i=max(float(np.max(np.abs(stokes[0]))), 1e-12),
+            cmap_i="RdBu_r",
             title=f"{head} - z = (test - ref) / sigma ({zname})",
         )
         conftest.savefig(request, bbox_inches="tight")
