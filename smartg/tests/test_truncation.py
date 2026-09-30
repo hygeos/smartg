@@ -143,6 +143,32 @@ def test_truncate_phase_refuses_negative_result() -> None:
                        GTTrunc(trunc_frac=0.9, theta_tr=10.0))
 
 
+def test_gttrunc_continuous_plateau() -> None:
+    """With trunc_frac=None, F11 is cut flat at its value at theta_tr.
+
+    Its truncation fraction is the one that imposing the angle takes to
+    give that plateau: both give the same matrix.
+    """
+    pha = _hg_matrix(0.85)
+    pha_tr, f = truncate_phase(
+        pha, THETA, GTTrunc(trunc_frac=None, theta_tr=10.0)
+    )
+    i = int(np.argmin(np.abs(THETA - 10.0)))
+    np.testing.assert_allclose(pha_tr[0, :i], pha_tr[0, i], rtol=1e-12)
+    assert 0.0 < f < 1.0
+    imposed, f_imposed = truncate_phase(
+        pha, THETA, GTTrunc(trunc_frac=f, theta_tr=10.0)
+    )
+    assert f_imposed == f
+    np.testing.assert_allclose(imposed, pha_tr, rtol=1e-12)
+
+
+def test_gttrunc_trunc_frac_none_needs_theta_tr() -> None:
+    """Without an angle, no plateau to make continuous."""
+    with pytest.raises(ValueError, match="theta_tr"):
+        GTTrunc(trunc_frac=None)
+
+
 @pytest.mark.parametrize(
     "theta_tr", [0.0, -5.0, float("nan"), 180.0, 200.0, True]
 )

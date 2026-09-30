@@ -25,7 +25,9 @@ Available truncation methods:
   backscatter peak and removes high-order terms.
 - **GT (Generalized Truncation)**: GT truncation as in Iwabuchi and
   Suzuki (2009), which provides an alternative approach to phase matrix
-  simplification.
+  simplification. With `trunc_frac=None` and an imposed angle, it cuts
+  the phase matrix flat at its value at that angle, the truncation of
+  the ocean of SMART-G 1.x.
 
 These methods support different integration techniques (Lobatto
 quadrature, trapezoid, Simpson) for computing phase matrix moments and
@@ -164,8 +166,14 @@ class GTTrunc:
 
     Parameters
     ----------
-    trunc_frac : float
-        The truncature fraction
+    trunc_frac : float or None
+        The truncation fraction f, in ]0; 1[: the part of the scattering
+        removed with the forward peak. None requires theta_tr: the
+        phase matrix is then cut flat at its value at theta_tr, and f is
+        the fraction that makes this plateau continuous with it (see
+        theta_tr). The truncation of the ocean of SMART-G 1.x
+        (`IOP_1`) is `GTTrunc(trunc_frac=None, theta_tr=5.0)`, but for
+        its scattering coefficient, halved there by mistake.
     integral_method : str, optional
         Integration method to use for computing the moments.
         Choices are:
@@ -181,7 +189,12 @@ class GTTrunc:
         and not below half the first angle step of the phase matrix.
         If provided, theta_tol is ignored; trunc_frac is still used as
         the truncation fraction, only the search of the truncation
-        angle is skipped.
+        angle is skipped. The truncated phase matrix is flat below
+        theta_tr: with both imposed, the level of that plateau is set by
+        the normalization and in general does not meet the phase matrix
+        at theta_tr (six times above it with 0.3 and 5 degrees for the
+        `HydrosolPR` of 0.5 mg/m3 at 500 nm); with trunc_frac None, it
+        is the value of the phase matrix at theta_tr.
     lobatto_optimization : bool, optional
         If True, use the optimized Lobatto quadrature for the integral.
         Reduces significantly the computational time in case theta_tr
@@ -206,7 +219,7 @@ class GTTrunc:
 
     def __init__(
         self,
-        trunc_frac: float,
+        trunc_frac: float | None,
         integral_method: str = "trapezoid",
         theta_tol: float | None = None,
         theta_tr: float | None = None,
@@ -215,7 +228,14 @@ class GTTrunc:
         n_theta_integral: int = 721,
     ) -> None:
         # check parameter values
-        if (
+        if trunc_frac is None:
+            if theta_tr is None:
+                raise ValueError(
+                    "trunc_frac=None needs theta_tr: the truncation "
+                    "fraction is then the one that makes the plateau "
+                    "continuous with the phase matrix at theta_tr."
+                )
+        elif (
             isinstance(trunc_frac, bool)
             or not isinstance(
                 trunc_frac, (int, float, np.integer, np.floating)
@@ -224,7 +244,7 @@ class GTTrunc:
         ):
             raise ValueError(
                 "The trunc_frac parameter must be a scalar in the "
-                + "interval ]0; 1[."
+                + "interval ]0; 1[, or None with theta_tr."
             )
         integral_methods_ok = ["lobatto", "trapezoid", "simpson"]
         if integral_method not in integral_methods_ok:
@@ -482,9 +502,11 @@ def truncate_phase(
             "The truncated phase function is negative (down to "
             f"{float(f11_tr.min()):.3g}, f = {f:.3g}): the truncation "
             "removes more energy than the forward peak holds. Lower "
-            "trunc_frac, let GTTrunc search the truncation angle "
-            "(theta_tr=None), raise n_streams, or do not truncate a "
-            "phase function without a marked forward peak."
+            "trunc_frac or pass trunc_frac=None for a plateau "
+            "continuous with the phase function, let GTTrunc search the "
+            "truncation angle (theta_tr=None), raise n_streams, or do "
+            "not truncate a phase function without a marked forward "
+            "peak."
         )
     if nodes is not None:
         f11_tr = f11_tr[nodes]

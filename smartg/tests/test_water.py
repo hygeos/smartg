@@ -976,6 +976,41 @@ def test_chlorophyll_hydrosols_scatter_their_whole_bp() -> None:
         )
 
 
+def test_hydrosol_pr_with_the_truncation_of_v1() -> None:
+    """GTTrunc(None, 5) truncates as SMART-G 1.x, but for its bp.
+
+    `IOP_1` cut the Fournier-Forand phase function flat below 5 degrees
+    at its value there and scaled bp by the fraction kept (and halved
+    it, by mistake). The continuous plateau gives that phase function,
+    and the kept fraction but for the quadrature of pytrunc (on the
+    grid and 721 equal angles, against integ_phase on the grid here).
+    """
+    wavelength, z = np.array([500.0]), np.array([0.0, -5.0])
+    pr = HydrosolPR(0.5)
+    iop = pr.iop(wavelength, z)
+    pha = pr.phase(wavelength, z)
+    assert pha is not None
+    theta = pha.coords["theta_oc"].values
+    # the untruncated phase at the analytic normalization, the
+    # unresolved part of the peak left out
+    f11 = pha.values[0, 0, 0] * (
+        pr.coeffs(wavelength, z)["bp"][0, 1] / iop["bp"][0, 1]
+    )
+    i5 = int(np.searchsorted(theta, 5.0))
+    flat = f11.copy()
+    flat[:i5] = f11[i5]
+    kept = integ_phase(np.deg2rad(theta), flat) / 2.0
+    v1 = HydrosolPR(0.5, truncation=GTTrunc(trunc_frac=None, theta_tr=5.0))
+    bp = v1.coeffs(wavelength, z)["bp"][0, 1] / iop["bp"][0, 1]
+    assert bp == pytest.approx(kept, rel=1e-2)
+    pha_tr = v1.phase(wavelength, z)
+    assert pha_tr is not None
+    f11_tr = pha_tr.values[0, 0, 0]
+    np.testing.assert_allclose(
+        f11_tr / f11_tr[i5], flat / flat[i5], rtol=1e-9
+    )
+
+
 def _backscattered_fraction(
     f11: NDArray[np.float64], theta_deg: NDArray[np.float64]
 ) -> NDArray[np.float64]:

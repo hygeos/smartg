@@ -680,7 +680,7 @@ final `v2.0.0` release.
     photon histories notebook. The libraries whose API SMART-G calls
     directly are
     now capped at their next major version (`numpy>=2,<3`,
-    `jupytext>=1.16,<2`, `geoclide>=4.0.0,<5`, `pytrunc>=2.0.0,<3`,
+    `jupytext>=1.16,<2`, `geoclide>=4.0.0,<5`, `pytrunc>=2.1.0,<3`,
     `gatiab>=1.1.2,<2`), and the supported Python versions are
     `>=3.11,<3.15`: Python 3.10, which v1.2.0 supported
     (`requires-python >= 3.10`), is no longer supported
@@ -710,6 +710,14 @@ final `v2.0.0` release.
       angles (721, 7201, 18001 or 72001 equally spaced ones) are
       truncated exactly as before; others move slightly, towards a dense
       integration, and `n_theta_integral=2` gives the former results
+    - `GTTrunc(trunc_frac=None, theta_tr=...)` cuts the phase matrix flat
+      at its value at `theta_tr`, the truncation fraction following from
+      the continuity of that plateau (pytrunc >= 2.1): with 5 degrees, the
+      truncation of the ocean of v1.2.0 (`IOP_1`), whose bp was besides
+      halved by mistake. Imposing both `trunc_frac` and `theta_tr` sets
+      the plateau by the normalization instead, in general away from the
+      phase matrix at `theta_tr`: six times above it with
+      `DEFAULT_WATER_TRUNC` for the `HydrosolPR` of 0.5 mg/m3 at 500 nm
   - The scattering angles of a phase matrix no longer have to be equally
     spaced. Clustering them towards the forward and backward directions
     resolves the diffraction peak of large particles (desert aerosols,
