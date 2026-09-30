@@ -4,7 +4,7 @@ requires = ["setuptools>=61"]
 
 [project]
 name = "smartg"
-version = "2.0.0b1"
+version = "2.0.0"
 description = """
 SMART-G (Speed-up Monte Carlo Advanced Radiative Transfer Code using GPU) is a radiative \
 transfer code using a Monte-Carlo technique to simulate the propagation of the polarized \
@@ -18,7 +18,7 @@ authors = [
 ]
 readme = "README.md"
 classifiers = [
-    'Development Status :: 4 - Beta',
+    'Development Status :: 5 - Production/Stable',
     'License :: Free for non-commercial use',
     'License :: Other/Proprietary License',
     'Intended Audience :: Science/Research',

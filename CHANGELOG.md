@@ -1,13 +1,13 @@
 # SMART-G CHANGELOG
 
 
-## v2.0.0b1
-Release date: 2026-09-22
+## v2.0.0
+Release date: 2026-09-30
 
 Note: this changelog entry has been started during the `v2.0.0dev1` stage,
 updated for `v2.0.0dev2`, `v2.0.0dev3`, `v2.0.0dev4`, `v2.0.0dev5` and
-the `v2.0.0b1` beta, and will be completed and corrected before the
-final `v2.0.0` release.
+the `v2.0.0b1` beta, and completed for this release: it lists the changes
+since `v1.2.0`.
 
 * Several breaking changes
   - The `AtmAFGL` class has been renamed to `Atm1D`, with PEP 8 constructor
@@ -2085,11 +2085,6 @@ final `v2.0.0` release.
       modules, all replaced by `geoclide`
 
 * Known issues
-  - `normalize=True` of the phase readers normalizes F11 with the
-    trapezoid rule in cos(theta), while the kernel integrates the tables
-    linearly in theta. The local estimate and ALIS contributions of such
-    a component are scaled by the gap: 5e-4 for the IPRT water cloud on
-    its native grid, below 1e-5 on the default 18001 angles
   - `icdf_2d` samples index 0 for a row that sums to zero or holds NaN,
     as a wavelength without absorption does in the forward thermal
     `cell_proba='auto'` path
