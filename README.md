@@ -36,14 +36,17 @@ Mathieu Compiègne
 * Polarized (I, Q, U, V) Monte-Carlo radiative transfer, accelerated on NVIDIA GPUs
 * Coupled ocean-atmosphere system, or atmosphere only / ocean only
 * 1D atmospheric profiles (AFGL standard atmospheres or user-provided), aerosols (OPAC or user-defined) and clouds
+* 1D ocean: chlorophyll-driven bio-optical models (Park & Ruddick, or the vertical profile of Zhai et al.), or user-defined inherent optical properties and phase matrices, over a reflecting seafloor
+* Truncation of the forward peak of the phase matrices (GT or Delta-M, with [pytrunc](https://github.com/hygeos/pytrunc)), per component; the ocean hydrosols are truncated by default, as in SMART-G 1.x
 * 3D atmospheres (`opt3d=True`), validated against MYSTIC on the IPRT phase B benchmark
 * Spherical atmosphere (`pp=False`), validated on the IPRT phase 3 benchmark
 * 3D objects and concentrated solar flux geometries (heliostat fields, solar towers)
-* Flat, rough or Lambertian surfaces, and 1D ocean profiles
-* Spectral integration with the k-distribution and REPTRAN parameterizations
+* Flat, rough (Cox-Munk), Lambertian or BRDF (RTLS) surfaces, and horizontally inhomogeneous environments (albedo maps)
+* Spectral integration with the k-distribution and REPTRAN parameterizations, and ALIS, which computes many wavelengths, and Jacobians, from the same photons
 * Rotational (Ring effect) and vibrational Raman scattering
-* Forward and backward modes, local estimate, and photon-history tracking
+* Forward and backward modes, local estimate, sensors, and photon-history tracking
 * Results returned as an `xarray.Dataset`, with built-in visualization helpers
+* Validated against published benchmarks and other codes: the IPRT phases A, B and 3, the atmosphere-ocean testbed of Chowdhary et al. (2020), HydroLight, and the Rayleigh, aerosol and cloud benchmarks of Kokhanovsky et al. (2010) and Natraj & Hovenier (2012), see [section 7](#7-tests)
 
 
 ## 2. Installation
@@ -55,7 +58,11 @@ needs the NVIDIA driver and the CUDA toolkit, see
 **Upgrading from 1.x**: version 2.0 renames many classes, functions and
 parameters to follow PEP 8 (e.g. `AtmAFGL` → `Atm1D`, `NBPHOTONS` →
 `n_photons`). The breaking changes are listed in the
-[CHANGELOG](https://github.com/hygeos/smartg/blob/master/CHANGELOG.md).
+[CHANGELOG](https://github.com/hygeos/smartg/blob/master/CHANGELOG.md),
+whose *Corrections* section lists the fixes that change results as well:
+the particle scattering of the chlorophyll ocean, for instance, which 1.x
+halved by mistake, or the reflection of a rough sea at grazing sun, which
+created energy.
 
 ### 2.1 PyPI
 
@@ -302,6 +309,18 @@ pytest -m slow smartg/tests/test_iprt_phase3.py   # slow, ~6 h 40
 ```
 
 Because a GPU run is not reproducible bit for bit, the phase 3 comparison is statistical: the tolerances on the mean bias and on the fraction of directions beyond three combined standard deviations were measured per tier rather than taken from a normal distribution.
+
+### 7.2 The other validation tests
+
+Four more files compare SMART-G with published benchmarks or with itself, with the same fast and slow tiers (`-m slow`) where the photon counts make it worthwhile. The durations are those of an RTX 5070 Ti.
+
+**Atmosphere-ocean testbed** — `test_chowdhary_aos.py` compares the upwelling reflectances I, Q and U just above the sea and at the top of the atmosphere with the testbed of Chowdhary et al. (2020, JQSRT 242, 106717): a Rayleigh atmosphere over a rough sea (AOS-I, and AOS-I* in the geometry of Natraj et al. 2009), a rough sea over 100 m of pure sea water (AOS-II), both (AOS-III), and both with forward-peaked hydrosols (AOS-IV), at four wavelengths and two solar angles. About 3 min in the fast tier and 1 h 30 in the slow one.
+
+**Rayleigh, aerosol and cloud benchmarks** — `test_kokhanovsky_natraj.py` compares the Stokes parameters of Rayleigh slabs of optical thickness 1 to 1024 (Natraj & Hovenier 2012) and of the Rayleigh, aerosol and water cloud layers of Kokhanovsky et al. (2010) with the benchmark values, the validations of the SMART-G paper. About 30 s of runs in the fast tier and 4 min in the slow one.
+
+**Self-consistency** — `test_self_consistency.py` computes the same quantity in two ways, which must agree within the Monte Carlo noise: the equivalence theorem (the absorption as a weight along the path or at the collisions), ALIS against standard runs, with water, and the Jacobians of ALIS against finite differences. About 3 min 30 in the fast tier and 30 min in the slow one.
+
+**Ocean** — `test_water.py` holds, among its unit tests, a comparison with HydroLight (the irradiance reflectance and the upwelling radiance just below the surface, pure sea water) and with the analytic radiance of a Lambertian seafloor under clear water, in the forward and backward modes.
 
 ## 8. Coding conventions
 
