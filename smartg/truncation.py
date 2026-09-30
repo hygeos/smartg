@@ -483,18 +483,27 @@ def truncate_phase(
                 f"{theta_int[0]:g} and {theta_int[1]:g} degree: nothing "
                 "would be truncated."
             )
-        ds_pha = cast(
-            xr.Dataset,
-            gt_phase_approx(
-                f11_int * scale,
-                theta_int,
-                truncation.trunc_frac,
-                method=truncation.integral_method,
-                th_tol=truncation.theta_tol,
-                th_f=truncation.theta_tr,
-                lobatto_optimization=truncation.lobatto_optimization,
-            ),
-        )
+        try:
+            ds_pha = cast(
+                xr.Dataset,
+                gt_phase_approx(
+                    f11_int * scale,
+                    theta_int,
+                    truncation.trunc_frac,
+                    method=truncation.integral_method,
+                    th_tol=truncation.theta_tol,
+                    th_f=truncation.theta_tr,
+                    lobatto_optimization=truncation.lobatto_optimization,
+                ),
+            )
+        except ValueError as exc:
+            if truncation.trunc_frac is not None:
+                raise
+            raise ValueError(
+                f"{exc} A component whose phase function has no forward "
+                "peak takes truncation=None (the hydrosols of "
+                "smartg.water truncate by default)."
+            ) from exc
     f11_tr = np.asarray(ds_pha["phase_tr"].values, dtype=np.float64) / scale
     f = float(ds_pha["f"].values)
     if (f11_tr < 0.0).any():

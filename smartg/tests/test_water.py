@@ -247,7 +247,9 @@ def _build_water_iop(pure_water_path: Path) -> Water1D:
         grid=WATER_GRID,
         aw=aw,
         bw=bw,
-        comp=[Hydrosol(phase=phase, ap=aph, acdom=ag, bp=bph)],
+        # HydroLight scatters with the whole phase function
+        comp=[Hydrosol(phase=phase, ap=aph, acdom=ag, bp=bph,
+                       truncation=None)],
     )
 
 
@@ -899,15 +901,25 @@ def test_hydrosol_calc_phase_truncation() -> None:
         assert (p[:, :, [1, 2, 3, 5], :] == 0.0).all()
         return coef.values
 
-    # no truncation by default: the 721 angles resolve 72 % of the
-    # forward peak of the mixture
-    resolved = calc()
+    # untruncated: the 721 angles resolve 72 % of the forward peak of
+    # the mixture
+    resolved = calc(truncation=None)
     np.testing.assert_allclose(resolved, 0.722, atol=1e-3)
 
-    # the recommended GT truncation: 1 - trunc_frac of the resolved part
+    # GT with an imposed fraction: 1 - trunc_frac of the resolved part
     np.testing.assert_allclose(
-        calc(truncation=DEFAULT_WATER_TRUNC), 0.7 * resolved, rtol=1e-12
+        calc(truncation=GTTrunc(trunc_frac=0.3, theta_tr=5.0)),
+        0.7 * resolved,
+        rtol=1e-12,
     )
+
+    # the default, the continuous plateau of v1.2.0 at 5 degrees, takes
+    # away more of the peak
+    default = calc()
+    np.testing.assert_array_equal(
+        default, calc(truncation=DEFAULT_WATER_TRUNC)
+    )
+    assert (default < 0.7 * resolved).all()
 
     # GT truncation with a searched truncation angle
     coef = calc(
@@ -1219,8 +1231,13 @@ def test_water1d_mixes_the_default_grids_on_their_union(
 
 
 def _user_phase() -> xr.DataArray:
-    """Return derived phase matrices on 1801 angles, to be supplied."""
-    return Hydrosol(bp=0.1, bbp_ratio=0.012, n_theta=1801).calc_phase(
+    """Return derived phase matrices on 1801 angles, to be supplied.
+
+    Untruncated, as a table read from a file would be.
+    """
+    return Hydrosol(
+        bp=0.1, bbp_ratio=0.012, n_theta=1801, truncation=None
+    ).calc_phase(
         np.array([500.0]), np.array([0.0]), np.array([[0.012]])
     )[0]
 
@@ -1278,12 +1295,15 @@ def test_water1d_derives_the_phases_on_the_asked_grid() -> None:
     built on that grid; the hydrosol's own grid comes back after.
     """
     wavelength = np.array([500.0])
-    hydrosol = HydrosolPR(chl=0.5, n_theta=7201)
+    # untruncated: the continuous plateau of the default truncation
+    # takes the peak away whatever the grid resolves of it
+    hydrosol = HydrosolPR(chl=0.5, n_theta=7201, truncation=None)
     water = Water1D(grid=[0.0, -5.0], comp=[hydrosol])
     own = water.calc(wavelength)
     asked = water.calc(wavelength, n_theta=721)
     built = Water1D(
-        grid=[0.0, -5.0], comp=[HydrosolPR(chl=0.5, n_theta=721)]
+        grid=[0.0, -5.0],
+        comp=[HydrosolPR(chl=0.5, n_theta=721, truncation=None)],
     ).calc(wavelength)
 
     xr.testing.assert_identical(asked, built)

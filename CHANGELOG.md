@@ -602,13 +602,14 @@ final `v2.0.0` release.
   - The `ang_trunc` parameter of the `IOP`, `IOP_1` and `IOP_profile`
     classes has been replaced, in the `Hydrosol`, `HydrosolPR` and
     `HydrosolZhai` classes that took over, by `truncation`
-    (`DMTrunc | GTTrunc | None`): the water
-    phase functions are truncated with pytrunc like the atmospheric ones, and
-    the scattering coefficient is scaled by `1 - f`. The truncation is only
-    applied when asked for: the default is `None`, no truncation, where
-    v1.2.0 always cut the forward peak below 5 degrees. Pass
-    `truncation=DEFAULT_WATER_TRUNC` (`GTTrunc(trunc_frac=0.3, theta_tr=5.0)`,
-    the recommended one) to truncate the derived phase functions
+    (`DMTrunc | GTTrunc | None`): the water phase functions are truncated
+    with pytrunc like the atmospheric ones, and the scattering coefficient
+    is scaled by `1 - f`. The default, `DEFAULT_WATER_TRUNC`
+    (`GTTrunc(trunc_frac=None, theta_tr=5.0)`, pytrunc >= 2.1), is the
+    truncation of v1.2.0: the phase function cut flat below 5 degrees at
+    its value there. It applies to a `Hydrosol` given its own phase
+    matrices too, which v1.2.0 left untruncated (see below);
+    `truncation=None` keeps the exact phase functions
   - The phase matrix truncation is carried by the components: the
     `truncation` argument of `Atm1D.calc` and `Atm3D.calc` has been
     removed, and `AerOPAC`, `Cloud`, `AerUser`, `Cloud3D` and `Aer3D` take
@@ -640,15 +641,16 @@ final `v2.0.0` release.
       as it already did for the hydrosols, instead of reaching the profile
       unnoticed: GT on a phase function without a marked forward peak (a
       continental aerosol), or Delta-M with too few streams
-    - no component is truncated unless asked for: `truncation=None`, the
-      default of the atmospheric components as of the hydrosols, is no
-      truncation, and anything else than a `DMTrunc`, a `GTTrunc` or `None`
-      (a boolean included) raises a `TypeError` when the component is built
+    - no atmospheric component is truncated unless asked for:
+      `truncation=None`, their default, is no truncation (the hydrosols
+      take `DEFAULT_WATER_TRUNC` by default), and anything else than a
+      `DMTrunc`, a `GTTrunc` or `None` (a boolean included) raises a
+      `TypeError` when the component is built
   - A `Hydrosol` given its own phase matrices (`phase=`) now truncates them
-    too when given a `truncation`, as the derived ones, and scales its
-    scattering coefficient by `1 - f`. A phase function without a marked
-    forward peak cannot be truncated: the truncation would leave it
-    negative, and is refused
+    too, by default as the derived ones, and scales its scattering
+    coefficient by `1 - f`. A phase function without a forward peak cannot
+    be truncated and is refused: give such a hydrosol `truncation=None`,
+    as the error of the default truncation says
   - The `show_trunc` option of `smartg.view.phase_view` has been removed: it
     read a `phase_atm_tr` / `phase_oc_tr` variable that no profile carries
     any more, the profile holding only the (truncated) matrices the
@@ -717,7 +719,8 @@ final `v2.0.0` release.
       halved by mistake. Imposing both `trunc_frac` and `theta_tr` sets
       the plateau by the normalization instead, in general away from the
       phase matrix at `theta_tr`: six times above it with
-      `DEFAULT_WATER_TRUNC` for the `HydrosolPR` of 0.5 mg/m3 at 500 nm
+      `GTTrunc(trunc_frac=0.3, theta_tr=5.0)`, the former
+      `DEFAULT_WATER_TRUNC`, for the `HydrosolPR` of 0.5 mg/m3 at 500 nm
   - The scattering angles of a phase matrix no longer have to be equally
     spaced. Clustering them towards the forward and backward directions
     resolves the diffraction peak of large particles (desert aerosols,

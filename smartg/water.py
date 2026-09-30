@@ -88,13 +88,14 @@ from smartg.truncation import (
 )
 from smartg.typing import NumericArrayLike, PathType, ThetaLike
 
-#: Recommended truncation of the Fournier-Forand phase functions the
-#: hydrosols derive, to be asked for explicitly (the hydrosols truncate
-#: nothing by default): the forward peak below 5 deg is replaced
-#: following Iwabuchi & Suzuki (2009), with a truncation fraction of 0.3
-#: (larger fractions make the truncated phase function negative for the
-#: most forward-peaked Fournier-Forand mixtures).
-DEFAULT_WATER_TRUNC = GTTrunc(trunc_frac=0.3, theta_tr=5.0)
+#: Default truncation of the phase functions of the hydrosols (the
+#: atmospheric components truncate nothing by default): the truncation
+#: of v1.2.0, the phase function cut flat below 5 deg at its value
+#: there, the truncation fraction following from that level (GT of
+#: Iwabuchi & Suzuki (2009) with the angle imposed and a continuous
+#: plateau, pytrunc >= 2.1). truncation=None keeps the exact phase
+#: functions.
+DEFAULT_WATER_TRUNC = GTTrunc(trunc_frac=None, theta_tr=5.0)
 
 #: Default scattering angles of the phase matrices HydrosolPR derives:
 #: 7201 angles clustered towards the forward and backward directions
@@ -291,11 +292,11 @@ class Hydrosol:
         Truncation of the forward peak of the phase matrices, the ones
         supplied through `phase` as well as the derived ones, performed
         with `smartg.truncation.truncate_phase_set` as the `truncation`
-        of the atmospheric components. None, the default, disables the
-        truncation; `DEFAULT_WATER_TRUNC` is the one recommended for
-        the derived phase functions. A phase function without a marked
-        forward peak cannot be truncated: the truncation would leave it
-        negative, and is refused.
+        of the atmospheric components. Default `DEFAULT_WATER_TRUNC`,
+        the truncation of v1.2.0: the phase function cut flat below 5
+        degrees at its value there; None disables the truncation. A
+        phase function without a forward peak cannot be truncated and
+        is refused: give it truncation=None.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths. The coefficients
@@ -345,7 +346,7 @@ class Hydrosol:
         acdom: NumericArrayLike | None = None,
         bbp_ratio: NumericArrayLike | None = None,
         n_theta: ThetaLike = 721,
-        truncation: DMTrunc | GTTrunc | None = None,
+        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
     ) -> None:
         self.bp = bp
@@ -643,7 +644,8 @@ class Hydrosol:
             when the imposed truncation fraction exceeds the energy of
             the truncated peak (e.g. a GT truncation with both
             `trunc_frac` and `theta_tr` imposed and a too large
-            `trunc_frac`).
+            `trunc_frac`), or if a continuous plateau finds no forward
+            peak to truncate.
 
         References
         ----------
@@ -1108,8 +1110,8 @@ class HydrosolPR(Hydrosol):
         `Water1D.calc`) derives the phase matrices on that one.
     truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices
-        (see `Hydrosol`). None, the default, disables the truncation;
-        `DEFAULT_WATER_TRUNC` is the recommended one.
+        (see `Hydrosol`). Default `DEFAULT_WATER_TRUNC`, the truncation
+        of v1.2.0; None disables the truncation.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -1147,7 +1149,7 @@ class HydrosolPR(Hydrosol):
         self,
         chl: float,
         n_theta: NumericArrayLike | None = None,
-        truncation: DMTrunc | GTTrunc | None = None,
+        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
         fqyc: float = 0.0,
     ) -> None:
@@ -1279,8 +1281,8 @@ class HydrosolZhai(Hydrosol):
         one.
     truncation : DMTrunc or GTTrunc or None, optional
         Truncation of the forward peak of the derived phase matrices
-        (see `Hydrosol`). None, the default, disables the truncation;
-        `DEFAULT_WATER_TRUNC` is the recommended one.
+        (see `Hydrosol`). Default `DEFAULT_WATER_TRUNC`, the truncation
+        of v1.2.0; None disables the truncation.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
         None, they are calculated at all wavelengths.
@@ -1331,7 +1333,7 @@ class HydrosolZhai(Hydrosol):
         self,
         chl_surf: float,
         n_theta: NumericArrayLike = 7201,
-        truncation: DMTrunc | GTTrunc | None = None,
+        truncation: DMTrunc | GTTrunc | None = DEFAULT_WATER_TRUNC,
         wavelength_phase: NumericArrayLike | None = None,
         euphotic_depth: float | None = None,
         mixed: bool = False,

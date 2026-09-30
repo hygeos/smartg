@@ -302,7 +302,9 @@ def _run_aos(
             pha = xr.concat(
                 [pha_a, pha_a, pha_b, pha_b], dim="wavelength_phase"
             ).assign_coords(wavelength_phase=WAVELENGTHS)
-            comp, absorption = [Hydrosol(phase=pha, bp=_column(BP))], A_BLK
+            # the testbed's codes scatter with the whole matrices
+            comp = [Hydrosol(phase=pha, bp=_column(BP), truncation=None)]
+            absorption = A_BLK
         water = Water1D(
             grid=[0.0, -DEPTH], aw=_column(absorption), bw=_column(BW),
             comp=comp,
