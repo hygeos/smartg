@@ -70,19 +70,12 @@ from smartg.reptran import Reptran, reduce_reptran
 from smartg.sensor import Sensor
 from smartg.smartg import Alis, LocalEstimate, Smartg
 from smartg.surface import Environment, LambSurface, RoughSurface, RTLSSurface
-from smartg.truncation import GTTrunc
 from smartg.view import input_view, smartg_view, spectrum_view, transect_view
 from smartg.water import Hydrosol, HydrosolPR, Water1D
 from smartg.xarray import drop_axes
 
 warnings.filterwarnings("ignore")
 warnings.simplefilter('always', DeprecationWarning)
-
-# The truncation of the chlorophyll water of this notebook, that of
-# SMART-G 1.x: the phase function cut flat below 5 degrees at its value
-# there, the truncation fraction following from that level (the
-# hydrosols truncate nothing by default)
-WATER_TRUNC = GTTrunc(trunc_frac=None, theta_tr=5.0)
 
 # %% [markdown]
 # # Quick Start
@@ -180,9 +173,10 @@ atmosphere = Atm1D('afglms', tco3=0., no2=False)
 surface = RoughSurface(wind=5., nh2o=1.34)
 # Case I water Inherent Optical Properties depending on Chlorophyll
 # concentration only; the forward peak of its phase function is
-# truncated (WATER_TRUNC, see the first cell)
-water = Water1D(grid=[0., -5.],
-                comp=[HydrosolPR(chl=0.5, truncation=WATER_TRUNC)])
+# truncated, by default as in SMART-G 1.x: cut flat below 5 degrees at
+# its value there (smartg.water.DEFAULT_WATER_TRUNC; truncation=None
+# keeps the exact phase function)
+water = Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)])
 # compute outputs at the surface and bottom of ocean also,
 # view results for upwelling and downwelling radiances
 wavelength = 500.
@@ -200,8 +194,7 @@ for log_i, field in zip(log_is, fields):
 # surface + ocean
 atmosphere = None
 surface = RoughSurface(wind=5., nh2o=1.34)
-water = Water1D(grid=[0., -5.],
-                comp=[HydrosolPR(chl=0.5, truncation=WATER_TRUNC)])
+water = Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)])
 # compute outputs at the surface also, view results for downwelling
 # at bottom of ocean
 fig = smartg_view(Smartg().run(wavelength, n_photons=1e8, th_deg=th0,
@@ -214,8 +207,7 @@ fig = smartg_view(Smartg().run(wavelength, n_photons=1e8, th_deg=th0,
 # ocean only
 atmosphere = None
 surface = None
-water = Water1D(grid=[0., -5.],
-                comp=[HydrosolPR(chl=0.5, truncation=WATER_TRUNC)])
+water = Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)])
 # compute outputs at the surface also, view results for downwelling
 # at bottom of ocean
 fig = smartg_view(Smartg().run(wavelength, n_photons=1e8, th_deg=th0,
@@ -248,10 +240,7 @@ m = Smartg().run(wavelength=wavelength, n_photons=1e6, th_deg=th0,
                  output_layers=3, le=le,
                  atmosphere=Atm1D('afglms', tco3=0., no2=False),
                  surface=RoughSurface(wind=5., nh2o=1.34),
-                 water=Water1D(
-                     grid=[0., -5.],
-                     comp=[HydrosolPR(chl=0.5,
-                                      truncation=WATER_TRUNC)]))
+                 water=Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)]))
 
 fig = smartg_view(m, field='up (0-)', log_i=True, i_min=-2.5, i_max=-1.)
 
@@ -269,10 +258,7 @@ mz = Smartg().run(wavelength=wavelength, n_photons=1e6, th_deg=th0,
                   output_layers=3, le=le,
                   atmosphere=Atm1D('afglms', tco3=0., no2=False),
                   surface=RoughSurface(wind=5., nh2o=1.34),
-                  water=Water1D(
-                      grid=[0., -5.],
-                      comp=[HydrosolPR(chl=0.5,
-                                       truncation=WATER_TRUNC)]))
+                  water=Water1D(grid=[0., -5.], comp=[HydrosolPR(chl=0.5)]))
 # the result has an "Azimuth angles" coordinate, but no variable depends
 # on it
 print(mz)
@@ -852,8 +838,7 @@ atmosphere = Atm1D('afglms', wavelength_phase=[400., 700., 1000., 1300., 1600,
                                              1900., 2200.])
 
 water = Water1D(grid=[0., -50.],
-              comp=[HydrosolPR(1., wavelength_phase=[400., 700.],
-                               truncation=WATER_TRUNC)])
+                comp=[HydrosolPR(1., wavelength_phase=[400., 700.])])
 
 surface = RoughSurface()
 
@@ -1100,8 +1085,7 @@ spp = Smartg()
 surface = RoughSurface(sur=3, wind=10., nh2o=1.34)
 atmosphere = Atm1D('afglms')
 water = Water1D(grid=[0., -100.],
-                     comp=[HydrosolPR(chl=1.1, wavelength_phase=[550.],
-                                      truncation=WATER_TRUNC)])
+                comp=[HydrosolPR(chl=1.1, wavelength_phase=[550.])])
 wavelength = np.linspace(400., 700., num=11)
 th0 = 75.
 
@@ -1605,8 +1589,7 @@ y_bins = np.array([-10, 10, 1e8])
 # albedos
 surface = RoughSurface(wind=5., wave_shadow=True)
 water = Water1D(grid=[0., -10.],
-               comp=[HydrosolPR(chl=0.1, wavelength_phase=[600.],
-                                truncation=WATER_TRUNC)])
+                comp=[HydrosolPR(chl=0.1, wavelength_phase=[600.])])
 ai = np.array([[-1, -1, -1], [-1, 0, -1], [-1, 1, -1], [-1, -1, -1]])
 #
 # we build the Albedo 2D object
