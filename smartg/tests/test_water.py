@@ -1395,8 +1395,11 @@ def test_water1d_mixes_a_hydrosol_given_arrays() -> None:
     )
     bp = np.array([[0.1, 0.1, 0.1], [0.2, 0.3, 0.4]])
     chl = HydrosolPR(chl=0.5, n_theta=721, wavelength_phase=[550.0])
+    # pha comes truncated by the default of calc_phase, and has no peak
+    # left to truncate: it is taken as it is
     pro = Water1D(
-        grid=grid, comp=[Hydrosol(phase=pha, bp=bp), chl]
+        grid=grid,
+        comp=[Hydrosol(phase=pha, bp=bp, truncation=None), chl],
     ).calc(wavelength)
 
     # both are tabulated at 550 nm, which weights every wavelength
