@@ -16,6 +16,10 @@
     the angles increasing whatever the order of the file, and these
     components sort the angles of the matrix they are given, as `AerUser`
     already did
+  - Build the Ross-Thick Li-Sparse surface of the demo notebook from the
+    `k0`, `k1p` and `k2p` parameters of `RTLSSurface`, instead of the `kp`
+    tuple deprecated since 1.1.0, whose `DeprecationWarning` the notebook
+    printed. The separate parameters raised a `TypeError` before 2.0.0
 
 
 ## v2.0.0

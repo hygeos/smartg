@@ -1046,8 +1046,7 @@ for i, (b, col) in enumerate(zip(wmedian, ['r', 'b', 'g', 'c'] * 2)):
 # K1 : Spectral weight the F1 (geometric) kernel
 # K2 : Spectral weight the F2 (volumetric) kernel
 # --------------
-# in SMART-G the RTLSSurface() objects is initialized with:
-# kp = (k0 , k1p, k2p): a tuple of
+# in SMART-G the RTLSSurface() object is initialized with:
 # k0 : Spectral Albedo of the isotropic (lambertian) kernel
 # k1p: Spectral relative weight the F1 (geometric) kernel (=K1/K0)
 # k2p: Spectral relative weight the F2 (volumetric) kernel(=K2/K0)
@@ -1057,10 +1056,10 @@ KP_VIS = (K_VIS[0], K_VIS[1] / K_VIS[0], K_VIS[2] / K_VIS[0])
 K_NIR = (0.36, 0.05, 0.3)  # vegetation in NIR
 KP_NIR = (K_NIR[0], K_NIR[1] / K_NIR[0], K_NIR[2] / K_NIR[0])
 wavelength = np.array([440., 760.])
-kp = (AlbedoSpectrum(np.array([KP_VIS[0], KP_NIR[0]]), wavelength),
-        AlbedoSpectrum(np.array([KP_VIS[1], KP_NIR[1]]), wavelength),
-        AlbedoSpectrum(np.array([KP_VIS[2], KP_NIR[2]]), wavelength))
-surface = RTLSSurface(kp=kp)
+k0 = AlbedoSpectrum(np.array([KP_VIS[0], KP_NIR[0]]), wavelength)
+k1p = AlbedoSpectrum(np.array([KP_VIS[1], KP_NIR[1]]), wavelength)
+k2p = AlbedoSpectrum(np.array([KP_VIS[2], KP_NIR[2]]), wavelength)
+surface = RTLSSurface(k0=k0, k1p=k1p, k2p=k2p)
 atmosphere = Atm1D('afglt')
 # atmosphere + surface
 azimuth_transect = (10., 90)
