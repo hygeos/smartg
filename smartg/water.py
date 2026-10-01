@@ -260,7 +260,7 @@ class Hydrosol:
     ----------
     phase : DataArray or LUT or None, optional
         Phase matrices with dimensions [n_wavelength, nz, nphamat,
-        angle].
+        angle], the angles in either order.
         If None, the phase matrices are derived from `bbp_ratio`
         (see notes).
     bp : array_like or None, optional
@@ -355,6 +355,9 @@ class Hydrosol:
         self.bbp_ratio = bbp_ratio
         self._phase = expand_phase_4_to_6(phase)
         if self._phase is not None:
+            # with its angles increasing, as AerUser does, whatever
+            # their order in the matrix given
+            self._phase = self._phase.sortby(self._phase.dims[-1])
             _check_finite_phase(self._phase, f"the {type(self).__name__}")
         if self._phase is None and is_native_theta(n_theta):
             raise ValueError(

@@ -897,10 +897,10 @@ def read_phase_dat(
     Read a phase matrix from a space-separated `.dat` file.
 
     The file is expected to have no header. The first column contains
-    the scattering angles (in degrees), and the remaining columns
-    contain the phase matrix elements (one column per element). The
-    phase matrix is assumed to be monochromatic and vertically uniform
-    (no wavelength or altitude dependence).
+    the scattering angles (in degrees), in either order, and the
+    remaining columns contain the phase matrix elements (one column per
+    element). The phase matrix is assumed to be monochromatic and
+    vertically uniform (no wavelength or altitude dependence).
 
     Parameters
     ----------
@@ -928,7 +928,7 @@ def read_phase_dat(
           nphamat = 4 for spherical particles only
           nphamat = 6 for spherical or non-spherical particles
           (for spherical: P22=P11, P44=P33)
-        - ``'theta_' + kind`` : scattering angle in degrees
+        - ``'theta_' + kind`` : scattering angle in degrees, increasing
 
     Examples
     --------
@@ -942,6 +942,10 @@ def read_phase_dat(
     theta = np.asarray(df.iloc[:, 0].values)
     pha = np.asarray(df.iloc[:, 1:].values)
     pha = pha.swapaxes(0, 1)
+    # the angles come back increasing, as from the other readers,
+    # whatever the order of the file
+    order = np.argsort(theta, kind="stable")
+    theta, pha = theta[order], pha[:, order]
 
     if normalize:
         mu = np.cos(np.deg2rad(theta))

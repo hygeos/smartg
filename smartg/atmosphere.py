@@ -1978,9 +1978,10 @@ class _Comp3DFile(Comp3D):
         else:
             # the readers keep the terms of the file: complete the 4
             # of spherical particles into 6, as the bulk file path of
-            # get_phase does
+            # get_phase does, with the angles increasing whatever
+            # their order in the matrix given
             _check_finite_phase(phase, f"the {type(self).__name__}")
-            self.phase = expand_phase_4_to_6(phase)
+            self.phase = expand_phase_4_to_6(phase.sortby("theta_atm"))
 
     def _normalize_param(
         self, param: NDArray[np.float64]

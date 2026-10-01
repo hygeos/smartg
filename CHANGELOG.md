@@ -1,6 +1,23 @@
 # SMART-G CHANGELOG
 
 
+## v2.0.1
+
+* Corrections
+  - Sort the angles of a phase matrix given in decreasing order.
+    `read_phase` kept the order of a `.dat` file, and `Hydrosol`,
+    `Cloud3D` and `Aer3D` that of the matrix they were given, so a table
+    listed from 180 down to 0 degrees, as `validation/opt_hydrosols.dat`
+    of the auxdata is, reached the truncation backwards and its F11
+    integrated to a negative value. Since the hydrosols truncate by
+    default, `Water1D.calc` raised `ValueError: F11 integrates to -1.35:
+    it cannot be truncated` on that table, which stopped the demo
+    notebook at its custom water profile. `read_phase_dat` now returns
+    the angles increasing whatever the order of the file, and these
+    components sort the angles of the matrix they are given, as `AerUser`
+    already did
+
+
 ## v2.0.0
 Release date: 2026-09-30
 

@@ -368,6 +368,25 @@ def test_hydrosols_truncate_by_default() -> None:
     assert -0.1 * 10.0 < pro["OD_p_oc"].values[0, -1] < 0.0
 
 
+def test_hydrosol_supplied_phase_in_decreasing_angles() -> None:
+    """A supplied phase is taken in either order of its angles.
+
+    Given from 180 down to 0 degrees, as validation/opt_hydrosols.dat of
+    the auxdata lists them, the phase gives the profile of the same
+    phase given increasing, default truncation included: F11 used to
+    integrate backwards to a negative value, which the truncation
+    refused.
+    """
+    pha, _ = _ff_phase()
+    down = pha.isel(theta_oc=slice(None, None, -1))
+    xr.testing.assert_identical(
+        Water1D(grid=WATER_GRID, comp=[Hydrosol(phase=down, bp=0.1)])
+        .calc(WATER_WAV),
+        Water1D(grid=WATER_GRID, comp=[Hydrosol(phase=pha, bp=0.1)])
+        .calc(WATER_WAV),
+    )
+
+
 def test_hydrosol_supplied_flat_phase_refused() -> None:
     """A GT fraction larger than a weak peak holds is refused.
 

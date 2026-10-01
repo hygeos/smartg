@@ -302,6 +302,25 @@ def test_cloud3d_completes_a_four_term_table() -> None:
     )
 
 
+def test_cloud3d_sorts_the_angles_of_its_table() -> None:
+    """Check that Cloud3D sorts a table given in decreasing angles."""
+    table = read_phase_cdf(
+        WC_CDF, n_theta=901, output_sg_ready=False, normalize=False
+    )
+
+    def cloud(phase: xr.DataArray) -> Cloud3D:
+        return Cloud3D(
+            "wc", w_ref=670.0, ext_ref=np.array([10.0]),
+            cell_indices=np.array([[1, 1, 1]]), reff=np.array([10.0]),
+            phase=phase,
+        )
+
+    up = cloud(table).phase
+    down = cloud(table.isel(theta_atm=slice(None, None, -1))).phase
+    assert up is not None and down is not None
+    xr.testing.assert_identical(down, up)
+
+
 # --------------------------------------------------------------------
 # read_phase_nc
 # --------------------------------------------------------------------
@@ -378,6 +397,23 @@ def test_dispatcher_refuses_the_table_layout_of_a_dat_file(
     assert read_phase(fname, kind="oc").dims[-1] == "theta_oc"
     with pytest.raises(ValueError, match="dat"):
         read_phase(fname, output_sg_ready=False)
+
+
+def test_dat_angles_come_back_increasing(tmp_path: Path) -> None:
+    """Check that a .dat file reads the same in either angle order.
+
+    As validation/opt_hydrosols.dat of the auxdata, a file may list its
+    angles from 180 down to 0 degrees.
+    """
+    theta = np.linspace(0.0, 180.0, 19)
+    f11 = 1.0 + np.cos(np.deg2rad(theta)) ** 2
+    table = np.column_stack([theta, f11, -0.5 * f11, 0.8 * f11, 0.1 * f11])
+    up, down = tmp_path / "up.dat", tmp_path / "down.dat"
+    np.savetxt(up, table)
+    np.savetxt(down, table[::-1])
+    pha_down = read_phase(down, kind="oc")
+    assert np.all(np.diff(pha_down["theta_oc"].values) > 0.0)
+    xr.testing.assert_identical(pha_down, read_phase(up, kind="oc"))
 
 
 def test_the_constant_theta_reader_is_gone() -> None:
