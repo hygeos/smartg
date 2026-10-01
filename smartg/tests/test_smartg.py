@@ -384,6 +384,42 @@ def test_alis_cdist_ocean(sg_alis: Smartg) -> None:
     assert np.all(cdist[:2, ..., 1] > 0.0)
 
 
+def test_alis_photon_scattered_horizontally(sg_alis: Smartg) -> None:
+    """Check that a vertical photon scattered at 90 degrees is finite.
+
+    With the sun at the zenith, a direct photon scattered at an angle
+    whose __cosf is exactly 0 (three float32 values around pi/2 on the
+    sm_120 GPUs) moves horizontally, and the plane-parallel move used
+    to divide by its vertical cosine: its path and its ALIS correction
+    became NaN, and so did the whole run. Seed 268 does it within 4e6
+    photons on an RTX 5070 Ti and an RTX PRO 6000 (3 runs of 3 on
+    each). Which photons a thread runs depends on the GPU, so another
+    one may not reach that photon, and then cannot fail this test.
+    """
+    atmosphere = Atm1D(
+        "afglus", grid=[120.0, 50.0, 20.0, 10.0, 5.0, 2.0, 0.0],
+        tco3=0.0, no2=False,
+    ).calc([550.0])
+    with pytest.warns(UserWarning, match="Odd number of azimuth"):
+        m = sg_alis.run(
+            np.array([550.0]),
+            atmosphere=atmosphere,
+            surface=LambSurface(alb=AlbedoCst(1.0)),
+            alis_options=Alis(n_low=-1),
+            th_deg=0.0,
+            n_photons=4e6,
+            n_theta=1,
+            n_phi=1,
+            output_layers=4,
+            r_max=0,
+            direct=True,
+            progress=False,
+            seed=268,
+        )
+    for name, var in m.data_vars.items():
+        assert np.all(np.isfinite(var.values)), name
+
+
 @pytest.fixture(scope="module")
 def sg_alis_datomicadd() -> Smartg:
     """Build an ALIS Smartg on the DatomicAdd fallback of old GPUs.

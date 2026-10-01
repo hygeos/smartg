@@ -2641,8 +2641,11 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
 
         //
         // calculate the distance d to the fw layer
-        // from the current position
-        d   = __fdividef(abs(ph->pos.z - prof[i_layer_fw].z), fabs(ph->v.z));
+        // from the current position; a horizontal photon (v.z = 0, as
+        // __cosf gives a vertical photon scattered at 90 degrees) would
+        // make d infinite and d * epsilon below NaN: with the floor, d
+        // cancels there into its path to the interaction in the layer
+        d   = __fdividef(abs(ph->pos.z - prof[i_layer_fw].z), fmaxf(fabs(ph->v.z), 1e-20F));
         AMF = __fdividef(d, abs(prof[i_layer_bh].z - prof[i_layer_fw].z)); // Air Mass Factor
 
         //

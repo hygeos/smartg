@@ -20,6 +20,18 @@
     `k0`, `k1p` and `k2p` parameters of `RTLSSurface`, instead of the `kp`
     tuple deprecated since 1.1.0, whose `DeprecationWarning` the notebook
     printed. The separate parameters raised a `TypeError` before 2.0.0
+  - Keep finite a photon that moves horizontally in the plane-parallel
+    geometry of `alt_pp=True`. With the sun at the zenith, a direct photon
+    scattered at one of the three angles around 90 degrees where the fast
+    cosine of the kernel returns exactly 0 moves horizontally, and the
+    move divided by its vertical cosine: its path became NaN. With ALIS
+    the NaN reached the scattering corrections and the path lengths,
+    which the photon count does not check, so one photon made the whole
+    run NaN: I, Q, U, V, their standard deviations and every layer of
+    `cdist`. In a clear sky, about 1 run in 50 of 4e6 photons was hit,
+    and about half of those of 1e8 photons; without ALIS the photon was
+    dropped. Spherical geometry and the 3D move were not affected. The
+    error was already in v1.2.0
 
 
 ## v2.0.0
