@@ -2,6 +2,7 @@
 
 
 ## v2.0.1
+Release date: 2026-10-02
 
 * Corrections
   - Sort the angles of a phase matrix given in decreasing order.
