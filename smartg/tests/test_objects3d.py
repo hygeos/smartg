@@ -37,7 +37,7 @@ from smartg.objects3d import (
     Spheric,
     Transformation,
 )
-from smartg.smartg import Smartg, _od_at_altitude
+from smartg.smartg import LocalEstimate, Smartg, _od_at_altitude
 from smartg.surface import LambSurface
 from smartg.view import nopt_view
 
@@ -929,6 +929,113 @@ def test_fast_and_alt_pp_moves_agree_on_the_receiver() -> None:
     assert counted[0] and counted[2]
     z = (fast["cat_irr"].values - alt["cat_irr"].values)[counted]
     assert np.all(np.abs(z / err[counted]) < 5)
+
+
+def _roof(half: float, altitude: float) -> Entity:
+    """Return a black horizontal square, of half-width half, in km."""
+    return Entity(
+        name="environment",
+        material_front=Matte(reflectivity=0.0),
+        material_back=Matte(reflectivity=0.0),
+        geo=_plane(half, half),
+        transformation=Transformation(
+            rotation=np.array([0.0, 0.0, 0.0]),
+            translation=np.array([0.0, 0.0, altitude]),
+        ),
+    )
+
+
+@pytest.mark.parametrize("roof", [True, False], ids=["roof", "no roof"])
+def test_local_estimate_masked_by_a_black_roof(sg: Smartg, roof: bool) -> None:
+    """A black roof over the scene masks every local estimate to TOA.
+
+    The photons are launched at 20 km, below a black roof at 30 km, into
+    a dusty atmosphere over a bright ground: every path of the local
+    estimate to TOA crosses the roof, so the TOA radiance is exactly 0.
+    The roof spans 1e5 km: at that altitude a photon scattered sideways
+    travels about 1000 km, and some went round a roof of 2000 km. The
+    alternative move tested the mask once the virtual photon was at TOA,
+    from where the ray missed the roof. Without the roof (a small object
+    far away) the radiance is not 0.
+    """
+    obstacle = (
+        _roof(5e4, 30.0) if roof else _receiver(0.001, (500.0, 500.0, 0.0))
+    )
+    ds = sg.run(
+        wavelength=550.0,
+        atmosphere=Atm1D("afglt", comp=[AerOPAC("desert", 0.5, 550.0)]),
+        surface=LambSurface(alb=AlbedoCst(0.3)),
+        th_deg=0.0,
+        n_photons=1e5,
+        my_objects=[obstacle],
+        cus_l=CusForward(cfx=1.0, cfy=1.0, cftz=20.0 - 120.0, mode="FF"),
+        le=LocalEstimate(th_deg=[0.0, 30.0, 60.0], phi_deg=[0.0]),
+        seed=SEED,
+        xblock=XBLOCK,
+        xgrid=XGRID,
+        progress=False,
+    )
+    radiance = ds["I_up (TOA)"].values
+    if roof:
+        np.testing.assert_array_equal(radiance, 0.0)
+    else:
+        assert np.all(radiance > 0.0)
+
+
+def _br_local_estimate(alt_pp: bool, seeds: list[int]) -> np.ndarray:
+    """Return the receiver flux of the BR scene with a local estimate.
+
+    One run per seed, the local estimate toward the sun with its disc.
+    """
+    sg = Smartg(double=True, obj3d=True, back=True, alt_pp=alt_pp)
+    objects = _scene()
+    normal = gc.normalize(
+        gc.get_rotate_y_tf(-101.5)(gc.Vector(0.0, 0.0, 1.0))
+    )
+    w2 = 0.5
+    atmosphere = Atm1D(
+        "afglms", comp=[AerOPAC("desert", 0.25, 550.0)], p0=877, tcwp=1.2
+    )
+    flux = []
+    for seed in seeds:
+        ds = sg.run(
+            wavelength=550.0,
+            atmosphere=atmosphere,
+            surface=LambSurface(alb=AlbedoCst(0.25)),
+            n_photons=5e5,
+            my_objects=objects,
+            interval=[[-w2, -w2, -0.005], [w2, w2, 0.125]],
+            cus_l=CusBackward(
+                normal=normal, receiver_fov=90.0, mode="BR",
+                receiver=objects[-1],
+                v_sun=gc.ang2vec(SZA, 0.0, vec_view="nadir"),
+            ),
+            le=LocalEstimate(th_deg=[SZA], phi_deg=[0.0]),
+            le_fov=0.266,
+            direct=True,
+            seed=seed,
+            xblock=XBLOCK,
+            xgrid=XGRID,
+            progress=False,
+        )
+        flux.append(ds["cat_irr"].values[0])
+    return np.array(flux)
+
+
+def test_br_local_estimate_moves_agree() -> None:
+    """The local estimate of the BR mode is the same in both moves.
+
+    The receiver of the RF scene, seen from the sun by local estimate
+    through the dust, 5 runs per move with their own seeds. The
+    alternative move attenuated the virtual photon on its way to TOA
+    and again in countPhotonObj3D, from a stale optical depth: about a
+    third too little light here.
+    """
+    fast = _br_local_estimate(False, [21, 22, 23, 24, 25])
+    alt = _br_local_estimate(True, [31, 32, 33, 34, 35])
+    err = np.hypot(fast.std(ddof=1), alt.std(ddof=1)) / np.sqrt(5)
+    assert fast.mean() > 0.0
+    assert abs(fast.mean() - alt.mean()) < 5 * err
 
 
 def test_receiver_cells_tile_the_receiver(sg: Smartg) -> None:

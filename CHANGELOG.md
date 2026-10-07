@@ -32,6 +32,19 @@
     9 % too little light in the fast move for a receiver facing the sun
     across the bottom of an absorbing layer, 7 % with `alt_pp=True`. The
     error was already in v1.2.0
+  - Fix the local estimate with 3D objects and `alt_pp=True`. The mask
+    of the objects was tested once the virtual photon had moved to TOA
+    or to the ground, from where its ray met no object, so the objects
+    hid nothing from the local estimate. The local estimate from an
+    object surface reached TOA without any transmission, and in the BR
+    mode `countPhotonObj3D` attenuated it a second time, from an optical
+    depth this move does not follow: about a third too little light at
+    the receiver of the test scene. The mask is now tested from the
+    scattering or reflection point, before the move
+  - No 3D object masks the local estimate of a photon in the ocean, in
+    either move: its ray was tested from a depth in metres read as
+    kilometres, and the seafloor kept the mask of the previous local
+    estimate
 
 
 ## v2.0.1

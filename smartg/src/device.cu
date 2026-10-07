@@ -485,6 +485,17 @@ extern "C" {
                             else display("SCATTER LE DOWN", &ph_le);
                             #endif
 
+                            #if defined(OBJ3D) && !defined(SPHERIQUE)
+                            // The 3D objects mask the virtual photon of the atmosphere
+                            // from its scattering point, so before the move of the
+                            // alternative PP mode: tested after it, from TOA || the
+                            // ground, the ray missed them. No object masks a path in
+                            // the ocean
+                            mask_le = false;
+                            copyIGeo(&geoStruc, &geoStruc_le);
+                            if (ph_le.loc == ATMOS) mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                            #endif
+
                             #ifdef SPHERIQUE
                             /* in spherical mode (ATMOS only), move the virtual photon until the counting level to calculate 
                             the extinction along the final path */
@@ -498,8 +509,8 @@ extern "C" {
                              #ifdef ALT_PP
                             /* in alternative PP mode (for ATMOS || OCEAN), move the virtual photon until the counting level to calculate 
                             the extinction along the final path */
-                             if ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)) 
-                                 move_pp2(&ph_le, prof_atm, prof_oc, 
+                             if (!mask_le && ((ph_le.loc==ATMOS) || (ph_le.loc==OCEAN)))
+                                 move_pp2(&ph_le, prof_atm, prof_oc,
                                          #ifdef OPT3D
                                          cell_atm, cell_oc,
                                          #endif
@@ -516,9 +527,12 @@ extern "C" {
                             // Finally count the virtual photon
                             /* in FAST PP mode the final extinction until the counting level is done in the countPhoton function */
 							#if defined(OBJ3D)
+                            // the spherical mode keeps its test after the move
+                            #ifdef SPHERIQUE
                             mask_le = false;
                             copyIGeo(&geoStruc, &geoStruc_le);
                             mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                            #endif
                             if (!mask_le && count_level_le == UPTOA && LMODEd == 4) { countPhotonObj3D(&ph_le, 1, tabObjInfo, &geoStruc_le, nbPhCat, wPhCat, wPhCat2, prof_atm, wPhLoss, wPhLoss2, thv_le, phi_le); }
 							#endif
                             if (!mask_le && if_count(count_level_le))
@@ -644,9 +658,10 @@ extern "C" {
 
                         // Count the photon up to the counting levels (at the surface UP0P || DOW0M)
                         #ifdef OBJ3D
+                        // the mask holds up to TOA; no object masks a path in the ocean
                         mask_le = false;
                         copyIGeo(&geoStruc, &geoStruc_le);
-                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
+                        if (ph_le.loc == ATMOS) mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                         #endif
                         if ((!mask_le) && (tablevel[ph_le.ith] == COUNTALL || tablevel[ph_le.ith] == count_level_le) && if_count(count_level_le) )
                         {
@@ -673,18 +688,13 @@ extern "C" {
                             }
                             #else // if not spheric
                             #ifdef ALT_PP
-                            if (ph_le.loc==ATMOS)
-                            {
+                            // the mask tested at the surface holds along the way
+                            if ((ph_le.loc==ATMOS) && !mask_le)
                                 move_pp2(&ph_le, prof_atm, prof_oc,
                                          #ifdef OPT3D
                                          cell_atm, cell_oc,
                                          #endif
-                                        1, UPTOA, &rngstate);
-                                #ifdef OBJ3D
-                                mask_le = false;
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                                #endif        
-                            }
+                                         1, UPTOA, &rngstate);
                             #endif // END ALT_PP
                             #endif // END not spheric
                             #ifdef OPT3D
@@ -713,10 +723,6 @@ extern "C" {
                                          cell_atm, cell_oc,
                                          #endif
                                         1, DOWNB, &rngstate);
-                                #ifdef OBJ3D
-                                mask_le = false;
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                                #endif
                             }
                             #endif // END ALT_PP
                             #ifdef OPT3D
@@ -831,18 +837,13 @@ extern "C" {
                             }
                             #else // if not spheric
                             #ifdef ALT_PP
-                            if (ph_le.loc==ATMOS) 
-                            {
-                                move_pp2(&ph_le, prof_atm, prof_oc, 
-                                        #ifdef OPT3D
-                                        cell_atm, cell_oc,
-                                        #endif
-                                        1, UPTOA , &rngstate);
-                                #ifdef OBJ3D
-                                mask_le = false;
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                                #endif
-                            }
+                            // the mask tested at the surface holds along the way
+                            if ((ph_le.loc==ATMOS) && !mask_le)
+                                move_pp2(&ph_le, prof_atm, prof_oc,
+                                         #ifdef OPT3D
+                                         cell_atm, cell_oc,
+                                         #endif
+                                         1, UPTOA, &rngstate);
                             #endif // END ALT_PP
                             #endif // END not spheric
                             #ifdef OPT3D
@@ -944,18 +945,13 @@ extern "C" {
                             }
                             #else // if not spheric
                             #ifdef ALT_PP
-                            if (ph_le.loc==ATMOS)
-                            {
-                                move_pp2(&ph_le, prof_atm, prof_oc, 
-                                        #ifdef OPT3D
-                                        cell_atm, cell_oc,
-                                        #endif
-                                        1, UPTOA , &rngstate);
-                                #ifdef OBJ3D
-                                mask_le = false;
-                                mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                                #endif
-                            }
+                            // the mask tested at the surface holds along the way
+                            if ((ph_le.loc==ATMOS) && !mask_le)
+                                move_pp2(&ph_le, prof_atm, prof_oc,
+                                         #ifdef OPT3D
+                                         cell_atm, cell_oc,
+                                         #endif
+                                         1, UPTOA, &rngstate);
                             #endif // END ALT_PP
                             #endif // END not spheric
                             #ifdef OPT3D
@@ -1035,8 +1031,9 @@ extern "C" {
                                    thv_le, phi_le,
                                    envmap, spectrum, &rngstate);
 
-                    //  contribution to UP0M level
-                    #ifdef ALT_PP                          
+                    //  contribution to UP0M level, which no 3D object masks
+                    mask_le = false;
+                    #ifdef ALT_PP
                     if (ph_le.loc==OCEAN)
                     {
                         move_pp2(&ph_le, prof_atm, prof_oc, 
@@ -1044,11 +1041,6 @@ extern "C" {
                                 cell_atm, cell_oc,
                                 #endif
                                 1, UP0M, &rngstate);
-                        #ifdef OBJ3D
-                        mask_le = false;
-                        copyIGeo(&geoStruc, &geoStruc_le);
-                        mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
-                        #endif
                     } 
                     #endif
                     if (!mask_le && if_count(UP0M))
@@ -1135,6 +1127,17 @@ extern "C" {
                                 mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             }
 						    #endif
+                            #if defined(ALT_PP) && !defined(SPHERIQUE)
+                            // the alternative PP mode moves the virtual
+                            // photon to TOA for its transmission, which
+                            // countPhoton leaves to the move
+                            if ((ph_le.loc==ATMOS) && !mask_le)
+                                move_pp2(&ph_le, prof_atm, prof_oc,
+                                         #ifdef OPT3D
+                                         cell_atm, cell_oc,
+                                         #endif
+                                         1, UPTOA, &rngstate);
+                            #endif
 							if (!mask_le && if_count(UPTOA))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
@@ -1197,6 +1200,17 @@ extern "C" {
                                 mask_le = geoTest(ph_le.pos, ph_le.v, &phit_le, &geoStruc_le, myObjets, myGObj, mySPECTObj, ph_le.ilam);
                             }
 						    #endif
+                            #if defined(ALT_PP) && !defined(SPHERIQUE)
+                            // the alternative PP mode moves the virtual
+                            // photon to TOA for its transmission, which
+                            // countPhoton leaves to the move
+                            if ((ph_le.loc==ATMOS) && !mask_le)
+                                move_pp2(&ph_le, prof_atm, prof_oc,
+                                         #ifdef OPT3D
+                                         cell_atm, cell_oc,
+                                         #endif
+                                         1, UPTOA, &rngstate);
+                            #endif
 							if (!mask_le && if_count(UPTOA))
                             {
                                 countPhoton(&ph_le, spectrum, prof_atm, prof_oc, tabthv, tabphi, UPTOA, errorcount, tabPhotons, tabDist, tabHist,
@@ -7085,6 +7099,10 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
 	weight = ph->weight * float(w_le) * float(stokes.x + stokes.y);
 	#endif
 
+	// The transmission of the local estimate to TOA in the fast PP
+	// mode: the other modes moved the virtual photon there, and
+	// countPhoton does not attenuate it either
+	#if !defined(SPHERIQUE) && !defined(ALT_PP)
 	if (le == 1)
 	{
         // Normally count only case where count level is UPTOA
@@ -7105,7 +7123,7 @@ __device__ void countPhotonObj3D(Photon* ph, int le, void *tabObjInfo, IGeo* geo
         // if BEER=1, photon variable tau corresponds to scattering only, need to add photon absorption variable
         else weight *= expf(-fabs(__fdividef(tau_le - (ph->tau+ph->tau_abs), ph->v.z))); // LE attenuation to count_level
 	}
-
+	#endif
     weight2 = weight * weight;
 	if(isnan(weight)){printf("Care weight is nan !! \n");return;}
 
