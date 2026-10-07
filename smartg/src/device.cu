@@ -2218,6 +2218,19 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		
 		// Apply transfo && update the value of the photon position
 		ph->pos = TR(p_t);
+
+		// The layer and, in the fast move, the optical depths of this
+		// point: they were those of the receiver centre, where the
+		// sensor of the BR mode is
+		#if !defined(SPHERIQUE) && !defined(OPT3D)
+		float tau_rec, tau_abs_rec;
+		ph->layer = layer_at_altitude(prof_atm, ph->ilam, ph->pos.z,
+		                              &tau_rec, &tau_abs_rec);
+		#ifndef ALT_PP
+		ph->tau = tau_rec;
+		ph->tau_abs = tau_abs_rec;
+		#endif
+		#endif
 	} //END LMODEd == 4
 	#endif // END !defined(BACK)
     #endif //END OBJ3D
@@ -2526,6 +2539,32 @@ __device__ void move_ocean(Photon* ph, float d) {
     ph->pos.x += ph->v.x * d * 1e-3F;
     ph->pos.y += ph->v.y * d * 1e-3F;
     ph->pos.z += ph->v.z * d;
+}
+
+/* The layer of the atmosphere holding the altitude z, counted from the
+   top (z[i] <= z <= z[i-1]), and the vertical optical depths from the
+   ground at z that the fast move follows, tau (get_OD) and tau_abs.
+   The fraction of the layer below z is measured from its bottom, as
+   initPhoton and move_pp do. Without atmosphere they are 0. */
+__device__ int layer_at_altitude(struct Profile *prof_atm, int ilam,
+                                 float z, float *tau, float *tau_abs) {
+    *tau = 0.F;
+    *tau_abs = 0.F;
+    if (NATMd == 0) return 1;
+
+    int ilayer = 1;
+    while ((ilayer < NATMd) && (prof_atm[ilayer].z > z)) ilayer++;
+    float epsilon = clamp(__fdividef(z - prof_atm[ilayer].z,
+                                     prof_atm[ilayer-1].z
+                                     - prof_atm[ilayer].z), 0.F, 1.F);
+
+    struct Profile *prof = prof_atm + ilam*(NATMd+1);
+    *tau = get_OD(BEERd, prof[NATMd]) - get_OD(BEERd, prof[ilayer])
+           + epsilon * fabs(get_OD(BEERd, prof[ilayer])
+                            - get_OD(BEERd, prof[ilayer-1]));
+    *tau_abs = prof[NATMd].OD_abs - prof[ilayer].OD_abs
+               + epsilon * fabs(prof[ilayer].OD_abs - prof[ilayer-1].OD_abs);
+    return ilayer;
 }
 
 #ifdef OBJ3D

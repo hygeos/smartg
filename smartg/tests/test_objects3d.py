@@ -24,6 +24,7 @@ import smartg.smartg as smartg_mod
 from smartg.albedo import AlbedoCst
 from smartg.atmosphere import AerOPAC, Atm1D
 from smartg.objects3d import (
+    CusBackward,
     CusForward,
     Entity,
     LambMirror,
@@ -99,9 +100,11 @@ def _scene(reflectivity: float | np.ndarray = 0.88) -> list[Entity]:
     return objects
 
 
-def _transparent() -> Atm1D:
+def _transparent(grid: list[float] | None = None) -> Atm1D:
     """Return an atmosphere that neither scatters nor absorbs."""
-    return Atm1D("afglt", tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0)
+    return Atm1D(
+        "afglt", grid=grid, tau_r=0.0, no2=False, tco3=0.0, tcwp=0.0
+    )
 
 
 def _receiver(
@@ -757,6 +760,91 @@ def test_ff_launch_below_toa(sg: Smartg) -> None:
     np.testing.assert_allclose(
         ds["cat_irr"].values[1], area * np.exp(-od), rtol=0.01
     )
+
+
+@pytest.fixture(scope="module", params=[False, True], ids=["fast", "alt_pp"])
+def sg_back(request: pytest.FixtureRequest) -> Smartg:
+    """Compile the backward kernel, in both plane-parallel moves."""
+    return Smartg(double=True, obj3d=True, back=True, alt_pp=request.param)
+
+
+def _absorbing_layer(
+    grid: list[float], layer: int, od_abs: float, wavelength: float = 550.0
+) -> xr.Dataset:
+    """Return a profile that only absorbs, od_abs in one of its layers.
+
+    The layer counts from the top, the first one is 1.
+    """
+    profile = _transparent(grid).calc(wavelength)
+    od = np.zeros(len(grid))
+    od[layer:] = od_abs
+    for name in ("OD_atm", "OD_abs_atm"):
+        profile[name].values[:] = od
+    profile["ssa_atm"].values[0, layer] = 0.0
+    return profile
+
+
+def _br_facing_the_sun(
+    sg: Smartg,
+    profile: xr.Dataset,
+    sza: float,
+    half: float,
+    centre_z: float,
+    seed: int = SEED,
+) -> xr.Dataset:
+    """Run a BR receiver facing the sun, its photons sent to the sun."""
+    v_sun = gc.ang2vec(sza, 0.0, vec_view="nadir")
+    to_sun = -gc.normalize(v_sun)
+    tilt = float(np.degrees(np.arctan2(to_sun.x, to_sun.z)))
+    normal = gc.normalize(gc.get_rotate_y_tf(tilt)(gc.Vector(0.0, 0.0, 1.0)))
+    np.testing.assert_allclose(
+        [normal.x, normal.y, normal.z], [to_sun.x, to_sun.y, to_sun.z],
+        atol=1e-12,
+    )
+    receiver = _receiver(half, (0.0, 0.0, centre_z), (0.0, tilt, 0.0))
+    return sg.run(
+        wavelength=550.0,
+        atmosphere=profile,
+        surface=LambSurface(alb=AlbedoCst(0.0)),
+        n_photons=1e6,
+        my_objects=[receiver],
+        cus_l=CusBackward(
+            normal=normal, receiver_fov=0.0, mode="BR", receiver=receiver,
+            v_sun=v_sun, sun_fov=0.266,
+        ),
+        direct=True,
+        seed=seed,
+        xblock=XBLOCK,
+        xgrid=XGRID,
+        progress=False,
+    )
+
+
+def test_br_starts_in_the_layer_of_its_receiver_point(sg_back: Smartg) -> None:
+    """A BR photon starts with the optical depth of its point.
+
+    The receiver faces the sun across the bottom of a layer that only
+    absorbs, above clear air, and every photon goes straight to the sun:
+    its weight is the transmission from its point of the receiver, whose
+    mean is the one of exp(-tau(z)/mu) over the receiver. The photons
+    started with the layer and the optical depth of the receiver centre,
+    on the boundary: the fast move gave all of them the transmission of
+    the centre, the alternative one gave the lower half the absorption
+    of the layer above.
+    """
+    sza, half, centre_z = 60.0, 0.01, 0.1
+    grid = [120.0, 0.2, 0.1, 0.0]
+    profile = _absorbing_layer(grid, 2, 2.0)
+    ds = _br_facing_the_sun(sg_back, profile, sza, half, centre_z)
+    mean_weight = ds["cat_w"].values[1] / ds["cat_PhNb"].values[1]
+    # the altitude is uniform over the tilted receiver, and the optical
+    # depth from TOA linear with it inside a layer
+    mu = np.cos(np.radians(sza))
+    height = half * np.sin(np.radians(sza))
+    z = centre_z + np.linspace(-height, height, 20001)
+    od = np.interp(z, np.array(grid)[::-1], profile["OD_atm"].values[0, ::-1])
+    expected = np.exp(-od / mu).mean()
+    np.testing.assert_allclose(mean_weight, expected, rtol=2e-3)
 
 
 def test_receiver_cells_tile_the_receiver(sg: Smartg) -> None:

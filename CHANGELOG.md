@@ -17,6 +17,13 @@
     never ended. A scene without molecules nor aerosols takes a
     transparent atmosphere, as `Atm1D('afglt', tau_r=0., no2=False,
     tco3=0., tcwp=0.)`
+  - Start the photons of the BR launching mode (`CusBackward`) in the
+    layer and at the optical depth of their point of the receiver, not
+    of its centre. A receiver across a layer boundary, or in a layer of
+    large extinction, was seen through the atmosphere of its centre:
+    9 % too little light in the fast move for a receiver facing the sun
+    across the bottom of an absorbing layer, 7 % with `alt_pp=True`. The
+    error was already in v1.2.0
 
 
 ## v2.0.1
