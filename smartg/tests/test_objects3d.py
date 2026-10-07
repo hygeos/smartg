@@ -1101,20 +1101,33 @@ def test_br_local_estimate_moves_agree() -> None:
     assert abs(fast.mean() - alt.mean()) < 5 * err
 
 
-def _br_horizon(alt_pp: bool, seeds: list[int]) -> np.ndarray:
+def _br_horizon(
+    alt_pp: bool,
+    seeds: list[int],
+    atmosphere: Atm1D | xr.Dataset | None = None,
+    altitude: float = 0.5,
+    v_z: float = 0.0,
+    half: float = 0.002,
+) -> np.ndarray:
     """Return the light of a BR receiver facing the horizon, per seed.
 
-    Its photons leave horizontally (receiver_fov=0, v.z = 6e-17) into an
-    urban aerosol, which absorbs (beer=1), and the local estimates of
+    Its photons leave along its normal (receiver_fov=0), whose vertical
+    cosine is v_z: 0 gives 6e-17. The atmosphere is an urban aerosol
+    by default, which absorbs (beer=1), and the local estimates of
     their collisions look at the sun. The light is the sum of their
     weights per photon launched.
     """
     sg = Smartg(double=True, obj3d=True, back=True, alt_pp=alt_pp)
-    receiver = _receiver(0.002, (0.0, 0.0, 0.5), (0.0, 90.0, 0.0))
-    normal = gc.normalize(
-        gc.get_rotate_y_tf(90.0)(gc.Vector(0.0, 0.0, 1.0))
+    elevation = float(np.degrees(np.arcsin(v_z)))
+    receiver = _receiver(
+        half, (0.0, 0.0, altitude), (0.0, 90.0 - elevation, 0.0),
+        tc=2 * half,
     )
-    atmosphere = Atm1D("afglt", comp=[AerOPAC("urban", 0.5, 550.0)])
+    normal = gc.normalize(
+        gc.get_rotate_y_tf(90.0 - elevation)(gc.Vector(0.0, 0.0, 1.0))
+    )
+    if atmosphere is None:
+        atmosphere = Atm1D("afglt", comp=[AerOPAC("urban", 0.5, 550.0)])
     light = []
     for seed in seeds:
         ds = sg.run(
@@ -1139,6 +1152,13 @@ def _br_horizon(alt_pp: bool, seeds: list[int]) -> np.ndarray:
     return np.array(light)
 
 
+def _assert_moves_agree(fast: np.ndarray, alt: np.ndarray) -> None:
+    """Check that two sets of runs agree within 5 standard errors."""
+    err = np.hypot(fast.std(ddof=1), alt.std(ddof=1)) / np.sqrt(len(fast))
+    assert fast.mean() > 0.0
+    assert abs(fast.mean() - alt.mean()) < 5 * err
+
+
 def test_horizontal_photons_collide_along_their_layer() -> None:
     """A horizontal photon collides at tauR along its layer, absorbed.
 
@@ -1147,11 +1167,51 @@ def test_horizontal_photons_collide_along_their_layer() -> None:
     change of vertical optical depth, a few float ulps, by v.z = 6e-17:
     their distance and their absorption were rounding noise.
     """
-    fast = _br_horizon(False, [41, 42, 43, 44, 45])
-    alt = _br_horizon(True, [51, 52, 53, 54, 55])
-    err = np.hypot(fast.std(ddof=1), alt.std(ddof=1)) / np.sqrt(5)
-    assert fast.mean() > 0.0
-    assert abs(fast.mean() - alt.mean()) < 5 * err
+    _assert_moves_agree(
+        _br_horizon(False, [41, 42, 43, 44, 45]),
+        _br_horizon(True, [51, 52, 53, 54, 55]),
+    )
+
+
+def _absorbing_below(top: float, k_abs: float) -> xr.Dataset:
+    """Return a Rayleigh profile that also absorbs below top, in km.
+
+    k_abs per km, under clear air; its layers are 10 m thick around
+    top.
+    """
+    grid = [120.0, 50.0, 20.0, 5.0, *np.round(
+        top + 0.01 * np.arange(5, -6, -1), 6), 0.5, 0.0]
+    profile = Atm1D(
+        "afglt", grid=grid, no2=False, tco3=0.0, tcwp=0.0
+    ).calc(550.0)
+    z = profile["z_atm"].values
+    od_abs = k_abs * np.clip(top - z, 0.0, None)
+    for name in ("OD_atm", "OD_abs_atm"):
+        profile[name].values[0] += od_abs
+    sca = np.diff(profile["OD_sca_atm"].values[0])
+    ext = np.diff(profile["OD_atm"].values[0])
+    profile["ssa_atm"].values[0, 1:] = sca / ext
+    return profile
+
+
+def test_grazing_photons_crossing_into_clear_air() -> None:
+    """A grazing photon crossing a layer boundary keeps its absorption.
+
+    The receiver, 2 cm below the top of a layer that absorbs 0.5 per km
+    under clear air, sends its photons up at v.z = 5e-5: nearly all of
+    them cross into the clear air after 0.4 km of absorbing air, 18 %
+    of absorption. Below a v.z of 1e-4, the fast move took the
+    distance and the absorption from the layer where the photon ends,
+    for its whole path: none of that absorption. Both moves agree, 5
+    runs each.
+    """
+    profile = _absorbing_below(1.0, 0.5)
+    kwargs = {"atmosphere": profile, "altitude": 1.0 - 2e-5, "v_z": 5e-5,
+              "half": 1e-5}
+    _assert_moves_agree(
+        _br_horizon(False, [61, 62, 63, 64, 65], **kwargs),
+        _br_horizon(True, [71, 72, 73, 74, 75], **kwargs),
+    )
 
 
 def test_receiver_cells_tile_the_receiver(sg: Smartg) -> None:

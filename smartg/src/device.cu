@@ -3722,11 +3722,15 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 	tauR = -logf(1.f - RAND);
 	ph->tau += (tauR*ph->v.z); // the value of tau is updated
 
-    // A photon within 1e-4 of the horizontal travels tauR along its
-    // layer (Moulana et al. 2024, eq. 6): its vertical optical depth
-    // barely moves, and dividing that change, a few float ulps, by v.z
-    // gave a distance and an absorption of rounding noise
-    bool horizontal = (fabsf(ph->v.z) < 1e-4F);
+    // The distance && the absorption of the move. A photon that stays
+    // in its layer travels tauR over the extinction coefficient of the
+    // layer, && is absorbed accordingly (Moulana et al. 2024, eq. 6):
+    // exact, without dividing by v.z. A photon that crosses into
+    // another layer travels its change of altitude over v.z, the only
+    // exact formula then. Their float32 errors are about 1e-7, && 1e-8
+    // over tauR*|v.z|: the second, from tau changed by a few float
+    // steps, is the larger one wherever the photon stays in its layer
+    bool stays;
 
     // 1. OCEAN case
         // partial geometrical thickness in the layer (from top) : 
@@ -3846,9 +3850,13 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             delta= fabs(ph->tau - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
             // fractional optical thickness
             epsilon = __fdividef(delta,delta_i);
-            // a horizontal photon in a layer without extinction never
+            // the photon stays in the layer it ends in when it starts
+            // there (a horizontal one does)
+            stays = (ph->v.z == 0.F) || ((ph->pos.z <= prof_oc[ilayer-1].z)
+                                         && (ph->pos.z >= prof_oc[ilayer].z));
+            // a photon staying in a layer without extinction never
             // collides: it is lost sideways
-            if (horizontal && (delta_i == 0.F)) {ph->loc = ABSORBED; return;}
+            if (stays && (delta_i == 0.F)) {ph->loc = ABSORBED; return;}
             
             #ifndef ALIS
             // General case absorption using Single scattering albedo
@@ -3860,8 +3868,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                      (prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs 
                     - prof_oc[ilayer  +ph->ilam*(NOCEd+1)].OD_abs);
                 // absorption between start && stop, through the layer
-                // for a horizontal photon
-                if (horizontal) ph->weight *= exp(-tauR * __fdividef(fabs(prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs
+                // for a photon staying in it
+                if (stays) ph->weight *= exp(-tauR * __fdividef(fabs(prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs
                                                                      - prof_oc[ilayer  +ph->ilam*(NOCEd+1)].OD_abs), delta_i));
                 else ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
                 // update photon absorption tau
@@ -3896,8 +3904,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             // calculate new photon position
             phz =  prof_oc[ilayer-1].z + epsilon * ( prof_oc[ilayer].z - prof_oc[ilayer-1].z); 
             // move the photon to new position, along the layer for a
-            // horizontal photon
-            if (horizontal) move_ocean(ph, tauR * __fdividef(fabs(prof_oc[ilayer].z - prof_oc[ilayer-1].z), delta_i));
+            // photon staying in it
+            if (stays) move_ocean(ph, tauR * __fdividef(fabs(prof_oc[ilayer].z - prof_oc[ilayer-1].z), delta_i));
             else move_ocean(ph, fabs( (ph->pos.z - phz) / ph->v.z));
         } // photon still in ocean
     } // Ocean
@@ -3932,7 +3940,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			float tau_sp, ab_sp;     // slant optical depths to the hit
 			int ilayer_hit = layer_at_altitude(prof_atm, ph->ilam, phit.z, &tau_hit, &ab_hit, ph->layer);
 			if (((ph->pos.z >= prof_atm[ilayer_hit].z) && (ph->pos.z <= prof_atm[ilayer_hit-1].z))
-			    || horizontal)
+			    || (ph->v.z == 0.F))
 			{
 				struct Profile *prof = prof_atm + ph->ilam*(NATMd+1);
 				float path = __fdividef(length(ph->pos, phit),
@@ -4064,9 +4072,13 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             delta= ph->tau - (get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)])
                             - get_OD(BEERd, prof_atm[ilayer + ph->ilam *(NATMd+1)]));
             epsilon = __fdividef(delta,delta_i);
-            // a horizontal photon in a layer without extinction never
+            // the photon stays in the layer it ends in when it starts
+            // there (a horizontal one does)
+            stays = (ph->v.z == 0.F) || ((ph->pos.z >= prof_atm[ilayer].z)
+                                         && (ph->pos.z <= prof_atm[ilayer-1].z));
+            // a photon staying in a layer without extinction never
             // collides: it is lost sideways
-            if (horizontal && (delta_i == 0.F)) {ph->loc = ABSORBED; return;}
+            if (stays && (delta_i == 0.F)) {ph->loc = ABSORBED; return;}
 
 
             #ifndef ALIS
@@ -4079,8 +4091,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                      (prof_atm[ilayer  +ph->ilam*(NATMd+1)].OD_abs 
                     - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs) ;
                 // absorption between start && stop, through the layer
-                // for a horizontal photon
-                if (horizontal) ph->weight *= exp(-tauR * __fdividef(fabs(prof_atm[ilayer  +ph->ilam*(NATMd+1)].OD_abs
+                // for a photon staying in it
+                if (stays) ph->weight *= exp(-tauR * __fdividef(fabs(prof_atm[ilayer  +ph->ilam*(NATMd+1)].OD_abs
                                                                      - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs), delta_i));
                 else ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
                 ph->tau_abs = ab;
@@ -4117,8 +4129,8 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             // calculate new photon position: epsilon is measured from
             // the bottom of the layer, as delta and ab above
             phz = prof_atm[ilayer].z + epsilon * (prof_atm[ilayer-1].z - prof_atm[ilayer].z);
-            // along the layer for a horizontal photon
-            if (horizontal) rdist = tauR * __fdividef(prof_atm[ilayer-1].z - prof_atm[ilayer].z, delta_i);
+            // along the layer for a photon staying in it
+            if (stays) rdist = tauR * __fdividef(prof_atm[ilayer-1].z - prof_atm[ilayer].z, delta_i);
             else rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
             operator+= (ph->pos, ph->v*rdist);
             ph->pos.z = phz;
