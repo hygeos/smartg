@@ -1,6 +1,19 @@
 # SMART-G CHANGELOG
 
 
+## Unreleased
+
+* Bug fixes
+  - Refuse the 3D objects (`my_objects`) in the kernels whose move does
+    not follow them: the spherical atmosphere (`pp=False`) and the 3D
+    atmosphere (`opt3d=True`), whose photons crossed the objects as if
+    they were absent, and ALIS (`alis=True`), whose receiver counts have
+    no spectral correction. `Smartg.run` raises a `ValueError` when
+    objects are given there. Without objects, a kernel compiled with
+    `obj3d=True` runs in every mode, as the start on the top of
+    atmosphere sphere of the `cell_size=-2` sensors does
+
+
 ## v2.0.1
 Release date: 2026-10-02
 

@@ -26,6 +26,7 @@ from smartg.objects3d import (
 )
 from smartg.smartg import (
     _check_object_roles,
+    _check_objects_kernel,
     _od_at_altitude,
     _receiver_grid,
     _rf_launch_cdf,
@@ -243,6 +244,53 @@ def test_spheric_br_receiver_is_refused() -> None:
     receiver = Entity(name="receiver", geo=Spheric(radius=0.01))
     with pytest.raises(ValueError, match="Plane geometry"):
         CusBackward(receiver=receiver, mode="BR")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"alis": True}, "alis=True"),
+        ({"pp": False}, "pp=False"),
+        ({"opt3d": True}, "opt3d=True"),
+    ],
+)
+def test_objects_refused_where_the_move_ignores_them(
+    kwargs: dict[str, bool], match: str
+) -> None:
+    """The ALIS, spherical and 3D atmosphere kernels refuse objects.
+
+    Their photons crossed the objects as if absent, and the receiver
+    counts have no ALIS spectral correction.
+    """
+    options = {"alis": False, "pp": True, "opt3d": False, **kwargs}
+    with pytest.raises(ValueError, match=match):
+        _check_objects_kernel([Entity(name="receiver")], **options)
+
+
+@pytest.mark.parametrize("my_objects", [None, []])
+@pytest.mark.parametrize(
+    "kwargs", [{}, {"alis": True}, {"pp": False}, {"opt3d": True}]
+)
+def test_obj3d_kernels_run_without_objects(
+    my_objects: list | None, kwargs: dict[str, bool]
+) -> None:
+    """Without objects every kernel compiled with obj3d=True runs.
+
+    As the spherical one does for its start on the top of atmosphere
+    sphere (cell_size=-2).
+    """
+    options = {"alis": False, "pp": True, "opt3d": False, **kwargs}
+    _check_objects_kernel(my_objects, **options)
+
+
+def test_plane_parallel_kernels_take_objects() -> None:
+    """The fast and the alternative (alt_pp) plane parallel moves.
+
+    Both compile with pp=True, without alis nor opt3d.
+    """
+    _check_objects_kernel(
+        [Entity(name="receiver")], alis=False, pp=True, opt3d=False
+    )
 
 
 def _receiver(x_low: float, x_high: float, half_y: float, tc: float) -> Entity:

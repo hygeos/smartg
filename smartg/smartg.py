@@ -561,6 +561,52 @@ def _check_alis_kernel(
         )
 
 
+def _check_objects_kernel(
+    my_objects: list | None, alis: bool, pp: bool, opt3d: bool
+) -> None:
+    """
+    Refuse the 3D objects in a kernel whose move does not follow them.
+
+    Only the plane parallel moves, the fast one and the alternative one
+    (alt_pp), follow the photons to the 3D objects. The spherical move
+    (pp=False) and the move of the 3D atmosphere (opt3d) do not, and
+    the receiver counts of the objects have no ALIS spectral
+    correction. Without objects, a kernel compiled with obj3d=True runs
+    in every mode, as the spherical start on the top of atmosphere
+    sphere (cell_size=-2) does.
+
+    Parameters
+    ----------
+    my_objects : list | None
+        The my_objects parameter of `Smartg.run`.
+    alis, pp, opt3d : bool
+        The compilation options of the same name of `Smartg`.
+
+    Raises
+    ------
+    ValueError
+        If objects are given to a kernel compiled with alis=True,
+        pp=False or opt3d=True.
+    """
+    if not my_objects:
+        return
+    if alis:
+        raise ValueError(
+            'The 3D objects (my_objects) cannot be used with alis=True: '
+            'their receiver counts have no ALIS spectral correction'
+        )
+    if not pp:
+        raise ValueError(
+            'The 3D objects (my_objects) cannot be used with pp=False: '
+            'the spherical move does not follow them'
+        )
+    if opt3d:
+        raise ValueError(
+            'The 3D objects (my_objects) cannot be used with opt3d=True: '
+            'the move of the 3D atmosphere does not follow them'
+        )
+
+
 def _alis_n_low(alis_options: Alis, n_lam: int) -> int:
     """
     Return the number of low resolution wavelengths of an ALIS run.
@@ -815,7 +861,8 @@ class Smartg:
     Parameters
     ----------
     pp :  bool, optional
-        Use a plane parallel atmosphere, else spherical atmosphere
+        Use a plane parallel atmosphere, else spherical atmosphere. The
+        3D objects need the plane parallel atmosphere.
     autoinit : bool, optional
         Use pycuda autoinit to initialize pycuda context.
     debug : bool, optional
@@ -827,7 +874,7 @@ class Smartg:
     alis : bool, optional
         Use the ALIS method (Emde et al. 2010) for treating gaseous
         absorption and perturbed profile. Needs alt_pp=True or
-        pp=False.
+        pp=False. The 3D objects are not available with it.
     back : bool, optional
         Activate backward mode (else forward)
     bias : bool, optional
@@ -837,10 +884,13 @@ class Smartg:
         each layer. Increase the computational time, but allow the use
         of the ALIS method
     obj3d : bool, optional
-        Allow 3D objects
+        Allow 3D objects, the my_objects parameter of `run`, in the
+        plane parallel atmosphere without alis nor opt3d. A kernel
+        compiled with obj3d=True also runs without objects, in every
+        mode.
     opt3d : bool, optional
         Activate the 3D atmosphere mode, in plane parallel geometry
-        only (pp=True).
+        only (pp=True). The 3D objects are not available with it.
     device : int | str, optional
         The CUDA device number of the GPU to use, which the command
         `nvidia-smi` lists. By default the one of the environment
@@ -1557,7 +1607,9 @@ class Smartg:
             A list of 3d objects (Entity objects) that will be used in
             the simulation. Currently sphere and plane objects are
             considered. The compilation option `obj3d` must be set to
-            True.
+            True, in the plane parallel atmosphere (pp=True) without
+            alis nor opt3d, whose moves do not follow the objects: a
+            ValueError is raised otherwise.
         interval : None | list, optional
             A principal bounding box in case 3d objects are
             incorporated. It must be a list composed of 2 lists with the
@@ -1742,6 +1794,7 @@ class Smartg:
                 'The parameter my_objects can be used only with the '
                 'compilation option obj3d=True'
             )
+        _check_objects_kernel(my_objects, self.alis, self.pp, self.opt3d)
 
         # Compute the sun direction as vector, given either by the
         # v_sun attribute of CusBackward or by th_deg and ph_deg
