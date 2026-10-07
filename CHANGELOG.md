@@ -15,7 +15,7 @@
     112675, section 2), instead of summing the slant optical depth over
     the layers crossed. The results are the same, the kernel faster with
     many layers: 4 % with the default grid (49 layers) in an RF scene of
-    four heliostats, 16 % with 200 layers and 32 % with 800
+    four heliostats, 15 % with 200 layers and 31 % with 800
 
 * Bug fixes
   - Refuse the 3D objects (`my_objects`) in the kernels whose move does
