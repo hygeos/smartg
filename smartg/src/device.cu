@@ -2244,7 +2244,7 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 		#if !defined(SPHERIQUE) && !defined(OPT3D)
 		float tau_rec, tau_abs_rec;
 		ph->layer = layer_at_altitude(prof_atm, ph->ilam, ph->pos.z,
-		                              &tau_rec, &tau_abs_rec);
+		                              &tau_rec, &tau_abs_rec, ph->layer);
 		#ifndef ALT_PP
 		ph->tau = tau_rec;
 		ph->tau_abs = tau_abs_rec;
@@ -2564,14 +2564,18 @@ __device__ void move_ocean(Photon* ph, float d) {
    top (z[i] <= z <= z[i-1]), and the vertical optical depths from the
    ground at z that the fast move follows, tau (get_OD) and tau_abs.
    The fraction of the layer below z is measured from its bottom, as
-   initPhoton and move_pp do. Without atmosphere they are 0. */
+   initPhoton and move_pp do. Without atmosphere they are 0. The search
+   starts from the layer ilayer0, that of the photon: an object hit in
+   its own layer costs no search. */
 __device__ int layer_at_altitude(struct Profile *prof_atm, int ilam,
-                                 float z, float *tau, float *tau_abs) {
+                                 float z, float *tau, float *tau_abs,
+                                 int ilayer0) {
     *tau = 0.F;
     *tau_abs = 0.F;
     if (NATMd == 0) return 1;
 
-    int ilayer = 1;
+    int ilayer = min(max(ilayer0, 1), NATMd);
+    while ((ilayer > 1) && (prof_atm[ilayer-1].z < z)) ilayer--;
     while ((ilayer < NATMd) && (prof_atm[ilayer].z > z)) ilayer++;
     float epsilon = clamp(__fdividef(z - prof_atm[ilayer].z,
                                      prof_atm[ilayer-1].z
@@ -2928,7 +2932,7 @@ __device__ void move_pp2_obj3d(Photon* ph, struct Profile *prof_atm,
         if (ph->loc == OBJSURF) {
             float tau, tau_abs;
             ph->layer = layer_at_altitude(prof_atm, ph->ilam, ph->pos.z,
-                                          &tau, &tau_abs);
+                                          &tau, &tau_abs, ph->layer);
         }
         return;
     }
@@ -3926,7 +3930,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		{
 			float tau_hit, ab_hit;   // vertical optical depths at the hit
 			float tau_sp, ab_sp;     // slant optical depths to the hit
-			int ilayer_hit = layer_at_altitude(prof_atm, ph->ilam, phit.z, &tau_hit, &ab_hit);
+			int ilayer_hit = layer_at_altitude(prof_atm, ph->ilam, phit.z, &tau_hit, &ab_hit, ph->layer);
 			if (((ph->pos.z >= prof_atm[ilayer_hit].z) && (ph->pos.z <= prof_atm[ilayer_hit-1].z))
 			    || horizontal)
 			{

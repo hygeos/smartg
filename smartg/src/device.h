@@ -221,10 +221,10 @@ __device__ void GetFaceMiddlePoint(int ind, float3 pmin, float3 pmax, float3 *p)
 // metres while the horizontal positions are in kilometres
 __device__ void move_ocean(Photon*, float d);
 
-// the layer of an altitude in the atmosphere, and its vertical optical
-// depths from the ground
+// the layer of an altitude in the atmosphere, searched from the layer
+// ilayer0, and its vertical optical depths from the ground
 __device__ int layer_at_altitude(struct Profile *prof_atm, int ilam, float z,
-                                 float *tau, float *tau_abs);
+                                 float *tau, float *tau_abs, int ilayer0);
 
 #ifdef OBJ3D
 // test the ray against the 3D objects before a plane-parallel move,
