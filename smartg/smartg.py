@@ -1609,7 +1609,9 @@ class Smartg:
             considered. The compilation option `obj3d` must be set to
             True, in the plane parallel atmosphere (pp=True) without
             alis nor opt3d, whose moves do not follow the objects: a
-            ValueError is raised otherwise.
+            ValueError is raised otherwise. The objects need an
+            atmosphere, a transparent one for a scene without molecules
+            nor aerosols.
         interval : None | list, optional
             A principal bounding box in case 3d objects are
             incorporated. It must be a list composed of 2 lists with the
@@ -1795,6 +1797,13 @@ class Smartg:
                 'compilation option obj3d=True'
             )
         _check_objects_kernel(my_objects, self.alis, self.pp, self.opt3d)
+        if my_objects and atmosphere is None:
+            raise ValueError(
+                'The 3D objects (my_objects) need an atmosphere: for a '
+                'scene without molecules nor aerosols, give a transparent '
+                "one, as Atm1D('afglt', tau_r=0., no2=False, tco3=0., "
+                'tcwp=0.)'
+            )
 
         # Compute the sun direction as vector, given either by the
         # v_sun attribute of CusBackward or by th_deg and ph_deg

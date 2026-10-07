@@ -12,6 +12,11 @@
     objects are given there. Without objects, a kernel compiled with
     `obj3d=True` runs in every mode, as the start on the top of
     atmosphere sphere of the `cell_size=-2` sensors does
+  - Refuse the 3D objects without atmosphere (`atmosphere=None`), which
+    stopped on an assertion once the kernel was done, or with `is_atm=0`
+    never ended. A scene without molecules nor aerosols takes a
+    transparent atmosphere, as `Atm1D('afglt', tau_r=0., no2=False,
+    tco3=0., tcwp=0.)`
 
 
 ## v2.0.1

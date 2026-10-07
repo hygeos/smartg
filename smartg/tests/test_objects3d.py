@@ -442,6 +442,23 @@ def test_transparent_atmosphere(sg: Smartg) -> None:
     np.testing.assert_allclose(ds["cat_w"].values[2], w_loss[6], rtol=1e-6)
 
 
+@pytest.mark.parametrize("is_atm", [1, 0])
+def test_objects_need_an_atmosphere(sg: Smartg, is_atm: int) -> None:
+    """A scene without atmosphere is refused before the kernel runs.
+
+    The run stopped on an assertion once the kernel was done, and with
+    is_atm=0 the kernel never ended.
+    """
+    with pytest.raises(ValueError, match="need an atmosphere"):
+        sg.run(
+            wavelength=550.0,
+            surface=LambSurface(alb=AlbedoCst(0.0)),
+            my_objects=[_receiver(0.002, (0.0, 0.0, 0.0))],
+            is_atm=is_atm,
+            progress=False,
+        )
+
+
 def test_translation_along_x_only(sg: Smartg) -> None:
     """An object translated along x only is intersected where it is.
 
