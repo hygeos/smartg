@@ -1101,6 +1101,59 @@ def test_br_local_estimate_moves_agree() -> None:
     assert abs(fast.mean() - alt.mean()) < 5 * err
 
 
+def _br_horizon(alt_pp: bool, seeds: list[int]) -> np.ndarray:
+    """Return the light of a BR receiver facing the horizon, per seed.
+
+    Its photons leave horizontally (receiver_fov=0, v.z = 6e-17) into an
+    urban aerosol, which absorbs (beer=1), and the local estimates of
+    their collisions look at the sun. The light is the sum of their
+    weights per photon launched.
+    """
+    sg = Smartg(double=True, obj3d=True, back=True, alt_pp=alt_pp)
+    receiver = _receiver(0.002, (0.0, 0.0, 0.5), (0.0, 90.0, 0.0))
+    normal = gc.normalize(
+        gc.get_rotate_y_tf(90.0)(gc.Vector(0.0, 0.0, 1.0))
+    )
+    atmosphere = Atm1D("afglt", comp=[AerOPAC("urban", 0.5, 550.0)])
+    light = []
+    for seed in seeds:
+        ds = sg.run(
+            wavelength=550.0,
+            atmosphere=atmosphere,
+            surface=LambSurface(alb=AlbedoCst(0.0)),
+            n_photons=2e5,
+            my_objects=[receiver],
+            cus_l=CusBackward(
+                normal=normal, receiver_fov=0.0, mode="BR",
+                receiver=receiver,
+                v_sun=gc.ang2vec(60.0, 0.0, vec_view="nadir"),
+            ),
+            le=LocalEstimate(th_deg=[60.0], phi_deg=[0.0]),
+            le_fov=0.266,
+            seed=seed,
+            xblock=XBLOCK,
+            xgrid=XGRID,
+            progress=False,
+        )
+        light.append(ds["cat_w"].values[0] / float(ds["norm_npho"].sum()))
+    return np.array(light)
+
+
+def test_horizontal_photons_collide_along_their_layer() -> None:
+    """A horizontal photon collides at tauR along its layer, absorbed.
+
+    The light of the local estimates of photons leaving horizontally is
+    the same in both moves, 5 runs each. The fast move divided their
+    change of vertical optical depth, a few float ulps, by v.z = 6e-17:
+    their distance and their absorption were rounding noise.
+    """
+    fast = _br_horizon(False, [41, 42, 43, 44, 45])
+    alt = _br_horizon(True, [51, 52, 53, 54, 55])
+    err = np.hypot(fast.std(ddof=1), alt.std(ddof=1)) / np.sqrt(5)
+    assert fast.mean() > 0.0
+    assert abs(fast.mean() - alt.mean()) < 5 * err
+
+
 def test_receiver_cells_tile_the_receiver(sg: Smartg) -> None:
     """Every hit of a receiver lands in one of its cells.
 

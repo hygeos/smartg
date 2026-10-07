@@ -52,6 +52,16 @@
     reached the object unabsorbed or not at all. A receiver facing the
     horizon, `CusBackward(receiver_fov=0.)`, sends all its photons that
     way. The error was already in v1.2.0
+  - Move a horizontal photon along its layer in the fast plane-parallel
+    move: within 1e-4 of the horizontal, it collides at tauR divided by
+    the extinction coefficient of its layer, and is absorbed along that
+    path (eq. 6 of Moulana et al. 2024). The move divided its change of
+    vertical optical depth, a few float ulps, by its vertical cosine:
+    with the sun at the zenith, a direct photon scattered at one of the
+    three angles where the fast cosine returns 0 got a NaN position, and
+    with `beer=1` a NaN weight, so it was dropped. The photons leaving a
+    receiver facing the horizon got 12 % too much light. `alt_pp=True`
+    is finite there since 2.0.1. The error was already in v1.2.0
 
 
 ## v2.0.1

@@ -3718,6 +3718,12 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 	tauR = -logf(1.f - RAND);
 	ph->tau += (tauR*ph->v.z); // the value of tau is updated
 
+    // A photon within 1e-4 of the horizontal travels tauR along its
+    // layer (Moulana et al. 2024, eq. 6): its vertical optical depth
+    // barely moves, and dividing that change, a few float ulps, by v.z
+    // gave a distance and an absorption of rounding noise
+    bool horizontal = (fabsf(ph->v.z) < 1e-4F);
+
     // 1. OCEAN case
         // partial geometrical thickness in the layer (from top) : 
         // epsilon = (z[i-1]-z)/(z[i-1]-z[i]) ; 0<epsilon<1
@@ -3836,6 +3842,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             delta= fabs(ph->tau - get_OD(BEERd, prof_oc[ilayer-1+ph->ilam*(NOCEd+1)])) ;
             // fractional optical thickness
             epsilon = __fdividef(delta,delta_i);
+            // a horizontal photon in a layer without extinction never
+            // collides: it is lost sideways
+            if (horizontal && (delta_i == 0.F)) {ph->loc = ABSORBED; return;}
             
             #ifndef ALIS
             // General case absorption using Single scattering albedo
@@ -3846,8 +3855,11 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                      - epsilon * 
                      (prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs 
                     - prof_oc[ilayer  +ph->ilam*(NOCEd+1)].OD_abs);
-                // absorption between start && stop
-                ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
+                // absorption between start && stop, through the layer
+                // for a horizontal photon
+                if (horizontal) ph->weight *= exp(-tauR * __fdividef(fabs(prof_oc[ilayer-1+ph->ilam*(NOCEd+1)].OD_abs
+                                                                     - prof_oc[ilayer  +ph->ilam*(NOCEd+1)].OD_abs), delta_i));
+                else ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
                 // update photon absorption tau
                 ph->tau_abs = ab;
             }
@@ -3879,8 +3891,10 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 
             // calculate new photon position
             phz =  prof_oc[ilayer-1].z + epsilon * ( prof_oc[ilayer].z - prof_oc[ilayer-1].z); 
-            // move the photon to new position
-            move_ocean(ph, fabs( (ph->pos.z - phz) / ph->v.z));
+            // move the photon to new position, along the layer for a
+            // horizontal photon
+            if (horizontal) move_ocean(ph, tauR * __fdividef(fabs(prof_oc[ilayer].z - prof_oc[ilayer-1].z), delta_i));
+            else move_ocean(ph, fabs( (ph->pos.z - phz) / ph->v.z));
         } // photon still in ocean
     } // Ocean
 
@@ -3914,7 +3928,7 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 			float tau_sp, ab_sp;     // slant optical depths to the hit
 			int ilayer_hit = layer_at_altitude(prof_atm, ph->ilam, phit.z, &tau_hit, &ab_hit);
 			if (((ph->pos.z >= prof_atm[ilayer_hit].z) && (ph->pos.z <= prof_atm[ilayer_hit-1].z))
-			    || (fabsf(ph->v.z) < 1e-4F))
+			    || horizontal)
 			{
 				struct Profile *prof = prof_atm + ph->ilam*(NATMd+1);
 				float path = __fdividef(length(ph->pos, phit),
@@ -4046,6 +4060,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             delta= ph->tau - (get_OD(BEERd, prof_atm[NATMd + ph->ilam *(NATMd+1)])
                             - get_OD(BEERd, prof_atm[ilayer + ph->ilam *(NATMd+1)]));
             epsilon = __fdividef(delta,delta_i);
+            // a horizontal photon in a layer without extinction never
+            // collides: it is lost sideways
+            if (horizontal && (delta_i == 0.F)) {ph->loc = ABSORBED; return;}
 
 
             #ifndef ALIS
@@ -4057,8 +4074,11 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
                      epsilon * 
                      (prof_atm[ilayer  +ph->ilam*(NATMd+1)].OD_abs 
                     - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs) ;
-                // absorption between start && stop
-                ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
+                // absorption between start && stop, through the layer
+                // for a horizontal photon
+                if (horizontal) ph->weight *= exp(-tauR * __fdividef(fabs(prof_atm[ilayer  +ph->ilam*(NATMd+1)].OD_abs
+                                                                     - prof_atm[ilayer-1+ph->ilam*(NATMd+1)].OD_abs), delta_i));
+                else ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
                 ph->tau_abs = ab;
             }
 
@@ -4093,7 +4113,9 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
             // calculate new photon position: epsilon is measured from
             // the bottom of the layer, as delta and ab above
             phz = prof_atm[ilayer].z + epsilon * (prof_atm[ilayer-1].z - prof_atm[ilayer].z);
-            rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
+            // along the layer for a horizontal photon
+            if (horizontal) rdist = tauR * __fdividef(prof_atm[ilayer-1].z - prof_atm[ilayer].z, delta_i);
+            else rdist=  fabs(__fdividef(phz-ph->pos.z, ph->v.z));
             operator+= (ph->pos, ph->v*rdist);
             ph->pos.z = phz;
         } // photon still in atmosphere
