@@ -209,6 +209,14 @@ __device__ void GetFaceMiddlePoint(int ind, float3 pmin, float3 pmax, float3 *p)
 // metres while the horizontal positions are in kilometres
 __device__ void move_ocean(Photon*, float d);
 
+#ifdef OBJ3D
+// test the ray against the 3D objects before a plane-parallel move,
+// true when that ends the move
+__device__ bool obj3d_ends_move(Photon*, float3 *phit, bool *hit, IGeo *geoS,
+                                struct IObjets *myObjets, struct GObj *myGObj,
+                                struct Spectrum_obj *mySPECTObj);
+#endif
+
 // move, version plan parallèle
 __device__ void move_pp(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
                         struct RNG_State*

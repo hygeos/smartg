@@ -2528,6 +2528,80 @@ __device__ void move_ocean(Photon* ph, float d) {
     ph->pos.z += ph->v.z * d;
 }
 
+#ifdef OBJ3D
+/* Test the ray of a photon in the atmosphere against the 3D objects,
+   before a plane-parallel move. The move ends here when there is no
+   atmosphere to cross (IsAtm == 0: the photon reaches the object the
+   ray meets, or leaves the scene) and when a photon of the RF mode
+   misses the objects (it is launched again). Returns true when the
+   move is done; otherwise *hit tells whether the ray meets an object
+   inside the atmosphere, at *phit, which the move compares with the
+   collision. */
+__device__ bool obj3d_ends_move(Photon* ph, float3 *phit, bool *hit,
+                                IGeo *geoS, struct IObjets *myObjets,
+                                struct GObj *myGObj,
+                                struct Spectrum_obj *mySPECTObj) {
+    bool mytest = false; // the ray meets an object
+    *hit = false;
+
+    // nObj = le nombre d'objets, si = 0 alors le test n'est pas
+    // nécessaire
+    if (nObj > 0) {
+        mytest = geoTest(ph->pos, ph->v, phit, geoS, myObjets, myGObj,
+                         mySPECTObj, ph->ilam);
+        if (!mytest && LMODEd == 1 && ph->pos.z >= (ZTOAd-VALMIN5)
+            && ph->direct == 0) {
+            ph->loc = NONE;
+            return true;
+        }
+    }
+    // the ray meets the object inside the atmosphere (0 < Z < 120)
+    bool in_atm = mytest && phit->z > -VALMIN5
+                  && phit->z < (ZTOAd+VALMIN5);
+
+    if (in_atm && IsAtm == 0) {
+        ph->tau = 0.F;
+        ph->loc = OBJSURF;
+        ph->pos = *phit;
+        return true;
+    }
+
+    // Without atmosphere, a photon that meets no object leaves the
+    // scene through the top (SPACE), the ground (SURF0P) or a side
+    if (nObj > 0 && !mytest && IsAtm == 0) {
+        BBox<float> boite(make_float3(-1200000., -1200000., 0.F),
+                          make_float3(12000.F, 12000.F, ZTOAd));
+        Ray<float> Rayon(ph->pos, ph->v, 0);
+        float intTime0=-10.F, intTime1=-10.F;
+        bool intersectBox;
+        float3 intersectPoint = make_float3(-1.F, -1.F, -1.F);
+
+        intersectBox = boite.IntersectP(Rayon, &intTime0, &intTime1);
+        if (!intersectBox) {printf("error1 in move_pp geo!! \n"); return true;}
+
+        intersectPoint = Rayon(intTime1);
+        if (intersectPoint.z >= (ZTOAd-VALMIN)) {
+            ph->loc = SPACE;
+            ph->layer = 0;
+        }
+        else if (intersectPoint.z <= VALMIN) {
+            ph->loc = SURF0P;
+            ph->tau = 0.F;
+            ph->tau_abs = 0.F;
+            ph->pos.x = intersectPoint.x;
+            ph->pos.y = intersectPoint.y;
+            ph->pos.z = 0.F;
+            ph->layer = NATMd;
+        }
+        else ph->loc = ABSORBED;
+        return true;
+    }
+
+    *hit = in_atm && IsAtm == 1;
+    return false;
+}
+#endif
+
 
 
 /*--------------------------------------------------------------------------------------------------*/
@@ -3695,28 +3769,15 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 		// Here geometry modification in the function move_pp
 		// ========================================================================================================
 		float timeT;                                 // the time from the parametric form of a ray
-		bool mytest = false;                         // initiate the boolean of the intersection test
+		bool mytest = false;                         // the ray meets an object in the atmosphere
 		float3 phit=make_float3(0.f, 0.f, 0.f);      // initiate the intersection point 
 
+		// Test the ray against the 3D objects, which may end the move
+		if (obj3d_ends_move(ph, &phit, &mytest, geoS, myObjets, myGObj, mySPECTObj)) return;
 
-		// Launch the function geoTest to see if there are an intersection with the 
-		// geometry, return true/false && give the position phit of the intersection
-		// nObj = le nombre d'objets, si = 0 alors le test n'est pas nécessaire.
-	    if (nObj > 0){
-			mytest = geoTest(ph->pos, ph->v, &phit, geoS, myObjets, myGObj, mySPECTObj, ph->ilam);
-			if (!mytest && LMODEd == 1 &&  ph->pos.z >= (ZTOAd-VALMIN5) && ph->direct == 0) {ph->loc=NONE; return;}
-			if (mytest && phit.z > -VALMIN5 && phit.z < (ZTOAd+VALMIN5) && IsAtm == 0)
-			{
-				ph->tau = 0.F;
-				ph->loc = OBJSURF;
-				ph->pos = phit;
-				return;
-			}
-		}
-
-		// if mytest = true (intersection with the geometry) && the position of the intersection is in
-		// the atmosphere (0 < Z < 120), then: Begin to analyse is there is really an intersection
-		if(mytest && phit.z > -VALMIN5 && phit.z < (ZTOAd+VALMIN5) && IsAtm == 1)
+		// if mytest = true (intersection with the geometry in the atmosphere, 0 < Z < 120),
+		// then: Begin to analyse is there is really an intersection
+		if(mytest)
 		{
 	        // if phit.z < 0 then correct the value to 0 (there is no object below the surface)
 	        //if (phit.z < 0) phit.z =0;
@@ -3808,42 +3869,6 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
 				return;
 			}
 		} // End of mytest = true
-		
-		// Case where atm is false in special case with objetcs
-		// if there is not an intersect with an objet we have a special treatment
-		if (nObj > 0 && !mytest && IsAtm == 0)
-		{
-			BBox<float> boite(make_float3(-1200000., -1200000., 0.F), make_float3(12000.F, 12000.F, ZTOAd));
-			Ray<float> Rayon(ph->pos, ph->v, 0);
-			float intTime0=-10.F, intTime1=-10.F;
-			bool intersectBox;
-			float3 intersectPoint = make_float3(-1.F, -1.F, -1.F);
-			
-			intersectBox = boite.IntersectP(Rayon, &intTime0, &intTime1);		 
-			
-			if (!intersectBox) {printf("error1 in move_pp geo!! \n"); return;}
-			
-			intersectPoint = Rayon(intTime1);
-			
-			if (intersectPoint.z >= (ZTOAd-VALMIN))
-			{			
-				ph->loc = SPACE;
-				ph->layer = 0;
-				return;
-			}
-			else if (intersectPoint.z <= VALMIN)
-			{
-				ph->loc = SURF0P;
-				ph->tau = 0.F;
-				ph->tau_abs = 0.F;
-				ph->pos.x = intersectPoint.x;
-				ph->pos.y = intersectPoint.y;
-				ph->pos.z = 0.F;
-				ph->layer = NATMd;
-				return;
-			}
-			else {ph->loc = ABSORBED;return;}
-		}
 		// ========================================================================================================
         #endif //END OBJ3D
 
