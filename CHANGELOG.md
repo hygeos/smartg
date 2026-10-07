@@ -3,6 +3,14 @@
 
 ## Unreleased
 
+* New features
+  - The alternative plane-parallel move (`alt_pp=True`) follows the 3D
+    objects: a photon of the atmosphere stops on the object its ray meets
+    when it reaches it before a collision, layer by layer, the way the
+    fast move first did. Its photons crossed the objects as if they were
+    absent, without any warning. The two moves give the same receiver
+    flux within the Monte Carlo error
+
 * Bug fixes
   - Refuse the 3D objects (`my_objects`) in the kernels whose move does
     not follow them: the spherical atmosphere (`pp=False`) and the 3D

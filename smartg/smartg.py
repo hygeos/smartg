@@ -882,7 +882,8 @@ class Smartg:
     alt_pp : bool, optional
         Use a plane parallel propagation scheme following the photon at
         each layer. Increase the computational time, but allow the use
-        of the ALIS method
+        of the ALIS method. It follows the 3D objects as the fast
+        scheme does.
     obj3d : bool, optional
         Allow 3D objects, the my_objects parameter of `run`, in the
         plane parallel atmosphere without alis nor opt3d. A kernel

@@ -234,11 +234,16 @@ extern "C" {
 
            #else // Plane Parallel
             #ifdef ALT_PP // Alternative PP move mode (very similar to Spherical move mode)
-            move_pp2(&ph, prof_atm, prof_oc, 
+            #if defined(OBJ3D) && !defined(OPT3D)
+            move_pp2_obj3d(&ph, prof_atm, prof_oc, &rngstate,
+                           &geoStruc, myObjets, myGObj, mySPECTObj);
+            #else
+            move_pp2(&ph, prof_atm, prof_oc,
                    #ifdef OPT3D
                    cell_atm, cell_oc,
                    #endif
                    0, 0 , &rngstate);
+            #endif
             #else // Fast PP move mode
             move_pp(&ph, prof_atm, prof_oc, &rngstate
 				#ifdef OBJ3D
@@ -2651,12 +2656,18 @@ __device__ bool obj3d_ends_move(Photon* ph, float3 *phit, bool *hit,
 /*--------------------------------------------------------------------------------------------------*/
 #ifdef ALT_PP
  #ifndef OPT3D // 1D
-__device__ void move_pp2(Photon* ph, struct Profile *prof_atm, 
+/* The move layer by layer. A photon of the atmosphere whose ray meets a
+   3D object at phit (not NULL) stops on it when it reaches it before a
+   collision: move_pp2 calls it without objects, move_pp2_obj3d with
+   them. */
+__device__ void move_pp2_core(Photon* ph, struct Profile *prof_atm,
                         struct Profile *prof_oc, int le, int count_level,
-                        struct RNG_State *rngstate) {
+                        struct RNG_State *rngstate, const float3 *phit) {
 
 
     if (!le && ph->scatterer == THERMAL_EM) return;
+    // the profiles are those of the atmosphere and of the ocean
+    if ((ph->loc != ATMOS) && (ph->loc != OCEAN)) return;
 
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
@@ -2759,6 +2770,22 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
         // make d infinite and d * epsilon below NaN: with the floor, d
         // cancels there into its path to the interaction in the layer
         d   = __fdividef(abs(ph->pos.z - prof[i_layer_fw].z), fmaxf(fabs(ph->v.z), 1e-20F));
+        #ifdef OBJ3D
+        // the 3D object ends the path in this layer when the hit is on
+        // this side of the forward level, within VALMIN5 at the ground
+        // and at TOA as move_pp accepts them, or before it along the ray,
+        // as for a horizontal photon whose d is huge. The distance is
+        // taken from the current position, at each layer
+        bool to_obj = false;
+        if (phit != NULL) {
+            float tol = ((i_layer_fw == NATMd) || (i_layer_fw == 0)) ? VALMIN5 : 0.F;
+            float d_obj = length(ph->pos, *phit);
+            if (sign_direction < 0) to_obj = (phit->z >= prof[i_layer_fw].z - tol);
+            else                    to_obj = (phit->z <= prof[i_layer_fw].z + tol);
+            to_obj = to_obj || (d_obj <= d);
+            if (to_obj) d = d_obj;
+        }
+        #endif
         AMF = __fdividef(d, abs(prof[i_layer_bh].z - prof[i_layer_fw].z)); // Air Mass Factor
 
         //
@@ -2823,6 +2850,15 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
             }
             #endif
 
+            #ifdef OBJ3D
+            // the photon reaches the object, in this layer
+            if (to_obj) {
+                ph->pos = *phit;
+                ph->loc = OBJSURF;
+                break;
+            }
+            #endif
+
             ph->layer -= sign_direction;
             count++;
         } // photon advances to next layer
@@ -2850,6 +2886,41 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
         ph->weight *= prof[ph->layer+ilam].ssa;
     }
 }
+
+/* The move layer by layer, without 3D objects */
+__device__ void move_pp2(Photon* ph, struct Profile *prof_atm,
+                         struct Profile *prof_oc, int le, int count_level,
+                         struct RNG_State *rngstate) {
+    move_pp2_core(ph, prof_atm, prof_oc, le, count_level, rngstate, NULL);
+}
+
+#ifdef OBJ3D
+/* The move layer by layer of a photon of the atmosphere, which stops on
+   the 3D object its ray meets when it reaches it before a collision:
+   the layer by layer way of the first move_pp */
+__device__ void move_pp2_obj3d(Photon* ph, struct Profile *prof_atm,
+                               struct Profile *prof_oc,
+                               struct RNG_State *rngstate, IGeo *geoS,
+                               struct IObjets *myObjets, struct GObj *myGObj,
+                               struct Spectrum_obj *mySPECTObj) {
+    if (ph->scatterer == THERMAL_EM) return;
+
+    float3 phit = make_float3(0.f, 0.f, 0.f);
+    bool hit;
+    if (obj3d_ends_move(ph, &phit, &hit, geoS, myObjets, myGObj,
+                        mySPECTObj)) {
+        // a hit without atmosphere (IsAtm == 0) gives the layer that the
+        // next moves and local estimates start from
+        if (ph->loc == OBJSURF) {
+            float tau, tau_abs;
+            ph->layer = layer_at_altitude(prof_atm, ph->ilam, ph->pos.z,
+                                          &tau, &tau_abs);
+        }
+        return;
+    }
+    move_pp2_core(ph, prof_atm, prof_oc, 0, 0, rngstate, hit ? &phit : NULL);
+}
+#endif
 
 
 

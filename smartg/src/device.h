@@ -199,6 +199,18 @@ __device__ void move_pp2(Photon*, struct Profile *prof_atm, struct Profile* prof
         int le, int count_level, struct RNG_State*);
 #endif
 
+#if defined(ALT_PP) && !defined(OPT3D)
+// move_pp2 up to the hit phit of a 3D object, or without when it is NULL
+__device__ void move_pp2_core(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
+        int le, int count_level, struct RNG_State*, const float3 *phit);
+#ifdef OBJ3D
+// move_pp2 of a photon of the atmosphere, toward the 3D objects
+__device__ void move_pp2_obj3d(Photon*, struct Profile *prof_atm, struct Profile* prof_oc,
+        struct RNG_State*, IGeo *geoS, struct IObjets *myObjets,
+        struct GObj *myGObj, struct Spectrum_obj *mySPECTObj);
+#endif
+#endif
+
 #ifdef OPT3D
 __device__ void GetFaceIndex(float3 pos, int *index);
 __device__ void GetFaceIndexMM(float3 pos, float3 pmin, float3 pmax, int *index);

@@ -7,9 +7,11 @@ wavelengths. The tests check the bookkeeping of the receiver: the
 receiver image of each photon category against the category weights,
 per wavelength and summed, and the weights of the optical losses at
 the heliostats, per wavelength, down to the efficiencies of
-nopt_view. The slow tier runs them again with the
-DatomicAdd fallback of the GPUs without a double precision atomicAdd,
-forced on the current GPU.
+nopt_view. Every test runs with the fast plane-parallel move and with
+the alternative one (alt_pp), which follows the photons layer by
+layer. The slow tier runs them again with the DatomicAdd fallback of
+the GPUs without a double precision atomicAdd, forced on the current
+GPU, in the fast move.
 """
 
 from typing import Any
@@ -134,19 +136,20 @@ def _run_ff(
     centre: tuple[float, float] = (0.0, 0.0),
     wavelength: float = 550.0,
     cftz: float = 0.0,
+    th_deg: float = 0.0,
     **kwargs: Any,
 ) -> xr.Dataset:
-    """Run a scene in the FF mode, zenith sun and black ground.
+    """Run a scene in the FF mode, zenith sun by default, black ground.
 
-    The photons are launched over a square of side field centred on
-    centre, cftz km above TOA, and the direct ones are counted by the
-    receivers.
+    The photons are launched over a square of side field, whose direct
+    beam is centred on centre at the ground, cftz km above TOA, and the
+    direct ones are counted by the receivers.
     """
     return sg.run(
         wavelength=wavelength,
         atmosphere=atmosphere,
         surface=LambSurface(alb=AlbedoCst(0.0)),
-        th_deg=0.0,
+        th_deg=th_deg,
         n_photons=1e6,
         my_objects=objects,
         cus_l=CusForward(
@@ -256,6 +259,7 @@ def _run(
     wavelength: float | np.ndarray,
     atmosphere: Atm1D | None = None,
     reflectivity: float | np.ndarray = 0.88,
+    seed: int = SEED,
 ) -> xr.Dataset:
     """Run the scene at the given wavelengths.
 
@@ -276,7 +280,7 @@ def _run(
         my_objects=_scene(reflectivity),
         interval=[[-w2, -w2, -0.005], [w2, w2, 0.125]],
         cus_l=CusForward(mode="RF"),
-        seed=SEED,
+        seed=seed,
         xblock=XBLOCK,
         xgrid=XGRID,
         progress=False,
@@ -285,17 +289,24 @@ def _run(
 
 @pytest.fixture(
     scope="module",
-    params=["native", pytest.param("datomicadd", marks=pytest.mark.slow)],
+    params=[
+        "native",
+        "alt_pp",
+        pytest.param("datomicadd", marks=pytest.mark.slow),
+    ],
 )
 def sg(request: pytest.FixtureRequest) -> Smartg:
-    """Compile the kernel, natively or with the DatomicAdd fallback.
+    """Compile the kernel, in the fast or the alternative (alt_pp) move.
 
-    The kernel is compiled when the Smartg is built, so the compiler
-    is patched for that alone, and never while a native one is built.
+    The fast one natively or with the DatomicAdd fallback. The kernel is
+    compiled when the Smartg is built, so the compiler is patched for
+    that alone, and never while a native one is built.
     """
-    if request.param == "native":
+    if request.param in ("native", "alt_pp"):
         assert smartg_mod.SourceModule is SourceModule
-        return Smartg(double=True, obj3d=True)
+        return Smartg(
+            double=True, obj3d=True, alt_pp=request.param == "alt_pp"
+        )
     source_module = smartg_mod.SourceModule
 
     def forced(*args: Any, **kwargs: Any) -> Any:
@@ -768,6 +779,21 @@ def sg_back(request: pytest.FixtureRequest) -> Smartg:
     return Smartg(double=True, obj3d=True, back=True, alt_pp=request.param)
 
 
+def _absorbing(
+    grid: list[float], od_abs: np.ndarray, wavelength: float = 550.0
+) -> xr.Dataset:
+    """Return a profile that only absorbs.
+
+    od_abs is the absorption optical depth from TOA down to each level
+    of the grid.
+    """
+    profile = _transparent(grid).calc(wavelength)
+    for name in ("OD_atm", "OD_abs_atm"):
+        profile[name].values[:] = od_abs
+    profile["ssa_atm"].values[0, 1:][np.diff(od_abs) > 0] = 0.0
+    return profile
+
+
 def _absorbing_layer(
     grid: list[float], layer: int, od_abs: float, wavelength: float = 550.0
 ) -> xr.Dataset:
@@ -775,13 +801,9 @@ def _absorbing_layer(
 
     The layer counts from the top, the first one is 1.
     """
-    profile = _transparent(grid).calc(wavelength)
     od = np.zeros(len(grid))
     od[layer:] = od_abs
-    for name in ("OD_atm", "OD_abs_atm"):
-        profile[name].values[:] = od
-    profile["ssa_atm"].values[0, layer] = 0.0
-    return profile
+    return _absorbing(grid, od, wavelength)
 
 
 def _br_facing_the_sun(
@@ -845,6 +867,68 @@ def test_br_starts_in_the_layer_of_its_receiver_point(sg_back: Smartg) -> None:
     od = np.interp(z, np.array(grid)[::-1], profile["OD_atm"].values[0, ::-1])
     expected = np.exp(-od / mu).mean()
     np.testing.assert_allclose(mean_weight, expected, rtol=2e-3)
+
+
+# levels of a profile that absorbs more and more toward the ground, and
+# its absorption optical depth from TOA, linear inside each layer
+GRID_ABS = [120.0, 50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.5, 0.2, 0.1, 0.05, 0.0]
+
+
+def _od_abs(grid: list[float]) -> np.ndarray:
+    """Return the optical depth of GRID_ABS at the levels of grid."""
+    levels = np.array(GRID_ABS)
+    od = 3.0 * (np.exp(-levels / 8.0) - np.exp(-levels[0] / 8.0))
+    return np.interp(grid, levels[::-1], od[::-1])
+
+
+@pytest.mark.parametrize("split", [False, True], ids=["grid", "split"])
+@pytest.mark.parametrize(
+    "altitude", [0.0, 0.35, 0.5], ids=["ground", "in layer", "on level"]
+)
+def test_direct_sun_through_absorbing_layers(
+    sg: Smartg, altitude: float, split: bool
+) -> None:
+    """The weight of a direct photon is the transmission to its object.
+
+    Under a sun at 60 degrees, in a profile that only absorbs, every
+    photon launched inside a black receiver reaches it with the same
+    weight, exp(-tau(z)/mu), through all the layers above it. The
+    same with every layer split in two, which the alternative move
+    walks one by one.
+    """
+    grid = GRID_ABS
+    if split:
+        middles = (np.array(GRID_ABS[:-1]) + np.array(GRID_ABS[1:])) / 2
+        grid = sorted([*GRID_ABS, *middles], reverse=True)
+    profile = _absorbing(grid, _od_abs(grid))
+    sza, half = 60.0, 0.002
+    # the direct beam on the receiver is centred on it
+    v_sun = gc.normalize(gc.ang2vec(sza, 0.0, vec_view="nadir"))
+    centre = (v_sun.x * altitude / -v_sun.z, v_sun.y * altitude / -v_sun.z)
+    ds = _run_ff(
+        sg, [_receiver(half, (0.0, 0.0, altitude))], profile, half,
+        centre=centre, th_deg=sza,
+    )
+    weight = ds["cat_w"].values[1] / ds["cat_PhNb"].values[1]
+    expected = np.exp(-_od_abs([altitude])[0] / np.cos(np.radians(sza)))
+    np.testing.assert_allclose(weight, expected, rtol=1e-5)
+
+
+def test_fast_and_alt_pp_moves_agree_on_the_receiver() -> None:
+    """The two plane-parallel moves give the same receiver categories.
+
+    The RF scene over its desert aerosol, each move with its own seed:
+    the categories agree within the Monte Carlo error of the receiver
+    counts (cat_errAbs), exact in this mode, at 5 sigma.
+    """
+    fast = _run(Smartg(double=True, obj3d=True), 550.0, seed=11)
+    alt = _run(Smartg(double=True, obj3d=True, alt_pp=True), 550.0, seed=12)
+    err = np.hypot(fast["cat_errAbs"].values, alt["cat_errAbs"].values)
+    counted = err > 0
+    # the sum and the light reflected by the heliostats alone
+    assert counted[0] and counted[2]
+    z = (fast["cat_irr"].values - alt["cat_irr"].values)[counted]
+    assert np.all(np.abs(z / err[counted]) < 5)
 
 
 def test_receiver_cells_tile_the_receiver(sg: Smartg) -> None:
