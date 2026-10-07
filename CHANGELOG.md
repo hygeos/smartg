@@ -10,6 +10,12 @@
     fast move first did. Its photons crossed the objects as if they were
     absent, without any warning. The two moves give the same receiver
     flux within the Monte Carlo error
+  - The fast plane-parallel move finds a 3D object hit from the vertical
+    optical depth at the hit (Moulana et al. 2024, Solar Energy 277,
+    112675, section 2), instead of summing the slant optical depth over
+    the layers crossed. The results are the same, the kernel faster with
+    many layers: 4 % with the default grid (49 layers) in an RF scene of
+    four heliostats, 16 % with 200 layers and 32 % with 800
 
 * Bug fixes
   - Refuse the 3D objects (`my_objects`) in the kernels whose move does
