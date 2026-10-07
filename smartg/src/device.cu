@@ -3890,105 +3890,57 @@ __device__ void move_pp(Photon* ph, struct Profile *prof_atm, struct Profile *pr
         float rdist;
 	    #ifdef OBJ3D
 		// ========================================================================================================
-		// Here geometry modification in the function move_pp
+		// The 3D objects, following Moulana et al. 2024 (Solar Energy 277,
+		// 112675), section 2
 		// ========================================================================================================
-		float timeT;                                 // the time from the parametric form of a ray
 		bool mytest = false;                         // the ray meets an object in the atmosphere
 		float3 phit=make_float3(0.f, 0.f, 0.f);      // initiate the intersection point 
 
 		// Test the ray against the 3D objects, which may end the move
 		if (obj3d_ends_move(ph, &phit, &mytest, geoS, myObjets, myGObj, mySPECTObj)) return;
 
-		// if mytest = true (intersection with the geometry in the atmosphere, 0 < Z < 120),
-		// then: Begin to analyse is there is really an intersection
+		// The photon reaches the object before a collision when the slant
+		// optical depth to the hit is below tauR. The move follows the
+		// vertical optical depth from the ground: at the altitude of the
+		// hit it is tau_hit (eqs. 1a-1b), so the slant optical depth is
+		// (tau_hit - prev_tau)/v.z (eq. 1c), whatever the layers crossed.
+		// From inside the layer of the hit, or along a horizontal ray, it
+		// is the path times the extinction coefficient of that layer (eq.
+		// 2c), exact there, without dividing by v.z. The absorption
+		// optical depth follows the same scheme with beer=1
 		if(mytest)
 		{
-	        // if phit.z < 0 then correct the value to 0 (there is no object below the surface)
-	        //if (phit.z < 0) phit.z =0;
-			float tauHit = 0.f; // Optical depth distance (from the initial position of the photon to phit)
-			int ilayer2 = ph->layer;
-			if (ilayer2==0) {ilayer2=1;} // Be sure that we're not out of the atmosphere
-
-			if((phit.z >= prof_atm[ilayer2].z) && (phit.z < prof_atm[ilayer2-1].z)) // 1 layer case: n = 1
+			float tau_hit, ab_hit;   // vertical optical depths at the hit
+			float tau_sp, ab_sp;     // slant optical depths to the hit
+			int ilayer_hit = layer_at_altitude(prof_atm, ph->ilam, phit.z, &tau_hit, &ab_hit);
+			if (((ph->pos.z >= prof_atm[ilayer_hit].z) && (ph->pos.z <= prof_atm[ilayer_hit-1].z))
+			    || (fabsf(ph->v.z) < 1e-4F))
 			{
-				// delta_i is: Delta(tau)1 = |tau(i-1) - tau(i)|
-				delta_i = fabs(get_OD(BEERd, prof_atm[ilayer2+ph->ilam*(NATMd+1)]) - 
-							   get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)]));
-				// tauHit = (Delat(D1)/Delat(Z1))*delta_i
-				tauHit += (length(ph->pos, phit)/fabs(prof_atm[ilayer2-1].z - prof_atm[ilayer2].z))*delta_i;
+				struct Profile *prof = prof_atm + ph->ilam*(NATMd+1);
+				float path = __fdividef(length(ph->pos, phit),
+				                        prof_atm[ilayer_hit-1].z - prof_atm[ilayer_hit].z);
+				tau_sp = path * fabs(get_OD(BEERd, prof[ilayer_hit]) - get_OD(BEERd, prof[ilayer_hit-1]));
+				ab_sp  = path * fabs(prof[ilayer_hit].OD_abs - prof[ilayer_hit-1].OD_abs);
 			}
-			else // several layers case: n >= 2
+			else
 			{
-				// Find the layer where there is intersection
-				ilayer2 = 1;
-				while(prof_atm[ilayer2].z > phit.z && prof_atm[ilayer2].z > 0.F)
-				{
-					ilayer2 ++;
-				} 
-
-				float3 newP, oldP;
-				bool higher = false;
-
-				ilayer = ph->layer;          // initialise with the actual layer
-				if (ilayer==0) {ilayer=1;}   // be sure that we're not out of the atmosphere
-				oldP = ph->pos;                // initialise with the actual position
-
-				// check if the photon come from higher || lower layers
-				if(ilayer < ilayer2) // true if the photon come from higher layers
-					higher =  true;
-
-				while(ilayer != ilayer2)
-				{
-					if(higher){timeT = fabs(prof_atm[ilayer].z - oldP.z)/fabs(ph->v.z);}
-					else{timeT = fabs(prof_atm[ilayer-1].z - oldP.z)/fabs(ph->v.z);}
-					newP = oldP + timeT*ph->v;
-					delta_i = fabs(get_OD(BEERd, prof_atm[ilayer+ph->ilam*(NATMd+1)]) - 
-								   get_OD(BEERd, prof_atm[ilayer-1+ph->ilam*(NATMd+1)]));
-					tauHit += (length(newP, oldP)/fabs(prof_atm[ilayer - 1].z - prof_atm[ilayer].z))*delta_i;
-					
-					// the photon come from higher layers
-					if(higher){ilayer++;}
-					// the photon come from lower layers
-					else{ilayer--;}
-					oldP = newP; //Update the position of the photon
-				}
-
-				// Calculate && add the last tau distance when ilayer is equal to ilayer2
-				delta_i = fabs(get_OD(BEERd, prof_atm[ilayer2+ph->ilam*(NATMd+1)]) - 
-							   get_OD(BEERd, prof_atm[ilayer2-1+ph->ilam*(NATMd+1)]));
-				tauHit += (length(phit, oldP)/fabs(prof_atm[ilayer2 - 1].z - prof_atm[ilayer2].z))*delta_i;
+				tau_sp = fabs(__fdividef(tau_hit - prev_tau, ph->v.z));
+				ab_sp  = fabs(__fdividef(ab_hit - ph->tau_abs, ph->v.z));
 			}
 
-
-			// if tauHit (optical distance to hit the geometry) < tauR, then: there is interaction.
-			if (tauHit < tauR)
+			if (tau_sp < tauR)
 			{
-				ph->layer = ilayer2;
 				// With BEERd == 0 the photon reached the object before a
 				// collision, so without the survival factor ssa of one
 				if (BEERd == 1)
-				{ // We compute the cumulated absorption OT at the new postion of the photon
-					// see move photon paper eq 11
-					// The fraction of the layer above the hit, from its
-					// altitude: the one from the scattering optical depth
-					// is 0/0 in a layer that does not scatter
-					epsilon = __fdividef(prof_atm[ilayer2-1].z - phit.z,
-					                     prof_atm[ilayer2-1].z - prof_atm[ilayer2].z);
-					epsilon = clamp(epsilon, 0.F, 1.F);
-					
-					float ab = prof_atm[NATMd+ph->ilam*(NATMd+1)].OD_abs - 
-						(epsilon * (prof_atm[ilayer2+ph->ilam*(NATMd+1)].OD_abs - prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs) +
-						 prof_atm[ilayer2-1+ph->ilam*(NATMd+1)].OD_abs);
+				{
 					// absorption between start && stop
-					ph->weight *= exp(-fabs(__fdividef(ab-ph->tau_abs, ph->v.z)));
-					ph->tau_abs = ab;
-					//ph->weight *= exp(-fabs(tauHit));
-					//prof_atm[NATMd + ph->ilam *(NATMd+1)].OD_sca;
-					
+					ph->weight *= exp(-ab_sp);
+					ph->tau_abs = ab_hit;
 				}
-				
+				ph->layer = ilayer_hit;
 				ph->loc = OBJSURF;                      // update of the loc of the photon 
-				ph->tau = prev_tau + tauHit * ph->v.z;  // update the value of tau photon
+				ph->tau = tau_hit;                      // update the value of tau photon
 				ph->pos = phit;                         // update the position of the photon
 				return;
 			}

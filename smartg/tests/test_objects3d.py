@@ -931,6 +931,69 @@ def test_fast_and_alt_pp_moves_agree_on_the_receiver() -> None:
     assert np.all(np.abs(z / err[counted]) < 5)
 
 
+def _horizontal_view_of_a_wall(sg: Smartg, distance: float) -> float:
+    """Return the mean weight of the local estimate of a wall.
+
+    A BR receiver at 0.5 km sends its photons along its normal
+    (receiver_fov=0), horizontally (v.z = 6e-17), to a Lambertian wall
+    at the given distance, whose local estimate looks at the sun. The
+    atmosphere only absorbs, uniformly below 1 km, with 1 per km.
+    """
+    altitude, sza = 0.5, 60.0
+    v_sun = gc.normalize(gc.ang2vec(sza, 0.0, vec_view="nadir"))
+    # the wall faces the receiver and the sun
+    side = 1.0 if v_sun.x > 0 else -1.0
+    receiver = _receiver(0.002, (0.0, 0.0, altitude), (0.0, side * 90.0, 0.0))
+    wall = Entity(
+        name="environment",
+        material_front=LambMirror(reflectivity=0.5),
+        material_back=Matte(),
+        geo=_plane(0.005, 0.005),
+        transformation=Transformation(
+            rotation=np.array([0.0, -side * 90.0, 0.0]),
+            translation=np.array([side * distance, 0.0, altitude]),
+        ),
+    )
+    normal = gc.normalize(
+        gc.get_rotate_y_tf(side * 90.0)(gc.Vector(0.0, 0.0, 1.0))
+    )
+    ds = sg.run(
+        wavelength=550.0,
+        atmosphere=_absorbing_layer([120.0, 1.0, 0.0], 2, 1.0),
+        surface=LambSurface(alb=AlbedoCst(0.0)),
+        n_photons=1e6,
+        my_objects=[wall, receiver],
+        cus_l=CusBackward(
+            normal=normal, receiver_fov=0.0, mode="BR", receiver=receiver,
+            v_sun=v_sun,
+        ),
+        le=LocalEstimate(th_deg=[sza], phi_deg=[0.0]),
+        le_fov=0.266,
+        direct=True,
+        seed=SEED,
+        xblock=XBLOCK,
+        xgrid=XGRID,
+        progress=False,
+    )
+    return float(ds["cat_w"].values[0] / ds["cat_PhNb"].values[0])
+
+
+def test_horizontal_ray_to_a_wall_in_absorbing_air(sg_back: Smartg) -> None:
+    """A horizontal photon reaches an object through its absorption.
+
+    Moving the wall 0.5 km away multiplies the light of its local
+    estimate by exactly exp(-0.5), the absorption of the longer path.
+    The fast move divided the difference of the absorption optical
+    depths at the two ends, at the same altitude, by v.z = 6e-17: the
+    weight came out 0 or 1.
+    """
+    near = _horizontal_view_of_a_wall(sg_back, 0.1)
+    far = _horizontal_view_of_a_wall(sg_back, 0.6)
+    assert near > 0.0
+    # within the noise of the cone of the local estimate, 2e-4
+    np.testing.assert_allclose(far / near, np.exp(-0.5), rtol=1e-3)
+
+
 def _roof(half: float, altitude: float) -> Entity:
     """Return a black horizontal square, of half-width half, in km."""
     return Entity(

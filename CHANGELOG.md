@@ -45,6 +45,13 @@
     either move: its ray was tested from a depth in metres read as
     kilometres, and the seafloor kept the mask of the previous local
     estimate
+  - Fix the absorption of a photon reaching a 3D object along a
+    horizontal ray in the fast plane-parallel move, with `beer=1`: the
+    difference of the absorption optical depths at its two ends, equal,
+    was divided by its vertical cosine, about 1e-16, so that the photon
+    reached the object unabsorbed or not at all. A receiver facing the
+    horizon, `CusBackward(receiver_fov=0.)`, sends all its photons that
+    way. The error was already in v1.2.0
 
 
 ## v2.0.1
