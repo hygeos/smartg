@@ -1,76 +1,50 @@
 # SMART-G CHANGELOG
 
 
-## Unreleased
+## v2.0.2
 
-* New features
-  - The alternative plane-parallel move (`alt_pp=True`) follows the 3D
-    objects: a photon of the atmosphere stops on the object its ray meets
-    when it reaches it before a collision, layer by layer, the way the
-    fast move first did. Its photons crossed the objects as if they were
-    absent, without any warning. The two moves give the same receiver
-    flux within the Monte Carlo error
-  - The fast plane-parallel move finds a 3D object hit from the vertical
-    optical depth at the hit (Moulana et al. 2024, Solar Energy 277,
-    112675, section 2), instead of summing the slant optical depth over
-    the layers crossed. The results are the same, the kernel faster with
-    many layers: 4 % with the default grid (49 layers) in an RF scene of
-    four heliostats, 15 % with 200 layers and 31 % with 800
-
-* Bug fixes
-  - Refuse the 3D objects (`my_objects`) in the kernels whose move does
-    not follow them: the spherical atmosphere (`pp=False`) and the 3D
-    atmosphere (`opt3d=True`), whose photons crossed the objects as if
-    they were absent, and ALIS (`alis=True`), whose receiver counts have
-    no spectral correction. `Smartg.run` raises a `ValueError` when
-    objects are given there. Without objects, a kernel compiled with
-    `obj3d=True` runs in every mode, as the start on the top of
-    atmosphere sphere of the `cell_size=-2` sensors does
-  - Refuse the 3D objects without atmosphere (`atmosphere=None`), which
-    stopped on an assertion once the kernel was done, or with `is_atm=0`
-    never ended. A scene without molecules nor aerosols takes a
-    transparent atmosphere, as `Atm1D('afglt', tau_r=0., no2=False,
-    tco3=0., tcwp=0.)`
-  - Start the photons of the BR launching mode (`CusBackward`) in the
-    layer and at the optical depth of their point of the receiver, not
-    of its centre. A receiver across a layer boundary, or in a layer of
-    large extinction, was seen through the atmosphere of its centre:
-    9 % too little light in the fast move for a receiver facing the sun
-    across the bottom of an absorbing layer, 7 % with `alt_pp=True`. The
-    error was already in v1.2.0
-  - Fix the local estimate with 3D objects and `alt_pp=True`. The mask
-    of the objects was tested once the virtual photon had moved to TOA
-    or to the ground, from where its ray met no object, so the objects
-    hid nothing from the local estimate. The local estimate from an
-    object surface reached TOA without any transmission, and in the BR
-    mode `countPhotonObj3D` attenuated it a second time, from an optical
-    depth this move does not follow: about a third too little light at
-    the receiver of the test scene. The mask is now tested from the
-    scattering or reflection point, before the move
-  - No 3D object masks the local estimate of a photon in the ocean, in
-    either move: its ray was tested from a depth in metres read as
-    kilometres, and the seafloor kept the mask of the previous local
-    estimate
-  - Fix the absorption of a photon reaching a 3D object along a
-    horizontal ray in the fast plane-parallel move, with `beer=1`: the
-    difference of the absorption optical depths at its two ends, equal,
-    was divided by its vertical cosine, about 1e-16, so that the photon
-    reached the object unabsorbed or not at all. A receiver facing the
-    horizon, `CusBackward(receiver_fov=0.)`, sends all its photons that
-    way. The error was already in v1.2.0
-  - Move a photon that stays in its layer along that layer in the fast
-    plane-parallel move: it collides at tauR divided by the extinction
-    coefficient of the layer, and is absorbed along that path (eq. 6 of
-    Moulana et al. 2024), exact and without dividing by its vertical
-    cosine. A photon crossing into another layer keeps its change of
-    altitude divided by the vertical cosine, the only exact formula
-    then. The move divided for every photon, and for a nearly horizontal
-    one the change of vertical optical depth is a few float steps: with
-    the sun at the zenith, a direct photon scattered at one of the three
-    angles where the fast cosine returns 0 got a NaN position, and with
-    `beer=1` a NaN weight, so it was dropped. The photons leaving a
-    receiver facing the horizon got 12 % too much light. `alt_pp=True`
-    is finite there since 2.0.1. The error was already in v1.2.0
+* Corrections
+  - Follow the 3D objects with `alt_pp=True`. Its photons crossed them
+    as if they were absent, without any warning. Both plane-parallel
+    moves now give the same receiver flux within the Monte Carlo error
+  - Refuse the 3D objects in the kernels that do not handle them:
+    `pp=False` and `opt3d=True`, whose photons crossed them, and
+    `alis=True`, whose receiver counts have no spectral correction.
+    `Smartg.run` raises a `ValueError` when objects are given there.
+    Without objects, these kernels run as before
+  - Refuse the 3D objects without atmosphere (`atmosphere=None`). The
+    run stopped on an assertion, or never ended with `is_atm=0`. Use a
+    transparent atmosphere instead: `Atm1D('afglt', tau_r=0.,
+    no2=False, tco3=0., tcwp=0.)`
+  - Start a photon of the BR mode (`CusBackward`) in the layer and at
+    the optical depth of its point on the receiver, not of the receiver
+    centre. A receiver facing the sun across the bottom of an absorbing
+    layer got 9 % too little light, 7 % with `alt_pp=True`. The error
+    was already in v1.2.0
+  - Fix the local estimate with 3D objects and `alt_pp=True`. The
+    objects hid nothing from it, the estimate from an object surface
+    reached TOA unattenuated, and the BR mode attenuated it twice. The
+    receiver of the test scene got about a third too little light
+  - Do not mask the local estimate of an ocean photon by the 3D
+    objects, in either move. Its depth in metres was read as kilometres,
+    and the seafloor kept the mask of the previous estimate
+  - Absorb a photon that reaches a 3D object along a horizontal ray in
+    the fast move, with `beer=1`. Its absorption was divided by a
+    vertical cosine of about 1e-16, so it arrived unabsorbed or not at
+    all. A receiver facing the horizon, `CusBackward(receiver_fov=0.)`,
+    sends all its photons that way. The error was already in v1.2.0
+  - In the fast move, move a photon that stays in its layer by tauR over
+    the extinction of the layer (eq. 6 of Moulana et al. 2024, Solar
+    Energy 277, 112675), without dividing by its vertical cosine. For a
+    nearly horizontal photon, that division amplified the rounding: a
+    receiver facing the horizon got 12 % too much light. With the sun at
+    the zenith, a photon scattered where the fast cosine returns 0 got a
+    NaN position and was dropped. The error was already in v1.2.0
+  - Locate a 3D object hit in the fast move from the vertical optical
+    depth at the hit (section 2 of the same paper), instead of summing
+    the slant optical depth layer by layer. The results are the same,
+    and the kernel is faster with many layers: 4 % with the default
+    grid (49 layers), 31 % with 800
 
 
 ## v2.0.1
