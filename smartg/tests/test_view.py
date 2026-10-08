@@ -34,6 +34,7 @@ from smartg.view import (
     plot_polar_iquv,
     profile_view,
     receiver_view,
+    spectrum,
     visualize_entity,
 )
 
@@ -231,6 +232,25 @@ def test_camera_view_zero_and_nan_panels() -> None:
     )
     # 4 panels and their colorbars
     assert len(fig.axes) == 8
+    plt.close(fig)
+
+
+def test_spectrum_without_a_finite_value() -> None:
+    """A line without any finite value is skipped with a warning.
+
+    A degree of polarization is NaN wherever the radiance is zero, at a
+    level that counted no photon for instance: spectrum used to raise
+    on the empty array of its finite values.
+    """
+    da = xr.DataArray(
+        np.full(3, np.nan),
+        dims=["wavelength"],
+        coords={"wavelength": [400.0, 500.0, 600.0]},
+        name="DoLP_up (TOA)",
+    )
+    with pytest.warns(UserWarning, match="no finite value"):
+        fig = spectrum(da, percent=True)
+    assert isinstance(fig, Figure)
     plt.close(fig)
 
 

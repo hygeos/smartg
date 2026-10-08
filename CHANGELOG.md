@@ -18,6 +18,9 @@
     of the process: its runs, and the compilation of a new one, failed
     with `invalid resource handle`. After `clear_context`, the process
     no longer prints `context::pop failed` at exit
+  - Skip a line without any finite value in `smartg.view.spectrum`,
+    with a warning, instead of raising on an empty array: a degree of
+    polarization where the radiance is zero, for instance
 
 
 ## v2.0.2

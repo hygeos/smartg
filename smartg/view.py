@@ -1000,6 +1000,13 @@ def spectrum(
 
     ax1 = da.coords["wavelength"].values
     data = da.values
+    if not np.any(np.isfinite(data)):
+        warnings.warn(
+            f"spectrum: no finite value to plot in {da.name!r}, line "
+            "skipped.",
+            stacklevel=2,
+        )
+        return fig
 
     if vmin is None:
         vmin = float(np.amin(data[~np.isnan(data)]))
