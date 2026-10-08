@@ -404,7 +404,7 @@ class Alis:
     """
     The options of the ALIS method, for Smartg.run.
 
-    ALIS (Emde et al. 2010) computes the spectrum of a whole band from
+    ALIS (Emde et al. 2011) computes the spectrum of a whole band from
     a single set of photon paths, by weighting each path with the
     absorption of every wavelength. The Smartg object must have been
     compiled with alis=True, together with alt_pp=True or pp=False.
@@ -971,7 +971,7 @@ class Smartg:
     double : bool, optional
         Accumulate photons table in double precision (default double).
     alis : bool, optional
-        Use the ALIS method (Emde et al. 2010) for treating gaseous
+        Use the ALIS method (Emde et al. 2011) for treating gaseous
         absorption and perturbed profile. Needs alt_pp=True or
         pp=False. The 3D objects are not available with it.
     back : bool, optional
