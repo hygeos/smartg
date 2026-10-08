@@ -7713,7 +7713,11 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
      #if ( defined(SPHERIQUE) || defined(ALT_PP) )
      unsigned long long K   = NBTHETAd*NBPHId*NSENSORd; /* number of potential output per photon*/
      unsigned long long LL;
-     if (HISTd==1 && ((count_level==UPTOA) || (count_level==DOWN0P))) { // Histories stored for absorption computation afterward (only spherical || alt_pp)
+     // Histories stored for absorption computation afterward (only
+     // spherical || alt_pp); a count of zero intensity (a local estimate
+     // that did not reach the level, for instance) contributes nothing
+     if (HISTd==1 && ((count_level==UPTOA) || (count_level==DOWN0P))
+         && (weight*(st.x+st.y) != 0.F)) {
           //int idx = blockIdx.x * blockDim.x + threadIdx.x;
           unsigned long long counter2;
           counter2=atomicAdd(NPhotonsOut, 1);

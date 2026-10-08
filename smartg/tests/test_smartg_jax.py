@@ -319,6 +319,34 @@ def test_histories_several_loops(n_photons: float = 5e4) -> None:
         assert n_sigma < 6.0 * np.sqrt(2.0)
 
 
+def test_histories_skip_the_counts_of_zero_intensity(
+    n_photons: float = 5e4,
+) -> None:
+    """Check that the histories keep no record of zero intensity.
+
+    In the spherical shell, a local estimate at 89 degrees meets the
+    Earth from some of the scattering points and counts nothing. Each
+    of these counts used to take a record of zero intensity among the
+    max_hist ones of the run (about 23 here).
+    """
+    th = [0.0, 89.0]
+    sg = Smartg(pp=False, alis=True)
+    m = sg.run(
+        np.array([550.0, 560.0]),
+        atmosphere=Atm1D("afglus", comp=[AerOPAC("desert", 0.3, 550.0)]),
+        th_deg=70.0,
+        le=LocalEstimate(th_deg=th, phi_deg=[0.0]),
+        alis_options=Alis(n_low=2, hist=True, max_hist=int(1e6)),
+        n_photons=n_photons,
+        seed=1,
+        progress=False,
+    )
+    sg.clear_context()
+    for idir in range(len(th)):
+        _, s, *_ = get_histories(m, idir=idir)
+        assert np.all(np.asarray(s)[:, 0] != 0.0)
+
+
 def test_validation_artdeco(
     request: pytest.FixtureRequest,
     n_photons: float = 5e5,

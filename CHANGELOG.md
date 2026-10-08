@@ -18,6 +18,10 @@
     of the process: its runs, and the compilation of a new one, failed
     with `invalid resource handle`. After `clear_context`, the process
     no longer prints `context::pop failed` at exit
+  - Record no count of zero intensity in the ALIS photon histories
+    (`Alis(hist=True)`), such as a local estimate that meets the Earth
+    in the spherical shell: the `max_hist` records of the run are kept
+    for the counts that contribute
   - Skip a line without any finite value in `smartg.view.spectrum`,
     with a warning, instead of raising on an empty array: a degree of
     polarization where the radiance is zero, for instance
