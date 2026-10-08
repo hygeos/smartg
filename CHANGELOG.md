@@ -14,6 +14,10 @@
     weights. It went with the path in the layer above, and the top
     layer did not absorb: with an absorbing 0-1 km layer, the TOA
     radiance was half the Beer-Lambert one
+  - Run a `Smartg` in its own CUDA context after JAX has used the GPU
+    of the process: its runs, and the compilation of a new one, failed
+    with `invalid resource handle`. After `clear_context`, the process
+    no longer prints `context::pop failed` at exit
 
 
 ## v2.0.2

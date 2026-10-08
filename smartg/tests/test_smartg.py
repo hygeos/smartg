@@ -6,6 +6,9 @@ the outputs and the arguments the run accepts.
 """
 
 import math
+import subprocess
+import sys
+import textwrap
 from typing import Any
 
 import numpy as np
@@ -70,6 +73,38 @@ def test_basic(request: pytest.FixtureRequest) -> None:
     )
     smartg_view(m)
     conftest.savefig(request)
+
+
+def test_clear_context_leaves_nothing_to_pop_at_exit() -> None:
+    """Check that clear_context leaves pycuda no context to pop at exit.
+
+    Two Smartg objects of one process run in turn, each cleared after
+    its run. The exit handler of pycuda.autoinit used to pop the
+    contexts that clear_context had destroyed, and printed 'context::pop
+    failed' twice. The script runs in a subprocess, whose exit is the
+    point.
+    """
+    script = textwrap.dedent(
+        """
+        from smartg.atmosphere import Atm1D
+        from smartg.smartg import Smartg
+
+        for alt_pp in (False, True):
+            sg = Smartg(alt_pp=alt_pp)
+            sg.run(550.0, atmosphere=Atm1D("afglt"), n_photons=1e4,
+                   progress=False)
+            sg.clear_context()
+        print("done")
+        """
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True,
+        timeout=600, check=False,
+    )
+    assert out.returncode == 0, out.stderr[-2000:]
+    assert "done" in out.stdout
+    assert "There is no current context" not in out.stdout
+    assert "context::pop failed" not in out.stderr
 
 
 @pytest.mark.parametrize("wavelength", wavelength_list)

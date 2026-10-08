@@ -32,6 +32,8 @@ reduce_diff
     Post-process ALIS finite-difference runs into sensitivities.
 """
 
+import atexit
+import functools
 import os
 import subprocess
 import tempfile
@@ -850,6 +852,103 @@ class LocalEstimate:
         )
 
 
+def _make_current(ctx: Any) -> bool:
+    """Make the CUDA context ctx the current one, if it is not.
+
+    Another library of the process (JAX for instance) may have made its
+    own context current, where the kernels of SMART-G are unknown
+    ('invalid resource handle'). Returns True if ctx was pushed, to be
+    popped by the caller.
+    """
+    if ctx is None:
+        return False
+    # PyCUDA only knows the contexts it pushed itself: ask the driver
+    if _driver_current_context() == ctx.handle:
+        return False
+    ctx.push()
+    return True
+
+
+def _autoinit_current_at_exit(sg: 'Smartg') -> None:
+    """At exit, make the pycuda.autoinit context of sg current again.
+
+    The exit handler of pycuda.autoinit pops its context, which fails
+    ('cannot pop non-current context') if another library (JAX) made
+    its own context current in the meantime.
+    """
+    import sys
+    mod = sys.modules.get('pycuda.autoinit')
+    if (sg.ctx is None or mod is None
+            or getattr(mod, 'context', None) is not sg.ctx):
+        return
+    # set it current at the driver level: pushing it would leave it
+    # twice on the stack of PyCUDA, which aborts at the module cleanup
+    if _driver_current_context() == sg.ctx.handle:
+        return
+    try:
+        import ctypes
+        for name in ('libcuda.so.1', 'libcuda.so', 'nvcuda.dll'):
+            try:
+                set_current = ctypes.CDLL(name).cuCtxSetCurrent
+                break
+            except (OSError, AttributeError):
+                continue
+        else:
+            return
+        set_current(ctypes.c_void_p(sg.ctx.handle))
+    # an exit handler must not raise: the one of pycuda.autoinit, which
+    # runs next, reports a context that is still not current
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+
+def _driver_current_context() -> int | None:
+    """Handle of the current CUDA context of the driver, or None."""
+    global _CU_CTX_GET_CURRENT
+    if _CU_CTX_GET_CURRENT is None:
+        import ctypes
+        import ctypes.util
+        names = ('libcuda.so.1', 'libcuda.so', 'nvcuda.dll',
+                 ctypes.util.find_library('cuda'))
+        for name in names:
+            if not name:
+                continue
+            try:
+                _CU_CTX_GET_CURRENT = ctypes.CDLL(name).cuCtxGetCurrent
+                break
+            except (OSError, AttributeError):
+                continue
+        else:
+            _CU_CTX_GET_CURRENT = False
+    if not _CU_CTX_GET_CURRENT:
+        return None
+    import ctypes
+    handle = ctypes.c_void_p()
+    if _CU_CTX_GET_CURRENT(ctypes.byref(handle)) != 0:
+        return None
+    return handle.value
+
+
+_CU_CTX_GET_CURRENT = None
+
+
+def _in_context(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Run a method of Smartg with its CUDA context current."""
+
+    @functools.wraps(method)
+    def wrapper(self: 'Smartg', *args: Any, **kwargs: Any) -> Any:
+        pushed = _make_current(self.ctx)
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            # run may have popped and released the context itself
+            # (autoinit=False, keep_context=False)
+            if pushed and self.ctx is not None:
+                cuda.Context.pop()  # pyright: ignore[reportAttributeAccessIssue]
+
+    return wrapper
+
+
 class Smartg:
     """Initialize the Smartg object.
 
@@ -1091,6 +1190,10 @@ class Smartg:
                 self.ctx = make_default_context()
 
         self.autoinit = autoinit
+        if autoinit:
+            # registered after the exit handler of pycuda.autoinit, so
+            # run before it: its context must be current to be popped
+            atexit.register(_autoinit_current_at_exit, self)
         self.pp = pp
         self.double = double
         self.alis = alis
@@ -1208,23 +1311,29 @@ class Smartg:
         with open(SRC_DEVICE, encoding='ascii', errors='ignore') as f:
             src_device_content = f.read()
 
-        # kernel compilation
-        self.mod = SourceModule(
-            src_device_content,
-            nvcc='nvcc',
-            options=options,
-            no_extern_c=True,
-            cache_dir=str(cache_dir),
-            include_dirs=[
-                str(DIR_SRC),
-                str(DIR_SRC / 'incRNGs' / 'Random123'),
-            ],
-        )
+        # kernel compilation, in the context of this object (another
+        # library may have made its own context current)
+        pushed = _make_current(self.ctx)
+        try:
+            self.mod = SourceModule(
+                src_device_content,
+                nvcc='nvcc',
+                options=options,
+                no_extern_c=True,
+                cache_dir=str(cache_dir),
+                include_dirs=[
+                    str(DIR_SRC),
+                    str(DIR_SRC / 'incRNGs' / 'Random123'),
+                ],
+            )
 
-        # load the kernel
-        self.kernel = self.mod.get_function('launchKernel')
-        # self.kernel2 = self.mod.get_function('launchKernel2')
-        self.kernel2 = self.mod.get_function('reduce_absorption_gpu')
+            # load the kernel
+            self.kernel = self.mod.get_function('launchKernel')
+            # self.kernel2 = self.mod.get_function('launchKernel2')
+            self.kernel2 = self.mod.get_function('reduce_absorption_gpu')
+        finally:
+            if pushed:
+                cuda.Context.pop()  # pyright: ignore[reportAttributeAccessIssue]
 
         #
         # common attributes
@@ -1284,6 +1393,8 @@ class Smartg:
         """
         try:
             assert self.ctx is not None
+            # another library (JAX) may have made its context current
+            _make_current(self.ctx)
             self.ctx.pop()
             self.ctx.detach()
             self.ctx = None
@@ -1291,14 +1402,17 @@ class Smartg:
 
             clear_context_caches()
             if self.autoinit:
-                # In case of autoinit delete pycuda.autoinit
+                # With autoinit, delete pycuda.autoinit and its exit
+                # handler, which would pop the destroyed context
                 import pycuda.autoinit
 
+                atexit.unregister(pycuda.autoinit._finish_up)
                 del pycuda.autoinit
         # pycuda's own error classes again, nothing else to do here
         except Exception:  # noqa: BLE001
             print("There is no current context to clear.")
 
+    @_in_context
     def run(
         self,
         wavelength: NumericArrayLike | BandSet | Sequence[BandLike],
