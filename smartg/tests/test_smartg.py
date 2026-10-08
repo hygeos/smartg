@@ -1203,6 +1203,35 @@ def test_3d_alis_absorbs_each_layer_along_its_path() -> None:
     assert np.all(np.abs(_z_scores(alis, beer, "up (TOA)")) < 4)
 
 
+def test_absorbing_3d_particles_with_beer_and_alis() -> None:
+    """Check that the particles of a 3D component absorb in every mode.
+
+    A plume of desert particles of single scattering albedo 0.8 fills
+    x 4-6 km and z 0-4 km under the sensors. Its absorption must be the
+    same whether the photon weight carries it through the single
+    scattering albedo (beer=0), the Beer-Lambert law (beer=1) or the
+    ALIS weights. Before 2.0.3 the last two read the absorption of the
+    1D level, without the particles: 1.6 times the beer=0 radiance.
+    """
+    # 1-based (ix, iy, iz): x 4-6 km, the middle y cell, z 0-4 km
+    cells = np.array(
+        [[i, 2, k] for i in range(17, 25) for k in (1, 2)], dtype=np.int32
+    )
+    plume = Aer3D(
+        "desert", w_ref=435.0, ext_ref=np.full(len(cells), 1.0),
+        cell_indices=cells, rh=np.full(len(cells), 50.0), ssa_cst=0.8,
+    )
+    kwargs = _scene_3d(comp_3d=[plume])
+    sg = Smartg(opt3d=True, alt_pp=True, back=True, double=True)
+    ssa = sg.run(beer=0, **kwargs)
+    beer = sg.run(beer=1, **kwargs)
+    alis = Smartg(
+        opt3d=True, alt_pp=True, alis=True, back=True, double=True
+    ).run(alis_options=Alis(n_low=2), **kwargs)
+    assert np.all(np.abs(_z_scores(beer, ssa, "up (TOA)")) < 4)
+    assert np.all(np.abs(_z_scores(alis, ssa, "up (TOA)")) < 4)
+
+
 def _sza_max_run(
     sg: Smartg, n_theta: int, sza_max: float, seed: int
 ) -> xr.Dataset:

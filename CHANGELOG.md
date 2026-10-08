@@ -4,6 +4,11 @@
 ## v2.0.3
 
 * Corrections
+  - Absorb the particles of a 3D component (`Aer3D`, `Cloud3D`, single
+    scattering albedo below 1) with `beer=1`, the default, and with
+    ALIS. Both took the absorption of the 1D level, without the
+    particles: the TOA radiance above an absorbing plume was 1.6 times
+    too high
   - Apply the absorption of each layer of a 3D atmosphere to the path
     in that layer with ALIS (`opt3d=True`), and in the `cdist_wabs`
     weights. It went with the path in the layer above, and the top

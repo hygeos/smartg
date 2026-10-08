@@ -3529,7 +3529,9 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
             h_cur    = coef_cur * intTime1;
 
             #ifndef ALIS
-            h_cur_abs = prof[cell[ph->layer].iabs+ilam].OD_abs * intTime1;
+            // the absorption of the cell: gases of the level, and the
+            // particles of a 3D component (its own optical properties)
+            h_cur_abs = prof[cell[ph->layer].iopt+ilam].OD_abs * intTime1;
             #endif
 
             //
@@ -3552,7 +3554,12 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 for (int k=0; k<NLOWd; k++)
                 {
                     coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
-			        ph->weight_sca[k] *= exp(-(coef-coef_cur)*intTime1);
+                    // the absorption of the particles of a 3D component,
+                    // smooth in wavelength, goes with the weights at the
+                    // nodes; that of the gases with the distances
+                    const float dabs = fmaxf(prof[cell[ph->layer].iopt + k*DL*NL].OD_abs
+                                             - prof[cell[ph->layer].iabs + k*DL*NL].OD_abs, 0.F);
+			        ph->weight_sca[k] *= exp(-(coef-coef_cur+dabs)*intTime1);
                 }
                 #endif
                 break;
@@ -3579,7 +3586,9 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 for (int k=0; k<NLOWd; k++)
                 {
                     coef = get_OD(1,prof[cell[ph->layer].iopt + k*DL*NL]);
-			        ph->weight_sca[k] *= __expf(-(coef-coef_cur)*intTime1);
+                    const float dabs = fmaxf(prof[cell[ph->layer].iopt + k*DL*NL].OD_abs
+                                             - prof[cell[ph->layer].iabs + k*DL*NL].OD_abs, 0.F);
+			        ph->weight_sca[k] *= __expf(-(coef-coef_cur+dabs)*intTime1);
                 }
                 #endif
 
