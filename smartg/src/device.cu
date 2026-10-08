@@ -4932,11 +4932,13 @@ __device__ void surfaceWaterRough(Photon* ph, int le,
 
      // A refraction crosses the facet: the incident and the refracted
      // directions both go against its normal, else the photon would
-     // reach the facet from behind and there is no transmission
+     // reach the facet from behind and there is no transmission. The
+     // virtual photon is removed rather than given a null weight, which
+     // the counts of photons (N_*) took for a photon
      if (((ph->loc==SURF0P) && (count_level==DOWN0M) ||
           (ph->loc==SURF0M) && (count_level==UP0P)) &&
          ((dot(no, ph->v) >= 0.F) || (dot(no, v) >= 0.F))) {
-         ph->weight = 0.;
+         ph->loc=REMOVED;
          return;
      }
 

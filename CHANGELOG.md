@@ -22,6 +22,11 @@
     (`Alis(hist=True)`), such as a local estimate that meets the Earth
     in the spherical shell: the `max_hist` records of the run are kept
     for the counts that contribute
+  - Count no virtual photon refracted at a wave facet that it reaches
+    from behind (`RoughSurface` over a water body, local estimate). It
+    had a null weight but was counted in the `N_*` outputs: a quarter
+    of `N_up (0+)` and `N_up (TOA)` in a test case. The radiances do
+    not change
   - Skip a line without any finite value in `smartg.view.spectrum`,
     with a warning, instead of raising on an empty array: a degree of
     polarization where the radiance is zero, for instance
