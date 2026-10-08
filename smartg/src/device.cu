@@ -7610,14 +7610,16 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
           /*for (int n=0; n<(NATMd); n++){
               wabs += prof_atm[n+1 + il*(NATMd+1)].OD_abs * ph->cdist_atm[n];
           }*/
+          // the 3D move adds the path in a cell to cdist_*[iabs], iabs
+          // counted from 1 at the top: level n+1 goes with cdist_*[n+1]
           for (int n=0; n<(NATM_ABSd); n++){
-              wabs += prof_atm[n+1 + il*(NATMd+1)].OD_abs * ph->cdist_atm[n];
+              wabs += prof_atm[n+1 + il*(NATMd+1)].OD_abs * ph->cdist_atm[n+1];
           }
           /*for (int n=0; n<(NOCEd); n++){
               wabs += prof_oc[ n+1 + il*(NOCEd+1)].OD_abs * ph->cdist_oc[n];
           }*/
           for (int n=0; n<(NOCE_ABSd); n++){
-              wabs += prof_oc[ n+1 + il*(NOCEd+1)].OD_abs * ph->cdist_oc[n];
+              wabs += prof_oc[ n+1 + il*(NOCEd+1)].OD_abs * ph->cdist_oc[n+1];
           }
           #endif
 
@@ -7821,10 +7823,10 @@ __device__ void countPhoton(Photon* ph, struct Spectrum *spectrum,
        }
        #else
        for (int n=0; n<(NATM_ABSd); n++){
-           wabs_cdist += prof_atm[n+1 + ph->ilam*(NATMd+1)].OD_abs * ph->cdist_atm[n];
+           wabs_cdist += prof_atm[n+1 + ph->ilam*(NATMd+1)].OD_abs * ph->cdist_atm[n+1];
        }
        for (int n=0; n<(NOCE_ABSd); n++){
-           wabs_cdist += prof_oc[n+1 + ph->ilam*(NOCEd+1)].OD_abs * ph->cdist_oc[n];
+           wabs_cdist += prof_oc[n+1 + ph->ilam*(NOCEd+1)].OD_abs * ph->cdist_oc[n+1];
        }
        #endif
        wabs_cdist = exp(-wabs_cdist);

@@ -1,6 +1,16 @@
 # SMART-G CHANGELOG
 
 
+## v2.0.3
+
+* Corrections
+  - Apply the absorption of each layer of a 3D atmosphere to the path
+    in that layer with ALIS (`opt3d=True`), and in the `cdist_wabs`
+    weights. It went with the path in the layer above, and the top
+    layer did not absorb: with an absorbing 0-1 km layer, the TOA
+    radiance was half the Beer-Lambert one
+
+
 ## v2.0.2
 Release date: 2026-10-08
 

@@ -17,7 +17,7 @@ from pycuda.compiler import SourceModule
 import smartg.smartg as smartg_mod
 from smartg import conftest
 from smartg.albedo import AlbedoCst, AlbedoMap
-from smartg.atmosphere import AerOPAC, Atm1D, Atm3D, Cloud
+from smartg.atmosphere import Aer3D, AerOPAC, Atm1D, Atm3D, Cloud, od2k
 from smartg.cdf import icdf_2d
 from smartg.grid3d import Grid3D
 from smartg.reptran import Reptran, reduce_reptran
@@ -1128,6 +1128,79 @@ def test_brdf_surface_in_3d_atmosphere() -> None:
         float(m1["I_up (TOA)"].values.ravel()[0]),
         rtol=1e-3,
     )
+
+
+def _scene_3d(
+    comp_3d: list[Aer3D] | None = None,
+    mol_abs_1d: NDArray[np.floating] | None = None,
+) -> dict[str, Any]:
+    """Return the run arguments of a periodic 3D atmosphere.
+
+    The AFGL US standard atmosphere on 7 layers, 10 km wide with
+    0.25 km columns along x, at 430 and 440 nm. Six sensors at the
+    TOA above x 4.75-5.25 km look at it in backward mode, through a
+    local estimate at 40 degrees, over a Lambertian ground of albedo
+    0.3. mol_abs_1d replaces the absorption coefficients of the
+    levels (km-1, levels from the top).
+    """
+    z = np.array([100.0, 60.0, 30.0, 15.0, 8.0, 4.0, 1.0, 0.0])
+    dx = 0.25
+    grid3 = Grid3D(
+        np.arange(0.0, 10.0 + dx / 2, dx),
+        np.array([0.0, 4.0, 6.0, 10.0]),
+        z[::-1],
+        periodic=True,
+    )
+    wavelengths = np.array([430.0, 440.0])
+    p1 = Atm1D("afglus", grid=z).calc(wavelengths)
+    if mol_abs_1d is None:
+        mol_abs_1d = np.asarray(od2k(p1, "OD_g"))
+    atmosphere = Atm3D(
+        atm_1d=Atm1D("afglus"),
+        grid_3d=grid3,
+        comp_3d=comp_3d,
+        mol_sca_1d=np.asarray(od2k(p1, "OD_r")),
+        mol_abs_1d=mol_abs_1d,
+    ).calc(wavelengths)
+    sensors = get_sensors_grid(
+        np.array([4.75, 5.0, 5.25]), np.array([4.0, 6.0]), pos_z=100.0,
+        th_deg=180.0, ph_deg=0.0, loc="ATMOS", grid_3d=grid3,
+    )
+    return {
+        "wavelength": wavelengths,
+        "atmosphere": atmosphere,
+        "surface": LambSurface(alb=AlbedoCst(0.3)),
+        "sensor": sensors,
+        "le": LocalEstimate(
+            th_deg=[40.0], phi_deg=[180.0], count_level=[0]
+        ),
+        "n_photons": 2e5,
+        "seed": 1,
+        "stdev": True,
+        "progress": False,
+    }
+
+
+def test_3d_alis_absorbs_each_layer_along_its_path() -> None:
+    """Check that 3D ALIS applies each layer's absorption to its path.
+
+    Only the lowest layer (0-1 km) of a horizontally uniform 3D
+    atmosphere absorbs. ALIS, which applies the absorption to the path
+    lengths when the photon is counted, must agree with the
+    Beer-Lambert absorption of the move. Before 2.0.3 the count paired
+    each layer with the path in the layer above: here the 1-4 km layer,
+    three times thicker.
+    """
+    kabs = np.zeros((2, 8))  # (wavelength, level from the top)
+    kabs[:, -1] = 0.5
+    kwargs = _scene_3d(mol_abs_1d=kabs)
+    beer = Smartg(opt3d=True, alt_pp=True, back=True, double=True).run(
+        beer=1, **kwargs
+    )
+    alis = Smartg(
+        opt3d=True, alt_pp=True, alis=True, back=True, double=True
+    ).run(alis_options=Alis(n_low=2), **kwargs)
+    assert np.all(np.abs(_z_scores(alis, beer, "up (TOA)")) < 4)
 
 
 def _sza_max_run(
