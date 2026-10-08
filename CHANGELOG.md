@@ -2,6 +2,7 @@
 
 
 ## v2.0.2
+Release date: 2026-10-08
 
 * Corrections
   - Follow the 3D objects with `alt_pp=True`. Its photons crossed them
