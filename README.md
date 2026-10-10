@@ -275,6 +275,11 @@ environment. Without them it skips itself with a message rather than
 failing, so run it with `pixi run -e extra pytest
 smartg/tests/test_smartg_jax.py`.
 
+`test_jax_context.py` needs JAX on a GPU, in the same environment, and
+a pytest process of its own: `test_smartg_jax.py` keeps JAX on the CPU
+for the whole process, and the test then skips itself. Run it with
+`pixi run -e extra pytest smartg/tests/test_jax_context.py`.
+
 To avoid repeating some pytest arguments, a `pytest.ini` file can be created at the root of the project. The following is an example of the contents of such a file:
 
 ```
