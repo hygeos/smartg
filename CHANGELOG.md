@@ -2,6 +2,7 @@
 
 
 ## v2.0.3
+Release date: 2026-10-10
 
 * Corrections
   - Absorb the particles of a 3D component (`Aer3D`, `Cloud3D`, single
