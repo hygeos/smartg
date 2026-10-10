@@ -13,6 +13,7 @@ from smartg.albedo import AlbedoCst, AlbedoMap
 from smartg.sensor import Sensor, get_sensors_grid
 from smartg.smartg import (
     LocalEstimate,
+    Smartg,
     StdevLim,
     _calc_solid_angles,
     _check_albedo_map_codes,
@@ -385,3 +386,14 @@ def test_stdev_lim_level_without_signal() -> None:
     means, sigmas = _stats(1.0, 0.005)
     lim = StdevLim(err_rel_min=1.0, n_loop_min=10, level=1)
     assert not _stdev_lim_reached(lim, 100, means, sigmas)[0]
+
+
+def test_thermal_forward_needs_alt_pp() -> None:
+    """Check that the forward thermal mode refuses the fast move.
+
+    Its kernel did not compile, and with the duplicate declaration
+    removed it gave an upward flux at the TOA 23 times too high in the
+    SEVIRI window. The refusal comes before any CUDA call.
+    """
+    with pytest.raises(ValueError, match="needs alt_pp=True"):
+        Smartg(thermal=True)

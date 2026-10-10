@@ -32,6 +32,11 @@
   - Skip a line without any finite value in `smartg.view.spectrum`,
     with a warning, instead of raising on an empty array: a degree of
     polarization where the radiance is zero, for instance
+  - Refuse the forward thermal emission (`Smartg(thermal=True)`,
+    `back=False`) in the fast plane parallel move, with a `ValueError`
+    asking for `alt_pp=True`. Its kernel did not compile, and once
+    compiled it was wrong: an upward flux at the TOA 23 times too high
+    in the SEVIRI window, and no downward flux at the surface
   - Compile the kernel without the warnings of CUDA 13 on the
     deprecated `double4` type (nvcc warning 1444), printed many times
     at each compilation; its replacements do not exist in the older

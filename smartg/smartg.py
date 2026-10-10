@@ -1024,7 +1024,8 @@ class Smartg:
         Include the Sun Induced Fluorescence, an experimental option.
         Needs alis=True, together with alt_pp=True or pp=False.
     thermal : bool, optional
-        Still in dev...
+        Still in dev... The forward mode (back=False) needs alt_pp=True
+        in the plane parallel geometry.
     rng : str, optional
         The pseudo-random number generator to use, only 2 choice:
         - PHILOX
@@ -1144,6 +1145,13 @@ class Smartg:
                 "The 3D atmosphere (opt3d=True) needs the plane parallel "
                 "geometry (pp=True): the spherical move does not follow "
                 "its cells"
+            )
+        if thermal and not back and pp and not alt_pp:
+            raise ValueError(
+                "The forward thermal emission (thermal=True, back=False) "
+                "needs alt_pp=True in the plane parallel geometry: the "
+                "fast move does not start the emitted photons at their "
+                "altitude"
             )
 
         if device is not None:
