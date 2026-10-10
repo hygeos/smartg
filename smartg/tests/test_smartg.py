@@ -9,6 +9,7 @@ import math
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -1758,3 +1759,37 @@ def test_sensor_on_either_side_of_the_surface(name: str, alt_pp: bool) -> None:
     sb = bw["I_stdev_up (TOA)"].values.ravel()[0]
     assert b > 0.1
     assert abs(a - b) < 5 * np.hypot(sa, sb), (name, a, sa, b, sb)
+
+
+def test_clear_context_of_two_objects() -> None:
+    """Check that two Smartg objects sharing a context clear safely.
+
+    Both run in the context of pycuda.autoinit: once the first has
+    cleared it, the second refuses to run and to clear it again, where
+    it crashed the driver, and a new Smartg object runs. The objects
+    live in a subprocess, the context being that of the whole process.
+    """
+    code = textwrap.dedent("""
+        from smartg.atmosphere import Atm1D
+        from smartg.smartg import Smartg
+        a, b = Smartg(), Smartg(alt_pp=True)
+        a.clear_context()
+        b.clear_context()
+        try:
+            b.run(500.0, n_photons=1e3, progress=False)
+        except RuntimeError as err:
+            print("refused:", err)
+        c = Smartg()
+        m = c.run(500.0, atmosphere=Atm1D("afglms"), n_photons=1e4,
+                  progress=False)
+        print("run:", float(m["I_up (TOA)"].mean()))
+        c.clear_context()
+        """)
+    proc = subprocess.run(
+        [sys.executable, "-B", "-c", code], capture_output=True, text=True,
+        cwd=Path(__file__).resolve().parents[2], timeout=600, check=False,
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert "There is no current context to clear." in proc.stdout
+    assert "refused: The CUDA context of this Smartg" in proc.stdout
+    assert "run: " in proc.stdout

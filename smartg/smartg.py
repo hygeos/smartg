@@ -852,16 +852,35 @@ class LocalEstimate:
         )
 
 
+# The CUDA contexts that clear_context destroyed, kept referenced so
+# that no new context takes the place of one of them. The Smartg objects
+# of a process share the context of pycuda.autoinit: once one of them
+# clears it, the others must not make it current again, which crashes
+# the driver.
+_RELEASED_CONTEXTS: list[Any] = []
+
+
+def _released(ctx: Any) -> bool:
+    """Return whether ctx is a context that clear_context destroyed."""
+    return any(c is ctx for c in _RELEASED_CONTEXTS)
+
+
 def _make_current(ctx: Any) -> bool:
     """Make the CUDA context ctx the current one, if it is not.
 
     Another library of the process (JAX for instance) may have made its
     own context current, where the kernels of SMART-G are unknown
     ('invalid resource handle'). Returns True if ctx was pushed, to be
-    popped by the caller.
+    popped by the caller. Raises a RuntimeError if ctx was destroyed by
+    the clear_context of another Smartg object that shared it.
     """
     if ctx is None:
         return False
+    if _released(ctx):
+        raise RuntimeError(
+            'The CUDA context of this Smartg object was destroyed by the '
+            'clear_context of another Smartg object that shared it: '
+            'create a new Smartg object.')
     # PyCUDA only knows the contexts it pushed itself: ask the driver
     if _driver_current_context() == ctx.handle:
         return False
@@ -878,7 +897,7 @@ def _autoinit_current_at_exit(sg: 'Smartg') -> None:
     """
     import sys
     mod = sys.modules.get('pycuda.autoinit')
-    if (sg.ctx is None or mod is None
+    if (sg.ctx is None or _released(sg.ctx) or mod is None
             or getattr(mod, 'context', None) is not sg.ctx):
         return
     # set it current at the driver level: pushing it would leave it
@@ -1389,7 +1408,10 @@ class Smartg:
         Notes
         -----
         Once this method has been called, the run method can no longer
-        be used: the Smartg object must be reinitialized.
+        be used: the Smartg object must be reinitialized. The Smartg
+        objects with autoinit share one context: once one of them has
+        cleared it, the others can no longer run, and their own
+        clear_context only prints that there is no context to clear.
         """
         try:
             assert self.ctx is not None
@@ -1397,6 +1419,7 @@ class Smartg:
             _make_current(self.ctx)
             self.ctx.pop()
             self.ctx.detach()
+            _RELEASED_CONTEXTS.append(self.ctx)
             self.ctx = None
             from pycuda.tools import clear_context_caches
 

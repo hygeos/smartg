@@ -17,7 +17,9 @@
   - Run a `Smartg` in its own CUDA context after JAX has used the GPU
     of the process: its runs, and the compilation of a new one, failed
     with `invalid resource handle`. After `clear_context`, the process
-    no longer prints `context::pop failed` at exit
+    no longer prints `context::pop failed` at exit, and a `Smartg` that
+    shared the context of `pycuda.autoinit` with the cleared one
+    refuses to run, with a `RuntimeError`
   - Record no count of zero intensity in the ALIS photon histories
     (`Alis(hist=True)`), such as a local estimate that meets the Earth
     in the spherical shell: the `max_hist` records of the run are kept
