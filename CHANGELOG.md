@@ -32,6 +32,10 @@
   - Skip a line without any finite value in `smartg.view.spectrum`,
     with a warning, instead of raising on an empty array: a degree of
     polarization where the radiance is zero, for instance
+  - Compile the kernel without the warnings of CUDA 13 on the
+    deprecated `double4` type (nvcc warning 1444), printed many times
+    at each compilation; its replacements do not exist in the older
+    toolkits
 
 
 ## v2.0.2

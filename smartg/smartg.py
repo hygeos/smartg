@@ -1319,6 +1319,9 @@ class Smartg:
             # 3D Object mode
             options.append('-DOBJ3D')
         options.append('-D' + rng)
+        # CUDA 13 deprecates double4 (warning 1444) for double4_16a and
+        # double4_32a, which older toolkits lack
+        options.append('-diag-suppress=1444')
         # options.append('-lineinfo')
 
         #
