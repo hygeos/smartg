@@ -22,29 +22,20 @@ class Shape // must be defined before the DifferentialGeometry structure
 // ========================================================
 {
 public:
-    // Public parameters
-	__host__ __device__ Shape()
-	{
-		// Initialize transformations with an empty Transform object
-		Transform<T> nothing;
-		ObjectToWorld = &nothing;
-		WorldToObject = &nothing;
-		shapeId = 0; // for the moment not used at all
-	}
+	// Identity transformations
+	__host__ __device__ Shape() : shapeId(0) {}
 
+	// The shape keeps its own copies of the transformations, which
+	// may be of another type, and live as long as it does
 	template <typename U_1, typename U_2>
 	__host__ __device__ Shape(const Transform<U_1> *o2w, const Transform<U_2> *w2o)
-		{
-			Transform<T> o2w_prv(o2w->GetMatrix(), o2w->GetInverseMatrix());
-			Transform<T> w2o_prv(w2o->GetMatrix(), w2o->GetInverseMatrix());
-			ObjectToWorld = &o2w_prv;
-			WorldToObject = &w2o_prv;
-			shapeId = 0; // for the moment not used at all
-		}
+		: shapeId(0),
+		  ObjectToWorld(o2w->GetMatrix(), o2w->GetInverseMatrix()),
+		  WorldToObject(w2o->GetMatrix(), w2o->GetInverseMatrix()) {}
 
     // Public parameters
-	unsigned long int shapeId;
-    const Transform<T> *ObjectToWorld, *WorldToObject;
+	unsigned long int shapeId; // for the moment not used at all
+    Transform<T> ObjectToWorld, WorldToObject;
 
 private:
 };
@@ -158,7 +149,7 @@ Sphere<T,TF>::Sphere(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
 template <typename T, typename TF> 
 __device__ BBox<T> Sphere<T,TF>::WorldBoundSphere() const
 {
-	return (*this->ObjectToWorld)(ObjectBoundSphere());
+	return this->ObjectToWorld(ObjectBoundSphere());
 }
 
 template <typename T, typename TF> 
@@ -195,7 +186,7 @@ bool Sphere<T,TF>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<
 
 	Ray<T> ray(r);
     // Passing the "ray" into the sphere space
-	(*this->WorldToObject)(r, &ray);
+	this->WorldToObject(r, &ray);
 
     // Solve |o + t d|^2 = radius^2 from the point of the ray closest
     // to the centre, pc = o + tc d: the roots are tc -/+ h with
@@ -261,7 +252,7 @@ bool Sphere<T,TF>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<
 							    -radius * get_func_sin(theta)) * (thetaMax-thetaMin);
 
     // Create the DifferentialGeometry object
-    const Transform<TF> &o2w = *this->ObjectToWorld;
+    const Transform<TF> &o2w = this->ObjectToWorld;
     *dg = DifferentialGeometry<U_3>(o2w(Point<U_3>(phit)),
 								    o2w(Normal<U_3>(dpdu)),
 								    o2w(Normal<U_3>(dpdv)),
@@ -720,8 +711,8 @@ bool Triangle<T,TF>::IntersectP(const Ray<U> &r, int version) const
 template <typename T, typename TF> 
 __device__ BBox<T> Triangle<T,TF>::ObjectBoundTriangle() const
 {
-	BBox<T> objectBounds((*this->WorldToObject)(Point<T>(p1)), (*this->WorldToObject)(Point<T>(p2)));
-	return objectBounds.Union(objectBounds, (*this->WorldToObject)(Point<T>(p3)));
+	BBox<T> objectBounds(this->WorldToObject(Point<T>(p1)), this->WorldToObject(Point<T>(p2)));
+	return objectBounds.Union(objectBounds, this->WorldToObject(Point<T>(p3)));
 }
 
 template <typename T, typename TF> 
@@ -793,7 +784,7 @@ TriangleMesh<T,TF,TP>::TriangleMesh(const Transform<U_1> *o2w, const Transform<U
 	for (int i = 0; i < nverts; ++i)
 	{
 		pbis.x = p[i].x; pbis.y = p[i].y; pbis.z = p[i].z;
-		(*this->ObjectToWorld)(pbis, &p[i]);
+		this->ObjectToWorld(pbis, &p[i]);
 	}
 }
 
@@ -850,7 +841,7 @@ __device__ BBox<T> TriangleMesh<T,TF,TP>::ObjectBoundTriangleMesh() const
     for (int i = 0; i < nverts; i++)
 	{
 		pW.x = TP(p[i].x); pW.y = TP(p[i].y); pW.z = TP(p[i].z);
-		(*this->WorldToObject)(p[i], &pW); // pointer to keep pW type
+		this->WorldToObject(p[i], &pW); // pointer to keep pW type
 		objectBounds = objectBounds.UnionPoint(objectBounds, pW);
 	}
     return objectBounds;
