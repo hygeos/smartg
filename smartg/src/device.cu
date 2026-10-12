@@ -1490,9 +1490,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
 	ph->pos = TRotZ(ph->pos, mPP);
 	#endif
 	
-    #ifdef SPHERIQUE
-	ph->radius = length(ph->pos);
-    #endif
 
 
     ///////////////////////////////////////
@@ -1787,7 +1784,6 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     }
     #ifdef SPHERIQUE
     ph->pos   = make_float3(0., 0., RAND *dz + prof_atm[ph->layer].z + RTER);
-    ph->radius = length(ph->pos);
     #else
     ph->pos   = make_float3(0., 0., RAND *dz + prof_atm[ph->layer].z);
     #endif
@@ -1886,20 +1882,15 @@ __device__ void initPhoton(Photon* ph, struct Profile *prof_atm, struct Profile 
     #if defined(SPHERIQUE) && defined(OBJ3D)
     if (cell_sized == -2)
     {
-        float toa_rad = RTER+ZTOAd;
-        Transform<real_clvl_1> nothing;
+        // the photon starts where its ray meets the TOA sphere
         Ray<real_clvl_1> r1(ph->pos, ph->v, 0.f);
-
-        Sphere<real_clvl_1,real_clvl_1> toa_sph(&nothing, &nothing, toa_rad, -toa_rad, toa_rad, 360.f);
-        float t_fac = 0.f;
-        bool is_intersection = false;
+        Sphere<real_clvl_1,real_clvl_1> toa_sph(RTER+ZTOAd);
+        real_clvl_1 t_fac = 0.;
         DifferentialGeometry<float> diff_geo;
-        is_intersection = toa_sph.Intersect(r1, &t_fac, &diff_geo);
-        if (is_intersection)
+        if (toa_sph.Intersect(r1, &t_fac, &diff_geo))
         {
             vec3<real_clvl_1> pos_tmp = r1(t_fac);
             ph->pos = make_float3(pos_tmp.x, pos_tmp.y, pos_tmp.z);
-            ph->radius = length(ph->pos);
         }
         else
         {
@@ -2267,17 +2258,15 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 	
     float tauRdm;
     float hph = 0.;  // cumulative optical thickness
-    float vzn, delta1, h_cur, tau_cur, epsilon, AMF;
+    float h_cur, tau_cur, epsilon, AMF;
     #ifndef ALIS
     float h_cur_abs, tau_cur_abs;
     #endif
     float d;
-    float rat;
     int sign_direction;
     int i_layer_fw, i_layer_bh; // index || layers forward && behind the photon
-    float costh, sinth2;
     int ilam = ph->ilam*(NATMd+1);  // wavelength offset in optical thickness table
-    float3 no, v0, u0;
+    float3 v0, u0;
 	//int idx = (blockIdx.x * YGRIDd + blockIdx.y) * XBLOCKd * YBLOCKd + (threadIdx.x * YBLOCKd + threadIdx.y);
 
     if (ph->layer == 0) ph->layer = 1;
@@ -2298,13 +2287,10 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     // photon is forced to exit upward || downward && tauRdm is chosen to be an upper limit
     else tauRdm = 1e6;
 
-    ph->radius = length(ph->pos);
-    vzn = __fdividef( dot(ph->v, ph->pos), ph->radius);
-
     // a priori value for sign_direction:
     // sign_direction may change sign from -1 to +1 if the photon does not
     // cross lower layer
-    if (vzn <= 0) sign_direction = -1;
+    if (dot(ph->v, ph->pos) <= 0) sign_direction = -1;
     else sign_direction = 1;
 
     if (REFRACd) {
@@ -2343,54 +2329,23 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             i_layer_bh = ph->layer;
         }
 
-        // initializations
-        costh = vzn;
-        sinth2 = 1.f-costh*costh;
         //
-        // calculate the distance d to the fw layer
-        // from the current position
+        // the distance d to the boundary the photon goes to, a sphere
+        // centred on the Earth. Going down, the photon enters the lower
+        // boundary at the near crossing of its line; if it misses it,
+        // it goes up. Going up, it leaves the upper boundary at the far
+        // crossing. A miss of the upper boundary is a rounding of a
+        // path tangent to it (the photon slightly above it), and the
+        // crossings are then both the tangent point
         //
-        // ri : radius of next layer boundary ri=zi+RTER
-        // r  : radius of current point along the path 
-        // costh: angle between the position vector && the direction vector
-        // In the triangle we have ri² = d² + r² + 2*d*r*costh
-        // ||: d**2 + 2*r*costh*d + r**2-ri**2 = 0 , to be solved for d
-        // delta = 4.r².costh² - 4(r²-ri²) = 4*r²*((ri/r)²-sinth²) = 4*r²*delta1
-        // with delta1 = (ri/r)²-sinth²
-        rat = (prof_atm[i_layer_fw].z+RTER)/ph->radius;
-        delta1 = rat*rat - sinth2;   // same sign as delta
-
-        if (delta1 < 0) {
-            if (sign_direction > 0) {
-                // because of numerical uncertainties, a downward photon may
-                // not strictly be between zi && zi+1
-                // in rare case of grazing angle there is sometimes no intersection
-                // with current layer because photon is actually slightly above it.
-                // therefore we consider that delta=0 such that the photon is
-                // tangent to the layer
-                delta1 = 0.;
-            } else {
-                // no intersection, with lower layer, we should go towards higher layer
-                sign_direction = 1;
-                continue;
-            }
+        Sphere<float> boundary(prof_atm[i_layer_fw].z + RTER);
+        float t_in, t_out;
+        if (!boundary.IntersectLine(Ray<float>(ph->pos, ph->v), &t_in, &t_out)
+            && sign_direction < 0) {
+            sign_direction = 1;
+            continue;
         }
-
-        /* Now, there are two real solutions for d
-        *  The solution is the smallest positive one
-        *
-        * if photon goes towards higher layers (sign_direction == 1) && costh>0
-        * => we keep the smallest solution in abs. val   (both terms are of opposite signs)
-        *
-        * if photon goes towards lower layers (sign_direction == -1) && costh<0
-        * => we keep the smallest solution in abs. val   (both terms are of opposite signs)
-        *
-        * if photon goes towards higher layers (sign_direction == 1) && costh<0
-        * => we keep the greatest solution in abs. val   (both terms are of same signs)
-        *
-        */
-        /* d = 0.5f*(-2.*ph->radius*costh + sign_direction*2*ph->radius*sqrtf(delta1)); simplified to: */
-        d = ph->radius*(-costh + sign_direction*sqrtf(delta1));
+        d = (sign_direction < 0) ? t_in : t_out;
         AMF = __fdividef(d, abs(prof_atm[i_layer_bh].z - prof_atm[i_layer_fw].z)); // Air Mass Factor
 
         //
@@ -2419,7 +2374,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
 
             // photon is located at his final position
             ph->pos = operator+(ph->pos, ph->v*d);
-            ph->radius = length(ph->pos);
             #ifndef ALIS
             // in the general case absorption is computed until final position if BEER
             if (BEERd == 1) ph->weight *= __expf(-( epsilon * h_cur_abs));
@@ -2444,10 +2398,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             hph += h_cur;
             // photon is located at his new position
             ph->pos = operator+(ph->pos, ph->v*d);
-            ph->radius = length(ph->pos);
-            // update local vertical
-            no = operator/(ph->pos, ph->radius);
-            vzn = dot(ph->v, no);
 
             //
             // REFRACTION
@@ -2459,6 +2409,9 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
             // Compute refraction everywhere
             if (REFRACd)  {
             #endif
+                // the local vertical
+                float3 no = operator/(ph->pos, length(ph->pos));
+                float vzn = dot(ph->v, no);
                 float3 uu = normalize(cross(no, ph->v)); // unit vector around which one turns
                 // We update photon direction at the interface due to refraction
                 // 1. sin_i just to verify if refraction occurs
@@ -2480,7 +2433,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
                   // new photon direction 
                   float3 v2 = normalize(mul(R, ph->v));
                   ph->v = v2;
-                  vzn = dot(ph->v, no);
                 } // no refraction computation necessary
             } // No Refraction
 
@@ -2540,9 +2492,6 @@ __device__ void move_sp(Photon* ph, struct Profile *prof_atm, int le, int count_
     // in case of propagation, if the photon is still in the atmosphere
     // compute the absorption using Single Scattering Albedo if BEER=0
     if ((BEERd == 0) && (ph->loc == ATMOS)) ph->weight *= prof_atm[ph->layer+ilam].ssa;
-
-    // TEST
-    //if (!le && (ph->loc==SURF0P) && (idx==0)) printf("%f %f %f %f\n", ph->pos.x, ph->pos.y, ph->pos.z, ph->radius);
 }
 #endif // SPHERIQUE
 
@@ -8326,9 +8275,6 @@ __device__ void copyPhoton(Photon* ph, Photon* ph_le) {
     ph_le->is = ph->is;
     ph_le->iph = ph->iph;
     ph_le->ith = ph->ith;
-    #ifdef SPHERIQUE
-    ph_le->radius = ph->radius;
-    #endif
 
     #ifdef ALIS
     int k; 

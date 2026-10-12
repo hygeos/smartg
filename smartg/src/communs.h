@@ -286,10 +286,6 @@ public:
     #endif
     /* ---------------------*/
 
-    #ifdef SPHERIQUE
-    float radius;
-    #endif
-
     #ifdef BACK
     // Cumulative Mueller Matrix
     float4x4 M;
