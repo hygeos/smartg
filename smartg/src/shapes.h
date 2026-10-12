@@ -22,19 +22,20 @@ class Shape // must be defined before the DifferentialGeometry structure
 // ========================================================
 {
 public:
-	// Identity transformations
-	__host__ __device__ Shape() : shapeId(0) {}
+	// A shape in the world frame: identity transformations
+	__host__ __device__ Shape() : shapeId(0), transformed(false) {}
 
 	// The shape keeps its own copies of the transformations, which
 	// may be of another type, and live as long as it does
 	template <typename U_1, typename U_2>
 	__host__ __device__ Shape(const Transform<U_1> *o2w, const Transform<U_2> *w2o)
-		: shapeId(0),
+		: shapeId(0), transformed(true),
 		  ObjectToWorld(o2w->GetMatrix(), o2w->GetInverseMatrix()),
 		  WorldToObject(w2o->GetMatrix(), w2o->GetInverseMatrix()) {}
 
     // Public parameters
 	unsigned long int shapeId; // for the moment not used at all
+	bool transformed;          // false: in the world frame, no transformation
     Transform<T> ObjectToWorld, WorldToObject;
 
 private:
@@ -96,6 +97,8 @@ class Sphere : public Shape<TF>
 public:
 	// Public methods
 	__host__ __device__ Sphere();
+	// A full sphere centred on the origin of the world frame
+	__host__ __device__ explicit Sphere(T rad);
 	template <typename U_1, typename U_2, typename U_3, typename U_4,
 	          typename U_5, typename U_6>
 	__host__ __device__ Sphere(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
@@ -107,9 +110,15 @@ public:
 	template <typename U_1, typename U_2, typename U_3>
     __host__ __device__ bool Intersect(const Ray<U_1> &ray, U_2* tHit,
 									   DifferentialGeometry<U_3> *Dg) const;
+	template <typename U_1, typename U_2>
+	__host__ __device__ bool IntersectLine(const Ray<U_1> &ray, U_2 *t_in,
+										   U_2 *t_out) const;
     __host__ __device__ T Area() const;
 
 private:
+	// private methods
+	__host__ __device__ bool Crossings(const Ray<T> &ray, T *t_in, T *t_out) const;
+
 	// private parameters
 	T radius;               // sphere radius
     T phiMax;               // phimax = 360° for a complete sphere
@@ -131,7 +140,18 @@ Sphere<T,TF>::Sphere() : Shape<TF>()
     phiMax = T(0);
 }
 
-template <typename T, typename TF> 
+template <typename T, typename TF>
+Sphere<T,TF>::Sphere(T rad) : Shape<TF>()
+{
+    radius = rad;
+    zmin = -rad;
+    zmax = rad;
+    thetaMin = get_const_pi(T{});
+    thetaMax = T(0);
+    phiMax = T(2)*get_const_pi(T{});
+}
+
+template <typename T, typename TF>
 template <typename U_1, typename U_2, typename U_3, typename U_4,
 	      typename U_5, typename U_6>
 Sphere<T,TF>::Sphere(const Transform<U_1> *o2w, const Transform<U_2> *w2o,
@@ -177,6 +197,83 @@ __device__ BBox<T> Sphere<T,TF>::ObjectBoundSphere() const
 	}
 }
 
+// The crossings t_in <= t_out of the line of a ray, given in the frame
+// of the sphere, with the full sphere: the roots of A t^2 + 2 b t + c,
+// A = |d|^2, b = d.o and c = |o|^2 - radius^2. False if the line misses
+// the sphere, both crossings being then the point of the line closest
+// to the centre, pc = o + tc d with tc = -b/A. The two uses of the
+// class need two forms to keep the float precision:
+// - a ray from far, |o| > 2 radius, as from TOA to a small object,
+//   where b^2 and A c lose radius^2: the crossings are tc -/+ h with
+//   h^2 = (radius^2 - |pc|^2) / A;
+// - a ray from near the sphere, as a photon on a layer boundary of the
+//   spherical atmosphere: c = (|o| - radius) (|o| + radius) keeps the
+//   short distance to the surface, and the crossings q/A and c/q,
+//   q = -(b + sign(b) sqrt(b^2 - A c)), have no cancellation (Press et
+//   al., Numerical Recipes, 5.6).
+template <typename T, typename TF>
+bool Sphere<T,TF>::Crossings(const Ray<T> &ray, T *t_in, T *t_out) const
+{
+    T A = ray.d.x*ray.d.x + ray.d.y*ray.d.y + ray.d.z*ray.d.z;
+    T b = ray.d.x*ray.o.x + ray.d.y*ray.o.y + ray.d.z*ray.o.z;
+    T tc = -b / A;
+    T lo2 = ray.o.x*ray.o.x + ray.o.y*ray.o.y + ray.o.z*ray.o.z;
+    if (lo2 > T(4)*radius*radius)
+    {
+        T pcx = ray.o.x + tc*ray.d.x;
+        T pcy = ray.o.y + tc*ray.d.y;
+        T pcz = ray.o.z + tc*ray.d.z;
+        T h2 = (radius*radius - (pcx*pcx + pcy*pcy + pcz*pcz)) / A;
+        if (h2 < T(0))
+        {
+            *t_in = *t_out = tc;
+            return false;
+        }
+        T h = get_func_sqrt(h2);
+        *t_in = tc - h;
+        *t_out = tc + h;
+        return true;
+    }
+    T lo = get_func_sqrt(lo2);
+    T c = (lo - radius) * (lo + radius);
+    T disc = b*b - A*c;
+    if (disc < T(0))
+    {
+        *t_in = *t_out = tc;
+        return false;
+    }
+    T sq = get_func_sqrt(disc);
+    T q = (b < T(0)) ? sq - b : -(b + sq);
+    if (q == T(0))
+    {
+        // the line touches the sphere at the origin of the ray
+        *t_in = *t_out = tc;
+        return true;
+    }
+    T t0 = q / A, t1 = c / q;
+    *t_in = min(t0, t1);
+    *t_out = max(t0, t1);
+    return true;
+}
+
+// The crossings t_in <= t_out of the line of a ray with the full sphere
+// (zmin, zmax and phiMax play no part), behind the origin of the ray
+// too: a ray from inside leaves the sphere at t_out, a ray from outside
+// enters it at t_in. False if the line misses the sphere, both
+// crossings being then its point closest to the centre
+template <typename T, typename TF>
+template <typename U_1, typename U_2>
+bool Sphere<T,TF>::IntersectLine(const Ray<U_1> &r, U_2 *t_in, U_2 *t_out) const
+{
+	Ray<T> ray(r);
+	if (this->transformed) this->WorldToObject(r, &ray);
+	T t0, t1;
+	bool meets = Crossings(ray, &t0, &t1);
+	*t_in = U_2(t0);
+	*t_out = U_2(t1);
+	return meets;
+}
+
 template <typename T, typename TF>
 template <typename U_1, typename U_2, typename U_3>
 bool Sphere<T,TF>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<U_3> *dg) const
@@ -186,23 +283,12 @@ bool Sphere<T,TF>::Intersect(const Ray<U_1> &r, U_2 *tHit, DifferentialGeometry<
 
 	Ray<T> ray(r);
     // Passing the "ray" into the sphere space
-	this->WorldToObject(r, &ray);
+	if (this->transformed) this->WorldToObject(r, &ray);
 
-    // Solve |o + t d|^2 = radius^2 from the point of the ray closest
-    // to the centre, pc = o + tc d: the roots are tc -/+ h with
-    // h^2 = (radius^2 - |pc|^2) / |d|^2. The coefficients of the
-    // quadratic lose radius^2 against |o|^2 in float for a ray that
-    // starts far from a small sphere, as from TOA
-    T A = ray.d.x*ray.d.x + ray.d.y*ray.d.y + ray.d.z*ray.d.z;
-    T tc = -(ray.d.x*ray.o.x + ray.d.y*ray.o.y + ray.d.z*ray.o.z) / A;
-    T pcx = ray.o.x + tc*ray.d.x;
-    T pcy = ray.o.y + tc*ray.d.y;
-    T pcz = ray.o.z + tc*ray.d.z;
-    T h2 = (radius*radius - (pcx*pcx + pcy*pcy + pcz*pcz)) / A;
-    if (h2 < T(0))
+    // The crossings of the line of the ray with the sphere
+    T t0, t1;
+    if (!Crossings(ray, &t0, &t1))
         return false;
-    T h = get_func_sqrt(h2);
-    T t0 = tc - h, t1 = tc + h;
 
     // Calculate the factor t at which the ray is reaching the sphere
     if (t0 > ray.maxt || t1 < ray.mint)
