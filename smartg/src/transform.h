@@ -2,9 +2,7 @@
 #ifndef _TRANSFORM_H_
 #define _TRANSFORM_H_
 
-#ifdef OBJ3D
 #include "geometry.h"
-#endif
 
 #include <math.h>
 #include <helper_math.h>
@@ -45,7 +43,6 @@ public:
 	inline __host__ __device__ U3 operator()(const C3 &c, const int type) const;
 	template <typename C3_1, typename C3_2>
 	inline __host__ __device__ void operator()(const C3_1 &c, C3_2 *ctrans, const int type) const;
-	#ifdef OBJ3D
 	template <typename U> inline __host__ __device__ U3 operator()(const Point<U> &c) const;
 	template <typename U> inline __host__ __device__ U3 operator()(const Vector<U> &c) const;
 	template <typename U> inline __host__ __device__ U3 operator()(const Normal<U> &c) const;
@@ -59,7 +56,6 @@ public:
 	template <typename U_1, typename U_2>
     inline __host__ __device__ void operator()(const Ray<U_1> &r, Ray<U_2> *rt) const;
     template <typename U> __host__ __device__ BBox<T> operator()(const BBox<U> &b) const;
-	#endif
     template <typename U> __host__ __device__ Transform<T> operator*(const Transform<U> &t2) const;
     __host__ __device__ const U4x4 &GetMatrix() const { return m; }
     __host__ __device__ const U4x4 &GetInverseMatrix() const { return mInv; }
@@ -243,7 +239,6 @@ inline void Transform<T>::operator()(const C3_1 &c, C3_2 *ctrans, const int type
 	}
 }
 
-#ifdef OBJ3D
 template <typename T>
 template <typename U>
 inline vec3<T> Transform<T>::operator()(const Point<U> &c) const
@@ -386,7 +381,6 @@ BBox<T> Transform<T>::operator()(const BBox<U> &b) const
 	ret = ret.Union(ret, P+V1+V2+V3);
     return ret;
 }
-#endif
 
 template <typename T>
 template <typename U>

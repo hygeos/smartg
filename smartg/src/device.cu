@@ -11,10 +11,8 @@
 
 #include "communs.h"
 #include "device.h"
-#ifdef OBJ3D
 #include "geometry.h"
 #include "shapes.h"
-#endif
 #include "transform.h"
 
 #include <math.h>
