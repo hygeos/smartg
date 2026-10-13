@@ -131,7 +131,7 @@ def _receiver(
 def _run_ff(
     sg: Smartg,
     objects: list[Entity],
-    atmosphere: Atm1D,
+    atmosphere: Atm1D | xr.Dataset,
     field: float,
     centre: tuple[float, float] = (0.0, 0.0),
     wavelength: float = 550.0,
@@ -820,7 +820,8 @@ def _br_facing_the_sun(
     tilt = float(np.degrees(np.arctan2(to_sun.x, to_sun.z)))
     normal = gc.normalize(gc.get_rotate_y_tf(tilt)(gc.Vector(0.0, 0.0, 1.0)))
     np.testing.assert_allclose(
-        [normal.x, normal.y, normal.z], [to_sun.x, to_sun.y, to_sun.z],
+        np.array([normal.x, normal.y, normal.z]),
+        np.array([to_sun.x, to_sun.y, to_sun.z]),
         atol=1e-12,
     )
     receiver = _receiver(half, (0.0, 0.0, centre_z), (0.0, tilt, 0.0))
@@ -904,7 +905,10 @@ def test_direct_sun_through_absorbing_layers(
     sza, half = 60.0, 0.002
     # the direct beam on the receiver is centred on it
     v_sun = gc.normalize(gc.ang2vec(sza, 0.0, vec_view="nadir"))
-    centre = (v_sun.x * altitude / -v_sun.z, v_sun.y * altitude / -v_sun.z)
+    centre = (
+        float(v_sun.x * altitude / -v_sun.z),
+        float(v_sun.y * altitude / -v_sun.z),
+    )
     ds = _run_ff(
         sg, [_receiver(half, (0.0, 0.0, altitude))], profile, half,
         centre=centre, th_deg=sza,

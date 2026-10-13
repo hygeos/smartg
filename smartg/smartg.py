@@ -564,7 +564,10 @@ def _check_alis_kernel(
 
 
 def _check_objects_kernel(
-    my_objects: list | None, alis: bool, pp: bool, opt3d: bool
+    my_objects: Sequence[Entity | GroupE] | None,
+    alis: bool,
+    pp: bool,
+    opt3d: bool,
 ) -> None:
     """
     Refuse the 3D objects in a kernel whose move does not follow them.
