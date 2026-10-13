@@ -20,6 +20,13 @@
     principal plane directions of a grid of 5 degrees returning 0, or,
     in the LiSparse kernel of RTLS, it lost its overlap term: the BRF
     of an exact hot spot came out 20 to 22 % low
+  - Evaluate the RTLS and RPV BRDFs at the angles of the local vertical
+    in the spherical atmosphere (`pp=False`): they were measured from
+    the Z axis, from which the local vertical departs by the angle
+    subtended at the Earth's centre, 1.9 degrees at 214 km. Viewed at
+    60 and 70 degrees from TOA, the BRF was off by -8.4 to +11.8 %
+    (RTLS) and -6.4 to -0.7 % (RPV). With the default sun of a forward
+    run, which aims at the Z axis, only the diffuse light changes
 
 
 ## v2.0.3

@@ -6092,6 +6092,14 @@ __device__ void surfaceLambert(Photon* ph, int le,
     ph->M = mul(ph->M, RL);
     #endif
 
+    #ifdef SPHERIQUE
+    // BRDF takes its angles from the z axis: the incident and the
+    // outgoing directions are read in the frame of the local vertical
+    // Nz of the impact point
+    float3 vi_loc = GlobalToLocal(Nx, Ny, Nz, -v0);
+    float3 vo_loc = GlobalToLocal(Nx, Ny, Nz, ph->v);
+    #endif
+
 	/***************************************************/
 	/* Update of photon location && weight */
 	/***************************************************/
@@ -6116,7 +6124,11 @@ __device__ void surfaceLambert(Photon* ph, int le,
         }
         else        {
             ph->nref += 1;
+            #ifdef SPHERIQUE
+            ph->weight *=  BRDF(ph->ilam, vi_loc, vo_loc, spectrum);
+            #else
             ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
+            #endif
             if (abs(ENVd)!=2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
             if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
                     spectrum[ph->ilam].alb_env;
@@ -6130,7 +6142,11 @@ __device__ void surfaceLambert(Photon* ph, int le,
             }
             else        {
                 ph->nref += 1;
+                #ifdef SPHERIQUE
+                ph->weight *=  BRDF(ph->ilam, vi_loc, vo_loc, spectrum);
+                #else
                 ph->weight *=  BRDF(ph->ilam, -v0, ph->v, spectrum);
+                #endif
                 if (abs(ENVd)!=2) ph->weight *= spectrum[ph->ilam].alb_surface;  /*[Eq. 16,39]*/
                 if (ENVd==2) ph->weight *= gauss_albedo(ph->pos, X0d, Y0d) * (spectrum[ph->ilam].alb_surface - spectrum[ph->ilam].alb_env) +
                     spectrum[ph->ilam].alb_env;

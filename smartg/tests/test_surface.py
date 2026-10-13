@@ -49,6 +49,11 @@ PLANE_SENSORS = [(vza, psi) for vza in (10.0, 30.0, 50.0, 70.0)
 PLANE_SUNS = [(ths, phs)
               for ths in (5.0, 15.0, 25.0, 35.0, 45.0, 55.0, 65.0, 75.0)
               for phs in (105.0, 285.0, 165.0, 345.0)]
+# In spherical geometry the views of 60 and 70 degrees from TOA reach
+# the ground 214 and 357 km from the sensor's vertical
+SP_SENSORS = [(0.0, 180.0), (60.0, 180.0), (70.0, 180.0), (70.0, 45.0)]
+SP_SUNS = [(40.0, 0.0), (40.0, 180.0), (60.0, 90.0), (50.0, 225.0),
+           (0.0, 0.0)]
 
 
 def _albedo_map() -> AlbedoMap:
@@ -307,3 +312,17 @@ def test_brdf_principal_plane(kernels: dict[bool, Smartg],
     """
     _check_brf(kernels, kind, pp=True, seed=181, sensors=PLANE_SENSORS,
                suns=PLANE_SUNS)
+
+
+@pytest.mark.parametrize("kind", ["rtls", "rpv"])
+def test_brdf_spherical_local_angles(kernels: dict[bool, Smartg],
+                                     kind: str) -> None:
+    """The spherical BRF takes the angles of the local vertical.
+
+    The local vertical of the ground points of the oblique views is
+    tilted by 1.9 and 3.2 degrees from the Z axis. Up to v2.0.3 the
+    angles of RTLS and RPV were measured from the Z axis, and their
+    BRF was off by -8.4 to +11.8 % (RTLS) and -6.4 to -0.7 % (RPV).
+    """
+    _check_brf(kernels, kind, pp=False, seed=161, sensors=SP_SENSORS,
+               suns=SP_SUNS)
