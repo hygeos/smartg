@@ -83,7 +83,7 @@ def _module() -> Any:
 
 
 def _f32(x: Any) -> NDArray[np.float32]:
-    """An array of float32, as the kernel takes its inputs."""
+    """Return an array of float32, the type the kernel takes."""
     return np.asarray(x, dtype=np.float32)
 
 
@@ -116,21 +116,21 @@ def _crossings(
 
 
 def _reference(
-    o: NDArray[np.float32], d: NDArray[np.float32], radius: Any
+    o: NDArray[Any], d: NDArray[Any], radius: Any
 ) -> tuple[NDArray[np.longdouble], NDArray[np.longdouble],
            NDArray[np.longdouble]]:
-    """The two crossings in long double, and the closest distance.
+    """Return both crossings in long double and the closest distance.
 
     Computed from the float32 inputs themselves, so that only the
     arithmetic of the kernel is judged.
     """
-    o, d = o.astype(np.longdouble), d.astype(np.longdouble)
-    radius = np.asarray(radius).astype(np.longdouble)
-    a = (d * d).sum(0)
-    b = (d * o).sum(0)
-    c = (o * o).sum(0) - radius * radius
+    ol, dl = o.astype(np.longdouble), d.astype(np.longdouble)
+    rl = np.asarray(radius).astype(np.longdouble)
+    a = (dl * dl).sum(0)
+    b = (dl * ol).sum(0)
+    c = (ol * ol).sum(0) - rl * rl
     sq = np.sqrt(np.maximum(b * b - a * c, 0))
-    closest = np.sqrt(np.maximum((o * o).sum(0) - b * b / a, 0))
+    closest = np.sqrt(np.maximum((ol * ol).sum(0) - b * b / a, 0))
     return (-b - sq) / a, (-b + sq) / a, closest
 
 
@@ -178,10 +178,10 @@ def _shell_rays(
 def _cos_at(
     o: NDArray[np.float32], d: NDArray[np.float32], t: NDArray[Any]
 ) -> NDArray[np.longdouble]:
-    """Cosine between the ray and the radius at the point at t."""
-    o, d = o.astype(np.longdouble), d.astype(np.longdouble)
-    p = o + d * np.asarray(t, np.longdouble)
-    return np.abs((p * d).sum(0)) / np.sqrt((p * p).sum(0))
+    """Return the cosine between the ray and the radius at t."""
+    dl = d.astype(np.longdouble)
+    p = o.astype(np.longdouble) + dl * np.asarray(t, np.longdouble)
+    return np.abs((p * dl).sum(0)) / np.sqrt((p * p).sum(0))
 
 
 @pytest.mark.parametrize("thickness", (1.0, 0.1, 0.01))
