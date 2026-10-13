@@ -117,7 +117,8 @@ public:
 
 private:
 	// private methods
-	__host__ __device__ bool Crossings(const Ray<T> &ray, T *t_in, T *t_out) const;
+	__host__ __device__ bool Crossings(const Ray<T> &ray, T *t_in,
+									   T *t_out) const;
 
 	// private parameters
 	T radius;               // sphere radius
@@ -263,7 +264,8 @@ bool Sphere<T,TF>::Crossings(const Ray<T> &ray, T *t_in, T *t_out) const
 // crossings being then its point closest to the centre
 template <typename T, typename TF>
 template <typename U_1, typename U_2>
-bool Sphere<T,TF>::IntersectLine(const Ray<U_1> &r, U_2 *t_in, U_2 *t_out) const
+bool Sphere<T,TF>::IntersectLine(const Ray<U_1> &r, U_2 *t_in,
+                                 U_2 *t_out) const
 {
 	Ray<T> ray(r);
 	if (this->transformed) this->WorldToObject(r, &ray);
@@ -797,7 +799,8 @@ bool Triangle<T,TF>::IntersectP(const Ray<U> &r, int version) const
 template <typename T, typename TF> 
 __device__ BBox<T> Triangle<T,TF>::ObjectBoundTriangle() const
 {
-	BBox<T> objectBounds(this->WorldToObject(Point<T>(p1)), this->WorldToObject(Point<T>(p2)));
+	BBox<T> objectBounds(this->WorldToObject(Point<T>(p1)),
+	                     this->WorldToObject(Point<T>(p2)));
 	return objectBounds.Union(objectBounds, this->WorldToObject(Point<T>(p3)));
 }
 
