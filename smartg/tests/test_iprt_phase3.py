@@ -56,7 +56,20 @@ CASE_NAMES = ["d1", "d2", "d3", "d4", "d5", "d6",
 # and E4 (its forward peak on a 0.5 degree grid) and 1.03 % for the
 # ice of E5 (a file normalized in single precision, and its peak), and
 # I at BOA went down by 0.26, 0.24 and 1.06 %.
+#
+# D1 to D6 were run again on 2026-10-13, with the kernel of 40bf5ebf
+# and the seed 20 261 013, and are read from a folder of their own,
+# after_v2_0_3, beside the files that v2.0.3 compares with. Up to
+# v2.0.3 the spherical move took half the path of a ray tangent to a
+# layer boundary (1 - cos^2 rounded to 1 below |cos| = 2.4e-4): the
+# TOA sensor looking at the horizon (vza = 90) crossed half of its
+# 0.57 m chord of atmosphere and saw half of its radiance, about 2e-7.
+# Against the former results, at the slow tier, 84 % of these
+# directions of D1 lay beyond 3 sigma, 0.047 of all its TOA directions
+# for a tolerance of 0.05. In E1 to E5 the top layer is too thin for
+# the difference to show.
 REF_DIR = DIR_AUXDATA / "IPRT" / "phase3" / "smartg_ref_res"
+REF_DIR_AFTER_V2_0_3 = REF_DIR / "after_v2_0_3"
 
 # Both the test run and the saved result estimate their Monte Carlo
 # noise (stdev=True), so each direction is compared in units of the
@@ -123,11 +136,14 @@ Z_OUTLIER = 3.0
 # against the E3, E4 and E5 results run again: the fractions at 0.0003
 # to 0.0059 everywhere, D3 included, and the biases at 5e-6 to 7.8e-5,
 # E5 apart (2.5e-3 on I at TOA, 1.0e-3 and 1.9e-3 on two runs before
-# 021637e). At this photon count the run is converged enough to be
-# machine independent: D3 rerun on the RTX 4090 that produced the
-# saved results gave the same bias to three digits, -6.48e-4 against
-# -6.47e-4 before 021637e, and the same fraction to 0.004. The margins
-# are taken on top of that.
+# 021637e). Measured again on 2026-10-13 for D1 to D6 against their
+# results run after v2.0.3: the fractions at 0 to 0.0059 and the biases
+# at 0 to 7e-5, D6 apart (2.5e-4 on I at BOA); against the former
+# results, D1 had reached 0.047 at TOA (see REF_DIR). At this photon
+# count the run is converged enough to be machine independent: D3
+# rerun on the RTX 4090 that produced the saved results gave the same
+# bias to three digits, -6.48e-4 against -6.47e-4 before 021637e, and
+# the same fraction to 0.004. The margins are taken on top of that.
 #
 # D3 took its own entries until 021637e: the normalisation difference
 # described above is systematic, and a higher photon count resolved it
@@ -399,7 +415,8 @@ def test_phase3(
     _log_times(tmp_path, case, label)
 
     rad, sig, coords = _open(tmp_path, case)
-    ref, sig_ref, coords_ref = _open(REF_DIR, case)
+    ref_dir = REF_DIR_AFTER_V2_0_3 if case.startswith("d") else REF_DIR
+    ref, sig_ref, coords_ref = _open(ref_dir, case)
     for name, values in coords.items():
         assert np.array_equal(values, coords_ref[name]), name
     assert rad.shape == ref.shape

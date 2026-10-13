@@ -1,6 +1,19 @@
 # SMART-G CHANGELOG
 
 
+## Unreleased
+
+* Corrections
+  - Cross the whole path of a ray tangent to a layer boundary in the
+    spherical atmosphere (`pp=False`): rounding took half of it, so that
+    a TOA sensor looking at the horizon saw half of its radiance. The
+    move now takes its distances to the layer boundaries from `Sphere`,
+    the class of the 3D objects, in a form that keeps the float
+    precision of short and grazing paths. The IPRT phase 3 test
+    compares D1 to D6 with results run again after this correction, in
+    `IPRT/phase3/smartg_ref_res/after_v2_0_3/` of the auxdata
+
+
 ## v2.0.3
 Release date: 2026-10-10
 
