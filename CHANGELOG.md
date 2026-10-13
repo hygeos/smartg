@@ -1,7 +1,8 @@
 # SMART-G CHANGELOG
 
 
-## Unreleased
+## v2.0.4
+Release date: 2026-10-13
 
 * Corrections
   - Cross the whole path of a ray tangent to a layer boundary in the
