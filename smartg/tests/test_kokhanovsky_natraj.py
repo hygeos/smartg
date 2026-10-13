@@ -109,18 +109,25 @@ KOKHANOVSKY_SIGN = {"I": 1.0, "Q": -1.0, "U": -1.0, "V": -1.0}
 # compared.
 #
 # Measured on 2026-09-28 on an RTX 5070 Ti, over the compared Stokes
-# parameters of each case. Fast tier, three seeds: 0.12 to 1.59, the
-# largest being the U of the slab over a ground. Slow tier, one seed:
-# 0.04 to 1.03. The bound of 2 fails an I scaled by 1 + e or 1 - e from
-# e = 0.3 % in the Rayleigh cases, whose Q and U it catches from 0.3 to
-# 0.5 %, 0.75 % (fast) and 0.5 % (slow) in the aerosol, and 2 % in the
-# cloud at the fast tier. The U and V of the aerosol and of the cloud,
-# and the Q of the cloud, are too noisy for a scaling of 5 % to fire:
-# the forward peak makes the local estimates noisy (Buras and Mayer,
-# 2011), which is why the cloud z_rms stays close to 1 at 1e8 photons.
+# parameters of each case, slow tier, one seed: 0.04 to 1.03. Fast
+# tier, measured again on 2026-10-14 on an RTX PRO 6000, over the
+# seeds 1 to 20 and two builds: 0.09 to 2.11, the largest being the U
+# of the slab (seed 8), and SEED gives 1.7 to 2.06 for the Q of the
+# slab over a ground. All the directions see the same photons: their
+# errors are correlated, and a z_rms varies from seed to seed almost
+# as much as a single z. The standard deviation, estimated from 30
+# kernel loops, also moves by up to 15 % from one run of a seed to the
+# next. The bound of 2.5 of the fast tier fails an I scaled by 1 + e
+# or 1 - e from e = 0.3 to 0.35 % in the Rayleigh cases, whose Q and U
+# it catches from 0.3 to 0.55 %, 1.1 % in the aerosol and 2.1 % in the
+# cloud; at the slow tier, the bound of 2 catches the aerosol from
+# 0.5 %. The U and V of the aerosol and of the cloud, and the Q of the
+# cloud, are too noisy for a scaling of 5 % to fire: the forward peak
+# makes the local estimates noisy (Buras and Mayer, 2011), which is why
+# the cloud z_rms stays close to 1 at 1e8 photons.
 REL_FLOOR = 1e-3
 ABS_FLOOR = 1e-5
-Z_RMS_MAX = {"fast": 2.0, "slow": 2.0}
+Z_RMS_MAX = {"fast": 2.5, "slow": 2.0}
 # **********************************************************************
 
 # **************************** logging *********************************
