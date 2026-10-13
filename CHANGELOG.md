@@ -12,6 +12,14 @@
     precision of short and grazing paths. The IPRT phase 3 test
     compares D1 to D6 with results run again after this correction, in
     `IPRT/phase3/smartg_ref_res/after_v2_0_3/` of the auxdata
+  - Count the reflection of an RTLS or RPV surface (`RTLSSurface`,
+    `RPVSurface`) in the principal plane and at the hot spot: rounding
+    could take the cosine of the relative azimuth beyond 1, or a
+    squared distance of the BRDF at the hot spot below 0, and the angle
+    turn NaN. The reflection was then not counted, 377 of the 3375
+    principal plane directions of a grid of 5 degrees returning 0, or,
+    in the LiSparse kernel of RTLS, it lost its overlap term: the BRF
+    of an exact hot spot came out 20 to 22 % low
 
 
 ## v2.0.3

@@ -9229,7 +9229,9 @@ __device__ float F1_rtls(float ths, float thv, float phi ){  //  rossthick-lispa
     float tthv = tan(thv);
     float tths = tan(ths);
 
-    float cos_t = 2./mm * sqrt(tthv*tthv + tths*tths - 2.*tthv*tths * cos(phi) + pow(tthv *tths * sin(phi),2) );
+    // the square of the distance, which rounds negative at the hot spot
+    double d2 = tthv*tthv + tths*tths - 2.*tthv*tths * cos(phi) + pow(tthv *tths * sin(phi),2);
+    float cos_t = 2./mm * sqrt(d2 < 0. ? 0. : d2);
     cos_t = min(cos_t, 1.);
     float t = acos(cos_t);
     float sin_t = sin(t);
@@ -9246,6 +9248,9 @@ __device__ float F2_rtls(float ths, float thv, float phi ){  //  rossthick-lispa
     if (phi < 0.) phi += DEUXPI; 
     if (phi > PI) phi = DEUXPI - phi; 
     float cos_xi = cos(ths) * cos(thv) + sin(ths) * sin(thv) * cos(phi);
+    // rounds beyond 1 at the hot spot
+    if (cos_xi > 1.F) cos_xi = 1.F;
+    if (cos_xi < -1.F) cos_xi = -1.F;
     float xi = acos(cos_xi);
 
     // volume-scattering kernel
@@ -9263,13 +9268,25 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
         float dph = 0.;
         float mu0 = fabs(v0.z);
         float mu1 = fabs(v1.z);
+        // the z of a unit vector may round above 1
+        if (mu0 > 1.F) mu0 = 1.F;
+        if (mu1 > 1.F) mu1 = 1.F;
         float th0 = acos(mu0);
         float th1 = acos(mu1);
         float2 v0xy  = make_float2(v0);
         float2 v1xy  = make_float2(v1);
-        v0xy/=length(v0xy);
-        v1xy/=length(v1xy);
-        if (th0!=0. && th1!=0.) dph = acos(dot(v0xy,v1xy));
+        float l0 = length(v0xy);
+        float l1 = length(v1xy);
+        // the relative azimuth, 0 when a direction is vertical; the
+        // cosine of two horizontal unit vectors may round beyond 1
+        if (th0!=0. && th1!=0. && l0>0.F && l1>0.F) {
+            v0xy/=l0;
+            v1xy/=l1;
+            float cph = dot(v0xy,v1xy);
+            if (cph > 1.F) cph = 1.F;
+            if (cph < -1.F) cph = -1.F;
+            dph = acos(cph);
+        }
         switch(DIOPTREd) {
             case 4: // RossThick Li-Sparse
             {
@@ -9282,8 +9299,10 @@ __device__ float BRDF(int ilam, float3 v0, float3 v1, struct Spectrum *spectrum 
                 float cosg = mu0*mu1 + sqrtf(1.F-mu0*mu0)*sqrtf(1.F-mu1*mu1)*cosf(dph);
                 float t0 = tanf(th0);
                 float t1 = tanf(th1);
-                float G = sqrtf(t0*t0 + t1*t1 - 2.F*t0*t1*cosf(dph));
-                wbrdf = Minnaert_rpv(fabs(v0.z), fabs(v1.z), spectrum[ilam].k1p_surface) *
+                // rounds negative at the hot spot
+                float g2 = t0*t0 + t1*t1 - 2.F*t0*t1*cosf(dph);
+                float G = sqrtf(g2 < 0.F ? 0.F : g2);
+                wbrdf = Minnaert_rpv(mu0, mu1, spectrum[ilam].k1p_surface) *
                         HG_rpv(cosg, spectrum[ilam].k2p_surface) *
                         H_rpv(spectrum[ilam].k3p_surface, G);
                 break;
