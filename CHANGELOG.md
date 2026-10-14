@@ -1,6 +1,16 @@
 # SMART-G CHANGELOG
 
 
+## Unreleased
+
+* Corrections
+  - Keep the photons of the 3D atmosphere (`opt3d=True`) that cross the
+    top or the bottom of a cell next to one of its y faces: the move
+    brought x back into the next cell but clamped z twice instead of y,
+    so that a photon that rounding put just beyond the y face was
+    removed
+
+
 ## v2.0.4
 Release date: 2026-10-13
 

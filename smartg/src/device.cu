@@ -3595,8 +3595,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                             ph->pos.z = cell[next_layer].pminz;
                             if (ph->pos.x < cell[next_layer].pminx) ph->pos.x = cell[next_layer].pminx+VALMIN;
                             if (ph->pos.x > cell[next_layer].pmaxx) ph->pos.x = cell[next_layer].pmaxx-VALMIN;
-                            if (ph->pos.z < cell[next_layer].pminz) ph->pos.z = cell[next_layer].pminz+VALMIN;
-                            if (ph->pos.z > cell[next_layer].pmaxz) ph->pos.z = cell[next_layer].pmaxz-VALMIN;
+                            if (ph->pos.y < cell[next_layer].pminy) ph->pos.y = cell[next_layer].pminy+VALMIN;
+                            if (ph->pos.y > cell[next_layer].pmaxy) ph->pos.y = cell[next_layer].pmaxy-VALMIN;
                         }
                         break;
                     case 5:
@@ -3606,8 +3606,8 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                             ph->pos.z = cell[next_layer].pmaxz;
                             if (ph->pos.x < cell[next_layer].pminx) ph->pos.x = cell[next_layer].pminx+VALMIN;
                             if (ph->pos.x > cell[next_layer].pmaxx) ph->pos.x = cell[next_layer].pmaxx-VALMIN;
-                            if (ph->pos.z < cell[next_layer].pminz) ph->pos.z = cell[next_layer].pminz+VALMIN;
-                            if (ph->pos.z > cell[next_layer].pmaxz) ph->pos.z = cell[next_layer].pmaxz-VALMIN;
+                            if (ph->pos.y < cell[next_layer].pminy) ph->pos.y = cell[next_layer].pminy+VALMIN;
+                            if (ph->pos.y > cell[next_layer].pmaxy) ph->pos.y = cell[next_layer].pmaxy-VALMIN;
                         }
                         break;
                     default:
