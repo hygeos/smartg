@@ -31,6 +31,28 @@ Mathieu Compiègne
 ----------------------------------------------------------------------  
 
 
+## Contents
+
+1. [Features](#1-features)
+2. [Installation](#2-installation)
+   - [2.1 PyPI](#21-pypi)
+   - [2.2 conda-forge](#22-conda-forge)
+   - [2.3 github clone (for development)](#23-github-clone-for-development)
+3. [Nvidia driver and CUDA](#3-nvidia-driver-and-cuda)
+4. [Auxiliary data](#4-auxiliary-data)
+5. [Quick start](#5-quick-start)
+6. [Examples](#6-examples)
+   - [6.1 Notebooks as percent scripts](#61-notebooks-as-percent-scripts)
+7. [Tests](#7-tests)
+   - [7.1 The IPRT tests](#71-the-iprt-tests)
+   - [7.2 The other validation tests](#72-the-other-validation-tests)
+8. [Coding conventions](#8-coding-conventions)
+9. [Hardware tested](#9-hardware-tested)
+10. [Licensing information](#10-licensing-information)
+11. [Referencing](#11-referencing)
+12. [Getting help](#12-getting-help)
+
+
 ## 1. Features
 
 * Polarized (I, Q, U, V) Monte-Carlo radiative transfer, accelerated on NVIDIA GPUs
