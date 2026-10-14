@@ -440,13 +440,18 @@ public:
 		return ret;
     }
 
+    // face1 receives the face through which the ray leaves the box, in
+    // the order of the neighbours of a 3D cell: 0 x max, 1 x min, 2 y
+    // max, 3 y min, 4 z max, 5 z min; on an edge or a corner the first
+    // axis, and -1 if no slab gives a finite exit (a NaN direction)
     template <typename U>
 	__host__ __device__ bool IntersectP(const Ray<U> &ray, T *hitt0 = NULL,
-										T *hitt1 = NULL) const
+										T *hitt1 = NULL, int *face1 = NULL) const
 	{
 		T t0 = T(0), gamma3;
 		T epsi = get_const_machine_eps(T{}) * T(0.5);
         T t1 = get_const_inf(T{});
+        int f1 = -1;
 
 		gamma3 = (T(3)*epsi)/(T(1) - T(3)*epsi);
 
@@ -458,18 +463,22 @@ public:
             else invRayDir  = 1e32;
 			T tNear = (pMin[i] - T(ray.o[i])) * invRayDir;
 			T tFar  = (pMax[i] - T(ray.o[i])) * invRayDir;
-			
+
 			// Update parametric interval from slab intersection $t$s
 			if (tNear > tFar) {swap(&tNear, &tFar);}
-			
+
 			// Update _tFar_ to ensure robust ray--bounds intersection
 			tFar *= T(1) + T(2)*gamma3;
 			t0 = tNear > t0 ? tNear : t0;
+			// the face from the sign of the direction, not from the swap:
+			// a slab of zero width is then left the way the ray goes
+			if (face1 && tFar < t1) f1 = 2*i + (invRayDir < T(0));
 			t1 = tFar  < t1 ? tFar  : t1;
 			if (t0 > t1) {return false;}
 		}
 		if (hitt0) *hitt0 = t0;
 		if (hitt1) *hitt1 = t1;
+		if (face1) *face1 = f1;
 		return true;
 	}
 

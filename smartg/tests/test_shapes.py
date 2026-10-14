@@ -1,4 +1,4 @@
-"""Tests for the ray crossings of the Sphere class of the kernel.
+"""Tests for the ray crossings of the Sphere and BBox classes.
 
 The Monte Carlo kernel is not reproducible from one run to the next,
 so ``Sphere`` (``src/shapes.h``) is checked where it is deterministic:
@@ -6,7 +6,9 @@ a probe kernel runs ``Sphere::IntersectLine`` and ``Sphere::Intersect``
 on float32 rays, against numpy references in extended precision on the
 same inputs. Two uses meet there: the spherical atmosphere, whose
 photons sit on or near a layer boundary of radius 6371 to 6491 km, and
-the 3D objects, small spheres seen from far.
+the 3D objects, small spheres seen from far. The same probe runs
+``BBox::IntersectP`` (``src/geometry.h``) for the face through which a
+ray leaves a cell of the 3D atmosphere.
 """
 
 from functools import cache
@@ -66,6 +68,25 @@ extern "C" __global__ void intersect(const float *o, const float *d,
     t[i] = th;
     p[3*i] = dg.p.x; p[3*i+1] = dg.p.y; p[3*i+2] = dg.p.z;
     nn[3*i] = dg.nn.x; nn[3*i+1] = dg.nn.y; nn[3*i+2] = dg.nn.z;
+}
+
+// the exit of a ray from the box [pmin, pmax], as the move of the 3D
+// atmosphere takes it from a cell: the distance and the face crossed
+// there, left at -1 and -2 when the ray misses the box
+extern "C" __global__ void exit_face(const float *o, const float *d,
+                                     const float *pmin, const float *pmax,
+                                     float *t1, int *face, int *hit, int n)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    BBox<float> box(make_float3(pmin[3*i], pmin[3*i+1], pmin[3*i+2]),
+                    make_float3(pmax[3*i], pmax[3*i+1], pmax[3*i+2]));
+    Ray<float> ray(make_float3(o[3*i], o[3*i+1], o[3*i+2]),
+                   make_float3(d[3*i], d[3*i+1], d[3*i+2]), 0.f);
+    float t0 = 0.f;
+    t1[i] = -1.f;
+    face[i] = -2;
+    hit[i] = box.IntersectP(ray, &t0, &t1[i], &face[i]);
 }
 """
 
@@ -324,3 +345,102 @@ def test_intersect_of_a_placed_sphere() -> None:
     dist = np.sqrt((rel * rel).sum(0))
     assert np.all(np.abs(dist - radius) < 16 * step)
     assert np.all((nn * rel).sum(0) / dist > 1 - 1e-4)
+
+
+def _exit_faces(
+    o: NDArray[np.float32],
+    d: NDArray[np.float32],
+    pmin: NDArray[np.float32],
+    pmax: NDArray[np.float32],
+) -> tuple[NDArray[np.bool_], NDArray[np.float32], NDArray[np.int32]]:
+    """Run BBox::IntersectP with its exit face, vectors of shape (3, n).
+
+    Returns the hit flags, the exit distances and the exit faces.
+    """
+    mod = _module()
+    from pycuda.gpuarray import empty, to_gpu
+
+    n = o.shape[1]
+    t1, face, hit = (empty(n, np.float32), empty(n, np.int32),
+                     empty(n, np.int32))
+    mod.get_function('exit_face')(
+        to_gpu(_flat(o)), to_gpu(_flat(d)), to_gpu(_flat(pmin)),
+        to_gpu(_flat(pmax)), t1, face, hit, np.int32(n),
+        block=(256, 1, 1), grid=((n + 255) // 256, 1))
+    return hit.get().astype(bool), t1.get(), face.get()
+
+
+def test_bbox_exit_face_of_random_rays() -> None:
+    """A ray from inside a box leaves through the face it meets first.
+
+    The faces are numbered as the neighbours of a 3D cell: x max,
+    x min, y max, y min, z max, z min. The distance is the exact one
+    within the overshoot of IntersectP (3.6e-7) and a few float steps
+    of the coordinates.
+    """
+    rng = np.random.default_rng(6)
+    n = 100_000
+    pmin = _f32(rng.uniform(-20, 20, (3, n)))
+    pmax = _f32(pmin + rng.uniform(0.01, 5, (3, n)))
+    o = _f32(pmin + (pmax - pmin) * rng.uniform(0, 1, (3, n)))
+    d = _f32(_unit(rng, n))
+    hit, t1, face = _exit_faces(o, d, pmin, pmax)
+
+    dl = d.astype(np.float64)
+    bound = np.where(dl > 0, pmax, pmin).astype(np.float64)
+    t = (bound - o) / dl
+    axis = np.argmin(t, axis=0)
+    i = np.arange(n)
+    ts = np.sort(t, axis=0)
+    # away from the edges, where the first two faces are met together
+    clear = ts[1] - ts[0] > 1e-5 * (ts[0] + 1)
+    assert clear.mean() > 0.99
+    assert hit.all()
+    assert np.array_equal(face[clear], (2 * axis + (dl[axis, i] < 0))[clear])
+    step = np.spacing(np.maximum(np.abs(bound[axis, i]),
+                                 np.abs(o[axis, i])).astype(np.float32))
+    tol = 4 * step / np.abs(dl[axis, i]) + 1e-6 * ts[0]
+    assert np.all(np.abs(t1 - ts[0]) <= tol)
+
+
+def test_bbox_exit_face_on_edges_and_faces() -> None:
+    """The exit face of the rays that the 3D atmosphere must not lose.
+
+    On an edge or a corner the first axis wins, as for the distance. A
+    ray lying in a face of the box leaves through it at distance 0 if
+    it is a max face. A box of zero thickness (a layer of a grid with
+    two equal bounds) is left through the face the direction points
+    to, so that a photon crossing it cannot come back. A NaN direction
+    gives no face, and a ray outside the box leaves the outputs as they
+    were.
+    """
+    unit = ([0, 0, 0], [1, 1, 1])
+    flat = ([0, 0, 0.5], [1, 1, 0.5])
+    centre = [0.5, 0.5, 0.5]
+    nan = np.nan
+    # box, origin, direction, then the hit flag, t1 and the face
+    cases = [
+        (unit, centre, [1, 1, 0.5], True, 0.5, 0),       # x-y edge
+        (unit, centre, [-1, -1, 0.5], True, 0.5, 1),
+        (unit, centre, [0.25, 1, 1], True, 0.5, 2),      # y-z edge
+        (unit, centre, [0.25, -1, -1], True, 0.5, 3),
+        (unit, centre, [1, 1, 1], True, 0.5, 0),         # corner
+        (unit, centre, [-1, -1, -1], True, 0.5, 1),
+        (unit, centre, [0, 0, -1], True, 0.5, 5),        # one face
+        (unit, [1, 0.5, 0.5], [0, 0.6, 0.8], True, 0.0, 0),    # in x max
+        (unit, [1, 0.5, 0.5], [-0.0, 0.6, 0.8], True, 0.0, 0),
+        (unit, [0, 0.5, 0.5], [0, 0.6, 0.8], True, 0.625, 4),  # in x min
+        (flat, centre, [0.6, 0, 0.8], True, 0.0, 4),     # zero thickness
+        (flat, centre, [0.6, 0, -0.8], True, 0.0, 5),
+        (unit, centre, [nan, nan, nan], True, np.inf, -1),
+        (unit, [2, 0.5, 0.5], [1, 0, 0], False, -1.0, -2),     # outside
+    ]
+    pmin = _f32([c[0][0] for c in cases]).T
+    pmax = _f32([c[0][1] for c in cases]).T
+    o = _f32([c[1] for c in cases]).T
+    d = _f32([c[2] for c in cases]).T
+    hit, t1, face = _exit_faces(o, d, pmin, pmax)
+
+    assert hit.tolist() == [c[3] for c in cases]
+    assert face.tolist() == [c[5] for c in cases]
+    np.testing.assert_allclose(t1, [c[4] for c in cases], rtol=1e-6)
