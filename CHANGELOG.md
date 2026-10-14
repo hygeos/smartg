@@ -1,7 +1,8 @@
 # SMART-G CHANGELOG
 
 
-## Unreleased
+## v2.0.5
+Release date: 2026-10-14
 
 * Corrections
   - Cross the edges and the corners of the cells of the 3D atmosphere
