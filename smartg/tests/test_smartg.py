@@ -1268,6 +1268,137 @@ def test_absorbing_3d_particles_with_beer_and_alis() -> None:
     assert np.all(np.abs(_z_scores(alis, ssa, "up (TOA)")) < 4)
 
 
+@pytest.fixture(scope="module")
+def sg_3d_back() -> Smartg:
+    """Build a backward Smartg of the 3D atmosphere, in double."""
+    return Smartg(opt3d=True, alt_pp=True, back=True, double=True)
+
+
+def _float_steps(start: float, n: int) -> list[float]:
+    """Return n successive float32 values, from start up."""
+    steps = [np.float32(start)]
+    for _ in range(n - 1):
+        steps.append(np.nextafter(steps[-1], np.float32(np.inf)))
+    return [float(s) for s in steps]
+
+
+def _cells_run(
+    sg: Smartg,
+    view: tuple[float, float],
+    suns: list[tuple[float, float]],
+    dx: float = 1.0,
+    comp_3d: list[Aer3D] | None = None,
+) -> tuple[NDArray[Any], NDArray[Any], dict[str, Any]]:
+    """Run an empty 3D atmosphere seen from the centres of its cells.
+
+    10 x 10 periodic columns of dx by 1 km from x = y = 0, of two
+    layers of 1 km, over a Lambertian ground of albedo 0.5. A backward
+    sensor at the centre of each top cell looks in the view (zenith,
+    azimuth) direction, and a local estimate counts each sun (zenith,
+    azimuth) direction at the TOA. Every photon of a sensor follows the
+    same path: I_up (TOA) is the albedo exactly, or 0 if the path is
+    lost.
+
+    Returns I_up (TOA) and N_up (TOA) on (sensor, sun), the sensors
+    x first, and the attributes of the output.
+    """
+    x, y = np.arange(11) * dx, np.arange(11.0)
+    grid3 = Grid3D(x, y, np.array([0.0, 1.0, 2.0]), periodic=True)
+    sensors = get_sensors_grid(
+        x, y, pos_z=2.0, th_deg=view[0], ph_deg=view[1], loc="ATMOS",
+        grid_3d=grid3,
+    )
+    m = sg.run(
+        550.0,
+        atmosphere=Atm3D(atm_1d=_empty_atmosphere(), grid_3d=grid3,
+                         comp_3d=comp_3d),
+        surface=LambSurface(alb=AlbedoCst(0.5)),
+        sensor=sensors,
+        le=LocalEstimate(th_deg=[t for t, _ in suns],
+                         phi_deg=[p for _, p in suns], zip=True,
+                         count_level=[0] * len(suns)),
+        n_photons=1e5,
+        seed=7,
+        progress=False,
+    )
+
+    def values(name: str) -> NDArray[Any]:
+        da = m[name].transpose("sensor index", ...)
+        return da.values.reshape(len(sensors), len(suns))
+
+    return values("I_up (TOA)"), values("N_up (TOA)"), m.attrs
+
+
+_NADIR = (180.0, 0.0)
+_DIAGONAL_2X1 = math.degrees(math.atan2(1.0, 2.0))
+# the view, the suns and the width of the cells of each case
+CELL_EDGE_CASES = {
+    # the sun estimate from the ground at a cell centre meets x-y edges
+    "x-y edges": (_NADIR, [(60.0, p) for p in (45.0, 135.0, 225.0, 315.0)],
+                  1.0),
+    # an edge of a y face and the top of the layer, at zenith angles of
+    # about atan(1/2), 26.565051 degrees, in float32 steps
+    "y-z edges": (_NADIR, [(t, p) for p in (90.0, 270.0)
+                           for t in _float_steps(26.5650444, 15)], 1.0),
+    # a corner of three faces, at about atan(1/sqrt(2))
+    "corners": (_NADIR, [(t, p) for p in (45.0, 135.0)
+                         for t in _float_steps(35.2643852, 4)], 1.0),
+    # the path of the photon itself, from the sensor
+    "view": ((150.0, 45.0), [(30.0, 0.0)], 1.0),
+    # the diagonals of cells of 2 x 1 km
+    "2x1 cells": (_NADIR, [(60.0, _DIAGONAL_2X1),
+                           (60.0, _DIAGONAL_2X1 + 180.0)], 2.0),
+}
+
+
+@pytest.mark.parametrize("case", list(CELL_EDGE_CASES))
+def test_3d_paths_through_cell_edges_and_corners(
+    sg_3d_back: Smartg, case: str
+) -> None:
+    """Check that a path through an edge or a corner of a cell goes on.
+
+    The move of the 3D atmosphere crosses one face at a time. Up to
+    v2.0.4, a path leaving its cell through an edge entered the next
+    cell lying on its other face, at a distance of 0 from its exit, and
+    the photon was removed. Photons starting at the centre of a cell
+    met edges whenever their direction aimed at one: a sun at an
+    azimuth of 45 degrees darkened the ground seen by backward sensors
+    at the cell centres, except near x = 0 and y = 0, where rounding
+    took the path past the edges.
+    """
+    view, suns, dx = CELL_EDGE_CASES[case]
+    i_up, n_up, attrs = _cells_run(sg_3d_back, view, suns, dx=dx)
+    # every photon counted once in each sun direction
+    assert np.array_equal(n_up.sum(axis=0),
+                          np.full(len(suns), attrs["NPhotonIn_sum"]))
+    np.testing.assert_allclose(i_up, 0.5, rtol=1e-6)
+
+
+def test_3d_path_through_a_corner_enters_the_cell_beyond(
+    sg_3d_back: Smartg,
+) -> None:
+    """Check that a path through a corner crosses the cells it meets.
+
+    An opaque cell fills x and y 5-6 km and z 0-1 km. The nadir sensor
+    above it sees nothing, and neither does the sun estimate at 60
+    degrees, azimuth 45, from the ground at (4.5, 4.5) km, which enters
+    it through its corner. The estimate from (4.5, 5.5) km meets it
+    only at its corner (5, 6), along a length of zero: the ground there
+    is seen as everywhere else.
+    """
+    voxel = Aer3D(
+        "desert", w_ref=550.0, ext_ref=np.array([1e3]),
+        cell_indices=np.array([[6, 6, 1]], dtype=np.int32),
+        rh=np.array([50.0]), ssa_cst=0.0,
+    )
+    i_up, _, _ = _cells_run(sg_3d_back, _NADIR, [(60.0, 45.0)],
+                            comp_3d=[voxel])
+    expected = np.full((10, 10), 0.5)  # (y, x)
+    expected[5, 5] = expected[4, 4] = 0.0
+    np.testing.assert_allclose(i_up.reshape(10, 10), expected, rtol=1e-6,
+                               atol=1e-12)
+
+
 def _sza_max_run(
     sg: Smartg, n_theta: int, sza_max: float, seed: int
 ) -> xr.Dataset:

@@ -3460,13 +3460,18 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
         pmin = make_float3(cell[ph->layer].pminx, cell[ph->layer].pminy, cell[ph->layer].pminz);
         pmax = make_float3(cell[ph->layer].pmaxx, cell[ph->layer].pmaxy, cell[ph->layer].pmaxz);
         BBox<float> Box_cur(pmin, pmax);
-		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1);
+        int ind = -1; // the face through which the photon leaves
+		intersectBox = Box_cur.IntersectP(Ray_cur, &intTime0, &intTime1, &ind);
 
-        // Case where the photon is blocked in a box corner... avoid infinite loop
-        if (intTime1 <= 0) {ph->loc=REMOVED; return;}
+        // A photon that left its previous cell through an edge or a
+        // corner lies on a face of this one, intTime1 = 0: it crosses
+        // it by a step of zero length. The face follows the direction,
+        // so the photon cannot come back. A NaN direction has no
+        // finite exit
+        if (!isfinite(intTime1)) {ph->loc=REMOVED; return;}
 
         if (intersectBox)
-        {   // the photon is not already on a boundary
+        {   // the photon leaves the cell at intTime1
             intersectPoint = operator+(ph->pos, ph->v * intTime1);
 
             // calculate the optical thicknesses h_cur && h_cur_abs to the next layer
@@ -3540,8 +3545,6 @@ __device__ void move_pp2(Photon* ph, struct Profile *prof_atm, struct Profile *p
                 #endif
 
 
-                int ind;
-                GetFaceIndexMM(ph->pos, pmin, pmax, &ind);
                 switch(ind)
                 {
                     case 0:
@@ -9123,27 +9126,6 @@ __device__ void GetFaceIndex(float3 pos, int *index)
   if (!isZPositive && absZ >= absX && absZ >= absY) {
     *index = 5;
   }
-}
-
-__device__ void GetFaceIndexMM(float3 pos, float3 pmin, float3 pmax, int *index)
-{
-    float dF0 = fabs(pmax.x - pos.x);
-    float dF1 = fabs(pmin.x - pos.x);
-    float dF2 = fabs(pmax.y - pos.y);
-    float dF3 = fabs(pmin.y - pos.y);
-    float dF4 = fabs(pmax.z - pos.z);
-    float dF5 = fabs(pmin.z - pos.z);
-
-    float dF_min = CUDART_INF_F;
-
-    if (dF0 < dF_min) {*index = 0; dF_min = dF0;}
-    if (dF1 < dF_min) {*index = 1; dF_min = dF1;}
-    if (dF2 < dF_min) {*index = 2; dF_min = dF2;}
-    if (dF3 < dF_min) {*index = 3; dF_min = dF3;}
-    if (dF4 < dF_min) {*index = 4; dF_min = dF4;}
-    if (dF5 < dF_min) {*index = 5; dF_min = dF5;}
-
-    if (dF_min > 1e-3) *index = -1;
 }
 
 #endif

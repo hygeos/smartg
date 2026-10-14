@@ -4,6 +4,19 @@
 ## Unreleased
 
 * Corrections
+  - Cross the edges and the corners of the cells of the 3D atmosphere
+    (`opt3d=True`) instead of removing the photon: a path leaving its
+    cell through an edge entered the next cell lying on its other face,
+    at a distance of 0 from its exit, and the photon was removed. Paths
+    from the centre of a cell meet edges wherever their direction aims
+    at one: backward sensors at the cell centres (`get_sensors_grid`)
+    lost the ground lit by a sun at an azimuth of 45, 135, 225 or 315
+    degrees (atan(dy/dx) for cells of dx by dy), and the image went
+    dark, its cloud shadows gone, except along x = 0 and y = 0 where
+    rounding took the paths past the edges. Viewed at such an azimuth,
+    the photons themselves were lost. The move now crosses the faces
+    of an edge or a corner one after the other, the next one by a step
+    of zero length
   - Keep the photons of the 3D atmosphere (`opt3d=True`) that cross the
     top or the bottom of a cell next to one of its y faces: the move
     brought x back into the next cell but clamped z twice instead of y,
