@@ -3983,17 +3983,20 @@ def _finalize(
         ):
             naatm = np.zeros(n_wavelength, dtype=np.float64)
             p = make_progress(n_wavelength - 1, dic_stp["prog"])
-            for j in range(n_wavelength):
-                sum_naatm = 0
-                p.update(
-                    j + 1,
-                    f'n_aatm computed : {j + 1:.3g} / {n_wavelength:.3g}',
+            # every wavelength at once: the paths do not depend on it,
+            # and each element takes the operations of a single one
+            sum_naatm = 0
+            for i in range(len(dic_stp["LPH"])):
+                sum_naatm += _find_extinction(
+                    dic_stp["LPH"][i], dic_stp["LPR"][0], prof_atm,
+                    slice(0, n_wavelength),
                 )
-                for i in range(len(dic_stp["LPH"])):
-                    sum_naatm += _find_extinction(
-                        dic_stp["LPH"][i], dic_stp["LPR"][0], prof_atm, j
-                    )
-                naatm[j] = sum_naatm / len(dic_stp["LPH"])
+            naatm[:] = sum_naatm / len(dic_stp["LPH"])
+            p.update(
+                n_wavelength,
+                f'n_aatm computed : {n_wavelength:.3g} / '
+                f'{n_wavelength:.3g}',
+            )
             p.finish(
                 'Done! | Analytic approx of n_atm computed for '
                 f'{n_wavelength:.3g} wavelengths'
@@ -7355,8 +7358,8 @@ def _find_extinction(
     ip: gc.Point,
     fp: gc.Point,
     prof_atm: xr.Dataset | MLUT | None,
-    w_ind: int = 0,
-) -> float:
+    w_ind: int | slice = 0,
+) -> float | NDArray[np.floating]:
     r"""Compute the atmospheric extinction along a segment.
 
     Between two points.
@@ -7378,14 +7381,15 @@ def _find_extinction(
         Atmospheric profile containing coordinates ``z_atm`` and
         variable ``OD_atm`` (cumulated extinction optical depth from the
         top).
-    w_ind : int, optional
-        Wavelength index into ``OD_atm``. Default is 0.
+    w_ind : int or slice, optional
+        Wavelength index into ``OD_atm``, or a slice of them. Default
+        is 0.
 
     Returns
     -------
-    float
+    float or ndarray
         Extinction factor between `ip` and `fp` (dimensionless, in [0,
-        1]).
+        1]), one per wavelength of a slice.
     """
     # Be sure ip and fp are Point classes
     if not all(isinstance(i, gc.Point) for i in [ip, fp]):

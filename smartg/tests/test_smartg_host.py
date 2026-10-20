@@ -817,3 +817,43 @@ def test_phase_tables_built_in_chunks(
     tab, cdf = _calc_phase_host(pro, 1000, 0.03, "atm")
     assert tab.tobytes() == ref_tab.tobytes()
     assert cdf.tobytes() == ref_cdf.tobytes()
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [((0.0, 0.0, 0.002), (0.05, 0.0, 0.15)),
+     ((0.3, 0.2, 3.5), (0.0, 0.0, 0.002)),
+     ((0.0, 0.0, 0.002), (1.0, 0.5, 3.5))],
+    ids=["one layer", "downward", "upward"],
+)
+def test_find_extinction_of_every_wavelength(
+    start: tuple[float, float, float], end: tuple[float, float, float]
+) -> None:
+    """A slice of wavelengths gives each the extinction of its own.
+
+    And the mean over heliostats of _finalize is the one of the former
+    loop over wavelengths, bitwise.
+    """
+    import geoclide as gc
+
+    pro = Atm1D("afglt", comp=[AerOPAC("desert", 0.3, 550.0)]).calc(
+        [450.0, 550.0, 650.0, 750.0]
+    )
+    ip, fp = gc.Point(*start), gc.Point(*end)
+    heliostats = [ip, gc.Point(start[0] + 0.01, start[1], start[2])]
+    new = sg_module._find_extinction(ip, fp, pro, slice(0, 4))
+    for j in range(4):
+        old = sg_module._find_extinction(ip, fp, pro, j)
+        assert np.asarray(new)[j].tobytes() == np.asarray(old).tobytes()
+    total: Any = 0
+    for h in heliostats:
+        total += sg_module._find_extinction(h, fp, pro, slice(0, 4))
+    naatm = np.zeros(4)
+    naatm[:] = total / len(heliostats)
+    ref = np.zeros(4)
+    for j in range(4):
+        s: Any = 0
+        for h in heliostats:
+            s += sg_module._find_extinction(h, fp, pro, j)
+        ref[j] = s / len(heliostats)
+    assert naatm.tobytes() == ref.tobytes()
