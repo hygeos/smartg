@@ -2695,10 +2695,10 @@ def _follows_calc_wavelengths(comp: Any) -> bool:
     """Whether a 1D component pairs inputs with the calc wavelengths.
 
     A forced `ssa` given as an array holds one value per wavelength of
-    `Atm1D.calc`, and a 4-D `phase` one matrix per wavelength: such a
-    component needs its phase matrices at every wavelength of `calc`,
-    repeated ones included. So does a component of another class,
-    whose inputs are unknown.
+    `Atm1D.calc`, and a 4-D `phase` one matrix per wavelength: the
+    phase matrices of such a component are computed at every
+    wavelength of `calc`, not once per distinct one. So are those of
+    a component of another class, whose inputs are unknown.
     """
     if type(comp) not in (AerOPAC, Cloud, AerUser):
         return True
@@ -2711,6 +2711,11 @@ def _follows_calc_wavelengths(comp: Any) -> bool:
 
 class Atmosphere:
     """Base class for atmosphere."""
+
+    # keep the phase matrices of the distinct wavelengths only, instead
+    # of one block per wavelength of calc: phase_atm gets shorter and
+    # iphase_atm is renumbered (private, set per instance)
+    _distinct_phase: bool = False
 
     def calc(
         self,
@@ -2813,12 +2818,12 @@ class Atm1D(Atmosphere):
         The wavelengths over which the phase matrices are
         calculated. Then use the nearest wavelength
         during cuda simulation. Useful to reduce the memory. If None,
-        compute the phase matrices once at each distinct wavelength of
-        `calc` (the internal bands of a KDIS channel share its
-        wavelength), or at every wavelength of `calc` when a component
-        pairs its inputs with them: a forced `ssa` array, a 4-D
-        `phase`, or a component of another class than `AerOPAC`,
-        `Cloud` and `AerUser`.
+        compute the phase matrix at all wavelengths. The matrices of a
+        repeated wavelength (the internal bands of a KDIS channel share
+        its wavelength) are computed once and copied, unless a
+        component pairs its inputs with the wavelengths of `calc`: a
+        forced `ssa` array, a 4-D `phase`, or a component of another
+        class than `AerOPAC`, `Cloud` and `AerUser`.
     pfgrid : array_like or None, optional
         The vertcial grid (from TOA to BOA) over which the phase
         matrices are calculated. This parameter can help
@@ -3109,21 +3114,16 @@ class Atm1D(Atmosphere):
                     f"{self.pfgrid[-1]:g} km, would leave the layers "
                     "below it without a phase matrix."
                 )
-            if self.wavelength_phase is not None:
-                wavelength_pha = np.atleast_1d(self.wavelength_phase)
-            elif any(_follows_calc_wavelengths(c) for c in self.comp):
-                wavelength_pha = np.atleast_1d(wavelength[:])
-            else:
-                # the internal bands of a KDIS channel share its
-                # wavelength, and so its phase matrices: compute them
-                # once, at the first of those bands
-                wavelength_pha = _distinct_values(
-                    np.atleast_1d(wavelength[:])
-                )[0]
+            wavelength_pha, expand = self._phase_wavelengths(wavelength)
             comp_phases = self._comp_phases(wavelength_pha, n_theta)
             pha = self._mix_phases(
                 comp_phases, warn=not is_native_theta(n_theta)
             )
+            if expand is not None:
+                # one block per wavelength of calc: a repeated
+                # wavelength gets a copy of the matrices of its first
+                # occurrence
+                pha = pha.isel(wavelength_phase=expand)
             pha_, ipha = calc_iphase(
                 pha,
                 np.atleast_1d(wavelength[:]),
@@ -3139,7 +3139,9 @@ class Atm1D(Atmosphere):
                 # layer whose phase matrix does not hold the component
                 # (null there) is not rescaled either
                 comp_trunc_frac = [
-                    None if f is None else f.values.ravel()[ipha]
+                    None if f is None
+                    else (f.values if expand is None
+                          else f.values[expand]).ravel()[ipha]
                     for _, _, f in comp_phases
                 ]
 
@@ -4011,6 +4013,44 @@ class Atm1D(Atmosphere):
             self._comp_phases(wavelength, n_theta),
             warn=not is_native_theta(n_theta),
         )
+
+    def _phase_wavelengths(
+        self, wavelength: BandSet
+    ) -> tuple[NDArray[Any], NDArray[np.intp] | None]:
+        """Return the wavelengths to compute the phase matrices at.
+
+        The internal bands of a KDIS channel share its wavelength, and
+        so its phase matrices: they are computed once per distinct
+        wavelength of `calc`, then copied onto the repeated ones, which
+        gives one block per wavelength as computing them at each would.
+
+        Parameters
+        ----------
+        wavelength : BandSet
+            The wavelengths of `calc`.
+
+        Returns
+        -------
+        wavelength_pha : ndarray
+            The wavelengths to compute the phase matrices at:
+            `wavelength_phase` when given, else those of `calc`, each
+            once unless a component pairs its inputs with them.
+        expand : ndarray of intp or None
+            The index in `wavelength_pha` of each wavelength of `calc`,
+            to copy the matrices onto the repeated wavelengths, or None
+            when there is nothing to copy.
+        """
+        calc_wavelength = np.atleast_1d(wavelength[:])
+        if self.wavelength_phase is not None:
+            return np.atleast_1d(self.wavelength_phase), None
+        if any(_follows_calc_wavelengths(c) for c in self.comp):
+            return calc_wavelength, None
+        distinct, inverse = _distinct_values(calc_wavelength)
+        if len(distinct) == len(calc_wavelength):
+            return calc_wavelength, None
+        if self._distinct_phase:
+            return distinct, None
+        return distinct, inverse
 
     def _comp_phases(
         self, wavelength: NDArray[Any], n_theta: ThetaLike

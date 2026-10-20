@@ -5,18 +5,16 @@
 
 * Changes
   - Compute the phase matrices of `Atm1D` once per distinct wavelength
-    when `wavelength_phase` is None. The internal bands of a KDIS
-    channel share its wavelength, and their phase matrices were
-    computed, stored and uploaded once per band: `calc` on the 2584
-    bands of SLSTR up to 4.5 µm with a desert aerosol took 6.5 s and
-    5.1 GB of memory, and now 1.2 s and 40 MB. `phase_atm` holds one
-    block of matrices per distinct wavelength, and `iphase_atm`, like
-    the phase lists of `calc_split`, follows that numbering; each
-    wavelength and layer keeps the same matrix, so the profiles and
-    the results do not change. Every wavelength of `calc` is still
-    used when a component pairs its inputs with them (a forced `ssa`
-    array, a 4-D `phase`, a component of another class), and giving
-    them as `wavelength_phase` restores the former layout. `Atm3D`
+    when `wavelength_phase` is None, and copy them onto the repeated
+    wavelengths. The internal bands of a KDIS channel share its
+    wavelength, and their phase matrices were computed once per band:
+    `calc` on the 2584 bands of SLSTR up to 4.5 µm with a desert
+    aerosol took 4.8 s and 5.1 GB of memory, and now 0.07 s and
+    0.3 GB. The profiles do not change, `phase_atm`, `iphase_atm` and
+    the phase lists of `calc_split` included. A component that pairs
+    its inputs with the wavelengths of `calc` (a forced `ssa` array, a
+    4-D `phase`, a component of another class) still has its matrices
+    computed at each of them. `Atm3D`
     does the same for its own phase matrices, and interpolates the
     extinction and albedo of its 3D components once per distinct
     wavelength: on the 312 kato2 bands up to 4.5 µm, a scene of 40

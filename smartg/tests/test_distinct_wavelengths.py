@@ -1,13 +1,13 @@
 """GPU-free tests of the phase matrices computed once per wavelength.
 
 The internal bands of a KDIS channel share its wavelength. By default
-(`wavelength_phase=None`) the builders now compute the phase matrices
-once at each distinct wavelength, instead of once per band: the phase
-table gets shorter and its indices are renumbered, but every layer at
-every wavelength keeps exactly the same matrix, and every other
-variable of the profile is unchanged. The reference is the former
-default, which an explicit `wavelength_phase` holding every
-wavelength still gives.
+(`wavelength_phase=None`) the builders compute the phase matrices once
+at each distinct wavelength, instead of once per band, and copy them
+onto the repeated wavelengths: the profile is the one an explicit
+`wavelength_phase` holding every wavelength gives, byte for byte. The
+private `_distinct_phase` switch keeps the distinct wavelengths only:
+the phase table gets shorter and its indices are renumbered, but every
+layer at every wavelength keeps exactly the same matrix.
 """
 
 from typing import Any
@@ -71,6 +71,35 @@ def _assert_same_profile(
     assert p_new.dtype == p_old.dtype
     for i, j in pairs:
         assert p_new[i].tobytes() == p_old[j].tobytes(), (i, j)
+
+
+def _assert_identical(new: xr.Dataset, old: xr.Dataset) -> None:
+    """Check that two profiles are identical, byte for byte.
+
+    Variables, coordinates and attributes, in the same order, with
+    the same dtype, shape, strides and bytes, the phase table and its
+    indices included.
+    """
+    xr.testing.assert_identical(new, old)
+    assert list(new.variables) == list(old.variables)
+    for name in new.variables:
+        a, b = new[name].values, old[name].values
+        assert a.dtype == b.dtype and a.shape == b.shape, name
+        assert a.strides == b.strides, name
+        assert a.tobytes() == b.tobytes(), name
+
+
+def _spy_comp_phases(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Record how many wavelengths each phase computation gets."""
+    sizes: list[int] = []
+    comp_phases = Atm1D._comp_phases
+
+    def spy(self: Atm1D, wavelength: np.ndarray, n_theta: Any) -> Any:
+        sizes.append(len(wavelength))
+        return comp_phases(self, wavelength, n_theta)
+
+    monkeypatch.setattr(Atm1D, "_comp_phases", spy)
+    return sizes
 
 
 def _henyey_greenstein(theta: np.ndarray, g: float = 0.7) -> np.ndarray:
@@ -164,15 +193,43 @@ def test_distinct_values_merge_signed_zeros() -> None:
     np.testing.assert_array_equal(inverse, [0, 0, 1])
 
 
+@pytest.mark.parametrize("old_calc_iphase", [False, True])
 @pytest.mark.parametrize("components", COMPONENTS)
-def test_atm1d_phase_once_per_distinct_wavelength(components: str) -> None:
+def test_atm1d_phase_once_per_distinct_wavelength(
+    components: str, old_calc_iphase: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Atm1D computes its phase matrices once per distinct wavelength.
 
-    Every variable but the numbering of the phase table is the one of
-    the former default, all the wavelengths of `calc`.
+    The profile is the one of every wavelength of `calc` given as
+    `wavelength_phase`, byte for byte, its phase table included.
     """
     comp, kwargs = COMPONENTS[components]()
-    new = Atm1D("afglt", comp=comp, **kwargs).calc(WAV)
+    old = Atm1D(
+        "afglt", comp=comp, wavelength_phase=_full_axis(), **kwargs
+    ).calc(WAV, use_old_calc_iphase=old_calc_iphase)
+    sizes = _spy_comp_phases(monkeypatch)
+    comp, kwargs = COMPONENTS[components]()
+    new = Atm1D("afglt", comp=comp, **kwargs).calc(
+        WAV, use_old_calc_iphase=old_calc_iphase
+    )
+    assert sizes == [N_DISTINCT]
+    n_pf = len(kwargs.get("pfgrid", [100.0, 0.0])) - 1
+    assert new.sizes["iphase"] == len(WAV) * n_pf
+    _assert_identical(new, old)
+
+
+@pytest.mark.parametrize("components", COMPONENTS)
+def test_atm1d_distinct_phase_layout(components: str) -> None:
+    """The private switch keeps the distinct wavelengths only.
+
+    Every variable but the numbering of the phase table is the one of
+    every wavelength of `calc`.
+    """
+    comp, kwargs = COMPONENTS[components]()
+    atm = Atm1D("afglt", comp=comp, **kwargs)
+    atm._distinct_phase = True
+    new = atm.calc(WAV)
     comp, kwargs = COMPONENTS[components]()
     old = Atm1D(
         "afglt", comp=comp, wavelength_phase=_full_axis(), **kwargs
@@ -181,6 +238,22 @@ def test_atm1d_phase_once_per_distinct_wavelength(components: str) -> None:
     assert new.sizes["iphase"] == N_DISTINCT * n_pf
     assert old.sizes["iphase"] == len(WAV) * n_pf
     _assert_same_profile(new, old)
+
+
+def test_atm1d_without_repeats(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wavelengths that do not repeat are all used, as they are."""
+    wav = [550.0, 443.0, 670.0]
+    comp, kwargs = _truncated_cloud()
+    old = Atm1D(
+        "afglt", comp=comp, wavelength_phase=np.atleast_1d(
+            BandSet(wav)[:]), **kwargs
+    ).calc(wav)
+    sizes = _spy_comp_phases(monkeypatch)
+    comp, kwargs = _truncated_cloud()
+    atm = Atm1D("afglt", comp=comp, **kwargs)
+    atm._distinct_phase = True
+    _assert_identical(atm.calc(wav), old)
+    assert sizes == [3]
 
 
 def _ssa_cloud() -> Cloud:
@@ -207,12 +280,15 @@ class _OwnAerosol(AerOPAC):
 def test_atm1d_full_axis_kept_when_inputs_follow_calc(make: Any) -> None:
     """A component paired with the calc wavelengths keeps them all."""
     kwargs: dict[str, Any] = {"pfgrid": PFGRID}
-    new = Atm1D("afglt", comp=[make()], **kwargs).calc(WAV)
     old = Atm1D(
         "afglt", comp=[make()], wavelength_phase=_full_axis(), **kwargs
     ).calc(WAV)
-    assert new.sizes["iphase"] == old.sizes["iphase"] == len(WAV) * 3
-    _assert_same_profile(new, old)
+    for distinct_phase in (False, True):
+        atm = Atm1D("afglt", comp=[make()], **kwargs)
+        atm._distinct_phase = distinct_phase
+        new = atm.calc(WAV)
+        assert new.sizes["iphase"] == len(WAV) * 3
+        _assert_identical(new, old)
 
 
 def test_follows_calc_wavelengths() -> None:
@@ -230,17 +306,48 @@ def test_follows_calc_wavelengths() -> None:
 
 def test_explicit_wavelength_phase_with_repeats_kept() -> None:
     """An explicit wavelength_phase is used as given, with repeats."""
-    pro = Atm1D(
-        "afglt", comp=[AerOPAC("desert", 0.1, 550.0)],
-        wavelength_phase=_full_axis(),
-    ).calc(WAV)
-    assert pro.sizes["iphase"] == len(WAV)
+    for distinct_phase in (False, True):
+        atm = Atm1D(
+            "afglt", comp=[AerOPAC("desert", 0.1, 550.0)],
+            wavelength_phase=_full_axis(),
+        )
+        atm._distinct_phase = distinct_phase
+        assert atm.calc(WAV).sizes["iphase"] == len(WAV)
+
+
+def test_calc_split_as_on_every_wavelength() -> None:
+    """calc_split gives the lists of every wavelength, byte for byte."""
+    comp, kwargs = _truncated_cloud()
+    new = Atm1D("afglt", comp=comp, **kwargs).calc_split(WAV)
+    comp, kwargs = _truncated_cloud()
+    old = Atm1D(
+        "afglt", comp=comp, wavelength_phase=_full_axis(), **kwargs
+    ).calc_split(WAV)
+    leaves_new, leaves_old = list(_leaves(new)), list(_leaves(old))
+    assert len(leaves_new) == len(leaves_old)
+    for x, y in zip(leaves_new, leaves_old):
+        if isinstance(x, xr.DataArray):
+            xr.testing.assert_identical(x, y)
+            x, y = x.values, y.values
+        x, y = np.asarray(x), np.asarray(y)
+        assert x.dtype == y.dtype and x.shape == y.shape
+        assert x.tobytes() == y.tobytes()
+
+
+def _leaves(value: Any) -> Any:
+    """Yield the arrays of nested tuples and lists."""
+    if isinstance(value, (tuple, list)):
+        for item in value:
+            yield from _leaves(item)
+    else:
+        yield value
 
 
 def test_calc_split_round_trip_on_distinct_layout() -> None:
     """calc_split gives the shorter list, and rebuilds the profile."""
     comp, kwargs = _truncated_cloud()
     atm = Atm1D("afglt", comp=comp, **kwargs)
+    atm._distinct_phase = True
     pro = atm.calc(WAV)
     prof_abs, prof_ray, prof_aer, prof_phases = atm.calc_split(WAV)
     assert prof_phases is not None
@@ -260,7 +367,9 @@ def test_calc_split_round_trip_on_distinct_layout() -> None:
 def test_extract_split_of_a_run_output_on_distinct_layout() -> None:
     """extract_split reads the shorter phase table of a run back."""
     comp, kwargs = _truncated_cloud()
-    pro = Atm1D("afglt", comp=comp, **kwargs).calc(WAV)
+    atm = Atm1D("afglt", comp=comp, **kwargs)
+    atm._distinct_phase = True
+    pro = atm.calc(WAV)
     run = pro[["OD_p", "OD_r", "OD_g", "ssa_p_atm", "iphase_atm"]]
     run["phase_atm"] = (
         ["phase_index_atm", "nphamat_atm", "theta_atm"],
