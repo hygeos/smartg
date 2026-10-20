@@ -513,3 +513,31 @@ def test_phase_set_on_the_bracketing_nodes(
     monkeypatch.undo()
     with pytest.raises(ValueError, match="range of the wavelength_phase"):
         cld.get_phase_set(np.array([1e5]), n_theta=19)
+
+
+@pytest.mark.parametrize("grid_dtype", [np.float32, np.float64])
+def test_calc_iphase_nearest_as_v205(grid_dtype: type) -> None:
+    """The phase wavelength of each wavelength, as v2.0.5 found it.
+
+    More distinct wavelengths than a block, ties between two phase
+    wavelengths (the first is taken), repeats and a NaN.
+    """
+    from smartg.phase import calc_iphase
+
+    rng = np.random.default_rng(10)
+    grid = np.sort(rng.uniform(400.0, 900.0, 37)).astype(grid_dtype)
+    full = rng.uniform(390.0, 910.0, 700).astype(np.float32)
+    full[:50] = full[50]
+    full[60] = 0.5 * (float(grid[3]) + float(grid[4]))
+    full[61] = np.nan
+    phase = xr.DataArray(
+        np.zeros((37, 1, 1, 2)),
+        dims=["wavelength_phase", "z_phase", "nphamat", "theta_atm"],
+        coords={"wavelength_phase": grid, "z_phase": [0.0]},
+    )
+    _, ipha = calc_iphase(phase, full, np.array([0.0]), True)
+    ref = np.array(
+        [np.abs(grid - x).argmin() for x in full], dtype="int32"
+    )
+    assert ipha.dtype == np.int32 and ipha.shape == (700, 1)
+    np.testing.assert_array_equal(ipha[:, 0], ref)

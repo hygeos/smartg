@@ -585,10 +585,16 @@ def calc_iphase(
     n_wavelength, nz, nstk, ntheta = phase.shape
     pha = phase.values.reshape(n_wavelength * nz, nstk, ntheta)
 
-    ipha_w = np.array(
-        [np.abs(wavelength - x).argmin() for x in wavelength_full],
-        dtype="int32",
-    )
+    # the nearest phase wavelength of each distinct wavelength, the
+    # first of equally near ones, in blocks of 256 to bound the memory
+    distinct, inverse = np.unique(wavelength_full, return_inverse=True)
+    nearest = np.empty(distinct.size, dtype="int32")
+    for start in range(0, distinct.size, 256):
+        block = distinct[start:start + 256]
+        nearest[start:start + 256] = np.abs(
+            wavelength[None, :] - block[:, None]
+        ).argmin(axis=1)
+    ipha_w = nearest[np.asarray(inverse).reshape(-1)]
     if old_method:
         ipha_a = np.array(
             [np.abs(altitude - x).argmin() for x in z_full], dtype="int32"
