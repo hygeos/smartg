@@ -110,6 +110,32 @@ def test_truncate_phase_matches_pytrunc(
     assert pha_tr.dtype == np.float64
 
 
+@pytest.mark.parametrize(
+    "truncation",
+    [
+        GTTrunc(trunc_frac=None, theta_tr=5.0),
+        GTTrunc(trunc_frac=0.3, theta_tr=10.0, lobatto_optimization=True),
+        GTTrunc(trunc_frac=0.3),
+        DMTrunc(n_streams=64, integral_method="simpson"),
+        GTTrunc(trunc_frac=0.3, theta_tr=10.0, pha_scale_method=2),
+    ],
+    ids=["GT-plateau", "GT-lobatto", "GT-search", "DM-simpson",
+         "GT-scale-2"],
+)
+def test_truncate_phase_reads_pytrunc_bitwise(
+    truncation: DMTrunc | GTTrunc,
+) -> None:
+    """F11 and f are those of pytrunc's Dataset, bit for bit."""
+    pha = _hg_matrix(0.85)
+    pha_tr, f = truncate_phase(pha, THETA, truncation)
+    theta_int, nodes = trunc_mod._integration_grid(THETA, 721)
+    assert nodes is not None
+    ds = _pytrunc(np.interp(theta_int, THETA, pha[0]), theta_int, truncation)
+    assert f == float(ds["f"].values)
+    assert pha_tr[0].tobytes() == np.ascontiguousarray(
+        ds["phase_tr"].values[nodes], dtype=np.float64).tobytes()
+
+
 def test_truncate_phase_scale_method_2() -> None:
     """ARTDECO scaling: F21 and F34 are divided by 1 - f instead."""
     pha = _hg_matrix(0.85)

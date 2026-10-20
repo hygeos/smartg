@@ -80,7 +80,6 @@ truncated_ext_ssa
 from typing import cast
 
 import numpy as np
-import xarray as xr
 from numpy.typing import ArrayLike, NDArray
 from pytrunc.truncation import delta_m_phase_approx, gt_phase_approx
 
@@ -461,14 +460,16 @@ def truncate_phase(
     # integration rule (1e-4) moves its truncation angle by tenths of a
     # degree, a change that tells nothing about the table
     scale = 2.0 / norm if abs(norm - 2.0) > 0.02 else 1.0
+    # pytrunc's arrays, without the Dataset it would build from them
     if isinstance(truncation, DMTrunc):
-        ds_pha = cast(
-            xr.Dataset,
+        _, f, f11_tr = cast(
+            tuple[NDArray[np.float64], float, NDArray[np.float64]],
             delta_m_phase_approx(
                 f11_int * scale,
                 theta_int,
                 truncation.m_max,
                 method=truncation.integral_method,
+                ds_output=False,
             ),
         )
     else:
@@ -484,8 +485,8 @@ def truncate_phase(
                 "would be truncated."
             )
         try:
-            ds_pha = cast(
-                xr.Dataset,
+            _, f, f11_tr = cast(
+                tuple[NDArray[np.float64], float, NDArray[np.float64]],
                 gt_phase_approx(
                     f11_int * scale,
                     theta_int,
@@ -494,6 +495,7 @@ def truncate_phase(
                     th_tol=truncation.theta_tol,
                     th_f=truncation.theta_tr,
                     lobatto_optimization=truncation.lobatto_optimization,
+                    ds_output=False,
                 ),
             )
         except ValueError as exc:
@@ -504,8 +506,8 @@ def truncate_phase(
                 "peak takes truncation=None (the hydrosols of "
                 "smartg.water truncate by default)."
             ) from exc
-    f11_tr = np.asarray(ds_pha["phase_tr"].values, dtype=np.float64) / scale
-    f = float(ds_pha["f"].values)
+    f11_tr = np.asarray(f11_tr, dtype=np.float64) / scale
+    f = float(f)
     if (f11_tr < 0.0).any():
         raise ValueError(
             "The truncated phase function is negative (down to "
