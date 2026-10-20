@@ -23,6 +23,7 @@ from matplotlib.figure import Figure
 from matplotlib.image import AxesImage
 from mpl_toolkits.mplot3d import art3d
 
+from smartg.kdis import Kdis
 from smartg.objects3d import Entity, Plane, Spheric, Transformation
 from smartg.reptran import ReptranIbandList
 from smartg.view import (
@@ -461,3 +462,62 @@ def test_visualize_entity_draws_every_triangle_of_a_sphere() -> None:
     ).to_trianglemesh().ntriangles
     assert [len(s.get_paths()) for s in surfaces] == [n_triangles]
     plt.close("all")
+
+
+def _kdis_cat_dataset(ibands: Any) -> xr.Dataset:
+    """Return random photon categories over the bands of a model."""
+    rng = np.random.default_rng(7)
+    wavelength = np.array([b.w for b in ibands.l], np.float32)
+    cat_w = rng.random((9, len(wavelength))) * 100.0
+    return xr.Dataset(
+        {
+            "wPhCats": (("Categories", "wavelength"), cat_w),
+            "wPhCats2": (("Categories", "wavelength"), cat_w**2 * 1e3),
+            "norm_npho": ("wavelength", rng.random(len(wavelength)) * 1e3),
+            "cat_PhNb": ("Categories", np.full(9, 100.0)),
+        },
+        coords={"Categories": np.arange(9.0), "wavelength": wavelength},
+        attrs={"ALDEG": "5", "NPHOTONS": "1000", "n_cte": "1.0",
+               "S_Receiver": "4.0"},
+    )
+
+
+@pytest.mark.parametrize("unit", ["FLUX", "FLUX_DENSITY", "RADIANCE"])
+@pytest.mark.parametrize("model", ["reptran", "kato2", "SLSTR"])
+def test_cat_view_as_groupby(
+    model: str, unit: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cat_view sums the channels as groupby did, bitwise."""
+    if model == "reptran":
+        ibands: Any = _channel_ibands()
+        ds = xr.Dataset(
+            {
+                "wPhCats": (("Categories", "wavelength"),
+                            np.outer(np.ones(9), [1.0, 2.0, 3.0, 4.0])),
+                "wPhCats2": (("Categories", "wavelength"),
+                             np.outer(np.ones(9), [1e3, 4e3, 9e3, 16e3])),
+                "norm_npho": ("wavelength", np.full(4, 250.0)),
+                "cat_PhNb": ("Categories", np.full(9, 100.0)),
+            },
+            coords={"Categories": np.arange(9.0),
+                    "wavelength": np.array([400.0, 500.0, 500.0, 700.0],
+                                           np.float32)},
+            attrs={"ALDEG": "5", "NPHOTONS": "1000", "n_cte": "1.0",
+               "S_Receiver": "4.0"},
+        )
+    else:
+        name = "kato2" if model == "kato2" else "SENTINEL3_1_SLSTR"
+        ibands = Kdis(name).to_smartg(lmax=4500)
+        ds = _kdis_cat_dataset(ibands)
+    mtoa = 1.0 if unit != "RADIANCE" else 2.0
+    kwargs = {"mtoa": mtoa, "output_unit": unit, "print_results": False,
+              "kdis_rep_bands": ibands}
+    new = cat_view(ds, **kwargs)
+    monkeypatch.setattr(
+        "smartg.view._group_sum",
+        lambda data, groups: data.groupby(groups.key).sum(dim="wavelength"),
+    )
+    ref = cat_view(ds, **kwargs)
+    xr.testing.assert_identical(new, ref)
+    for v in new.data_vars:
+        assert new[v].values.tobytes() == ref[v].values.tobytes()

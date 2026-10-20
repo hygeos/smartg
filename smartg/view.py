@@ -74,6 +74,7 @@ from smartg.objects3d import (
     convert_lg_to_le,
     ref_fresnel,
 )
+from smartg.xarray import _group_index, _group_sum
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -3947,14 +3948,14 @@ def cat_view(
 
     # The channel central wavelength of each internal band, which groups
     # the internal bands into channels
-    grouping: xr.DataArray | None = None
+    groups = None
     if wb is not None and is_wave_axis:
-        grouping = xr.DataArray(
+        groups = _group_index(xr.DataArray(
             wb.to_numpy(),
             dims=("wavelength",),
             coords={"wavelength": ds["wPhCats"].wavelength},
             name="wavelength",
-        )
+        ))
 
     # Fill needed parameters considering the case with and without
     # the wavelength
@@ -4046,18 +4047,16 @@ def cat_view(
     abs_err_da_n_int: xr.DataArray | None = None
     if is_wave_axis:
         if kdis_rep_bands is not None:
-            if norm is None or norm_dl is None or grouping is None:
+            if norm is None or norm_dl is None or groups is None:
                 raise RuntimeError(
                     "kdis/reptran normalization weights are required."
                 )
             # Sum the internal bands of each channel
-            mf_n = (mf * cst * mtoa).groupby(grouping).sum(dim="wavelength")
+            mf_n = _group_sum(mf * cst * mtoa, groups)
             mf_n_int = mf_n / norm
 
-            mf_2_n_int = (
-                (mf2 * (cst * mtoa) * (cst * mtoa))
-                .groupby(grouping)
-                .sum(dim="wavelength")
+            mf_2_n_int = _group_sum(
+                mf2 * (cst * mtoa) * (cst * mtoa), groups
             )
             mf_2_n_int /= norm
 
@@ -4128,15 +4127,13 @@ def cat_view(
             },
         )
         if kdis_rep_bands is not None:
-            if grouping is None:
+            if groups is None:
                 raise RuntimeError(
                     "kdis/reptran channel grouping is required."
                 )
             # Sum the internal bands of each channel
-            abs_err_da_n = (
-                (abs_err_da * cst * mtoa * ld)
-                .groupby(grouping)
-                .sum(dim="wavelength")
+            abs_err_da_n = _group_sum(
+                abs_err_da * cst * mtoa * ld, groups
             )
             if norm_dl is None:
                 raise RuntimeError(
