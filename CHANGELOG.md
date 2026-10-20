@@ -18,7 +18,7 @@
     matrices, and interpolates the extinction and albedo of its 3D
     components once per distinct wavelength: on the 312 kato2 bands up
     to 4.5 µm, a scene of 40 cloud cells took 54 s and 4.1 GB, and now
-    6 s and 1.7 GB
+    1.5 s and 1.7 GB
   - Tabulate the phase matrices of the hydrosols once per distinct
     wavelength when their `wavelength_phase` is None, mix those of
     several hydrosols once per distinct wavelength, and copy them onto
