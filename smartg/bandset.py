@@ -206,6 +206,38 @@ class BandSet:
         return tau_mol
 
 
+def _distinct_values(
+    values: NumericArrayLike,
+) -> tuple[NDArray[np.generic], NDArray[np.intp]]:
+    """Return the distinct values of an array, in order of appearance.
+
+    Parameters
+    ----------
+    values : array_like
+        1-D array.
+
+    Returns
+    -------
+    distinct : ndarray
+        The distinct values, in the order of their first occurrence
+        and with the dtype of `values`: a copy of the values themselves
+        when none repeats. Values that compare equal, such as 0.0 and
+        -0.0, are merged as by `numpy.unique`.
+    inverse : ndarray of intp
+        Index in `distinct` of each value, so that
+        ``distinct[inverse]`` equals `values`.
+    """
+    values = np.asarray(values)
+    _, first, inverse = np.unique(
+        values, return_index=True, return_inverse=True
+    )
+    # np.unique sorts the values: rank them by first occurrence
+    order = np.argsort(first)
+    rank = np.empty_like(order)
+    rank[order] = np.arange(order.size)
+    return values[first[order]], rank[inverse]
+
+
 def spectral_grids(
     lmin: RealNumber,
     lmax: RealNumber,

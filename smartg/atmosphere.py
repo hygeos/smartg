@@ -94,7 +94,7 @@ from scipy.constants import Boltzmann, Planck, speed_of_light
 from scipy.integrate import simpson
 from scipy.interpolate import make_interp_spline
 
-from smartg.bandset import BandSet
+from smartg.bandset import BandSet, _distinct_values
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.grid3d import Grid3D, create_1d_grid
@@ -2608,6 +2608,24 @@ def _read_i3rc_field(
     )
 
 
+def _follows_calc_wavelengths(comp: Any) -> bool:
+    """Whether a 1D component pairs inputs with the calc wavelengths.
+
+    A forced `ssa` given as an array holds one value per wavelength of
+    `Atm1D.calc`, and a 4-D `phase` one matrix per wavelength: such a
+    component needs its phase matrices at every wavelength of `calc`,
+    repeated ones included. So does a component of another class,
+    whose inputs are unknown.
+    """
+    if type(comp) not in (AerOPAC, Cloud, AerUser):
+        return True
+    ssa = getattr(comp, "ssa", None)
+    if isinstance(ssa, np.ndarray) and ssa.ndim > 0:
+        return True
+    phase = getattr(comp, "_phase", None)
+    return phase is not None and phase.ndim != 2
+
+
 class Atmosphere:
     """Base class for atmosphere."""
 
@@ -2712,7 +2730,12 @@ class Atm1D(Atmosphere):
         The wavelengths over which the phase matrices are
         calculated. Then use the nearest wavelength
         during cuda simulation. Useful to reduce the memory. If None,
-        compute the phase matrix at all wavelengths.
+        compute the phase matrices once at each distinct wavelength of
+        `calc` (the internal bands of a KDIS channel share its
+        wavelength), or at every wavelength of `calc` when a component
+        pairs its inputs with them: a forced `ssa` array, a 4-D
+        `phase`, or a component of another class than `AerOPAC`,
+        `Cloud` and `AerUser`.
     pfgrid : array_like or None, optional
         The vertcial grid (from TOA to BOA) over which the phase
         matrices are calculated. This parameter can help
@@ -3001,10 +3024,17 @@ class Atm1D(Atmosphere):
                     f"{self.pfgrid[-1]:g} km, would leave the layers "
                     "below it without a phase matrix."
                 )
-            if self.wavelength_phase is None:
+            if self.wavelength_phase is not None:
+                wavelength_pha = np.atleast_1d(self.wavelength_phase)
+            elif any(_follows_calc_wavelengths(c) for c in self.comp):
                 wavelength_pha = np.atleast_1d(wavelength[:])
             else:
-                wavelength_pha = np.atleast_1d(self.wavelength_phase)
+                # the internal bands of a KDIS channel share its
+                # wavelength, and so its phase matrices: compute them
+                # once, at the first of those bands
+                wavelength_pha = _distinct_values(
+                    np.atleast_1d(wavelength[:])
+                )[0]
             comp_phases = self._comp_phases(wavelength_pha, n_theta)
             pha = self._mix_phases(
                 comp_phases, warn=not is_native_theta(n_theta)
