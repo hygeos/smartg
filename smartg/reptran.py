@@ -51,19 +51,21 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterator, Sequence
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
 from luts.luts import LUT, MLUT
+from numpy.typing import NDArray
 from scipy.integrate import quad, simpson
 from scipy.interpolate import make_interp_spline
 
 from smartg.atmosphere import blackbody_radiance, od2k
 from smartg.config import DIR_AUXDATA
 from smartg.interp import interp2, interp3
-from smartg.typing import NumericArrayLike, PathType
+from smartg.typing import BandLike, NumericArrayLike, PathType
 from smartg.xarray import _group_index, _group_sum
 
 if TYPE_CHECKING:
@@ -455,6 +457,37 @@ class ReptranIband:
                     )
 
         return data_molecules
+
+    @staticmethod
+    def _calc_profiles(
+        ibands: Sequence[BandLike], prof: ProfileBase
+    ) -> NDArray[np.float64]:
+        """Calculate the gaseous absorption of several internal bands.
+
+        Each band by its own `calc_profile`, the lookup tables it reads
+        being read once for all of them.
+
+        Parameters
+        ----------
+        ibands : sequence of ReptranIband
+            Internal bands.
+        prof : ProfileBase
+            Atmospheric profile, see `calc_profile`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Absorption coefficient profiles, of shape ``(len(ibands),
+            len(prof.t))``.
+        """
+        token = _LOOKUP_TABLES.set({})
+        try:
+            return np.array(
+                [iband.calc_profile(prof) for iband in ibands],
+                dtype=np.float64,
+            )
+        finally:
+            _LOOKUP_TABLES.reset(token)
 
 
 class ReptranBand:
@@ -884,6 +917,16 @@ class ReptranIbandList:
         ]
 
 
+# the lookup tables of at most this size are read whole, once per
+# profile; larger ones (H2O of reptran_solar_fine, 254 MB) are read a
+# band at a time
+_LOOKUP_CACHE_FILE_BYTES = 64 * 2**20
+# the lookup tables read during ReptranIband._calc_profiles, by file
+_LOOKUP_TABLES: ContextVar[dict[Path, dict[str, np.ndarray]] | None] = (
+    ContextVar("_LOOKUP_TABLES", default=None)
+)
+
+
 class ReadCrs:
     """Read a REPTRAN molecular cross-section lookup table.
 
@@ -916,6 +959,29 @@ class ReadCrs:
 
     def _read_file_general(self, iband: int) -> None:
         fname = self.fname.with_name(f"{self.fname.name}.cdf")
+        tables = _LOOKUP_TABLES.get()
+        if tables is not None and (
+            fname in tables
+            or fname.stat().st_size <= _LOOKUP_CACHE_FILE_BYTES
+        ):
+            if fname not in tables:
+                with xr.open_dataset(fname) as dataset:
+                    tables[fname] = {
+                        name: dataset[name].values for name in (
+                            "wvl_index", "xsec", "pressure", "t_ref",
+                            "t_pert", "vmrs",
+                        )
+                    }
+            table = tables[fname]
+            # copies, as a read from the file gives them
+            self.wvl_index = table["wvl_index"].copy()
+            ii = list(self.wvl_index).index(iband)
+            self.xsec = np.array(table["xsec"][:, :, ii, :], order="C")
+            self.pressure = table["pressure"].copy()
+            self.t_ref = table["t_ref"].copy()
+            self.t_pert = table["t_pert"].copy()
+            self.vmrs = table["vmrs"].copy()
+            return
         with xr.open_dataset(fname) as dataset:
             self.wvl_index = dataset["wvl_index"].values
             ii = list(self.wvl_index).index(iband)

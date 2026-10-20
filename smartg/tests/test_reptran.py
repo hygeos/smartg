@@ -13,6 +13,7 @@ from smartg.reptran import (
     ReadCrs,
     Reptran,
     ReptranBand,
+    ReptranIband,
     ReptranIbandList,
     dir_reptran,
     reduce_reptran,
@@ -528,3 +529,35 @@ def test_reduce_reptran_as_groupby(
         norm, we.groupby(wb).sum(dim="wavelength"))
     xr.testing.assert_identical(
         norm_dl, (we * dl).groupby(wb).sum(dim="wavelength"))
+
+
+@pytest.mark.parametrize("subset", ["sentinel", "coarse"])
+def test_lookup_tables_read_once_per_profile(
+    subset: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A profile reads each lookup file once, for the same absorption.
+
+    Bitwise the absorption of each band read alone from the files.
+    """
+    from smartg.atmosphere import Atm1D
+    from smartg.bandset import BandSet
+
+    if subset == "sentinel":
+        bands = Reptran("reptran_solar_sentinel").to_smartg().l
+    else:
+        bands = Reptran("reptran_solar_coarse").to_smartg().l[::20]
+    prof = Atm1D("afglus").prof
+    ref = np.array([b.calc_profile(prof) for b in bands])
+    opened: list[str] = []
+    real = xr.open_dataset
+
+    def counted(fname: Any, *args: Any, **kwargs: Any) -> xr.Dataset:
+        opened.append(str(fname))
+        return real(fname, *args, **kwargs)
+
+    monkeypatch.setattr("smartg.reptran.xr.open_dataset", counted)
+    new = ReptranIband._calc_profiles(bands, prof)
+    assert new.tobytes() == ref.tobytes()
+    assert len(opened) == len(set(opened))
+    tau = BandSet(bands).calc_profile(prof)
+    assert tau.tobytes() == ref.astype(np.float32).tobytes()
