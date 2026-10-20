@@ -10,17 +10,23 @@ import xarray as xr
 
 from smartg import smartg as sg_module
 from smartg.albedo import AlbedoCst, AlbedoMap
+from smartg.atmosphere import AerOPAC, Atm1D
+from smartg.bandset import BandSet
 from smartg.sensor import Sensor, get_sensors_grid
 from smartg.smartg import (
     LocalEstimate,
     Smartg,
     StdevLim,
+    _calc_phase_host,
     _calc_solid_angles,
     _check_albedo_map_codes,
     _check_flat_surface_le,
     _check_forward_raster,
     _check_sensor_directions,
+    _distinct_phase_profile,
+    _distinct_phase_rows,
     _impact_init,
+    _init_profile,
     _isotropic,
     _RatioStdev,
     _resolve_n_loop,
@@ -28,6 +34,7 @@ from smartg.smartg import (
     multi_profiles,
 )
 from smartg.surface import FlatSurface, RoughSurface
+from smartg.water import HydrosolPR, Water1D
 
 
 @pytest.mark.parametrize("sza_max", [30.0, 60.0, 90.0, 120.0])
@@ -397,3 +404,126 @@ def test_thermal_forward_needs_alt_pp() -> None:
     """
     with pytest.raises(ValueError, match="needs alt_pp=True"):
         Smartg(thermal=True)
+
+
+def _hg_rows(g: list[float], theta: np.ndarray) -> np.ndarray:
+    """Return Henyey-Greenstein matrices of 6 terms, one per g."""
+    mu = np.cos(np.radians(theta))
+    rows = []
+    for gi in g:
+        f11 = (1.0 - gi**2) / (1.0 + gi**2 - 2.0 * gi * mu) ** 1.5
+        rows.append(np.stack([f11, 0 * f11, f11, 0 * f11, f11, f11]))
+    return np.array(rows)
+
+
+def _repeated_profile(kind: str) -> xr.Dataset:
+    """Return a profile whose matrices repeat, one being unused.
+
+    Matrices A, B, A, null and C: the third repeats the first, the
+    fourth is null (a layer without particles), the last is not used.
+    """
+    theta = np.linspace(0.0, 180.0, 181)
+    phase = _hg_rows([0.7, 0.5, 0.7, 0.0, 0.3], theta)
+    phase[3] = 0.0
+    iphase = np.array([[0, 1, 3], [2, 1, 3]], dtype=np.int32)
+    z = [f"z_{kind}", np.array([2.0, 1.0, 0.0])]
+    return xr.Dataset(
+        {
+            f"OD_{kind}": (("wavelength", z[0]), np.ones((2, 3))),
+            f"iphase_{kind}": (("wavelength", z[0]), iphase),
+            f"phase_{kind}": (("iphase", "nphamat", f"theta_{kind}"), phase),
+        },
+        coords={"wavelength": [500.0, 500.0], z[0]: z[1],
+                f"theta_{kind}": theta},
+    )
+
+
+def _assert_same_upload(pro: xr.Dataset, kind: str) -> xr.Dataset:
+    """Check that the deduplicated upload gives every layer its rows.
+
+    Every wavelength and layer reads the same table row and the same
+    cumulative distribution as from the whole table, bitwise, and the
+    profile itself is left as it was. Return the uploaded profile.
+    """
+    before = pro.copy(deep=True)
+    dev = _distinct_phase_profile(pro, kind)
+    assert dev is not None
+    xr.testing.assert_identical(pro, before)
+    old_tab, old_cdf = _calc_phase_host(pro, 1000, 0.03, kind)
+    new_tab, new_cdf = _calc_phase_host(dev, 1000, 0.03, kind)
+    old_i = pro[f"iphase_{kind}"].values + 2
+    new_i = dev[f"iphase_{kind}"].values + 2
+    assert new_tab[new_i].tobytes() == old_tab[old_i].tobytes()
+    assert new_cdf[new_i].tobytes() == old_cdf[old_i].tobytes()
+    assert new_tab[:2].tobytes() == old_tab[:2].tobytes()
+    return dev
+
+
+@pytest.mark.parametrize("kind", ["atm", "oc"])
+def test_distinct_phase_profile_uploads_the_same_rows(kind: str) -> None:
+    """A repeated matrix is uploaded once, an unused one not at all."""
+    dev = _assert_same_upload(_repeated_profile(kind), kind)
+    assert dev[f"phase_{kind}"].shape[0] == 3
+
+
+@pytest.mark.parametrize("kind", ["atm", "oc"])
+def test_distinct_phase_profile_of_a_built_profile(
+    kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The profile arrays uploaded beside the table are unchanged.
+
+    The profiles are built at 500 and 600 nm on a wavelength_phase grid
+    that repeats 500 nm, as the internal bands of a KDIS channel did.
+    """
+    monkeypatch.setattr(sg_module, "to_gpu", np.asarray)
+    wavelength_phase = [500.0, 500.0, 600.0]
+    if kind == "atm":
+        pro = Atm1D(
+            "afglt", comp=[AerOPAC("desert", 0.1, 550.0)],
+            wavelength_phase=wavelength_phase,
+        ).calc([500.0, 600.0])
+    else:
+        pro = Water1D(comp=[HydrosolPR(
+            0.5, n_theta=721, wavelength_phase=wavelength_phase
+        )]).calc([500.0, 600.0])
+    dev = _assert_same_upload(pro, kind)
+    assert dev[f"phase_{kind}"].shape[0] < pro[f"phase_{kind}"].shape[0]
+    wavelength = BandSet(pro.coords["wavelength"].values)
+    old_prof, _ = _init_profile(wavelength, pro, kind)
+    new_prof, _ = _init_profile(wavelength, dev, kind)
+    for field in old_prof.dtype.names:
+        if field != "iphase":
+            assert new_prof[field].tobytes() == old_prof[field].tobytes()
+
+
+def test_distinct_phase_profile_left_alone() -> None:
+    """A profile with nothing to remove, or not to touch, is kept."""
+    pro = _repeated_profile("atm")
+    distinct = pro.isel(iphase=[0, 1, 3])
+    distinct["iphase_atm"] = (
+        ("wavelength", "z_atm"), np.array([[0, 1, 2], [0, 1, 2]], np.int32)
+    )
+    assert _distinct_phase_profile(distinct, "atm") is distinct
+    no_index = pro.drop_vars("iphase_atm")
+    assert _distinct_phase_profile(no_index, "atm") is no_index
+    nan = pro.copy(deep=True)
+    nan["phase_atm"][4, 0, 0] = np.nan
+    assert _distinct_phase_profile(nan, "atm") is nan
+    phase = pro["phase_atm"].values
+    assert _distinct_phase_rows(phase, np.array([[0, 5]])) is None
+    assert _distinct_phase_rows(phase, np.array([[0.0, 1.0]])) is None
+
+
+def test_multi_profiles_of_one_profile_upload_its_matrices_once() -> None:
+    """Blocks of the same matrices are uploaded once, others apart."""
+    same = multi_profiles([_profile_with_phases(1.0),
+                           _profile_with_phases(1.0)])
+    dev = _distinct_phase_profile(same, "atm")
+    assert dev is not None and dev["phase_atm"].shape[0] == 1
+    other = multi_profiles([_profile_with_phases(1.0),
+                            _profile_with_phases(2.0)])
+    dev = _distinct_phase_profile(other, "atm")
+    assert dev is not None and dev["phase_atm"].shape[0] == 2
+    phase, iphase = dev["phase_atm"].values, dev["iphase_atm"].values
+    np.testing.assert_array_equal(phase[iphase[:2]], 1.0)
+    np.testing.assert_array_equal(phase[iphase[2:]], 2.0)

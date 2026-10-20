@@ -1610,9 +1610,9 @@ class Smartg:
             The number of scattering angles of the atmospheric and
             oceanic phase tables uploaded to the GPU. Ignored when
             `theta_grid` supplies its own grid. Each angle costs 28
-            bytes per phase function, 24 for the matrix and 4 for its
-            cumulative probability, so the 1e6 default costs 28 MB per
-            phase function.
+            bytes per distinct phase matrix of the profiles, 24 for the
+            matrix and 4 for its cumulative probability, so the 1e6
+            default costs 28 MB per matrix.
         theta_grid : str or ndarray, optional
             Distribution of those scattering angles:
 
@@ -2232,8 +2232,12 @@ class Smartg:
             # caer is reachable from the kernel only through a pointer
             # in constant memory, which does not keep it alive: it has
             # to stay referenced here until the kernel is done
+            # each distinct phase matrix is uploaded once, the profile
+            # itself is kept for the output
+            prof_atm_dev = _distinct_phase_profile(prof_atm, 'atm')
+            assert prof_atm_dev is not None
             faer, caer = _calc_phase_gpu(
-                prof_atm,
+                prof_atm_dev,
                 n_theta=agrid_atm[0],
                 depol=depol,
                 kind='atm',
@@ -2243,7 +2247,7 @@ class Smartg:
             )
             pgrid_atm = (caer.shape[-1], caer)
             prof_atm_gpu, cell_atm_gpu = _init_profile(
-                wavelength, prof_atm, 'atm'
+                wavelength, prof_atm_dev, 'atm'
             )
             if 'z_atm' in prof_atm.coords:
                 n_atm = len(prof_atm.coords['z_atm']) - 1
@@ -2396,8 +2400,10 @@ class Smartg:
                 theta_grid, n_icdf, prof_oc, 'oc'
             )
             # coce, like caer above, is kept alive by this reference
+            prof_oc_dev = _distinct_phase_profile(prof_oc, 'oc')
+            assert prof_oc_dev is not None
             foce, coce = _calc_phase_gpu(
-                prof_oc,
+                prof_oc_dev,
                 n_theta=agrid_oc[0],
                 depol=depol_water,
                 kind='oc',
@@ -2405,7 +2411,9 @@ class Smartg:
                 ang_a=None if agrid_oc[1] == 0 else ang_oc,
             )
             pgrid_oc = (coce.shape[-1], coce)
-            prof_oc_gpu, cell_oc_gpu = _init_profile(wavelength, prof_oc, 'oc')
+            prof_oc_gpu, cell_oc_gpu = _init_profile(
+                wavelength, prof_oc_dev, 'oc'
+            )
             n_oce = len(prof_oc.coords['z_oc']) - 1
             if self.opt3d:
                 n_oce_abs = np.int32(prof_oc['iabs_oc'].to_numpy().max())
@@ -4508,6 +4516,109 @@ def _calc_phase_gpu(
     )
 
     return to_gpu(phase_host), to_gpu(cdf_host)
+
+
+def _distinct_phase_rows(
+    phase: NDArray[np.floating], iphase: NDArray[Any]
+) -> tuple[NDArray[np.intp], NDArray[np.intp]] | None:
+    """Return the referenced phase matrices that differ, once each.
+
+    Parameters
+    ----------
+    phase : ndarray
+        Phase matrices of a profile, of shape (n_matrices, nphamat,
+        n_theta).
+    iphase : ndarray
+        Index of the matrix of each wavelength and layer (or cell).
+
+    Returns
+    -------
+    (keep, remap) or None
+        `keep` holds, in increasing order, the first of the referenced
+        matrices of each distinct content, and `remap[i]` the position
+        in `keep` of the content of matrix `i` (-1 when it is not
+        referenced). None when every matrix is referenced and distinct,
+        or when the profile is not one to touch: indices that are not
+        integers or point outside the table, or a matrix that is not
+        finite, which `_calc_phase_host` then refuses as before.
+    """
+    n = len(phase)
+    if (
+        phase.ndim != 3
+        or iphase.size == 0
+        or not np.issubdtype(iphase.dtype, np.integer)
+        or iphase.min() < 0
+        or iphase.max() >= n
+        or not np.isfinite(phase).all()
+    ):
+        return None
+    referenced = np.zeros(n, dtype=bool)
+    referenced[iphase.ravel()] = True
+    first: dict[bytes, int] = {}
+    keep: list[int] = []
+    remap = np.full(n, -1, dtype=np.intp)
+    for i in np.flatnonzero(referenced):
+        j = first.setdefault(phase[i].tobytes(), len(keep))
+        if j == len(keep):
+            keep.append(int(i))
+        remap[i] = j
+    if len(keep) == n:
+        return None
+    return np.asarray(keep, dtype=np.intp), remap
+
+
+def _distinct_phase_profile(
+    profile: xr.Dataset | None, kind: str
+) -> xr.Dataset | None:
+    """Return the profile to upload, each phase matrix in it once.
+
+    The internal bands of a KDIS channel, the blocks of
+    `multi_profiles` or a `wavelength_phase` grid wider than the
+    profile repeat matrices or leave some unused. The kernel reads a
+    matrix only through the index of a wavelength and a layer, so the
+    profile uploaded keeps only the referenced matrices of distinct
+    content, and its indices point to them: every wavelength and layer
+    is given exactly the same table rows. Matrices are compared by
+    content, never by wavelength.
+
+    Parameters
+    ----------
+    profile : xr.Dataset or None
+        Atmospheric or oceanic profile.
+    kind : {'atm', 'oc'}
+        Medium of the profile.
+
+    Returns
+    -------
+    xr.Dataset or None
+        A copy of the profile with fewer matrices, or the profile
+        itself when there is nothing to remove.
+    """
+    if profile is None:
+        return None
+    name, iname = f'phase_{kind}', f'iphase_{kind}'
+    if name not in profile.data_vars or iname not in profile.data_vars:
+        return profile
+    phase = profile[name]
+    iphase = profile[iname].to_numpy()
+    rows = _distinct_phase_rows(phase.to_numpy(), iphase)
+    if rows is None:
+        return profile
+    keep, remap = rows
+    out = profile.drop_vars(name)
+    # a dimension of its own: the matrices kept no longer follow the
+    # coordinate of the phase dimension of the profile
+    out[name] = xr.Variable(
+        (f'{phase.dims[0]}_distinct', *phase.dims[1:]),
+        phase.to_numpy()[keep],
+        attrs=phase.attrs,
+    )
+    out[iname] = xr.Variable(
+        profile[iname].dims,
+        remap[iphase].astype(iphase.dtype),
+        attrs=profile[iname].attrs,
+    )
+    return out
 
 
 def _init_const(
