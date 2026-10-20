@@ -31,6 +31,15 @@
     `HydrosolZhai` on the 4372 hypernav bands from 400 to 1050 nm took
     9.8 GB of memory, and now 2.9 GB. A hydrosol given coefficients as
     arrays over the wavelengths of the profile still uses all of them
+  - Refuse, with a `ValueError` naming their size and how to reduce it
+    (`n_icdf`, `theta_grid='phase'`, `wavelength_phase`), phase tables
+    larger than the memory of the GPU or than what the host can hold,
+    before building them: `Smartg.run` used to spend minutes on the
+    host and fail in an allocation. Tables that fit but exceed the
+    memory free at the time get a warning. Each distinct phase matrix
+    is now uploaded once (24 bytes per angle for the matrix and 4 for
+    its cumulative distribution), which also makes the tables of
+    KDIS profiles several times smaller
 
 
 ## v2.0.5

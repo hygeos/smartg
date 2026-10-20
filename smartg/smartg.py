@@ -40,6 +40,7 @@ import tempfile
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, cast
 from warnings import warn
 
@@ -145,6 +146,15 @@ TYPE_PHASE = [
 # its angle grid, from 0 to 1, integrated exactly for the tabulated
 # matrix: F11 linear in theta between nodes times the true sin(theta)
 TYPE_PCDF = 'float32'
+
+# bytes per angle of a phase matrix on the GPU: its TYPE_PHASE row and
+# its TYPE_PCDF cumulative distribution
+_PHASE_ANGLE_BYTES = (
+    np.dtype(TYPE_PHASE).itemsize + np.dtype(TYPE_PCDF).itemsize
+)
+# peak host bytes per angle and matrix while _calc_phase_host builds
+# the tables (measured)
+_PHASE_HOST_BYTES = 55
 
 # mirrors struct AGrid of communs.h: align=True reproduces the 4 bytes
 # of padding the compiler inserts before the 8-byte pointer
@@ -2236,6 +2246,10 @@ class Smartg:
             # itself is kept for the output
             prof_atm_dev = _distinct_phase_profile(prof_atm, 'atm')
             assert prof_atm_dev is not None
+            _check_phase_memory(
+                'atm', _phase_table_rows(prof_atm_dev, 'atm'),
+                agrid_atm[0], _device_memory(), _host_memory(),
+            )
             faer, caer = _calc_phase_gpu(
                 prof_atm_dev,
                 n_theta=agrid_atm[0],
@@ -2402,6 +2416,10 @@ class Smartg:
             # coce, like caer above, is kept alive by this reference
             prof_oc_dev = _distinct_phase_profile(prof_oc, 'oc')
             assert prof_oc_dev is not None
+            _check_phase_memory(
+                'oc', _phase_table_rows(prof_oc_dev, 'oc'),
+                agrid_oc[0], _device_memory(), _host_memory(),
+            )
             foce, coce = _calc_phase_gpu(
                 prof_oc_dev,
                 n_theta=agrid_oc[0],
@@ -4518,6 +4536,15 @@ def _calc_phase_gpu(
     return to_gpu(phase_host), to_gpu(cdf_host)
 
 
+def _phase_table_rows(profile: xr.Dataset, kind: str) -> int:
+    """Return the rows of the phase table of a profile on the GPU.
+
+    Its matrices, and the Rayleigh and VRS ones.
+    """
+    name = f'phase_{kind}'
+    return (profile[name].shape[0] if name in profile.data_vars else 0) + 2
+
+
 def _distinct_phase_rows(
     phase: NDArray[np.floating], iphase: NDArray[Any]
 ) -> tuple[NDArray[np.intp], NDArray[np.intp]] | None:
@@ -4619,6 +4646,175 @@ def _distinct_phase_profile(
         attrs=profile[iname].attrs,
     )
     return out
+
+
+def _device_memory() -> tuple[int, int] | None:
+    """Return the free and total memory of the current GPU, in bytes.
+
+    None when there is no current context to ask.
+    """
+    try:
+        free, total = cuda.mem_get_info()  # pyright: ignore[reportAttributeAccessIssue]
+    except Exception:  # noqa: BLE001 (pycuda raises its own errors)
+        return None
+    return int(free), int(total)
+
+
+def _cgroup_value(path: Path) -> int | None:
+    """Return a cgroup v2 memory limit in bytes, None when unlimited."""
+    try:
+        text = path.read_text().strip()
+    except OSError:
+        return None
+    return None if text == "max" else int(text)
+
+
+def _host_memory(
+    meminfo: str | Path = "/proc/meminfo",
+    proc_cgroup: str | Path = "/proc/self/cgroup",
+    cgroup_root: str | Path = "/sys/fs/cgroup",
+) -> tuple[int | None, int | None]:
+    """Return the available memory of the host and its hard limit.
+
+    The available memory is MemAvailable, or less where a cgroup v2
+    limit of the process or one of its ancestors leaves less room (its
+    page cache counted as reclaimable). The hard limit is what no
+    allocation can go past: the RAM and the swap of the host, or less
+    where a cgroup limits the memory and the swap. Each is None where
+    unknown, as on another system than Linux.
+
+    Parameters
+    ----------
+    meminfo, proc_cgroup, cgroup_root : str or Path, optional
+        The files read, which the tests point elsewhere.
+
+    Returns
+    -------
+    (int or None, int or None)
+        The available memory and the hard limit, in bytes.
+    """
+    info = {}
+    try:
+        for line in Path(meminfo).read_text().splitlines():
+            key, _, value = line.partition(":")
+            info[key] = int(value.split()[0]) * 1024
+    except (OSError, ValueError, IndexError):
+        return None, None
+    available = info.get("MemAvailable")
+    limit = None
+    if "MemTotal" in info:
+        limit = info["MemTotal"] + info.get("SwapTotal", 0)
+    root = Path(cgroup_root)
+    try:
+        lines = Path(proc_cgroup).read_text().splitlines()
+        rel = next(ln[3:] for ln in lines if ln.startswith("0::"))
+    except (OSError, StopIteration):
+        return available, limit
+    group = root / rel.lstrip("/")
+    while True:
+        mem_max = _cgroup_value(group / "memory.max")
+        if mem_max is not None:
+            swap_max = _cgroup_value(group / "memory.swap.max")
+            swap = info.get("SwapTotal", 0)
+            if swap_max is not None:
+                swap = min(swap, swap_max)
+            limit = mem_max + swap if limit is None else min(
+                limit, mem_max + swap
+            )
+            try:
+                current = int((group / "memory.current").read_text())
+                stat = dict(
+                    ln.split() for ln in
+                    (group / "memory.stat").read_text().splitlines()
+                )
+                room = mem_max - current + int(stat.get("file", 0))
+            except (OSError, ValueError):
+                room = None
+            if room is not None:
+                available = room if available is None else min(
+                    available, room
+                )
+        if group == root or root not in group.parents:
+            break
+        group = group.parent
+    return available, limit
+
+
+def _check_phase_memory(
+    kind: str,
+    n_rows: int,
+    n_angles: int,
+    device: tuple[int, int] | None,
+    host: tuple[int | None, int | None],
+) -> None:
+    """Refuse phase tables that cannot fit in memory, before building.
+
+    The tables of `n_rows` matrices (the Rayleigh and VRS ones
+    included) of `n_angles` angles take `_PHASE_ANGLE_BYTES` per angle
+    and matrix on the GPU, and on the host where they are built first.
+    That size alone, a lower bound of what the run needs, is compared
+    with the total memory of the GPU and the hard limit of the host:
+    above, the run could not go through and is refused at once instead
+    of failing in an allocation. The memory the build is expected to
+    take, above what is free now, only gets a warning.
+
+    Parameters
+    ----------
+    kind : {'atm', 'oc'}
+        Medium of the tables.
+    n_rows, n_angles : int
+        Matrices and angles of the tables.
+    device : (int, int) or None
+        Free and total memory of the GPU, see `_device_memory`.
+    host : (int or None, int or None)
+        Available memory of the host and its hard limit, see
+        `_host_memory`.
+
+    Raises
+    ------
+    ValueError
+        If the tables cannot fit on the GPU or on the host.
+    """
+    table = n_rows * n_angles * _PHASE_ANGLE_BYTES
+    build = n_rows * n_angles * _PHASE_HOST_BYTES
+    medium = "atmosphere" if kind == "atm" else "ocean"
+    what = (
+        f"The phase tables of the {medium}, {n_rows} matrices of "
+        f"{n_angles} angles at {_PHASE_ANGLE_BYTES} bytes each"
+    )
+    remedy = (
+        "Lower n_icdf, use theta_grid='phase' to keep the angles the "
+        "matrices carry, or tabulate them at fewer wavelengths with the "
+        "wavelength_phase parameter of the atmosphere or the hydrosols."
+    )
+    gib = 2.0**30
+    refused = []
+    if device is not None and table > device[1]:
+        refused.append(f"{device[1] / gib:.1f} GiB of the GPU")
+    if host[1] is not None and table > host[1]:
+        refused.append(f"the {host[1] / gib:.1f} GiB the host can hold")
+    if refused:
+        raise ValueError(
+            f"{what}, take {table / gib:.1f} GiB, more than "
+            + " and ".join(refused) + ". " + remedy
+        )
+    short = []
+    if device is not None and table > device[0]:
+        short.append(
+            f"{table / gib:.1f} GiB on the GPU, of which "
+            f"{device[0] / gib:.1f} GiB are free"
+        )
+    if host[0] is not None and build > host[0]:
+        short.append(
+            f"about {build / gib:.1f} GiB on the host to build them, of "
+            f"{host[0] / gib:.1f} GiB available"
+        )
+    if short:
+        warn(
+            f"{what}, need " + " and ".join(short) + ": the run may "
+            "fail for lack of memory. " + remedy,
+            stacklevel=3,
+        )
 
 
 def _init_const(

@@ -4,6 +4,10 @@ They check the arithmetic that Smartg.run does on the host around
 the kernel, without building a Smartg object.
 """
 
+import warnings
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -22,9 +26,12 @@ from smartg.smartg import (
     _check_albedo_map_codes,
     _check_flat_surface_le,
     _check_forward_raster,
+    _check_phase_memory,
     _check_sensor_directions,
+    _device_memory,
     _distinct_phase_profile,
     _distinct_phase_rows,
+    _host_memory,
     _impact_init,
     _init_profile,
     _isotropic,
@@ -527,3 +534,110 @@ def test_multi_profiles_of_one_profile_upload_its_matrices_once() -> None:
     phase, iphase = dev["phase_atm"].values, dev["iphase_atm"].values
     np.testing.assert_array_equal(phase[iphase[:2]], 1.0)
     np.testing.assert_array_equal(phase[iphase[2:]], 2.0)
+
+
+def _fake_host(
+    tmp_path: Path, mem_max: str = "max", current: int = 0,
+    swap_max: str = "max",
+) -> dict[str, Path]:
+    """Write a /proc/meminfo, a /proc/self/cgroup and a cgroup tree.
+
+    The host has 16 GiB of RAM, 2 GiB of swap and 12 GiB available;
+    the process runs in a scope of a slice, the scope limited to
+    `mem_max` with `current` bytes used and 1 GiB of page cache.
+    """
+    gib = 2**30
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(
+        f"MemTotal: {16 * gib // 1024} kB\n"
+        f"MemAvailable: {12 * gib // 1024} kB\n"
+        f"SwapTotal: {2 * gib // 1024} kB\n"
+    )
+    root = tmp_path / "cgroup"
+    scope = root / "user.slice" / "run.scope"
+    scope.mkdir(parents=True)
+    (root / "user.slice" / "memory.max").write_text("max\n")
+    (scope / "memory.max").write_text(f"{mem_max}\n")
+    (scope / "memory.swap.max").write_text(f"{swap_max}\n")
+    (scope / "memory.current").write_text(f"{current}\n")
+    (scope / "memory.stat").write_text(f"anon 0\nfile {gib}\n")
+    proc = tmp_path / "cgroup_of_self"
+    proc.write_text("0::/user.slice/run.scope\n")
+    return {"meminfo": meminfo, "proc_cgroup": proc, "cgroup_root": root}
+
+
+def test_host_memory_of_the_host(tmp_path: Path) -> None:
+    """Without a cgroup limit: MemAvailable and RAM plus swap."""
+    gib = 2**30
+    available, limit = _host_memory(**_fake_host(tmp_path))
+    assert available == 12 * gib
+    assert limit == 18 * gib
+
+
+def test_host_memory_of_a_limited_scope(tmp_path: Path) -> None:
+    """A cgroup limit lowers both, its page cache counted as free."""
+    gib = 2**30
+    files = _fake_host(tmp_path, mem_max=str(8 * gib), current=6 * gib,
+                       swap_max="0")
+    available, limit = _host_memory(**files)
+    assert available == 3 * gib
+    assert limit == 8 * gib
+
+
+def test_host_memory_unknown(tmp_path: Path) -> None:
+    """Without /proc/meminfo, nothing is known and nothing checked."""
+    assert _host_memory(meminfo=tmp_path / "none") == (None, None)
+
+
+GIB = 2**30
+
+
+@pytest.mark.parametrize(
+    ("kind", "device", "host", "where"),
+    [
+        ("atm", (15 * GIB, 16 * GIB), (None, None), "of the GPU"),
+        ("oc", None, (40 * GIB, 18 * GIB), "the host can hold"),
+    ],
+)
+def test_phase_tables_refused(
+    kind: str, device: Any, host: Any, where: str
+) -> None:
+    """Tables larger than the GPU or than the host are refused."""
+    medium = "atmosphere" if kind == "atm" else "ocean"
+    # 1602 matrices of 1e6 angles, 28 bytes each: 41.8 GiB
+    with pytest.raises(ValueError, match=f"{medium}.*{where}.*n_icdf"):
+        _check_phase_memory(kind, 1602, 1_000_000, device, host)
+
+
+def test_phase_tables_warned() -> None:
+    """Tables that fit, but not in the free memory, are warned of."""
+    with pytest.warns(UserWarning, match="may fail for lack of memory"):
+        _check_phase_memory(
+            "atm", 300, 1_000_000, (5 * GIB, 16 * GIB), (20 * GIB, 64 * GIB)
+        )
+
+
+def test_phase_tables_accepted() -> None:
+    """Tables that fit go through silently, as do unknown memories."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _check_phase_memory(
+            "atm", 97, 1_000_000, (15 * GIB, 16 * GIB), (30 * GIB, 64 * GIB)
+        )
+        _check_phase_memory("oc", 10**6, 10**6, None, (None, None))
+
+
+def test_device_memory_without_a_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a CUDA context, the GPU is not checked."""
+
+    def no_context() -> None:
+        raise RuntimeError("no context")
+
+    monkeypatch.setattr(sg_module.cuda, "mem_get_info", no_context,
+                        raising=False)
+    assert _device_memory() is None
+    monkeypatch.setattr(sg_module.cuda, "mem_get_info",
+                        lambda: (1, 2), raising=False)
+    assert _device_memory() == (1, 2)
