@@ -2077,32 +2077,34 @@ class _Comp3DFile(Comp3D):
         )
 
     def get_ext(self, wavelength: NDArray[np.floating]) -> NDArray[np.float64]:
-        n_wavelength = len(wavelength)
-        ext = np.zeros((n_wavelength, self._ext_ref.size), dtype=np.float64)
+        # interpolated once per distinct wavelength: the internal bands
+        # of a KDIS channel share its wavelength
+        values, inverse = _distinct_values(np.atleast_1d(wavelength))
+        ext = np.zeros((len(values), self._ext_ref.size), dtype=np.float64)
         ext_cells = self._interp_bulk_cells("ext")
         ext_ref0 = self._interp_axis(
             ext_cells, "wav", self.w_ref
         ).values
-        for iw in range(n_wavelength):
+        for iw in range(len(values)):
             ext_factor = (
-                self._interp_axis(ext_cells, "wav", wavelength[iw]).values
+                self._interp_axis(ext_cells, "wav", values[iw]).values
                 / ext_ref0
             )
             ext[iw, :] = self._ext_ref * ext_factor
-        return ext
+        return ext[inverse]
 
     def get_ssa(self, wavelength: NDArray[np.floating]) -> NDArray[np.float64]:
-        n_wavelength = len(wavelength)
-        ssa = np.ones((n_wavelength, self._ext_ref.size), dtype=np.float64)
+        values, inverse = _distinct_values(np.atleast_1d(wavelength))
+        ssa = np.ones((len(values), self._ext_ref.size), dtype=np.float64)
         if self.ssa_cst is not None:
             ssa[:, :] = self.ssa_cst
         else:
             ssa_cells = self._interp_bulk_cells("ssa")
-            for iw in range(n_wavelength):
+            for iw in range(len(values)):
                 ssa[iw, :] = self._interp_axis(
-                    ssa_cells, "wav", wavelength[iw]
+                    ssa_cells, "wav", values[iw]
                 ).values
-        return ssa
+        return ssa[inverse]
 
     def native_theta(self) -> NDArray[np.float64]:
         """Return the scattering angles the component's tables carry.
@@ -4398,7 +4400,9 @@ class Atm3D(Atmosphere):
         each wavelength of the profile using those of the nearest one,
         the 1D aerosols being mixed into the cells at the profile
         wavelength nearest to it. Useful to reduce the memory. If
-        None, compute the phase matrices at all wavelengths.
+        None, compute the phase matrices once at each distinct
+        wavelength of the profile (the internal bands of a KDIS channel
+        share its wavelength).
     mol_sca_1d : 2-D ndarray or None, optional
         Force the 1D molecular scattering (Rayleigh) coefficients in
         km-1, with the shape (nwavelength, NZ + 1) where NZ is the
@@ -4628,10 +4632,7 @@ class Atm3D(Atmosphere):
             wavelengths = np.asarray(wavelength.wavelength)
         else:
             wavelengths = np.atleast_1d(np.asarray(wavelength))
-        wavelength_pha = (
-            self.wavelength_phase
-            if self.wavelength_phase is not None else wavelengths
-        )
+        wavelength_pha = self.wavelength_phase
         native = is_native_theta(n_theta)
         if native and (self.atm_1d.comp or self.comp_3d):
             # resolved once here, so that the 1D and the 3D components
@@ -4728,6 +4729,11 @@ class Atm3D(Atmosphere):
         mol_sca_glob = self._glob_molecular(mol_sca_1d)
         mol_abs_glob = self._glob_molecular(mol_abs_1d)
         if phase:
+            if wavelength_pha is None:
+                # the internal bands of a KDIS channel share its
+                # wavelength, and so its phase matrices: computed once,
+                # at the first of those bands
+                wavelength_pha = _distinct_values(wavelengths)[0]
             with _native_union(native):
                 ext_glob, ssa_glob, prof_phases = self._glob_particles(
                     wavelengths,

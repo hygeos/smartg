@@ -20,11 +20,14 @@ from smartg.atmosphere import (
     AerOPAC,
     AerUser,
     Atm1D,
+    Atm3D,
     Cloud,
+    Cloud3D,
     _follows_calc_wavelengths,
     extract_split,
 )
 from smartg.bandset import BandSet, _distinct_values
+from smartg.grid3d import Grid3D
 from smartg.truncation import GTTrunc
 from smartg.water import Hydrosol, HydrosolPR, HydrosolZhai, Water1D
 
@@ -353,3 +356,104 @@ def test_hydrosol_phase_and_scattering_on_distinct_wavelengths() -> None:
     water = Water1D(grid=z, comp=_pr_zhai())
     mixed = water.phase(wavelength)
     assert mixed is not None and mixed.sizes["wavelength_phase"] == 2
+
+
+def _grid3d() -> Grid3D:
+    return Grid3D(
+        np.array([0.0, 1.0, 2.0, 3.0, 4.0]),
+        np.array([0.0, 1.0]),
+        np.array([0.0, 1.0, 3.0, 4.0]),
+        periodic=True,
+    )
+
+
+def _cloud3d(**kwargs: Any) -> Cloud3D:
+    return Cloud3D(
+        "wc",
+        w_ref=550.0,
+        ext_ref=np.array([5.0, 10.0, 15.0, 20.0]),
+        reff=np.array([10.0, 10.0, 12.0, 12.0]),
+        cell_indices=np.array([[1, 1, 2], [2, 1, 2], [3, 1, 2], [4, 1, 2]]),
+        **kwargs,
+    )
+
+
+def _ice3d() -> Cloud3D:
+    return Cloud3D(
+        "ic_baum_ghm",
+        w_ref=550.0,
+        ext_ref=np.array([2.0]),
+        reff=np.array([30.0]),
+        cell_indices=np.array([[2, 1, 2]]),
+    )
+
+
+Scene = tuple[list[AerOPAC], list[Cloud3D]]
+
+
+def _scene_1d() -> Scene:
+    return [AerOPAC("desert", 0.1, 550.0)], []
+
+
+def _scene_cloud() -> Scene:
+    return [], [_cloud3d()]
+
+
+def _scene_cloud_over_1d() -> Scene:
+    return [AerOPAC("desert", 0.1, 550.0)], [_cloud3d()]
+
+
+def _scene_two_over_1d() -> Scene:
+    return [AerOPAC("desert", 0.1, 550.0)], [_cloud3d(), _ice3d()]
+
+
+def _scene_truncated() -> Scene:
+    trunc = GTTrunc(None, theta_tr=5.0)
+    return [AerOPAC("desert", 0.1, 550.0)], [_cloud3d(truncation=trunc)]
+
+
+SCENES = {
+    "1d only": _scene_1d,
+    "cloud": _scene_cloud,
+    "cloud over 1d": _scene_cloud_over_1d,
+    "two clouds over 1d": _scene_two_over_1d,
+    "truncated cloud": _scene_truncated,
+}
+
+
+def _atm3d(scene: str, wavelength_phase: Any = None) -> Atm3D:
+    comp_1d, comp_3d = SCENES[scene]()
+    kwargs = {} if wavelength_phase is None else {
+        "wavelength_phase": wavelength_phase
+    }
+    atm_1d = Atm1D("afglt", comp=comp_1d, **kwargs)
+    return Atm3D(
+        atm_1d=atm_1d, grid_3d=_grid3d(), comp_3d=comp_3d, **kwargs
+    )
+
+
+@pytest.mark.parametrize("scene", SCENES)
+def test_atm3d_phase_once_per_distinct_wavelength(scene: str) -> None:
+    """Atm3D computes its phase matrices once per distinct wavelength.
+
+    Its 1D atmosphere and its 3D components both do, and the profile
+    is the one of both given every wavelength, but for the numbering
+    of its phase table.
+    """
+    bands = BandSet(WAV)
+    new = _atm3d(scene).calc(bands, n_theta=181)
+    old = _atm3d(scene, _full_axis()).calc(bands, n_theta=181)
+    assert new.sizes["iphase"] < old.sizes["iphase"]
+    _assert_same_profile(new, old)
+
+
+def test_comp3d_ext_ssa_on_repeated_wavelengths() -> None:
+    """get_ext and get_ssa give each wavelength its own row."""
+    cld = _cloud3d()
+    wavelength = np.array([670.0, 443.0, 670.0, 550.0, 443.0])
+    ext, ssa = cld.get_ext(wavelength), cld.get_ssa(wavelength)
+    assert ext.shape == ssa.shape == (5, 4)
+    for i, w in enumerate(wavelength):
+        assert ext[i].tobytes() == cld.get_ext(np.array([w]))[0].tobytes()
+        assert ssa[i].tobytes() == cld.get_ssa(np.array([w]))[0].tobytes()
+

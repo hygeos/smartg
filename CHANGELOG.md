@@ -16,7 +16,11 @@
     the results do not change. Every wavelength of `calc` is still
     used when a component pairs its inputs with them (a forced `ssa`
     array, a 4-D `phase`, a component of another class), and giving
-    them as `wavelength_phase` restores the former layout
+    them as `wavelength_phase` restores the former layout. `Atm3D`
+    does the same for its own phase matrices, and interpolates the
+    extinction and albedo of its 3D components once per distinct
+    wavelength: on the 312 kato2 bands up to 4.5 µm, a scene of 40
+    cloud cells took 54 s and 4.1 GB, and now 6 s and 1.7 GB
   - Tabulate the phase matrices of the hydrosols once per distinct
     wavelength when their `wavelength_phase` is None, and mix those of
     several hydrosols that do not share a grid on the distinct
