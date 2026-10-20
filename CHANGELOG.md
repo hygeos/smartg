@@ -20,15 +20,15 @@
     to 4.5 µm, a scene of 40 cloud cells took 54 s and 4.1 GB, and now
     6 s and 1.7 GB
   - Tabulate the phase matrices of the hydrosols once per distinct
-    wavelength when their `wavelength_phase` is None, and mix those of
-    several hydrosols that do not share a grid on the distinct
-    wavelengths of the profile. `phase_oc` gets shorter and
-    `iphase_oc` follows, as do the wavelengths of `Hydrosol.phase`,
-    `Hydrosol.scattering` and `Water1D.phase`, while each wavelength
-    and depth keeps the same matrix: a `Water1D` of `HydrosolPR` and
-    `HydrosolZhai` on the 4372 hypernav bands from 400 to 1050 nm took
-    9.8 GB of memory, and now 2.9 GB. A hydrosol given coefficients as
-    arrays over the wavelengths of the profile still uses all of them
+    wavelength when their `wavelength_phase` is None, mix those of
+    several hydrosols once per distinct wavelength, and copy them onto
+    the repeated wavelengths. `phase_oc`, `iphase_oc` and what
+    `Hydrosol.phase`, `Hydrosol.scattering` and `Water1D.phase` return
+    do not change: a `Water1D` of `HydrosolPR` and `HydrosolZhai` on
+    the 4372 hypernav bands from 400 to 1050 nm took 11 s and 9.8 GB
+    of memory, and now 5.3 s and 7.0 GB. A hydrosol given coefficients
+    as arrays over the wavelengths of the profile still has its
+    matrices tabulated at each of them
   - Refuse, with a `ValueError` naming their size and how to reduce it
     (`n_icdf`, `theta_grid='phase'`, `wavelength_phase`), phase tables
     larger than the memory of the GPU or than what the host can hold,

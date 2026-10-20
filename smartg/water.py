@@ -63,7 +63,7 @@ from numpy.typing import NDArray
 from pytrunc.phase import fournier_forand
 
 from smartg.albedo import AlbedoCst, AlbedoMap, SpectralAlbedoLike
-from smartg.bandset import BandSet, _distinct_values
+from smartg.bandset import BandSet, _distinct_values, _expand_blocks
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.interp import interp_1d_coord
@@ -299,12 +299,10 @@ class Hydrosol:
         is refused: give it truncation=None.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
-        None, they are calculated once at each distinct wavelength of
-        the profile (the internal bands of a KDIS channel share its
-        wavelength), or at all of them when coefficients are supplied
-        as arrays. The coefficients supplied as arrays over the
-        wavelengths of the profile are interpolated linearly onto them,
-        and taken constant beyond the end wavelengths.
+        None, they are calculated at all wavelengths. The coefficients
+        supplied as arrays over the wavelengths of the profile are
+        interpolated linearly onto them, and taken constant beyond the
+        end wavelengths.
 
     Raises
     ------
@@ -339,6 +337,11 @@ class Hydrosol:
        reflectance including bidirectional effects for case 1 and case 2
        waters," Appl. Opt. 44, 1236-1249 (2005).
     """
+
+    # tabulate the distinct wavelengths only: phase and scattering
+    # return them once, instead of once per wavelength of the profile
+    # (private, set per instance)
+    _distinct_phase: bool = False
 
     def __init__(
         self,
@@ -379,6 +382,9 @@ class Hydrosol:
         self._pha: xr.DataArray | None = None
         self._coef_trunc: xr.DataArray | None = None
         self._bsca: NDArray | None = None
+        # the wavelengths of the profile and the row of the tabulation
+        # of each, when a repeated wavelength is tabulated once
+        self._tab_expand: tuple[NDArray, NDArray[np.intp]] | None = None
         # the wavelengths, depths and angles the cache above was
         # tabulated for, and the wavelengths the supplied arrays were
         # given over
@@ -773,6 +779,21 @@ class Hydrosol:
             If the hydrosol scatters but neither the phase matrices nor
             the backscattering ratio have been provided.
         """
+        return self._public_phase(self._phase_tab(
+            wavelength, z, use_old_calc_iphase, n_theta
+        ))
+
+    def _phase_tab(
+        self,
+        wavelength: NDArray,
+        z: NDArray,
+        use_old_calc_iphase: bool = False,
+        n_theta: ThetaLike = NATIVE_THETA,
+    ) -> xr.DataArray | None:
+        """Return the phase matrices as tabulated, see `phase`.
+
+        A repeated wavelength of the profile is tabulated once.
+        """
         if self._phase is not None:
             if self.truncation is None:
                 return self._phase
@@ -791,6 +812,44 @@ class Hydrosol:
             wavelength, z, use_old_calc_iphase, n_theta
         )
         return self._pha
+
+    def _public_phase(
+        self, pha: xr.DataArray | None
+    ) -> xr.DataArray | None:
+        """Copy the tabulated matrices onto the profile wavelengths.
+
+        Parameters
+        ----------
+        pha : DataArray or None
+            The phase matrices as `_phase_tab` returns them.
+
+        Returns
+        -------
+        DataArray or None
+            `pha`, or, when a repeated wavelength of the profile was
+            tabulated once, its matrices at each of its occurrences.
+        """
+        if pha is None or self._phase is not None or self._tab_expand is None:
+            return pha
+        wavelength, inverse = self._tab_expand
+        return xr.DataArray(
+            _expand_blocks(pha.values, inverse, 1),
+            dims=pha.dims,
+            coords={
+                "wavelength_phase": wavelength,
+                "z_phase": pha.coords["z_phase"].values,
+                "theta_oc": pha.coords["theta_oc"].values,
+            },
+        )
+
+    def _public_grid(self, pha: xr.DataArray) -> NDArray:
+        """Return the wavelengths `phase` gives `pha`.
+
+        See `_public_phase`.
+        """
+        if self._phase is None and self._tab_expand is not None:
+            return self._tab_expand[0]
+        return pha.coords["wavelength_phase"].values
 
     def _resolve_truncation(
         self,
@@ -817,10 +876,11 @@ class Hydrosol:
         Parameters
         ----------
         wavelength : ndarray
-            Wavelengths in nm of the profile. Unless `wavelength_phase`
-            is set, the phase matrices are tabulated once at each
-            distinct one of them, or at all of them when coefficients
-            are supplied as arrays, which are given over them.
+            Wavelengths in nm of the profile. The phase matrices are
+            tabulated at these unless `wavelength_phase` is set, and
+            the coefficients supplied as arrays are given over them;
+            a repeated wavelength is tabulated once, and `phase` and
+            `scattering` copy it onto each of its occurrences.
         z : ndarray
             Vertical grid of the water column in m. These are z
             coordinates: 0 at the surface, negative downwards.
@@ -836,16 +896,20 @@ class Hydrosol:
             If the backscattering ratio is not defined at the tabulation
             wavelengths.
         """
+        self._tab_expand = None
         if self.wavelength_phase is not None:
             wavelength_pha = np.asarray(self.wavelength_phase, dtype="float")
         elif self._supplies_arrays():
             wavelength_pha = np.asarray(wavelength, dtype="float")
         else:
             # the internal bands of a KDIS channel share its wavelength,
-            # and so its phase matrices: tabulated once
-            wavelength_pha = _distinct_values(
-                np.asarray(wavelength, dtype="float")
-            )[0]
+            # and so its phase matrices: tabulated once, and copied by
+            # phase and scattering
+            wavelength_all = np.asarray(wavelength, dtype="float")
+            wavelength_pha, inverse = _distinct_values(wavelength_all)
+            if (not self._distinct_phase
+                    and len(wavelength_pha) < len(wavelength_all)):
+                self._tab_expand = (wavelength_all.copy(), inverse)
         z = np.asarray(z, dtype="float")
         theta = self._derived_theta(n_theta)
         # the supplied arrays are interpolated from the wavelengths of
@@ -977,7 +1041,9 @@ class Hydrosol:
             been calculated yet.
         """
         if self._phase is None:
-            return self._bsca
+            if self._bsca is None or self._tab_expand is None:
+                return self._bsca
+            return _expand_blocks(self._bsca, self._tab_expand[1], 1)
         bp = self.iop(
             pha.coords["wavelength_phase"].values, pha.coords["z_phase"].values
         )["bp"]
@@ -1125,8 +1191,7 @@ class HydrosolPR(Hydrosol):
         of v1.2.0; None disables the truncation.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
-        None, they are calculated once at each distinct wavelength of
-        the profile.
+        None, they are calculated at all wavelengths.
     fqyc : float, optional
         Chlorophyll a fluorescence quantum yield.
 
@@ -1297,8 +1362,7 @@ class HydrosolZhai(Hydrosol):
         of v1.2.0; None disables the truncation.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
-        None, they are calculated once at each distinct wavelength of
-        the profile.
+        None, they are calculated at all wavelengths.
     euphotic_depth : float or None, optional
         Euphotic depth in m, noted Z_eu in [2]_. This is a positive
         depth, measured downwards from the surface, and not a z
@@ -1906,13 +1970,13 @@ class Water1D(Water):
         When a single hydrosol scatters, its phase matrices are returned
         unchanged. Otherwise they are averaged on a common grid: the
         `wavelength_phase` of the hydrosols if they share it, the
-        distinct wavelengths of the profile otherwise (all of them when
-        a hydrosol supplies coefficients as arrays); their `z_phase` if
-        they share it and no weight varies with depth, the depths of
-        `grid` otherwise; their angles if they share them, the union of
-        their angles otherwise (see `smartg.phase.union_theta_grid`),
-        each phase matrix being interpolated linearly in angle, as the
-        kernel reads it.
+        wavelengths of the profile otherwise; their `z_phase` if they
+        share it and no weight varies with depth, the depths of `grid`
+        otherwise; their angles if they share them, the union of their
+        angles otherwise (see `smartg.phase.union_theta_grid`), each
+        phase matrix being interpolated linearly in angle, as the
+        kernel reads it. A repeated wavelength (the internal bands of a
+        KDIS channel share its wavelength) is averaged once and copied.
 
         Parameters
         ----------
@@ -1955,9 +2019,10 @@ class Water1D(Water):
         z = self.grid
         theta_req = _requested_theta(n_theta)
 
+        # as tabulated: a repeated wavelength once
         phases = []
         for comp in self.comp:
-            pha = comp.phase(
+            pha = comp._phase_tab(
                 wavelength, z, use_old_calc_iphase=use_old_calc_iphase,
                 n_theta=theta_req,
             )
@@ -1967,7 +2032,7 @@ class Water1D(Water):
         if len(phases) == 0:
             return None
         if len(phases) == 1:
-            return phases[0][1]
+            return phases[0][0]._public_phase(phases[0][1])
 
         def shared(dim: str) -> NDArray | None:
             """Return the `dim` coordinate if all phases share it."""
@@ -1979,19 +2044,35 @@ class Water1D(Water):
 
         # the common grid of the average, see the docstring
         wavelength = np.asarray(wavelength, dtype="float")
-        wavelength_c = shared("wavelength_phase")
-        if wavelength_c is None:
-            # coefficients supplied as arrays are given over each
-            # wavelength of the profile; otherwise the internal bands
-            # of a KDIS channel, which share its wavelength, are mixed
-            # once
+        grids = [comp._public_grid(pha) for comp, pha in phases]
+        wavelength_c = grids[0]
+        if any(not np.array_equal(g, wavelength_c) for g in grids[1:]):
             supplied = any(comp._supplies_arrays() for comp, _ in phases)
             wavelength_c = (
-                wavelength if supplied else _distinct_values(wavelength)[0]
+                _distinct_values(wavelength)[0]
+                if not supplied
+                and all(comp._distinct_phase for comp, _ in phases)
+                else wavelength
             )
+        # the internal bands of a KDIS channel share its wavelength:
+        # they are averaged once and copied, unless coefficients
+        # supplied as arrays may differ between them, or a hydrosol
+        # tabulates a wavelength twice
+        wavelength_m, inverse = _distinct_values(wavelength_c)
+        if (
+            len(wavelength_m) == len(wavelength_c)
+            or any(comp._supplies_arrays() for comp, _ in phases)
+            or any(
+                len(_distinct_values(pha.coords["wavelength_phase"].values)[0])
+                < pha.sizes["wavelength_phase"]
+                for _, pha in phases
+            )
+        ):
+            wavelength_m, inverse = wavelength_c, None
+            phases = [(comp, comp._public_phase(pha)) for comp, pha in phases]
         weights = [
             comp._scattering_on(
-                wavelength_c, wavelength, z, use_old_calc_iphase
+                wavelength_m, wavelength, z, use_old_calc_iphase
             )
             for comp, _ in phases
         ]
@@ -2017,13 +2098,18 @@ class Water1D(Water):
         )
 
         # the average is accumulated in place, one matrix at a time,
-        # so that the only full-size array is the result
+        # so that the only full-size array is the result: a repeated
+        # wavelength at its first occurrence, copied at the end
         n_mat = phases[0][1].sizes["nphamat"]
         pha_tot = np.zeros((len(wavelength_c), len(z_c), n_mat, len(theta_c)))
-        bsca = np.zeros((len(wavelength_c), len(z_c)))
+        bsca = np.zeros((len(wavelength_m), len(z_c)))
+        first = (
+            np.arange(len(wavelength_m)) if inverse is None
+            else np.unique(inverse, return_index=True)[1]
+        )
         for (_, pha), weight in zip(phases, weights, strict=True):
             if np.array_equal(
-                pha.coords["wavelength_phase"].values, wavelength_c
+                pha.coords["wavelength_phase"].values, wavelength_m
             ) and np.array_equal(pha.coords["z_phase"].values, z_c):
                 flat = pha.values.reshape(-1, *pha.shape[2:])
                 ipha = np.arange(len(flat)).reshape(pha.shape[:2])
@@ -2031,7 +2117,7 @@ class Water1D(Water):
                 # the phase matrix each wavelength and depth of the
                 # common grid is given, as calc_iphase gives the profile
                 flat, ipha = calc_iphase(
-                    pha, wavelength_c, z_c, use_old_calc_iphase
+                    pha, wavelength_m, z_c, use_old_calc_iphase
                 )
             theta = pha.coords["theta_oc"].values
             same_theta = np.array_equal(theta, theta_c)
@@ -2042,12 +2128,22 @@ class Water1D(Water):
                     row = flat[k_row]
                     if not same_theta:
                         row = _interp_theta(row, theta, theta_c)
-                pha_tot[iw, iz] += row * weight[iw, iz]
+                pha_tot[first[iw], iz] += row * weight[iw, iz]
             bsca += weight
 
-        with np.errstate(divide="ignore", invalid="ignore"):
-            pha_tot /= bsca[:, :, None, None]
-        pha_tot[np.isnan(pha_tot)] = 0.0
+        if inverse is None:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                pha_tot /= bsca[:, :, None, None]
+            pha_tot[np.isnan(pha_tot)] = 0.0
+        else:
+            for iw, i_row in enumerate(first):
+                block = pha_tot[i_row]
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    block /= bsca[iw, :, None, None]
+                block[np.isnan(block)] = 0.0
+            for i_row, iw in enumerate(inverse):
+                if i_row != first[iw]:
+                    pha_tot[i_row] = pha_tot[first[iw]]
         return xr.DataArray(
             pha_tot,
             dims=["wavelength_phase", "z_phase", "nphamat", "theta_oc"],

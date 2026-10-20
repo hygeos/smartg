@@ -456,21 +456,49 @@ def _pr_supplied(**kwargs: Any) -> list[Hydrosol]:
 HYDROSOLS = {"PR": _pr, "PR+Zhai": _pr_zhai, "PR+supplied": _pr_supplied}
 
 
+# two wavelengths that the float32 profile grid merges
+WAV_CLOSE = [550.0, 443.0, 550.0 + 1e-5, 670.0, 443.0, 550.0]
+
+
+@pytest.mark.parametrize("wav", [WAV, WAV_CLOSE], ids=["repeats", "close"])
 @pytest.mark.parametrize("hydrosols", HYDROSOLS)
-def test_water1d_phase_once_per_distinct_wavelength(hydrosols: str) -> None:
+def test_water1d_phase_once_per_distinct_wavelength(
+    hydrosols: str, wav: list[float]
+) -> None:
     """Water1D tabulates its phase matrices once per wavelength.
+
+    The profile is the one of hydrosols given every wavelength of the
+    profile, byte for byte, its phase table included.
+    """
+    make = HYDROSOLS[hydrosols]
+    comp = make()
+    new = Water1D(comp=comp).calc(wav)
+    full = np.atleast_1d(BandSet(wav)[:]).astype(float)
+    old = Water1D(comp=make(wavelength_phase=full)).calc(wav)
+    _assert_identical(new, old)
+    # the tabulation itself is kept once per wavelength
+    assert comp[0]._pha is not None
+    assert comp[0]._pha.sizes["wavelength_phase"] == len(np.unique(full))
+
+
+@pytest.mark.parametrize("hydrosols", HYDROSOLS)
+def test_water1d_distinct_phase_layout(hydrosols: str) -> None:
+    """The private switch keeps the distinct wavelengths only.
 
     Every variable but the numbering of the phase table is the one of
     hydrosols given every wavelength of the profile. With a supplied
     matrix on its own grid, both mix on the distinct wavelengths.
     """
     make = HYDROSOLS[hydrosols]
-    new = Water1D(comp=make()).calc(WAV)
+    comp = make()
+    for c in comp:
+        c._distinct_phase = True
+    new = Water1D(comp=comp).calc(WAV)
     old = Water1D(
         comp=make(wavelength_phase=_full_axis().astype(float))
     ).calc(WAV)
     assert new.sizes["iphase"] % N_DISTINCT == 0
-    assert new.sizes["iphase"] <= old.sizes["iphase"]
+    assert new.sizes["iphase"] < old.sizes["iphase"]
     _assert_same_profile(new, old, kind="oc")
 
 
@@ -481,19 +509,75 @@ def test_water1d_arrays_keep_every_wavelength() -> None:
     def make(**kwargs: Any) -> list[Hydrosol]:
         return [Hydrosol(bp=bp, bbp_ratio=0.01, n_theta=721, **kwargs)]
 
-    new = Water1D(comp=make()).calc(WAV)
+    comp = make()
+    for c in comp:
+        c._distinct_phase = True
     old = Water1D(
         comp=make(wavelength_phase=_full_axis().astype(float))
     ).calc(WAV)
-    assert new.sizes["iphase"] == old.sizes["iphase"]
-    _assert_same_profile(new, old, kind="oc")
+    _assert_identical(Water1D(comp=make()).calc(WAV), old)
+    _assert_identical(Water1D(comp=comp).calc(WAV), old)
 
 
-def test_hydrosol_phase_and_scattering_on_distinct_wavelengths() -> None:
-    """Hydrosol and Water1D phase methods give a wavelength once."""
+def _assert_identical_array(new: Any, old: Any) -> None:
+    """Check that two arrays are identical, byte for byte."""
+    if isinstance(old, xr.DataArray):
+        xr.testing.assert_identical(new, old)
+        new, old = new.values, old.values
+    assert new.dtype == old.dtype and new.shape == old.shape
+    assert new.strides == old.strides and new.tobytes() == old.tobytes()
+
+
+def test_hydrosol_phase_and_scattering_on_every_wavelength() -> None:
+    """Hydrosol and Water1D phase methods give each wavelength its row.
+
+    As when every wavelength is given as `wavelength_phase`, while a
+    repeated one is tabulated once.
+    """
     wavelength = np.array([550.0, 443.0, 550.0])
     z = np.array([0.0, -10.0])
     pr = HydrosolPR(0.5, n_theta=721)
+    ref = HydrosolPR(0.5, n_theta=721, wavelength_phase=wavelength)
+    pha, pha_ref = pr.phase(wavelength, z), ref.phase(wavelength, z)
+    _assert_identical_array(pha, pha_ref)
+    assert pr._pha is not None and pr._pha.sizes["wavelength_phase"] == 2
+    assert pha is not None and pha_ref is not None
+    _assert_identical_array(pr.scattering(pha), ref.scattering(pha_ref))
+    mixed = Water1D(grid=z, comp=_pr_zhai()).phase(wavelength)
+    mixed_ref = Water1D(
+        grid=z, comp=_pr_zhai(wavelength_phase=wavelength)
+    ).phase(wavelength)
+    _assert_identical_array(mixed, mixed_ref)
+    assert mixed is not None and mixed.sizes["wavelength_phase"] == 3
+
+
+def test_hydrosol_cache_with_other_repeats() -> None:
+    """A cached tabulation is copied onto the repeats of a profile."""
+    z = np.array([0.0, -10.0])
+    pr = HydrosolPR(0.5, n_theta=721)
+    for wavelength in ([550.0, 550.0, 443.0], [550.0, 443.0, 443.0],
+                       [443.0, 550.0]):
+        w = np.array(wavelength)
+        ref = HydrosolPR(0.5, n_theta=721, wavelength_phase=w)
+        pha, pha_ref = pr.phase(w, z), ref.phase(w, z)
+        _assert_identical_array(pha, pha_ref)
+        assert pha is not None and pha_ref is not None
+        _assert_identical_array(pr.scattering(pha), ref.scattering(pha_ref))
+
+
+def test_hydrosol_phase_without_repeats_is_the_cache() -> None:
+    """Without a repeated wavelength, the tabulation comes back."""
+    pr = HydrosolPR(0.5, n_theta=721)
+    w, z = np.array([550.0, 443.0]), np.array([0.0, -10.0])
+    assert pr.phase(w, z) is pr.phase(w, z)
+
+
+def test_hydrosol_phase_and_scattering_on_distinct_wavelengths() -> None:
+    """Under the private switch, a wavelength is given once."""
+    wavelength = np.array([550.0, 443.0, 550.0])
+    z = np.array([0.0, -10.0])
+    pr = HydrosolPR(0.5, n_theta=721)
+    pr._distinct_phase = True
     pha = pr.phase(wavelength, z)
     assert pha is not None
     np.testing.assert_array_equal(
@@ -506,8 +590,10 @@ def test_hydrosol_phase_and_scattering_on_distinct_wavelengths() -> None:
     bsca, bsca_ref = pr.scattering(pha), ref.scattering(pha_ref)
     assert bsca is not None and bsca_ref is not None
     np.testing.assert_array_equal(bsca, bsca_ref[:2])
-    water = Water1D(grid=z, comp=_pr_zhai())
-    mixed = water.phase(wavelength)
+    comp = _pr_zhai()
+    for c in comp:
+        c._distinct_phase = True
+    mixed = Water1D(grid=z, comp=comp).phase(wavelength)
     assert mixed is not None and mixed.sizes["wavelength_phase"] == 2
 
 
