@@ -2773,6 +2773,7 @@ class Smartg:
             amf_variance=self.amf_variance,
             nscl=self.nscl,
             le_fov=le_fov,
+            no_aer_output=no_aer_output,
         )
 
         attrs['kernel time (s)'] = secs_cuda_clock
@@ -5475,6 +5476,7 @@ def _loop_kernel(
     amf_variance: bool = False,
     nscl: int = 1,
     le_fov: float = 0.0,
+    no_aer_output: bool = True,
 ) -> tuple:
     """Run the transport kernel until the requested photon budget.
 
@@ -5551,6 +5553,9 @@ def _loop_kernel(
         If True, allocate extra AMF variance channel in ALIS distances.
     nscl : int, optional
         Number of ALIS scaling channels.
+    no_aer_output : bool, optional
+        Whether the tallies without aerosols are output. Without, they
+        are not copied from the GPU and None is returned for them.
 
     Returns
     -------
@@ -6003,13 +6008,15 @@ def _loop_kernel(
     return (
         n_photons_in_tot.get(),
         tab_photons_tot.get(),
-        tab_photons_tot_no_aer.get(),
+        # the tallies without aerosols are left on the GPU when they are
+        # not output
+        tab_photons_tot_no_aer.get() if no_aer_output else None,
         tab_dist_tot.get(),
         tab_hist_tot.get(),
         tab_trans_dir.get().astype(np.float64),
         errorcount,
         n_photons_out_tot.get(),
-        n_photons_out_tot_no_aer.get(),
+        n_photons_out_tot_no_aer.get() if no_aer_output else None,
         sigma,
         n_simu,
         secs_cuda_clock,
