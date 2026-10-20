@@ -713,6 +713,39 @@ def test_atm3d_distinct_phase_layout(scene: str) -> None:
     _assert_same_profile(new, old)
 
 
+class _RowCloud(Cloud3D):
+    """A subclass pairing its albedo with the bands by position."""
+
+    def get_ssa(self, wavelength: Any) -> Any:
+        rows = np.array([0.99, 0.98, 0.97, 0.96, 0.95, 0.94])
+        return super().get_ssa(wavelength) * rows[:len(wavelength), None]
+
+
+def test_atm3d_full_axis_kept_for_another_class() -> None:
+    """A 3D component of another class keeps every wavelength."""
+    bands = BandSet(WAV)
+
+    def make(**kwargs: Any) -> Atm3D:
+        return Atm3D(
+            atm_1d=Atm1D("afglt", comp=[AerOPAC("desert", 0.1, 550.0)],
+                         **kwargs),
+            grid_3d=_grid3d(),
+            comp_3d=[_RowCloud(
+                "wc",
+                w_ref=550.0,
+                ext_ref=np.array([5.0, 10.0, 15.0, 20.0]),
+                reff=np.array([10.0, 10.0, 12.0, 12.0]),
+                cell_indices=np.array(
+                    [[1, 1, 2], [2, 1, 2], [3, 1, 2], [4, 1, 2]]
+                ),
+            )],
+            **kwargs,
+        )
+
+    old = make(wavelength_phase=_full_axis()).calc(bands, n_theta=181)
+    _assert_identical(make().calc(bands, n_theta=181), old)
+
+
 def test_comp3d_ext_ssa_on_repeated_wavelengths() -> None:
     """get_ext and get_ssa give each wavelength its own row."""
     cld = _cloud3d()

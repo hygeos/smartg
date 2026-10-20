@@ -4899,7 +4899,13 @@ class Atm3D(Atmosphere):
         phase_blocks = None
         if phase:
             inverse = None
-            if wavelength_pha is None and np.isnan(wavelengths).any():
+            if wavelength_pha is None and (
+                np.isnan(wavelengths).any()
+                # a component of another class may pair its rows with
+                # the wavelengths of calc, as Atm1D's may
+                or any(type(c) not in (Cloud3D, Aer3D)
+                       for c in self.comp_3d)
+            ):
                 wavelength_pha = wavelengths
             elif wavelength_pha is None:
                 # the internal bands of a KDIS channel share its
