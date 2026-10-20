@@ -494,3 +494,37 @@ def test_get_weights_sums_per_channel(synthetic_reptran: Reptran) -> None:
     np.testing.assert_allclose(norm, [1.5, 1.0])
     np.testing.assert_array_equal(norm_dl.wavelength, [450.0, 650.0])
     np.testing.assert_allclose(norm_dl, [300.0, 200.0])
+
+
+@pytest.mark.parametrize("subset", ["sentinel", "coarse"])
+def test_reduce_reptran_as_groupby(
+    subset: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """reduce_reptran and get_weights sum as groupby did, bitwise."""
+    if subset == "sentinel":
+        ibands = Reptran("reptran_solar_sentinel").to_smartg()
+    else:
+        all_bands = Reptran("reptran_solar_coarse").to_smartg()
+        ibands = ReptranIbandList(all_bands.l[::40])
+    rng = np.random.default_rng(5)
+    wavelength = np.array([b.w for b in ibands.l], np.float32)
+    ds = xr.Dataset(
+        {"I_up (TOA)": (("wavelength", "n"),
+                        rng.random((len(wavelength), 9)),
+                        {"desc": "I_up (TOA)"})},
+        coords={"wavelength": wavelength, "n": np.arange(9)},
+    )
+    new = reduce_reptran(ds, ibands)
+    we, wb, _, dl, norm, norm_dl = ibands.get_weights()
+    monkeypatch.setattr(
+        "smartg.reptran._group_sum",
+        lambda data, groups: data.groupby(groups.key).sum(dim="wavelength"),
+    )
+    ref = reduce_reptran(ds, ibands)
+    xr.testing.assert_identical(new, ref)
+    assert new["I_up (TOA)"].values.tobytes() == (
+        ref["I_up (TOA)"].values.tobytes())
+    xr.testing.assert_identical(
+        norm, we.groupby(wb).sum(dim="wavelength"))
+    xr.testing.assert_identical(
+        norm_dl, (we * dl).groupby(wb).sum(dim="wavelength"))

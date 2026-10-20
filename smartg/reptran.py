@@ -64,6 +64,7 @@ from smartg.atmosphere import blackbody_radiance, od2k
 from smartg.config import DIR_AUXDATA
 from smartg.interp import interp2, interp3
 from smartg.typing import NumericArrayLike, PathType
+from smartg.xarray import _group_index, _group_sum
 
 if TYPE_CHECKING:
     from smartg.atmosphere import ProfileBase
@@ -170,8 +171,10 @@ def reduce_reptran(
             )
 
     factor = we * ex * dl if use_solar else we * dl
-    norm = we.groupby(grouping).sum(dim="wavelength")
-    norm_dl = (we * dl).groupby(grouping).sum(dim="wavelength")
+    # the internal bands of each channel, grouped once for every sum
+    groups = _group_index(grouping)
+    norm = _group_sum(we, groups)
+    norm_dl = _group_sum(we * dl, groups)
 
     result = xr.Dataset(attrs=ds.attrs)
     prefixes = ("I_", "Q_", "U_", "V_", "transmission", "flux")
@@ -185,7 +188,7 @@ def reduce_reptran(
         if extern_weights is not None:
             weighted = weighted * extern_weights
 
-        reduced = weighted.groupby(grouping).sum(dim="wavelength")
+        reduced = _group_sum(weighted, groups)
         reduced = reduced / (norm if integrated else norm_dl)
         reduced.attrs = attrs
         result[name] = reduced
@@ -833,8 +836,9 @@ class ReptranIbandList:
             name="bandwidth",
             attrs={"desc": "Dlambda"},
         )
-        norm_dl = (we * dl).groupby(wb).sum(dim="wavelength")
-        norm = we.groupby(wb).sum(dim="wavelength")
+        groups = _group_index(wb)
+        norm_dl = _group_sum(we * dl, groups)
+        norm = _group_sum(we, groups)
 
         return we, wb, ex, dl, norm, norm_dl
 

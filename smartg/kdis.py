@@ -53,6 +53,7 @@ from smartg.atmosphere import blackbody_radiance, od2k
 from smartg.config import DIR_AUXDATA
 from smartg.interp import _interp2_stack
 from smartg.typing import BandLike, NumericArrayLike, PathType
+from smartg.xarray import _group_index, _group_sum
 
 dir_kdis = DIR_AUXDATA / "kdis"
 
@@ -148,8 +149,10 @@ def reduce_kdis(
             )
 
     factor = we * ex * dl if use_solar else we * dl
-    norm = we.groupby(grouping).sum(dim="wavelength")
-    norm_dl = (we * dl).groupby(grouping).sum(dim="wavelength")
+    # the internal bands of each channel, grouped once for every sum
+    groups = _group_index(grouping)
+    norm = _group_sum(we, groups)
+    norm_dl = _group_sum(we * dl, groups)
 
     result = xr.Dataset(attrs=ds.attrs)
     prefixes = ("I_", "Q_", "U_", "V_", "N_", "transmission", "flux")
@@ -163,7 +166,7 @@ def reduce_kdis(
         if extern_weights is not None:
             weighted = weighted * extern_weights
 
-        reduced = weighted.groupby(grouping).sum(dim="wavelength")
+        reduced = _group_sum(weighted, groups)
         reduced = reduced / (norm if integrated else norm_dl)
         reduced.attrs = attrs
         result[name] = reduced
@@ -1288,8 +1291,9 @@ class KdisIbandList:
             name="bandwidth",
             attrs={"desc": "Dlambda"},
         )
-        norm_dl = (we * dl).groupby("wavelength").sum(dim="wavelength")
-        norm = we.groupby("wavelength").sum(dim="wavelength")
+        groups = _group_index(we.coords["wavelength"])
+        norm_dl = _group_sum(we * dl, groups)
+        norm = _group_sum(we, groups)
         return we, wb, ex, dl, norm, norm_dl
 
     def get_groups(self) -> np.ndarray:

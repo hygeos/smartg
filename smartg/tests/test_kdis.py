@@ -553,3 +553,68 @@ def test_bandset_computes_kdis_bands_at_once(
     ref = np.stack([_v205_calc_profile(b, prof) for b in bands])
     assert tau.dtype == np.float32
     assert tau.tobytes() == ref.astype(np.float32).tobytes()
+
+
+def _spectral_run(ibands: KdisIbandList, sensors: bool) -> xr.Dataset:
+    """Return random radiances over the bands, as a run gives them."""
+    rng = np.random.default_rng(3)
+    wavelength = np.array([b.w for b in ibands.l], np.float32)
+    dims: tuple[str, ...] = ("wavelength", "Zenith angles", "Azimuth angles")
+    shape: tuple[int, ...] = (len(wavelength), 10, 10)
+    coords: dict = {"wavelength": wavelength,
+                    "Zenith angles": np.arange(10.0),
+                    "Azimuth angles": np.arange(10.0)}
+    if sensors:
+        dims, shape = ("sensor index",) + dims, (2,) + shape
+        coords["sensor index"] = np.arange(2)
+    return xr.Dataset(
+        {name: (dims, rng.random(shape), {"desc": name})
+         for name in ["I_up (TOA)", "Q_up (TOA)", "N_up (TOA)"]},
+        coords=coords, attrs={"NPHOTONS": "1e6"},
+    )
+
+
+def _groupby_sum(data: xr.DataArray, groups: Any) -> xr.DataArray:
+    return data.groupby(groups.key).sum(dim="wavelength")
+
+
+@pytest.mark.parametrize("model", ["kato2", "SLSTR", "S2"])
+@pytest.mark.parametrize("sensors", [False, True])
+@pytest.mark.parametrize(
+    "options",
+    [{}, {"use_solar": True}, {"integrated": True}, {"extern": True}],
+    ids=["default", "solar", "integrated", "extern"],
+)
+def test_reduce_kdis_as_groupby(
+    model: str, sensors: bool, options: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """reduce_kdis gives the channels groupby gave, bitwise."""
+    name, kwargs = KDIS_MODELS[model]
+    ibands = Kdis(name).to_smartg(**kwargs)
+    ds = _spectral_run(ibands, sensors)
+    kw = dict(options)
+    if kw.pop("extern", False):
+        kw["extern_weights"] = xr.DataArray(
+            np.linspace(0.5, 1.5, ds.sizes["wavelength"]),
+            dims=("wavelength",), coords={"wavelength": ds.wavelength},
+        )
+    new = reduce_kdis(ds, ibands, **kw)
+    monkeypatch.setattr("smartg.kdis._group_sum", _groupby_sum)
+    ref = reduce_kdis(ds, ibands, **kw)
+    xr.testing.assert_identical(new, ref)
+    for v in new.data_vars:
+        assert new[v].values.tobytes() == ref[v].values.tobytes()
+        assert new[v].values.strides == ref[v].values.strides
+
+
+def test_kdis_get_weights_as_groupby() -> None:
+    """The channel norms of get_weights are groupby's, bitwise."""
+    we, _, _, dl, norm, norm_dl = Kdis("kato2").to_smartg(
+        lmax=4500).get_weights()
+    ref_norm = we.groupby("wavelength").sum(dim="wavelength")
+    ref_dl = (we * dl).groupby("wavelength").sum(dim="wavelength")
+    xr.testing.assert_identical(norm, ref_norm)
+    xr.testing.assert_identical(norm_dl, ref_dl)
+    assert norm.values.tobytes() == ref_norm.values.tobytes()
+    assert norm_dl.values.tobytes() == ref_dl.values.tobytes()

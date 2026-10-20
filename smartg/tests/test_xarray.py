@@ -4,7 +4,12 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from smartg.xarray import dataset_to_mlut, drop_axes
+from smartg.xarray import (
+    _group_index,
+    _group_sum,
+    dataset_to_mlut,
+    drop_axes,
+)
 
 
 def sample_dataset() -> xr.Dataset:
@@ -90,3 +95,61 @@ def test_drop_axes_size_error() -> None:
     ds = xr.Dataset({'I': (('z',), np.ones(3))})
     with pytest.raises(ValueError):
         drop_axes(ds, 'z')
+
+
+KEYS = {
+    "unique": [400.0, 500.0, 600.0, 700.0, 800.0],
+    "decreasing": [800.0, 700.0, 600.0, 500.0, 400.0],
+    "repeated": [400.0, 400.0, 500.0, 600.0, 600.0],
+    "unsorted": [600.0, 400.0, 600.0, 500.0, 400.0],
+    "nan": [600.0, np.nan, 600.0, 500.0, 400.0],
+}
+LAYOUTS = [
+    ("wavelength",),
+    ("wavelength", "n"),
+    ("n", "wavelength"),
+    ("sensor", "wavelength", "a", "z"),
+    ("Categories", "wavelength"),
+]
+
+
+@pytest.mark.parametrize("dtype", ["f8", "f4", "i8"])
+@pytest.mark.parametrize("dims", LAYOUTS, ids=["-".join(d) for d in LAYOUTS])
+@pytest.mark.parametrize("key", KEYS)
+def test_group_sum_as_groupby(key: str, dims: tuple[str, ...],
+                              dtype: str) -> None:
+    """The group sums are groupby's: values, layout, coords, attrs."""
+    sizes = {"wavelength": 5, "n": 9, "sensor": 2, "a": 3, "z": 4,
+             "Categories": 9}
+    rng = np.random.default_rng(len(dims))
+    values = (rng.random(tuple(sizes[d] for d in dims)) * 10).astype(dtype)
+    if dtype != "i8":
+        values.flat[3] = np.nan
+    coords: dict = {"wavelength": np.arange(5.0) + 0.5}
+    coords.update({d: np.arange(sizes[d]) for d in dims if d != "wavelength"})
+    if "sensor" in dims:
+        coords["sensor index"] = ("sensor", np.arange(2))
+    data = xr.DataArray(values, dims=dims, coords=coords, name="x",
+                        attrs={"desc": "x"})
+    grouping = xr.DataArray(
+        np.array(KEYS[key]), dims=("wavelength",),
+        coords={"wavelength": coords["wavelength"]}, name="wavelength",
+    )
+    ref = data.groupby(grouping).sum(dim="wavelength")
+    new = _group_sum(data, _group_index(grouping))
+    xr.testing.assert_identical(new, ref)
+    assert new.values.tobytes() == ref.values.tobytes()
+    assert new.values.strides == ref.values.strides
+
+
+def test_group_sum_refuses_a_misaligned_array() -> None:
+    """An array over other wavelengths raises groupby's error."""
+    grouping = xr.DataArray([1.0, 1.0], dims=("wavelength",),
+                            coords={"wavelength": [1.0, 2.0]},
+                            name="wavelength")
+    data = xr.DataArray([1.0, 2.0], dims=("wavelength",),
+                        coords={"wavelength": [1.0, 3.0]})
+    with pytest.raises(ValueError, match="does not match the length"):
+        _group_sum(data, _group_index(grouping))
+    with pytest.raises(ValueError, match="all NaN"):
+        _group_index(grouping * np.nan)
