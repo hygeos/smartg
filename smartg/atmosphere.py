@@ -5096,10 +5096,12 @@ class Atm3D(Atmosphere):
                         iphase=ipha_aer_1d[row, idz_atm[icell]]
                     )
                     if sca_mix_tmp[icell] > 0.0:
-                        pha_tot = (
-                            pha_aer_tmp * sca_aer_tmp[icell]
-                            + pha_cld_tmp * sca_cld_tmp[icell]
-                        ) / sca_mix_tmp[icell]
+                        # the ufuncs of the DataArray arithmetic, on
+                        # the values: the angles are the same
+                        pha_tot = pha_cld_tmp.copy(data=(
+                            pha_aer_tmp.values * sca_aer_tmp[icell]
+                            + pha_cld_tmp.values * sca_cld_tmp[icell]
+                        ) / sca_mix_tmp[icell])
                     else:
                         # never sampled (no scattering): keep a valid
                         # unweighted matrix rather than a null one
@@ -5297,6 +5299,8 @@ class Atm3D(Atmosphere):
                         phase_aer_1d.isel(iphase=ipha_aer_1d[row, iz])
                     )
             for icell in range(n_cell):
+                # the matrices are summed as arrays, by the ufuncs of
+                # the DataArray arithmetic: the angles are the same
                 pha_tot = None
                 pha_first = None
                 sca_tot = 0.0
@@ -5307,7 +5311,7 @@ class Atm3D(Atmosphere):
                         iphase=ipha_aer_1d[row, idz]
                     )
                     sca = ext_aer_1d[row, idz] * ssa_aer_1d[row, idz]
-                    pha_tot = pha_first * sca
+                    pha_tot = pha_first.values * sca
                     sca_tot += sca
                 for icomp in range(len(self.comp_3d)):
                     iloc = local_pos[icomp, icell]
@@ -5323,7 +5327,7 @@ class Atm3D(Atmosphere):
                         ext_3d_pha[icomp][i_wavelength, iloc]
                         * ssa_3d_pha[icomp][i_wavelength, iloc]
                     )
-                    pha_comp = pha_cld * sca
+                    pha_comp = pha_cld.values * sca
                     pha_tot = (
                         pha_comp if pha_tot is None
                         else pha_tot + pha_comp
@@ -5331,12 +5335,11 @@ class Atm3D(Atmosphere):
                     sca_tot += sca
                 assert pha_tot is not None and pha_first is not None
                 if sca_tot > 0.0:
-                    pha_tot = pha_tot / sca_tot
+                    phases.append(pha_first.copy(data=pha_tot / sca_tot))
                 else:
                     # never sampled (no scattering): keep a valid
                     # unweighted matrix rather than a null one
-                    pha_tot = pha_first
-                phases.append(pha_tot)
+                    phases.append(pha_first)
 
         # the phase matrix indices: each profile wavelength points into
         # the block of its phase wavelength, with the per-wavelength
