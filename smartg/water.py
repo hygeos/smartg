@@ -63,7 +63,7 @@ from numpy.typing import NDArray
 from pytrunc.phase import fournier_forand
 
 from smartg.albedo import AlbedoCst, AlbedoMap, SpectralAlbedoLike
-from smartg.bandset import BandSet
+from smartg.bandset import BandSet, _distinct_values
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.interp import interp_1d_coord
@@ -299,10 +299,12 @@ class Hydrosol:
         is refused: give it truncation=None.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
-        None, they are calculated at all wavelengths. The coefficients
-        supplied as arrays over the wavelengths of the profile are
-        interpolated linearly onto them, and taken constant beyond the
-        end wavelengths.
+        None, they are calculated once at each distinct wavelength of
+        the profile (the internal bands of a KDIS channel share its
+        wavelength), or at all of them when coefficients are supplied
+        as arrays. The coefficients supplied as arrays over the
+        wavelengths of the profile are interpolated linearly onto them,
+        and taken constant beyond the end wavelengths.
 
     Raises
     ------
@@ -815,9 +817,10 @@ class Hydrosol:
         Parameters
         ----------
         wavelength : ndarray
-            Wavelengths in nm of the profile. The phase matrices are
-            tabulated at these unless `wavelength_phase` is set, and
-            the coefficients supplied as arrays are given over them.
+            Wavelengths in nm of the profile. Unless `wavelength_phase`
+            is set, the phase matrices are tabulated once at each
+            distinct one of them, or at all of them when coefficients
+            are supplied as arrays, which are given over them.
         z : ndarray
             Vertical grid of the water column in m. These are z
             coordinates: 0 at the surface, negative downwards.
@@ -833,11 +836,16 @@ class Hydrosol:
             If the backscattering ratio is not defined at the tabulation
             wavelengths.
         """
-        wavelength_pha = np.asarray(
-            wavelength if self.wavelength_phase is None
-            else self.wavelength_phase,
-            dtype="float",
-        )
+        if self.wavelength_phase is not None:
+            wavelength_pha = np.asarray(self.wavelength_phase, dtype="float")
+        elif self._supplies_arrays():
+            wavelength_pha = np.asarray(wavelength, dtype="float")
+        else:
+            # the internal bands of a KDIS channel share its wavelength,
+            # and so its phase matrices: tabulated once
+            wavelength_pha = _distinct_values(
+                np.asarray(wavelength, dtype="float")
+            )[0]
         z = np.asarray(z, dtype="float")
         theta = self._derived_theta(n_theta)
         # the supplied arrays are interpolated from the wavelengths of
@@ -1117,7 +1125,8 @@ class HydrosolPR(Hydrosol):
         of v1.2.0; None disables the truncation.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
-        None, they are calculated at all wavelengths.
+        None, they are calculated once at each distinct wavelength of
+        the profile.
     fqyc : float, optional
         Chlorophyll a fluorescence quantum yield.
 
@@ -1288,7 +1297,8 @@ class HydrosolZhai(Hydrosol):
         of v1.2.0; None disables the truncation.
     wavelength_phase : array_like or None, optional
         Wavelengths in nm at which the phase matrices are calculated. If
-        None, they are calculated at all wavelengths.
+        None, they are calculated once at each distinct wavelength of
+        the profile.
     euphotic_depth : float or None, optional
         Euphotic depth in m, noted Z_eu in [2]_. This is a positive
         depth, measured downwards from the surface, and not a z
@@ -1896,11 +1906,12 @@ class Water1D(Water):
         When a single hydrosol scatters, its phase matrices are returned
         unchanged. Otherwise they are averaged on a common grid: the
         `wavelength_phase` of the hydrosols if they share it, the
-        wavelengths of the profile otherwise; their `z_phase` if they
-        share it and no weight varies with depth, the depths of `grid`
-        otherwise; their angles if they share them, the union of their
-        angles otherwise (see `smartg.phase.union_theta_grid`), each
-        phase matrix being interpolated linearly in angle, as the
+        distinct wavelengths of the profile otherwise (all of them when
+        a hydrosol supplies coefficients as arrays); their `z_phase` if
+        they share it and no weight varies with depth, the depths of
+        `grid` otherwise; their angles if they share them, the union of
+        their angles otherwise (see `smartg.phase.union_theta_grid`),
+        each phase matrix being interpolated linearly in angle, as the
         kernel reads it.
 
         Parameters
@@ -1970,7 +1981,14 @@ class Water1D(Water):
         wavelength = np.asarray(wavelength, dtype="float")
         wavelength_c = shared("wavelength_phase")
         if wavelength_c is None:
-            wavelength_c = wavelength
+            # coefficients supplied as arrays are given over each
+            # wavelength of the profile; otherwise the internal bands
+            # of a KDIS channel, which share its wavelength, are mixed
+            # once
+            supplied = any(comp._supplies_arrays() for comp, _ in phases)
+            wavelength_c = (
+                wavelength if supplied else _distinct_values(wavelength)[0]
+            )
         weights = [
             comp._scattering_on(
                 wavelength_c, wavelength, z, use_old_calc_iphase

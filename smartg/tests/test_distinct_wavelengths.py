@@ -26,6 +26,7 @@ from smartg.atmosphere import (
 )
 from smartg.bandset import BandSet, _distinct_values
 from smartg.truncation import GTTrunc
+from smartg.water import Hydrosol, HydrosolPR, HydrosolZhai, Water1D
 
 # internal bands of three channels, as KDIS orders them: not sorted
 # here, so that the order of first occurrence matters
@@ -39,14 +40,16 @@ def _full_axis() -> np.ndarray:
     return np.atleast_1d(BandSet(WAV)[:])
 
 
-def _assert_same_profile(new: xr.Dataset, old: xr.Dataset) -> None:
+def _assert_same_profile(
+    new: xr.Dataset, old: xr.Dataset, kind: str = "atm"
+) -> None:
     """Check that two profiles agree bitwise, but for their numbering.
 
     Every variable but the phase table and its indices is compared
     bytewise; the phase matrices are compared through the matrix each
     (wavelength, layer) is given, once per pair of indices.
     """
-    layout = ["phase_atm", "iphase_atm", "iphase"]
+    layout = [f"phase_{kind}", f"iphase_{kind}", "iphase"]
     assert sorted(map(str, new.variables)) == sorted(map(str, old.variables))
     for name in new.variables:
         if name in layout:
@@ -55,11 +58,12 @@ def _assert_same_profile(new: xr.Dataset, old: xr.Dataset) -> None:
         assert a.dtype == b.dtype and a.shape == b.shape, name
         assert a.tobytes() == b.tobytes(), name
     assert new.attrs == old.attrs
-    i_new = new["iphase_atm"].values
-    i_old = old["iphase_atm"].values
+    i_new = new[f"iphase_{kind}"].values
+    i_old = old[f"iphase_{kind}"].values
     assert i_new.dtype == i_old.dtype and i_new.shape == i_old.shape
     pairs = np.unique(np.stack([i_new.ravel(), i_old.ravel()], 1), axis=0)
-    p_new, p_old = new["phase_atm"].values, old["phase_atm"].values
+    p_new = new[f"phase_{kind}"].values
+    p_old = old[f"phase_{kind}"].values
     assert p_new.dtype == p_old.dtype
     for i, j in pairs:
         assert p_new[i].tobytes() == p_old[j].tobytes(), (i, j)
@@ -268,3 +272,84 @@ def test_extract_split_of_a_run_output_on_distinct_layout() -> None:
     np.testing.assert_array_equal(
         rebuilt["phase_atm"].values, pro["phase_atm"].values
     )
+
+
+def _supplied_phase() -> xr.DataArray:
+    """Return a hydrosol phase matrix at 550 nm, as one is supplied."""
+    h = Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=721, truncation=None)
+    pha, _ = h.calc_phase(
+        np.array([550.0]), np.array([0.0]), np.full((1, 1), 0.01)
+    )
+    return pha
+
+
+def _pr(**kwargs: Any) -> list[Hydrosol]:
+    return [HydrosolPR(0.5, n_theta=721, **kwargs)]
+
+
+def _pr_zhai(**kwargs: Any) -> list[Hydrosol]:
+    return [HydrosolPR(0.5, n_theta=721, **kwargs),
+            HydrosolZhai(0.5, n_theta=721, **kwargs)]
+
+
+def _pr_supplied(**kwargs: Any) -> list[Hydrosol]:
+    return [HydrosolPR(0.5, n_theta=721, **kwargs),
+            Hydrosol(phase=_supplied_phase(), bp=0.05, **kwargs)]
+
+
+HYDROSOLS = {"PR": _pr, "PR+Zhai": _pr_zhai, "PR+supplied": _pr_supplied}
+
+
+@pytest.mark.parametrize("hydrosols", HYDROSOLS)
+def test_water1d_phase_once_per_distinct_wavelength(hydrosols: str) -> None:
+    """Water1D tabulates its phase matrices once per wavelength.
+
+    Every variable but the numbering of the phase table is the one of
+    hydrosols given every wavelength of the profile. With a supplied
+    matrix on its own grid, both mix on the distinct wavelengths.
+    """
+    make = HYDROSOLS[hydrosols]
+    new = Water1D(comp=make()).calc(WAV)
+    old = Water1D(
+        comp=make(wavelength_phase=_full_axis().astype(float))
+    ).calc(WAV)
+    assert new.sizes["iphase"] % N_DISTINCT == 0
+    assert new.sizes["iphase"] <= old.sizes["iphase"]
+    _assert_same_profile(new, old, kind="oc")
+
+
+def test_water1d_arrays_keep_every_wavelength() -> None:
+    """Coefficients supplied over the profile keep its wavelengths."""
+    bp = np.array([[0.1], [0.2], [0.1], [0.3], [0.2], [0.15]])
+
+    def make(**kwargs: Any) -> list[Hydrosol]:
+        return [Hydrosol(bp=bp, bbp_ratio=0.01, n_theta=721, **kwargs)]
+
+    new = Water1D(comp=make()).calc(WAV)
+    old = Water1D(
+        comp=make(wavelength_phase=_full_axis().astype(float))
+    ).calc(WAV)
+    assert new.sizes["iphase"] == old.sizes["iphase"]
+    _assert_same_profile(new, old, kind="oc")
+
+
+def test_hydrosol_phase_and_scattering_on_distinct_wavelengths() -> None:
+    """Hydrosol and Water1D phase methods give a wavelength once."""
+    wavelength = np.array([550.0, 443.0, 550.0])
+    z = np.array([0.0, -10.0])
+    pr = HydrosolPR(0.5, n_theta=721)
+    pha = pr.phase(wavelength, z)
+    assert pha is not None
+    np.testing.assert_array_equal(
+        pha.coords["wavelength_phase"].values, [550.0, 443.0]
+    )
+    ref = HydrosolPR(0.5, n_theta=721, wavelength_phase=wavelength)
+    pha_ref = ref.phase(wavelength, z)
+    assert pha_ref is not None
+    np.testing.assert_array_equal(pha.values, pha_ref.values[:2])
+    bsca, bsca_ref = pr.scattering(pha), ref.scattering(pha_ref)
+    assert bsca is not None and bsca_ref is not None
+    np.testing.assert_array_equal(bsca, bsca_ref[:2])
+    water = Water1D(grid=z, comp=_pr_zhai())
+    mixed = water.phase(wavelength)
+    assert mixed is not None and mixed.sizes["wavelength_phase"] == 2

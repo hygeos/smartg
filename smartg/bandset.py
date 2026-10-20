@@ -37,7 +37,7 @@ spectral_grids
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, Any, cast, overload
 
 import numpy as np
 import scipy.constants as cst
@@ -208,7 +208,7 @@ class BandSet:
 
 def _distinct_values(
     values: NumericArrayLike,
-) -> tuple[NDArray[np.generic], NDArray[np.intp]]:
+) -> tuple[NDArray[Any], NDArray[np.intp]]:
     """Return the distinct values of an array, in order of appearance.
 
     Parameters

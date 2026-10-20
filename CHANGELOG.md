@@ -17,6 +17,16 @@
     used when a component pairs its inputs with them (a forced `ssa`
     array, a 4-D `phase`, a component of another class), and giving
     them as `wavelength_phase` restores the former layout
+  - Tabulate the phase matrices of the hydrosols once per distinct
+    wavelength when their `wavelength_phase` is None, and mix those of
+    several hydrosols that do not share a grid on the distinct
+    wavelengths of the profile. `phase_oc` gets shorter and
+    `iphase_oc` follows, as do the wavelengths of `Hydrosol.phase`,
+    `Hydrosol.scattering` and `Water1D.phase`, while each wavelength
+    and depth keeps the same matrix: a `Water1D` of `HydrosolPR` and
+    `HydrosolZhai` on the 4372 hypernav bands from 400 to 1050 nm took
+    9.8 GB of memory, and now 2.9 GB. A hydrosol given coefficients as
+    arrays over the wavelengths of the profile still uses all of them
 
 
 ## v2.0.5
