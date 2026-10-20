@@ -896,20 +896,23 @@ class Hydrosol:
             If the backscattering ratio is not defined at the tabulation
             wavelengths.
         """
-        self._tab_expand = None
+        expand = None
         if self.wavelength_phase is not None:
             wavelength_pha = np.asarray(self.wavelength_phase, dtype="float")
+            wavelength_key = wavelength_pha
         elif self._supplies_arrays():
             wavelength_pha = np.asarray(wavelength, dtype="float")
+            wavelength_key = wavelength_pha
         else:
             # the internal bands of a KDIS channel share its wavelength,
             # and so its phase matrices: tabulated once, and copied by
-            # phase and scattering
-            wavelength_all = np.asarray(wavelength, dtype="float")
-            wavelength_pha, inverse = _distinct_values(wavelength_all)
+            # phase and scattering. The cache is keyed on all the
+            # wavelengths, as when each was tabulated
+            wavelength_key = np.asarray(wavelength, dtype="float")
+            wavelength_pha, inverse = _distinct_values(wavelength_key)
             if (not self._distinct_phase
-                    and len(wavelength_pha) < len(wavelength_all)):
-                self._tab_expand = (wavelength_all.copy(), inverse)
+                    and len(wavelength_pha) < len(wavelength_key)):
+                expand = (wavelength_key.copy(), inverse)
         z = np.asarray(z, dtype="float")
         theta = self._derived_theta(n_theta)
         # the supplied arrays are interpolated from the wavelengths of
@@ -921,14 +924,14 @@ class Hydrosol:
         if (
             self._coef_trunc is not None
             and self._tab_grid is not None
-            and np.array_equal(self._tab_grid[0], wavelength_pha)
+            and np.array_equal(self._tab_grid[0], wavelength_key)
             and np.array_equal(self._tab_grid[1], z)
             and np.array_equal(self._tab_grid[2], wavelength_src)
             and np.array_equal(self._tab_grid[3], theta)
         ):
             return
         self._tab_grid = (
-            wavelength_pha.copy(), z.copy(), wavelength_src.copy(), theta
+            wavelength_key.copy(), z.copy(), wavelength_src.copy(), theta
         )
 
         iop = self._iop_on(wavelength_pha, wavelength, z)
@@ -950,6 +953,8 @@ class Hydrosol:
             wavelength_pha, z[sl], bbp_ratio[:, sl], theta
         )
         self._bsca = bp[:, sl] * self._coef_trunc.values
+        # with the tabulation it applies to
+        self._tab_expand = expand
 
     def _resolve_user_truncation(self) -> None:
         """

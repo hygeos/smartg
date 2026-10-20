@@ -565,6 +565,21 @@ def test_hydrosol_cache_with_other_repeats() -> None:
         _assert_identical_array(pr.scattering(pha), ref.scattering(pha_ref))
 
 
+def test_hydrosol_cache_after_a_coefficient_changes() -> None:
+    """The cache is keyed on every wavelength of the profile.
+
+    As when each was tabulated: other repeats of the same wavelengths
+    tabulate again, with the coefficients of the time.
+    """
+    z = np.array([0.0, -10.0])
+    h = Hydrosol(bp=0.1, bbp_ratio=0.01, n_theta=721)
+    h.phase(np.array([550.0, 550.0, 443.0]), z)
+    h.bbp_ratio = 0.02
+    w = np.array([550.0, 443.0, 443.0])
+    ref = Hydrosol(bp=0.1, bbp_ratio=0.02, n_theta=721)
+    _assert_identical_array(h.phase(w, z), ref.phase(w, z))
+
+
 def test_hydrosol_phase_without_repeats_is_the_cache() -> None:
     """Without a repeated wavelength, the tabulation comes back."""
     pr = HydrosolPR(0.5, n_theta=721)
