@@ -38,7 +38,7 @@ import os
 import subprocess
 import tempfile
 from collections import OrderedDict
-from collections.abc import Callable, Hashable, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -3306,10 +3306,10 @@ def _add_level_output(
     direction: str,
     lvl: int,
     axnames: Sequence[Hashable],
-    tab_final: np.ndarray,
-    tab_final_no_aer: np.ndarray,
+    tab_final: Mapping[int, np.ndarray],
+    tab_final_no_aer: Mapping[int, np.ndarray],
     n_photons_out_tot: np.ndarray,
-    n_photons_out_tot_no_aer: np.ndarray,
+    n_photons_out_tot_no_aer: np.ndarray | None,
     sigma: np.ndarray | None,
     tab_dist_final: np.ndarray,
     zip_flag: bool,
@@ -3331,7 +3331,7 @@ def _add_level_output(
         _add_variable(
             ds,
             f'{stk}_{direction}',
-            tab_final[lvl, i, isen, ilam, iphi, :],
+            tab_final[lvl][i, isen, ilam, iphi, :],
             axnames,
         )
     if sigma is not None:
@@ -3349,11 +3349,12 @@ def _add_level_output(
         axnames,
     )
     if no_aer_output:
+        assert n_photons_out_tot_no_aer is not None
         for i, stk in enumerate(('I', 'Q', 'U', 'V')):
             _add_variable(
                 ds,
                 f'{stk}_{direction}, no_aer',
-                tab_final_no_aer[lvl, i, isen, ilam, iphi, :],
+                tab_final_no_aer[lvl][i, isen, ilam, iphi, :],
                 axnames,
             )
         _add_variable(
@@ -3382,14 +3383,14 @@ def _add_level_output(
 
 def _finalize(
     tab_photons_tot: np.ndarray,
-    tab_photons_tot_no_aer: np.ndarray,
+    tab_photons_tot_no_aer: np.ndarray | None,
     tab_dist_tot: np.ndarray,
     tab_hist_tot: np.ndarray | None,
     wavelength: np.ndarray,
     n_photons_in_tot: np.ndarray,
     errorcount: GPUArray,
     n_photons_out_tot: np.ndarray,
-    n_photons_out_tot_no_aer: np.ndarray,
+    n_photons_out_tot_no_aer: np.ndarray | None,
     output_layers: int,
     tab_trans_dir: np.ndarray,
     tab_trans_dir_analytic: np.ndarray | None,
@@ -3519,24 +3520,50 @@ def _finalize(
             n_theta, n_phi, sza_max=sza_max, sun_disc=sun_disc
         )
 
-    # normalization
-    tab_final = tab_photons_tot.astype('float64') / (norm_geo * norm_npho)
-    tab_final_no_aer = tab_photons_tot_no_aer.astype('float64') / (
-        norm_geo * norm_npho
-    )
+    write_uptoa = output_layers in (0, 1, 2, 3, 7)
+    write_down0p = output_layers in (1, 3, 4, 7)
+    write_down0m = output_layers in (2, 3, 5, 6)
+    write_up0p = output_layers in (2, 3, 5, 6)
+    write_up0m = output_layers in (1, 3, 4)
+    write_downb = output_layers in (2, 3, 5)
+    levels = [
+        lvl for lvl, write in (
+            (UPTOA, write_uptoa), (DOWN0P, write_down0p),
+            (DOWN0M, write_down0m), (UP0P, write_up0p),
+            (UP0M, write_up0m), (DOWNB, write_downb),
+        ) if write
+    ]
+
+    # normalization of the levels written only, each in a float64 array
+    # of its own, whose views have the strides of those of a whole one;
+    # swapaxes : (th, phi) -> (phi, theta)
+    denom = norm_geo * norm_npho
+    tab_final = {
+        lvl: np.divide(
+            tab_photons_tot[lvl], denom[0], dtype=np.float64
+        ).swapaxes(3, 4)
+        for lvl in levels
+    }
+    tab_final_no_aer = {}
+    if no_aer_output:
+        assert tab_photons_tot_no_aer is not None
+        tab_final_no_aer = {
+            lvl: np.divide(
+                tab_photons_tot_no_aer[lvl], denom[0], dtype=np.float64
+            ).swapaxes(3, 4)
+            for lvl in levels
+        }
     tab_dist_final = tab_dist_tot.astype('float64')
     # if hist : tab_hist_final = tab_hist_tot
 
-    # swapaxes : (th, phi) -> (phi, theta)
-    tab_final = tab_final.swapaxes(4, 5)
-    tab_final_no_aer = tab_final_no_aer.swapaxes(4, 5)
     if len(tab_dist_final) > 1:
         tab_dist_final = tab_dist_final.swapaxes(3, 4)
     if hist:
         assert tab_hist_tot is not None
         tab_hist_tot = tab_hist_tot.swapaxes(3, 4)
     n_photons_out_tot = n_photons_out_tot.swapaxes(3, 4)
-    n_photons_out_tot_no_aer = n_photons_out_tot_no_aer.swapaxes(3, 4)
+    if n_photons_out_tot_no_aer is not None:
+        n_photons_out_tot_no_aer = n_photons_out_tot_no_aer.swapaxes(3, 4)
     if sigma is not None:
         sigma /= norm_geo
         sigma = sigma.swapaxes(4, 5)
@@ -3592,13 +3619,6 @@ def _finalize(
         axnames4.insert(0, 'sensor index')
     else:
         isen = 0
-
-    write_uptoa = output_layers in (0, 1, 2, 3, 7)
-    write_down0p = output_layers in (1, 3, 4, 7)
-    write_down0m = output_layers in (2, 3, 5, 6)
-    write_up0p = output_layers in (2, 3, 5, 6)
-    write_up0m = output_layers in (1, 3, 4)
-    write_downb = output_layers in (2, 3, 5)
 
     # Build dimension names for cdist variables (ALIS mode)
     # Shape after swapaxes: (n_lvl, N_LAYERS, n_sensor, n_phi,

@@ -31,6 +31,7 @@ from smartg.smartg import (
     _device_memory,
     _distinct_phase_profile,
     _distinct_phase_rows,
+    _finalize,
     _host_memory,
     _impact_init,
     _init_profile,
@@ -641,3 +642,89 @@ def test_device_memory_without_a_context(
     monkeypatch.setattr(sg_module.cuda, "mem_get_info",
                         lambda: (1, 2), raising=False)
     assert _device_memory() == (1, 2)
+
+
+class _NoError:
+    """Stand for the GPU error counters of a run."""
+
+    def get(self) -> np.ndarray:
+        return np.zeros(32, dtype=np.uint64)
+
+
+LEVELS = {
+    "up (TOA)": sg_module.UPTOA, "down (0+)": sg_module.DOWN0P,
+    "up (0-)": sg_module.UP0M, "down (0-)": sg_module.DOWN0M,
+    "up (0+)": sg_module.UP0P, "down (B)": sg_module.DOWNB,
+}
+
+
+@pytest.mark.parametrize("output_layers", [0, 3, 5])
+@pytest.mark.parametrize("mode", ["cone", "le", "zip"])
+@pytest.mark.parametrize("no_aer", [False, True])
+def test_finalize_normalizes_the_written_levels(
+    output_layers: int, mode: str, no_aer: bool
+) -> None:
+    """Each output is the slice of the whole normalized table, bitwise.
+
+    Values, dtype and strides are those of a view of the six levels
+    divided as a whole, as they were before only the written levels
+    were normalized.
+    """
+    rng = np.random.default_rng(output_layers)
+    n_sensor, n_lam = 2, 3
+    le = None
+    if mode == "cone":
+        n_th, n_phi = 5, 6
+    else:
+        zip_le = mode == "zip"
+        le = LocalEstimate(th_deg=[0.0, 30.0, 60.0],
+                           phi_deg=[0.0, 90.0, 180.0], zip=zip_le)
+        n_th, n_phi = 3, 1 if zip_le else 3
+    shape = (6, 4, n_sensor, n_lam, n_th, n_phi)
+    photons = rng.random(shape).astype(np.float32)
+    photons_no_aer = rng.random(shape).astype(np.float32)
+    n_in = rng.integers(10, 20, (n_sensor, n_lam)).astype(np.uint64)
+    n_out = rng.integers(0, 9, (6, n_sensor, n_lam, n_th, n_phi)).astype(
+        np.uint64)
+    ds = _finalize(
+        tab_photons_tot=photons,
+        tab_photons_tot_no_aer=photons_no_aer if no_aer else None,
+        tab_dist_tot=np.zeros(1),
+        tab_hist_tot=None,
+        wavelength=np.array([500.0, 600.0, 700.0]),
+        n_photons_in_tot=n_in,
+        errorcount=_NoError(),  # pyright: ignore[reportArgumentType]
+        n_photons_out_tot=n_out,
+        n_photons_out_tot_no_aer=n_out if no_aer else None,
+        output_layers=output_layers,
+        tab_trans_dir=np.zeros((n_sensor, n_lam)),
+        tab_trans_dir_analytic=None,
+        attrs={},
+        prof_atm=None,
+        prof_oc=None,
+        sigma=None,
+        horiz=0,
+        le=le,
+        no_aer_output=no_aer,
+    )
+    norm_geo: Any = 1.0
+    if mode == "cone":
+        _, _, omega = _calc_solid_angles(n_th, n_phi)
+        norm_geo = 2.0 * omega.reshape((1, 1, -1, 1))
+    norm = norm_geo * n_in.reshape((1, 1, n_sensor, n_lam, 1, 1))
+    iphi: Any = 0 if mode == "zip" else slice(None)
+    written = 0
+    for direction, lvl in LEVELS.items():
+        if f"I_{direction}" not in ds:
+            continue
+        written += 1
+        for tab, suffix in [(photons, "")] + (
+                [(photons_no_aer, ", no_aer")] if no_aer else []):
+            ref = (tab.astype("float64") / norm).swapaxes(4, 5)
+            for i, stk in enumerate("IQUV"):
+                out = ds[f"{stk}_{direction}{suffix}"].values
+                exp = ref[lvl, i, :, :, iphi, :]
+                assert out.dtype == exp.dtype and out.shape == exp.shape
+                assert out.tobytes() == np.ascontiguousarray(exp).tobytes()
+                assert out.strides == exp.strides
+    assert written == {0: 1, 3: 6, 5: 3}[output_layers]
