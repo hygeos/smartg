@@ -380,3 +380,61 @@ def test_truncated_ext_ssa() -> None:
     ext_1, ssa_1 = truncated_ext_ssa(2.0, 1.0, 1.0)
     assert float(ext_1) == 0.0
     assert float(ssa_1) == 1.0
+
+
+def _v205_truncate_phase_set(
+    pha: NDArray[np.float64],
+    theta_deg: NDArray[np.float64],
+    truncation: DMTrunc | GTTrunc,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Truncate a set of matrices as v2.0.5 did, with numpy.unique."""
+    pha = np.asarray(pha, dtype=np.float64)
+    lead = pha.shape[:-2]
+    flat = pha.reshape((-1,) + pha.shape[-2:])
+    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
+    inv = np.asarray(inv).reshape(-1)
+    pha_tr_uniq = np.empty_like(uniq)
+    f_uniq = np.zeros(len(uniq), dtype=np.float64)
+    for i in range(len(uniq)):
+        pha_tr_uniq[i], f_uniq[i] = truncate_phase(
+            uniq[i], theta_deg, truncation
+        )
+    return pha_tr_uniq[inv].reshape(pha.shape), f_uniq[inv].reshape(lead)
+
+
+@pytest.mark.parametrize("truncation", [GT, DM], ids=["GT", "DM"])
+def test_truncate_phase_set_as_v205(
+    truncation: DMTrunc | GTTrunc, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repeated and null matrices: numpy.unique's results, bitwise.
+
+    Each distinct matrix is truncated once, the null ones not at all.
+    """
+    a, b, c = _hg_matrix(0.85), _hg_matrix(0.88), _hg_matrix(0.9)
+    null = np.zeros_like(a)
+    pha = np.stack([
+        np.stack([a, b, a, null]), np.stack([c, a, null, b]),
+        np.stack([b, b, c, a]),
+    ])
+    ref_tr, ref_f = _v205_truncate_phase_set(pha, THETA, truncation)
+    calls = _count_calls(monkeypatch, "truncate_phase")
+    pha_tr, f = truncate_phase_set(pha, THETA, truncation)
+    assert calls[0] == 3
+    assert pha_tr.tobytes() == ref_tr.tobytes()
+    assert f.tobytes() == ref_f.tobytes()
+    assert pha_tr.shape == pha.shape and f.shape == pha.shape[:2]
+
+
+def test_truncate_phase_set_merges_signed_zeros(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Matrices equal but for the sign of zeros are truncated once."""
+    a = _hg_matrix(0.85)
+    a[1, :] = 0.0
+    b = a.copy()
+    b[1, :] = -0.0
+    calls = _count_calls(monkeypatch, "truncate_phase")
+    pha_tr, f = truncate_phase_set(np.stack([a, b]), THETA, GT)
+    assert calls[0] == 1
+    np.testing.assert_array_equal(pha_tr[0], pha_tr[1])
+    assert f[0] == f[1]

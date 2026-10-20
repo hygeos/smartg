@@ -567,16 +567,21 @@ def truncate_phase_set(
     """
     pha = np.asarray(pha, dtype=np.float64)
     lead = pha.shape[:-2]
-    flat = pha.reshape((-1,) + pha.shape[-2:])
-    uniq, inv = np.unique(flat, axis=0, return_inverse=True)
-    inv = np.asarray(inv).reshape(-1)
-    pha_tr_uniq = np.empty_like(uniq)
-    f_uniq = np.zeros(len(uniq), dtype=np.float64)
-    for i in range(len(uniq)):
-        pha_tr_uniq[i], f_uniq[i] = truncate_phase(
-            uniq[i], theta_deg, truncation
+    flat = np.ascontiguousarray(pha.reshape((-1,) + pha.shape[-2:]))
+    # the null matrices (F11 zero, in the layers a component is absent
+    # from) come back unchanged with f = 0, as truncate_phase gives them
+    pha_tr = flat.copy()
+    f = np.zeros(len(flat), dtype=np.float64)
+    # the others are grouped by their bytes, -0.0 taken as 0.0 as the
+    # equality of numpy.unique does, and each group truncated once
+    groups: dict[bytes, list[int]] = {}
+    for i in np.flatnonzero(flat[:, 0].any(axis=1)):
+        groups.setdefault((flat[i] + 0.0).tobytes(), []).append(int(i))
+    for rows in groups.values():
+        pha_tr[rows], f[rows] = truncate_phase(
+            flat[rows[0]], theta_deg, truncation
         )
-    return pha_tr_uniq[inv].reshape(pha.shape), f_uniq[inv].reshape(lead)
+    return pha_tr.reshape(pha.shape), f.reshape(lead)
 
 
 def truncated_ext_ssa(
