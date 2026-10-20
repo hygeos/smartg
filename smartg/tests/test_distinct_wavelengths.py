@@ -484,3 +484,32 @@ def test_phase_in_wavelength_chunks(
     chunked = comp.phase(wavelength, z, rh)
     xr.testing.assert_identical(chunked, whole)
     assert chunked.values.tobytes() == whole.values.tobytes()
+
+
+def test_phase_set_on_the_bracketing_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The two nodes around a wavelength give the whole table's rows.
+
+    At every node, between nodes, one ulp off each node, at both ends
+    and at float32 midpoints, bitwise; out of the table, the same error.
+    """
+    cld = _cloud3d()
+    nodes = cld.get_phase(n_theta=19).coords["wavelength_phase"].values
+    nodes = nodes.astype(np.float64)
+    mid = 0.5 * (nodes[1:] + nodes[:-1])
+    queries = np.concatenate([
+        nodes, mid, np.nextafter(nodes[1:], -np.inf),
+        np.nextafter(nodes[:-1], np.inf),
+        mid.astype(np.float32).astype(np.float64),
+    ])
+    new, _, _ = cld.get_phase_set(queries, n_theta=19)
+    monkeypatch.setattr(atm_mod, "_bracket", lambda axis, value: None)
+    ref, _, _ = cld.get_phase_set(queries, n_theta=19)
+    assert len(new) == len(ref)
+    for a, b in zip(new, ref, strict=True):
+        xr.testing.assert_identical(a, b)
+        assert a.values.tobytes() == b.values.tobytes()
+    monkeypatch.undo()
+    with pytest.raises(ValueError, match="range of the wavelength_phase"):
+        cld.get_phase_set(np.array([1e5]), n_theta=19)

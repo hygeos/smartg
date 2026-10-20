@@ -297,6 +297,21 @@ def _forced_ssa(
     return values
 
 
+def _bracket(axis: NDArray[np.float64], value: float) -> slice | None:
+    """Return the two nodes a linear interpolation at `value` reads.
+
+    On an increasing axis of 3 nodes or more, the nodes scipy's
+    interp1d reads on the whole axis, the one of numpy.searchsorted
+    (side 'left') clipped to [1, n - 1] and the one before: a value on
+    a node is interpolated from that node and the one before it. None
+    for a value out of the axis or NaN.
+    """
+    if not axis[0] <= value <= axis[-1]:
+        return None
+    i = min(max(int(np.searchsorted(axis, value)), 1), axis.size - 1)
+    return slice(i - 1, i + 1)
+
+
 def _nearest_index(
     values: NumericArrayLike, targets: NumericArrayLike
 ) -> NDArray[np.intp]:
@@ -2240,11 +2255,23 @@ class _Comp3DFile(Comp3D):
 
         phase = self.get_phase(n_theta=n_theta)
         clamp = self._param_oor == "clamp"
+        # each wavelength is interpolated on the two nodes around it,
+        # those the interpolation reads on the whole table; an axis
+        # that is not increasing keeps the whole table
+        wav = phase.coords["wavelength_phase"].values.astype(np.float64)
+        increasing = wav.size > 2 and bool(np.all(np.diff(wav) > 0.0))
 
         phases = []
         for i_wavelength in range(len(wavelength_phase)):
+            window = (
+                _bracket(wav, float(wavelength_phase[i_wavelength]))
+                if increasing else None
+            )
             phase_w = self._interp_axis(
-                phase, "wavelength_phase", wavelength_phase[i_wavelength]
+                phase if window is None
+                else phase.isel(wavelength_phase=window),
+                "wavelength_phase",
+                wavelength_phase[i_wavelength],
             )
             # Loop only on the unique parameter values
             for iparam in range(n_unique):
