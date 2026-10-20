@@ -200,8 +200,15 @@ class BandSet:
 
         if self.use_reptran_kdis:
             assert self.data is not None
-            for i, w in enumerate(self.data):
-                tau_mol[i, :] = w.calc_profile(prof)
+            # a band type may compute the absorption of all its bands
+            # at once, as KDIS bands do
+            calc_profiles = getattr(self.type_wavelength, "_calc_profiles",
+                                    None)
+            if calc_profiles is not None:
+                tau_mol[:, :] = calc_profiles(self.data, prof)
+            else:
+                for i, w in enumerate(self.data):
+                    tau_mol[i, :] = w.calc_profile(prof)
 
         return tau_mol
 

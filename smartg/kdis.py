@@ -51,8 +51,8 @@ from scipy.interpolate import interpn
 
 from smartg.atmosphere import blackbody_radiance, od2k
 from smartg.config import DIR_AUXDATA
-from smartg.interp import interp2
-from smartg.typing import NumericArrayLike, PathType
+from smartg.interp import _interp2_stack
+from smartg.typing import BandLike, NumericArrayLike, PathType
 
 dir_kdis = DIR_AUXDATA / "kdis"
 
@@ -279,6 +279,113 @@ def kdis_avg_emission(
     )
 
 
+# the gases of the density columns of a profile, in the order of the
+# species of KDIS models
+_SPECIES = [
+    "h2o", "co2", "o3", "no2", "co", "ch4", "o2", "n2", "n2o", "so2",
+]
+# k tables interpolated together by one interpn call (a hypernav table
+# of 31 x 9 x 12 doubles makes 14 MB a chunk)
+_KDIS_TABLE_CHUNK = 512
+
+
+def _distinct_tables(
+    channels: NDArray[np.intp], coefficients: NDArray[np.integer]
+) -> tuple[NDArray[np.intp], NDArray[np.intp]]:
+    """Return the distinct (channel, k index) pairs, and each band's."""
+    span = int(coefficients.max()) + 1
+    keys, inverse = np.unique(
+        channels * span + coefficients, return_inverse=True
+    )
+    return np.stack(np.divmod(keys, span), axis=1), inverse.reshape(-1)
+
+
+def _kdis_absorption(
+    kdis: Kdis, ibands: Sequence[KdisIband], prof: ProfileBase
+) -> NDArray[np.float64]:
+    """Return the gaseous absorption of internal bands of one model.
+
+    See `KdisIband.calc_profile`, whose operations it performs in the
+    same order, each k table interpolated once for the bands that use
+    it.
+    """
+    temperature = prof.t.copy()
+    pressure = prof.p.copy()
+    n_z = len(temperature)
+    density = np.zeros((n_z, len(_SPECIES)), np.float64)
+    for j, name in enumerate(_SPECIES):
+        density[:, j] = getattr(prof, f"dens_{name}")[:]
+    absorption = np.zeros((len(ibands), n_z), np.float64)
+    channels = np.array([b.band.band for b in ibands], dtype=np.intp)
+    indices = np.array([b.index for b in ibands], dtype=np.intp)
+    if kdis.nsp_c > 0:
+        # calc_profile clipped them for each species, to the same values
+        pressure[pressure > np.max(kdis.p)] = np.max(kdis.p) * 0.99
+        pressure[pressure < np.min(kdis.p)] = np.min(kdis.p) * 1.01
+        temperature[temperature > np.max(kdis.t)] = np.max(kdis.t) * 0.99
+        temperature[temperature < np.min(kdis.t)] = np.min(kdis.t) * 1.01
+    for species_index in range(kdis.nsp_c):
+        molecular_index = _SPECIES.index(kdis.species_c[species_index])
+        # a copy, since only the interpolation point is clipped
+        # below, not the density that scales the absorption
+        if kdis.c_desc == "density":
+            concentration = density[:, molecular_index].copy()
+        elif kdis.c_desc == "molar_fraction":
+            concentration = density[:, molecular_index] / (
+                prof.dens_air.copy()
+            )
+        else:
+            raise ValueError(
+                "Unsupported KDIS concentration description: "
+                f"{kdis.c_desc}"
+            )
+        concentration[concentration > np.max(kdis.c)] = (
+            np.max(kdis.c) * 0.99
+        )
+        concentration[concentration < np.min(kdis.c)] = (
+            np.min(kdis.c) * 1.01
+        )
+        points = np.concatenate(
+            (
+                np.array([pressure]),
+                np.array([temperature]),
+                np.array([concentration]),
+            ),
+            axis=0,
+        ).T
+        tables, inverse = _distinct_tables(
+            channels, kdis.iki_eff_c[species_index, channels, indices]
+        )
+        k_interp = np.empty((n_z, len(tables)), np.float64)
+        for start in range(0, len(tables), _KDIS_TABLE_CHUNK):
+            chunk = tables[start:start + _KDIS_TABLE_CHUNK]
+            # the tables on a trailing axis, which interpn weighs as
+            # it weighs a single table
+            k_interp[:, start:start + len(chunk)] = interpn(
+                (kdis.p, kdis.t, kdis.c),
+                np.moveaxis(
+                    kdis.ki_c[species_index, chunk[:, 0], chunk[:, 1]],
+                    0, -1,
+                ),
+                points,
+            )
+        absorption += k_interp[:, inverse].T * density[:, molecular_index]
+    for species_index in range(kdis.nsp):
+        molecular_index = _SPECIES.index(kdis.species[species_index])
+        tables, inverse = _distinct_tables(
+            channels, kdis.iki_eff[species_index, channels, indices]
+        )
+        k_interp = _interp2_stack(
+            kdis.p,
+            kdis.t,
+            [np.squeeze(kdis.ki[species_index, b, k]) for b, k in tables],
+            pressure,
+            temperature,
+        )
+        absorption += k_interp[inverse] * density[:, molecular_index]
+    return absorption * 1e5
+
+
 class KdisIband:
     """Represent one internal KDIS absorption band.
 
@@ -328,119 +435,49 @@ class KdisIband:
             Absorption coefficient profile in inverse kilometres,
             with one value for each altitude in ``prof``.
         """
-        species = [
-            "h2o",
-            "co2",
-            "o3",
-            "no2",
-            "co",
-            "ch4",
-            "o2",
-            "n2",
-            "n2o",
-            "so2",
-        ]
-        temperature = prof.t.copy()
-        pressure = prof.p.copy()
-        n_molecules = 10
-        profile_length = len(temperature)
-        data_molecules = np.zeros(profile_length, np.float64)
+        return _kdis_absorption(self.band.kdis, [self], prof)[0]
 
-        density_molecules = np.zeros((profile_length, n_molecules), np.float64)
-        density_molecules[:, 0] = prof.dens_h2o[:]
-        density_molecules[:, 1] = prof.dens_co2[:]
-        density_molecules[:, 2] = prof.dens_o3[:]
-        density_molecules[:, 3] = prof.dens_no2[:]
-        density_molecules[:, 4] = prof.dens_co[:]
-        density_molecules[:, 5] = prof.dens_ch4[:]
-        density_molecules[:, 6] = prof.dens_o2[:]
-        density_molecules[:, 7] = prof.dens_n2[:]
-        density_molecules[:, 8] = prof.dens_n2o[:]
-        density_molecules[:, 9] = prof.dens_so2[:]
+    @staticmethod
+    def _calc_profiles(
+        ibands: Sequence[BandLike], prof: ProfileBase
+    ) -> NDArray[np.float64]:
+        """Calculate the gaseous absorption of several internal bands.
 
-        for species_index in range(self.band.kdis.nsp_c):
-            species_name = self.band.kdis.species_c[species_index]
-            molecular_index = species.index(species_name)
-            coefficient_index = self.band.kdis.iki_eff_c[
-                species_index, self.band.band, self.index
-            ]
-            coefficient_table = self.band.kdis.ki_c[
-                species_index, self.band.band, coefficient_index, :, :, :
-            ]
-            interpolation_points = (
-                self.band.kdis.p,
-                self.band.kdis.t,
-                self.band.kdis.c,
-            )
-            # a copy, since only the interpolation point is clipped
-            # below, not the density that scales the absorption
-            if self.band.kdis.c_desc == "density":
-                concentration = density_molecules[:, molecular_index].copy()
-            elif self.band.kdis.c_desc == "molar_fraction":
-                concentration = density_molecules[:, molecular_index] / (
-                    prof.dens_air.copy()
-                )
+        Each k table, picked by a species, a channel and a k index, is
+        interpolated once for all the internal bands that use it, by
+        the interpolations of `calc_profile`, and the contributions are
+        added in its order: each row is the one `calc_profile` gives,
+        bit for bit. A band of another type, or of a subclass with its
+        own `calc_profile`, is computed by it.
+
+        Parameters
+        ----------
+        ibands : sequence of KdisIband
+            Internal bands, of one KDIS model or several.
+        prof : ProfileBase
+            Atmospheric profile, see `calc_profile`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Absorption coefficient profiles in inverse kilometres, of
+            shape ``(len(ibands), len(prof.t))``.
+        """
+        absorption = np.zeros((len(ibands), len(prof.t)), np.float64)
+        models: dict[int, tuple[Kdis, list[int]]] = {}
+        for i, iband in enumerate(ibands):
+            if getattr(type(iband), "calc_profile", None) is (
+                KdisIband.calc_profile
+            ):
+                kdis = cast(KdisIband, iband).band.kdis
+                models.setdefault(id(kdis), (kdis, []))[1].append(i)
             else:
-                raise ValueError(
-                    "Unsupported KDIS concentration description: "
-                    f"{self.band.kdis.c_desc}"
-                )
-            concentration[concentration > np.max(self.band.kdis.c)] = (
-                np.max(self.band.kdis.c) * 0.99
+                absorption[i] = iband.calc_profile(prof)
+        for kdis, rows in models.values():
+            absorption[rows] = _kdis_absorption(
+                kdis, [cast(KdisIband, ibands[i]) for i in rows], prof
             )
-            concentration[concentration < np.min(self.band.kdis.c)] = (
-                np.min(self.band.kdis.c) * 1.01
-            )
-            pressure[pressure > np.max(self.band.kdis.p)] = (
-                np.max(self.band.kdis.p) * 0.99
-            )
-            pressure[pressure < np.min(self.band.kdis.p)] = (
-                np.min(self.band.kdis.p) * 1.01
-            )
-            temperature[temperature > np.max(self.band.kdis.t)] = (
-                np.max(self.band.kdis.t) * 0.99
-            )
-            temperature[temperature < np.min(self.band.kdis.t)] = (
-                np.min(self.band.kdis.t) * 1.01
-            )
-            interpolation_values = np.concatenate(
-                (
-                    np.array([pressure]),
-                    np.array([temperature]),
-                    np.array([concentration]),
-                ),
-                axis=0,
-            ).T
-            data_molecules += (
-                interpn(
-                    interpolation_points,
-                    coefficient_table,
-                    interpolation_values,
-                )
-                * density_molecules[:, molecular_index]
-            )
-
-        for species_index in range(self.band.kdis.nsp):
-            species_name = self.band.kdis.species[species_index]
-            molecular_index = species.index(species_name)
-            coefficient_index = self.band.kdis.iki_eff[
-                species_index, self.band.band, self.index
-            ]
-            coefficient_table = self.band.kdis.ki[
-                species_index, self.band.band, coefficient_index, :, :
-            ]
-            data_molecules += (
-                interp2(
-                    self.band.kdis.p,
-                    self.band.kdis.t,
-                    np.squeeze(coefficient_table),
-                    pressure,
-                    temperature,
-                )
-                * density_molecules[:, molecular_index]
-            )
-
-        return data_molecules * 1e5
+        return absorption
 
 
 class KdisBand:

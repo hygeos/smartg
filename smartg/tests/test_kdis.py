@@ -7,8 +7,11 @@ from typing import Any, cast
 import numpy as np
 import pytest
 import xarray as xr
+from scipy.interpolate import interpn
 
-from smartg.atmosphere import od2k
+from smartg.atmosphere import Atm1D, od2k
+from smartg.bandset import BandSet
+from smartg.interp import interp2
 from smartg.kdis import (
     Kdis,
     KdisIband,
@@ -361,3 +364,192 @@ def test_calc_profile_clips_only_the_interpolation_point(
     kabs = KdisIband(cast(Any, band), 0).calc_profile(cast(Any, prof))
 
     np.testing.assert_allclose(kabs, [0.0, 5e17 * 1e5])
+
+
+def _v205_calc_profile(iband: Any, prof: Any) -> np.ndarray:
+    """Return the absorption of a band as v2.0.5 computed it."""
+    species = [
+        "h2o", "co2", "o3", "no2", "co", "ch4", "o2", "n2", "n2o", "so2",
+    ]
+    kdis = iband.band.kdis
+    temperature = prof.t.copy()
+    pressure = prof.p.copy()
+    profile_length = len(temperature)
+    data_molecules = np.zeros(profile_length, np.float64)
+    density_molecules = np.zeros((profile_length, 10), np.float64)
+    for j, name in enumerate(species):
+        density_molecules[:, j] = getattr(prof, f"dens_{name}")[:]
+    for s in range(kdis.nsp_c):
+        molecular_index = species.index(kdis.species_c[s])
+        coefficient_index = kdis.iki_eff_c[s, iband.band.band, iband.index]
+        table = kdis.ki_c[s, iband.band.band, coefficient_index, :, :, :]
+        if kdis.c_desc == "density":
+            concentration = density_molecules[:, molecular_index].copy()
+        else:
+            concentration = density_molecules[:, molecular_index] / (
+                prof.dens_air.copy()
+            )
+        concentration[concentration > np.max(kdis.c)] = np.max(kdis.c) * 0.99
+        concentration[concentration < np.min(kdis.c)] = np.min(kdis.c) * 1.01
+        pressure[pressure > np.max(kdis.p)] = np.max(kdis.p) * 0.99
+        pressure[pressure < np.min(kdis.p)] = np.min(kdis.p) * 1.01
+        temperature[temperature > np.max(kdis.t)] = np.max(kdis.t) * 0.99
+        temperature[temperature < np.min(kdis.t)] = np.min(kdis.t) * 1.01
+        points = np.concatenate(
+            (np.array([pressure]), np.array([temperature]),
+             np.array([concentration])), axis=0,
+        ).T
+        data_molecules += (
+            interpn((kdis.p, kdis.t, kdis.c), table, points)
+            * density_molecules[:, molecular_index]
+        )
+    for s in range(kdis.nsp):
+        molecular_index = species.index(kdis.species[s])
+        coefficient_index = kdis.iki_eff[s, iband.band.band, iband.index]
+        table = kdis.ki[s, iband.band.band, coefficient_index, :, :]
+        data_molecules += (
+            interp2(kdis.p, kdis.t, np.squeeze(table), pressure, temperature)
+            * density_molecules[:, molecular_index]
+        )
+    return data_molecules * 1e5
+
+
+def _profiles() -> dict[str, Any]:
+    atm = Atm1D("afglt")
+    return {
+        "afglt": atm.prof,
+        "afglus": Atm1D("afglus").prof,
+        "regridded": atm.prof.regrid(np.array([100.0, 30.0, 10.0, 3.0,
+                                               1.0, 0.0])),
+    }
+
+
+KDIS_MODELS = {
+    "kato2": ("kato2", {"lmax": 4500}),
+    "S2": ("SENTINEL2_1_MSI", {}),
+    "SLSTR": ("SENTINEL3_1_SLSTR", {"lmax": 4500}),
+}
+
+
+@pytest.mark.parametrize("model", KDIS_MODELS)
+def test_calc_profiles_as_band_by_band(model: str) -> None:
+    """The batch gives each band its v2.0.5 absorption, bitwise."""
+    name, kwargs = KDIS_MODELS[model]
+    bands = Kdis(name).to_smartg(**kwargs).l
+    for prof in _profiles().values():
+        batch = KdisIband._calc_profiles(bands, prof)
+        ref = np.stack([_v205_calc_profile(b, prof) for b in bands])
+        assert batch.dtype == ref.dtype and batch.shape == ref.shape
+        assert batch.tobytes() == ref.tobytes()
+        one = bands[len(bands) // 2]
+        assert (one.calc_profile(prof).tobytes()
+                == _v205_calc_profile(one, prof).tobytes())
+
+
+def _synthetic_kdis(nsp_c: int, nsp: int, c_desc: str = "density") -> Any:
+    rng = np.random.default_rng(0)
+    n_k = 4
+    return SimpleNamespace(
+        nsp_c=nsp_c,
+        species_c=["h2o", "co2"][:nsp_c],
+        iki_eff_c=rng.integers(0, n_k, (nsp_c, 2, 6)),
+        ki_c=rng.random((nsp_c, 2, n_k, 3, 4, 2)),
+        c=np.array([1e15, 1e18]) if c_desc == "density"
+        else np.array([1e-7, 1e-2]),
+        c_desc=c_desc,
+        nsp=nsp,
+        species=["o3", "o2"][:nsp],
+        iki_eff=rng.integers(0, n_k, (nsp, 2, 6)),
+        ki=rng.random((nsp, 2, n_k, 3, 4)),
+        p=np.array([1.0, 100.0, 1000.0]),
+        t=np.array([180.0, 220.0, 260.0, 300.0]),
+    )
+
+
+def _synthetic_bands(kdis: Any) -> list[KdisIband]:
+    bands = []
+    for b in range(2):
+        band = SimpleNamespace(kdis=kdis, band=b, awvl=[500.0 + b] * 6,
+                               awvl_weight=np.ones(6), solarflux=1.0,
+                               dl=10.0)
+        bands += [KdisIband(cast(Any, band), i) for i in (0, 3, 1, 3, 5)]
+    return bands
+
+
+def _synthetic_profile() -> Any:
+    # pressures and temperatures beyond the axes, which are clipped
+    # only when a species has a concentration axis
+    return SimpleNamespace(
+        t=np.array([170.0, 250.0, 310.0]),
+        p=np.array([0.5, 300.0, 1200.0]),
+        dens_air=np.full(3, 1e19),
+        **{f"dens_{name}": np.array([1e14, 1e16, 2e18]) for name in
+           ["h2o", "co2", "o3", "no2", "co", "ch4", "o2", "n2", "n2o",
+            "so2"]},
+    )
+
+
+@pytest.mark.parametrize(
+    ("nsp_c", "nsp", "c_desc"),
+    [(0, 2, "density"), (2, 1, "density"), (2, 2, "molar_fraction")],
+)
+def test_calc_profiles_synthetic(nsp_c: int, nsp: int, c_desc: str) -> None:
+    """Repeated k indices, points off the axes, both concentrations."""
+    kdis = _synthetic_kdis(nsp_c, nsp, c_desc)
+    bands = _synthetic_bands(kdis)
+    prof = _synthetic_profile()
+    batch = KdisIband._calc_profiles(cast(Any, bands), prof)
+    ref = np.stack([_v205_calc_profile(b, prof) for b in bands])
+    assert batch.tobytes() == ref.tobytes()
+
+
+class _OwnBand(KdisIband):
+    """A subclass with its own absorption."""
+
+    def calc_profile(self, prof: Any) -> np.ndarray:
+        return np.full(len(prof.t), 7.0)
+
+
+class _OtherBand:
+    """A band of another type."""
+
+    w = 600.0
+
+    def calc_profile(self, prof: Any) -> np.ndarray:
+        return np.full(len(prof.t), 3.0)
+
+
+def test_calc_profiles_of_mixed_bands() -> None:
+    """Bands of two models, a subclass and another type, interleaved."""
+    kato2 = Kdis("kato2").to_smartg(lmin=500, lmax=700).l
+    s2 = Kdis("SENTINEL2_1_MSI").to_smartg(lmax=700).l
+    own = _OwnBand(kato2[0].band, 0)
+    bands: list[Any] = [kato2[0], s2[0], own, kato2[1], _OtherBand(), s2[1]]
+    prof = _profiles()["afglt"]
+    batch = KdisIband._calc_profiles(bands, prof)
+    for row, band in zip(batch, bands, strict=True):
+        ref = (band.calc_profile(prof) if isinstance(band, (_OwnBand,
+                                                            _OtherBand))
+               else _v205_calc_profile(band, prof))
+        assert row.tobytes() == np.asarray(ref, np.float64).tobytes()
+
+
+def test_bandset_computes_kdis_bands_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BandSet hands its KDIS bands to one batch, as float32 rows."""
+    bands = Kdis("kato2").to_smartg(lmin=500, lmax=700).l
+    prof = _profiles()["afglt"]
+    calls = []
+    batch = KdisIband._calc_profiles
+
+    def counted(ibands: Any, p: Any) -> np.ndarray:
+        calls.append(len(ibands))
+        return batch(ibands, p)
+
+    monkeypatch.setattr(KdisIband, "_calc_profiles", staticmethod(counted))
+    tau = BandSet(bands).calc_profile(prof)
+    assert calls == [len(bands)]
+    ref = np.stack([_v205_calc_profile(b, prof) for b in bands])
+    assert tau.dtype == np.float32
+    assert tau.tobytes() == ref.astype(np.float32).tobytes()

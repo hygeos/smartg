@@ -20,12 +20,40 @@ interp_1d_coord
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 import xarray as xr
 from numpy.typing import ArrayLike, NDArray
 from scipy.ndimage import map_coordinates
+
+
+def _index_coords(
+    corner_locs: ArrayLike, interp_locs: ArrayLike
+) -> NDArray[np.float64]:
+    """Return the fractional index of each point along an axis.
+
+    Parameters
+    ----------
+    corner_locs : array_like
+        Increasing or decreasing coordinates of the nodes.
+    interp_locs : array_like
+        Coordinates of the points.
+
+    Returns
+    -------
+    ndarray
+        Fractional index of each point among the nodes, clipped to
+        the first and the last node.
+    """
+    corner_locs_arr = np.asarray(corner_locs, dtype=np.float64)
+    interp_locs_arr = np.asarray(interp_locs, dtype=np.float64)
+    index = np.arange(len(corner_locs_arr))
+    if np.all(np.diff(corner_locs_arr) < 0):
+        corner_locs_arr = corner_locs_arr[::-1]
+        index = index[::-1]
+    return np.interp(interp_locs_arr, corner_locs_arr, index)
 
 
 def interp3(
@@ -66,23 +94,12 @@ def interp3(
     """
     assert v.ndim == 3
 
-    def index_coords(
-        corner_locs: ArrayLike, interp_locs: ArrayLike
-    ) -> NDArray[np.float64]:
-        corner_locs_arr = np.asarray(corner_locs, dtype=np.float64)
-        interp_locs_arr = np.asarray(interp_locs, dtype=np.float64)
-        index = np.arange(len(corner_locs_arr))
-        if np.all(np.diff(corner_locs_arr) < 0):
-            corner_locs_arr = corner_locs_arr[::-1]
-            index = index[::-1]
-        return np.interp(interp_locs_arr, corner_locs_arr, index)
-
     orig_shape = np.asarray(xi).shape
     xi, yi, zi = (a.reshape(-1) for a in np.atleast_1d(xi, yi, zi))
 
     output = np.empty(xi.shape, dtype=float)
     coords = [
-        index_coords(*item)
+        _index_coords(*item)
         for item in zip([x, y, z], [xi, yi, zi], strict=True)
     ]
 
@@ -126,29 +143,62 @@ def interp2(
     """
     assert v.ndim == 2
 
-    def index_coords(
-        corner_locs: ArrayLike, interp_locs: ArrayLike
-    ) -> NDArray[np.float64]:
-        corner_locs_arr = np.asarray(corner_locs, dtype=np.float64)
-        interp_locs_arr = np.asarray(interp_locs, dtype=np.float64)
-        index = np.arange(len(corner_locs_arr))
-        if np.all(np.diff(corner_locs_arr) < 0):
-            corner_locs_arr = corner_locs_arr[::-1]
-            index = index[::-1]
-        return np.interp(interp_locs_arr, corner_locs_arr, index)
-
     orig_shape = np.asarray(xi).shape
     xi, yi = (a.reshape(-1) for a in np.atleast_1d(xi, yi))
 
     output = np.empty(xi.shape, dtype=float)
     coords = [
-        index_coords(*item)
+        _index_coords(*item)
         for item in zip([x, y], [xi, yi], strict=True)
     ]
 
     map_coordinates(v, coords, order=1, output=output, **kwargs)
 
     return output.reshape(orig_shape)
+
+
+def _interp2_stack(
+    x: ArrayLike,
+    y: ArrayLike,
+    v: Sequence[NDArray[np.number]],
+    xi: ArrayLike,
+    yi: ArrayLike,
+    **kwargs: Any,
+) -> NDArray[np.float64]:
+    """Sample several 2-D arrays at the same points, linearly.
+
+    The same as ``np.stack([interp2(x, y, a, xi, yi) for a in v])``,
+    the index coordinates of the points computed once: each array goes
+    through the very same ``map_coordinates`` call as in `interp2`.
+
+    Parameters
+    ----------
+    x, y : array_like
+        1-D coordinates of the nodes of each array, see `interp2`.
+    v : sequence of ndarray
+        2-D arrays to interpolate.
+    xi, yi : array_like
+        Query point coordinates, of any shape.
+    **kwargs
+        Additional keyword arguments forwarded to
+        ``scipy.ndimage.map_coordinates``.
+
+    Returns
+    -------
+    ndarray
+        Interpolated values, of shape ``(len(v),) + xi.shape``.
+    """
+    orig_shape = np.asarray(xi).shape
+    xi, yi = (a.reshape(-1) for a in np.atleast_1d(xi, yi))
+    coords = [
+        _index_coords(*item)
+        for item in zip([x, y], [xi, yi], strict=True)
+    ]
+    output = np.empty((len(v),) + xi.shape, dtype=float)
+    for values, out in zip(v, output, strict=True):
+        assert values.ndim == 2
+        map_coordinates(values, coords, order=1, output=out, **kwargs)
+    return output.reshape((len(v),) + orig_shape)
 
 
 def interp_1d_coord(
