@@ -94,7 +94,12 @@ from scipy.constants import Boltzmann, Planck, speed_of_light
 from scipy.integrate import simpson
 from scipy.interpolate import make_interp_spline
 
-from smartg.bandset import BandSet, _distinct_values
+from smartg.bandset import (
+    BandSet,
+    _distinct_values,
+    _expand_block_indices,
+    _expand_blocks,
+)
 from smartg.config import DIR_AUXDATA
 from smartg.diff import diff1
 from smartg.grid3d import Grid3D, create_1d_grid
@@ -3870,10 +3875,7 @@ class Atm1D(Atmosphere):
             )
             if resampled:
                 phases = [_on_theta_grid(p, theta) for p in phases]
-            # no copy of a stack that is already float64
-            pha = np.stack([p.values for p in phases]).astype(
-                np.float64, copy=False
-            )
+            pha = self._phase_table(phases)
             pro = pro.assign_coords(theta_atm=theta)
             pro["phase_atm"] = xr.DataArray(
                 pha,
@@ -4012,6 +4014,24 @@ class Atm1D(Atmosphere):
         return self._mix_phases(
             self._comp_phases(wavelength, n_theta),
             warn=not is_native_theta(n_theta),
+        )
+
+    def _phase_table(self, phases: list[xr.DataArray]) -> NDArray[Any]:
+        """Stack the phase matrices of `prof_phases` into a table.
+
+        Parameters
+        ----------
+        phases : list of DataArray
+            The matrices, on the same scattering angles.
+
+        Returns
+        -------
+        ndarray
+            The float64 table [iphase, nphamat, theta_atm].
+        """
+        # no copy of a stack that is already float64
+        return np.stack([p.values for p in phases]).astype(
+            np.float64, copy=False
         )
 
     def _phase_wavelengths(
@@ -4415,6 +4435,7 @@ class _Atm3DBackend(Atm1D):
         ],
         o3_acs: PathType = "O3_acs_BogumilV3.0_coeffs",
         no2_acs: PathType = "NO2_acs_BogumilV1.0_coeffs",
+        phase_blocks: tuple[NDArray[np.intp], int] | None = None,
     ) -> None:
 
         self.lat = 45.0
@@ -4424,10 +4445,16 @@ class _Atm3DBackend(Atm1D):
         self.prof_abs = prof_abs
         self.prof_ray = prof_ray
         self.prof_aer = prof_aer
-        self.prof_phases = prof_phases
         if prof_phases is not None:
             for pha in prof_phases[1]:
                 _check_finite_phase(pha, "prof_phases")
+            if phase_blocks is not None:
+                prof_phases = (
+                    _expand_block_indices(prof_phases[0], *phase_blocks),
+                    prof_phases[1],
+                )
+        self.prof_phases = prof_phases
+        self._phase_blocks = phase_blocks
         self.rh_cst = None
         self.opt3d = True
         self.cells = cells
@@ -4482,6 +4509,18 @@ class _Atm3DBackend(Atm1D):
         self.prof = prof.regrid(grid)
         self.prof_red = prof.regrid(self.pfgrid)
 
+    def _phase_table(self, phases: list[xr.DataArray]) -> NDArray[Any]:
+        """Stack the phase matrices, one block per wavelength of calc.
+
+        `phase_blocks`, when given, holds the block of matrices of each
+        wavelength and the number of matrices of a block: the matrices
+        of the distinct wavelengths are copied onto the repeated ones.
+        """
+        pha = super()._phase_table(phases)
+        if self._phase_blocks is None:
+            return pha
+        return _expand_blocks(pha, *self._phase_blocks)
+
 
 class Atm3D(Atmosphere):
     """3D atmospheric profile definition.
@@ -4526,9 +4565,9 @@ class Atm3D(Atmosphere):
         each wavelength of the profile using those of the nearest one,
         the 1D aerosols being mixed into the cells at the profile
         wavelength nearest to it. Useful to reduce the memory. If
-        None, compute the phase matrices once at each distinct
-        wavelength of the profile (the internal bands of a KDIS channel
-        share its wavelength).
+        None, compute the phase matrices at all wavelengths. The
+        matrices of a repeated wavelength (the internal bands of a KDIS
+        channel share its wavelength) are computed once and copied.
     mol_sca_1d : 2-D ndarray or None, optional
         Force the 1D molecular scattering (Rayleigh) coefficients in
         km-1, with the shape (nwavelength, NZ + 1) where NZ is the
@@ -4789,6 +4828,9 @@ class Atm3D(Atmosphere):
             or self.aer_phase_1d is None
         ):
             atm_1d = copy.copy(self.atm_1d)
+            # its matrices are read through its indices: no need to
+            # copy those of the repeated wavelengths
+            atm_1d._distinct_phase = True
             atm_1d.prof = self.atm_1d._prof_src.regrid(
                 np.asarray(self.grid_3d.zGRID[::-1])
             )
@@ -4854,12 +4896,20 @@ class Atm3D(Atmosphere):
         #
         mol_sca_glob = self._glob_molecular(mol_sca_1d)
         mol_abs_glob = self._glob_molecular(mol_abs_1d)
+        phase_blocks = None
         if phase:
-            if wavelength_pha is None:
+            inverse = None
+            if wavelength_pha is None and np.isnan(wavelengths).any():
+                wavelength_pha = wavelengths
+            elif wavelength_pha is None:
                 # the internal bands of a KDIS channel share its
                 # wavelength, and so its phase matrices: computed once,
-                # at the first of those bands
-                wavelength_pha = _distinct_values(wavelengths)[0]
+                # at the first of those bands, and copied onto the
+                # others below
+                wavelength_pha, inverse = _distinct_values(wavelengths)
+                if (self._distinct_phase
+                        or len(wavelength_pha) == len(wavelengths)):
+                    inverse = None
             with _native_union(native):
                 ext_glob, ssa_glob, prof_phases = self._glob_particles(
                     wavelengths,
@@ -4869,6 +4919,10 @@ class Atm3D(Atmosphere):
                     ssa_aer_1d,
                     ipha_aer_1d,
                     pha_aer_1d,
+                )
+            if inverse is not None and prof_phases is not None:
+                phase_blocks = (
+                    inverse, len(prof_phases[1]) // len(wavelength_pha)
                 )
         else:
             ext_glob, ssa_glob = self._glob_ext_ssa(
@@ -4886,6 +4940,7 @@ class Atm3D(Atmosphere):
             prof_aer=(ext_glob, ssa_glob),
             prof_phases=prof_phases,
             cells=self._cells_info(),
+            phase_blocks=phase_blocks,
         )
         return backend.calc(
             wavelength,

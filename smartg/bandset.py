@@ -245,6 +245,65 @@ def _distinct_values(
     return values[first[order]], rank[inverse]
 
 
+def _expand_blocks(
+    table: NDArray[Any], inverse: NDArray[np.intp], block_rows: int
+) -> NDArray[Any]:
+    """Repeat the blocks of rows of a table computed per distinct value.
+
+    Parameters
+    ----------
+    table : ndarray
+        Rows in blocks of `block_rows`, one block per distinct value.
+    inverse : ndarray of intp
+        The block of each value, as `_distinct_values` gives it.
+    block_rows : int
+        The number of rows of a block.
+
+    Returns
+    -------
+    ndarray
+        One block per value: block i is block ``inverse[i]`` of
+        `table`, in a new C-contiguous array of its dtype, or `table`
+        itself when each block is used once, in order.
+    """
+    table = np.asarray(table)
+    n_block = table.shape[0] // block_rows
+    if np.array_equal(inverse, np.arange(n_block)):
+        return table
+    blocks = table.reshape(n_block, block_rows, *table.shape[1:])
+    return np.take(blocks, inverse, axis=0).reshape(-1, *table.shape[1:])
+
+
+def _expand_block_indices(
+    index: NDArray[np.integer], inverse: NDArray[np.intp], block_rows: int
+) -> NDArray[np.integer]:
+    """Renumber indices into blocks per distinct value onto all values.
+
+    Row i of `index` points into block ``inverse[i]`` of a table
+    computed per distinct value; it is moved to the block of the first
+    occurrence of that value in the table `_expand_blocks` gives.
+
+    Parameters
+    ----------
+    index : ndarray of int
+        Indices of the rows of the table, one row of indices per value.
+    inverse : ndarray of intp
+        The block of each value, as `_distinct_values` gives it.
+    block_rows : int
+        The number of rows of a block.
+
+    Returns
+    -------
+    ndarray
+        The indices, with the dtype of `index`.
+    """
+    # the distinct values come in order of first occurrence
+    first = np.unique(inverse, return_index=True)[1]
+    shift = (first[inverse] - inverse) * block_rows
+    shift = shift.reshape(-1, *(1,) * (index.ndim - 1))
+    return (index + shift).astype(index.dtype)
+
+
 def spectral_grids(
     lmin: RealNumber,
     lmax: RealNumber,

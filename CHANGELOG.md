@@ -14,11 +14,11 @@
     the phase lists of `calc_split` included. A component that pairs
     its inputs with the wavelengths of `calc` (a forced `ssa` array, a
     4-D `phase`, a component of another class) still has its matrices
-    computed at each of them. `Atm3D`
-    does the same for its own phase matrices, and interpolates the
-    extinction and albedo of its 3D components once per distinct
-    wavelength: on the 312 kato2 bands up to 4.5 µm, a scene of 40
-    cloud cells took 54 s and 4.1 GB, and now 6 s and 1.7 GB
+    computed at each of them. `Atm3D` does the same for its own phase
+    matrices, and interpolates the extinction and albedo of its 3D
+    components once per distinct wavelength: on the 312 kato2 bands up
+    to 4.5 µm, a scene of 40 cloud cells took 54 s and 4.1 GB, and now
+    6 s and 1.7 GB
   - Tabulate the phase matrices of the hydrosols once per distinct
     wavelength when their `wavelength_phase` is None, and mix those of
     several hydrosols that do not share a grid on the distinct

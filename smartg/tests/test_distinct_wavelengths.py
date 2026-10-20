@@ -25,9 +25,15 @@ from smartg.atmosphere import (
     Cloud,
     Cloud3D,
     _follows_calc_wavelengths,
+    _nearest_index,
     extract_split,
 )
-from smartg.bandset import BandSet, _distinct_values
+from smartg.bandset import (
+    BandSet,
+    _distinct_values,
+    _expand_block_indices,
+    _expand_blocks,
+)
 from smartg.grid3d import Grid3D
 from smartg.truncation import GTTrunc
 from smartg.water import Hydrosol, HydrosolPR, HydrosolZhai, Water1D
@@ -191,6 +197,43 @@ def test_distinct_values_merge_signed_zeros() -> None:
     distinct, inverse = _distinct_values(np.array([0.0, -0.0, 1.0]))
     assert distinct.size == 2
     np.testing.assert_array_equal(inverse, [0, 0, 1])
+
+
+@pytest.mark.parametrize("block_rows", [1, 3])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_expand_blocks(dtype: type, block_rows: int) -> None:
+    """Block i of the expanded table is block inverse[i]."""
+    rng = np.random.default_rng(1)
+    distinct, inverse = _distinct_values(np.array(WAV))
+    table = rng.random((len(distinct) * block_rows, 2, 5)).astype(dtype)
+    out = _expand_blocks(table, inverse, block_rows)
+    ref = np.concatenate([
+        table[k * block_rows:(k + 1) * block_rows] for k in inverse
+    ])
+    assert out.dtype == ref.dtype and out.flags.c_contiguous
+    assert out.strides == ref.strides and out.tobytes() == ref.tobytes()
+
+
+def test_expand_blocks_without_repeats() -> None:
+    """A table whose blocks are each used once is kept as it is."""
+    table = np.arange(12.0).reshape(6, 2)
+    assert _expand_blocks(table, np.arange(3), 2) is table
+
+
+@pytest.mark.parametrize("block_rows", [1, 4])
+def test_expand_block_indices(block_rows: int) -> None:
+    """The indices move to the block of the first occurrence.
+
+    As those v2.0.5 found with the nearest of every wavelength.
+    """
+    full = np.atleast_1d(BandSet(WAV)[:])
+    _, inverse = _distinct_values(full)
+    offset = np.array([[0, 2, 1, 3][:block_rows]] * len(WAV), np.int32)
+    index = (offset + inverse[:, None] * block_rows).astype(np.int32)
+    out = _expand_block_indices(index, inverse, block_rows)
+    ref = (offset + _nearest_index(full, full)[:, None] * block_rows)
+    assert out.dtype == np.int32
+    np.testing.assert_array_equal(out, ref)
 
 
 @pytest.mark.parametrize("old_calc_iphase", [False, True])
@@ -543,15 +586,42 @@ def _atm3d(scene: str, wavelength_phase: Any = None) -> Atm3D:
 
 
 @pytest.mark.parametrize("scene", SCENES)
-def test_atm3d_phase_once_per_distinct_wavelength(scene: str) -> None:
+def test_atm3d_phase_once_per_distinct_wavelength(
+    scene: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Atm3D computes its phase matrices once per distinct wavelength.
 
     Its 1D atmosphere and its 3D components both do, and the profile
-    is the one of both given every wavelength, but for the numbering
-    of its phase table.
+    is the one of both given every wavelength, byte for byte, its
+    phase table included.
     """
     bands = BandSet(WAV)
+    old = _atm3d(scene, _full_axis()).calc(bands, n_theta=181)
+    sizes: list[int] = []
+    glob_particles = Atm3D._glob_particles
+
+    def spy(self: Atm3D, wavelengths: Any, wavelength_pha: Any,
+            *args: Any) -> Any:
+        sizes.append(len(wavelength_pha))
+        return glob_particles(self, wavelengths, wavelength_pha, *args)
+
+    monkeypatch.setattr(Atm3D, "_glob_particles", spy)
     new = _atm3d(scene).calc(bands, n_theta=181)
+    assert sizes == [N_DISTINCT]
+    _assert_identical(new, old)
+
+
+@pytest.mark.parametrize("scene", SCENES)
+def test_atm3d_distinct_phase_layout(scene: str) -> None:
+    """The private switch keeps the distinct wavelengths only.
+
+    Every variable but the numbering of the phase table is the one of
+    every wavelength of `calc`.
+    """
+    bands = BandSet(WAV)
+    atm = _atm3d(scene)
+    atm._distinct_phase = True
+    new = atm.calc(bands, n_theta=181)
     old = _atm3d(scene, _full_axis()).calc(bands, n_theta=181)
     assert new.sizes["iphase"] < old.sizes["iphase"]
     _assert_same_profile(new, old)
