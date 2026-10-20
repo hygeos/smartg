@@ -857,3 +857,21 @@ def test_find_extinction_of_every_wavelength(
             s += sg_module._find_extinction(h, fp, pro, j)
         ref[j] = s / len(heliostats)
     assert naatm.tobytes() == ref.tobytes()
+
+
+@pytest.mark.parametrize("th_deg", [0.0, 30.0, 75.0])
+@pytest.mark.parametrize("pp", [True, False], ids=["pp", "spherical"])
+def test_direct_transmission_of_every_wavelength(
+    monkeypatch: pytest.MonkeyPatch, pp: bool, th_deg: float
+) -> None:
+    """Each wavelength gets the transmission it gets alone, bitwise."""
+    monkeypatch.setattr(sg_module, "to_gpu", np.asarray)
+    pro = Atm1D("afglt", comp=[AerOPAC("desert", 0.3, 550.0)]).calc(
+        [450.0, 550.0, 650.0]
+    )
+    x0, trans = _impact_init(pro, 3, th_deg, 225.0, 6371.0, pp)
+    for j in range(3):
+        one = pro.isel(wavelength=[j])
+        x0_j, trans_j = _impact_init(one, 1, th_deg, 225.0, 6371.0, pp)
+        assert np.asarray(x0_j).tobytes() == np.asarray(x0).tobytes()
+        assert trans[j].tobytes() == trans_j[0].tobytes()

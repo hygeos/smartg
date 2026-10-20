@@ -6411,23 +6411,19 @@ def _impact_init(
 
         if natm != 0:
             assert prof_atm is not None and od_atm is not None
-            for ilam in range(nlam):
-                if prof_atm['OD_atm'].ndim == 2:
-                    # wavelength, z
-                    # tautot[ilam] = prof_atm['OD_atm'][ilam,
-                    # natm]/np.cos(thv_deg*pi/180.)
-                    tautot[ilam] = od_atm[ilam, -1] / np.cos(
-                        thv_deg * np.pi / 180.0
-                    )
-                elif prof_atm['OD_atm'].ndim == 1:
-                    # z
-                    # tautot[ilam] =
-                    # prof_atm['OD_atm'][natm]/np.cos(thv_deg*pi/180.)
-                    tautot[ilam] = od_atm[-1] / np.cos(thv_deg * np.pi / 180.0)
-                else:
-                    raise ValueError(
-                        'invalid number of dimensions in prof_atm'
-                    )
+            # every wavelength at once, by the operations of each
+            if prof_atm['OD_atm'].ndim == 2:
+                # wavelength, z
+                tautot[:] = od_atm[:nlam, -1] / np.cos(
+                    thv_deg * np.pi / 180.0
+                )
+            elif prof_atm['OD_atm'].ndim == 1:
+                # z
+                tautot[:] = od_atm[-1] / np.cos(thv_deg * np.pi / 180.0)
+            else:
+                raise ValueError(
+                    'invalid number of dimensions in prof_atm'
+                )
     else:
         tanthv = np.tan(thv_deg * np.pi / 180.0)
 
@@ -6496,18 +6492,18 @@ def _impact_init(
             yph += vy * d
             zph += vz * d
 
-            for ilam in range(nlam):
-                # optical thickness of the layer in vertical direction
-                hlay0 = abs(od_atm[ilam, i] - od_atm[ilam, i - 1])
+            # optical thickness of the layer in vertical direction, at
+            # every wavelength
+            hlay0 = np.abs(od_atm[:nlam, i] - od_atm[:nlam, i - 1])
 
-                # thickness of the layer
-                d0 = abs(z_atm[i - 1] - z_atm[i])
+            # thickness of the layer
+            d0 = abs(z_atm[i - 1] - z_atm[i])
 
-                # optical thickness of the layer at current wavelength
-                hlay = hlay0 * d / d0
+            # optical thickness of the layer at each wavelength
+            hlay = hlay0 * d / d0
 
-                # cumulative optical thickness
-                tautot[ilam] += hlay
+            # cumulative optical thickness
+            tautot += hlay
 
     return (
         to_gpu(np.array([x0, y0, z0], dtype='float32')),
