@@ -38,6 +38,7 @@ from smartg.smartg import (
     _isotropic,
     _RatioStdev,
     _resolve_n_loop,
+    _stdev_lim_check,
     _stdev_lim_reached,
     multi_profiles,
 )
@@ -728,3 +729,75 @@ def test_finalize_normalizes_the_written_levels(
                 assert out.tobytes() == np.ascontiguousarray(exp).tobytes()
                 assert out.strides == exp.strides
     assert written == {0: 1, 3: 6, 5: 3}[output_layers]
+
+
+class _V205RatioStdev:
+    """The accumulator of v2.0.5, whose results the new one gives."""
+
+    def __init__(self, shape: tuple[int, ...]) -> None:
+        self.s1 = np.zeros(shape)
+        self.s2 = np.zeros(shape)
+        self.sn = np.zeros(shape)
+        n_shape = (1, 1, shape[2], shape[3], 1, 1)
+        self.n1 = np.zeros(n_shape)
+        self.n2 = np.zeros(n_shape)
+
+    def add(self, weights: np.ndarray, launched: np.ndarray) -> None:
+        s = np.asarray(weights, dtype=np.float64)
+        n = np.asarray(launched, dtype=np.float64).reshape(self.n1.shape)
+        self.s1 += s
+        self.s2 += s * s
+        self.sn += s * n
+        self.n1 += n
+        self.n2 += n * n
+
+    def mean(self) -> np.ndarray:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return self.s1 / self.n1
+
+    def sigma(self) -> np.ndarray:
+        r = self.mean()
+        q = self.s2 - 2 * r * self.sn + r * r * self.n2
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return np.sqrt(np.maximum(q, 0.0)) / self.n1
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_ratio_stdev_in_place_as_v205(dtype: type) -> None:
+    """Means and deviations, whole, sliced or last, are v2.0.5's.
+
+    A sensor gets no photon in some loops, and one in none, whose
+    results are NaN.
+    """
+    rng = np.random.default_rng(4)
+    shape = (6, 4, 3, 5, 4, 3)
+    new, old = _RatioStdev(shape), _V205RatioStdev(shape)
+    for k in range(7):
+        launched = rng.integers(0, 1000, (3, 5)).astype(np.uint64)
+        launched[2] = 0
+        if k % 3 == 0:
+            launched[1, :2] = 0
+        weights = (rng.random(shape) * launched.reshape(
+            (1, 1, 3, 5, 1, 1))).astype(dtype)
+        new.add(weights, launched)
+        old.add(weights, launched)
+        for lvl, stk in [(0, 0), (3, 2)]:
+            assert new.mean(lvl, stk).tobytes() == (
+                old.mean()[lvl, stk].tobytes())
+            assert new.sigma(lvl, stk).tobytes() == (
+                old.sigma()[lvl, stk].tobytes())
+    assert new.mean().tobytes() == old.mean().tobytes()
+    assert new.sigma().tobytes() == old.sigma().tobytes()
+    last = new.sigma(consume=True)
+    assert last.tobytes() == old.sigma().tobytes()
+    assert last.shape == shape and last.flags.c_contiguous
+    assert np.isnan(last[:, :, 2]).all()
+
+
+def test_stdev_lim_check_on_the_slice() -> None:
+    """The check on a slice decides as the check on the whole result."""
+    lim = StdevLim(err_rel_min=5.0, n_loop_min=2, level=0, stokes=0)
+    mean, sigma = _stats(1.0, 0.04)
+    whole = _stdev_lim_reached(lim, 3, mean, sigma)
+    sliced = _stdev_lim_check(lim, 3, mean[0, 0], sigma[0, 0])
+    assert whole == sliced

@@ -5922,8 +5922,12 @@ def _loop_kernel(
 
             if stdev_lim is not None:
                 format_std = stdev_lim.dict['format']
-                reached, max_aerr, max_rerr = _stdev_lim_reached(
-                    stdev_lim, n_simu, loop_stats.mean(), loop_stats.sigma()
+                # on the level and Stokes component of the criterion
+                lvl = stdev_lim.dict['level']
+                stk = stdev_lim.dict['stokes']
+                reached, max_aerr, max_rerr = _stdev_lim_check(
+                    stdev_lim, n_simu, loop_stats.mean(lvl, stk),
+                    loop_stats.sigma(lvl, stk),
                 )
 
                 if stdev_lim.dict['verbose']:
@@ -6003,7 +6007,12 @@ def _loop_kernel(
                     mat_cats[i, 4] = (n_bis * abs(sum_z2 - sum_2z)) ** 0.5
                 mat_cats[i, 5] = (mat_cats[i, 4] / mat_cats[i, 1]) * 100
 
-    sigma = loop_stats.sigma() if loop_stats is not None else None
+    # in the memory of the accumulators, released before the tallies
+    # are copied from the GPU
+    sigma = (
+        loop_stats.sigma(consume=True) if loop_stats is not None else None
+    )
+    loop_stats = None
 
     return (
         n_photons_in_tot.get(),
@@ -6059,6 +6068,8 @@ class _RatioStdev:
         n_shape = (1, 1, shape[2], shape[3], 1, 1)
         self.n1 = np.zeros(n_shape, dtype=np.float64)
         self.n2 = np.zeros(n_shape, dtype=np.float64)
+        # the products of a loop, written in place
+        self._work = np.empty(shape, dtype=np.float64)
 
     def add(self, weights: np.ndarray, launched: np.ndarray) -> None:
         """Add the weights and the launched photons of a kernel loop.
@@ -6071,29 +6082,90 @@ class _RatioStdev:
             The photons launched in the loop, of shape (sensor,
             wavelength).
         """
-        s = np.asarray(weights, dtype=np.float64)
+        # in place, in float64: the operations of s1 += s, s2 += s * s
+        # and sn += s * n on s = weights in float64
+        w = np.asarray(weights)
         n = np.asarray(launched, dtype=np.float64).reshape(self.n1.shape)
-        self.s1 += s
-        self.s2 += s * s
-        self.sn += s * n
+        np.add(self.s1, w, out=self.s1, dtype=np.float64)
+        np.multiply(w, w, out=self._work, dtype=np.float64)
+        np.add(self.s2, self._work, out=self.s2)
+        np.multiply(w, n, out=self._work, dtype=np.float64)
+        np.add(self.sn, self._work, out=self.sn)
         self.n1 += n
         self.n2 += n * n
 
-    def mean(self) -> np.ndarray:
-        """Return the weights per launched photon, NaN without any."""
-        with np.errstate(invalid='ignore', divide='ignore'):
-            return self.s1 / self.n1
+    def _parts(
+        self, level: int | None, stokes: int | None
+    ) -> tuple[np.ndarray, ...]:
+        """Return the accumulators, or their level and Stokes slice."""
+        if level is None or stokes is None:
+            return self.s1, self.s2, self.sn, self.n1, self.n2
+        return (self.s1[level, stokes], self.s2[level, stokes],
+                self.sn[level, stokes], self.n1[0, 0], self.n2[0, 0])
 
-    def sigma(self) -> np.ndarray:
-        """Return the standard deviation of the mean, NaN if none."""
-        r = self.mean()
-        # the sum of the squares of s_k - r n_k, expanded
-        q = self.s2 - 2 * r * self.sn + r * r * self.n2
+    def mean(
+        self, level: int | None = None, stokes: int | None = None
+    ) -> np.ndarray:
+        """Return the weights per launched photon, NaN without any.
+
+        Over all the levels and Stokes components, or the one given.
+        """
+        s1, _, _, n1, _ = self._parts(level, stokes)
         with np.errstate(invalid='ignore', divide='ignore'):
-            return np.sqrt(np.maximum(q, 0.0)) / self.n1
+            return s1 / n1
+
+    def sigma(
+        self,
+        level: int | None = None,
+        stokes: int | None = None,
+        consume: bool = False,
+    ) -> np.ndarray:
+        """Return the standard deviation of the mean, NaN if none.
+
+        Over all the levels and Stokes components, or the one given.
+        With `consume`, the last call of a run, it is computed in the
+        memory of the accumulators, which are then no longer valid.
+        """
+        s1, s2, sn, n1, n2 = self._parts(level, stokes)
+        r = self.mean(level, stokes) if not consume else s1
+        if consume:
+            with np.errstate(invalid='ignore', divide='ignore'):
+                np.divide(s1, n1, out=r)
+        # the sum of the squares of s_k - r n_k, expanded, in the order
+        # of (s2 - 2 * r * sn) + r * r * n2
+        q = np.multiply(2, r, out=self._work if consume else None)
+        np.multiply(q, sn, out=q)
+        np.subtract(s2, q, out=q)
+        np.multiply(r, r, out=r)
+        np.multiply(r, n2, out=r)
+        np.add(q, r, out=q)
+        with np.errstate(invalid='ignore', divide='ignore'):
+            np.maximum(q, 0.0, out=q)
+            np.sqrt(q, out=q)
+            np.divide(q, n1, out=q)
+        return q
 
 
 def _stdev_lim_reached(
+    stdev_lim: StdevLim,
+    n_loops: int,
+    mean: np.ndarray,
+    sigma: np.ndarray,
+) -> tuple[bool, float, float]:
+    """Tell whether a run has reached the precision of its StdevLim.
+
+    See `_stdev_lim_check`, given the whole result and its standard
+    deviation, of shape (level, stokes, sensor, wavelength, theta,
+    phi).
+    """
+    level = stdev_lim.dict['level']
+    stokes = stdev_lim.dict['stokes']
+    return _stdev_lim_check(
+        stdev_lim, n_loops, mean[level, stokes], sigma[level, stokes]
+    )
+
+
+def _stdev_lim_check(
     stdev_lim: StdevLim,
     n_loops: int,
     mean: np.ndarray,
@@ -6108,8 +6180,9 @@ def _stdev_lim_reached(
     n_loops : int
         The number of kernel loops run so far.
     mean, sigma : np.ndarray
-        The result of the run so far and its standard deviation, of
-        shape (level, stokes, sensor, wavelength, theta, phi).
+        The result of the run so far and its standard deviation, at the
+        level and Stokes component of the criterion, of shape (sensor,
+        wavelength, theta, phi).
 
     Returns
     -------
@@ -6123,10 +6196,8 @@ def _stdev_lim_reached(
         The largest absolute and relative (in %) errors of the slice,
         where the bins without any photon count as zero.
     """
-    level = stdev_lim.dict['level']
-    stokes = stdev_lim.dict['stokes']
-    mean_lim = np.nan_to_num(mean[level, stokes])
-    sigma_lim = np.nan_to_num(sigma[level, stokes])
+    mean_lim = np.nan_to_num(mean)
+    sigma_lim = np.nan_to_num(sigma)
     with np.errstate(invalid='ignore', divide='ignore'):
         err_rel = sigma_lim / mean_lim * 100
     err_rel[np.isnan(err_rel)] = 0
