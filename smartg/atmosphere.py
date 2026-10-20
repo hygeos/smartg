@@ -3868,7 +3868,10 @@ class Atm1D(Atmosphere):
             )
             if resampled:
                 phases = [_on_theta_grid(p, theta) for p in phases]
-            pha = np.stack([p.values for p in phases]).astype(np.float64)
+            # no copy of a stack that is already float64
+            pha = np.stack([p.values for p in phases]).astype(
+                np.float64, copy=False
+            )
             pro = pro.assign_coords(theta_atm=theta)
             pro["phase_atm"] = xr.DataArray(
                 pha,
