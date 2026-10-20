@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import xarray as xr
 from numpy.typing import NDArray
 
 from smartg.atmosphere import (
@@ -325,3 +326,26 @@ def test_extract_split_of_a_run_output() -> None:
         rebuilt["phase_atm"].values, pro["phase_atm"].values
     )
     assert extract_split(run.drop_vars(["phase_atm", "iphase_atm"]))[3] is None
+
+
+def test_cross_sections_read_in_memory_as_from_the_file() -> None:
+    """The O3 and NO2 cross sections read whole give the same profile.
+
+    Atm1D reads them in memory once instead of from the open files at
+    each wavelength of each profile.
+    """
+    wavelength = [440.0, 440.0, 550.0, 700.0]
+    atm = Atm1D("afglus")
+    lazy = Atm1D("afglus")
+    acs = DIR_AUXDATA / "acs"
+    lazy.acs_o3 = xr.open_dataset(
+        acs / "O3_acs_BogumilV3.0_coeffs.nc"
+    ).rename({"wav": "wavelength"})
+    lazy.acs_no2 = xr.open_dataset(
+        acs / "NO2_acs_BogumilV1.0_coeffs.nc"
+    ).rename({"wav": "wavelength"})
+    xr.testing.assert_identical(atm.acs_o3, lazy.acs_o3)
+    new, ref = atm.calc(wavelength), lazy.calc(wavelength)
+    xr.testing.assert_identical(new, ref)
+    for name in new.variables:
+        assert new[name].values.tobytes() == ref[name].values.tobytes()

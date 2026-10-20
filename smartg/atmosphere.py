@@ -2896,7 +2896,9 @@ class Atm1D(Atmosphere):
             o3_acs_path = DIR_AUXDATA / "acs" / o3_acs_path.name
         if not o3_acs_path.exists() and o3_acs_path.suffix != ".nc":
             o3_acs_path = o3_acs_path.with_name(o3_acs_path.name + ".nc")
-        self.acs_o3 = xr.open_dataset(o3_acs_path)
+        # read whole, once: each profile takes a value per wavelength,
+        # which a lazily opened file would read from the disk again
+        self.acs_o3 = xr.load_dataset(o3_acs_path)
         self.acs_o3 = self.acs_o3.rename({"wav": "wavelength"})
 
         no2_acs_path = Path(no2_acs)
@@ -2904,7 +2906,7 @@ class Atm1D(Atmosphere):
             no2_acs_path = DIR_AUXDATA / "acs" / no2_acs_path.name
         if not no2_acs_path.exists() and no2_acs_path.suffix != ".nc":
             no2_acs_path = no2_acs_path.with_name(no2_acs_path.name + ".nc")
-        self.acs_no2 = xr.open_dataset(no2_acs_path)
+        self.acs_no2 = xr.load_dataset(no2_acs_path)
         self.acs_no2 = self.acs_no2.rename({"wav": "wavelength"})
 
         #
