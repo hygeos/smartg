@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
+import smartg.atmosphere as atm_mod
 from smartg.atmosphere import (
     AerOPAC,
     AerUser,
@@ -457,3 +458,29 @@ def test_comp3d_ext_ssa_on_repeated_wavelengths() -> None:
         assert ext[i].tobytes() == cld.get_ext(np.array([w]))[0].tobytes()
         assert ssa[i].tobytes() == cld.get_ssa(np.array([w]))[0].tobytes()
 
+
+@pytest.mark.parametrize("make", [
+    lambda: AerOPAC("desert", 0.1, 550.0),
+    lambda: _cloud(),
+    _aer_user,
+], ids=["desert", "cloud", "user aerosol"])
+def test_phase_in_wavelength_chunks(
+    make: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phase matrices computed a few wavelengths at a time are the same.
+
+    40 wavelengths, repeated and unsorted as KDIS bands are, computed
+    one at a time against all at once, bitwise.
+    """
+    rng = np.random.default_rng(9)
+    wavelength = rng.uniform(420.0, 690.0, 40).astype(np.float32)
+    wavelength[10:20] = wavelength[0]
+    z = np.array([100.0, 3.0, 2.0, 0.0])
+    rh = np.zeros(4)
+    comp = make()
+    monkeypatch.setattr(atm_mod, "_PHASE_WAVELENGTH_CHUNK_BYTES", 2**62)
+    whole = comp.phase(wavelength, z, rh)
+    monkeypatch.setattr(atm_mod, "_PHASE_WAVELENGTH_CHUNK_BYTES", 1)
+    chunked = comp.phase(wavelength, z, rh)
+    xr.testing.assert_identical(chunked, whole)
+    assert chunked.values.tobytes() == whole.values.tobytes()

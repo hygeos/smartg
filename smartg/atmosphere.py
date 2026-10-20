@@ -132,6 +132,10 @@ if TYPE_CHECKING:
 
 # constants
 M_H2O = 18.015  # g/mol
+# AerOPAC.phase interpolates its tables at this many bytes of float64
+# rows at most: the matrices of many wavelengths are computed a chunk of
+# wavelengths at a time
+_PHASE_WAVELENGTH_CHUNK_BYTES = 64 * 2**20
 
 # the columns of the libRadtran atmosphere files
 _LIBRADTRAN_COLUMNS = (
@@ -1097,11 +1101,21 @@ class AerOPAC:
             )
         self._check_wavelengths(wavelength)
 
+        theta_req = n_theta
         theta = (
             self.native_theta() if is_native_theta(n_theta)
             else as_theta_grid(n_theta)
         )
         n_theta = len(theta)
+        # the bytes of the largest float64 rows of one wavelength
+        row_bytes = 8 * 6 * max(
+            self.ds_mix.sizes[self.hum_or_reff], len(z)
+        ) * max(self.ds_mix.sizes["theta"], n_theta)
+        chunk = max(1, _PHASE_WAVELENGTH_CHUNK_BYTES // row_bytes)
+        if len(wavelength) > chunk + 2:
+            return self._phase_in_chunks(
+                wavelength, z, rh, theta_req, chunk
+            )
         wavelength_tabulated = self.ds_mix.coords["wav"].values
         n_wavelength = len(wavelength)
 
@@ -1344,6 +1358,46 @@ class AerOPAC:
         p_tot.data[np.isnan(p_tot.data)] = 0.0
         p_tot = p_tot.assign_coords(z_phase=z[1:])
         return p_tot
+
+    def _phase_in_chunks(
+        self,
+        wavelength: np.ndarray,
+        z: np.ndarray,
+        rh: np.ndarray,
+        n_theta: ThetaLike,
+        chunk: int,
+    ) -> xr.DataArray:
+        """Return `phase` computed a chunk of wavelengths at a time.
+
+        Each chunk is computed with the shortest and the longest
+        wavelengths before it, so that `phase` picks the same tabulated
+        wavelengths and interpolates each of its rows exactly as for
+        the whole array: the rows do not depend on one another.
+        """
+        wavelength = np.asarray(wavelength)
+        ends = wavelength[[np.argmin(wavelength), np.argmax(wavelength)]]
+        out = None
+        first = None
+        for start in range(0, len(wavelength), chunk):
+            part = np.concatenate((ends, wavelength[start:start + chunk]))
+            rows = self.phase(part, z, rh, n_theta=n_theta)
+            if out is None:
+                first = rows
+                out = np.empty(
+                    (len(wavelength), *rows.shape[1:]), dtype=rows.dtype
+                )
+            out[start:start + chunk] = rows.values[2:]
+        assert out is not None and first is not None
+        return xr.DataArray(
+            out,
+            dims=first.dims,
+            coords={
+                "wavelength_phase": wavelength,
+                "z_phase": first.coords["z_phase"].values,
+                "nphamat": first.coords["nphamat"].values,
+                "theta_atm": first.coords["theta_atm"].values,
+            },
+        )
 
     @staticmethod
     def list() -> list[str]:
