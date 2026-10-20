@@ -801,3 +801,19 @@ def test_stdev_lim_check_on_the_slice() -> None:
     whole = _stdev_lim_reached(lim, 3, mean, sigma)
     sliced = _stdev_lim_check(lim, 3, mean[0, 0], sigma[0, 0])
     assert whole == sliced
+
+
+@pytest.mark.parametrize("rows", [1, 2, 3])
+def test_phase_tables_built_in_chunks(
+    rows: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Tables built a few rows at a time are those built at once."""
+    pro = Atm1D(
+        "afglt", comp=[AerOPAC("desert", 0.1, 550.0)],
+        pfgrid=[100.0, 3.0, 2.0, 0.0],
+    ).calc([450.0, 550.0, 650.0, 750.0])
+    ref_tab, ref_cdf = _calc_phase_host(pro, 1000, 0.03, "atm")
+    monkeypatch.setattr(sg_module, "_PHASE_CHUNK_BYTES", rows * 64 * 1000)
+    tab, cdf = _calc_phase_host(pro, 1000, 0.03, "atm")
+    assert tab.tobytes() == ref_tab.tobytes()
+    assert cdf.tobytes() == ref_cdf.tobytes()

@@ -152,9 +152,10 @@ TYPE_PCDF = 'float32'
 _PHASE_ANGLE_BYTES = (
     np.dtype(TYPE_PHASE).itemsize + np.dtype(TYPE_PCDF).itemsize
 )
-# peak host bytes per angle and matrix while _calc_phase_host builds
-# the tables (measured)
-_PHASE_HOST_BYTES = 55
+# _calc_phase_host normalizes and integrates the rows of the tables a
+# chunk at a time: its float64 temporaries, under 64 bytes per angle
+# and row, then stay below this size
+_PHASE_CHUNK_BYTES = 2**28
 
 # mirrors struct AGrid of communs.h: align=True reproduces the 4 bytes
 # of padding the compiler inserts before the 8-byte pointer
@@ -4368,6 +4369,7 @@ def _calc_phase_host(
 
     nrows = nphases if nphases > 0 else 1
     phase_host = np.zeros((nrows, n_theta), dtype=TYPE_PHASE, order='C')
+    cdf_host = np.empty((nrows, n_theta), dtype=TYPE_PCDF)
     ang = _uniform_angles(n_theta) if ang_a is None else ang_a
 
     # Set Rayleigh phase function or isotropic if depol <0
@@ -4387,75 +4389,121 @@ def _calc_phase_host(
     # Set VRS phase function
     phase_host[1, :] = _rayleigh(n_theta, 0.17, ang_a=ang_a)
 
-    for idx, ipha in enumerate(range(nphases - 2), start=2):
-        # for ipha in range(nphases-1):
-        assert angles is not None
-
-        # (ipha, nphamat, theta)
-        phase = profile[name_phase][ipha, :, :].to_numpy()
-        _check_finite_phase(
-            phase,
-            f"the {'atmosphere' if kind == 'atm' else 'ocean'} profile "
-            f"({name_phase}[{ipha}])",
-            theta=profile.coords['theta_' + kind].to_numpy(),
+    # each row depends on its own matrix only: the rows are built,
+    # normalized and integrated a chunk at a time
+    factors = _bin_factors(ang)
+    chunk = max(1, _PHASE_CHUNK_BYTES // (64 * n_theta))
+    for start in range(0, nrows, chunk):
+        stop = min(start + chunk, nrows)
+        for idx in range(max(start, 2), stop):
+            _phase_row(phase_host, idx, profile, name_phase, kind, angles,
+                       ang, polarization)
+        block = phase_host[start:stop]
+        # normalize each row on the interpolation the kernel reads, see
+        # the docstring; a row of zeros, e.g. a VRS entry of a profile
+        # that has none, stays one
+        total = _bin_masses(block, ang, factors).sum(axis=1)
+        scale = np.divide(
+            2.0, total, out=np.ones_like(total), where=total > 0
         )
+        for name, dtype in TYPE_PHASE:
+            block[name] *= scale[:, None].astype(dtype)
+        cdf_host[start:stop] = _cdf_of_table(block, ang, factors)
+    return phase_host, cdf_host
 
-        phase = convert_phase_to_iparper(phase)
 
-        if not polarization:
-            if len(phase[:, 0]) == 4:
-                raise ValueError(
-                    "old profiles with only 4 phase matrix terms are not "
-                    "supported without polarization"
-                )
-            # back to IQUV convention to obtain F11
-            f11 = 0.5 * (phase[0, :] + 2 * phase[1, :] + phase[4, :])
-            # reset all values to 0
-            phase[:, :] = 0.0
-            # reconvert to Iperpar but without considering polarization
-            phase[0, :] = 0.5 * f11
-            phase[1, :] = 0.5 * f11
-            phase[4, :] = 0.5 * f11
+def _phase_row(
+    phase_host: np.ndarray,
+    idx: int,
+    profile: xr.Dataset,
+    name_phase: str,
+    kind: str,
+    angles: NDArray[np.float64] | None,
+    ang: NDArray[np.float64],
+    polarization: bool,
+) -> None:
+    """Write row `idx` of a phase table, unnormalized.
 
-        # f1 = interp1d(angles, phase[1,:])
-        # f2 = interp1d(angles, phase[0,:])
-        f1 = interp1d(angles, phase[0, :])
-        f2 = interp1d(angles, phase[1, :])
-        f3 = interp1d(angles, phase[2, :])
-        f4 = interp1d(angles, phase[3, :])
+    From the matrix ``idx - 2`` of the profile, see
+    `_calc_phase_host`.
+    """
+    ipha = idx - 2
+    assert angles is not None
 
-        if len(phase[:, 0]) == 4:  # spherical particle
-            # parameters equally spaced in scattering angle [0, 180]
-            phase_host['a_P11'][idx, :] = f1(ang)  # I par P11
-            phase_host['a_P22'][idx, :] = f2(ang)  # I per P22
-            phase_host['a_P33'][idx, :] = f3(ang)  # U P33
-            phase_host['a_P43'][idx, :] = f4(ang)  # V P43
-            phase_host['a_P44'][idx, :] = f3(ang)  # V P44=P33
-        else:  # non spherical particle
-            f5 = interp1d(angles, phase[4, :])
-            f6 = interp1d(angles, phase[5, :])
+    # (ipha, nphamat, theta)
+    phase = profile[name_phase][ipha, :, :].to_numpy()
+    _check_finite_phase(
+        phase,
+        f"the {'atmosphere' if kind == 'atm' else 'ocean'} profile "
+        f"({name_phase}[{ipha}])",
+        theta=profile.coords['theta_' + kind].to_numpy(),
+    )
 
-            phase_host['a_P11'][idx, :] = f1(ang)  # I par P11
-            phase_host['a_P22'][idx, :] = f5(ang)  # I per P22
-            phase_host['a_P12'][idx, :] = f2(ang)  # I per P22
-            phase_host['a_P33'][idx, :] = f3(ang)  # U P33
-            phase_host['a_P43'][idx, :] = f4(ang)  # V P43
-            phase_host['a_P44'][idx, :] = f6(ang)  # V P44=P33
-            # phase_host['a_P33'][idx, :] = f6(ang)  # V P44=P33
+    phase = convert_phase_to_iparper(phase)
 
-    # normalize each row on the interpolation the kernel reads, see the
-    # docstring; a row of zeros, e.g. a VRS entry of a profile that has
-    # none, stays one
-    total = _bin_masses(phase_host, ang).sum(axis=1)
-    scale = np.divide(2.0, total, out=np.ones_like(total), where=total > 0)
-    for name, dtype in TYPE_PHASE:
-        phase_host[name] *= scale[:, None].astype(dtype)
+    if not polarization:
+        if len(phase[:, 0]) == 4:
+            raise ValueError(
+                "old profiles with only 4 phase matrix terms are not "
+                "supported without polarization"
+            )
+        # back to IQUV convention to obtain F11
+        f11 = 0.5 * (phase[0, :] + 2 * phase[1, :] + phase[4, :])
+        # reset all values to 0
+        phase[:, :] = 0.0
+        # reconvert to Iperpar but without considering polarization
+        phase[0, :] = 0.5 * f11
+        phase[1, :] = 0.5 * f11
+        phase[4, :] = 0.5 * f11
 
-    return phase_host, _cdf_of_table(phase_host, ang)
+    # f1 = interp1d(angles, phase[1,:])
+    # f2 = interp1d(angles, phase[0,:])
+    f1 = interp1d(angles, phase[0, :])
+    f2 = interp1d(angles, phase[1, :])
+    f3 = interp1d(angles, phase[2, :])
+    f4 = interp1d(angles, phase[3, :])
+
+    if len(phase[:, 0]) == 4:  # spherical particle
+        # parameters equally spaced in scattering angle [0, 180]
+        phase_host['a_P11'][idx, :] = f1(ang)  # I par P11
+        phase_host['a_P22'][idx, :] = f2(ang)  # I per P22
+        phase_host['a_P33'][idx, :] = f3(ang)  # U P33
+        phase_host['a_P43'][idx, :] = f4(ang)  # V P43
+        phase_host['a_P44'][idx, :] = f3(ang)  # V P44=P33
+    else:  # non spherical particle
+        f5 = interp1d(angles, phase[4, :])
+        f6 = interp1d(angles, phase[5, :])
+
+        phase_host['a_P11'][idx, :] = f1(ang)  # I par P11
+        phase_host['a_P22'][idx, :] = f5(ang)  # I per P22
+        phase_host['a_P12'][idx, :] = f2(ang)  # I per P22
+        phase_host['a_P33'][idx, :] = f3(ang)  # U P33
+        phase_host['a_P43'][idx, :] = f4(ang)  # V P43
+        phase_host['a_P44'][idx, :] = f6(ang)  # V P44=P33
+        # phase_host['a_P33'][idx, :] = f6(ang)  # V P44=P33
+
+
+def _bin_factors(
+    ang: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Return the factors of the bin masses that depend on the angles.
+
+    See `_bin_masses`: the integrals of sin(theta) and of (theta -
+    th0) / dth sin(theta) over each bin.
+    """
+    th0 = ang[:-1]
+    th1 = ang[1:]
+    dth = th1 - th0
+    return (
+        np.cos(th0) - np.cos(th1),
+        (np.sin(th1) - np.sin(th0)) / dth - np.cos(th1),
+    )
 
 
 def _bin_masses(
-    phase_host: np.ndarray, ang: NDArray[np.float64]
+    phase_host: np.ndarray,
+    ang: NDArray[np.float64],
+    factors: tuple[NDArray[np.float64], NDArray[np.float64]] | None = None,
 ) -> NDArray[np.float64]:
     """Return the integral of each row of a phase table over its bins.
 
@@ -4471,6 +4519,8 @@ def _bin_masses(
         Table of dtype ``TYPE_PHASE`` and shape ``(nrows, n)``.
     ang : ndarray
         The ``n`` angles in radians, from 0 to pi.
+    factors : tuple of ndarray, optional
+        ``_bin_factors(ang)``, when already computed.
 
     Returns
     -------
@@ -4483,20 +4533,17 @@ def _bin_masses(
         + phase_host['a_P22'].astype(np.float64)
         + 2.0 * phase_host['a_P12'].astype(np.float64)
     )
-    th0 = ang[:-1]
-    th1 = ang[1:]
-    dth = th1 - th0
+    a, b = _bin_factors(ang) if factors is None else factors
     f0 = f11[:, :-1]
     df = f11[:, 1:] - f0
     # int_th0^th1 (f0 + df (th-th0)/dth) sin(th) dth
-    return (
-        f0 * (np.cos(th0) - np.cos(th1))
-        + df * ((np.sin(th1) - np.sin(th0)) / dth - np.cos(th1))
-    )
+    return f0 * a + df * b
 
 
 def _cdf_of_table(
-    phase_host: np.ndarray, ang: NDArray[np.float64]
+    phase_host: np.ndarray,
+    ang: NDArray[np.float64],
+    factors: tuple[NDArray[np.float64], NDArray[np.float64]] | None = None,
 ) -> np.ndarray:
     """Return the cumulative distribution of each row of a phase table.
 
@@ -4511,13 +4558,15 @@ def _cdf_of_table(
         Table of dtype ``TYPE_PHASE`` and shape ``(nrows, n)``.
     ang : ndarray
         The ``n`` angles in radians, from 0 to pi.
+    factors : tuple of ndarray, optional
+        ``_bin_factors(ang)``, when already computed.
 
     Returns
     -------
     ndarray
         ``(nrows, n)`` of dtype ``TYPE_PCDF``, each row from 0 to 1.
     """
-    mass = _bin_masses(phase_host, ang)
+    mass = _bin_masses(phase_host, ang, factors)
     cdf = np.zeros(phase_host.shape, dtype=np.float64)
     cdf[:, 1:] = np.cumsum(mass, axis=1)
     total = cdf[:, -1:]
@@ -4797,7 +4846,7 @@ def _check_phase_memory(
         If the tables cannot fit on the GPU or on the host.
     """
     table = n_rows * n_angles * _PHASE_ANGLE_BYTES
-    build = n_rows * n_angles * _PHASE_HOST_BYTES
+    build = table + _PHASE_CHUNK_BYTES
     medium = "atmosphere" if kind == "atm" else "ocean"
     what = (
         f"The phase tables of the {medium}, {n_rows} matrices of "
