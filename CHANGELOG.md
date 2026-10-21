@@ -1,44 +1,20 @@
 # SMART-G CHANGELOG
 
 
-## Unreleased
+## v2.0.6
+Release date: 2026-10-21
 
 * Changes
-  - Compute the phase matrices of `Atm1D` once per distinct wavelength
-    when `wavelength_phase` is None, and copy them onto the repeated
-    wavelengths. The internal bands of a KDIS channel share its
-    wavelength, and their phase matrices were computed once per band:
-    `calc` on the 2584 bands of SLSTR up to 4.5 µm with a desert
-    aerosol took 4.8 s and 5.1 GB of memory, and now 0.07 s and
-    0.3 GB. The profiles do not change, `phase_atm`, `iphase_atm` and
-    the phase lists of `calc_split` included. A component that pairs
-    its inputs with the wavelengths of `calc` (a forced `ssa` array, a
-    4-D `phase`, a component of another class) still has its matrices
-    computed at each of them. `Atm3D` does the same for its own phase
-    matrices, and interpolates the extinction and albedo of its 3D
-    components once per distinct wavelength: on the 312 kato2 bands up
-    to 4.5 µm, a scene of 40 cloud cells took 54 s and 4.1 GB, and now
-    1.5 s and 1.7 GB
-  - Tabulate the phase matrices of the hydrosols once per distinct
-    wavelength when their `wavelength_phase` is None, mix those of
-    several hydrosols once per distinct wavelength, and copy them onto
-    the repeated wavelengths. `phase_oc`, `iphase_oc` and what
-    `Hydrosol.phase`, `Hydrosol.scattering` and `Water1D.phase` return
-    do not change: a `Water1D` of `HydrosolPR` and `HydrosolZhai` on
-    the 4372 hypernav bands from 400 to 1050 nm took 11 s and 9.8 GB
-    of memory, and now 5.3 s and 7.0 GB. A hydrosol given coefficients
-    as arrays over the wavelengths of the profile still has its
-    matrices tabulated at each of them
-  - Refuse, with a `ValueError` naming their size and how to reduce it
-    (`n_icdf`, `theta_grid='phase'`, `wavelength_phase`), phase tables
-    larger than the memory of the GPU or than what the host can hold,
-    before building them: `Smartg.run` used to spend minutes on the
-    host and fail in an allocation. Tables that fit but exceed the
-    memory free at the time get a warning. Each distinct phase matrix
-    is now uploaded once (24 bytes per angle for the matrix and 4 for
-    its cumulative distribution), which also makes the tables of
-    KDIS profiles several times smaller
-
+  - Compute the phase matrices of `Atm1D`, `Atm3D` and the hydrosols
+    once per distinct wavelength and copy them onto the repeated ones,
+    such as the internal bands of a KDIS channel. The profiles do not
+    change. On large KDIS runs the phase build is up to 70 times
+    faster and needs up to 17 times less memory
+  - Upload each distinct phase matrix to the GPU once, which makes the
+    phase tables of KDIS profiles several times smaller
+  - Refuse phase tables too large for the GPU or the host with a
+    `ValueError` before building them, instead of failing after
+    minutes in an allocation; warn when they exceed the free memory
 
 ## v2.0.5
 Release date: 2026-10-14
